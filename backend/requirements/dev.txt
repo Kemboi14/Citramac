@@ -1,0 +1,12 @@
+-r base.txt
+
+black==25.1.0
+isort==6.1.0
+ruff==0.14.5
+bandit==1.9.2
+detect-secrets==1.5.0
+pytest==8.4.2
+pytest-django==4.11.1
+pytest-cov==6.2.1
+factory-boy==3.3.3
+pre-commit==4.6.2

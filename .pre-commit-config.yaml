@@ -1,0 +1,57 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black (backend)
+        entry: bash -c 'cd backend && .venv/bin/black .'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: isort
+        name: isort (backend)
+        entry: bash -c 'cd backend && .venv/bin/isort .'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: ruff
+        name: ruff (backend)
+        entry: bash -c 'cd backend && .venv/bin/ruff check . --fix'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: bandit
+        name: bandit (backend SAST)
+        entry: bash -c 'cd backend && .venv/bin/bandit -q -r apps config -x "*/migrations/*"'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint (frontend)
+        entry: bash -c 'cd frontend && npm run --silent lint'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+      - id: prettier
+        name: prettier --check (frontend)
+        entry: bash -c 'cd frontend && npm run --silent format:check'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args:
+          [
+            "--baseline",
+            ".secrets.baseline",
+            "--exclude-lines",
+            "citramac:citramac",
+          ]
+        exclude: package-lock.json
