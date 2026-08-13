@@ -23,4 +23,7 @@ exclude = [".venv", "**/migrations/*.py"]
 select = ["E", "F", "I", "B"]
 
 [tool.bandit]
-exclude_dirs = [".venv", "migrations", "tests.py"]
+exclude_dirs = [".venv", "migrations"]
+# Hardcoded-looking passwords in tests.py are fixture data, not real secrets —
+# excluded via the `-x` flag on the actual bandit invocation (pre-commit, CI)
+# rather than here, since exclude_dirs doesn't reliably glob-match filenames.

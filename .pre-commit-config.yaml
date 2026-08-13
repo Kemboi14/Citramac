@@ -24,7 +24,7 @@ repos:
 
       - id: bandit
         name: bandit (backend SAST)
-        entry: bash -c 'cd backend && .venv/bin/bandit -q -r apps config -x "*/migrations/*"'
+        entry: bash -c 'cd backend && .venv/bin/bandit -q -r apps config -x "*/migrations/*,*/tests.py"'
         language: system
         files: ^backend/
         pass_filenames: false
