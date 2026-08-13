@@ -205,3 +205,94 @@ class Attachment(TenantScopedModel):
 
     def __str__(self):
         return self.file.name
+
+
+class ConsentRecord(TenantScopedModel):
+    """
+    Append-only consent history — docs/09-SECURITY-COMPLIANCE.md §9.5:
+    "Explicit, timestamped, revocable consent capture ... stored with the
+    exact consent text version shown at capture time (for legal
+    defensibility if the consent language changes later)." `Patient.consent_data_sharing`/
+    `consent_captured_at` remain a denormalized "current state" cache
+    (updated by apps.client_registry.consent.capture_consent); this table
+    is the full, immutable history a DHA/DPA audit would actually want —
+    a single mutable boolean can't show what was consented to, when, or
+    that it was later revoked and re-granted.
+    """
+
+    CONSENT_TYPE_CHOICES = [("DATA_SHARING_HIE", "Data Sharing via National HIE")]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="consent_records")
+    consent_type = models.CharField(
+        max_length=32, choices=CONSENT_TYPE_CHOICES, default="DATA_SHARING_HIE"
+    )
+    granted = models.BooleanField()
+    consent_text_version = models.CharField(max_length=32)
+    consent_text_snapshot = models.TextField()
+    captured_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    captured_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-captured_at"]
+
+    def __str__(self):
+        verb = "Granted" if self.granted else "Revoked"
+        consent_type = self.get_consent_type_display()
+        return f"{verb} {consent_type} for {self.patient} ({self.consent_text_version})"
+
+
+class ErasureRequest(TenantScopedModel):
+    """
+    Right-to-Erasure workflow — docs/09-SECURITY-COMPLIANCE.md §9.5:
+    "distinct from routine soft-delete, requires Org Admin + a compliance
+    officer sign-off, produces an audit record of the erasure itself, and
+    enforces any legal retention minimums ... flag this conflict to the
+    requester rather than silently refusing or silently complying."
+    Execution (apps.client_registry.erasure.execute_erasure) anonymizes the
+    Patient's identifying fields in place rather than deleting the row —
+    the underlying clinical/financial records have their own statutory
+    retention requirements independent of this request.
+    """
+
+    STATUS_PENDING = "PENDING"
+    STATUS_RETENTION_CONFLICT = "RETENTION_CONFLICT"
+    STATUS_REJECTED = "REJECTED"
+    STATUS_COMPLETED = "COMPLETED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RETENTION_CONFLICT, "Retention Conflict"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="erasure_requests")
+    requested_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+
+    org_admin_approved_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    org_admin_approved_at = models.DateTimeField(null=True, blank=True)
+    compliance_officer_approved_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    compliance_officer_approved_at = models.DateTimeField(null=True, blank=True)
+
+    rejection_reason = models.TextField(blank=True)
+    retention_conflict_detail = models.TextField(blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-created_at"]
+
+    @property
+    def is_fully_approved(self):
+        return bool(self.org_admin_approved_at and self.compliance_officer_approved_at)
+
+    def __str__(self):
+        return f"Erasure request for {self.patient} ({self.get_status_display()})"

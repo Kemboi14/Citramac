@@ -4,10 +4,63 @@ from .models import (
     AllergyRecord,
     Appointment,
     Attachment,
+    ConsentRecord,
     EmergencyContact,
+    ErasureRequest,
     InsuranceCoverage,
     Patient,
 )
+
+
+class ConsentRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConsentRecord
+        fields = [
+            "id",
+            "patient",
+            "consent_type",
+            "granted",
+            "consent_text_version",
+            "consent_text_snapshot",
+            "captured_by",
+            "captured_at",
+        ]
+        read_only_fields = ["patient", "captured_by", "captured_at"]
+
+
+class ErasureRequestSerializer(serializers.ModelSerializer):
+    is_fully_approved = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ErasureRequest
+        fields = [
+            "id",
+            "patient",
+            "requested_by",
+            "reason",
+            "status",
+            "org_admin_approved_by",
+            "org_admin_approved_at",
+            "compliance_officer_approved_by",
+            "compliance_officer_approved_at",
+            "rejection_reason",
+            "retention_conflict_detail",
+            "completed_at",
+            "is_fully_approved",
+            "created_at",
+        ]
+        read_only_fields = [
+            "requested_by",
+            "status",
+            "org_admin_approved_by",
+            "org_admin_approved_at",
+            "compliance_officer_approved_by",
+            "compliance_officer_approved_at",
+            "rejection_reason",
+            "retention_conflict_detail",
+            "completed_at",
+            "created_at",
+        ]
 
 
 class EmergencyContactSerializer(serializers.ModelSerializer):

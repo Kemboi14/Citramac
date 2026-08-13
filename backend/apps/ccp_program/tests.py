@@ -237,3 +237,54 @@ class CcpExtensionsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         emails = {row["email"]: row["caseload_count"] for row in response.data}
         self.assertEqual(emails["casemanager@org.test"], 1)
+
+    def test_urine_drug_screen_restricted_for_non_care_team_and_audit_logged_for_care_team(self):
+        """
+        docs/09-SECURITY-COMPLIANCE.md §9.3 names UrineDrugScreen explicitly
+        alongside PsychotherapySession/SudRehabPlan/BiopsychosocialAssessment
+        for the elevated CCP privacy tier; §9.4 requires the *view* itself
+        (not just edits) to be audit-logged when full content is returned.
+        """
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        from .models import SudRehabPlan, UrineDrugScreen
+
+        with platform_admin_context():
+            plan = SudRehabPlan.objects.create(organization=self.org, patient=self.patient)
+            screen = UrineDrugScreen.objects.create(
+                organization=self.org,
+                plan=plan,
+                panel_results={"cannabinoids": "positive"},
+                collected_by=self.case_manager,
+            )
+            CareTeamMembership.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                user=self.case_manager,
+                role="THERAPIST",
+            )
+
+        outsider_response = self.client.get(
+            reverse("urine-drug-screen-detail", args=[screen.id]),
+            **{"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"},
+        )
+        self.assertEqual(outsider_response.status_code, 200)
+        self.assertNotIn("panel_results", outsider_response.data)
+        self.assertEqual(set(outsider_response.data.keys()), {"id", "plan", "collected_at"})
+
+        with platform_admin_context():
+            view_count_before = AuditLogEntry.objects.filter(
+                model="ccp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
+            ).count()
+
+        care_team_response = self.client.get(
+            reverse("urine-drug-screen-detail", args=[screen.id]), **self.auth
+        )
+        self.assertEqual(care_team_response.status_code, 200)
+        self.assertEqual(care_team_response.data["panel_results"], {"cannabinoids": "positive"})
+
+        with platform_admin_context():
+            view_count_after = AuditLogEntry.objects.filter(
+                model="ccp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
+            ).count()
+        self.assertEqual(view_count_after, view_count_before + 1)

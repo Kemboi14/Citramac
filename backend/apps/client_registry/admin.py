@@ -4,7 +4,9 @@ from .models import (
     AllergyRecord,
     Appointment,
     Attachment,
+    ConsentRecord,
     EmergencyContact,
+    ErasureRequest,
     InsuranceCoverage,
     Patient,
 )
@@ -54,3 +56,29 @@ class AppointmentAdmin(admin.ModelAdmin):
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ["patient", "classification", "uploaded_by", "uploaded_at"]
     list_filter = ["classification", "organization"]
+
+
+@admin.register(ConsentRecord)
+class ConsentRecordAdmin(admin.ModelAdmin):
+    list_display = ["patient", "consent_type", "granted", "consent_text_version", "captured_at"]
+    list_filter = ["consent_type", "granted"]
+    readonly_fields = [f.name for f in ConsentRecord._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ErasureRequest)
+class ErasureRequestAdmin(admin.ModelAdmin):
+    list_display = [
+        "patient",
+        "status",
+        "requested_by",
+        "org_admin_approved_at",
+        "compliance_officer_approved_at",
+        "completed_at",
+    ]
+    list_filter = ["status"]

@@ -4,6 +4,13 @@ Generates the standard tenant-isolation RLS policy for a table with an
 migrations across every app via `migrations.RunSQL(*enable_rls(table))`.
 See apps/tenancy/migrations/0002_branch_rls.py for the hand-written version
 this factors out (still accurate as documentation of what this generates).
+
+FORCE ROW LEVEL SECURITY means the app's own runtime role is subject to
+these policies too (defense-in-depth) — but it also means `pg_dump`/
+`pg_restore` can't run as that role: Postgres refuses a plain `COPY
+tablename` on an RLS-forced table for any role that isn't exempt, no
+matter what the policy would otherwise allow. Backups need a separate
+role with BYPASSRLS — see backend/scripts/README.md.
 """
 
 

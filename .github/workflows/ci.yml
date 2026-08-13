@@ -99,7 +99,7 @@ jobs:
         run: npm run format:check
 
       - name: Dependency vulnerability scan
-        run: npm audit --audit-level=high || true # advisory only until Phase 7 hardening pass
+        run: npm audit --audit-level=high
 
       - name: Type-check + build
         run: npm run build

@@ -36,6 +36,8 @@ class AuditLogEntry(models.Model):
     ACTION_CREATE = "CREATE"
     ACTION_UPDATE = "UPDATE"
     ACTION_DELETE = "DELETE"
+    ACTION_VIEW = "VIEW"
+    ACTION_ERASURE = "ERASURE"
     ACTION_LOGIN = "LOGIN"
     ACTION_LOGIN_FAILED = "LOGIN_FAILED"
     ACTION_LOGOUT = "LOGOUT"
@@ -43,6 +45,8 @@ class AuditLogEntry(models.Model):
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
         (ACTION_DELETE, "Delete"),
+        (ACTION_VIEW, "View"),
+        (ACTION_ERASURE, "Right-to-Erasure Executed"),
         (ACTION_LOGIN, "Login"),
         (ACTION_LOGIN_FAILED, "Login Failed"),
         (ACTION_LOGOUT, "Logout"),

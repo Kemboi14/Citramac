@@ -7,11 +7,10 @@ def has_full_ccp_access(user, patient):
     """
     True if `user` may see full session/assessment content for `patient`:
     a superuser, an assigned care-team member (therapist/supervisor) for
-    that specific patient, or an Org Admin (logged access, per §7.14.7 —
-    audit logging of the *view* itself is handled generically by
-    apps.sysadmin_audit's signal-based audit trail on every read... note
-    read/VIEW auditing beyond writes is a documented Phase 7 hardening item,
-    see docs/09-SECURITY-COMPLIANCE.md §9.4's "sensitive record views" line).
+    that specific patient, or an Org Admin. Every full-access view is
+    itself audit-logged (docs/09-SECURITY-COMPLIANCE.md §9.4's "sensitive
+    record views" requirement) by CareTeamRestrictedMixin, which calls
+    apps.sysadmin_audit.audit.log_view() whenever this returns True.
     Everyone else in the org gets only "an active care episode exists."
     """
     if user.is_superuser:

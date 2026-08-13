@@ -74,6 +74,8 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # CSP/Referrer-Policy/Permissions-Policy — docs/09-SECURITY-COMPLIANCE.md §9.7.
+    "config.middleware.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -235,6 +237,14 @@ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localho
 # (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.
 CORS_ALLOW_CREDENTIALS = True
 
+# ── Security headers (docs/09-SECURITY-COMPLIANCE.md §9.7) ───────────────
+# X-Frame-Options comes from XFrameOptionsMiddleware (default DENY);
+# Content-Security-Policy/Referrer-Policy/Permissions-Policy come from
+# config.middleware.SecurityHeadersMiddleware; HSTS is staging/production-only
+# (config/settings/staging.py, production.py) since it doesn't apply over
+# the plain-http dev server.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
 # ── DHA/SHA interoperability (docs/08-DHA-SHA-INTEGRATION.md) ─────────────
 # All empty by default — no real HIE/SHA sandbox credentials exist in this
 # environment. apps.dha_interop.hie_client and apps.insurance_claims.sha_gateway
@@ -251,6 +261,14 @@ HIE_MTLS_CLIENT_KEY = env("HIE_MTLS_CLIENT_KEY", default="")
 SHA_GATEWAY_MODE = env("SHA_GATEWAY_MODE", default="stub")
 SHA_GATEWAY_ENDPOINT_URL = env("SHA_GATEWAY_ENDPOINT_URL", default="")
 SHA_GATEWAY_SIGNING_KEY_PATH = env("SHA_GATEWAY_SIGNING_KEY_PATH", default="")
+
+# ── Data Protection Act compliance (docs/09-SECURITY-COMPLIANCE.md §9.5) ──
+# Statutory minimum retention for clinical records — confirm the exact
+# figure with legal/DHA guidance before production go-live (§9.6 notes the
+# same 7-year figure for backup cold-storage archives).
+CLINICAL_RECORD_MINIMUM_RETENTION_YEARS = env.int(
+    "CLINICAL_RECORD_MINIMUM_RETENTION_YEARS", default=7
+)
 
 # Terminology mirror sync sources (docs/08-DHA-SHA-INTEGRATION.md §8.2) —
 # empty by default; apps.dha_interop.sync honestly records a

@@ -21,6 +21,7 @@ import { ClinicalReviewPage } from "./modules/clinical/ClinicalReviewPage";
 import { SupervisionRequestsPage } from "./modules/clinical/SupervisionRequestsPage";
 import { CcpTeamPage } from "./modules/clinical/CcpTeamPage";
 import { NacadaReportPage } from "./modules/clinical/NacadaReportPage";
+import { ErasureRequestsPage } from "./modules/org-admin/ErasureRequestsPage";
 
 function App() {
   return (
@@ -91,6 +92,7 @@ function App() {
               <PlaceholderPage eyebrow="Facility · Governance" title="Roles & Permissions" />
             }
           />
+          <Route path="data-requests" element={<ErasureRequestsPage />} />
         </Route>
       </Route>
 

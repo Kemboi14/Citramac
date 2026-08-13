@@ -11,7 +11,7 @@ commands, Celery tasks, and data migrations too, not just HTTP views.
 from django.conf import settings
 from django.db.models.signals import post_delete, post_save, pre_save
 
-from .context import get_audit_context
+from .audit import write_entry
 from .models import AuditLogEntry
 
 SENSITIVE_FIELDS = {"password", "code_hash"}
@@ -61,27 +61,11 @@ def _log_save(sender, instance, created, **kwargs):
         if not diff:
             return  # save() with no actual field changes — nothing to log
 
-    _write_entry(instance, action, diff)
+    write_entry(instance, action, diff)
 
 
 def _log_delete(sender, instance, **kwargs):
-    _write_entry(instance, AuditLogEntry.ACTION_DELETE, {})
-
-
-def _write_entry(instance, action, field_diff):
-    context = get_audit_context()
-    AuditLogEntry.objects.create(
-        organization_id=getattr(instance, "organization_id", None),
-        branch_id=context["actor_branch_id"],
-        actor_user_id=context["actor_user_id"],
-        actor_role=context["actor_role"],
-        action=action,
-        model=f"{instance._meta.app_label}.{instance._meta.model_name}",
-        object_id=str(instance.pk),
-        field_diff=field_diff,
-        source_ip=context["source_ip"],
-        request_id=context["request_id"],
-    )
+    write_entry(instance, AuditLogEntry.ACTION_DELETE)
 
 
 def connect_audit_signals():

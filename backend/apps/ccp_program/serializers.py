@@ -113,6 +113,14 @@ class UrineDrugScreenSerializer(serializers.ModelSerializer):
         read_only_fields = ["collected_by"]
 
 
+class UrineDrugScreenRestrictedSerializer(serializers.ModelSerializer):
+    """docs/09-SECURITY-COMPLIANCE.md §9.3 — existence only, no panel results."""
+
+    class Meta:
+        model = UrineDrugScreen
+        fields = ["id", "plan", "collected_at"]
+
+
 class ClinicalReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClinicalReview

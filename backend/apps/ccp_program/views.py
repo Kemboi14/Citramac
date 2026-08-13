@@ -4,6 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.sysadmin_audit.audit import log_view
+
 from .models import (
     BiopsychosocialAssessment,
     CareTeamMembership,
@@ -27,26 +29,33 @@ from .serializers import (
     SudRehabPlanRestrictedSerializer,
     SudRehabPlanSerializer,
     SupervisionRequestSerializer,
+    UrineDrugScreenRestrictedSerializer,
     UrineDrugScreenSerializer,
 )
 
 
 class CareTeamRestrictedMixin:
-    """Swaps in the restricted serializer per-object for anyone without full CCP access."""
+    """
+    Swaps in the restricted serializer per-object for anyone without full
+    CCP access, and audit-logs the view itself whenever full sensitive
+    content is actually returned — docs/09-SECURITY-COMPLIANCE.md §9.4:
+    "Sensitive record views (not just edits) must also be logged."
+    """
 
     full_serializer_class = None
     restricted_serializer_class = None
+    # Most CCP records FK straight to Patient; UrineDrugScreen only has one
+    # via its SudRehabPlan, so it overrides this accessor.
+    patient_accessor = staticmethod(lambda obj: obj.patient)
 
     def get_serializer_class(self):
         return self.full_serializer_class
 
     def _serializer_for(self, obj, request):
-        cls = (
-            self.full_serializer_class
-            if has_full_ccp_access(request.user, obj.patient)
-            else self.restricted_serializer_class
-        )
-        return cls(obj, context={"request": request})
+        if has_full_ccp_access(request.user, self.patient_accessor(obj)):
+            log_view(obj)
+            return self.full_serializer_class(obj, context={"request": request})
+        return self.restricted_serializer_class(obj, context={"request": request})
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -117,11 +126,19 @@ class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization, case_manager=self.request.user)
 
 
-class UrineDrugScreenViewSet(viewsets.ModelViewSet):
-    serializer_class = UrineDrugScreenSerializer
+class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+    """
+    docs/09-SECURITY-COMPLIANCE.md §9.3 explicitly names UrineDrugScreen
+    among the records the elevated CCP privacy tier gates — panel_results
+    is SUD screening data, not just metadata.
+    """
+
+    full_serializer_class = UrineDrugScreenSerializer
+    restricted_serializer_class = UrineDrugScreenRestrictedSerializer
+    patient_accessor = staticmethod(lambda obj: obj.plan.patient)
 
     def get_queryset(self):
-        return UrineDrugScreen.objects.select_related("plan").order_by("-collected_at")
+        return UrineDrugScreen.objects.select_related("plan__patient").order_by("-collected_at")
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, collected_by=self.request.user)

@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   Stethoscope,
+  Trash2,
   User,
   UserCog,
   Users,
@@ -64,6 +65,10 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
       { label: "Branch Settings", to: "/org-admin/branch-settings", icon: Settings },
       { label: "Roles & Permissions", to: "/org-admin/roles", icon: ShieldCheck },
     ],
+  },
+  {
+    label: "Governance",
+    items: [{ label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 }],
   },
 ];
 
