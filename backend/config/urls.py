@@ -40,6 +40,9 @@ urlpatterns = [
     path("api/v1/", include("apps.ccp_program.urls")),
     path("api/v1/", include("apps.billing.urls")),
     path("api/v1/", include("apps.insurance_claims.urls")),
+    path("api/v1/", include("apps.lims.urls")),
+    path("api/v1/", include("apps.pharmacy.urls")),
+    path("api/v1/", include("apps.ipd_ward.urls")),
 ]
 
 if settings.DEBUG:

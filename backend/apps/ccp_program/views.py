@@ -1,14 +1,33 @@
+from django.utils import timezone
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import BiopsychosocialAssessment, CareTeamMembership, PsychotherapySession
+from .models import (
+    BiopsychosocialAssessment,
+    CareTeamMembership,
+    ClinicalReview,
+    NacadaNdoReport,
+    PsychotherapySession,
+    SudRehabPlan,
+    SupervisionRequest,
+    UrineDrugScreen,
+)
 from .permissions import has_full_ccp_access
 from .serializers import (
     BiopsychosocialAssessmentRestrictedSerializer,
     BiopsychosocialAssessmentSerializer,
     CareTeamMembershipSerializer,
+    CcpTeamRosterSerializer,
+    ClinicalReviewSerializer,
+    NacadaNdoReportSerializer,
     PsychotherapySessionRestrictedSerializer,
     PsychotherapySessionSerializer,
+    SudRehabPlanRestrictedSerializer,
+    SudRehabPlanSerializer,
+    SupervisionRequestSerializer,
+    UrineDrugScreenSerializer,
 )
 
 
@@ -79,3 +98,151 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+
+class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4."""
+
+    full_serializer_class = SudRehabPlanSerializer
+    restricted_serializer_class = SudRehabPlanRestrictedSerializer
+
+    def get_queryset(self):
+        return (
+            SudRehabPlan.objects.select_related("patient")
+            .prefetch_related("milestones")
+            .order_by("-started_at")
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, case_manager=self.request.user)
+
+
+class UrineDrugScreenViewSet(viewsets.ModelViewSet):
+    serializer_class = UrineDrugScreenSerializer
+
+    def get_queryset(self):
+        return UrineDrugScreen.objects.select_related("plan").order_by("-collected_at")
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, collected_by=self.request.user)
+
+
+class ClinicalReviewViewSet(viewsets.ModelViewSet):
+    """Peer/senior review workflow — docs/07-CLINICAL-MODULES-SPEC.md §7.14.5."""
+
+    serializer_class = ClinicalReviewSerializer
+
+    def get_queryset(self):
+        return ClinicalReview.objects.select_related("patient").order_by("-requested_at")
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def decide(self, request, pk=None):
+        review = self.get_object()
+        decision = request.data.get("status")
+        if decision not in ("APPROVED", "CHANGES_REQUESTED"):
+            return Response({"error": "status must be APPROVED or CHANGES_REQUESTED"}, status=400)
+        review.status = decision
+        review.reviewer = request.user
+        review.review_notes = request.data.get("review_notes", review.review_notes)
+        review.reviewed_at = timezone.now()
+        review.save(update_fields=["status", "reviewer", "review_notes", "reviewed_at"])
+        return Response(ClinicalReviewSerializer(review).data)
+
+
+class SupervisionRequestViewSet(viewsets.ModelViewSet):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.5 — mirrors the mockup's nav item."""
+
+    serializer_class = SupervisionRequestSerializer
+
+    def get_queryset(self):
+        return SupervisionRequest.objects.select_related("patient").order_by("-requested_at")
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def schedule(self, request, pk=None):
+        supervision_request = self.get_object()
+        supervision_request.status = "SCHEDULED"
+        supervision_request.supervisor = request.user
+        supervision_request.save(update_fields=["status", "supervisor"])
+        return Response(SupervisionRequestSerializer(supervision_request).data)
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        supervision_request = self.get_object()
+        supervision_request.status = "COMPLETED"
+        supervision_request.completed_at = timezone.now()
+        supervision_request.notes = request.data.get("notes", supervision_request.notes)
+        supervision_request.save(update_fields=["status", "completed_at", "notes"])
+        return Response(SupervisionRequestSerializer(supervision_request).data)
+
+
+class NacadaNdoReportViewSet(viewsets.ModelViewSet):
+    """
+    NACADA National Drug Observatory report — docs/07-CLINICAL-MODULES-SPEC.md
+    §7.14.6: auto-compiled from SudRehabPlan/UrineDrugScreen; API submission
+    to NACADA itself is a Phase 6+ integration, not implemented here.
+    """
+
+    serializer_class = NacadaNdoReportSerializer
+
+    def get_queryset(self):
+        return NacadaNdoReport.objects.order_by("-generated_at")
+
+    def perform_create(self, serializer):
+        report = serializer.save(
+            organization=self.request.user.organization, generated_by=self.request.user
+        )
+        period_start, period_end = report.period_start, report.period_end
+        plans = SudRehabPlan.objects.filter(started_at__date__range=(period_start, period_end))
+        screens = UrineDrugScreen.objects.filter(
+            collected_at__date__range=(period_start, period_end)
+        )
+        phase_counts = {}
+        for phase_code, phase_label in SudRehabPlan.PHASE_CHOICES:
+            phase_counts[phase_label] = plans.filter(current_phase=phase_code).count()
+        report.summary_data = {
+            "new_rehab_plans": plans.count(),
+            "plans_by_phase": phase_counts,
+            "urine_drug_screens_conducted": screens.count(),
+        }
+        report.save(update_fields=["summary_data"])
+
+    @action(detail=True, methods=["post"])
+    def export(self, request, pk=None):
+        report = self.get_object()
+        report.status = "EXPORTED"
+        report.save(update_fields=["status"])
+        return Response(NacadaNdoReportSerializer(report).data)
+
+
+class CcpTeamRosterView(APIView):
+    """
+    Roster/caseload view of the CCP team — docs/07-CLINICAL-MODULES-SPEC.md
+    §7.14.6. "specialties" is sourced from each member's assigned Roles (no
+    separate specialty taxonomy exists yet).
+    """
+
+    def get(self, request):
+        from apps.accounts.models import User
+
+        therapists = User.objects.filter(care_team_memberships__isnull=False).distinct()
+        roster = []
+        for user in therapists:
+            roster.append(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "caseload_count": user.care_team_memberships.values("patient")
+                    .distinct()
+                    .count(),
+                    "specialties": list(user.roles.values_list("name", flat=True)),
+                }
+            )
+        return Response(CcpTeamRosterSerializer(roster, many=True).data)

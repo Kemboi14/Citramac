@@ -14,6 +14,13 @@ import { ClinicalEncounterPage } from "./modules/clinical/ClinicalEncounterPage"
 import { IndividualPsychotherapyPage } from "./modules/clinical/IndividualPsychotherapyPage";
 import { FamilyTherapyPage } from "./modules/clinical/FamilyTherapyPage";
 import { GroupPsychotherapyPage } from "./modules/clinical/GroupPsychotherapyPage";
+import { LimsPage } from "./modules/clinical/LimsPage";
+import { PharmacyPage } from "./modules/clinical/PharmacyPage";
+import { IpdPage } from "./modules/clinical/IpdPage";
+import { ClinicalReviewPage } from "./modules/clinical/ClinicalReviewPage";
+import { SupervisionRequestsPage } from "./modules/clinical/SupervisionRequestsPage";
+import { CcpTeamPage } from "./modules/clinical/CcpTeamPage";
+import { NacadaReportPage } from "./modules/clinical/NacadaReportPage";
 
 function App() {
   return (
@@ -97,25 +104,17 @@ function App() {
             element={<PlaceholderPage eyebrow="Module 1" title="Attachments" />}
           />
           <Route path="triage" element={<TriageMsePage />} />
-          <Route
-            path="review"
-            element={
-              <PlaceholderPage
-                eyebrow="Module 2 · Ongoing Clinical Review"
-                title="Clinical Review"
-              />
-            }
-          />
+          <Route path="review" element={<ClinicalReviewPage />} />
           <Route path="encounter" element={<ClinicalEncounterPage />} />
+          <Route path="lims" element={<LimsPage />} />
+          <Route path="pharmacy" element={<PharmacyPage />} />
+          <Route path="ipd" element={<IpdPage />} />
           <Route path="ccp/individual" element={<IndividualPsychotherapyPage />} />
           <Route path="ccp/family" element={<FamilyTherapyPage />} />
           <Route path="ccp/group" element={<GroupPsychotherapyPage />} />
-          <Route
-            path="ccp/nacada"
-            element={
-              <PlaceholderPage eyebrow="CCP · Regulatory Reporting" title="NACADA NDO Report" />
-            }
-          />
+          <Route path="ccp/supervision" element={<SupervisionRequestsPage />} />
+          <Route path="ccp/nacada" element={<NacadaReportPage />} />
+          <Route path="ccp/team" element={<CcpTeamPage />} />
         </Route>
       </Route>
 

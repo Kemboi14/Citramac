@@ -144,6 +144,36 @@ export function searchIcd11(accessToken: string, query: string) {
   });
 }
 
+export interface PrescriptionItem {
+  id: string;
+  drug: string;
+  dose: string;
+  route: string;
+  frequency: string;
+  duration: string;
+}
+
+export interface Prescription {
+  id: string;
+  items: PrescriptionItem[];
+}
+
+export function createPrescription(
+  accessToken: string,
+  encounterId: string,
+  drugCode: string,
+  dose: string,
+  route: string,
+  frequency: string,
+  duration: string,
+) {
+  return apiRequest<Prescription>(`/encounters/${encounterId}/prescriptions/`, {
+    method: "POST",
+    body: { items: [{ drug: drugCode, dose, route, frequency, duration }] },
+    accessToken,
+  });
+}
+
 export function createPsychotherapySession(accessToken: string, payload: Record<string, unknown>) {
   return apiRequest<Record<string, unknown>>("/ccp/psychotherapy-sessions/", {
     method: "POST",

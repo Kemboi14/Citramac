@@ -105,3 +105,135 @@ class CcpCareTeamRestrictionTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         for row in response.data["results"]:
             self.assertNotIn("session_notes", row)
+
+
+class CcpExtensionsTests(APITestCase):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4-§7.14.6."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Kevin",
+                last_name="Otieno",
+                gender="MALE",
+                date_of_birth="1990-06-01",
+            )
+            self.case_manager = User.objects.create_user(
+                email="casemanager@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            self.supervisor = User.objects.create_user(
+                email="supervisor@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        self.access, _ = issue_tokens(self.case_manager)
+        self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
+
+    def test_create_sud_rehab_plan_defaults_to_intake_phase(self):
+        from .models import SudRehabPlan
+
+        response = self.client.post(
+            reverse("sud-rehab-plan-list"),
+            {"patient": str(self.patient.id), "substances_of_concern": "Alcohol"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["current_phase"], "INTAKE")
+        with platform_admin_context():
+            plan = SudRehabPlan.objects.get(pk=response.data["id"])
+            self.assertEqual(plan.case_manager_id, self.case_manager.id)
+
+    def test_urine_drug_screen_stores_panel_results_as_json(self):
+        from .models import SudRehabPlan
+
+        with platform_admin_context():
+            plan = SudRehabPlan.objects.create(organization=self.org, patient=self.patient)
+        response = self.client.post(
+            reverse("urine-drug-screen-list"),
+            {
+                "plan": str(plan.id),
+                "panel_results": {"amphetamine": "negative", "cannabinoids": "positive"},
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["panel_results"]["cannabinoids"], "positive")
+
+    def test_supervision_request_lifecycle(self):
+        create_response = self.client.post(
+            reverse("supervision-request-list"),
+            {"patient": str(self.patient.id), "topic": "Risk escalation review"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+        request_id = create_response.data["id"]
+
+        access_supervisor, _ = issue_tokens(self.supervisor)
+        schedule_response = self.client.post(
+            reverse("supervision-request-schedule", args=[request_id]),
+            **{"HTTP_AUTHORIZATION": f"Bearer {access_supervisor}"},
+        )
+        self.assertEqual(schedule_response.status_code, 200)
+        self.assertEqual(schedule_response.data["status"], "SCHEDULED")
+
+        complete_response = self.client.post(
+            reverse("supervision-request-complete", args=[request_id]),
+            {"notes": "Reviewed and closed."},
+            format="json",
+            **{"HTTP_AUTHORIZATION": f"Bearer {access_supervisor}"},
+        )
+        self.assertEqual(complete_response.status_code, 200)
+        self.assertEqual(complete_response.data["status"], "COMPLETED")
+
+    def test_nacada_ndo_report_auto_compiles_summary_on_create(self):
+        from .models import SudRehabPlan
+
+        with platform_admin_context():
+            SudRehabPlan.objects.create(organization=self.org, patient=self.patient)
+        response = self.client.post(
+            reverse("nacada-ndo-report-list"),
+            {"period_start": "2026-01-01", "period_end": "2026-12-31"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["summary_data"]["new_rehab_plans"], 1)
+        self.assertEqual(response.data["status"], "DRAFT")
+
+    def test_nacada_ndo_report_export_action_marks_exported(self):
+        create_response = self.client.post(
+            reverse("nacada-ndo-report-list"),
+            {"period_start": "2026-01-01", "period_end": "2026-12-31"},
+            format="json",
+            **self.auth,
+        )
+        export_response = self.client.post(
+            reverse("nacada-ndo-report-export", args=[create_response.data["id"]]), **self.auth
+        )
+        self.assertEqual(export_response.status_code, 200)
+        self.assertEqual(export_response.data["status"], "EXPORTED")
+
+    def test_ccp_team_roster_reports_caseload_from_care_team_memberships(self):
+        with platform_admin_context():
+            CareTeamMembership.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                user=self.case_manager,
+                role="THERAPIST",
+            )
+        response = self.client.get(reverse("ccp-team-roster"), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        emails = {row["email"]: row["caseload_count"] for row in response.data}
+        self.assertEqual(emails["casemanager@org.test"], 1)

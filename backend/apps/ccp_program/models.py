@@ -94,3 +94,139 @@ class PsychotherapySession(TenantScopedModel):
 
     def __str__(self):
         return f"{self.get_session_type_display()} — {self.patient} @ {self.session_date:%Y-%m-%d}"
+
+
+class SudRehabPlan(TenantScopedModel):
+    """
+    Multi-phase SUD rehab plan — docs/07-CLINICAL-MODULES-SPEC.md §7.14.4:
+    Intake -> Stabilization -> Active Treatment -> Aftercare, with milestone
+    tracking (see RehabMilestone below).
+    """
+
+    PHASE_CHOICES = [
+        ("INTAKE", "Intake"),
+        ("STABILIZATION", "Stabilization"),
+        ("ACTIVE_TREATMENT", "Active Treatment"),
+        ("AFTERCARE", "Aftercare"),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="sud_rehab_plans")
+    current_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default="INTAKE")
+    substances_of_concern = models.TextField(blank=True)
+    treatment_goals = models.TextField(blank=True)
+    case_manager = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"SUD rehab plan for {self.patient} ({self.get_current_phase_display()})"
+
+
+class RehabMilestone(TenantScopedModel):
+    plan = models.ForeignKey(SudRehabPlan, on_delete=models.CASCADE, related_name="milestones")
+    phase = models.CharField(max_length=20, choices=SudRehabPlan.PHASE_CHOICES)
+    description = models.CharField(max_length=255)
+    achieved = models.BooleanField(default=False)
+    achieved_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.description} ({'achieved' if self.achieved else 'pending'})"
+
+
+class UrineDrugScreen(TenantScopedModel):
+    """
+    Periodic UDS results logged against a rehab plan — docs/07-CLINICAL-MODULES-SPEC.md
+    §7.14.4: panel results stored as structured JSONB for trend charts.
+    """
+
+    plan = models.ForeignKey(
+        SudRehabPlan, on_delete=models.CASCADE, related_name="urine_drug_screens"
+    )
+    collected_at = models.DateTimeField(default=timezone.now)
+    panel_results = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="e.g. {'amphetamine': 'negative', 'cannabinoids': 'positive'}",
+    )
+    collected_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    def __str__(self):
+        return f"UDS for {self.plan.patient} @ {self.collected_at:%Y-%m-%d}"
+
+
+class ClinicalReview(TenantScopedModel):
+    """Peer/senior review before finalizing a treatment plan — §7.14.5."""
+
+    STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("APPROVED", "Approved"),
+        ("CHANGES_REQUESTED", "Changes Requested"),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="clinical_reviews")
+    requested_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reviewer = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    case_summary = models.TextField(blank=True)
+    review_notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
+    requested_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Clinical review for {self.patient} ({self.get_status_display()})"
+
+
+class SupervisionRequest(TenantScopedModel):
+    """Junior clinician requests supervisor time on a case — §7.14.5."""
+
+    STATUS_CHOICES = [("OPEN", "Open"), ("SCHEDULED", "Scheduled"), ("COMPLETED", "Completed")]
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="supervision_requests"
+    )
+    requested_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    supervisor = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    topic = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="OPEN")
+    requested_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Supervision request re: {self.patient} ({self.get_status_display()})"
+
+
+class NacadaNdoReport(TenantScopedModel):
+    """
+    Periodic aggregated NACADA National Drug Observatory report — §7.14.6.
+    Auto-compiled from SudRehabPlan/UrineDrugScreen data at generation time;
+    submission to NACADA's own systems is a Phase 6+ integration item — this
+    stores the compiled snapshot and export status honestly as SHA-style
+    stub, not a fake "submitted" success.
+    """
+
+    STATUS_CHOICES = [("DRAFT", "Draft"), ("EXPORTED", "Exported")]
+
+    period_start = models.DateField()
+    period_end = models.DateField()
+    generated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    generated_at = models.DateTimeField(default=timezone.now)
+    summary_data = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="DRAFT")
+
+    def __str__(self):
+        return f"NACADA NDO report {self.period_start} to {self.period_end}"
