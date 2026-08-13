@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import { usePatientContext } from "../../clinical/PatientContext";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
 import { ApiError } from "../../lib/apiClient";
 import {
   addDiagnosis,
+  createLabOrder,
   searchIcd11,
   signSoapNote,
   submitSoapNote,
   type Icd11Code,
 } from "../../lib/clinicalApi";
+import { createInvoice, recordPayment } from "../../lib/billingApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-green";
@@ -17,7 +20,14 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 /** Module 3 — SOAP notes + mandatory ICD-11 diagnosis coding, docs/07-CLINICAL-MODULES-SPEC.md §7.3. */
 export function ClinicalEncounterPage() {
   const { accessToken } = useAuth();
+  const { selected } = usePatientContext();
   const { encounterId, patientName, error: encounterError } = useEnsureEncounter();
+
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [orderingLab, setOrderingLab] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paid, setPaid] = useState(false);
 
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "" });
   const [savedNote, setSavedNote] = useState<{ id: string; is_locked: boolean } | null>(null);
@@ -80,6 +90,41 @@ export function ClinicalEncounterPage() {
       setIcdResults([]);
     } catch (err) {
       setDiagnosisError(err instanceof ApiError ? err.message : "Couldn't add that diagnosis.");
+    }
+  };
+
+  const orderLabTest = async () => {
+    if (!accessToken) return;
+    setOrderError(null);
+    setOrderSuccess(false);
+    setOrderingLab(true);
+    try {
+      await createLabOrder(accessToken, encounterId!, "Full Blood Count");
+      setOrderSuccess(true);
+    } catch (err) {
+      setOrderError(err instanceof ApiError ? err.message : "Couldn't place the order.");
+    } finally {
+      setOrderingLab(false);
+    }
+  };
+
+  const payAndClearBilling = async () => {
+    if (!accessToken || !selected) return;
+    setPaying(true);
+    try {
+      const invoice = await createInvoice(
+        accessToken,
+        selected.patientId,
+        encounterId!,
+        "Upfront consultation fee",
+        "1000.00",
+      );
+      await recordPayment(accessToken, invoice.id, "1000.00", "CASH");
+      setPaid(true);
+    } catch {
+      setOrderError("Couldn't record payment.");
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -186,6 +231,52 @@ export function ClinicalEncounterPage() {
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
+        <h2 className="mb-1 font-display text-base font-semibold text-ink-900">
+          Orders &amp; Billing (POS Gate)
+        </h2>
+        <p className="mb-4 text-xs text-ink-500">
+          Module 10&apos;s validation gate — docs/07-CLINICAL-MODULES-SPEC.md §7.10: a lab/procedure
+          order is refused until an upfront payment, verified SHA coverage, or an approved
+          pre-authorization is on file for this encounter.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={orderLabTest}
+            disabled={orderingLab}
+            className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
+          >
+            {orderingLab ? "Ordering…" : "Order Lab Test (FBC)"}
+          </button>
+          {!paid && (
+            <button
+              type="button"
+              onClick={payAndClearBilling}
+              disabled={paying}
+              className="rounded-md border border-surface-border bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+            >
+              {paying ? "Recording…" : "Record KES 1,000 Cash Payment"}
+            </button>
+          )}
+          {paid && (
+            <span className="text-sm font-medium text-brand-green-dark">
+              Billing cleared — upfront cash payment on file.
+            </span>
+          )}
+        </div>
+        {orderSuccess && (
+          <p className="mt-3 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
+            Lab order placed.
+          </p>
+        )}
+        {orderError && (
+          <p className="mt-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+            {orderError}
+          </p>
+        )}
       </div>
     </div>
   );

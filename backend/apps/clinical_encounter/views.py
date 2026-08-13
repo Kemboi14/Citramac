@@ -93,8 +93,18 @@ class EncounterViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"])
     def orders(self, request, pk=None):
+        """POS validation gate applies here — docs/07-CLINICAL-MODULES-SPEC.md §7.10."""
         encounter = self.get_object()
         if request.method == "POST":
+            from apps.billing.gate import BillingNotCleared, check_billing_clearance
+
+            try:
+                check_billing_clearance(encounter)
+            except BillingNotCleared as exc:
+                return Response(
+                    {"error": {"code": "BILLING_NOT_CLEARED", "message": str(exc)}}, status=402
+                )
+
             serializer = ClinicalOrderSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(
@@ -105,8 +115,18 @@ class EncounterViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"])
     def prescriptions(self, request, pk=None):
+        """POS validation gate applies here too — same doc reference as orders() above."""
         encounter = self.get_object()
         if request.method == "POST":
+            from apps.billing.gate import BillingNotCleared, check_billing_clearance
+
+            try:
+                check_billing_clearance(encounter)
+            except BillingNotCleared as exc:
+                return Response(
+                    {"error": {"code": "BILLING_NOT_CLEARED", "message": str(exc)}}, status=402
+                )
+
             serializer = PrescriptionSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(

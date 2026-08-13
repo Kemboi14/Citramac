@@ -112,6 +112,14 @@ export function signSoapNote(accessToken: string, encounterId: string, noteId: s
   );
 }
 
+export function createLabOrder(accessToken: string, encounterId: string, details: string) {
+  return apiRequest<Record<string, unknown>>(`/encounters/${encounterId}/orders/`, {
+    method: "POST",
+    body: { order_type: "LAB", details },
+    accessToken,
+  });
+}
+
 export function addDiagnosis(
   accessToken: string,
   encounterId: string,
