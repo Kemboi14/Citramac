@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { usePatientContext } from "../../clinical/PatientContext";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
+import { useOfflineSync } from "../../clinical/useOfflineSync";
 import { ApiError } from "../../lib/apiClient";
 import {
   addDiagnosis,
@@ -22,6 +23,7 @@ export function ClinicalEncounterPage() {
   const { accessToken } = useAuth();
   const { selected } = usePatientContext();
   const { encounterId, patientName, error: encounterError } = useEnsureEncounter();
+  const { submitOrQueue } = useOfflineSync(accessToken);
 
   const [orderError, setOrderError] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -31,6 +33,7 @@ export function ClinicalEncounterPage() {
 
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "" });
   const [savedNote, setSavedNote] = useState<{ id: string; is_locked: boolean } | null>(null);
+  const [soapQueued, setSoapQueued] = useState(false);
   const [soapError, setSoapError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -47,10 +50,17 @@ export function ClinicalEncounterPage() {
     event.preventDefault();
     if (!accessToken) return;
     setSoapError(null);
+    setSoapQueued(false);
     setSaving(true);
     try {
-      const note = await submitSoapNote(accessToken, encounterId, soap);
-      setSavedNote({ id: note.id, is_locked: false });
+      const { queued, result } = await submitOrQueue("SOAP_NOTE", encounterId, soap, () =>
+        submitSoapNote(accessToken, encounterId, soap),
+      );
+      if (queued) {
+        setSoapQueued(true);
+      } else if (result) {
+        setSavedNote({ id: result.id, is_locked: false });
+      }
     } catch (err) {
       setSoapError(err instanceof ApiError ? err.message : "Couldn't save the SOAP note.");
     } finally {
@@ -162,6 +172,11 @@ export function ClinicalEncounterPage() {
             </label>
           ))}
         </fieldset>
+        {soapQueued && (
+          <p className="mt-4 rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-status-amber">
+            Saved on this device — will sync once you&apos;re back online.
+          </p>
+        )}
         {soapError && <p className="mt-4 text-sm text-status-red">{soapError}</p>}
         <div className="mt-4 flex gap-3">
           <button

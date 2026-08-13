@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Search } from "lucide-react";
 import type { NavGroup } from "./navConfig";
+import { OfflineSyncBanner } from "./OfflineSyncBanner";
 
 /**
  * Shared sidebar+topbar chrome for all three tiers — docs/03-DESIGN-SYSTEM.md
@@ -117,6 +118,7 @@ export function AppShell({
         </header>
 
         <main className="w-full max-w-[1400px] flex-1 px-7 py-6.5 pb-14">
+          <OfflineSyncBanner />
           <Outlet />
         </main>
       </div>

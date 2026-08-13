@@ -8,6 +8,7 @@ module and override only what differs, per docs/02-TECH-STACK-AND-ARCHITECTURE.m
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -62,6 +63,7 @@ LOCAL_APPS = [
     "apps.ccp_program",
     "apps.dha_interop",
     "apps.notifications",
+    "apps.offline_sync",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -195,6 +197,24 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
+# Nightly terminology mirror sync — docs/08-DHA-SHA-INTEGRATION.md §8.2. Each
+# task honestly no-ops (SKIPPED_NOT_CONFIGURED) until its source URL setting
+# is set, so enabling beat here is safe even with no live source configured.
+CELERY_BEAT_SCHEDULE = {
+    "sync-icd11-nightly": {
+        "task": "apps.dha_interop.tasks.sync_icd11",
+        "schedule": crontab(hour=2, minute=0),
+    },
+    "sync-loinc-nightly": {
+        "task": "apps.dha_interop.tasks.sync_loinc",
+        "schedule": crontab(hour=2, minute=15),
+    },
+    "sync-national-drug-index-nightly": {
+        "task": "apps.dha_interop.tasks.sync_national_drug_index",
+        "schedule": crontab(hour=2, minute=30),
+    },
+}
+
 # ── Cache (rate limiting for the auth flow, docs/05-AUTHENTICATION-FLOW.md §5.5) ──
 CACHES = {
     "default": {
@@ -214,3 +234,27 @@ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localho
 # The frontend needs the httpOnly refresh_token cookie sent/received cross-origin
 # (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.
 CORS_ALLOW_CREDENTIALS = True
+
+# ── DHA/SHA interoperability (docs/08-DHA-SHA-INTEGRATION.md) ─────────────
+# All empty by default — no real HIE/SHA sandbox credentials exist in this
+# environment. apps.dha_interop.hie_client and apps.insurance_claims.sha_gateway
+# honestly report a skipped/stubbed transmission rather than faking success
+# when these are unset; set them (and flip SHA_GATEWAY_MODE) only once a real
+# facility certificate and sandbox/production endpoint are provisioned.
+HIE_ENDPOINT_URL = env("HIE_ENDPOINT_URL", default="")
+HIE_MTLS_CLIENT_CERT = env("HIE_MTLS_CLIENT_CERT", default="")
+HIE_MTLS_CLIENT_KEY = env("HIE_MTLS_CLIENT_KEY", default="")
+
+# "stub" (default): sha_gateway logs to ShaTransactionLog and makes no live
+# call. "sandbox"/"production": makes a real signed HTTP call — requires
+# SHA_GATEWAY_ENDPOINT_URL and a signing key to also be configured.
+SHA_GATEWAY_MODE = env("SHA_GATEWAY_MODE", default="stub")
+SHA_GATEWAY_ENDPOINT_URL = env("SHA_GATEWAY_ENDPOINT_URL", default="")
+SHA_GATEWAY_SIGNING_KEY_PATH = env("SHA_GATEWAY_SIGNING_KEY_PATH", default="")
+
+# Terminology mirror sync sources (docs/08-DHA-SHA-INTEGRATION.md §8.2) —
+# empty by default; apps.dha_interop.sync honestly records a
+# SKIPPED_NOT_CONFIGURED run rather than fabricating a sync when unset.
+ICD11_SYNC_SOURCE_URL = env("ICD11_SYNC_SOURCE_URL", default="")
+LOINC_SYNC_SOURCE_URL = env("LOINC_SYNC_SOURCE_URL", default="")
+NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL = env("NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL", default="")

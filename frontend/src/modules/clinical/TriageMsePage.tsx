@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
+import { useOfflineSync } from "../../clinical/useOfflineSync";
 import { ApiError } from "../../lib/apiClient";
 import { submitMse, submitVitals } from "../../lib/clinicalApi";
 
@@ -16,6 +17,7 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 export function TriageMsePage() {
   const { accessToken } = useAuth();
   const { encounterId, patientName, error: encounterError } = useEnsureEncounter();
+  const { submitOrQueue } = useOfflineSync(accessToken);
 
   const [vitals, setVitals] = useState({
     systolic_bp: "",
@@ -28,6 +30,7 @@ export function TriageMsePage() {
     esi_acuity_level: "",
   });
   const [vitalsResult, setVitalsResult] = useState<{ bmi: string; bsa: string } | null>(null);
+  const [vitalsQueued, setVitalsQueued] = useState(false);
   const [vitalsError, setVitalsError] = useState<string | null>(null);
   const [vitalsSaving, setVitalsSaving] = useState(false);
 
@@ -56,6 +59,7 @@ export function TriageMsePage() {
     event.preventDefault();
     if (!accessToken) return;
     setVitalsError(null);
+    setVitalsQueued(false);
     setVitalsSaving(true);
     try {
       const payload = Object.fromEntries(
@@ -63,8 +67,15 @@ export function TriageMsePage() {
           .filter(([, v]) => v !== "")
           .map(([k, v]) => [k, v]),
       );
-      const result = await submitVitals(accessToken, encounterId, payload);
-      setVitalsResult({ bmi: String(result.bmi ?? ""), bsa: String(result.bsa ?? "") });
+      const { queued, result } = await submitOrQueue("VITALS", encounterId, payload, () =>
+        submitVitals(accessToken, encounterId, payload),
+      );
+      if (queued) {
+        setVitalsQueued(true);
+        setVitalsResult(null);
+      } else if (result) {
+        setVitalsResult({ bmi: String(result.bmi ?? ""), bsa: String(result.bsa ?? "") });
+      }
     } catch (err) {
       setVitalsError(err instanceof ApiError ? err.message : "Couldn't save vitals.");
     } finally {
@@ -178,6 +189,11 @@ export function TriageMsePage() {
         {vitalsResult && (
           <p className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
             Computed BMI: {vitalsResult.bmi} · BSA: {vitalsResult.bsa} m²
+          </p>
+        )}
+        {vitalsQueued && (
+          <p className="mt-4 rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-status-amber">
+            Saved on this device — will sync (and compute BMI/BSA) once you&apos;re back online.
           </p>
         )}
         {vitalsError && <p className="mt-4 text-sm text-status-red">{vitalsError}</p>}

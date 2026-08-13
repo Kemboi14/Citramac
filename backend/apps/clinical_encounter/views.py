@@ -3,6 +3,8 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.dha_interop.fhir_mapper import build_referral_bundle
+from apps.dha_interop.hie_client import transmit_referral
 from apps.triage.serializers import MentalStatusExamSerializer, VitalSignsSerializer
 
 from .models import Encounter, SoapNote
@@ -137,19 +139,40 @@ class EncounterViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"])
     def referrals(self, request, pk=None):
-        """Generates a FHIR bundle placeholder — real construction is Phase 6 (docs/08 §8.1)."""
+        """
+        E-Referral — docs/07-CLINICAL-MODULES-SPEC.md §7.3. Builds a real,
+        schema-validated FHIR Bundle (docs/08-DHA-SHA-INTEGRATION.md §8.1) at
+        creation time; transmission to the HIE happens via the `send` action.
+        """
         encounter = self.get_object()
         if request.method == "POST":
             serializer = ReferralPacketSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            serializer.save(
-                encounter=encounter,
-                organization=encounter.organization,
-                fhir_bundle_json={
-                    "resourceType": "Bundle",
-                    "type": "document",
-                    "note": "Placeholder — real FHIR Bundle construction is a Phase 6 item.",
-                },
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            referral = serializer.save(encounter=encounter, organization=encounter.organization)
+            referral.fhir_bundle_json = build_referral_bundle(referral)
+            referral.save(update_fields=["fhir_bundle_json"])
+            return Response(ReferralPacketSerializer(referral).data, status=status.HTTP_201_CREATED)
         return Response(ReferralPacketSerializer(encounter.referrals.all(), many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="referrals/(?P<referral_id>[^/.]+)/send")
+    def send_referral(self, request, pk=None, referral_id=None):
+        """
+        Transmits the cached FHIR Bundle to the HIE — docs/08-DHA-SHA-INTEGRATION.md
+        §8.1. Honestly reports a failed/skipped transmission when no HIE
+        endpoint is configured (see apps.dha_interop.hie_client), never a
+        fabricated success.
+        """
+        encounter = self.get_object()
+        referral = encounter.referrals.get(pk=referral_id)
+        cache_entry = transmit_referral(referral, referral.fhir_bundle_json)
+        if cache_entry.status == "SENT":
+            referral.status = "SENT"
+            referral.sent_at = timezone.now()
+            referral.save(update_fields=["status", "sent_at"])
+        return Response(
+            {
+                "referral": ReferralPacketSerializer(referral).data,
+                "transmission_status": cache_entry.status,
+                "transmission_detail": cache_entry.transmission_detail,
+            }
+        )

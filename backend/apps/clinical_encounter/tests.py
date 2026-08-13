@@ -154,3 +154,49 @@ class ClinicalEncounterAndTriageTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {other_access}",
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_referral_builds_a_real_fhir_bundle_with_patient_and_condition(self):
+        """docs/08-DHA-SHA-INTEGRATION.md §8.1 — real, schema-validated FHIR Bundle."""
+        encounter_id = self._open_encounter()
+        with platform_admin_context():
+            code = IcdCodeIndex.objects.get(code="6A70")
+        self.client.post(
+            reverse("encounter-diagnoses", args=[encounter_id]),
+            {"icd11_code": code.code, "is_primary": True},
+            format="json",
+            **self.auth,
+        )
+
+        response = self.client.post(
+            reverse("encounter-referrals", args=[encounter_id]),
+            {"destination_facility": "Kenyatta National Hospital"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        bundle = response.data["fhir_bundle_json"]
+        self.assertEqual(bundle["resourceType"], "Bundle")
+        resource_types = {entry["resource"]["resourceType"] for entry in bundle["entry"]}
+        self.assertEqual(resource_types, {"Composition", "Patient", "Condition"})
+
+    def test_send_referral_reports_honest_failure_with_no_hie_endpoint_configured(self):
+        """
+        HIE_ENDPOINT_URL is unset in tests (matches the default dev/prod
+        posture — no real facility mTLS certificate exists) — the send
+        action must report this honestly, not fabricate a SENT status.
+        """
+        encounter_id = self._open_encounter()
+        create_response = self.client.post(
+            reverse("encounter-referrals", args=[encounter_id]),
+            {"destination_facility": "Kenyatta National Hospital"},
+            format="json",
+            **self.auth,
+        )
+        referral_id = create_response.data["id"]
+
+        send_response = self.client.post(
+            reverse("encounter-send-referral", args=[encounter_id, referral_id]), **self.auth
+        )
+        self.assertEqual(send_response.status_code, 200, send_response.data)
+        self.assertEqual(send_response.data["transmission_status"], "FAILED")
+        self.assertEqual(send_response.data["referral"]["status"], "DRAFT")

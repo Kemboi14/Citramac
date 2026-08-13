@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/v1/", include("apps.lims.urls")),
     path("api/v1/", include("apps.pharmacy.urls")),
     path("api/v1/", include("apps.ipd_ward.urls")),
+    path("api/v1/", include("apps.offline_sync.urls")),
 ]
 
 if settings.DEBUG:

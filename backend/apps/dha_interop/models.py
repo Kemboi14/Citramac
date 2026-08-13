@@ -87,3 +87,74 @@ class ShaTransactionLog(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type} [{self.status}] {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class FhirResourceCache(models.Model):
+    """
+    Locally cached FHIR resources fetched/pushed to the HIE — docs/06-DATA-MODEL.md
+    §6.6, docs/08-DHA-SHA-INTEGRATION.md §8.1's offline-resilience + audit
+    requirement. Not tenant-scoped via TenantScopedModel (kept simple like
+    ShaTransactionLog) but carries organization_id for filtering.
+    """
+
+    DIRECTION_CHOICES = [("OUTBOUND", "Outbound"), ("INBOUND", "Inbound")]
+    STATUS_CHOICES = [
+        ("CACHED", "Cached (not yet transmitted)"),
+        ("SENT", "Sent"),
+        ("RECEIVED", "Received"),
+        ("FAILED", "Failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization_id = models.UUIDField(db_index=True)
+    resource_type = models.CharField(max_length=64, help_text="e.g. Bundle, Composition")
+    direction = models.CharField(max_length=16, choices=DIRECTION_CHOICES)
+    fhir_json = models.JSONField()
+    related_object_type = models.CharField(max_length=100, blank=True)
+    related_object_id = models.UUIDField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="CACHED")
+    transmission_detail = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        timestamp = self.created_at.strftime("%Y-%m-%d %H:%M")
+        return f"{self.resource_type} [{self.direction}/{self.status}] {timestamp}"
+
+
+class TerminologySyncRun(models.Model):
+    """
+    Audit trail of terminology mirror sync attempts — docs/08-DHA-SHA-INTEGRATION.md
+    §8.2's "generic TerminologySyncJob Celery task pattern reused for all
+    three mirrors." No live WHO/LOINC/national-drug-registry source is
+    configured in this environment, so runs honestly record a SKIPPED status
+    with the reason rather than fabricating a successful sync.
+    """
+
+    SOURCE_CHOICES = [
+        ("ICD11", "ICD-11 (WHO)"),
+        ("LOINC", "LOINC"),
+        ("NATIONAL_DRUG_INDEX", "National Drug Index"),
+    ]
+    STATUS_CHOICES = [
+        ("SUCCESS", "Success"),
+        ("FAILED", "Failed"),
+        ("SKIPPED_NOT_CONFIGURED", "Skipped — source not configured"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    source = models.CharField(max_length=32, choices=SOURCE_CHOICES)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    records_synced = models.PositiveIntegerField(default=0)
+    detail = models.TextField(blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.get_source_display()} sync [{self.status}] {self.started_at:%Y-%m-%d %H:%M}"
