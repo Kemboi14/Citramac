@@ -31,4 +31,6 @@ frontend/.vite/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
-citramac-hmis-copilot-docs/  # original delivered spec package — superseded by /docs, /mockups, /.github at repo root; kept on disk, not tracked
+# Original delivered spec package — superseded by /docs, /mockups, /.github
+# at repo root (see SPEC-README.md); kept on disk for reference, not tracked.
+citramac-hmis-copilot-docs/
