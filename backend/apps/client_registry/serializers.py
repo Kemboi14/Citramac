@@ -1,0 +1,156 @@
+from rest_framework import serializers
+
+from .models import (
+    AllergyRecord,
+    Appointment,
+    Attachment,
+    EmergencyContact,
+    InsuranceCoverage,
+    Patient,
+)
+
+
+class EmergencyContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmergencyContact
+        fields = ["id", "patient", "name", "relationship", "phone", "email", "address"]
+        read_only_fields = ["patient"]
+
+
+class AllergyRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AllergyRecord
+        fields = ["id", "patient", "substance", "reaction", "severity", "noted_at"]
+        read_only_fields = ["patient"]
+
+
+class InsuranceCoverageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InsuranceCoverage
+        fields = [
+            "id",
+            "patient",
+            "scheme_type",
+            "policy_number",
+            "corporate_account",
+            "sha_verified",
+            "sha_member_status",
+            "sha_premium_compliant",
+            "sha_last_checked_at",
+        ]
+        read_only_fields = [
+            "patient",
+            "sha_verified",
+            "sha_member_status",
+            "sha_premium_compliant",
+            "sha_last_checked_at",
+        ]
+
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = [
+            "id",
+            "patient",
+            "file",
+            "classification",
+            "description",
+            "uploaded_by",
+            "uploaded_at",
+        ]
+        read_only_fields = ["patient", "uploaded_by", "uploaded_at"]
+
+
+class PatientListSerializer(serializers.ModelSerializer):
+    """Matches the AppSheet reference table columns — docs/03-DESIGN-SYSTEM.md §3.5."""
+
+    age = serializers.IntegerField(source="age_years", read_only=True)
+    doctors_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Patient
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "middle_other_names",
+            "uhid_number",
+            "citramac_number",
+            "gender",
+            "date_of_birth",
+            "age",
+            "registered_at",
+            "doctors_name",
+            "allergy_status",
+            "nationality",
+            "marital_status",
+            "patient_category",
+        ]
+
+    def get_doctors_name(self, obj):
+        return obj.doctor.get_full_name() if obj.doctor_id else ""
+
+
+class PatientDetailSerializer(serializers.ModelSerializer):
+    age = serializers.IntegerField(source="age_years", read_only=True)
+    emergency_contacts = EmergencyContactSerializer(many=True, read_only=True)
+    allergy_records = AllergyRecordSerializer(many=True, read_only=True)
+    insurance_coverages = InsuranceCoverageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Patient
+        fields = [
+            "id",
+            "upi",
+            "uhid_number",
+            "citramac_number",
+            "first_name",
+            "last_name",
+            "middle_other_names",
+            "gender",
+            "date_of_birth",
+            "age",
+            "marital_status",
+            "nationality",
+            "occupation",
+            "employment_status",
+            "living_with_disability",
+            "national_id",
+            "passport_number",
+            "contact_phone",
+            "contact_email",
+            "address",
+            "county",
+            "next_of_kin",
+            "allergy_status",
+            "doctor",
+            "registered_at",
+            "registered_by",
+            "referral_source",
+            "referral_mode",
+            "referral_date",
+            "patient_category",
+            "insurer_details",
+            "consent_data_sharing",
+            "consent_captured_at",
+            "emergency_contacts",
+            "allergy_records",
+            "insurance_coverages",
+        ]
+        read_only_fields = ["citramac_number", "registered_at", "registered_by"]
+
+
+class AppointmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = [
+            "id",
+            "patient",
+            "branch",
+            "provider",
+            "scheduled_for",
+            "appointment_type",
+            "status",
+            "notes",
+        ]

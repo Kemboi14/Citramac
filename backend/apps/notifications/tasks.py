@@ -1,6 +1,8 @@
 from celery import shared_task
 from django.core.mail import send_mail
 
+from apps.tenancy.context import platform_admin_context
+
 
 @shared_task
 def send_otp_email(email, code, purpose):
@@ -22,6 +24,35 @@ def send_otp_email(email, code, purpose):
         ),
         from_email=None,
         recipient_list=[email],
+    )
+
+
+@shared_task
+def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
+    """
+    Positive suicide/homicide-ideation flags escalate to a supervisor alert
+    — docs/07-CLINICAL-MODULES-SPEC.md §7.14.2. Runs with platform_admin_context()
+    since Celery tasks have no request-bound tenant context of their own
+    (see apps.tenancy.context module docstring).
+    """
+    from apps.accounts.models import User
+
+    with platform_admin_context():
+        supervisor_emails = list(
+            User.objects.filter(
+                organization_id=organization_id, roles__name="Supervisor", is_active=True
+            ).values_list("email", flat=True)
+        )
+    if not supervisor_emails:
+        return
+    send_mail(
+        subject="URGENT: Risk flag raised on a Mental Status Exam",
+        message=(
+            f"A Mental Status Exam for {patient_name} (encounter {encounter_id}) flagged "
+            "positive suicidal or homicidal ideation. Please review immediately."
+        ),
+        from_email=None,
+        recipient_list=supervisor_emails,
     )
 
 

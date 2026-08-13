@@ -2,6 +2,8 @@
 URL configuration for the config project.
 """
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.db import connections
 from django.db.utils import OperationalError
@@ -32,4 +34,11 @@ urlpatterns = [
     path("api/v1/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/auth/", include("apps.accounts.urls")),
     path("api/v1/platform/", include("apps.tenancy.urls")),
+    path("api/v1/", include("apps.client_registry.urls")),
+    path("api/v1/", include("apps.dha_interop.urls")),
+    path("api/v1/", include("apps.clinical_encounter.urls")),
+    path("api/v1/", include("apps.ccp_program.urls")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -11,6 +11,7 @@ __pycache__/
 venv/
 db.sqlite3
 staticfiles/
+mediafiles/
 .pytest_cache/
 .ruff_cache/
 .coverage

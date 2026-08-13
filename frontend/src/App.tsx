@@ -7,6 +7,13 @@ import { ClinicalWorkspaceShell } from "./shells/ClinicalWorkspaceShell";
 import { OrgAdminShell } from "./shells/OrgAdminShell";
 import { SuperAdminShell } from "./shells/SuperAdminShell";
 import { PlaceholderPage } from "./modules/PlaceholderPage";
+import { ClientRegistryPage } from "./modules/clinical/ClientRegistryPage";
+import { NewClientPage } from "./modules/clinical/NewClientPage";
+import { TriageMsePage } from "./modules/clinical/TriageMsePage";
+import { ClinicalEncounterPage } from "./modules/clinical/ClinicalEncounterPage";
+import { IndividualPsychotherapyPage } from "./modules/clinical/IndividualPsychotherapyPage";
+import { FamilyTherapyPage } from "./modules/clinical/FamilyTherapyPage";
+import { GroupPsychotherapyPage } from "./modules/clinical/GroupPsychotherapyPage";
 
 function App() {
   return (
@@ -83,22 +90,13 @@ function App() {
       {/* Everyone else authenticated (Doctor, Nurse, Therapist, etc.) — the frontline Clinical Workspace. */}
       <Route element={<ProtectedRoute />}>
         <Route path="/clinical" element={<ClinicalWorkspaceShell />}>
-          <Route
-            index
-            element={
-              <PlaceholderPage eyebrow="Module 1 · Patient Registration" title="Client Registry" />
-            }
-          />
+          <Route index element={<ClientRegistryPage />} />
+          <Route path="registry-new" element={<NewClientPage />} />
           <Route
             path="attachments"
             element={<PlaceholderPage eyebrow="Module 1" title="Attachments" />}
           />
-          <Route
-            path="triage"
-            element={
-              <PlaceholderPage eyebrow="Module 2 · Triage & Biopsychosocial" title="Triage & MSE" />
-            }
-          />
+          <Route path="triage" element={<TriageMsePage />} />
           <Route
             path="review"
             element={
@@ -108,34 +106,10 @@ function App() {
               />
             }
           />
-          <Route
-            path="encounter"
-            element={
-              <PlaceholderPage
-                eyebrow="Module 3 · Clinical Encounter (EHR)"
-                title="Clinical Encounter"
-              />
-            }
-          />
-          <Route
-            path="ccp/individual"
-            element={
-              <PlaceholderPage
-                eyebrow="CCP · Individual Psychotherapy"
-                title="Individual Session Form"
-              />
-            }
-          />
-          <Route
-            path="ccp/family"
-            element={
-              <PlaceholderPage eyebrow="CCP · Family Therapy" title="Family Therapy Session" />
-            }
-          />
-          <Route
-            path="ccp/group"
-            element={<PlaceholderPage eyebrow="CCP · Group Psychotherapy" title="Group Session" />}
-          />
+          <Route path="encounter" element={<ClinicalEncounterPage />} />
+          <Route path="ccp/individual" element={<IndividualPsychotherapyPage />} />
+          <Route path="ccp/family" element={<FamilyTherapyPage />} />
+          <Route path="ccp/group" element={<GroupPsychotherapyPage />} />
           <Route
             path="ccp/nacada"
             element={

@@ -41,6 +41,12 @@ THIRD_PARTY_APPS = [
 # One entry per app in apps/, mirrors docs/02-TECH-STACK-AND-ARCHITECTURE.md §2.5.
 # Apps are scaffolded ahead of their build phase (docs/11-ROADMAP-AND-PHASES.md) but
 # stay logic-free until their phase begins.
+#
+# This deployment is strictly a mental-health/CCP facility (CAfRIC), not a
+# general hospital — apps.ris_pacs/theatre/mch/mortuary (Modules 5/8/9/12) are
+# general-hospital-only per docs/07-CLINICAL-MODULES-SPEC.md §7.14 and are
+# deliberately not installed; their app directories stay in apps/ as inert
+# scaffolding (matching docs/02 §2.5's repo layout) but are never registered.
 LOCAL_APPS = [
     "apps.tenancy",
     "apps.accounts",
@@ -48,14 +54,10 @@ LOCAL_APPS = [
     "apps.triage",
     "apps.clinical_encounter",
     "apps.lims",
-    "apps.ris_pacs",
     "apps.pharmacy",
     "apps.ipd_ward",
-    "apps.theatre",
-    "apps.mch",
     "apps.billing",
     "apps.insurance_claims",
-    "apps.mortuary",
     "apps.sysadmin_audit",
     "apps.ccp_program",
     "apps.dha_interop",
@@ -139,6 +141,13 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Local filesystem in dev; production uses S3 via django-storages (already in
+# requirements/production.txt) per docs/12-DEVOPS-DEPLOYMENT.md §12.1's
+# "S3/GCS/equivalent object storage ... for attachments, lab PDFs, imaging
+# references" — swap DEFAULT_FILE_STORAGE in production.py when that's wired up.
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
