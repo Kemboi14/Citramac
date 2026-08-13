@@ -202,3 +202,6 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@citramac.local")
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:5173"])
+# The frontend needs the httpOnly refresh_token cookie sent/received cross-origin
+# (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.
+CORS_ALLOW_CREDENTIALS = True

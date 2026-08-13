@@ -1,42 +1,152 @@
-/**
- * Phase 0 placeholder shell — proves the design-token/Tailwind/font pipeline
- * end to end. The real SuperAdminShell / OrgAdminShell / ClinicalWorkspaceShell
- * (see src/shells/) are built in Phase 2, per docs/11-ROADMAP-AND-PHASES.md.
- */
+import { Navigate, Route, Routes } from "react-router-dom";
+import { ActivationPage } from "./auth/ActivationPage";
+import { ForgotPasswordPage } from "./auth/ForgotPasswordPage";
+import { LoginPage } from "./auth/LoginPage";
+import { ProtectedRoute, RootRedirect } from "./auth/ProtectedRoute";
+import { ClinicalWorkspaceShell } from "./shells/ClinicalWorkspaceShell";
+import { OrgAdminShell } from "./shells/OrgAdminShell";
+import { SuperAdminShell } from "./shells/SuperAdminShell";
+import { PlaceholderPage } from "./modules/PlaceholderPage";
+
 function App() {
   return (
-    <div className="grid min-h-screen grid-cols-[248px_1fr]">
-      <aside
-        className="flex flex-col p-5 text-[#eafaf4]"
-        style={{
-          backgroundImage: "linear-gradient(180deg, #00503a 0%, #003f2e 100%)",
-        }}
-      >
-        <div className="font-display text-lg font-bold">CITRAMAC</div>
-        <div className="mt-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#9fd6c3]">
-          Platform Console
-        </div>
-      </aside>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/activate" element={<ActivationPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-      <main className="flex flex-col items-start gap-3 p-10">
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          Phase 0 — Environment Ready
-        </h1>
-        <p className="max-w-md text-sm text-ink-500">
-          Django admin, PostgreSQL, Redis, and this React shell are wired up per{" "}
-          <code className="rounded-sm border border-surface-border bg-surface-bg px-1.5 py-0.5">
-            docs/11-ROADMAP-AND-PHASES.md
-          </code>{" "}
-          Phase 0. Tenancy, identity, and the real auth flow come next in Phase 1.
-        </p>
-        <button
-          type="button"
-          className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark"
-        >
-          Design tokens wired
-        </button>
-      </main>
-    </div>
+      <Route path="/" element={<RootRedirect />} />
+
+      <Route element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]} />}>
+        <Route path="/super-admin" element={<SuperAdminShell />}>
+          <Route
+            index
+            element={<PlaceholderPage eyebrow="Super Admin" title="Platform Dashboard" />}
+          />
+          <Route
+            path="organizations"
+            element={<PlaceholderPage eyebrow="Super Admin · Platform" title="Organizations" />}
+          />
+          <Route
+            path="branches"
+            element={<PlaceholderPage eyebrow="Super Admin · Platform" title="Branches" />}
+          />
+          <Route
+            path="subscriptions"
+            element={
+              <PlaceholderPage eyebrow="Super Admin · Platform" title="Subscriptions & Billing" />
+            }
+          />
+          <Route
+            path="roles"
+            element={
+              <PlaceholderPage
+                eyebrow="Super Admin · Governance"
+                title="Global Roles & Permissions"
+              />
+            }
+          />
+          <Route
+            path="audit-log"
+            element={<PlaceholderPage eyebrow="Super Admin · Governance" title="Audit Log" />}
+          />
+        </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute allowedRoles={["Org Admin"]} />}>
+        <Route path="/org-admin" element={<OrgAdminShell />}>
+          <Route
+            index
+            element={<PlaceholderPage eyebrow="Organization Admin" title="Org Dashboard" />}
+          />
+          <Route
+            path="wards"
+            element={<PlaceholderPage eyebrow="Facility" title="Ward & Bed Management" />}
+          />
+          <Route
+            path="staff"
+            element={<PlaceholderPage eyebrow="Facility" title="Staff & CCP Team" />}
+          />
+          <Route
+            path="branch-settings"
+            element={<PlaceholderPage eyebrow="Facility" title="Branch Settings" />}
+          />
+          <Route
+            path="roles"
+            element={
+              <PlaceholderPage eyebrow="Facility · Governance" title="Roles & Permissions" />
+            }
+          />
+        </Route>
+      </Route>
+
+      {/* Everyone else authenticated (Doctor, Nurse, Therapist, etc.) — the frontline Clinical Workspace. */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/clinical" element={<ClinicalWorkspaceShell />}>
+          <Route
+            index
+            element={
+              <PlaceholderPage eyebrow="Module 1 · Patient Registration" title="Client Registry" />
+            }
+          />
+          <Route
+            path="attachments"
+            element={<PlaceholderPage eyebrow="Module 1" title="Attachments" />}
+          />
+          <Route
+            path="triage"
+            element={
+              <PlaceholderPage eyebrow="Module 2 · Triage & Biopsychosocial" title="Triage & MSE" />
+            }
+          />
+          <Route
+            path="review"
+            element={
+              <PlaceholderPage
+                eyebrow="Module 2 · Ongoing Clinical Review"
+                title="Clinical Review"
+              />
+            }
+          />
+          <Route
+            path="encounter"
+            element={
+              <PlaceholderPage
+                eyebrow="Module 3 · Clinical Encounter (EHR)"
+                title="Clinical Encounter"
+              />
+            }
+          />
+          <Route
+            path="ccp/individual"
+            element={
+              <PlaceholderPage
+                eyebrow="CCP · Individual Psychotherapy"
+                title="Individual Session Form"
+              />
+            }
+          />
+          <Route
+            path="ccp/family"
+            element={
+              <PlaceholderPage eyebrow="CCP · Family Therapy" title="Family Therapy Session" />
+            }
+          />
+          <Route
+            path="ccp/group"
+            element={<PlaceholderPage eyebrow="CCP · Group Psychotherapy" title="Group Session" />}
+          />
+          <Route
+            path="ccp/nacada"
+            element={
+              <PlaceholderPage eyebrow="CCP · Regulatory Reporting" title="NACADA NDO Report" />
+            }
+          />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

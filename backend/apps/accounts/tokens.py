@@ -16,9 +16,16 @@ def issue_tokens(user):
     before accessing .access_token means SimpleJWT copies them onto the
     access token too (its default no_copy_claims only excludes a handful of
     reserved claims like jti/exp).
+
+    Also carries the user's own name/email — non-sensitive (it's their own
+    data), and lets the shell chrome (Phase 2, docs/03-DESIGN-SYSTEM.md §3.3
+    sidebar-foot) render a name/avatar without a separate /me round-trip.
     """
     refresh = RefreshToken.for_user(user)
     refresh["organization_id"] = str(user.organization_id) if user.organization_id else None
     refresh["branch_ids"] = [str(bid) for bid in user.branch_access.values_list("id", flat=True)]
     refresh["role"] = _primary_role_name(user)
+    refresh["email"] = user.email
+    refresh["first_name"] = user.first_name
+    refresh["last_name"] = user.last_name
     return str(refresh.access_token), str(refresh)
