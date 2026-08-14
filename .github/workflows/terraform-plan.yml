@@ -1,0 +1,70 @@
+name: Terraform Plan
+
+# On every PR touching infra/terraform/**: plan every environment and post
+# the output as a PR comment for review — docs/12-DEVOPS-DEPLOYMENT.md
+# §12.5/§12.4 ("no manual console changes ... all changes go through a
+# terraform plan reviewed in PR").
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, production]
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_PLAN_ROLE_ARN_{0}', matrix.environment)] }}
+          aws-region: af-south-1
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive ../../
+
+      - id: init
+        run: terraform init
+
+      - id: validate
+        run: terraform validate -no-color
+
+      - id: plan
+        run: terraform plan -no-color -input=false
+        continue-on-error: true
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan — \`${{ matrix.environment }}\`
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+            *Exit status: ${{ steps.plan.outcome }}*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output,
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1

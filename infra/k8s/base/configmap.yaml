@@ -1,0 +1,11 @@
+# Non-secret configuration shared across the backend/worker/beat containers.
+# Secrets (DATABASE_URL, DJANGO_SECRET_KEY, REDIS_URL, SHA/HIE credentials,
+# etc.) come from a Secret synced by an ExternalSecret resource per overlay
+# (docs/12-DEVOPS-DEPLOYMENT.md §12.3) — never inlined here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: citramac-backend-config
+data:
+  DJANGO_SETTINGS_MODULE: "config.settings.production"
+  DJANGO_DEBUG: "False"

@@ -1,0 +1,54 @@
+name: Deploy to Staging
+
+# On merge to master, once images are built+scanned: kubectl/kustomize
+# apply to staging automatically — docs/12-DEVOPS-DEPLOYMENT.md §12.5.
+# No manual approval gate here (that's production's job, see
+# deploy-production.yml) — staging is meant to reflect master continuously.
+
+on:
+  workflow_run:
+    workflows: ["Build & Scan"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  id-token: write # for AWS OIDC federation — no static AWS keys stored in GitHub
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/citramac
+  AWS_REGION: af-south-1
+  EKS_CLUSTER_NAME: citramac-staging-eks
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Set image tags and apply
+        working-directory: infra/k8s/overlays/staging
+        run: |
+          kustomize edit set image \
+            citramac-backend=${REGISTRY}/${IMAGE_PREFIX}-backend:${{ github.event.workflow_run.head_sha }} \
+            citramac-frontend=${REGISTRY}/${IMAGE_PREFIX}-frontend:${{ github.event.workflow_run.head_sha }}
+          kubectl apply -k .
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n citramac-staging rollout status deployment/citramac-backend --timeout=5m
+          kubectl -n citramac-staging rollout status deployment/citramac-frontend --timeout=5m
+          kubectl -n citramac-staging rollout status deployment/citramac-celery-worker --timeout=5m

@@ -1,0 +1,37 @@
+# Exactly one replica — celery beat is a scheduler, running two would
+# double-fire every periodic task (docs/dha_interop's nightly terminology
+# sync jobs, notification digests, etc.).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: citramac-celery-beat
+  labels:
+    app: citramac-celery-beat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: citramac-celery-beat
+  template:
+    metadata:
+      labels:
+        app: citramac-celery-beat
+    spec:
+      containers:
+        - name: celery-beat
+          image: citramac-backend:latest
+          command: ["celery", "-A", "config", "beat", "-l", "info"]
+          envFrom:
+            - configMapRef:
+                name: citramac-backend-config
+            - secretRef:
+                name: citramac-backend-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"

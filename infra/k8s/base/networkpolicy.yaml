@@ -1,0 +1,91 @@
+# Deny-by-default, explicit allow rules only — docs/12-DEVOPS-DEPLOYMENT.md
+# §12.3, docs/09-SECURITY-COMPLIANCE.md §9.7. Postgres/Redis are managed
+# services outside the cluster (Terraform rds/ modules, ElastiCache/managed
+# Redis) so "backend→postgres"/"backend→redis" are egress-to-external rules
+# here, not pod-to-pod — real IP ranges are environment-specific (the
+# managed instances' subnets), so overlays should tighten the `ipBlock` CIDR
+# once those are known rather than leaving the permissive default below.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: citramac-frontend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-and-ingress-to-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: citramac-backend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: citramac-frontend
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8000
+---
+# backend/celery-worker/celery-beat all need the same egress shape: managed
+# Postgres (5432), managed Redis (6379), and HTTPS (443) for SHA/HIE calls +
+# pulling container images/OS packages. Applied to all three via a shared
+# label selector rather than duplicating per-Deployment.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-tier-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["citramac-backend", "citramac-celery-worker", "citramac-celery-beat"]
+  policyTypes: ["Egress"]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 443

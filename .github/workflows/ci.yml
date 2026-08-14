@@ -1,13 +1,13 @@
 name: CI
 
-# Phase 0 skeleton per docs/11-ROADMAP-AND-PHASES.md — lint + test on every PR,
-# no deploy yet. build-and-scan.yml / deploy-*.yml / terraform-*.yml are added
-# in Phase 8 per docs/12-DEVOPS-DEPLOYMENT.md §12.5.
+# Lint + test on every PR and on every push to master. Phase 8 adds the
+# deploy pipeline (build-and-scan.yml, deploy-*.yml, terraform-*.yml) per
+# docs/12-DEVOPS-DEPLOYMENT.md §12.5, gated on this workflow passing.
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   backend:

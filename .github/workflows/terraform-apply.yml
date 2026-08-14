@@ -1,0 +1,49 @@
+name: Terraform Apply
+
+# On merge to master touching infra/terraform/**: apply dev and staging
+# automatically; production runs through the same job but is held at the
+# `environment: production` gate — docs/12-DEVOPS-DEPLOYMENT.md §12.4/§12.5.
+#
+# The actual approval requirement is configured in GitHub's repo settings
+# (Settings → Environments → production → required reviewers), not in this
+# YAML — a workflow file alone cannot enforce it.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "infra/terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    strategy:
+      # No fail-fast and no max-parallel: production must never start until
+      # dev/staging are confirmed at the matrix level by the environment
+      # gate itself, not by relying on job ordering.
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, production]
+    environment: ${{ matrix.environment }}
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_APPLY_ROLE_ARN_{0}', matrix.environment)] }}
+          aws-region: af-south-1
+
+      - run: terraform init
+
+      - run: terraform apply -auto-approve -input=false

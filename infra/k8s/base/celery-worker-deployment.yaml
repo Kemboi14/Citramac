@@ -1,0 +1,50 @@
+# Same image as citramac-backend, different command — a separate Deployment
+# so it scales independently of HTTP traffic (docs/02-TECH-STACK-AND-ARCHITECTURE.md
+# §2.2, docs/12-DEVOPS-DEPLOYMENT.md §12.3: "never combined").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: citramac-celery-worker
+  labels:
+    app: citramac-celery-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: citramac-celery-worker
+  template:
+    metadata:
+      labels:
+        app: citramac-celery-worker
+    spec:
+      containers:
+        - name: celery-worker
+          image: citramac-backend:latest
+          command: ["celery", "-A", "config", "worker", "-l", "info"]
+          envFrom:
+            - configMapRef:
+                name: citramac-backend-config
+            - secretRef:
+                name: citramac-backend-secrets
+          # No HTTP server in this container — liveness is a Celery-provided
+          # heartbeat check via `celery inspect ping`, not an httpGet probe.
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - config
+                - inspect
+                - ping
+                - --destination
+                - "celery@$(HOSTNAME)"
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"

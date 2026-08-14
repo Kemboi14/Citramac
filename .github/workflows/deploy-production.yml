@@ -1,0 +1,69 @@
+name: Deploy to Production
+
+# Manual promotion only — docs/12-DEVOPS-DEPLOYMENT.md §12.5: "requires
+# approval environment, promotes staging image tag to production." The
+# `production` GitHub Environment must have required reviewers configured
+# in repo settings for the approval gate to actually block; that
+# configuration lives in GitHub's environment settings, not this file.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to promote (the git SHA already running in staging)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/citramac
+  AWS_REGION: af-south-1
+  EKS_CLUSTER_NAME: citramac-production-eks
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production # <- the manual-approval gate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm the promoted image was actually scanned and pushed
+        run: |
+          if ! curl -fsSL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://ghcr.io/v2/${IMAGE_PREFIX}-backend/manifests/${{ inputs.image_tag }}" > /dev/null; then
+            echo "::error::No image found for tag ${{ inputs.image_tag }} — refusing to deploy an unscanned/nonexistent image."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Set image tags and apply
+        working-directory: infra/k8s/overlays/production
+        run: |
+          kustomize edit set image \
+            citramac-backend=${REGISTRY}/${IMAGE_PREFIX}-backend:${{ inputs.image_tag }} \
+            citramac-frontend=${REGISTRY}/${IMAGE_PREFIX}-frontend:${{ inputs.image_tag }}
+          kubectl apply -k .
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n citramac-production rollout status deployment/citramac-backend --timeout=10m
+          kubectl -n citramac-production rollout status deployment/citramac-frontend --timeout=10m
+          kubectl -n citramac-production rollout status deployment/citramac-celery-worker --timeout=10m
+
+      - name: Roll back on failed rollout
+        if: failure()
+        run: |
+          kubectl -n citramac-production rollout undo deployment/citramac-backend
+          kubectl -n citramac-production rollout undo deployment/citramac-frontend
+          kubectl -n citramac-production rollout undo deployment/citramac-celery-worker

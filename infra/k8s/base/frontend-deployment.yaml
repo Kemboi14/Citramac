@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: citramac-frontend
+  labels:
+    app: citramac-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: citramac-frontend
+  template:
+    metadata:
+      labels:
+        app: citramac-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: citramac-frontend:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"

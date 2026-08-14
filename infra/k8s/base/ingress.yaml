@@ -1,0 +1,35 @@
+# Nginx ingress controller, TLS via cert-manager — docs/12-DEVOPS-DEPLOYMENT.md
+# §12.3. `host` and the cert-manager cluster-issuer are patched per
+# environment in overlays/*/kustomization.yaml (different domains for
+# dev/staging/production).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: citramac
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  tls:
+    - hosts:
+        - citramac.example.invalid
+      secretName: citramac-tls  # pragma: allowlist secret
+  rules:
+    - host: citramac.example.invalid
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: citramac-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: citramac-frontend
+                port:
+                  number: 80

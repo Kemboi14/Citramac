@@ -8,7 +8,10 @@ module and override only what differs, per docs/02-TECH-STACK-AND-ARCHITECTURE.m
 from pathlib import Path
 
 import environ
+import structlog
 from celery.schedules import crontab
+
+from config.observability import init_sentry
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -37,6 +40,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
+    "django_structlog",
 ]
 
 # One entry per app in apps/, mirrors docs/02-TECH-STACK-AND-ARCHITECTURE.md §2.5.
@@ -91,6 +95,11 @@ MIDDLEWARE = [
     # Writes an AuditLogEntry for every request that mutates state.
     # See docs/09-SECURITY-COMPLIANCE.md §9.4.
     "apps.sysadmin_audit.middleware.AuditMiddleware",
+    # Binds request_id/user_id/etc. into every structlog log line for the
+    # duration of the request — docs/12-DEVOPS-DEPLOYMENT.md §12.5's
+    # "structured JSON logging ... shipped to a log aggregator." Last, so
+    # it wraps (and its timing includes) every middleware/view above it.
+    "django_structlog.middlewares.RequestMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -276,3 +285,64 @@ CLINICAL_RECORD_MINIMUM_RETENTION_YEARS = env.int(
 ICD11_SYNC_SOURCE_URL = env("ICD11_SYNC_SOURCE_URL", default="")
 LOINC_SYNC_SOURCE_URL = env("LOINC_SYNC_SOURCE_URL", default="")
 NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL = env("NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL", default="")
+
+# ── Observability (docs/12-DEVOPS-DEPLOYMENT.md §12.5) ────────────────────
+# Structured JSON logging in every environment except local dev (where a
+# human-readable console renderer is more useful) — django_structlog's
+# RequestMiddleware (above) binds request_id/user_id into every line.
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.processors.JSONRenderer(),
+        },
+        "console": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.dev.ConsoleRenderer(colors=True),
+        },
+    },
+    "handlers": {
+        "default": {
+            "class": "logging.StreamHandler",
+            "formatter": "console" if DEBUG else "json",
+        },
+    },
+    "root": {
+        # Catches app-code loggers too (structlog.get_logger(__name__) in
+        # any apps/* module) — without this, only the two names below would
+        # ever reach a handler.
+        "handlers": ["default"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django_structlog": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        "django": {"handlers": ["default"], "level": "INFO", "propagate": False},
+    },
+}
+
+# Error tracking — empty SENTRY_DSN (the default) means init_sentry() no-ops,
+# consistent with this project's honest-stub pattern for unconfigured
+# third-party integrations.
+SENTRY_DSN = env("SENTRY_DSN", default="")
+SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default="development")
+SENTRY_RELEASE = env("SENTRY_RELEASE", default="") or None
+init_sentry(SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE)

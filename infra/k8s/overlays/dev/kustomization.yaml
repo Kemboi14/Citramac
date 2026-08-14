@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: citramac-dev
+
+resources:
+  - ../../base
+
+# Placeholder image refs — the deploy-staging.yml/deploy-production.yml
+# workflows run `kustomize edit set image` with the real registry + tag
+# (git SHA) right before `kubectl apply -k .`; Kustomize's YAML syntax has
+# no shell-variable expansion, so a `${REGISTRY}`-style placeholder here
+# would deploy literally, not get substituted.
+images:
+  - name: citramac-backend
+    newName: citramac-backend
+    newTag: unset
+  - name: citramac-frontend
+    newName: citramac-frontend
+    newTag: unset
+
+replicas:
+  - name: citramac-backend
+    count: 1
+  - name: citramac-frontend
+    count: 1
+  - name: citramac-celery-worker
+    count: 1
+
+configMapGenerator:
+  - name: citramac-backend-config
+    behavior: merge
+    literals:
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DJANGO_DEBUG=True
+
+patches:
+  - target:
+      kind: Ingress
+      name: citramac
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: dev.citramac.example.invalid
+      - op: replace
+        path: /spec/rules/0/host
+        value: dev.citramac.example.invalid
+      - op: replace
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer
+        value: letsencrypt-staging
+  - target:
+      kind: ExternalSecret
+      name: citramac-backend-secrets
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: citramac/dev/backend
+  - target:
+      kind: Deployment
+      name: citramac-backend
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"

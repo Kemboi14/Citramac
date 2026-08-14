@@ -1,0 +1,23 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: citramac-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: citramac-backend
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  # A custom Celery-queue-depth metric (docs/12-DEVOPS-DEPLOYMENT.md §12.3)
+  # requires a metrics adapter (e.g. KEDA or Prometheus Adapter) wired to the
+  # cluster's metrics pipeline — not yet installed in any environment here,
+  # so only CPU-based scaling is configured for now. Add an `External` or
+  # `Pods` metric entry once that adapter is in place.

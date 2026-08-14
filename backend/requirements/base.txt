@@ -12,3 +12,5 @@ argon2-cffi==25.1.0
 requests==2.34.2
 cryptography==50.0.0
 fhir.resources==8.3.0
+django-structlog==10.1.0
+sentry-sdk==2.36.0
