@@ -11,6 +11,7 @@ import environ
 import structlog
 from celery.schedules import crontab
 
+from config.metrics import init_custom_metrics
 from config.observability import init_sentry
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -35,6 +36,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "django_prometheus",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -77,6 +79,12 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
+    # Request-latency timer — must be the very first middleware so its
+    # timing wraps every other middleware below, per django-prometheus's own
+    # setup docs. Paired with PrometheusAfterMiddleware at the end of this
+    # list. docs/12-DEVOPS-DEPLOYMENT.md §12.5's request-latency/error-rate
+    # metrics.
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     # CSP/Referrer-Policy/Permissions-Policy — docs/09-SECURITY-COMPLIANCE.md §9.7.
     "config.middleware.SecurityHeadersMiddleware",
@@ -100,6 +108,9 @@ MIDDLEWARE = [
     # "structured JSON logging ... shipped to a log aggregator." Last, so
     # it wraps (and its timing includes) every middleware/view above it.
     "django_structlog.middlewares.RequestMiddleware",
+    # Must be the very last middleware — records the response status/latency
+    # after everything else (including RequestMiddleware) has run.
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -130,6 +141,10 @@ DATABASES = {
         default="postgres://citramac:citramac@localhost:5432/citramac",  # pragma: allowlist secret
     )
 }
+# django-prometheus's wrapper engine, not a different database — exposes
+# query-count/latency and connection-pool metrics (docs/12-DEVOPS-DEPLOYMENT.md
+# §12.5's "DB connection pool saturation") by proxying the real backend below.
+DATABASES["default"]["ENGINE"] = "django_prometheus.db.backends.postgresql"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -346,3 +361,6 @@ SENTRY_DSN = env("SENTRY_DSN", default="")
 SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default="development")
 SENTRY_RELEASE = env("SENTRY_RELEASE", default="") or None
 init_sentry(SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE)
+
+# Celery queue depth + SHA failure-rate gauges — see config/metrics.py.
+init_custom_metrics()

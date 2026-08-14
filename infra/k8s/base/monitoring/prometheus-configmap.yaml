@@ -1,0 +1,95 @@
+# docs/12-DEVOPS-DEPLOYMENT.md §12.5 — request latency/error rate, Celery
+# queue depth, DB connection pool saturation, and SHA API success/failure
+# rate all come from the backend's own /metrics endpoint (django-prometheus
+# + backend/config/metrics.py's custom collectors). Classic file-based
+# Prometheus config, not the prometheus-operator CRDs (ServiceMonitor/
+# PrometheusRule) — no operator is installed in this deployment, matching
+# the rest of infra/k8s's hand-rolled-manifest approach (no eks/vpc/etc.
+# community Terraform modules either).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/rules/alerts.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager:9093"]
+
+    scrape_configs:
+      - job_name: citramac-backend
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["citramac-backend:8000"]
+
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+
+  alerts.yml: |
+    groups:
+      - name: citramac-slo
+        rules:
+          - alert: HighHttp5xxRate
+            expr: |
+              sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]))
+              /
+              sum(rate(django_http_responses_total_by_status_total[5m]))
+              > 0.05
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Backend 5xx rate above 5% for 5 minutes"
+              runbook: "docs/ONCALL-RUNBOOK.md#high-5xx-rate"
+
+          - alert: CeleryQueueBacklog
+            expr: citramac_celery_queue_depth > 500
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Celery default queue backlog above 500 tasks for 10 minutes"
+              runbook: "docs/ONCALL-RUNBOOK.md#celery-queue-backlog"
+
+          - alert: CeleryQueueDepthUnavailable
+            expr: citramac_celery_queue_depth < 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Backend cannot reach Redis to read Celery queue depth (metric itself is down)"
+              runbook: "docs/ONCALL-RUNBOOK.md#celery-queue-backlog"
+
+          - alert: ShaClaimFailuresHigh
+            expr: citramac_sha_failed_transactions{transaction_type="E_CLAIM"} > 5
+            for: 10m
+            labels:
+              severity: page
+            annotations:
+              summary: "More than 5 SHA e-claim submissions failed in the last 15 minutes"
+              runbook: "docs/ONCALL-RUNBOOK.md#sha-claim-failures"
+
+          # Inert until a postgres_exporter is deployed against a real read
+          # replica (infra/terraform's RDS module runs multi_az for
+          # failover, not a separate async read replica) — see
+          # docs/ONCALL-RUNBOOK.md's monitoring-stack scope disclosure.
+          # Kept here (rather than omitted) so it activates automatically,
+          # with no silent gap in docs/12-DEVOPS-DEPLOYMENT.md §12.5's
+          # required alert list, the moment that exporter exists.
+          - alert: DbReplicaLagHigh
+            expr: pg_replication_lag_seconds > 30
+            for: 5m
+            labels:
+              severity: page
+            annotations:
+              summary: "Postgres replica lag above 30 seconds"
+              runbook: "docs/ONCALL-RUNBOOK.md#db-replica-lag"

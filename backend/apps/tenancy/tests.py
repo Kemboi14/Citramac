@@ -1,6 +1,11 @@
+import json
+
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django.test import TestCase
 
+from apps.accounts.models import ActivationInvite, User
 from apps.tenancy.context import clear_tenant_context, platform_admin_context, set_tenant_context
 from apps.tenancy.models import Branch, Organization
 
@@ -73,3 +78,119 @@ class TenantIsolationTests(TestCase):
         with platform_admin_context():
             names = set(Branch.objects.values_list("name", flat=True))
         self.assertEqual(names, {"Branch A1", "Branch B1"})
+
+
+class OnboardTenantCommandTests(TestCase):
+    """
+    docs/11-ROADMAP-AND-PHASES.md Phase 9 ("Onboard CAfRIC Centre ... Org
+    creation -> activation -> module bundle -> staff onboarding"). Covers
+    the ops tool that drives that flow end-to-end, run from the CLI.
+    """
+
+    def _run(self, **overrides):
+        options = {
+            "name": "Test Centre",
+            "slug": "test-centre",
+            "admin_email": "admin@test-centre.invalid",
+            "admin_first_name": "Ada",
+            "admin_last_name": "Min",
+            "dha_facility_code": "",
+            "sha_provider_code": "",
+            "branch_name": "",
+            "branch_level": "L4",
+            "county": "",
+            "staff_file": "",
+            "dry_run": False,
+        }
+        options.update(overrides)
+        call_command("onboard_tenant", **options)
+
+    def test_creates_org_admin_and_module_bundle(self):
+        self._run(branch_name="Main Branch", county="Nairobi")
+
+        with platform_admin_context():
+            org = Organization.objects.get(slug="test-centre")
+            admin = User.objects.get(email="admin@test-centre.invalid")
+
+            self.assertEqual(org.facility_type, "MENTAL_HEALTH_CCP")
+            self.assertIn("ccp_program", org.enabled_modules)
+            self.assertIn("client_registry", org.enabled_modules)
+            self.assertFalse(admin.is_active)
+            self.assertTrue(admin.roles.filter(name="Org Admin").exists())
+            self.assertTrue(
+                Branch.all_objects.filter(organization=org, name="Main Branch").exists()
+            )
+            self.assertTrue(ActivationInvite.all_objects.filter(user=admin).exists())
+
+    def test_rerun_is_idempotent(self):
+        self._run(branch_name="Main Branch")
+        self._run(branch_name="Main Branch")
+
+        with platform_admin_context():
+            self.assertEqual(Organization.objects.filter(slug="test-centre").count(), 1)
+            self.assertEqual(User.objects.filter(email="admin@test-centre.invalid").count(), 1)
+            self.assertEqual(Branch.all_objects.filter(name="Main Branch").count(), 1)
+            self.assertEqual(
+                ActivationInvite.all_objects.filter(
+                    user__email="admin@test-centre.invalid"
+                ).count(),
+                1,
+            )
+
+    def test_dry_run_rolls_back_everything(self):
+        self._run(dry_run=True)
+
+        with platform_admin_context():
+            self.assertFalse(Organization.objects.filter(slug="test-centre").exists())
+            self.assertFalse(User.objects.filter(email="admin@test-centre.invalid").exists())
+
+    def test_staff_file_bulk_invites(self):
+        import os
+        import tempfile
+
+        fd, path = tempfile.mkstemp(suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(
+                    [
+                        {
+                            "email": "doctor@test-centre.invalid",
+                            "first_name": "Dana",
+                            "last_name": "Doctor",
+                            "role": "Doctor",
+                            "staff_id": "D-01",
+                        }
+                    ],
+                    fh,
+                )
+            self._run(branch_name="Main Branch", staff_file=path)
+        finally:
+            os.remove(path)
+
+        with platform_admin_context():
+            staff = User.objects.get(email="doctor@test-centre.invalid")
+            self.assertTrue(staff.roles.filter(name="Doctor").exists())
+            self.assertEqual(staff.staff_id, "D-01")
+
+    def test_unknown_staff_role_raises_command_error(self):
+        import os
+        import tempfile
+
+        fd, path = tempfile.mkstemp(suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(
+                    [
+                        {
+                            "email": "ghost@test-centre.invalid",
+                            "first_name": "Ghost",
+                            "last_name": "Role",
+                            "role": "Not A Real Role",
+                        }
+                    ],
+                    fh,
+                )
+            with self.assertRaises(CommandError):
+                self._run(staff_file=path)
+        finally:
+            os.remove(path)

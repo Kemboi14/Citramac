@@ -105,3 +105,23 @@ resource "aws_secretsmanager_secret_version" "backend" {
     DJANGO_SECRET_KEY = random_password.django_secret_key.result
   })
 }
+
+# Composes the secret infra/k8s/base/monitoring/grafana-external-secret.yaml
+# reads (citramac/dev/monitoring) — Grafana's admin password, never
+# hardcoded (docs/12-DEVOPS-DEPLOYMENT.md §12.5).
+resource "random_password" "grafana_admin_password" {
+  length  = 32
+  special = false # Grafana's own login form; avoid characters that need shell-escaping when copy-pasted by on-call.
+}
+
+resource "aws_secretsmanager_secret" "monitoring" {
+  name = "citramac/dev/monitoring"
+  tags = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "monitoring" {
+  secret_id = aws_secretsmanager_secret.monitoring.id
+  secret_string = jsonencode({
+    GRAFANA_ADMIN_PASSWORD = random_password.grafana_admin_password.result
+  })
+}

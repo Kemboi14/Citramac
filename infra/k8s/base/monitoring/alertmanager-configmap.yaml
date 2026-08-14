@@ -1,0 +1,23 @@
+# Honest-stub receiver, matching this project's pattern for unconfigured
+# third-party integrations (apps.dha_interop.hie_client,
+# apps.insurance_claims.sha_gateway, config/observability.py's Sentry
+# no-op): alerts fire and are visible in Alertmanager's own UI/API, but
+# nothing pages anyone yet. Wiring a real PagerDuty/Slack/email receiver
+# needs real credentials (an ExternalSecret, same pattern as
+# infra/k8s/base/external-secret.yaml) which this environment has none of.
+# Do this before go-live — see docs/ONCALL-RUNBOOK.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+data:
+  alertmanager.yml: |
+    route:
+      receiver: unconfigured
+      group_by: ["alertname"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+    receivers:
+      - name: unconfigured

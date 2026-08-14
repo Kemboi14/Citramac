@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - prometheus-configmap.yaml
+  - prometheus-deployment.yaml
+  - prometheus-service.yaml
+  - alertmanager-configmap.yaml
+  - alertmanager-deployment.yaml
+  - alertmanager-service.yaml
+  - grafana-configmap.yaml
+  - grafana-deployment.yaml
+  - grafana-service.yaml
+  - grafana-external-secret.yaml
+  - networkpolicy-monitoring.yaml

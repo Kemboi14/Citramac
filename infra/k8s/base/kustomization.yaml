@@ -14,6 +14,7 @@ resources:
   - hpa-frontend.yaml
   - networkpolicy.yaml
   - external-secret.yaml
+  - monitoring
 
 labels:
   - pairs:

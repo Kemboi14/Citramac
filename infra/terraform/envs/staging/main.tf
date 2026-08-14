@@ -100,3 +100,21 @@ resource "aws_secretsmanager_secret_version" "backend" {
     DJANGO_SECRET_KEY = random_password.django_secret_key.result
   })
 }
+
+# See envs/dev/main.tf's monitoring secret comment.
+resource "random_password" "grafana_admin_password" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "monitoring" {
+  name = "citramac/staging/monitoring"
+  tags = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "monitoring" {
+  secret_id = aws_secretsmanager_secret.monitoring.id
+  secret_string = jsonencode({
+    GRAFANA_ADMIN_PASSWORD = random_password.grafana_admin_password.result
+  })
+}

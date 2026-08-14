@@ -50,3 +50,10 @@ patches:
       - op: replace
         path: /spec/dataFrom/0/extract/key
         value: citramac/staging/backend
+  - target:
+      kind: ExternalSecret
+      name: grafana-secrets
+    patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: citramac/staging/monitoring

@@ -1,0 +1,13 @@
+# ClusterIP only, deliberately not exposed on the public Ingress — an
+# operator dashboard has no reason to be internet-facing. On-call reaches it
+# via `kubectl port-forward svc/grafana 3000:3000` (see docs/ONCALL-RUNBOOK.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000

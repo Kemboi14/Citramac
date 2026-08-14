@@ -1,0 +1,98 @@
+# Extends infra/k8s/base/networkpolicy.yaml's default-deny-all posture for
+# the monitoring stack's pod-to-pod traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: citramac-backend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: citramac-backend
+      ports:
+        - port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: alertmanager
+      ports:
+        - port: 9093
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-egress-to-prometheus
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 9090
+---
+# No ingress rule for Grafana itself: `kubectl port-forward` (the intended
+# access path — see grafana-service.yaml) proxies through the kubelet
+# directly rather than the pod network, so it isn't subject to
+# NetworkPolicy at all. default-deny-all's blanket ingress deny is
+# therefore already correct for Grafana with nothing further to add.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: alertmanager
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 9093
+---
+# Alertmanager's receiver is an honest stub today (see
+# alertmanager-configmap.yaml) so it sends nothing outbound yet; this rule
+# is scoped to HTTPS only so it's ready for a real webhook/PagerDuty/Slack
+# receiver without widening egress further at that point.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: alertmanager
+  policyTypes: ["Egress"]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443

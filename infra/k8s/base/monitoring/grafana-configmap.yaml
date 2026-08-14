@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+data:
+  datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+
+  dashboard-provider.yml: |
+    apiVersion: 1
+    providers:
+      - name: citramac
+        folder: CITRAMAC
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+---
+# docs/12-DEVOPS-DEPLOYMENT.md §12.5's required panels: request latency,
+# error rate, Celery queue depth, DB connection pool saturation, SHA
+# success/failure rate.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+data:
+  citramac-overview.json: |
+    {
+      "title": "CITRAMAC Overview",
+      "timezone": "utc",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "id": 1, "title": "HTTP request rate", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [{"expr": "sum(rate(django_http_responses_total_by_status_total[5m])) by (status)"}]
+        },
+        {
+          "id": 2, "title": "HTTP 5xx error rate", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [{"expr": "sum(rate(django_http_responses_total_by_status_total{status=~\"5..\"}[5m])) / sum(rate(django_http_responses_total_by_status_total[5m]))"}]
+        },
+        {
+          "id": 3, "title": "Request latency (DB query duration, p50/p95)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "histogram_quantile(0.5, sum(rate(django_db_query_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+            {"expr": "histogram_quantile(0.95, sum(rate(django_db_query_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}
+          ]
+        },
+        {
+          "id": 4, "title": "DB connections opened", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [{"expr": "sum(rate(django_db_new_connections_total[5m]))"}]
+        },
+        {
+          "id": 5, "title": "Celery queue depth", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [{"expr": "citramac_celery_queue_depth"}]
+        },
+        {
+          "id": 6, "title": "SHA failed transactions (last 15m, by type)", "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "targets": [{"expr": "citramac_sha_failed_transactions"}]
+        }
+      ]
+    }

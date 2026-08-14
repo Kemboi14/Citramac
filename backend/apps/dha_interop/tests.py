@@ -1,3 +1,6 @@
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -5,6 +8,7 @@ from apps.accounts.models import User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.clinical_encounter.models import Encounter, ReferralPacket
+from apps.insurance_claims.models import InsuranceClaim, PreAuthorization, Remittance
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
@@ -167,3 +171,76 @@ class TerminologySyncTests(APITestCase):
                 run = sync_terminology_source("ICD11")
         self.assertEqual(run.status, "FAILED")
         self.assertIn("down", run.detail)
+
+
+class SeedDhaSandboxDemoCommandTests(TestCase):
+    """
+    docs/08-DHA-SHA-INTEGRATION.md §8.6 / docs/11-ROADMAP-AND-PHASES.md
+    Phase 9 — the seeded-sandbox demo data DHA evaluators walk through live.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Demo Org", slug="demo-org", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                citramac_number="TEST-SEED-0001",
+                first_name="Faith",
+                last_name="Mwangi",
+                gender="FEMALE",
+                date_of_birth="1997-03-14",
+            )
+            self.encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
+
+    def test_seeds_full_cycle(self):
+        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
+
+        with platform_admin_context():
+            pre_auth = PreAuthorization.objects.get(patient=self.patient)
+            claim = InsuranceClaim.objects.get(patient=self.patient)
+            remittance = Remittance.objects.get(claim=claim)
+            referral = ReferralPacket.objects.get(encounter=self.encounter)
+
+            self.assertEqual(pre_auth.status, "SUBMITTED")
+            self.assertTrue(pre_auth.sha_reference)
+            self.assertEqual(claim.status, "SUBMITTED")
+            self.assertTrue(claim.sha_reference)
+            self.assertGreater(remittance.amount_paid, 0)
+            self.assertEqual(referral.fhir_bundle_json.get("resourceType"), "Bundle")
+
+    def test_rerun_is_idempotent(self):
+        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
+        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
+
+        with platform_admin_context():
+            self.assertEqual(PreAuthorization.objects.filter(patient=self.patient).count(), 1)
+            self.assertEqual(InsuranceClaim.objects.filter(patient=self.patient).count(), 1)
+            self.assertEqual(Remittance.objects.filter(claim__patient=self.patient).count(), 1)
+            self.assertEqual(ReferralPacket.objects.filter(encounter=self.encounter).count(), 1)
+
+    def test_raises_without_patient(self):
+        with platform_admin_context():
+            empty_org = Organization.objects.create(
+                name="Empty Org", slug="empty-org", facility_type="MENTAL_HEALTH_CCP"
+            )
+        with self.assertRaises(CommandError):
+            call_command("seed_dha_sandbox_demo", org_slug=empty_org.slug)
+
+    def test_raises_without_encounter(self):
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="No Encounter Org", slug="no-encounter-org", facility_type="MENTAL_HEALTH_CCP"
+            )
+            Patient.objects.create(
+                organization=org,
+                citramac_number="TEST-SEED-0002",
+                first_name="No",
+                last_name="Encounter",
+                gender="FEMALE",
+                date_of_birth="1990-01-01",
+            )
+        with self.assertRaises(CommandError):
+            call_command("seed_dha_sandbox_demo", org_slug=org.slug)
