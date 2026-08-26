@@ -1,16 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LoginOutcome } from "../AuthContext";
 import type { TenantBranding } from "../../lib/authApi";
 import { ApiError } from "../../lib/apiClient";
+import { getPlatformBranding } from "../../lib/brandingApi";
 import { AuthButton, PasswordField, SecureFooter } from "./AuthCard";
 import { ArrowRightIcon, BuildingIcon, LockIcon, MailIcon } from "./icons";
+
+// Platform staff (Super Admin, and any other organization=None account) have
+// no tenant for TenantDiscoveryStep to resolve — email domain lookup is
+// scoped to Organization.email_domains, which by definition doesn't cover
+// them. Rather than dead-ending the whole login flow (the bug this constant
+// fixes — see TenantDiscoveryStep's "Continue without an organisation"
+// fallback), this generic branding renders in that case instead.
+const PLATFORM_BRANDING: TenantBranding = {
+  id: "",
+  name: "CITRAMAC",
+  logo_url: "",
+  login_image_url: "",
+  tagline: "Platform Console",
+  primary_color: "",
+  support_email: "",
+  support_phone: "",
+  website: "",
+};
 
 /**
  * Tenant-branded password screen (citramac-tenant-login.html) — the split
  * panel takes its color from the resolved Organization.primary_color
  * (docs/14-TENANT-BRANDED-LOGIN-UX.md), scoped to this card only via the
  * --tenant-primary CSS var so it never leaks into the rest of the app's
- * green brand palette.
+ * green brand palette. `tenant` is null for platform staff signing in
+ * without a resolved organization, in which case generic CITRAMAC branding
+ * renders instead.
  */
 export function TenantLoginStep({
   tenant,
@@ -20,7 +41,7 @@ export function TenantLoginStep({
   onSuccess,
   onRequiresOtp,
 }: {
-  tenant: TenantBranding;
+  tenant: TenantBranding | null;
   email: string;
   onChangeEmail: () => void;
   login: (email: string, password: string, remember: boolean) => Promise<LoginOutcome>;
@@ -35,8 +56,17 @@ export function TenantLoginStep({
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [platformLogo, setPlatformLogo] = useState<string | null>(null);
 
-  const supportEmail = tenant.support_email || "support@citramac.com";
+  useEffect(() => {
+    if (tenant) return;
+    getPlatformBranding()
+      .then((b) => setPlatformLogo(b.logo))
+      .catch(() => setPlatformLogo(null));
+  }, [tenant]);
+
+  const branding = tenant ?? { ...PLATFORM_BRANDING, logo_url: platformLogo ?? "" };
+  const supportEmail = branding.support_email || "support@citramac.com";
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -67,14 +97,16 @@ export function TenantLoginStep({
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8"
-      style={{ "--tenant-primary": tenant.primary_color || "var(--green)" } as React.CSSProperties}
+      style={
+        { "--tenant-primary": branding.primary_color || "var(--green)" } as React.CSSProperties
+      }
     >
       <div className="grid w-full max-w-[850px] overflow-hidden rounded-lg border border-black/[0.06] bg-surface-card shadow-md md:grid-cols-[minmax(230px,0.82fr)_minmax(320px,1.18fr)]">
         <aside className="flex min-h-[220px] flex-col items-center justify-center gap-4 bg-[var(--tenant-primary)] p-8 text-white md:min-h-[575px]">
-          {tenant.logo_url ? (
+          {branding.logo_url ? (
             <img
-              src={tenant.logo_url}
-              alt={`${tenant.name} logo`}
+              src={branding.logo_url}
+              alt={`${branding.name} logo`}
               className="h-[160px] w-[160px] rounded-3xl bg-white object-contain p-4 md:h-[190px] md:w-[190px]"
             />
           ) : (
@@ -82,9 +114,11 @@ export function TenantLoginStep({
               <span className="grid h-[120px] w-[120px] place-items-center rounded-3xl bg-white/15">
                 <BuildingIcon className="h-14 w-14" />
               </span>
-              <p className="font-display text-lg font-semibold">{tenant.name}</p>
-              {tenant.tagline && (
-                <p className="max-w-[200px] text-center text-xs text-white/80">{tenant.tagline}</p>
+              <p className="font-display text-lg font-semibold">{branding.name}</p>
+              {branding.tagline && (
+                <p className="max-w-[200px] text-center text-xs text-white/80">
+                  {branding.tagline}
+                </p>
               )}
             </>
           )}
@@ -92,7 +126,7 @@ export function TenantLoginStep({
 
         <div className="px-7 pb-7 pt-10 md:px-12 md:pt-12">
           <h1 className="font-display text-2xl font-semibold text-ink-900">
-            Sign in to {tenant.name}
+            Sign in to {branding.name}
           </h1>
           <p className="mt-2.5 text-[13px] leading-relaxed text-ink-500">
             Access your organisation&rsquo;s platform to manage care and operations.

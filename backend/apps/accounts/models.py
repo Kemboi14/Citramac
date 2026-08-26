@@ -47,6 +47,20 @@ class Role(TimestampedModel):
     that exact rule at the database layer regardless.
     """
 
+    # PLATFORM: governs the Super Admin console itself (Softlink Options'
+    # own staff — Super Admin, Support Agent, Billing Admin, Auditor, MFL
+    # Verifier). ORG_TEMPLATE: what an Org Admin assigns their own clinical/
+    # operational staff into (Psychiatrist, Ward Nurse, Therapist, ...) —
+    # these are the only ones an Org Admin's Roles & Permissions screen
+    # ever lists or lets an org customize, per docs/09-SECURITY-COMPLIANCE.md
+    # §9.3's "cannot grant permissions the platform template doesn't allow."
+    SCOPE_PLATFORM = "PLATFORM"
+    SCOPE_ORG_TEMPLATE = "ORG_TEMPLATE"
+    SCOPE_CHOICES = [
+        (SCOPE_PLATFORM, "Platform staff"),
+        (SCOPE_ORG_TEMPLATE, "Organization template"),
+    ]
+
     name = models.CharField(max_length=100)
     organization = models.ForeignKey(
         Organization,
@@ -55,6 +69,8 @@ class Role(TimestampedModel):
         blank=True,
         related_name="roles",
     )
+    scope = models.CharField(max_length=16, choices=SCOPE_CHOICES, default=SCOPE_ORG_TEMPLATE)
+    description = models.CharField(max_length=255, blank=True)
     permissions = models.ManyToManyField(Permission, blank=True, related_name="roles")
 
     class Meta:
@@ -143,6 +159,11 @@ class User(AbstractBaseUser):
     roles = models.ManyToManyField(Role, blank=True, related_name="users")
     branch_access = models.ManyToManyField(Branch, blank=True, related_name="staff_members")
 
+    # Manually toggled by an Org Admin from the Staff & CCP Team roster
+    # (citramac_ORG-admin.html "On duty / Off duty" status pill) — there is
+    # no shift-scheduling module in this build, so this is a plain presence
+    # flag, not derived from a roster/attendance system.
+    is_on_duty = models.BooleanField(default=False)
     mfa_enabled = models.BooleanField(default=True)
     MFA_CHANNEL_EMAIL = "EMAIL"
     MFA_CHANNEL_SMS = "SMS"

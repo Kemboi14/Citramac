@@ -22,6 +22,22 @@ import { SupervisionRequestsPage } from "./modules/clinical/SupervisionRequestsP
 import { CcpTeamPage } from "./modules/clinical/CcpTeamPage";
 import { NacadaReportPage } from "./modules/clinical/NacadaReportPage";
 import { ErasureRequestsPage } from "./modules/org-admin/ErasureRequestsPage";
+import { SecurityDashboardPage } from "./modules/super-admin/SecurityDashboardPage";
+import { SecurityPoliciesPage } from "./modules/super-admin/SecurityPoliciesPage";
+import { TenantSecurityPage } from "./modules/super-admin/TenantSecurityPage";
+import { SecurityAuditLogsPage } from "./modules/super-admin/SecurityAuditLogsPage";
+import { SecurityAlertsPage } from "./modules/super-admin/SecurityAlertsPage";
+import { PlatformDashboardPage } from "./modules/super-admin/PlatformDashboardPage";
+import { OrganizationsPage } from "./modules/super-admin/OrganizationsPage";
+import { BranchesPage } from "./modules/super-admin/BranchesPage";
+import { SubscriptionsPage } from "./modules/super-admin/SubscriptionsPage";
+import { GlobalRolesPage } from "./modules/super-admin/GlobalRolesPage";
+import { AuditLogPage } from "./modules/super-admin/AuditLogPage";
+import { OrgDashboardPage } from "./modules/org-admin/OrgDashboardPage";
+import { WardBedManagementPage } from "./modules/org-admin/WardBedManagementPage";
+import { StaffTeamPage } from "./modules/org-admin/StaffTeamPage";
+import { OrgRolesPermissionsPage } from "./modules/org-admin/OrgRolesPermissionsPage";
+import { BranchSettingsPage } from "./modules/org-admin/BranchSettingsPage";
 
 function App() {
   return (
@@ -34,64 +50,27 @@ function App() {
 
       <Route element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]} />}>
         <Route path="/super-admin" element={<SuperAdminShell />}>
-          <Route
-            index
-            element={<PlaceholderPage eyebrow="Super Admin" title="Platform Dashboard" />}
-          />
-          <Route
-            path="organizations"
-            element={<PlaceholderPage eyebrow="Super Admin · Platform" title="Organizations" />}
-          />
-          <Route
-            path="branches"
-            element={<PlaceholderPage eyebrow="Super Admin · Platform" title="Branches" />}
-          />
-          <Route
-            path="subscriptions"
-            element={
-              <PlaceholderPage eyebrow="Super Admin · Platform" title="Subscriptions & Billing" />
-            }
-          />
-          <Route
-            path="roles"
-            element={
-              <PlaceholderPage
-                eyebrow="Super Admin · Governance"
-                title="Global Roles & Permissions"
-              />
-            }
-          />
-          <Route
-            path="audit-log"
-            element={<PlaceholderPage eyebrow="Super Admin · Governance" title="Audit Log" />}
-          />
+          <Route index element={<PlatformDashboardPage />} />
+          <Route path="organizations" element={<OrganizationsPage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="roles" element={<GlobalRolesPage />} />
+          <Route path="audit-log" element={<AuditLogPage />} />
+          <Route path="security-dashboard" element={<SecurityDashboardPage />} />
+          <Route path="security-policies" element={<SecurityPoliciesPage />} />
+          <Route path="tenant-security" element={<TenantSecurityPage />} />
+          <Route path="security-audit-logs" element={<SecurityAuditLogsPage />} />
+          <Route path="security-alerts" element={<SecurityAlertsPage />} />
         </Route>
       </Route>
 
       <Route element={<ProtectedRoute allowedRoles={["Org Admin"]} />}>
         <Route path="/org-admin" element={<OrgAdminShell />}>
-          <Route
-            index
-            element={<PlaceholderPage eyebrow="Organization Admin" title="Org Dashboard" />}
-          />
-          <Route
-            path="wards"
-            element={<PlaceholderPage eyebrow="Facility" title="Ward & Bed Management" />}
-          />
-          <Route
-            path="staff"
-            element={<PlaceholderPage eyebrow="Facility" title="Staff & CCP Team" />}
-          />
-          <Route
-            path="branch-settings"
-            element={<PlaceholderPage eyebrow="Facility" title="Branch Settings" />}
-          />
-          <Route
-            path="roles"
-            element={
-              <PlaceholderPage eyebrow="Facility · Governance" title="Roles & Permissions" />
-            }
-          />
+          <Route index element={<OrgDashboardPage />} />
+          <Route path="wards" element={<WardBedManagementPage />} />
+          <Route path="staff" element={<StaffTeamPage />} />
+          <Route path="branch-settings" element={<BranchSettingsPage />} />
+          <Route path="roles" element={<OrgRolesPermissionsPage />} />
           <Route path="data-requests" element={<ErasureRequestsPage />} />
         </Route>
       </Route>

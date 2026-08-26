@@ -1,12 +1,15 @@
 import {
   Activity,
+  AlertTriangle,
   Building2,
   ClipboardList,
   CreditCard,
   FileBarChart,
+  FileClock,
   FileText,
   FlaskConical,
   Info,
+  KeyRound,
   Landmark,
   LayoutDashboard,
   Paperclip,
@@ -50,6 +53,11 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
     items: [
       { label: "Roles & Permissions", to: "/super-admin/roles", icon: ShieldCheck },
       { label: "Audit Log", to: "/super-admin/audit-log", icon: ClipboardList },
+      { label: "Security Dashboard", to: "/super-admin/security-dashboard", icon: ShieldCheck },
+      { label: "Security Policies", to: "/super-admin/security-policies", icon: KeyRound },
+      { label: "Tenant Security", to: "/super-admin/tenant-security", icon: Building2 },
+      { label: "Security Audit Logs", to: "/super-admin/security-audit-logs", icon: FileClock },
+      { label: "Security Alerts", to: "/super-admin/security-alerts", icon: AlertTriangle },
     ],
   },
 ];

@@ -32,8 +32,8 @@ class UserAdmin(admin.ModelAdmin):
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ["name", "organization"]
-    list_filter = ["organization"]
+    list_display = ["name", "organization", "scope"]
+    list_filter = ["organization", "scope"]
     filter_horizontal = ["permissions"]
 
 

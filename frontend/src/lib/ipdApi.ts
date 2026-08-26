@@ -10,22 +10,60 @@ export interface Paginated<T> {
 export interface Ward {
   id: string;
   name: string;
+  branch: string | null;
   ward_type: string;
+  bed_count: number;
 }
 
-export function listWards(accessToken: string) {
-  return apiRequest<Paginated<Ward>>("/ipd/wards/", { accessToken });
+export function listWards(accessToken: string, branchId?: string) {
+  return apiRequest<Paginated<Ward>>(`/ipd/wards/${branchId ? `?branch=${branchId}` : ""}`, {
+    accessToken,
+  });
 }
+
+export function createWard(
+  accessToken: string,
+  payload: { name: string; branch?: string; ward_type?: string },
+) {
+  return apiRequest<Ward>("/ipd/wards/", { method: "POST", body: payload, accessToken });
+}
+
+export type BedStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED" | "MAINTENANCE";
 
 export interface Bed {
   id: string;
   ward: string;
   bed_number: string;
-  status: string;
+  status: BedStatus;
+  occupant_name: string | null;
 }
 
-export function listBeds(accessToken: string) {
-  return apiRequest<Paginated<Bed>>("/ipd/beds/", { accessToken });
+export function listBeds(accessToken: string, wardId?: string) {
+  return apiRequest<Paginated<Bed>>(`/ipd/beds/${wardId ? `?ward=${wardId}` : ""}`, {
+    accessToken,
+  });
+}
+
+export function createBed(
+  accessToken: string,
+  payload: { ward: string; bed_number: string; status?: BedStatus },
+) {
+  return apiRequest<Bed>("/ipd/beds/", { method: "POST", body: payload, accessToken });
+}
+
+export function updateBed(accessToken: string, bedId: string, payload: Partial<Bed>) {
+  return apiRequest<Bed>(`/ipd/beds/${bedId}/`, { method: "PATCH", body: payload, accessToken });
+}
+
+export interface WardBedSummary {
+  beds_by_status: Record<BedStatus, number>;
+  wards: Ward[];
+}
+
+export function getWardSummary(accessToken: string, branchId?: string) {
+  return apiRequest<WardBedSummary>(`/ipd/wards/summary/${branchId ? `?branch=${branchId}` : ""}`, {
+    accessToken,
+  });
 }
 
 export interface Admission {

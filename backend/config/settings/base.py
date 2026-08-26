@@ -21,6 +21,16 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="django-insecure-change-me-in-env")
 
+# Fernet key for at-rest encryption of tenant secrets (apps/tenancy/crypto.py),
+# e.g. Branch.sha_api_credentials_encrypted — docs/04-MULTI-TENANCY.md §4.5.
+# Dev/test default is fixed (NOT secret) so migrations/fixtures are
+# reproducible across a fresh clone; every real environment must set a real
+# generated key (`python -c "from cryptography.fernet import Fernet;
+# print(Fernet.generate_key().decode())"`) via FIELD_ENCRYPTION_KEY.
+FIELD_ENCRYPTION_KEY = env(
+    "FIELD_ENCRYPTION_KEY", default="9Z1XUaU8qUf7ln091SpHloEM-TCNclM3dVaFT5ZtpuA="
+)
+
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
@@ -70,6 +80,7 @@ LOCAL_APPS = [
     "apps.dha_interop",
     "apps.notifications",
     "apps.offline_sync",
+    "apps.security",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

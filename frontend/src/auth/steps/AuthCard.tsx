@@ -56,7 +56,7 @@ export function AuthField({
         {label}
         <input
           {...props}
-          className="rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none focus:border-brand-green"
+          className="rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green"
         />
       </label>
     );
@@ -84,7 +84,10 @@ export function AuthField({
 export function PasswordField({
   label,
   ...props
-}: { label: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">) {
+}: { label: string; icon?: ReactNode } & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "type"
+>) {
   const [visible, setVisible] = useState(false);
   return (
     <AuthField

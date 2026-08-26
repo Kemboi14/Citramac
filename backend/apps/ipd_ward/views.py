@@ -20,17 +20,54 @@ class WardViewSet(viewsets.ModelViewSet):
         # Not `queryset = Ward.objects.all()` as a class attribute — that
         # would bind the tenant-scoped manager's filter at import time
         # (before any request context exists), returning nothing forever.
-        return Ward.objects.order_by("name")
+        from django.db.models import Count
+
+        queryset = Ward.objects.annotate(bed_count=Count("beds", distinct=True)).order_by("name")
+        branch = self.request.query_params.get("branch")
+        if branch:
+            queryset = queryset.filter(branch_id=branch)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """Ward & Bed Management screen's legend counts (vacant/occupied/
+        reserved/maintenance) and per-ward totals, in one call."""
+        from django.db.models import Count
+
+        branch = request.query_params.get("branch")
+        beds = Bed.objects.all()
+        if branch:
+            beds = beds.filter(ward__branch_id=branch)
+        by_status = {
+            row["status"]: row["count"] for row in beds.values("status").annotate(count=Count("id"))
+        }
+        wards = self.get_queryset()
+        return Response(
+            {
+                "beds_by_status": {
+                    status: by_status.get(status, 0) for status, _ in Bed.STATUS_CHOICES
+                },
+                "wards": WardSerializer(wards, many=True).data,
+            }
+        )
 
 
 class BedViewSet(viewsets.ModelViewSet):
     serializer_class = BedSerializer
 
     def get_queryset(self):
-        return Bed.objects.select_related("ward").order_by("ward__name", "bed_number")
+        queryset = (
+            Bed.objects.select_related("ward")
+            .prefetch_related("admissions__patient")
+            .order_by("ward__name", "bed_number")
+        )
+        ward = self.request.query_params.get("ward")
+        if ward:
+            queryset = queryset.filter(ward_id=ward)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)

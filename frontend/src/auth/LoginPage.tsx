@@ -8,11 +8,11 @@ import { TenantLoginStep } from "./steps/TenantLoginStep";
 
 type LoginFlowState =
   | { step: "discovery" }
-  | { step: "password"; email: string; tenant: TenantBranding }
+  | { step: "password"; email: string; tenant: TenantBranding | null }
   | {
       step: "otp";
       email: string;
-      tenant: TenantBranding;
+      tenant: TenantBranding | null;
       otpToken: string;
       channel: MfaChannel;
       deliveryMethods: MfaDeliveryMethod[];

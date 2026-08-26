@@ -1,13 +1,13 @@
 from django.contrib import admin
 
-from .models import Branch, Organization, SubscriptionPlan
+from .models import Branch, Organization, PlatformBranding, Subscription, SubscriptionPlan
 
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "facility_type", "is_active", "created_at"]
+    list_display = ["name", "slug", "org_type", "facility_type", "status", "created_at"]
     search_fields = ["name", "slug", "dha_facility_code"]
-    list_filter = ["facility_type", "is_active"]
+    list_filter = ["org_type", "facility_type", "status", "ownership_type"]
     prepopulated_fields = {"slug": ("name",)}
     fieldsets = (
         (
@@ -16,13 +16,19 @@ class OrganizationAdmin(admin.ModelAdmin):
                 "fields": (
                     "name",
                     "slug",
+                    "org_type",
                     "facility_type",
+                    "ownership_type",
                     "dha_facility_code",
                     "sha_provider_code",
+                    "county",
+                    "sub_county",
                     "subscription_plan",
                     "enabled_modules",
                     "isolation_mode",
+                    "status",
                     "is_active",
+                    "mfl_verified_at",
                 )
             },
         ),
@@ -53,10 +59,27 @@ class OrganizationAdmin(admin.ModelAdmin):
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
     list_display = ["name", "organization", "facility_level", "county", "is_active"]
-    search_fields = ["name", "organization__name"]
-    list_filter = ["facility_level", "is_active"]
+    search_fields = ["name", "organization__name", "mfl_code"]
+    list_filter = ["facility_level", "is_active", "ccp_registration_status"]
+    exclude = ["sha_api_credentials_encrypted"]
 
 
 @admin.register(SubscriptionPlan)
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    list_display = ["name", "max_branches", "max_staff_seats", "price_monthly"]
+    list_display = ["name", "code", "max_branches", "max_staff_seats", "price_monthly", "is_active"]
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ["organization", "plan", "billing_cycle", "status", "current_period_end"]
+    list_filter = ["status", "billing_cycle"]
+    search_fields = ["organization__name"]
+
+
+@admin.register(PlatformBranding)
+class PlatformBrandingAdmin(admin.ModelAdmin):
+    list_display = ["logo", "updated_at", "updated_by"]
+
+    def has_add_permission(self, request):
+        # Singleton — always pk=1, editing is the only meaningful action.
+        return not PlatformBranding.objects.exists()

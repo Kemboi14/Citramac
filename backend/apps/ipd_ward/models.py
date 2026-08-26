@@ -21,6 +21,7 @@ class Bed(TenantScopedModel):
     STATUS_CHOICES = [
         ("AVAILABLE", "Available"),
         ("OCCUPIED", "Occupied"),
+        ("RESERVED", "Reserved"),
         ("MAINTENANCE", "Maintenance"),
     ]
 

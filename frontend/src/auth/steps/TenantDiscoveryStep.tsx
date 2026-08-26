@@ -18,7 +18,7 @@ export function TenantDiscoveryStep({
   initialEmail = "",
   toast,
 }: {
-  onSuccess: (email: string, tenant: TenantBranding) => void;
+  onSuccess: (email: string, tenant: TenantBranding | null) => void;
   initialEmail?: string;
   toast?: string | null;
 }) {
@@ -104,6 +104,16 @@ export function TenantDiscoveryStep({
             {isSubmitting ? "Checking email..." : notFound ? "Try Again" : "Continue"}
             {!isSubmitting && <ArrowRightIcon className="h-[18px] w-[18px]" />}
           </AuthButton>
+
+          {notFound && (
+            <button
+              type="button"
+              onClick={() => onSuccess(email.trim(), null)}
+              className="mt-1 text-center text-xs font-medium text-ink-500 hover:text-brand-green-dark hover:underline"
+            >
+              Continue without an organisation
+            </button>
+          )}
         </form>
 
         <div

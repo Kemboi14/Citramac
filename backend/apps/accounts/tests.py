@@ -7,7 +7,8 @@ from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .models import ActivationInvite, OneTimePassword, User
+from .models import ActivationInvite, OneTimePassword, Permission, Role, User
+from .tokens import issue_tokens
 
 
 def _extract_code(email_body):
@@ -416,3 +417,150 @@ class RememberMeCookieTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.cookies["refresh_token"]["max-age"], "")
+
+
+class RolesAndStaffConsoleApiTests(APITestCase):
+    """
+    citramac_ORG-admin.html "Roles & Permissions" + "Staff / CCP Team",
+    citramac_SUPER-ADMIN.html "Global Roles & Permissions" + "Platform
+    Staff". Covers the permission-ceiling rule from
+    docs/09-SECURITY-COMPLIANCE.md §9.3.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Amani Wellness", slug="amani-wellness", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.super_admin = User.objects.create_superuser(
+                email="root@platform.test", password="Password123!"
+            )
+            self.org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
+            self.org_admin = User.objects.create_user(
+                email="admin@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            self.org_admin.roles.add(self.org_admin_role)
+            self.psychiatrist_template = Role.objects.get(
+                name="Psychiatrist", organization__isnull=True
+            )
+        self.super_access, _ = issue_tokens(self.super_admin)
+        self.org_access, _ = issue_tokens(self.org_admin)
+
+    def test_org_admin_sees_org_template_roles_but_not_platform_ones(self):
+        response = self.client.get(
+            reverse("role-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_access}"
+        )
+        names = {row["name"] for row in response.data["results"]}
+        self.assertIn("Psychiatrist", names)
+        self.assertNotIn("Support Agent", names)
+
+    def test_super_admin_sees_only_platform_roles(self):
+        response = self.client.get(
+            reverse("role-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
+        )
+        names = {row["name"] for row in response.data["results"]}
+        self.assertIn("Support Agent", names)
+        self.assertNotIn("Psychiatrist", names)
+
+    def test_org_admin_can_create_custom_role_within_template_ceiling(self):
+        allowed_permission = self.psychiatrist_template.permissions.first()
+        response = self.client.post(
+            reverse("role-list"),
+            {"name": "Senior Psychiatrist", "permissions": [allowed_permission.id]},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            role = Role.objects.get(name="Senior Psychiatrist")
+        self.assertEqual(role.organization_id, self.org.id)
+        self.assertEqual(role.scope, Role.SCOPE_ORG_TEMPLATE)
+
+    def test_org_admin_cannot_grant_permission_outside_any_template(self):
+        rogue_permission = Permission.objects.create(
+            codename="platform.totally_rogue.permission", description="Platform-only"
+        )
+        response = self.client.post(
+            reverse("role-list"),
+            {"name": "Rogue Role", "permissions": [rogue_permission.id]},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("permissions", response.data)
+
+    def test_staff_invite_creates_inactive_user_with_role_and_activation_invite(self):
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "nurse@amani.test",
+                "first_name": "Ann",
+                "last_name": "Mutua",
+                "role": self.org_admin_role.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            staff = User.objects.get(email="nurse@amani.test")
+            self.assertFalse(staff.is_active)
+            self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
+
+    def test_staff_toggle_duty(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="onduty@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.post(
+            reverse("staff-toggle-duty", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["is_on_duty"])
+
+    def test_org_admin_cannot_see_other_orgs_staff(self):
+        with platform_admin_context():
+            other_org = Organization.objects.create(
+                name="Other Org", slug="other-org-staff", facility_type="CLINIC"
+            )
+            User.objects.create_user(
+                email="ghost@other-org.test",
+                password="Password123!",
+                organization=other_org,
+                is_active=True,
+            )
+        response = self.client.get(
+            reverse("staff-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_access}"
+        )
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertNotIn("ghost@other-org.test", emails)
+
+    def test_platform_staff_invite_is_immediately_active_with_unusable_password(self):
+        role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
+        response = self.client.post(
+            reverse("platform-staff-list"),
+            {
+                "email": "support@softlink.test",
+                "first_name": "Joy",
+                "last_name": "Mwangi",
+                "role": role.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            staff = User.objects.get(email="support@softlink.test")
+        self.assertTrue(staff.is_active)
+        self.assertFalse(staff.has_usable_password())
+        self.assertTrue(OneTimePassword.objects.filter(user=staff).exists())

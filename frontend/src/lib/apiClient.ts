@@ -35,14 +35,22 @@ interface RequestOptions {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      // FormData sets its own multipart Content-Type (with boundary) —
+      // forcing application/json here would corrupt the upload.
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
     },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? options.body
+          : JSON.stringify(options.body),
   });
 
   const text = await response.text();
