@@ -14,11 +14,19 @@ class ConfirmEmailSerializer(serializers.Serializer):
 
 class ResendOtpSerializer(serializers.Serializer):
     otp_token = serializers.CharField()
+    # Lets the tenant-branded MFA screen (docs/14-TENANT-BRANDED-LOGIN-UX.md)
+    # switch delivery channel before resending, e.g. user picks "Email"
+    # after the default SMS send. Ignored for non-login OTP purposes.
+    channel = serializers.ChoiceField(choices=["EMAIL", "SMS"], required=False)
 
 
 class VerifyOtpSerializer(serializers.Serializer):
     otp_token = serializers.CharField()
     otp = serializers.RegexField(r"^\d{6}$")
+
+
+class TenantDiscoverySerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class SetPasswordSerializer(serializers.Serializer):
@@ -33,6 +41,10 @@ class SetPasswordSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()
+    # "Remember me" (docs/14-TENANT-BRANDED-LOGIN-UX.md) — only controls
+    # whether the refresh-token cookie persists across browser restarts, not
+    # the token's own lifetime (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME).
+    remember = serializers.BooleanField(required=False, default=False)
 
 
 class LoginVerifyOtpSerializer(serializers.Serializer):

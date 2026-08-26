@@ -17,10 +17,18 @@ export function confirmEmail(activationToken: string, email: string) {
   });
 }
 
-export function resendOtp(otpToken: string) {
-  return apiRequest<{ otp_token: string }>("/auth/resend-otp/", {
+/** "EMAIL" | "SMS" — see apps.accounts.models.User.MFA_CHANNEL_CHOICES. */
+export type MfaChannel = "EMAIL" | "SMS";
+
+export interface MfaDeliveryMethod {
+  channel: MfaChannel;
+  masked_contact: string;
+}
+
+export function resendOtp(otpToken: string, channel?: MfaChannel) {
+  return apiRequest<{ otp_token: string; channel?: MfaChannel }>("/auth/resend-otp/", {
     method: "POST",
-    body: { otp_token: otpToken },
+    body: channel ? { otp_token: otpToken, channel } : { otp_token: otpToken },
   });
 }
 
@@ -38,12 +46,39 @@ export function setPassword(passwordSetupToken: string, password: string) {
   });
 }
 
-export type LoginResult = { access: string } | { requires_otp: true; otp_token: string };
+/** Tenant branding surfaced by /auth/tenant-discovery/ — docs/14-TENANT-BRANDED-LOGIN-UX.md. */
+export interface TenantBranding {
+  id: string;
+  name: string;
+  logo_url: string;
+  login_image_url: string;
+  tagline: string;
+  primary_color: string;
+  support_email: string;
+  support_phone: string;
+  website: string;
+}
 
-export function login(email: string, password: string) {
+export function tenantDiscovery(email: string) {
+  return apiRequest<{ tenant: TenantBranding }>("/auth/tenant-discovery/", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export type LoginResult =
+  | { access: string }
+  | {
+      requires_otp: true;
+      otp_token: string;
+      channel: MfaChannel;
+      delivery_methods: MfaDeliveryMethod[];
+    };
+
+export function login(email: string, password: string, remember = false) {
   return apiRequest<LoginResult>("/auth/login/", {
     method: "POST",
-    body: { email, password },
+    body: { email, password, remember },
   });
 }
 

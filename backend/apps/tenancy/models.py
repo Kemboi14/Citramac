@@ -80,6 +80,31 @@ class Organization(TimestampedModel):
     )
     is_active = models.BooleanField(default=True)
 
+    # Tenant-branded login (docs/14-TENANT-BRANDED-LOGIN-UX.md) — surfaced by
+    # AuthTenantDiscoveryView before any credential is touched, so a staff
+    # member sees their own org's mark, not a generic CITRAMAC page.
+    email_domains = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Email domains (e.g. 'cafric.org') that route to this tenant at login.",
+    )
+    logo_url = models.URLField(blank=True)
+    login_image_url = models.URLField(
+        blank=True, help_text="Optional background image for the tenant login panel."
+    )
+    tagline = models.CharField(max_length=255, blank=True)
+    primary_color = models.CharField(
+        max_length=7,
+        default="#006e51",
+        help_text=(
+            "Hex color, e.g. #006e51 — overrides the default brand green "
+            "on this tenant's login page only."
+        ),
+    )
+    support_email = models.EmailField(blank=True)
+    support_phone = models.CharField(max_length=32, blank=True)
+    website = models.URLField(blank=True)
+
     def __str__(self):
         return self.name
 

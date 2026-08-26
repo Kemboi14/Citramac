@@ -1,7 +1,26 @@
+import structlog
 from celery import shared_task
 from django.core.mail import send_mail
 
 from apps.tenancy.context import platform_admin_context
+
+logger = structlog.get_logger(__name__)
+
+
+@shared_task
+def send_otp_sms(phone, code, purpose):
+    """
+    SMS delivery for login OTPs (docs/14-TENANT-BRANDED-LOGIN-UX.md) when a
+    user's preferred_mfa_channel is SMS. Honest stub, same pattern as the
+    Sentry-DSN-empty stub in config/settings — no SMS gateway (e.g. Africa's
+    Talking) is wired up yet, so this logs a structured, code-free event
+    instead of silently pretending delivery happened. Swap the body for a
+    real gateway call when one is provisioned; callers (LoginView,
+    ResendOtpView) don't need to change either way, since the OTP itself is
+    still valid and verifiable via the email channel or the sandbox log in
+    dev.
+    """
+    logger.info("otp_sms_stub_dispatch", phone_last4=phone[-4:] if phone else "", purpose=purpose)
 
 
 @shared_task

@@ -39,6 +39,7 @@ from .serializers import (
     RefreshSerializer,
     ResendOtpSerializer,
     SetPasswordSerializer,
+    TenantDiscoverySerializer,
     VerifyOtpSerializer,
 )
 from .throttling import RateLimitExceeded, enforce_cooldown, enforce_rate_limit
@@ -74,11 +75,29 @@ def _mask_email(email):
     return f"{masked_local}@{domain}"
 
 
-def _set_refresh_cookie(response, refresh_str, request):
+def _mask_phone(phone):
+    """`+254712345678` -> `+254•••••5678` — keeps only the prefix and last 4 digits."""
+    digits = phone.strip()
+    if len(digits) <= 4:
+        return "•" * len(digits)
+    prefix_len = min(4, len(digits) - 4)
+    prefix, suffix = digits[:prefix_len], digits[-4:]
+    return f"{prefix}{'•' * (len(digits) - prefix_len - 4)}{suffix}"
+
+
+def _email_domain(email):
+    return email.strip().rsplit("@", 1)[-1].casefold()
+
+
+def _set_refresh_cookie(response, refresh_str, request, remember=False):
     response.set_cookie(
         REFRESH_COOKIE_NAME,
         refresh_str,
-        max_age=REFRESH_COOKIE_MAX_AGE,
+        # remember=False -> no max_age at all, i.e. a session cookie the
+        # browser drops on close. The refresh token's own validity window
+        # (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME) is unaffected either way —
+        # this only controls whether the *browser* keeps offering it back.
+        max_age=REFRESH_COOKIE_MAX_AGE if remember else None,
         httponly=True,
         secure=not request.META.get("wsgi.url_scheme") == "http",
         samesite="Lax",
@@ -97,6 +116,79 @@ def _log_auth_event(user, action, request, extra_object_id=None):
         source_ip=request.META.get("REMOTE_ADDR"),
         request_id=getattr(request, "request_id", ""),
     )
+
+
+TENANT_NOT_FOUND_ERROR = {
+    "error": {
+        "code": "TENANT_NOT_FOUND",
+        "message": (
+            "We couldn't continue with the information provided. "
+            "Please contact your organisation administrator."
+        ),
+    }
+}
+
+
+class TenantDiscoveryView(APIView):
+    """
+    docs/14-TENANT-BRANDED-LOGIN-UX.md — the pre-login step that shows a
+    staff member their own organization's branding before they ever type a
+    password. Resolves by **email domain**, not by looking up a specific
+    user, so this can never be used to confirm "does this exact person have
+    an account" (the anti-enumeration principle in
+    docs/05-AUTHENTICATION-FLOW.md §5.5 still holds) — the worst it discloses
+    is "does any CITRAMAC tenant use this email domain", which is no more
+    sensitive than knowing a company's own public domain name.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = TenantDiscoverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        domain = _email_domain(serializer.validated_data["email"])
+
+        try:
+            enforce_rate_limit(
+                f"tenant-discovery:{request.META.get('REMOTE_ADDR', 'unknown')}",
+                max_attempts=20,
+                window_seconds=600,
+            )
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
+        from apps.tenancy.models import Organization
+
+        with platform_admin_context():
+            org = (
+                Organization.objects.filter(is_active=True)
+                .filter(email_domains__contains=[domain])
+                .first()
+            )
+
+        if org is None:
+            return Response(TENANT_NOT_FOUND_ERROR, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(
+            {
+                "tenant": {
+                    "id": str(org.id),
+                    "name": org.name,
+                    "logo_url": org.logo_url,
+                    "login_image_url": org.login_image_url,
+                    "tagline": org.tagline,
+                    "primary_color": org.primary_color,
+                    "support_email": org.support_email,
+                    "support_phone": org.support_phone,
+                    "website": org.website,
+                }
+            }
+        )
 
 
 class IdentifyView(APIView):
@@ -220,6 +312,15 @@ class ResendOtpView(APIView):
             new_otp, code = OneTimePassword.issue(
                 old_otp.user, old_otp.purpose, activation_invite=old_otp.activation_invite
             )
+            if new_otp.purpose == OneTimePassword.PURPOSE_LOGIN_2FA:
+                channel = _dispatch_login_otp(
+                    old_otp.user,
+                    code,
+                    new_otp.purpose,
+                    channel=serializer.validated_data.get("channel"),
+                )
+                return Response({"otp_token": new_otp.token, "channel": channel})
+
             _dispatch_otp_email(old_otp.user.email, code, new_otp.purpose)
             return Response({"otp_token": new_otp.token})
 
@@ -347,13 +448,20 @@ class LoginView(APIView):
         if user.mfa_enabled:
             with platform_admin_context():
                 otp, code = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
-            _dispatch_otp_email(user.email, code, otp.purpose)
-            return Response({"requires_otp": True, "otp_token": otp.token})
+            channel = _dispatch_login_otp(user, code, otp.purpose)
+            return Response(
+                {
+                    "requires_otp": True,
+                    "otp_token": otp.token,
+                    "channel": channel,
+                    "delivery_methods": _available_channels(user),
+                }
+            )
 
         access, refresh = issue_tokens(user)
         _log_auth_event(user, AuditLogEntry.ACTION_LOGIN, request)
         response = Response({"access": access})
-        _set_refresh_cookie(response, refresh, request)
+        _set_refresh_cookie(response, refresh, request, remember=data.get("remember", False))
         return response
 
 
@@ -491,3 +599,35 @@ def _dispatch_otp_email(email, code, purpose):
     from apps.notifications.tasks import send_otp_email
 
     send_otp_email.delay(email, code, purpose)
+
+
+def _dispatch_otp_sms(phone, code, purpose):
+    from apps.notifications.tasks import send_otp_sms
+
+    send_otp_sms.delay(phone, code, purpose)
+
+
+def _available_channels(user):
+    """
+    Delivery options the tenant-branded MFA screen (docs/14-TENANT-BRANDED-
+    LOGIN-UX.md) can offer this user — SMS only appears if a phone number is
+    actually on file.
+    """
+    channels = [{"channel": "EMAIL", "masked_contact": _mask_email(user.email)}]
+    if user.phone:
+        channels.append({"channel": "SMS", "masked_contact": _mask_phone(user.phone)})
+    return channels
+
+
+def _dispatch_login_otp(user, code, purpose, channel=None):
+    """
+    Sends a login-2FA OTP via `channel` (falls back to the user's
+    preferred_mfa_channel, then EMAIL if SMS was requested/preferred but no
+    phone is on file) and returns which channel actually got used.
+    """
+    resolved = channel or user.preferred_mfa_channel
+    if resolved == User.MFA_CHANNEL_SMS and user.phone:
+        _dispatch_otp_sms(user.phone, code, purpose)
+        return User.MFA_CHANNEL_SMS
+    _dispatch_otp_email(user.email, code, purpose)
+    return User.MFA_CHANNEL_EMAIL

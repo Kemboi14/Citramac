@@ -78,6 +78,11 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # See docs/06-DATA-MODEL.md §6.1.
 AUTH_USER_MODEL = "accounts.User"
 
+# Session auth (Django admin) needs the tenant-context-aware lookup — see
+# apps.accounts.backends.TenantAwareModelBackend's docstring for why the
+# stock ModelBackend can't resolve a user before tenant context exists.
+AUTHENTICATION_BACKENDS = ["apps.accounts.backends.TenantAwareModelBackend"]
+
 MIDDLEWARE = [
     # Request-latency timer — must be the very first middleware so its
     # timing wraps every other middleware below, per django-prometheus's own

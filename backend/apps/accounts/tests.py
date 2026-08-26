@@ -282,3 +282,137 @@ class ForgotPasswordEnumerationTests(APITestCase):
             reverse("auth-verify-otp"), {"otp_token": unknown.data["otp_token"], "otp": "123456"}
         )
         self.assertEqual(bad_verify.status_code, 400)
+
+
+class TenantDiscoveryTests(APITestCase):
+    """docs/14-TENANT-BRANDED-LOGIN-UX.md — email-domain-based tenant discovery."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            Organization.objects.create(
+                name="CAfRIC Centre",
+                slug="cafric",
+                facility_type="MENTAL_HEALTH_CCP",
+                email_domains=["cafric.org"],
+                logo_url="https://example.org/cafric-logo.png",
+                tagline="Training, Treatment & Transition Centre",
+                primary_color="#006e51",
+                support_email="support@cafric.org",
+            )
+
+    def test_known_domain_returns_tenant_branding(self):
+        response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "someone@cafric.org"}
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["tenant"]["name"], "CAfRIC Centre")
+        self.assertEqual(response.data["tenant"]["primary_color"], "#006e51")
+        # Never echoes anything about whether "someone" is a real user.
+        self.assertNotIn("email", response.data["tenant"])
+        self.assertNotIn("user", response.data)
+
+    def test_unknown_domain_returns_generic_not_found(self):
+        response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "someone@unknown-domain.test"}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["error"]["code"], "TENANT_NOT_FOUND")
+
+    def test_domain_match_is_case_insensitive(self):
+        response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "someone@CAFRIC.ORG"}
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+
+class LoginMfaChannelTests(APITestCase):
+    """docs/14-TENANT-BRANDED-LOGIN-UX.md — SMS/email 2FA channel selection."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            org = Organization.objects.create(name="Org", slug="org-z", facility_type="CLINIC")
+            self.user_email_only = User.objects.create_user(
+                email="email-only@org-z.test",
+                password="Correct!Horse99",
+                organization=org,
+                is_active=True,
+                mfa_enabled=True,
+            )
+            self.user_with_phone = User.objects.create_user(
+                email="has-phone@org-z.test",
+                password="Correct!Horse99",
+                organization=org,
+                is_active=True,
+                mfa_enabled=True,
+                phone="+254712345678",
+                preferred_mfa_channel=User.MFA_CHANNEL_SMS,
+            )
+
+    def test_login_response_lists_only_available_channels(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "email-only@org-z.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        channels = {c["channel"] for c in response.data["delivery_methods"]}
+        self.assertEqual(channels, {"EMAIL"})
+        self.assertEqual(response.data["channel"], "EMAIL")
+
+    def test_user_with_phone_gets_sms_and_email_options_and_masked_contact(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "has-phone@org-z.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        by_channel = {c["channel"]: c["masked_contact"] for c in response.data["delivery_methods"]}
+        self.assertEqual(set(by_channel), {"EMAIL", "SMS"})
+        self.assertTrue(by_channel["SMS"].endswith("5678"))
+        self.assertNotIn("712345", by_channel["SMS"])
+        self.assertEqual(response.data["channel"], "SMS")
+
+    def test_resend_can_switch_channel(self):
+        login = self.client.post(
+            reverse("auth-login"),
+            {"email": "has-phone@org-z.test", "password": "Correct!Horse99"},
+        )
+        response = self.client.post(
+            reverse("auth-resend-otp"),
+            {"otp_token": login.data["otp_token"], "channel": "EMAIL"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["channel"], "EMAIL")
+
+
+class RememberMeCookieTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            org = Organization.objects.create(name="Org", slug="org-r", facility_type="CLINIC")
+            User.objects.create_user(
+                email="jane@org-r.test",
+                password="Correct!Horse99",
+                organization=org,
+                is_active=True,
+                mfa_enabled=False,
+            )
+
+    def test_remember_true_persists_refresh_cookie(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "jane@org-r.test", "password": "Correct!Horse99", "remember": True},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertGreater(response.cookies["refresh_token"]["max-age"], 0)
+
+    def test_remember_false_is_a_session_cookie(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "jane@org-r.test", "password": "Correct!Horse99", "remember": False},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.cookies["refresh_token"]["max-age"], "")

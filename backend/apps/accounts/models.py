@@ -144,6 +144,12 @@ class User(AbstractBaseUser):
     branch_access = models.ManyToManyField(Branch, blank=True, related_name="staff_members")
 
     mfa_enabled = models.BooleanField(default=True)
+    MFA_CHANNEL_EMAIL = "EMAIL"
+    MFA_CHANNEL_SMS = "SMS"
+    MFA_CHANNEL_CHOICES = [(MFA_CHANNEL_EMAIL, "Email"), (MFA_CHANNEL_SMS, "SMS")]
+    preferred_mfa_channel = models.CharField(
+        max_length=8, choices=MFA_CHANNEL_CHOICES, default=MFA_CHANNEL_EMAIL
+    )
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

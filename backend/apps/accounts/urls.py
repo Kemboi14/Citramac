@@ -3,6 +3,11 @@ from django.urls import path
 from . import auth_views
 
 urlpatterns = [
+    path(
+        "tenant-discovery/",
+        auth_views.TenantDiscoveryView.as_view(),
+        name="auth-tenant-discovery",
+    ),
     path("identify/", auth_views.IdentifyView.as_view(), name="auth-identify"),
     path("confirm-email/", auth_views.ConfirmEmailView.as_view(), name="auth-confirm-email"),
     path("verify-otp/", auth_views.VerifyOtpView.as_view(), name="auth-verify-otp"),

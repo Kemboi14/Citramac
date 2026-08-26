@@ -64,6 +64,23 @@ class Command(BaseCommand):
         )
         parser.add_argument("--county", default="")
         parser.add_argument(
+            "--email-domain",
+            action="append",
+            default=[],
+            dest="email_domains",
+            help=(
+                "Email domain that routes to this tenant on the login screen "
+                "(docs/14-TENANT-BRANDED-LOGIN-UX.md), e.g. cafric.org. Repeatable."
+            ),
+        )
+        parser.add_argument("--logo-url", default="")
+        parser.add_argument("--login-image-url", default="")
+        parser.add_argument("--tagline", default="")
+        parser.add_argument("--primary-color", default="")
+        parser.add_argument("--support-email", default="")
+        parser.add_argument("--support-phone", default="")
+        parser.add_argument("--website", default="")
+        parser.add_argument(
             "--staff-file",
             default="",
             help=(
@@ -105,7 +122,25 @@ class Command(BaseCommand):
                 raise CommandError(f"Staff entry {spec} missing required field(s): {missing}")
         return specs
 
+    # Branding fields (docs/14-TENANT-BRANDED-LOGIN-UX.md) — CLI flag name to
+    # Organization field name, since --primary-color etc. don't match 1:1.
+    _BRANDING_FIELDS = {
+        "email_domains": "email_domains",
+        "logo_url": "logo_url",
+        "login_image_url": "login_image_url",
+        "tagline": "tagline",
+        "primary_color": "primary_color",
+        "support_email": "support_email",
+        "support_phone": "support_phone",
+        "website": "website",
+    }
+
     def _upsert_organization(self, options):
+        branding_defaults = {
+            field: options[opt_key]
+            for opt_key, field in self._BRANDING_FIELDS.items()
+            if options.get(opt_key)
+        }
         organization, created = Organization.objects.get_or_create(
             slug=options["slug"],
             defaults={
@@ -114,6 +149,7 @@ class Command(BaseCommand):
                 "dha_facility_code": options["dha_facility_code"],
                 "sha_provider_code": options["sha_provider_code"],
                 "enabled_modules": MENTAL_HEALTH_CCP_BUNDLE,
+                **branding_defaults,
             },
         )
         if created:
@@ -131,8 +167,15 @@ class Command(BaseCommand):
                 organization.dha_facility_code = options["dha_facility_code"]
             if options["sha_provider_code"]:
                 organization.sha_provider_code = options["sha_provider_code"]
+            for field, value in branding_defaults.items():
+                setattr(organization, field, value)
             organization.save(
-                update_fields=["enabled_modules", "dha_facility_code", "sha_provider_code"]
+                update_fields=[
+                    "enabled_modules",
+                    "dha_facility_code",
+                    "sha_provider_code",
+                    *branding_defaults.keys(),
+                ]
             )
         return organization
 

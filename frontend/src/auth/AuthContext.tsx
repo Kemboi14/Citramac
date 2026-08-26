@@ -1,16 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import * as authApi from "../lib/authApi";
+import type { MfaChannel, MfaDeliveryMethod } from "../lib/authApi";
 import { ApiError } from "../lib/apiClient";
 import { decodeAccessToken, type AccessTokenClaims } from "../lib/jwt";
 
-export type LoginOutcome = { requiresOtp: false } | { requiresOtp: true; otpToken: string };
+export type LoginOutcome =
+  | { requiresOtp: false }
+  | {
+      requiresOtp: true;
+      otpToken: string;
+      channel: MfaChannel;
+      deliveryMethods: MfaDeliveryMethod[];
+    };
 
 interface AuthContextValue {
   accessToken: string | null;
   claims: AccessTokenClaims | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginOutcome>;
+  login: (email: string, password: string, remember?: boolean) => Promise<LoginOutcome>;
   loginVerifyOtp: (otpToken: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -31,14 +39,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginOutcome> => {
-    const result = await authApi.login(email, password);
-    if ("access" in result) {
-      setAccessToken(result.access);
-      return { requiresOtp: false };
-    }
-    return { requiresOtp: true, otpToken: result.otp_token };
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string, remember = false): Promise<LoginOutcome> => {
+      const result = await authApi.login(email, password, remember);
+      if ("access" in result) {
+        setAccessToken(result.access);
+        return { requiresOtp: false };
+      }
+      return {
+        requiresOtp: true,
+        otpToken: result.otp_token,
+        channel: result.channel,
+        deliveryMethods: result.delivery_methods,
+      };
+    },
+    [],
+  );
 
   const loginVerifyOtp = useCallback(async (otpToken: string, otp: string) => {
     const { access } = await authApi.loginVerifyOtp(otpToken, otp);

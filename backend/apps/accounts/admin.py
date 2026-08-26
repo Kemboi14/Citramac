@@ -15,8 +15,16 @@ class UserAdmin(admin.ModelAdmin):
     """
 
     ordering = ["email"]
-    list_display = ["email", "organization", "is_active", "is_staff", "is_superuser", "mfa_enabled"]
-    list_filter = ["organization", "is_active", "is_staff", "mfa_enabled"]
+    list_display = [
+        "email",
+        "organization",
+        "is_active",
+        "is_staff",
+        "is_superuser",
+        "mfa_enabled",
+        "preferred_mfa_channel",
+    ]
+    list_filter = ["organization", "is_active", "is_staff", "mfa_enabled", "preferred_mfa_channel"]
     search_fields = ["email", "first_name", "last_name", "staff_id"]
     filter_horizontal = ["roles", "branch_access"]
     readonly_fields = ["password", "last_login", "email_verified_at", "created_at", "updated_at"]

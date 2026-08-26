@@ -34,12 +34,12 @@ describe("App routing", () => {
 
   it("redirects an unauthenticated visitor at / to the login page", async () => {
     renderAt("/");
-    await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
   });
 
   it("redirects an unauthenticated visitor hitting a protected shell to login", async () => {
     renderAt("/super-admin/organizations");
-    await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
   });
 
   it("renders the activation flow's first step given an activation token", async () => {
