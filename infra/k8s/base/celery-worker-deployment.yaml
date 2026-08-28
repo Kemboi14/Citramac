@@ -48,9 +48,10 @@ spec:
                 - ping
                 - --destination
                 - "celery@$(HOSTNAME)"
-            initialDelaySeconds: 20
+            initialDelaySeconds: 30
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 25
+            failureThreshold: 3
           resources:
             requests:
               cpu: "250m"
