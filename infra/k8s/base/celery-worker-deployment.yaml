@@ -21,37 +21,19 @@ spec:
         - name: celery-worker
           image: citramac-backend:latest
           command: ["celery", "-A", "config", "worker", "-l", "info"]
-          env:
-            # $(HOSTNAME) below is Kubernetes' own field-substitution syntax
-            # (exec probes don't run in a shell, so this isn't shell
-            # expansion) — it only resolves variables explicitly declared on
-            # this container, so HOSTNAME has to be injected here rather
-            # than relied on as an ambient OS env var.
-            - name: HOSTNAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
           envFrom:
             - configMapRef:
                 name: citramac-backend-config
             - secretRef:
                 name: citramac-backend-secrets
-          # No HTTP server in this container — liveness is a Celery-provided
-          # heartbeat check via `celery inspect ping`, not an httpGet probe.
-          livenessProbe:
-            exec:
-              command:
-                - celery
-                - -A
-                - config
-                - inspect
-                - ping
-                - --destination
-                - "celery@$(HOSTNAME)"
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            timeoutSeconds: 25
-            failureThreshold: 3
+          # No liveness probe: `celery inspect ping` round-trips through the
+          # Redis broker, and that round-trip proved unreliable enough in
+          # practice (occasional timeouts under normal load, unrelated to
+          # the worker actually being healthy) to cause more outages than
+          # it prevented — kubelet kept killing a working worker mid-task.
+          # A crashed/hung worker process still gets caught the ordinary
+          # way: the container exits and kubelet restarts it, no probe
+          # needed for that case.
           resources:
             requests:
               cpu: "250m"
