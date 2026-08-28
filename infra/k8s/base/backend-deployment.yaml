@@ -28,16 +28,27 @@ spec:
           # connectivity is exercised by celery-worker's own probe instead,
           # so a backend pod isn't marked unhealthy by a broker blip it
           # doesn't itself depend on for serving HTTP requests.
+          # kubelet sends probes straight to the pod IP, never through the
+          # Service/Ingress — DJANGO_ALLOWED_HOSTS only ever contains the
+          # real public hostname, so an unpatched Host header gets rejected
+          # with 400 (DisallowedHost). "localhost" is unconditionally in
+          # ALLOWED_HOSTS (config/settings/base.py) specifically for this.
           readinessProbe:
             httpGet:
               path: /healthz
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: localhost
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:

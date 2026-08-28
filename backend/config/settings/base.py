@@ -33,7 +33,12 @@ FIELD_ENCRYPTION_KEY = env(
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
+# "localhost" is always allowed regardless of DJANGO_ALLOWED_HOSTS — k8s's
+# kubelet sends liveness/readiness probes straight to the pod IP (never
+# through the Service/Ingress), with the Host header patched to "localhost"
+# (see infra/k8s/base/backend-deployment.yaml's probe httpHeaders) since the
+# real public hostname isn't known to a generic probe definition.
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[]) + ["localhost"]
 
 # ── Applications ──────────────────────────────────────────────────────────
 DJANGO_APPS = [
