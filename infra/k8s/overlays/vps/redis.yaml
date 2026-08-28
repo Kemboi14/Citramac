@@ -1,0 +1,62 @@
+# In-cluster Redis for this single-node environment only (see postgres.yaml
+# for why — no managed ElastiCache here). `emptyDir`, not a PVC: Redis here
+# is only the Celery broker/result-backend and Django cache, not a durable
+# store — losing it on a pod restart is an acceptable, disclosed tradeoff
+# at this scale (in-flight Celery tasks would need re-triggering, nothing
+# patient-data-bearing lives here).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: citramac-redis
+  labels:
+    app: citramac-redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: citramac-redis
+  template:
+    metadata:
+      labels:
+        app: citramac-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: citramac-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

@@ -1,0 +1,77 @@
+# In-cluster Postgres for this single-node environment only — the AWS
+# overlays (dev/staging/production) use managed RDS instead (see
+# infra/terraform/modules/rds), which doesn't exist here. Single replica,
+# `local-path` is k3s's built-in default StorageClass (a plain hostPath
+# volume under the hood) — acceptable for a single-node box where there's
+# no other node to schedule an HA replica onto anyway.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: citramac-postgres-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: citramac-postgres
+  labels:
+    app: citramac-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: citramac-postgres
+  template:
+    metadata:
+      labels:
+        app: citramac-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: citramac-backend-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: citramac-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: citramac-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

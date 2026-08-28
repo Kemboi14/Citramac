@@ -1,0 +1,29 @@
+# ../../base/networkpolicy.yaml's default-deny-all applies here too, and its
+# allow-backend-tier-egress rule already permits the backend/celery pods to
+# *send* traffic to 5432/6379 (it was written generically for "managed
+# Postgres/Redis somewhere," which now just resolves in-cluster) — but
+# nothing yet allows traffic *into* the new Postgres/Redis pods themselves.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-tier-to-db
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["citramac-postgres", "citramac-redis"]
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  ["citramac-backend", "citramac-celery-worker", "citramac-celery-beat"]
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379

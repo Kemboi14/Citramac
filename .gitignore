@@ -31,6 +31,7 @@ frontend/.vite/
 **/.terraform/
 *.tfstate
 *.tfstate.backup
+*.tfvars
 # .terraform.lock.hcl is deliberately NOT ignored — Terraform's own
 # convention is to commit it so every `terraform init` resolves the exact
 # same provider versions (docs/12-DEVOPS-DEPLOYMENT.md §12.4).

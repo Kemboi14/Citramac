@@ -1,0 +1,220 @@
+# Single-node k3s on an existing shared VPS (no AWS account, no managed
+# RDS/ElastiCache/ALB/External-Secrets-Operator) — see
+# docs/12-DEVOPS-DEPLOYMENT.md and the deployment history in project memory.
+#
+# References ../../base wholesale (same as every other overlay — Kustomize
+# refuses to pull individual loose files from outside this directory's own
+# tree, only whole sibling kustomizations), then deletes the pieces this
+# environment doesn't use: external-secret.yaml's ExternalSecret and the
+# whole monitoring/ component (no External Secrets Operator here — Terraform's
+# infra/terraform/envs/vps creates a plain Secret of the same name instead;
+# monitoring is a disclosed scope cut — the host already runs netdata).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: citramac
+
+resources:
+  - ../../base
+  - postgres.yaml
+  - redis.yaml
+  - networkpolicy-db.yaml
+
+labels:
+  - pairs:
+      project: citramac
+    includeSelectors: true
+
+images:
+  - name: citramac-backend
+    newName: citramac-backend
+    newTag: latest
+  - name: citramac-frontend
+    newName: citramac-frontend
+    newTag: latest
+
+replicas:
+  - name: citramac-backend
+    count: 1
+  - name: citramac-frontend
+    count: 1
+  - name: citramac-celery-worker
+    count: 1
+
+configMapGenerator:
+  - name: citramac-backend-config
+    behavior: merge
+    literals:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DJANGO_DEBUG=False
+
+# No registry to pull from — images are built with `docker build` and
+# imported straight into k3s's containerd (`k3s ctr images import`), and
+# TLS terminates at the host's nginx in front of this cluster, not
+# cert-manager (it already holds a valid Let's Encrypt cert for
+# demo.citramac.com — see project memory).
+patches:
+  - target:
+      kind: Deployment
+      name: citramac-backend
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: citramac-frontend
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: citramac-celery-worker
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: citramac-celery-beat
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: citramac-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: citramac-frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+  - target:
+      kind: Ingress
+      name: citramac
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: demo.citramac.com
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer
+      - op: add
+        path: /spec/ingressClassName
+        value: nginx
+  - patch: |-
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: citramac-backend-secrets
+      $patch: delete
+  - patch: |-
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: grafana-secrets
+      $patch: delete
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: prometheus
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: prometheus
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: prometheus-config
+      $patch: delete
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: alertmanager
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: alertmanager
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: alertmanager-config
+      $patch: delete
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: grafana
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: grafana
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: grafana-provisioning
+      $patch: delete
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: grafana-dashboards
+      $patch: delete
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-prometheus-scrape-backend
+      $patch: delete
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-prometheus-egress
+      $patch: delete
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-grafana-egress-to-prometheus
+      $patch: delete
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-alertmanager-ingress
+      $patch: delete
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-alertmanager-egress
+      $patch: delete

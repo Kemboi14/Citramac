@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and fill in with the SAME values
+# already generated in /opt/citramac/.env on the server — reused, not
+# regenerated, so the migrated Postgres data's credentials stay consistent
+# across the Compose -> k3s cutover.
+
+django_secret_key    = "change-me" # pragma: allowlist secret
+field_encryption_key = "change-me" # pragma: allowlist secret
+database_url         = "postgres://citramac:change-me@postgres:5432/citramac" # pragma: allowlist secret
+postgres_password    = "change-me" # pragma: allowlist secret
