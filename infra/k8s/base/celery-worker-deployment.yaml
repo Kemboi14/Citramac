@@ -21,6 +21,16 @@ spec:
         - name: celery-worker
           image: citramac-backend:latest
           command: ["celery", "-A", "config", "worker", "-l", "info"]
+          env:
+            # $(HOSTNAME) below is Kubernetes' own field-substitution syntax
+            # (exec probes don't run in a shell, so this isn't shell
+            # expansion) — it only resolves variables explicitly declared on
+            # this container, so HOSTNAME has to be injected here rather
+            # than relied on as an ambient OS env var.
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           envFrom:
             - configMapRef:
                 name: citramac-backend-config
