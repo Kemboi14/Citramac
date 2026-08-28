@@ -111,6 +111,9 @@ patches:
         value: demo.citramac.com
       - op: remove
         path: /spec/tls
+      - op: add
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1ssl-redirect
+        value: "false"
       - op: remove
         path: /metadata/annotations/cert-manager.io~1cluster-issuer
       - op: add
