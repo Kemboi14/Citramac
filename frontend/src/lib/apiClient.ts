@@ -49,7 +49,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       options.body === undefined
         ? undefined
         : isFormData
-          ? options.body
+          ? (options.body as FormData)
           : JSON.stringify(options.body),
   });
 
