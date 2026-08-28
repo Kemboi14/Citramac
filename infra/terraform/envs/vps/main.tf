@@ -73,6 +73,21 @@ resource "helm_release" "ingress_nginx" {
     name  = "controller.ingressClassResource.default"
     value = "false"
   }
+
+  # Without this, ingress-nginx always derives X-Forwarded-Proto from its
+  # own connection scheme ($scheme) and discards whatever the host nginx in
+  # front of it already set — since host nginx talks to this ClusterIP over
+  # plain HTTP (TLS terminates at host nginx, never reaching this cluster),
+  # that made ingress-nginx report "http" to every backend regardless of
+  # the real client scheme, which in turn made Django's SECURE_SSL_REDIRECT
+  # 301-loop every single request. This tells ingress-nginx to trust and
+  # pass through the X-Forwarded-* headers the upstream proxy already set
+  # (the documented pattern for a chained-reverse-proxy topology like this
+  # one) instead of overwriting them.
+  set {
+    name  = "controller.config.use-forwarded-headers"
+    value = "true"
+  }
 }
 
 data "kubernetes_service" "ingress_nginx_controller" {
