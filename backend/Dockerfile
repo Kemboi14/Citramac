@@ -17,6 +17,8 @@ RUN DJANGO_SETTINGS_MODULE=config.settings.production \
     DJANGO_SECRET_KEY=collectstatic-only \
     python manage.py collectstatic --noinput
 
+RUN chown -R appuser:appuser /app
+
 USER appuser
 EXPOSE 8000
 
