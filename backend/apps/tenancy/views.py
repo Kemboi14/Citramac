@@ -15,13 +15,22 @@ from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdmin
 from apps.ipd_ward.models import Bed
 from apps.tenancy.context import platform_admin_context
 
-from .models import Branch, Organization, PlatformBranding, Subscription, SubscriptionPlan
+from .models import (
+    Branch,
+    Organization,
+    PlatformBranding,
+    PlatformEmailSettings,
+    Subscription,
+    SubscriptionPlan,
+)
 from .serializers import (
     BranchSerializer,
     CreateOrganizationSerializer,
+    OrganizationEmailSettingsSerializer,
     OrganizationSerializer,
     OrganizationStatusSerializer,
     PlatformBrandingSerializer,
+    PlatformEmailSettingsSerializer,
     SubscriptionPlanSerializer,
     SubscriptionSerializer,
 )
@@ -118,7 +127,9 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 created_by=request.user,
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
-            _dispatch_invite_email(org_admin.email, organization.name, invite.token)
+            _dispatch_invite_email(
+                org_admin.email, organization.name, invite.token, organization.id
+            )
 
         return Response(OrganizationSerializer(organization).data, status=status.HTTP_201_CREATED)
 
@@ -257,6 +268,66 @@ class PlatformBrandingView(APIView):
         branding.updated_by = request.user
         branding.save()
         return Response(PlatformBrandingSerializer(branding, context={"request": request}).data)
+
+
+class PlatformEmailSettingsView(APIView):
+    """
+    Super Admin's platform-wide SMTP fallback (Settings screen) — used for
+    platform staff email and for any tenant that hasn't configured its own
+    SMTP (see OrganizationEmailSettingsView, apps.notifications.email).
+    Unlike PlatformBrandingView, GET is Super-Admin-only: this holds SMTP
+    credentials, not a public logo.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        email_settings = PlatformEmailSettings.get_solo()
+        return Response(PlatformEmailSettingsSerializer(email_settings).data)
+
+    def patch(self, request):
+        email_settings = PlatformEmailSettings.get_solo()
+        serializer = PlatformEmailSettingsSerializer(
+            email_settings, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(serializer.data)
+
+
+class OrganizationEmailSettingsView(APIView):
+    """
+    Self-service SMTP configuration for a single organization's outbound
+    email — lets each tenant configure its own email without Super
+    Admin/terraform involvement. A narrow endpoint over Organization's
+    email_* fields only, mirroring OrganizationLogoUploadView's precedent of
+    carving out one self-service concern rather than widening
+    OrganizationDetailView's Super-Admin-only PATCH to the whole resource
+    (which would also expose org_type/status/subscription_plan to Org
+    Admins). Org Admins may only read/write their own organization —
+    enforced by IsPlatformSuperAdminOrOrgAdmin's object-level check.
+    """
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+
+    def _get_organization(self, request, pk):
+        with platform_admin_context():
+            organization = generics.get_object_or_404(Organization, pk=pk)
+        self.check_object_permissions(request, organization)
+        return organization
+
+    def get(self, request, pk):
+        organization = self._get_organization(request, pk)
+        return Response(OrganizationEmailSettingsSerializer(organization).data)
+
+    def patch(self, request, pk):
+        organization = self._get_organization(request, pk)
+        serializer = OrganizationEmailSettingsSerializer(
+            organization, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class BranchViewSet(viewsets.ModelViewSet):
@@ -466,7 +537,7 @@ class OrgDashboardStatsView(APIView):
         )
 
 
-def _dispatch_invite_email(email, organization_name, token):
+def _dispatch_invite_email(email, organization_name, token, organization_id=None):
     from apps.notifications.tasks import send_invite_email
 
-    send_invite_email.delay(email, organization_name, token)
+    send_invite_email.delay(email, organization_name, token, organization_id=organization_id)

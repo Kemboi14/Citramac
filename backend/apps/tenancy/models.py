@@ -151,9 +151,37 @@ class Organization(TimestampedModel):
     support_phone = models.CharField(max_length=32, blank=True)
     website = models.URLField(blank=True)
 
+    # Self-service SMTP (Org Admin's own "Email Configuration" settings
+    # screen) — lets a tenant send its own OTP/invite/notification email
+    # through its own mail server instead of the platform default. Blank
+    # email_host means "not configured"; apps.notifications.email falls
+    # back to PlatformEmailSettings, then settings.py, in that order.
+    email_host = models.CharField(max_length=255, blank=True)
+    email_port = models.PositiveIntegerField(null=True, blank=True)
+    email_host_user = models.CharField(max_length=255, blank=True)
+    # Fernet-encrypted (apps/tenancy/crypto.py), same pattern as
+    # Branch.sha_api_credentials_encrypted — never round-tripped in
+    # plaintext via the API.
+    email_host_password_encrypted = models.TextField(blank=True)
+    email_use_tls = models.BooleanField(default=True)
+    email_use_ssl = models.BooleanField(default=False)
+    email_from_address = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="e.g. 'Cafric Demo <notifications@cafric.org>'. Blank uses the platform default.",
+    )
+
     def save(self, *args, **kwargs):
         self.is_active = self.status == self.STATUS_ACTIVE
         super().save(*args, **kwargs)
+
+    @property
+    def has_email_configured(self):
+        return bool(self.email_host)
+
+    @property
+    def has_email_credentials(self):
+        return bool(self.email_host_password_encrypted)
 
     def __str__(self):
         return self.name
@@ -189,6 +217,48 @@ class PlatformBranding(models.Model):
 
     def __str__(self):
         return "Platform branding"
+
+
+class PlatformEmailSettings(models.Model):
+    """
+    Singleton (always pk=1): the platform-wide default SMTP used for
+    Softlink Options' own platform staff email and as the fallback for any
+    tenant that hasn't configured its own SMTP via Organization.email_* —
+    see apps.notifications.email for the org -> platform -> settings.py
+    resolution order. Same singleton pattern as PlatformBranding.
+    """
+
+    host = models.CharField(max_length=255, blank=True)
+    port = models.PositiveIntegerField(null=True, blank=True)
+    host_user = models.CharField(max_length=255, blank=True)
+    # Fernet-encrypted (apps/tenancy/crypto.py).
+    host_password_encrypted = models.TextField(blank=True)
+    use_tls = models.BooleanField(default=True)
+    use_ssl = models.BooleanField(default=False)
+    default_from_email = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name_plural = "platform email settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def has_credentials(self):
+        return bool(self.host_password_encrypted)
+
+    def __str__(self):
+        return "Platform email settings"
 
 
 class Branch(TenantScopedModel):

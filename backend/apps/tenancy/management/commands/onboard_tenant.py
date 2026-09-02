@@ -248,12 +248,14 @@ class Command(BaseCommand):
                 created_by=None,
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
-            self._dispatch_invite_email(user.email, organization.name, invite.token)
+            self._dispatch_invite_email(
+                user.email, organization.name, invite.token, organization.id
+            )
             self.stdout.write(
                 f"  -> activation invite dispatched (token starts {invite.token[:8]}...)"
             )
 
-    def _dispatch_invite_email(self, email, organization_name, token):
+    def _dispatch_invite_email(self, email, organization_name, token, organization_id=None):
         from apps.notifications.tasks import send_invite_email
 
-        send_invite_email.delay(email, organization_name, token)
+        send_invite_email.delay(email, organization_name, token, organization_id=organization_id)

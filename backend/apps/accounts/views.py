@@ -119,7 +119,7 @@ class StaffViewSet(viewsets.ModelViewSet):
                 created_by=request.user,
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
-            _dispatch_invite_email(staff.email, organization.name, invite.token)
+            _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
 
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
 
@@ -184,7 +184,7 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
             staff.roles.add(data["role"])
 
             otp, code = OneTimePassword.issue(staff, OneTimePassword.PURPOSE_RESET)
-            _dispatch_otp_email(staff.email, code, otp.purpose)
+            _dispatch_otp_email(staff.email, code, otp.purpose, staff.organization_id)
 
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
 
@@ -200,13 +200,13 @@ class EnabledModulesView(APIView):
         return Response({"enabled_modules": organization.enabled_modules if organization else []})
 
 
-def _dispatch_invite_email(email, organization_name, token):
+def _dispatch_invite_email(email, organization_name, token, organization_id=None):
     from apps.notifications.tasks import send_invite_email
 
-    send_invite_email.delay(email, organization_name, token)
+    send_invite_email.delay(email, organization_name, token, organization_id=organization_id)
 
 
-def _dispatch_otp_email(email, code, purpose):
+def _dispatch_otp_email(email, code, purpose, organization_id=None):
     from apps.notifications.tasks import send_otp_email
 
-    send_otp_email.delay(email, code, purpose)
+    send_otp_email.delay(email, code, purpose, organization_id=organization_id)

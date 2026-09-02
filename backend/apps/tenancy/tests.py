@@ -16,6 +16,7 @@ from apps.tenancy.models import (
     Branch,
     Organization,
     PlatformBranding,
+    PlatformEmailSettings,
     Subscription,
     SubscriptionPlan,
 )
@@ -750,3 +751,151 @@ class InviteStaffCommandTests(TestCase):
             self.assertTrue(user.is_active)
             self.assertEqual(user.first_name, "Already")
             self.assertFalse(ActivationInvite.all_objects.filter(user=user).exists())
+
+
+class PlatformEmailSettingsApiTests(APITestCase):
+    """
+    Super Admin's platform-wide SMTP fallback (Settings screen) — mirrors
+    PlatformBrandingApiTests' auth setup, but unlike branding, GET is
+    Super-Admin-only here since this holds SMTP credentials.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.super_admin = User.objects.create_superuser(
+                email="email-settings-admin@platform.test", password="Password123!"
+            )
+            self.non_admin = User.objects.create_user(
+                email="email-settings-staff@platform.test", password="Password123!", is_active=True
+            )
+        self.super_access, _ = issue_tokens(self.super_admin)
+        self.non_admin_access, _ = issue_tokens(self.non_admin)
+        self.addCleanup(lambda: PlatformEmailSettings.objects.all().delete())
+
+    def test_non_admin_cannot_view_or_edit(self):
+        get_response = self.client.get(
+            reverse("platform-email-settings"), HTTP_AUTHORIZATION=f"Bearer {self.non_admin_access}"
+        )
+        self.assertEqual(get_response.status_code, 403)
+
+        patch_response = self.client.patch(
+            reverse("platform-email-settings"),
+            {"host": "smtp.example.com"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.non_admin_access}",
+        )
+        self.assertEqual(patch_response.status_code, 403)
+
+    def test_super_admin_can_configure_smtp_and_password_is_encrypted_at_rest(self):
+        response = self.client.patch(
+            reverse("platform-email-settings"),
+            {
+                "host": "smtp.softlinkoptions.co.ke",
+                "port": 587,
+                "host_user": "notifications@softlinkoptions.co.ke",
+                "host_password": "super-secret-smtp-password",  # pragma: allowlist secret
+                "use_tls": True,
+                "default_from_email": "CITRAMAC <notifications@softlinkoptions.co.ke>",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["has_credentials"])
+        self.assertNotIn("host_password", response.data)
+
+        settings_obj = PlatformEmailSettings.get_solo()
+        self.assertNotIn("super-secret-smtp-password", settings_obj.host_password_encrypted)
+        self.assertEqual(settings_obj.host, "smtp.softlinkoptions.co.ke")
+
+        get_response = self.client.get(
+            reverse("platform-email-settings"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
+        )
+        self.assertEqual(get_response.data["host"], "smtp.softlinkoptions.co.ke")
+        self.assertTrue(get_response.data["has_credentials"])
+
+
+class OrganizationEmailSettingsApiTests(APITestCase):
+    """
+    Self-service SMTP for a single tenant — the actual "each tenant can
+    configure their own email" ask. Org Admins may only touch their own
+    organization; Super Admin can act on any of them (e.g. from the
+    Organizations table). Encrypted-at-rest, same as Branch's SHA
+    credentials and the platform-level equivalent above.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            from apps.accounts.models import Role
+
+            self.org_a = Organization.objects.create(
+                name="Org A", slug="org-a-email", facility_type="CLINIC"
+            )
+            self.org_b = Organization.objects.create(
+                name="Org B", slug="org-b-email", facility_type="CLINIC"
+            )
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
+            self.org_a_admin = User.objects.create_user(
+                email="admin@org-a-email.test",
+                password="Password123!",
+                organization=self.org_a,
+                is_active=True,
+            )
+            self.org_a_admin.roles.add(org_admin_role)
+            self.super_admin = User.objects.create_superuser(
+                email="email-settings-superadmin@platform.test", password="Password123!"
+            )
+        self.org_a_access, _ = issue_tokens(self.org_a_admin)
+        self.super_access, _ = issue_tokens(self.super_admin)
+
+    def test_org_admin_can_configure_own_organization_email(self):
+        response = self.client.patch(
+            reverse("platform-organization-email-settings", args=[self.org_a.id]),
+            {
+                "email_host": "mail.cafric.org",
+                "email_port": 587,
+                "email_host_user": "notifications@cafric.org",
+                "email_host_password": "org-a-secret-password",  # pragma: allowlist secret
+                "email_use_tls": True,
+                "email_from_address": "Cafric Demo <notifications@cafric.org>",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["has_email_credentials"])
+        self.assertNotIn("email_host_password", response.data)
+
+        with platform_admin_context():
+            self.org_a.refresh_from_db()
+        self.assertNotIn("org-a-secret-password", self.org_a.email_host_password_encrypted)
+        self.assertEqual(self.org_a.email_host, "mail.cafric.org")
+
+    def test_org_admin_cannot_configure_another_organizations_email(self):
+        response = self.client.patch(
+            reverse("platform-organization-email-settings", args=[self.org_b.id]),
+            {"email_host": "mail.evil.example"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 403)
+
+        get_response = self.client.get(
+            reverse("platform-organization-email-settings", args=[self.org_b.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(get_response.status_code, 403)
+
+    def test_super_admin_can_configure_any_organizations_email(self):
+        response = self.client.patch(
+            reverse("platform-organization-email-settings", args=[self.org_b.id]),
+            {"email_host": "mail.org-b.example"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["email_host"], "mail.org-b.example")

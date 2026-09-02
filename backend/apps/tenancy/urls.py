@@ -4,12 +4,14 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     BranchViewSet,
     OrganizationDetailView,
+    OrganizationEmailSettingsView,
     OrganizationListCreateView,
     OrganizationLogoUploadView,
     OrganizationStatusView,
     OrgDashboardStatsView,
     PlatformBrandingView,
     PlatformDashboardStatsView,
+    PlatformEmailSettingsView,
     SubscriptionPlanViewSet,
     SubscriptionViewSet,
 )
@@ -36,8 +38,14 @@ urlpatterns = [
         OrganizationLogoUploadView.as_view(),
         name="platform-organization-logo",
     ),
+    path(
+        "organizations/<uuid:pk>/email-settings/",
+        OrganizationEmailSettingsView.as_view(),
+        name="platform-organization-email-settings",
+    ),
     path("dashboard-stats/", PlatformDashboardStatsView.as_view(), name="platform-dashboard-stats"),
     path("branding/", PlatformBrandingView.as_view(), name="platform-branding"),
+    path("email-settings/", PlatformEmailSettingsView.as_view(), name="platform-email-settings"),
     path("org-dashboard-stats/", OrgDashboardStatsView.as_view(), name="org-dashboard-stats"),
     path("", include(router.urls)),
 ]

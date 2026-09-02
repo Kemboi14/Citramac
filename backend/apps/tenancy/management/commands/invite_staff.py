@@ -100,7 +100,9 @@ class Command(BaseCommand):
 
             from apps.notifications.tasks import send_invite_email
 
-            send_invite_email.delay(user.email, organization.name, invite.token)
+            send_invite_email.delay(
+                user.email, organization.name, invite.token, organization_id=organization.id
+            )
 
         self.stdout.write(
             self.style.SUCCESS(

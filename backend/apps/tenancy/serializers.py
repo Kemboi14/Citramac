@@ -3,7 +3,14 @@ import re
 from rest_framework import serializers
 
 from .crypto import encrypt_value
-from .models import Branch, Organization, PlatformBranding, Subscription, SubscriptionPlan
+from .models import (
+    Branch,
+    Organization,
+    PlatformBranding,
+    PlatformEmailSettings,
+    Subscription,
+    SubscriptionPlan,
+)
 
 # Per org_type, which label + validation pattern the single "identity code"
 # field (Organization.dha_facility_code) should use — mirrors the mockup's
@@ -250,3 +257,95 @@ class PlatformBrandingSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         url = obj.logo.url
         return request.build_absolute_uri(url) if request else url
+
+
+class PlatformEmailSettingsSerializer(serializers.ModelSerializer):
+    """
+    Super Admin's platform-wide SMTP fallback (Settings screen) — the
+    Organization-level equivalent is OrganizationEmailSettingsSerializer.
+    `host_password` is write-only and only ever encrypted-at-rest
+    (apps/tenancy/crypto.py), same pattern as BranchSerializer's
+    sha_api_credentials.
+    """
+
+    has_credentials = serializers.BooleanField(read_only=True)
+    host_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new SMTP password (encrypted at rest).",
+    )
+
+    class Meta:
+        model = PlatformEmailSettings
+        fields = [
+            "host",
+            "port",
+            "host_user",
+            "host_password",
+            "has_credentials",
+            "use_tls",
+            "use_ssl",
+            "default_from_email",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        use_tls = attrs.get("use_tls", getattr(self.instance, "use_tls", False))
+        use_ssl = attrs.get("use_ssl", getattr(self.instance, "use_ssl", False))
+        if use_tls and use_ssl:
+            raise serializers.ValidationError(
+                "use_tls and use_ssl are mutually exclusive — set only one."
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("host_password", None)
+        if password:
+            validated_data["host_password_encrypted"] = encrypt_value(password)
+        return super().update(instance, validated_data)
+
+
+class OrganizationEmailSettingsSerializer(serializers.ModelSerializer):
+    """
+    Self-service SMTP configuration for a single tenant (Org Admin's own
+    "Email Configuration" settings screen, or Super Admin editing it on a
+    tenant's behalf) — a narrow field subset of Organization, mirroring
+    BranchSerializer's write-only-encrypted-credential pattern.
+    """
+
+    has_email_credentials = serializers.BooleanField(read_only=True)
+    email_host_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new SMTP password (encrypted at rest).",
+    )
+
+    class Meta:
+        model = Organization
+        fields = [
+            "email_host",
+            "email_port",
+            "email_host_user",
+            "email_host_password",
+            "has_email_credentials",
+            "email_use_tls",
+            "email_use_ssl",
+            "email_from_address",
+        ]
+
+    def validate(self, attrs):
+        use_tls = attrs.get("email_use_tls", getattr(self.instance, "email_use_tls", False))
+        use_ssl = attrs.get("email_use_ssl", getattr(self.instance, "email_use_ssl", False))
+        if use_tls and use_ssl:
+            raise serializers.ValidationError(
+                "email_use_tls and email_use_ssl are mutually exclusive — set only one."
+            )
+        return attrs
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("email_host_password", None)
+        if password:
+            validated_data["email_host_password_encrypted"] = encrypt_value(password)
+        return super().update(instance, validated_data)

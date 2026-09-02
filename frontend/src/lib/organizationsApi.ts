@@ -160,3 +160,82 @@ export interface OrgDashboardStats {
 export function getOrgDashboardStats(accessToken: string) {
   return apiRequest<OrgDashboardStats>("/platform/org-dashboard-stats/", { accessToken });
 }
+
+// Self-service SMTP — Org Admin's own "Email Configuration" (or Super Admin
+// acting on a tenant's behalf), a narrow field subset distinct from the rest
+// of Organization (see backend OrganizationEmailSettingsView's docstring).
+export interface OrganizationEmailSettings {
+  email_host: string;
+  email_port: number | null;
+  email_host_user: string;
+  has_email_credentials: boolean;
+  email_use_tls: boolean;
+  email_use_ssl: boolean;
+  email_from_address: string;
+}
+
+export interface OrganizationEmailSettingsPayload {
+  email_host?: string;
+  email_port?: number | null;
+  email_host_user?: string;
+  email_host_password?: string;
+  email_use_tls?: boolean;
+  email_use_ssl?: boolean;
+  email_from_address?: string;
+}
+
+export function getOrganizationEmailSettings(accessToken: string, organizationId: string) {
+  return apiRequest<OrganizationEmailSettings>(
+    `/platform/organizations/${organizationId}/email-settings/`,
+    { accessToken },
+  );
+}
+
+export function updateOrganizationEmailSettings(
+  accessToken: string,
+  organizationId: string,
+  payload: OrganizationEmailSettingsPayload,
+) {
+  return apiRequest<OrganizationEmailSettings>(
+    `/platform/organizations/${organizationId}/email-settings/`,
+    { method: "PATCH", body: payload, accessToken },
+  );
+}
+
+// Super Admin's platform-wide SMTP fallback (Settings screen) — used for
+// platform staff email and any tenant that hasn't configured its own.
+export interface PlatformEmailSettings {
+  host: string;
+  port: number | null;
+  host_user: string;
+  has_credentials: boolean;
+  use_tls: boolean;
+  use_ssl: boolean;
+  default_from_email: string;
+  updated_at: string;
+}
+
+export interface PlatformEmailSettingsPayload {
+  host?: string;
+  port?: number | null;
+  host_user?: string;
+  host_password?: string;
+  use_tls?: boolean;
+  use_ssl?: boolean;
+  default_from_email?: string;
+}
+
+export function getPlatformEmailSettings(accessToken: string) {
+  return apiRequest<PlatformEmailSettings>("/platform/email-settings/", { accessToken });
+}
+
+export function updatePlatformEmailSettings(
+  accessToken: string,
+  payload: PlatformEmailSettingsPayload,
+) {
+  return apiRequest<PlatformEmailSettings>("/platform/email-settings/", {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}

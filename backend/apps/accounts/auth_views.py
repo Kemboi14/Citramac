@@ -262,7 +262,7 @@ class ConfirmEmailView(APIView):
             otp, code = OneTimePassword.issue(
                 invite.user, OneTimePassword.PURPOSE_ACTIVATION, activation_invite=invite
             )
-            _dispatch_otp_email(invite.user.email, code, otp.purpose)
+            _dispatch_otp_email(invite.user, code, otp.purpose)
             return Response({"otp_token": otp.token})
 
 
@@ -321,7 +321,7 @@ class ResendOtpView(APIView):
                 )
                 return Response({"otp_token": new_otp.token, "channel": channel})
 
-            _dispatch_otp_email(old_otp.user.email, code, new_otp.purpose)
+            _dispatch_otp_email(old_otp.user, code, new_otp.purpose)
             return Response({"otp_token": new_otp.token})
 
 
@@ -584,7 +584,7 @@ class ForgotPasswordView(APIView):
 
         if user:
             otp, code = OneTimePassword.issue(user, OneTimePassword.PURPOSE_RESET)
-            _dispatch_otp_email(user.email, code, otp.purpose)
+            _dispatch_otp_email(user, code, otp.purpose)
             otp_token = otp.token
         else:
             # Same-shaped, non-functional token — never resolves at verify-otp time.
@@ -595,10 +595,10 @@ class ForgotPasswordView(APIView):
         return Response({"otp_token": otp_token})
 
 
-def _dispatch_otp_email(email, code, purpose):
+def _dispatch_otp_email(user, code, purpose):
     from apps.notifications.tasks import send_otp_email
 
-    send_otp_email.delay(email, code, purpose)
+    send_otp_email.delay(user.email, code, purpose, organization_id=user.organization_id)
 
 
 def _dispatch_otp_sms(phone, code, purpose):
@@ -629,5 +629,5 @@ def _dispatch_login_otp(user, code, purpose, channel=None):
     if resolved == User.MFA_CHANNEL_SMS and user.phone:
         _dispatch_otp_sms(user.phone, code, purpose)
         return User.MFA_CHANNEL_SMS
-    _dispatch_otp_email(user.email, code, purpose)
+    _dispatch_otp_email(user, code, purpose)
     return User.MFA_CHANNEL_EMAIL

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, MapPin, PlugZap, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, MapPin, PlugZap, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -9,6 +9,11 @@ import {
   type Branch,
   type CcpRegistrationStatus,
 } from "../../lib/branchesApi";
+import {
+  getOrganizationEmailSettings,
+  updateOrganizationEmailSettings,
+  type OrganizationEmailSettings,
+} from "../../lib/organizationsApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -136,8 +141,34 @@ function ToggleRow({
  * the only one). mfl_code is verification-controlled by the Super Admin's
  * DHA MFL process elsewhere and is read-only here.
  */
+const EMAIL_FIELD_HELP =
+  "Blank uses the platform default. Set a host to relay through your own mail server; " +
+  "set a From address to change what LOGIN_2FA/invite emails show even without one.";
+
+interface EmailFormState {
+  email_host: string;
+  email_port: string;
+  email_host_user: string;
+  email_host_password: string;
+  email_use_tls: boolean;
+  email_use_ssl: boolean;
+  email_from_address: string;
+}
+
+function emailFormFromSettings(settings: OrganizationEmailSettings): EmailFormState {
+  return {
+    email_host: settings.email_host,
+    email_port: settings.email_port === null ? "" : String(settings.email_port),
+    email_host_user: settings.email_host_user,
+    email_host_password: "",
+    email_use_tls: settings.email_use_tls,
+    email_use_ssl: settings.email_use_ssl,
+    email_from_address: settings.email_from_address,
+  };
+}
+
 export function BranchSettingsPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, claims } = useAuth();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,6 +184,13 @@ export function BranchSettingsPage() {
   const [credentialError, setCredentialError] = useState<string | null>(null);
   const [credentialSaved, setCredentialSaved] = useState(false);
   const [savingCredentials, setSavingCredentials] = useState(false);
+
+  const [emailSettings, setEmailSettings] = useState<OrganizationEmailSettings | null>(null);
+  const [emailForm, setEmailForm] = useState<EmailFormState | null>(null);
+  const [emailLoadError, setEmailLoadError] = useState<string | null>(null);
+  const [emailSaveError, setEmailSaveError] = useState<string | null>(null);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   const load = async () => {
     if (!accessToken) return;
@@ -175,6 +213,51 @@ export function BranchSettingsPage() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken || !claims?.organization_id) return;
+    const organizationId = claims.organization_id;
+    getOrganizationEmailSettings(accessToken, organizationId)
+      .then((settings) => {
+        setEmailSettings(settings);
+        setEmailForm(emailFormFromSettings(settings));
+      })
+      .catch((err) =>
+        setEmailLoadError(
+          err instanceof ApiError ? err.message : "Couldn't load email configuration.",
+        ),
+      );
+  }, [accessToken, claims?.organization_id]);
+
+  const saveEmailSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !claims?.organization_id || !emailForm) return;
+    setEmailSaveError(null);
+    setEmailSaved(false);
+    setSavingEmail(true);
+    try {
+      const updated = await updateOrganizationEmailSettings(accessToken, claims.organization_id, {
+        email_host: emailForm.email_host,
+        email_port: emailForm.email_port === "" ? null : Number(emailForm.email_port),
+        email_host_user: emailForm.email_host_user,
+        ...(emailForm.email_host_password
+          ? { email_host_password: emailForm.email_host_password }
+          : {}),
+        email_use_tls: emailForm.email_use_tls,
+        email_use_ssl: emailForm.email_use_ssl,
+        email_from_address: emailForm.email_from_address,
+      });
+      setEmailSettings(updated);
+      setEmailForm(emailFormFromSettings(updated));
+      setEmailSaved(true);
+    } catch (err) {
+      setEmailSaveError(
+        err instanceof ApiError ? err.message : "Couldn't save email configuration.",
+      );
+    } finally {
+      setSavingEmail(false);
+    }
+  };
 
   const updateForm = (patch: Partial<FormState>) => {
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -574,6 +657,151 @@ export function BranchSettingsPage() {
                   </p>
                 )}
               </form>
+            </div>
+
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>
+                <span className="inline-flex items-center gap-2">
+                  <Mail size={16} className="text-brand-green" />
+                  Email Configuration
+                </span>
+              </h2>
+              {emailLoadError && (
+                <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {emailLoadError}
+                </p>
+              )}
+              {emailSettings && emailForm && (
+                <form onSubmit={saveEmailSettings} className="flex flex-col gap-3">
+                  <div className="mb-1">
+                    <StatusPill
+                      ok={emailSettings.has_email_credentials}
+                      okLabel="SMTP configured"
+                      pendingLabel="Using platform default"
+                    />
+                  </div>
+                  <p className="text-xs text-ink-500">{EMAIL_FIELD_HELP}</p>
+                  <label className={LABEL_CLASS}>
+                    SMTP Host
+                    <input
+                      type="text"
+                      className={FIELD_CLASS}
+                      value={emailForm.email_host}
+                      onChange={(e) => {
+                        setEmailForm({ ...emailForm, email_host: e.target.value });
+                        setEmailSaved(false);
+                      }}
+                      placeholder="mail.yourdomain.org"
+                    />
+                  </label>
+                  <div className="flex gap-3">
+                    <label className={`${LABEL_CLASS} flex-1`}>
+                      Port
+                      <input
+                        type="number"
+                        className={FIELD_CLASS}
+                        value={emailForm.email_port}
+                        onChange={(e) => {
+                          setEmailForm({ ...emailForm, email_port: e.target.value });
+                          setEmailSaved(false);
+                        }}
+                        placeholder="587"
+                      />
+                    </label>
+                    <label className={`${LABEL_CLASS} flex-[2]`}>
+                      SMTP Username
+                      <input
+                        type="text"
+                        className={FIELD_CLASS}
+                        value={emailForm.email_host_user}
+                        onChange={(e) => {
+                          setEmailForm({ ...emailForm, email_host_user: e.target.value });
+                          setEmailSaved(false);
+                        }}
+                        placeholder="notifications@yourdomain.org"
+                      />
+                    </label>
+                  </div>
+                  <label className={LABEL_CLASS}>
+                    SMTP Password
+                    <input
+                      type="password"
+                      className={FIELD_CLASS}
+                      value={emailForm.email_host_password}
+                      onChange={(e) => {
+                        setEmailForm({ ...emailForm, email_host_password: e.target.value });
+                        setEmailSaved(false);
+                      }}
+                      placeholder={
+                        emailSettings.has_email_credentials
+                          ? "Leave blank to keep the current password"
+                          : "SMTP account password"
+                      }
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm text-ink-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-brand-green"
+                        checked={emailForm.email_use_tls}
+                        onChange={(e) => {
+                          setEmailForm({
+                            ...emailForm,
+                            email_use_tls: e.target.checked,
+                            email_use_ssl: e.target.checked ? false : emailForm.email_use_ssl,
+                          });
+                          setEmailSaved(false);
+                        }}
+                      />
+                      Use TLS (port 587)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-ink-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-brand-green"
+                        checked={emailForm.email_use_ssl}
+                        onChange={(e) => {
+                          setEmailForm({
+                            ...emailForm,
+                            email_use_ssl: e.target.checked,
+                            email_use_tls: e.target.checked ? false : emailForm.email_use_tls,
+                          });
+                          setEmailSaved(false);
+                        }}
+                      />
+                      Use SSL (port 465)
+                    </label>
+                  </div>
+                  <label className={LABEL_CLASS}>
+                    From Address
+                    <input
+                      type="text"
+                      className={FIELD_CLASS}
+                      value={emailForm.email_from_address}
+                      onChange={(e) => {
+                        setEmailForm({ ...emailForm, email_from_address: e.target.value });
+                        setEmailSaved(false);
+                      }}
+                      placeholder="Your Organization <notifications@yourdomain.org>"
+                    />
+                  </label>
+                  <button type="submit" disabled={savingEmail} className={BUTTON_CLASS}>
+                    {savingEmail ? "Saving…" : "Save Email Configuration"}
+                  </button>
+                  {emailSaved && (
+                    <span className="text-sm font-medium text-brand-green">
+                      Email configuration saved
+                    </span>
+                  )}
+                  {emailSaveError && (
+                    <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                      {emailSaveError}
+                    </p>
+                  )}
+                </form>
+              )}
             </div>
           </div>
         </div>

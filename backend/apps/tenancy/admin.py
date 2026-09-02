@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Branch, Organization, PlatformBranding, Subscription, SubscriptionPlan
+from .models import (
+    Branch,
+    Organization,
+    PlatformBranding,
+    PlatformEmailSettings,
+    Subscription,
+    SubscriptionPlan,
+)
 
 
 @admin.register(Organization)
@@ -52,6 +59,25 @@ class OrganizationAdmin(admin.ModelAdmin):
                 ),
             },
         ),
+        (
+            "Self-service SMTP",
+            {
+                "description": (
+                    "Org Admin's own 'Email Configuration' settings screen writes "
+                    "these fields via a narrow API endpoint, not this admin. The "
+                    "SMTP password is Fernet-encrypted at rest and never shown here."
+                ),
+                "fields": (
+                    "email_host",
+                    "email_port",
+                    "email_host_user",
+                    "email_use_tls",
+                    "email_use_ssl",
+                    "email_from_address",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
         ("Advanced", {"fields": ("theme_overrides",), "classes": ("collapse",)}),
     )
 
@@ -83,3 +109,13 @@ class PlatformBrandingAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         # Singleton — always pk=1, editing is the only meaningful action.
         return not PlatformBranding.objects.exists()
+
+
+@admin.register(PlatformEmailSettings)
+class PlatformEmailSettingsAdmin(admin.ModelAdmin):
+    list_display = ["host", "host_user", "use_tls", "use_ssl", "updated_at", "updated_by"]
+    exclude = ["host_password_encrypted"]
+
+    def has_add_permission(self, request):
+        # Singleton — always pk=1, editing is the only meaningful action.
+        return not PlatformEmailSettings.objects.exists()
