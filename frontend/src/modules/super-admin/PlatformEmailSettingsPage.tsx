@@ -135,137 +135,164 @@ export function PlatformEmailSettingsPage() {
       )}
 
       {settings && form && (
-        <div className={`${CARD_CLASS} max-w-xl`}>
-          <h2 className={SECTION_TITLE_CLASS}>
-            <span className="inline-flex items-center gap-2">
-              <Mail size={16} className="text-brand-green" />
-              SMTP Configuration
-            </span>
-          </h2>
-          <div className="mb-3">
-            <StatusPill
-              ok={settings.has_credentials}
-              okLabel="SMTP configured"
-              pendingLabel="Not configured — emails fall back to the console/dev backend"
-            />
-          </div>
-          <form onSubmit={save} className="flex flex-col gap-3">
-            <label className={LABEL_CLASS}>
-              SMTP Host
-              <input
-                type="text"
-                className={FIELD_CLASS}
-                value={form.host}
-                onChange={(e) => {
-                  setForm({ ...form, host: e.target.value });
-                  setSaved(false);
-                }}
-                placeholder="mail.softlinkoptions.co.ke"
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className={`${CARD_CLASS} lg:w-2/3`}>
+            <h2 className={SECTION_TITLE_CLASS}>
+              <span className="inline-flex items-center gap-2">
+                <Mail size={16} className="text-brand-green" />
+                SMTP Configuration
+              </span>
+            </h2>
+            <div className="mb-3">
+              <StatusPill
+                ok={settings.has_credentials}
+                okLabel="SMTP configured"
+                pendingLabel="Not configured — emails fall back to the console/dev backend"
               />
-            </label>
-            <div className="flex gap-3">
-              <label className={`${LABEL_CLASS} flex-1`}>
-                Port
-                <input
-                  type="number"
-                  className={FIELD_CLASS}
-                  value={form.port}
-                  onChange={(e) => {
-                    setForm({ ...form, port: e.target.value });
-                    setSaved(false);
-                  }}
-                  placeholder="587"
-                />
-              </label>
-              <label className={`${LABEL_CLASS} flex-[2]`}>
-                SMTP Username
+            </div>
+            <form onSubmit={save} className="flex flex-col gap-3">
+              <label className={LABEL_CLASS}>
+                SMTP Host
                 <input
                   type="text"
                   className={FIELD_CLASS}
-                  value={form.host_user}
+                  value={form.host}
                   onChange={(e) => {
-                    setForm({ ...form, host_user: e.target.value });
+                    setForm({ ...form, host: e.target.value });
                     setSaved(false);
                   }}
-                  placeholder="notifications@softlinkoptions.co.ke"
+                  placeholder="mail.softlinkoptions.co.ke"
                 />
               </label>
-            </div>
-            <label className={LABEL_CLASS}>
-              SMTP Password
-              <input
-                type="password"
-                className={FIELD_CLASS}
-                value={form.host_password}
-                onChange={(e) => {
-                  setForm({ ...form, host_password: e.target.value });
-                  setSaved(false);
-                }}
-                placeholder={
-                  settings.has_credentials
-                    ? "Leave blank to keep the current password"
-                    : "SMTP account password"
-                }
-                autoComplete="new-password"
-              />
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm text-ink-700">
+              <div className="flex gap-3">
+                <label className={`${LABEL_CLASS} flex-1`}>
+                  Port
+                  <input
+                    type="number"
+                    className={FIELD_CLASS}
+                    value={form.port}
+                    onChange={(e) => {
+                      setForm({ ...form, port: e.target.value });
+                      setSaved(false);
+                    }}
+                    placeholder="587"
+                  />
+                </label>
+                <label className={`${LABEL_CLASS} flex-[2]`}>
+                  SMTP Username
+                  <input
+                    type="text"
+                    className={FIELD_CLASS}
+                    value={form.host_user}
+                    onChange={(e) => {
+                      setForm({ ...form, host_user: e.target.value });
+                      setSaved(false);
+                    }}
+                    placeholder="notifications@softlinkoptions.co.ke"
+                  />
+                </label>
+              </div>
+              <label className={LABEL_CLASS}>
+                SMTP Password
                 <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-brand-green"
-                  checked={form.use_tls}
+                  type="password"
+                  className={FIELD_CLASS}
+                  value={form.host_password}
                   onChange={(e) => {
-                    setForm({
-                      ...form,
-                      use_tls: e.target.checked,
-                      use_ssl: e.target.checked ? false : form.use_ssl,
-                    });
+                    setForm({ ...form, host_password: e.target.value });
                     setSaved(false);
                   }}
+                  placeholder={
+                    settings.has_credentials
+                      ? "Leave blank to keep the current password"
+                      : "SMTP account password"
+                  }
+                  autoComplete="new-password"
                 />
-                Use TLS (port 587)
               </label>
-              <label className="flex items-center gap-2 text-sm text-ink-700">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm text-ink-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand-green"
+                    checked={form.use_tls}
+                    onChange={(e) => {
+                      setForm({
+                        ...form,
+                        use_tls: e.target.checked,
+                        use_ssl: e.target.checked ? false : form.use_ssl,
+                      });
+                      setSaved(false);
+                    }}
+                  />
+                  Use TLS (port 587)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-ink-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-brand-green"
+                    checked={form.use_ssl}
+                    onChange={(e) => {
+                      setForm({
+                        ...form,
+                        use_ssl: e.target.checked,
+                        use_tls: e.target.checked ? false : form.use_tls,
+                      });
+                      setSaved(false);
+                    }}
+                  />
+                  Use SSL (port 465)
+                </label>
+              </div>
+              <label className={LABEL_CLASS}>
+                Default From Address
                 <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-brand-green"
-                  checked={form.use_ssl}
+                  type="text"
+                  className={FIELD_CLASS}
+                  value={form.default_from_email}
                   onChange={(e) => {
-                    setForm({
-                      ...form,
-                      use_ssl: e.target.checked,
-                      use_tls: e.target.checked ? false : form.use_tls,
-                    });
+                    setForm({ ...form, default_from_email: e.target.value });
                     setSaved(false);
                   }}
+                  placeholder="CITRAMAC <notifications@softlinkoptions.co.ke>"
                 />
-                Use SSL (port 465)
               </label>
+              <button type="submit" disabled={saving} className={BUTTON_CLASS}>
+                {saving ? "Saving…" : "Save Email Settings"}
+              </button>
+              {saved && (
+                <span className="text-sm font-medium text-brand-green">Settings saved</span>
+              )}
+              {saveError && (
+                <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {saveError}
+                </p>
+              )}
+            </form>
+          </div>
+
+          <div className="flex flex-col gap-6 lg:w-1/3">
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>How This Is Used</h2>
+              <div className="flex flex-col gap-3 text-sm text-ink-700">
+                <p>
+                  This is the platform-wide fallback SMTP — used for CITRAMAC staff email, and for
+                  any tenant that hasn&rsquo;t set up its own.
+                </p>
+                <p>
+                  Each organization can override this with its own SMTP under its own{" "}
+                  <span className="font-medium text-ink-900">
+                    Branch Settings &rarr; Email Configuration
+                  </span>{" "}
+                  screen.
+                </p>
+                <p className="text-ink-500">
+                  Leaving this unconfigured is safe — emails simply fall back to the console/dev
+                  backend (visible in the celery-worker logs) instead of being delivered.
+                </p>
+              </div>
             </div>
-            <label className={LABEL_CLASS}>
-              Default From Address
-              <input
-                type="text"
-                className={FIELD_CLASS}
-                value={form.default_from_email}
-                onChange={(e) => {
-                  setForm({ ...form, default_from_email: e.target.value });
-                  setSaved(false);
-                }}
-                placeholder="CITRAMAC <notifications@softlinkoptions.co.ke>"
-              />
-            </label>
-            <button type="submit" disabled={saving} className={BUTTON_CLASS}>
-              {saving ? "Saving…" : "Save Email Settings"}
-            </button>
-            {saved && <span className="text-sm font-medium text-brand-green">Settings saved</span>}
-            {saveError && (
-              <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
-                {saveError}
-              </p>
-            )}
-          </form>
+          </div>
         </div>
       )}
     </div>
