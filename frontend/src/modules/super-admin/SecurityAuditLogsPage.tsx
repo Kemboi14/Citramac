@@ -31,7 +31,7 @@ export function SecurityAuditLogsPage() {
   const totalPages = page ? Math.max(1, Math.ceil(page.count / page.page_size)) : 1;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex items-start justify-between">
         <div>
           <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">

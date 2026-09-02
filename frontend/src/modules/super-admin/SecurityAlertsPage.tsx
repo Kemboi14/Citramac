@@ -83,7 +83,7 @@ export function SecurityAlertsPage() {
   const visible = filter === "All" ? alerts : alerts.filter((a) => a.status === filter);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-in">
       <div>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
           Governance · Security

@@ -126,7 +126,7 @@ export function StaffTeamPage() {
   const initials = (s: Staff) => `${s.first_name.charAt(0)}${s.last_name.charAt(0)}`.toUpperCase();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-in">
       <div>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
           Org Admin · Team

@@ -195,7 +195,7 @@ export function BranchesPage() {
   const ccpOpenCount = branches.filter((b) => b.ccp_registration_status === "OPEN").length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">

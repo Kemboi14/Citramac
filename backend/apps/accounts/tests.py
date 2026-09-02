@@ -564,3 +564,33 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertTrue(staff.is_active)
         self.assertFalse(staff.has_usable_password())
         self.assertTrue(OneTimePassword.objects.filter(user=staff).exists())
+
+    def test_super_admin_can_retrieve_and_update_a_platform_staff_member(self):
+        """
+        Regression: get_queryset() returned a plain list, so DRF's default
+        get_object() (get_object_or_404 on something with no .get()) 404'd
+        on every retrieve/update/destroy regardless of whether the row
+        existed — only the list action ever worked.
+        """
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="retrieve-me@softlink.test",
+                password="Password123!",
+                organization=None,
+                is_staff=True,
+                is_active=True,
+            )
+        get_response = self.client.get(
+            reverse("platform-staff-detail", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(get_response.status_code, 200, get_response.data)
+
+        patch_response = self.client.patch(
+            reverse("platform-staff-detail", args=[staff.id]),
+            {"first_name": "Updated"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(patch_response.status_code, 200, patch_response.data)
+        self.assertEqual(patch_response.data["first_name"], "Updated")

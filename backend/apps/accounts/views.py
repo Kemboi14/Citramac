@@ -154,6 +154,24 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                 .order_by("first_name", "last_name")
             )
 
+    def get_object(self):
+        """
+        Overridden rather than left to the list-returning get_queryset()
+        above: DRF's default get_object() calls get_object_or_404() on
+        whatever get_queryset() returns, and a plain list has no .get() —
+        that 404s on every retrieve/update/destroy regardless of whether
+        the row exists (get_queryset() itself stays list-based since the
+        list action needs platform_admin_context() active while it's
+        actually evaluated, not just while it's constructed).
+        """
+        with platform_admin_context():
+            obj = generics.get_object_or_404(
+                User.all_objects.filter(organization__isnull=True).prefetch_related("roles"),
+                pk=self.kwargs["pk"],
+            )
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def create(self, request, *args, **kwargs):
         """
         Platform staff have organization=None, so they can't own an

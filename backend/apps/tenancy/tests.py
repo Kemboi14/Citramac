@@ -484,6 +484,33 @@ class OrganizationConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_super_admin_can_retrieve_and_edit_an_organization_by_pk(self):
+        """
+        Regression: OrganizationDetailView.get_queryset() returned a plain
+        list, so DRF's default get_object() (get_object_or_404 on something
+        with no .get()) 404'd on every GET/PATCH by pk regardless of
+        whether the organization existed — the Organizations screen's edit
+        drawer's "Save Changes" was broken for every single organization.
+        """
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Detail Org", slug="detail-org", facility_type="CLINIC"
+            )
+        get_response = self.client.get(
+            reverse("platform-organization-detail", args=[org.id]), **self.auth
+        )
+        self.assertEqual(get_response.status_code, 200, get_response.data)
+        self.assertEqual(get_response.data["branch_count"], 0)
+
+        patch_response = self.client.patch(
+            reverse("platform-organization-detail", args=[org.id]),
+            {"name": "Renamed Org"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(patch_response.status_code, 200, patch_response.data)
+        self.assertEqual(patch_response.data["name"], "Renamed Org")
+
 
 class BranchAndSubscriptionScopingTests(APITestCase):
     """Branches/Subscriptions screens: Super Admin sees every tenant, Org

@@ -135,12 +135,31 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
 
 
 class OrganizationDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH a single Organization (Organizations table's edit drawer's
+    "Save Changes"). `get_object` is overridden rather than left to DRF's
+    default `get_queryset()`-based lookup: `get_object_or_404` requires a
+    real QuerySet/Manager (it calls `.get()` on whatever it's given), and
+    returning a `list(...)` here — as this used to do — makes DRF's own
+    `hasattr(queryset, "get")` check fail on *every* pk, 404ing on every
+    request regardless of whether the organization exists. The DB query
+    itself must still run inside `platform_admin_context()`: `branch_count`
+    joins across Branch, which is RLS-protected, and a Super Admin request's
+    ambient tenant context is "no org" — without the bypass active at query
+    time, that join would silently return 0 for every organization.
+    """
+
     permission_classes = [IsPlatformSuperAdmin]
     serializer_class = OrganizationSerializer
 
-    def get_queryset(self):
+    def get_object(self):
         with platform_admin_context():
-            return list(Organization.objects.annotate(branch_count=Count("branch", distinct=True)))
+            obj = generics.get_object_or_404(
+                Organization.objects.annotate(branch_count=Count("branch", distinct=True)),
+                pk=self.kwargs["pk"],
+            )
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 class OrganizationStatusView(APIView):
