@@ -173,6 +173,11 @@ class Appointment(TenantScopedModel):
         ("CANCELLED", "Cancelled"),
         ("NO_SHOW", "No Show"),
     ]
+    MODE_CHOICES = [
+        ("IN_PERSON", "In Person"),
+        ("PHONE", "Phone"),
+        ("VIDEO", "Video"),
+    ]
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
@@ -180,9 +185,15 @@ class Appointment(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     scheduled_for = models.DateTimeField()
+    duration_minutes = models.PositiveSmallIntegerField(default=30)
+    location = models.CharField(max_length=150, blank=True)
+    mode = models.CharField(max_length=16, choices=MODE_CHOICES, default="IN_PERSON")
     appointment_type = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="SCHEDULED")
     notes = models.TextField(blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["scheduled_for"]
 
     def __str__(self):
         return f"{self.patient} @ {self.scheduled_for:%Y-%m-%d %H:%M}"
@@ -193,15 +204,36 @@ class Attachment(TenantScopedModel):
         ("HISTORICAL", "Historical File Scans"),
         ("CURRENT", "Current Clinical Records"),
     ]
+    CATEGORY_CHOICES = [
+        ("IDENTITY", "Identity Documents"),
+        ("CLINICAL", "Clinical Documents"),
+        ("ASSESSMENT", "Assessments"),
+        ("REFERRAL", "Referrals"),
+        ("LAB_RESULT", "Lab Results"),
+        ("IMAGING", "Imaging"),
+        ("CONSENT", "Consents"),
+        ("CORRESPONDENCE", "Correspondence"),
+        ("OTHER", "Other"),
+    ]
+    DOC_STATUS_CHOICES = [("ACTIVE", "Active"), ("ARCHIVED", "Archived")]
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="attachments")
     file = models.FileField(upload_to="attachments/%Y/%m/")
     classification = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")
+    document_type = models.CharField(max_length=100, blank=True)
+    document_date = models.DateField(null=True, blank=True)
+    tags = models.JSONField(default=list, blank=True)
+    is_favorite = models.BooleanField(default=False)
+    doc_status = models.CharField(max_length=16, choices=DOC_STATUS_CHOICES, default="ACTIVE")
     description = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     uploaded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-uploaded_at"]
 
     def __str__(self):
         return self.file.name

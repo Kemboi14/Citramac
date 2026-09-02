@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BedDouble, Plus } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
 import {
@@ -325,6 +325,7 @@ export function WardBedManagementPage() {
                       >
                         {BED_STATUSES.map((status) => (
                           <option key={status} value={status}>
+                            {/* eslint-disable-next-line security/detect-object-injection -- `status` is iterated from the fixed `BED_STATUSES` const array, not user input. */}
                             {STATUS_LABEL[status]}
                           </option>
                         ))}

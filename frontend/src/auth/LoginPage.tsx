@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { MfaChannel, MfaDeliveryMethod, TenantBranding } from "../lib/authApi";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./useAuth";
 import { LoginMfaStep } from "./steps/LoginMfaStep";
 import { TenantDiscoveryStep } from "./steps/TenantDiscoveryStep";
 import { TenantLoginStep } from "./steps/TenantLoginStep";

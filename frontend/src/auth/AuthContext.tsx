@@ -1,29 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import * as authApi from "../lib/authApi";
-import type { MfaChannel, MfaDeliveryMethod } from "../lib/authApi";
 import { ApiError } from "../lib/apiClient";
-import { decodeAccessToken, type AccessTokenClaims } from "../lib/jwt";
+import { decodeAccessToken } from "../lib/jwt";
+import { AuthContext, type LoginOutcome } from "./authContextObject";
 
-export type LoginOutcome =
-  | { requiresOtp: false }
-  | {
-      requiresOtp: true;
-      otpToken: string;
-      channel: MfaChannel;
-      deliveryMethods: MfaDeliveryMethod[];
-    };
-
-interface AuthContextValue {
-  accessToken: string | null;
-  claims: AccessTokenClaims | null;
-  isLoading: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<LoginOutcome>;
-  loginVerifyOtp: (otpToken: string, otp: string) => Promise<void>;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+// Re-exported for existing consumers (e.g. steps/TenantLoginStep.tsx) — the
+// type itself now lives in authContextObject.ts alongside the context, per
+// react-refresh/only-export-components (this file exports only the
+// `AuthProvider` component).
+export type { LoginOutcome };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -83,10 +69,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
-  return context;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../auth/AuthContext";
-import { usePatientContext } from "../../clinical/PatientContext";
+import { useAuth } from "../../auth/useAuth";
+import { usePatientContext } from "../../clinical/usePatientContext";
 import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
 
 const ALLERGY_BADGE: Record<string, string> = {
@@ -9,6 +9,15 @@ const ALLERGY_BADGE: Record<string, string> = {
   UNKNOWN: "bg-status-amber-tint text-status-amber",
   NONE: "bg-brand-green-tint text-brand-green-dark",
 };
+
+const CARE_LABEL: Record<string, string> = {
+  OUTPATIENT: "Outpatient",
+  INPATIENT: "Inpatient",
+  POSTTREATMENT_SUPPORT: "Post-treatment support",
+};
+
+const FIELD_CLASS =
+  "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 
 /**
  * Module 1 — replicates the AppSheet reference table columns exactly, per
@@ -21,6 +30,8 @@ export function ClientRegistryPage() {
   const [patients, setPatients] = useState<PatientListRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [careFilter, setCareFilter] = useState("");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -32,11 +43,23 @@ export function ClientRegistryPage() {
 
   const openPatient = (patient: PatientListRow) => {
     selectPatient(patient.id, `${patient.first_name} ${patient.last_name}`);
-    navigate("/clinical/triage");
+    navigate("/clinical/patient");
   };
 
+  const query = search.trim().toLowerCase();
+  const filteredPatients = patients.filter((patient) => {
+    const matchesSearch =
+      !query ||
+      [patient.first_name, patient.last_name, patient.uhid_number, patient.citramac_number]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    const matchesCare = !careFilter || patient.patient_category === careFilter;
+    return matchesSearch && matchesCare;
+  });
+
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="mb-5 flex items-center justify-between">
         <div>
           <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
@@ -53,14 +76,37 @@ export function ClientRegistryPage() {
         </button>
       </div>
 
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          className={`${FIELD_CLASS} w-64`}
+          placeholder="Search by name, UHID or client number…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className={FIELD_CLASS}
+          value={careFilter}
+          onChange={(e) => setCareFilter(e.target.value)}
+        >
+          <option value="">All care types</option>
+          <option value="OUTPATIENT">Outpatient</option>
+          <option value="INPATIENT">Inpatient</option>
+          <option value="POSTTREATMENT_SUPPORT">Post-treatment support</option>
+        </select>
+        <span className="text-xs text-ink-500">
+          {filteredPatients.length} of {patients.length} clients shown · FHIR R4 Patient resource
+        </span>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        <table className="w-full min-w-[1000px] text-left text-sm">
+        <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="bg-surface-bg text-[10.5px] font-bold uppercase tracking-wide text-ink-400">
             <tr>
               <th className="px-4 py-3">First Name</th>
               <th className="px-4 py-3">Last Name</th>
               <th className="px-4 py-3">Middle/Other Names</th>
               <th className="px-4 py-3">UHID Number</th>
+              <th className="px-4 py-3">Care</th>
               <th className="px-4 py-3">Gender</th>
               <th className="px-4 py-3">Date Of Birth</th>
               <th className="px-4 py-3">Age</th>
@@ -73,35 +119,42 @@ export function ClientRegistryPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={12} className="px-4 py-6 text-center text-ink-500">
                   Loading…
                 </td>
               </tr>
             )}
             {error && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-status-red">
+                <td colSpan={12} className="px-4 py-6 text-center text-status-red">
                   {error}
                 </td>
               </tr>
             )}
-            {!isLoading && !error && patients.length === 0 && (
+            {!isLoading && !error && filteredPatients.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-ink-500">
-                  No clients registered yet.
+                <td colSpan={12} className="px-4 py-6 text-center text-ink-500">
+                  {patients.length === 0
+                    ? "No clients registered yet."
+                    : "No clients match these filters."}
                 </td>
               </tr>
             )}
-            {patients.map((patient) => (
+            {filteredPatients.map((patient) => (
               <tr
                 key={patient.id}
                 onClick={() => openPatient(patient)}
-                className="cursor-pointer border-t border-surface-border hover:bg-brand-green-tint-2"
+                className="cursor-pointer border-t border-surface-border transition-colors duration-150 hover:bg-brand-green-tint-2"
               >
                 <td className="px-4 py-3 text-ink-700">{patient.first_name}</td>
                 <td className="px-4 py-3 text-ink-700">{patient.last_name}</td>
                 <td className="px-4 py-3 text-ink-700">{patient.middle_other_names}</td>
                 <td className="px-4 py-3 font-mono text-xs text-ink-700">{patient.uhid_number}</td>
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-brand-green-tint px-2.5 py-1 text-xs font-semibold text-brand-green-dark">
+                    {CARE_LABEL[patient.patient_category] ?? patient.patient_category}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-ink-700">{patient.gender}</td>
                 <td className="px-4 py-3 text-ink-700">{patient.date_of_birth}</td>
                 <td className="px-4 py-3 text-ink-700">{patient.age}</td>

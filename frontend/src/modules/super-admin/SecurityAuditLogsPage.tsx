@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock, Search } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listAuditLog, type AuditLogEntry, type AuditLogPage } from "../../lib/auditApi";
 

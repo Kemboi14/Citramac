@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Building2, Landmark, Upload, Users } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   getPlatformDashboardStats,
@@ -132,7 +132,11 @@ const ACTION_DOT: Record<string, string> = {
 
 function StatusBadge({ status }: { status: OrganizationStatus }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[status] ?? ""}`}>
+    <span
+      // eslint-disable-next-line security/detect-object-injection -- `status` is the compile-time-checked `OrganizationStatus` prop union, not user input.
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[status] ?? ""}`}
+    >
+      {/* eslint-disable-next-line security/detect-object-injection -- `status` is the compile-time-checked `OrganizationStatus` prop union, not user input. */}
       {STATUS_LABEL[status] ?? status}
     </span>
   );

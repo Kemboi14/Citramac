@@ -1,12 +1,15 @@
+from django.db import models
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .consent import capture_consent
 from .erasure import execute_erasure
 from .models import (
     Appointment,
+    Attachment,
     ErasureRequest,
     Patient,
 )
@@ -117,11 +120,11 @@ class PatientViewSet(viewsets.ModelViewSet):
     def attachments(self, request, pk=None):
         patient = self.get_object()
         if request.method == "POST":
-            serializer = AttachmentSerializer(data=request.data)
+            data = request.data.copy()
+            data["patient"] = str(patient.id)
+            serializer = AttachmentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
-            serializer.save(
-                patient=patient, organization=patient.organization, uploaded_by=request.user
-            )
+            serializer.save(organization=patient.organization, uploaded_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(AttachmentSerializer(patient.attachments.all(), many=True).data)
 
@@ -169,13 +172,121 @@ class PatientViewSet(viewsets.ModelViewSet):
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
+    """Appointments Calendar — filterable by `from`/`to` (ISO dates) and `status`."""
+
     serializer_class = AppointmentSerializer
 
     def get_queryset(self):
-        return Appointment.objects.select_related("patient", "provider").order_by("-scheduled_for")
+        queryset = Appointment.objects.select_related("patient", "provider").order_by(
+            "scheduled_for"
+        )
+        params = self.request.query_params
+        if params.get("from"):
+            queryset = queryset.filter(scheduled_for__date__gte=params["from"])
+        if params.get("to"):
+            queryset = queryset.filter(scheduled_for__date__lte=params["to"])
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("patient"):
+            queryset = queryset.filter(patient_id=params["patient"])
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+
+class AttachmentViewSet(viewsets.ModelViewSet):
+    """
+    Global document manager — mockups/citramac_clinical_workspace.html's
+    "Attachments" nav item. Per-patient upload/list continues to also be
+    reachable via PatientViewSet.attachments (kept for that existing usage);
+    this is the cross-patient view + insights.
+    """
+
+    serializer_class = AttachmentSerializer
+
+    def get_queryset(self):
+        queryset = Attachment.objects.select_related("patient", "uploaded_by").order_by(
+            "-uploaded_at"
+        )
+        params = self.request.query_params
+        if params.get("patient"):
+            queryset = queryset.filter(patient_id=params["patient"])
+        if params.get("category"):
+            queryset = queryset.filter(category=params["category"])
+        if params.get("status"):
+            queryset = queryset.filter(doc_status=params["status"])
+        q = params.get("q")
+        if q:
+            queryset = queryset.filter(
+                models.Q(description__icontains=q)
+                | models.Q(file__icontains=q)
+                | models.Q(patient__first_name__icontains=q)
+                | models.Q(patient__last_name__icontains=q)
+            )
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, uploaded_by=self.request.user)
+
+    @action(detail=False, methods=["get"])
+    def insights(self, request):
+        """Document Insights dashboard — real aggregate counts, no fabricated metrics."""
+        queryset = Attachment.objects.all()
+        total = queryset.count()
+        by_category = {
+            row["category"]: row["count"]
+            for row in queryset.values("category").annotate(count=models.Count("id"))
+        }
+        by_status = {
+            row["doc_status"]: row["count"]
+            for row in queryset.values("doc_status").annotate(count=models.Count("id"))
+        }
+        recent = queryset.select_related("patient").order_by("-uploaded_at")[:5]
+        return Response(
+            {
+                "total": total,
+                "favourites": queryset.filter(is_favorite=True).count(),
+                "by_category": by_category,
+                "by_status": by_status,
+                "recent": AttachmentSerializer(recent, many=True).data,
+            }
+        )
+
+
+class ClinicalDashboardSummaryView(APIView):
+    """
+    Clinical Workspace dashboard — mockups/citramac_clinical_workspace.html.
+    Every figure here is a real, directly-derivable count; there is no
+    "documentation completeness %" style metric since nothing in the data
+    model can honestly compute one yet (same real-vs-stub discipline as the
+    SHA/IPRS verification stubs elsewhere — don't fabricate a positive-
+    looking number rather than admit the data isn't there).
+    """
+
+    def get(self, request):
+        from apps.ipd_ward.models import Admission
+
+        today = timezone.localdate()
+        patients = Patient.objects.all()
+        appointments_today = Appointment.objects.filter(scheduled_for__date=today)
+        active_admissions = Admission.objects.filter(status="ADMITTED")
+
+        recent_patients = patients.order_by("-registered_at")[:5]
+        recent_appointments = appointments_today.select_related("patient").order_by(
+            "scheduled_for"
+        )[:5]
+
+        return Response(
+            {
+                "registered_clients": patients.count(),
+                "appointments_today": appointments_today.count(),
+                "active_admissions": active_admissions.count(),
+                "attachments_total": Attachment.objects.count(),
+                "recent_patients": PatientListSerializer(recent_patients, many=True).data,
+                "recent_appointments": AppointmentSerializer(recent_appointments, many=True).data,
+            }
+        )
 
 
 class ErasureRequestViewSet(viewsets.ModelViewSet):

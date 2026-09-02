@@ -15,7 +15,7 @@ import {
   Search,
   Upload,
 } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { Drawer } from "../../components/Drawer";
 import {
@@ -169,7 +169,11 @@ function slugify(value: string) {
 
 function StatusBadge({ status }: { status: OrganizationStatus }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[status] ?? ""}`}>
+    <span
+      // eslint-disable-next-line security/detect-object-injection -- `status` is the compile-time-checked `OrganizationStatus` prop union, not user input.
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[status] ?? ""}`}
+    >
+      {/* eslint-disable-next-line security/detect-object-injection -- `status` is the compile-time-checked `OrganizationStatus` prop union, not user input. */}
       {STATUS_LABEL[status] ?? status}
     </span>
   );
@@ -181,10 +185,13 @@ function IdentityCodeStatus({ orgType, value }: { orgType: OrgType; value: strin
     return (
       <p className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-400">
         <Circle className="h-3 w-3 flex-shrink-0" />
-        Enter the code exactly as it appears on the {IDENTITY_CODE_REGISTRY[orgType]}.
+        Enter the code exactly as it appears on the{" "}
+        {/* eslint-disable-next-line security/detect-object-injection -- `orgType` is the compile-time-checked `OrgType` prop union, not user input. */}
+        {IDENTITY_CODE_REGISTRY[orgType]}.
       </p>
     );
   }
+  // eslint-disable-next-line security/detect-object-injection -- `orgType` is the compile-time-checked `OrgType` prop union, not user input.
   const ok = IDENTITY_CODE_PATTERN[orgType].test(trimmed);
   if (ok) {
     return (
@@ -197,6 +204,7 @@ function IdentityCodeStatus({ orgType, value }: { orgType: OrgType; value: strin
   return (
     <p className="mt-1.5 flex items-center gap-1.5 text-xs text-status-red">
       <AlertCircle className="h-3 w-3 flex-shrink-0" />
+      {/* eslint-disable-next-line security/detect-object-injection -- `orgType` is the compile-time-checked `OrgType` prop union, not user input. */}
       {IDENTITY_CODE_HINT[orgType]}
     </p>
   );
@@ -463,6 +471,7 @@ function OrganizationDrawer({
           >
             {(Object.keys(ORG_TYPE_LABEL) as OrgType[]).map((type) => (
               <option key={type} value={type}>
+                {/* eslint-disable-next-line security/detect-object-injection -- `type` is iterated from `Object.keys(ORG_TYPE_LABEL)`, not user input. */}
                 {ORG_TYPE_LABEL[type]}
               </option>
             ))}

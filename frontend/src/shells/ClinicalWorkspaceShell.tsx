@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import { AppShell } from "./AppShell";
 import { CLINICAL_NAV } from "./navConfig";
 import { TopbarActions } from "./TopbarActions";

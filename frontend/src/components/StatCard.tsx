@@ -30,6 +30,7 @@ export function StatCard({
     <div className="animate-fade-in rounded-lg border border-surface-border bg-surface-card p-[18px] pb-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center justify-between">
         <div
+          // eslint-disable-next-line security/detect-object-injection -- `tone` is `keyof typeof ICON_TONE`, a compile-time-checked prop union, never user input.
           className={`flex h-[34px] w-[34px] items-center justify-center rounded-[10px] transition-transform duration-200 ${ICON_TONE[tone]}`}
         >
           <Icon className="h-[17px] w-[17px]" />

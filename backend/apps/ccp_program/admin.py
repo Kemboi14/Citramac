@@ -7,6 +7,8 @@ from .models import (
     NacadaNdoReport,
     PsychotherapySession,
     RehabMilestone,
+    ReviewOfSystemEntry,
+    SubstanceUseEntry,
     SudRehabPlan,
     SupervisionRequest,
     UrineDrugScreen,
@@ -19,9 +21,21 @@ class CareTeamMembershipAdmin(admin.ModelAdmin):
     list_filter = ["role", "organization"]
 
 
+class SubstanceUseEntryInline(admin.TabularInline):
+    model = SubstanceUseEntry
+    extra = 0
+
+
+class ReviewOfSystemEntryInline(admin.TabularInline):
+    model = ReviewOfSystemEntry
+    extra = 0
+
+
 @admin.register(BiopsychosocialAssessment)
 class BiopsychosocialAssessmentAdmin(admin.ModelAdmin):
-    list_display = ["patient", "author", "created_at"]
+    list_display = ["patient", "author", "status", "date_of_intake", "created_at"]
+    list_filter = ["status"]
+    inlines = [SubstanceUseEntryInline, ReviewOfSystemEntryInline]
 
 
 @admin.register(PsychotherapySession)

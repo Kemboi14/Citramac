@@ -1,6 +1,6 @@
 import { Bell, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 
 /** Notification bell + sign-out, shown on the right of every shell's topbar. */
 export function TopbarActions({ pill }: { pill: React.ReactNode }) {

@@ -7,7 +7,7 @@ from apps.dha_interop.fhir_mapper import build_referral_bundle
 from apps.dha_interop.hie_client import transmit_referral
 from apps.triage.serializers import MentalStatusExamSerializer, VitalSignsSerializer
 
-from .models import Encounter, SoapNote
+from .models import DiagnosisCode, Encounter, SoapNote
 from .serializers import (
     ClinicalOrderSerializer,
     DiagnosisCodeSerializer,
@@ -24,7 +24,11 @@ class EncounterViewSet(viewsets.ModelViewSet):
     serializer_class = EncounterSerializer
 
     def get_queryset(self):
-        return Encounter.objects.select_related("patient").order_by("-opened_at")
+        queryset = Encounter.objects.select_related("patient").order_by("-opened_at")
+        patient = self.request.query_params.get("patient")
+        if patient:
+            queryset = queryset.filter(patient_id=patient)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, opened_by=self.request.user)
@@ -87,7 +91,8 @@ class EncounterViewSet(viewsets.ModelViewSet):
     def diagnoses(self, request, pk=None):
         encounter = self.get_object()
         if request.method == "POST":
-            serializer = DiagnosisCodeSerializer(data=request.data)
+            data = {**request.data, "encounter": str(encounter.id)}
+            serializer = DiagnosisCodeSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             serializer.save(encounter=encounter, organization=encounter.organization)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -176,3 +181,29 @@ class EncounterViewSet(viewsets.ModelViewSet):
                 "transmission_detail": cache_entry.transmission_detail,
             }
         )
+
+
+class DiagnosisCodeViewSet(viewsets.ModelViewSet):
+    """
+    Cross-encounter diagnosis list/detail — the Diagnoses tab from
+    mockups/citramac_clinical_workspace.html's patient workspace.
+    EncounterViewSet.diagnoses (encounter-scoped create/list) remains the
+    creation path used by the Clinical Encounter page; this adds the
+    patient-scoped read/update surface that didn't exist before.
+    """
+
+    serializer_class = DiagnosisCodeSerializer
+
+    def get_queryset(self):
+        queryset = DiagnosisCode.objects.select_related("icd11_code", "encounter").order_by(
+            "-noted_at"
+        )
+        params = self.request.query_params
+        if params.get("patient"):
+            queryset = queryset.filter(encounter__patient_id=params["patient"])
+        if params.get("encounter"):
+            queryset = queryset.filter(encounter_id=params["encounter"])
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)

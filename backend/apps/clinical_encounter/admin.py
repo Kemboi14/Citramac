@@ -25,7 +25,8 @@ class SoapNoteAdmin(admin.ModelAdmin):
 
 @admin.register(DiagnosisCode)
 class DiagnosisCodeAdmin(admin.ModelAdmin):
-    list_display = ["encounter", "icd11_code", "is_primary"]
+    list_display = ["encounter", "icd11_code", "is_primary", "status", "noted_at"]
+    list_filter = ["status", "is_primary"]
 
 
 @admin.register(ClinicalOrder)

@@ -46,11 +46,23 @@ class SoapNoteSerializer(serializers.ModelSerializer):
 
 class DiagnosisCodeSerializer(serializers.ModelSerializer):
     icd11_description = serializers.CharField(source="icd11_code.description", read_only=True)
+    patient = serializers.UUIDField(source="encounter.patient_id", read_only=True)
 
     class Meta:
         model = DiagnosisCode
-        fields = ["id", "encounter", "icd11_code", "icd11_description", "is_primary", "noted_at"]
-        read_only_fields = ["encounter", "noted_at"]
+        fields = [
+            "id",
+            "encounter",
+            "patient",
+            "icd11_code",
+            "icd11_description",
+            "is_primary",
+            "noted_at",
+            "status",
+            "clinical_notes",
+            "diagnostic_criteria_met",
+        ]
+        read_only_fields = ["noted_at"]
 
 
 class ClinicalOrderSerializer(serializers.ModelSerializer):

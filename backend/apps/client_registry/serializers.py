@@ -101,18 +101,43 @@ class InsuranceCoverageSerializer(serializers.ModelSerializer):
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+
     class Meta:
         model = Attachment
         fields = [
             "id",
             "patient",
+            "patient_name",
             "file",
+            "file_size",
             "classification",
+            "category",
+            "document_type",
+            "document_date",
+            "tags",
+            "is_favorite",
+            "doc_status",
             "description",
             "uploaded_by",
+            "uploaded_by_name",
             "uploaded_at",
         ]
-        read_only_fields = ["patient", "uploaded_by", "uploaded_at"]
+        read_only_fields = ["uploaded_by", "uploaded_at"]
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name() if obj.patient_id else ""
+
+    def get_uploaded_by_name(self, obj):
+        return obj.uploaded_by.get_full_name() if obj.uploaded_by_id else ""
+
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size
+        except (ValueError, OSError):
+            return None
 
 
 class PatientListSerializer(serializers.ModelSerializer):
@@ -195,15 +220,29 @@ class PatientDetailSerializer(serializers.ModelSerializer):
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    provider_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Appointment
         fields = [
             "id",
             "patient",
+            "patient_name",
             "branch",
             "provider",
+            "provider_name",
             "scheduled_for",
+            "duration_minutes",
+            "location",
+            "mode",
             "appointment_type",
             "status",
             "notes",
         ]
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name() if obj.patient_id else ""
+
+    def get_provider_name(self, obj):
+        return obj.provider.get_full_name() if obj.provider_id else ""

@@ -1,22 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { PatientContext, type SelectedPatient } from "./patientContextObject";
 
 const STORAGE_KEY = "citramac.selectedPatient";
-
-interface SelectedPatient {
-  patientId: string;
-  patientName: string;
-  encounterId: string | null;
-}
-
-interface PatientContextValue {
-  selected: SelectedPatient | null;
-  selectPatient: (patientId: string, patientName: string) => void;
-  setEncounter: (encounterId: string) => void;
-  clear: () => void;
-}
-
-const PatientContext = createContext<PatientContextValue | undefined>(undefined);
 
 /**
  * Holds the "currently open" patient + encounter, mirroring the mockups'
@@ -59,10 +45,4 @@ export function PatientProvider({ children }: { children: ReactNode }) {
   );
 
   return <PatientContext.Provider value={value}>{children}</PatientContext.Provider>;
-}
-
-export function usePatientContext() {
-  const context = useContext(PatientContext);
-  if (!context) throw new Error("usePatientContext must be used within a PatientProvider");
-  return context;
 }

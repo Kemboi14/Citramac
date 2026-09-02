@@ -48,14 +48,30 @@ class PatientAdmin(admin.ModelAdmin):
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ["patient", "scheduled_for", "appointment_type", "status", "provider"]
-    list_filter = ["status", "organization"]
+    list_display = [
+        "patient",
+        "scheduled_for",
+        "duration_minutes",
+        "mode",
+        "appointment_type",
+        "status",
+        "provider",
+    ]
+    list_filter = ["status", "mode", "organization"]
 
 
 @admin.register(Attachment)
 class AttachmentAdmin(admin.ModelAdmin):
-    list_display = ["patient", "classification", "uploaded_by", "uploaded_at"]
-    list_filter = ["classification", "organization"]
+    list_display = [
+        "patient",
+        "category",
+        "classification",
+        "doc_status",
+        "is_favorite",
+        "uploaded_by",
+        "uploaded_at",
+    ]
+    list_filter = ["category", "doc_status", "classification", "organization"]
 
 
 @admin.register(ConsentRecord)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   listAuditLog,
@@ -37,7 +37,10 @@ const ACTION_TINT: Record<AuditAction, string> = {
 
 function ActionBadge({ action }: { action: AuditAction }) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ACTION_TINT[action] ?? ""}`}>
+    <span
+      // eslint-disable-next-line security/detect-object-injection -- `action` is the compile-time-checked `AuditAction` prop union, not user input.
+      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ACTION_TINT[action] ?? ""}`}
+    >
       {action.replaceAll("_", " ")}
     </span>
   );

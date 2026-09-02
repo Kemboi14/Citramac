@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
-import { usePatientContext } from "../../clinical/PatientContext";
+import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
 import { createPsychotherapySession } from "../../lib/clinicalApi";
 

@@ -288,3 +288,119 @@ class CcpExtensionsTests(APITestCase):
                 model="ccp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
             ).count()
         self.assertEqual(view_count_after, view_count_before + 1)
+
+
+class ClientHistoryIntakeTests(APITestCase):
+    """
+    BiopsychosocialAssessment's CIF-style intake fields —
+    mockups/citramac_clinical_workspace.html "Client History" tab.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-cif", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Mary",
+                last_name="Wanjiku",
+                gender="FEMALE",
+                date_of_birth="1985-03-12",
+            )
+            self.therapist = User.objects.create_user(
+                email="therapist@org-cif.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            CareTeamMembership.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                user=self.therapist,
+                role="THERAPIST",
+            )
+        self.access, _ = issue_tokens(self.therapist)
+        self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
+
+    def test_create_intake_with_clinical_history_and_plan_fields(self):
+        response = self.client.post(
+            reverse("biopsychosocial-assessment-list"),
+            {
+                "patient": str(self.patient.id),
+                "presenting_problem": "Persistent worry and sleep disturbance.",
+                "hpi_onset_date": "2026-02-10",
+                "hpi_duration": "6 months",
+                "hpi_severity": "Moderate",
+                "main_drug_problem": "Alcohol",
+                "past_medical_surgical_history": "No significant history.",
+                "suicide_risk_level": "LOW",
+                "plan_details": "Outpatient CBT referral.",
+                "level_of_care": "OUTPATIENT",
+                "status": "SUBMITTED",
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["status"], "SUBMITTED")
+        self.assertEqual(response.data["hpi_severity"], "Moderate")
+        self.assertEqual(str(response.data["author"]), str(self.therapist.id))
+
+    def test_intake_list_is_filterable_by_patient_and_includes_nested_entries(self):
+        from .models import BiopsychosocialAssessment, ReviewOfSystemEntry, SubstanceUseEntry
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org, patient=self.patient, author=self.therapist
+            )
+            SubstanceUseEntry.objects.create(
+                organization=self.org,
+                assessment=assessment,
+                substance="Alcohol",
+                frequency="Weekly",
+            )
+            ReviewOfSystemEntry.objects.create(
+                organization=self.org,
+                assessment=assessment,
+                category="Neurological System",
+                notes="No acute findings.",
+            )
+
+        response = self.client.get(
+            reverse("biopsychosocial-assessment-list") + f"?patient={self.patient.id}", **self.auth
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        record = response.data["results"][0]
+        self.assertEqual(len(record["substance_use_entries"]), 1)
+        self.assertEqual(record["substance_use_entries"][0]["substance"], "Alcohol")
+        self.assertEqual(len(record["review_of_systems"]), 1)
+
+    def test_unassigned_clinician_sees_only_restricted_intake_fields(self):
+        from .models import BiopsychosocialAssessment
+
+        with platform_admin_context():
+            BiopsychosocialAssessment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                author=self.therapist,
+                presenting_problem="Sensitive trauma-related content.",
+            )
+            outsider = User.objects.create_user(
+                email="outsider@org-cif.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        access, _ = issue_tokens(outsider)
+
+        response = self.client.get(
+            reverse("biopsychosocial-assessment-list"),
+            **{"HTTP_AUTHORIZATION": f"Bearer {access}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        record = response.data["results"][0]
+        self.assertNotIn("presenting_problem", record)
+        self.assertIn("status", record)

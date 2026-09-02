@@ -2,13 +2,14 @@ import {
   Activity,
   AlertTriangle,
   Building2,
+  CalendarClock,
   ClipboardList,
   CreditCard,
   FileBarChart,
   FileClock,
   FileText,
   FlaskConical,
-  Info,
+  HeartPulse,
   KeyRound,
   Landmark,
   LayoutDashboard,
@@ -83,16 +84,23 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
 // Matches mockups/citramac_clinical_workspace.html — docs/03-DESIGN-SYSTEM.md §3.5.
 export const CLINICAL_NAV: NavGroup[] = [
   {
+    label: "Workspace",
+    items: [{ label: "Dashboard", to: "/clinical", icon: LayoutDashboard }],
+  },
+  {
     label: "Core Clinical (DHA)",
     items: [
-      { label: "Client Registry", to: "/clinical", icon: FileText },
+      { label: "Client Registry", to: "/clinical/registry", icon: FileText },
+      { label: "Client History", to: "/clinical/client-history", icon: ClipboardList },
       { label: "Attachments", to: "/clinical/attachments", icon: Paperclip },
+      { label: "Appointments", to: "/clinical/appointments", icon: CalendarClock },
       { label: "Triage & MSE", to: "/clinical/triage", icon: Activity },
       { label: "Clinical Review", to: "/clinical/review", icon: Stethoscope },
       { label: "Clinical Encounter", to: "/clinical/encounter", icon: FileText },
       { label: "Laboratory (LIMS)", to: "/clinical/lims", icon: FlaskConical },
       { label: "Pharmacy", to: "/clinical/pharmacy", icon: Pill },
-      { label: "Inpatient & Ward", to: "/clinical/ipd", icon: Building2 },
+      { label: "Inpatient & Ward / Admission", to: "/clinical/ipd", icon: Building2 },
+      { label: "Psychiatric Nursing", to: "/clinical/ipd/nursing", icon: HeartPulse },
     ],
   },
   {
@@ -111,7 +119,32 @@ export const CLINICAL_NAV: NavGroup[] = [
     ],
   },
   {
-    label: "",
-    items: [{ label: "About", to: "/clinical/about", icon: Info, soon: true }],
+    // Named in mockups/citramac_clinical_workspace.html but with no backing
+    // model/spec anywhere (docs/07-CLINICAL-MODULES-SPEC.md) — listed
+    // honestly as unbuilt rather than either hidden or faked, matching this
+    // shell's existing "soon" pattern (see AppShell.tsx / docs/03 §3.5).
+    label: "Coming Soon",
+    items: [
+      {
+        label: "CORI / CRI Assessments",
+        to: "/clinical/soon/assessments",
+        icon: ClipboardList,
+        soon: true,
+      },
+      {
+        label: "MOH Clinical Reports",
+        to: "/clinical/soon/moh-reports",
+        icon: FileBarChart,
+        soon: true,
+      },
+      {
+        label: "Physical Exercise",
+        to: "/clinical/soon/physical-exercise",
+        icon: Activity,
+        soon: true,
+      },
+      { label: "Bills and Claims", to: "/clinical/soon/billing", icon: CreditCard, soon: true },
+      { label: "Centre Operations", to: "/clinical/soon/centre-ops", icon: Building2, soon: true },
+    ],
   },
 ];

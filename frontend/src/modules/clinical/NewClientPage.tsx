@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { createPatient, type NewPatientPayload } from "../../lib/clinicalApi";
 
@@ -50,7 +50,7 @@ export function NewClientPage() {
     setIsSubmitting(true);
     try {
       await createPatient(accessToken, form);
-      navigate("/clinical");
+      navigate("/clinical/registry");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
@@ -62,7 +62,7 @@ export function NewClientPage() {
     <div>
       <button
         type="button"
-        onClick={() => navigate("/clinical")}
+        onClick={() => navigate("/clinical/registry")}
         className="mb-4 text-sm font-medium text-brand-green hover:underline"
       >
         ← Back to Client Registry

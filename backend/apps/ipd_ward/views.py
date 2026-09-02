@@ -74,14 +74,26 @@ class BedViewSet(viewsets.ModelViewSet):
 
 
 class AdmissionViewSet(viewsets.ModelViewSet):
-    """ADT — docs/07-CLINICAL-MODULES-SPEC.md §7.7."""
+    """
+    ADT — docs/07-CLINICAL-MODULES-SPEC.md §7.7. `admission_type` distinguishes
+    voluntary (client-consented) from involuntary (Mental Health Act Cap. 248
+    legal order) inpatient admission — mockups/citramac_clinical_workspace.html.
+    """
 
     serializer_class = AdmissionSerializer
 
     def get_queryset(self):
-        return Admission.objects.select_related("patient", "bed", "encounter").order_by(
-            "-admitted_at"
-        )
+        queryset = Admission.objects.select_related(
+            "patient", "bed", "bed__ward", "encounter"
+        ).order_by("-admitted_at")
+        params = self.request.query_params
+        if params.get("admission_type"):
+            queryset = queryset.filter(admission_type=params["admission_type"])
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("patient"):
+            queryset = queryset.filter(patient_id=params["patient"])
+        return queryset
 
     def perform_create(self, serializer):
         admission = serializer.save(
@@ -89,6 +101,32 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         )
         admission.bed.status = "OCCUPIED"
         admission.bed.save(update_fields=["status"])
+
+    @action(detail=False, methods=["get"], url_path="eligible-patients")
+    def eligible_patients(self, request):
+        """
+        Inpatient-category clients without a currently active admission —
+        the pool a new Voluntary/Involuntary Admission can be started against
+        (mockup's "Voluntary/Involuntary Admissions" records screen).
+        """
+        from apps.client_registry.models import Patient
+        from apps.client_registry.serializers import PatientListSerializer
+
+        admitted_patient_ids = Admission.objects.filter(status="ADMITTED").values_list(
+            "patient_id", flat=True
+        )
+        patients = Patient.objects.filter(patient_category="INPATIENT").exclude(
+            id__in=admitted_patient_ids
+        )
+        return Response(PatientListSerializer(patients, many=True).data)
+
+    @action(detail=True, methods=["get"])
+    def fhir(self, request, pk=None):
+        """FHIR Bundle (Encounter + Consent/RiskAssessment) for this admission."""
+        from apps.dha_interop.fhir_mapper import build_admission_bundle
+
+        admission = self.get_object()
+        return Response(build_admission_bundle(admission))
 
     @action(detail=True, methods=["post"])
     def discharge(self, request, pk=None):
@@ -126,9 +164,13 @@ class MedicationAdministrationViewSet(viewsets.ModelViewSet):
     serializer_class = MedicationAdministrationSerializer
 
     def get_queryset(self):
-        return MedicationAdministration.objects.select_related("admission").order_by(
+        queryset = MedicationAdministration.objects.select_related("admission").order_by(
             "scheduled_time"
         )
+        admission = self.request.query_params.get("admission")
+        if admission:
+            queryset = queryset.filter(admission_id=admission)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
@@ -149,7 +191,11 @@ class NursingNoteViewSet(viewsets.ModelViewSet):
     serializer_class = NursingNoteSerializer
 
     def get_queryset(self):
-        return NursingNote.objects.select_related("admission").order_by("-recorded_at")
+        queryset = NursingNote.objects.select_related("admission").order_by("-recorded_at")
+        admission = self.request.query_params.get("admission")
+        if admission:
+            queryset = queryset.filter(admission_id=admission)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, author=self.request.user)

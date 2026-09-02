@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyRound, MapPin, PlugZap, ShieldCheck } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   listBranches,

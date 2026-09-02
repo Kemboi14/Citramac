@@ -38,7 +38,31 @@ class CareTeamMembership(TenantScopedModel):
 
 
 class BiopsychosocialAssessment(TenantScopedModel):
-    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.1."""
+    """
+    docs/07-CLINICAL-MODULES-SPEC.md §7.14.1 — also the structured Client
+    Intake History Form from mockups/citramac_clinical_workspace.html
+    ("Client History" tab): the mockup's CIF fields are additive to the
+    original six free-text fields below, not a replacement, so existing
+    rows/consumers of those six fields are unaffected.
+    """
+
+    LEVEL_OF_CARE_CHOICES = [
+        ("INPATIENT", "Inpatient"),
+        ("OUTPATIENT", "Outpatient"),
+        ("PARTIAL", "Partial"),
+        ("RESIDENTIAL", "Residential"),
+    ]
+    ADMISSION_TYPE_CHOICES = [
+        ("NEW", "New Admission"),
+        ("READMISSION", "Readmission"),
+    ]
+    RISK_LEVEL_CHOICES = [
+        ("NONE", "None"),
+        ("LOW", "Low"),
+        ("MODERATE", "Moderate"),
+        ("HIGH", "High"),
+    ]
+    STATUS_CHOICES = [("DRAFT", "Draft"), ("SUBMITTED", "Submitted")]
 
     patient = models.ForeignKey(
         Patient, on_delete=models.CASCADE, related_name="biopsychosocial_assessments"
@@ -52,9 +76,82 @@ class BiopsychosocialAssessment(TenantScopedModel):
     author = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="DRAFT")
+    date_of_intake = models.DateTimeField(null=True, blank=True)
+
+    # History of Presenting Problem
+    hpi_onset_date = models.DateField(null=True, blank=True)
+    hpi_duration = models.CharField(max_length=100, blank=True)
+    hpi_severity = models.CharField(max_length=20, blank=True)
+
+    # Substance use history (summary — entries are on SubstanceUseEntry)
+    main_drug_problem = models.CharField(max_length=100, blank=True)
+    other_main_drug_problem = models.CharField(max_length=100, blank=True)
+    injecting_drug_use = models.BooleanField(default=False)
+    treatment_before = models.BooleanField(default=False)
+    substance_use_details = models.TextField(blank=True)
+
+    # Clinical history breakdown per the CIF form
+    past_medical_surgical_history = models.TextField(blank=True)
+    current_medications = models.TextField(blank=True)
+    family_psychiatric_history = models.TextField(blank=True)
+    forensic_history = models.TextField(blank=True)
+    premorbid_history = models.TextField(blank=True)
+    collateral_history = models.TextField(blank=True)
+    vegetative_history = models.TextField(blank=True)
+
+    # Structured risk assessment (risk_factors above remains the free-text summary)
+    withdrawal_risk = models.TextField(blank=True)
+    suicide_risk_level = models.CharField(max_length=10, choices=RISK_LEVEL_CHOICES, blank=True)
+    self_harm_risk_level = models.CharField(max_length=10, choices=RISK_LEVEL_CHOICES, blank=True)
+    violence_risk_level = models.CharField(max_length=10, choices=RISK_LEVEL_CHOICES, blank=True)
+
+    # Plan
+    plan_details = models.TextField(blank=True)
+    admission_type_at_intake = models.CharField(
+        max_length=16, choices=ADMISSION_TYPE_CHOICES, default="NEW"
+    )
+    level_of_care = models.CharField(max_length=16, choices=LEVEL_OF_CARE_CHOICES, blank=True)
+    next_steps = models.TextField(blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"Biopsychosocial assessment for {self.patient}"
+
+
+class SubstanceUseEntry(TenantScopedModel):
+    """One recorded substance within a Client History intake's substance-use history."""
+
+    assessment = models.ForeignKey(
+        BiopsychosocialAssessment, on_delete=models.CASCADE, related_name="substance_use_entries"
+    )
+    substance = models.CharField(max_length=100)
+    first_use = models.DateField(null=True, blank=True)
+    last_use = models.DateField(null=True, blank=True)
+    frequency = models.CharField(max_length=32, blank=True)
+    route = models.CharField(max_length=32, blank=True)
+
+    def __str__(self):
+        return f"{self.substance} — {self.assessment.patient}"
+
+
+class ReviewOfSystemEntry(TenantScopedModel):
+    """One system reviewed within a Client History intake."""
+
+    assessment = models.ForeignKey(
+        BiopsychosocialAssessment, on_delete=models.CASCADE, related_name="review_of_systems"
+    )
+    category = models.CharField(max_length=100)
+    notes = models.TextField(blank=True)
+    review_date = models.DateField(null=True, blank=True)
+    clinician = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    def __str__(self):
+        return f"{self.category} review — {self.assessment.patient}"
 
 
 class PsychotherapySession(TenantScopedModel):

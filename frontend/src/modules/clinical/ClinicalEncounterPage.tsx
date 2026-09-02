@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useAuth } from "../../auth/AuthContext";
-import { usePatientContext } from "../../clinical/PatientContext";
+import { useAuth } from "../../auth/useAuth";
+import { usePatientContext } from "../../clinical/usePatientContext";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
 import { useOfflineSync } from "../../clinical/useOfflineSync";
 import { ApiError } from "../../lib/apiClient";

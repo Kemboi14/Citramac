@@ -8,6 +8,8 @@ from .views import (
     ClinicalReviewViewSet,
     NacadaNdoReportViewSet,
     PsychotherapySessionViewSet,
+    ReviewOfSystemEntryViewSet,
+    SubstanceUseEntryViewSet,
     SudRehabPlanViewSet,
     SupervisionRequestViewSet,
     UrineDrugScreenViewSet,
@@ -18,6 +20,12 @@ router.register(
     "ccp/biopsychosocial-assessments",
     BiopsychosocialAssessmentViewSet,
     basename="biopsychosocial-assessment",
+)
+router.register(
+    "ccp/substance-use-entries", SubstanceUseEntryViewSet, basename="substance-use-entry"
+)
+router.register(
+    "ccp/review-of-systems", ReviewOfSystemEntryViewSet, basename="review-of-system-entry"
 )
 router.register(
     "ccp/psychotherapy-sessions", PsychotherapySessionViewSet, basename="psychotherapy-session"

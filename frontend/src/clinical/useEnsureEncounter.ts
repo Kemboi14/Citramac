@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../auth/useAuth";
 import { createEncounter } from "../lib/clinicalApi";
-import { usePatientContext } from "./PatientContext";
+import { usePatientContext } from "./usePatientContext";
 
 /**
  * Every clinical tab (Triage/MSE, Clinical Encounter, CCP sessions) needs an
@@ -22,7 +22,7 @@ export function useEnsureEncounter() {
 
   useEffect(() => {
     if (!selected) {
-      navigate("/clinical", { replace: true });
+      navigate("/clinical/registry", { replace: true });
       return;
     }
     if (selected.encounterId || !accessToken || isCreatingRef.current) return;

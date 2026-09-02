@@ -6,9 +6,14 @@ import { ProtectedRoute, RootRedirect } from "./auth/ProtectedRoute";
 import { ClinicalWorkspaceShell } from "./shells/ClinicalWorkspaceShell";
 import { OrgAdminShell } from "./shells/OrgAdminShell";
 import { SuperAdminShell } from "./shells/SuperAdminShell";
-import { PlaceholderPage } from "./modules/PlaceholderPage";
+import { ClinicalDashboardPage } from "./modules/clinical/ClinicalDashboardPage";
 import { ClientRegistryPage } from "./modules/clinical/ClientRegistryPage";
 import { NewClientPage } from "./modules/clinical/NewClientPage";
+import { AppointmentsPage } from "./modules/clinical/AppointmentsPage";
+import { AttachmentsPage } from "./modules/clinical/AttachmentsPage";
+import { ClientHistoryPage } from "./modules/clinical/ClientHistoryPage";
+import { PatientWorkspacePage } from "./modules/clinical/PatientWorkspacePage";
+import { NursingCarePage } from "./modules/clinical/NursingCarePage";
 import { TriageMsePage } from "./modules/clinical/TriageMsePage";
 import { ClinicalEncounterPage } from "./modules/clinical/ClinicalEncounterPage";
 import { IndividualPsychotherapyPage } from "./modules/clinical/IndividualPsychotherapyPage";
@@ -78,12 +83,14 @@ function App() {
       {/* Everyone else authenticated (Doctor, Nurse, Therapist, etc.) — the frontline Clinical Workspace. */}
       <Route element={<ProtectedRoute />}>
         <Route path="/clinical" element={<ClinicalWorkspaceShell />}>
-          <Route index element={<ClientRegistryPage />} />
+          <Route index element={<ClinicalDashboardPage />} />
+          <Route path="registry" element={<ClientRegistryPage />} />
           <Route path="registry-new" element={<NewClientPage />} />
-          <Route
-            path="attachments"
-            element={<PlaceholderPage eyebrow="Module 1" title="Attachments" />}
-          />
+          <Route path="patient" element={<PatientWorkspacePage />} />
+          <Route path="attachments" element={<AttachmentsPage />} />
+          <Route path="appointments" element={<AppointmentsPage />} />
+          <Route path="client-history" element={<ClientHistoryPage />} />
+          <Route path="ipd/nursing" element={<NursingCarePage />} />
           <Route path="triage" element={<TriageMsePage />} />
           <Route path="review" element={<ClinicalReviewPage />} />
           <Route path="encounter" element={<ClinicalEncounterPage />} />

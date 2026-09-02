@@ -12,6 +12,8 @@ from .models import (
     ClinicalReview,
     NacadaNdoReport,
     PsychotherapySession,
+    ReviewOfSystemEntry,
+    SubstanceUseEntry,
     SudRehabPlan,
     SupervisionRequest,
     UrineDrugScreen,
@@ -26,6 +28,10 @@ from .serializers import (
     NacadaNdoReportSerializer,
     PsychotherapySessionRestrictedSerializer,
     PsychotherapySessionSerializer,
+    ReviewOfSystemEntryRestrictedSerializer,
+    ReviewOfSystemEntrySerializer,
+    SubstanceUseEntryRestrictedSerializer,
+    SubstanceUseEntrySerializer,
     SudRehabPlanRestrictedSerializer,
     SudRehabPlanSerializer,
     SupervisionRequestSerializer,
@@ -72,14 +78,59 @@ class CareTeamRestrictedMixin:
 
 
 class BiopsychosocialAssessmentViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+    """
+    Also the "Client History" intake list/detail from
+    mockups/citramac_clinical_workspace.html — filterable by `?patient=`.
+    """
+
     full_serializer_class = BiopsychosocialAssessmentSerializer
     restricted_serializer_class = BiopsychosocialAssessmentRestrictedSerializer
 
     def get_queryset(self):
-        return BiopsychosocialAssessment.objects.select_related("patient").order_by("-created_at")
+        queryset = (
+            BiopsychosocialAssessment.objects.select_related("patient", "author")
+            .prefetch_related("substance_use_entries", "review_of_systems")
+            .order_by("-created_at")
+        )
+        patient = self.request.query_params.get("patient")
+        if patient:
+            queryset = queryset.filter(patient_id=patient)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, author=self.request.user)
+
+
+class SubstanceUseEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+    full_serializer_class = SubstanceUseEntrySerializer
+    restricted_serializer_class = SubstanceUseEntryRestrictedSerializer
+    patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
+
+    def get_queryset(self):
+        queryset = SubstanceUseEntry.objects.select_related("assessment__patient")
+        assessment = self.request.query_params.get("assessment")
+        if assessment:
+            queryset = queryset.filter(assessment_id=assessment)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+
+class ReviewOfSystemEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+    full_serializer_class = ReviewOfSystemEntrySerializer
+    restricted_serializer_class = ReviewOfSystemEntryRestrictedSerializer
+    patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
+
+    def get_queryset(self):
+        queryset = ReviewOfSystemEntry.objects.select_related("assessment__patient")
+        assessment = self.request.query_params.get("assessment")
+        if assessment:
+            queryset = queryset.filter(assessment_id=assessment)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization, clinician=self.request.user)
 
 
 class PsychotherapySessionViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):

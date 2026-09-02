@@ -154,7 +154,11 @@ export function AppShell({
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to.split("/").length <= 2}
+                    // Exact match only — every entry here is its own distinct
+                    // screen, never a section header that should stay lit
+                    // while a nested child screen (with its own nav entry,
+                    // e.g. /clinical/ipd vs /clinical/ipd/nursing) is open.
+                    end
                     title={collapsed ? item.label : undefined}
                     onClick={closeMobile}
                     className={({ isActive }) =>

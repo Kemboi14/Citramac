@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   getSecurityPolicy,
@@ -77,6 +77,7 @@ export function SecurityPoliciesPage() {
     setComplexity(p.password_complexity);
     const nextForm = {} as Record<NumericFieldKey, string>;
     NUMERIC_FIELDS.forEach(({ key }) => {
+      // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
       nextForm[key] = String(p[key]);
     });
     setForm(nextForm);
@@ -101,8 +102,11 @@ export function SecurityPoliciesPage() {
     try {
       const payload: Partial<SecurityPolicy> = {};
       NUMERIC_FIELDS.forEach(({ key }) => {
+        // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
         const num = Number(form[key]);
+        // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
         if (!Number.isNaN(num) && num !== policy[key]) {
+          // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
           payload[key] = num;
         }
       });
@@ -154,9 +158,13 @@ export function SecurityPoliciesPage() {
                   key={key}
                   className="flex items-center justify-between rounded-md border border-surface-border bg-surface-bg px-4 py-3"
                 >
-                  <span className="text-sm font-medium text-ink-700">{MANDATORY_LABELS[key]}</span>
+                  <span className="text-sm font-medium text-ink-700">
+                    {/* eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `MANDATORY_ORDER` const array, not user input. */}
+                    {MANDATORY_LABELS[key]}
+                  </span>
                   <span className="flex items-center gap-1 rounded-sm bg-brand-green-tint px-2 py-0.5 text-xs font-semibold text-brand-green-dark">
                     <Lock className="h-3 w-3" />
+                    {/* eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `MANDATORY_ORDER` const array, not user input. */}
                     {policy.mandatory_controls[key] ? "Enforced" : "Disabled"}
                   </span>
                 </div>
@@ -190,6 +198,7 @@ export function SecurityPoliciesPage() {
                   <input
                     type="number"
                     className={FIELD_CLASS}
+                    // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
                     value={form[key] ?? ""}
                     onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                   />

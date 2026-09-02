@@ -16,8 +16,16 @@ class BedAdmin(admin.ModelAdmin):
 
 @admin.register(Admission)
 class AdmissionAdmin(admin.ModelAdmin):
-    list_display = ["patient", "bed", "status", "admitted_at", "discharged_at"]
-    list_filter = ["status"]
+    list_display = [
+        "patient",
+        "bed",
+        "admission_type",
+        "status",
+        "observation_level",
+        "admitted_at",
+        "discharged_at",
+    ]
+    list_filter = ["status", "admission_type", "priority"]
 
 
 @admin.register(MedicationAdministration)

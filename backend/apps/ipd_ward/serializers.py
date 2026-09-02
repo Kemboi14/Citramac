@@ -29,21 +29,64 @@ class BedSerializer(serializers.ModelSerializer):
 
 
 class AdmissionSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    bed_label = serializers.SerializerMethodField()
+
     class Meta:
         model = Admission
         fields = [
             "id",
             "patient",
+            "patient_name",
             "encounter",
             "bed",
+            "bed_label",
             "admitted_by",
             "admitted_at",
             "status",
             "discharged_at",
             "discharge_summary",
             "follow_up_date",
+            "admission_type",
+            "admission_source",
+            "priority",
+            "reason_for_admission",
+            "clinical_summary",
+            "primary_diagnosis",
+            "associated_conditions",
+            "risk_self_harm",
+            "risk_to_others",
+            "risk_absconding",
+            "risk_medical",
+            "observation_level",
+            "safety_actions",
+            "risk_summary",
+            "primary_care_team",
+            "consultant",
+            "initial_care_priorities",
+            "consent_status",
+            "consent_at",
+            "consent_obtained_by",
+            "capacity_assessed",
+            "consent_notes",
+            "legal_status",
+            "legal_order_reference",
+            "legal_order_date",
+            "legal_review_due_date",
+            "authorizing_professional",
+            "legal_rationale",
+            "oversight_notes",
+            "next_of_kin_notification",
+            "next_of_kin_notes",
+            "handover_note",
         ]
         read_only_fields = ["admitted_by", "admitted_at", "status", "discharged_at"]
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name() if obj.patient_id else ""
+
+    def get_bed_label(self, obj):
+        return f"{obj.bed.ward.name} / Bed {obj.bed.bed_number}" if obj.bed_id else ""
 
 
 class MedicationAdministrationSerializer(serializers.ModelSerializer):

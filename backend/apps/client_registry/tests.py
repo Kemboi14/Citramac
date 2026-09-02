@@ -7,7 +7,7 @@ from apps.accounts.tokens import issue_tokens
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .models import Patient
+from .models import Appointment, Attachment, Patient
 
 
 class ClientRegistryTests(APITestCase):
@@ -407,3 +407,108 @@ class RightToErasureTests(APITestCase):
             **self.org_admin_auth,
         )
         self.assertEqual(response.status_code, 403)
+
+
+class AttachmentAppointmentDashboardTests(APITestCase):
+    """Document manager, appointments calendar, and dashboard summary aggregates."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-history", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.clinician = User.objects.create_user(
+                email="clinician@org-history.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Grace",
+                last_name="Njeri",
+                gender="FEMALE",
+                date_of_birth="1989-06-14",
+            )
+        self.access, _ = issue_tokens(self.clinician)
+        self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
+
+    def test_attachment_create_requires_patient_and_defaults_category(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile("consent.pdf", b"%PDF-1.4 test", content_type="application/pdf")
+        response = self.client.post(
+            reverse("attachment-list"),
+            {
+                "patient": str(self.patient.id),
+                "file": upload,
+                "classification": "CURRENT",
+                "category": "CONSENT",
+            },
+            format="multipart",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["category"], "CONSENT")
+        self.assertEqual(response.data["doc_status"], "ACTIVE")
+
+    def test_attachment_insights_aggregates_by_category(self):
+        with platform_admin_context():
+            Attachment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                file="attachments/2026/09/a.pdf",
+                classification="CURRENT",
+                category="LAB_RESULT",
+            )
+            Attachment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                file="attachments/2026/09/b.pdf",
+                classification="CURRENT",
+                category="LAB_RESULT",
+                is_favorite=True,
+            )
+        response = self.client.get(reverse("attachment-insights"), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total"], 2)
+        self.assertEqual(response.data["by_category"]["LAB_RESULT"], 2)
+        self.assertEqual(response.data["favourites"], 1)
+
+    def test_appointment_list_filters_by_date_range(self):
+        with platform_admin_context():
+            Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for="2026-06-06T10:00:00Z",
+                appointment_type="Individual therapy session",
+            )
+            Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for="2026-06-20T09:30:00Z",
+                appointment_type="Psychiatric review",
+            )
+        response = self.client.get(
+            reverse("appointment-list") + "?from=2026-06-06&to=2026-06-06", **self.auth
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["appointment_type"], "Individual therapy session"
+        )
+
+    def test_dashboard_summary_returns_real_counts(self):
+        with platform_admin_context():
+            Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now(),
+                appointment_type="Follow-up",
+            )
+        response = self.client.get(reverse("clinical-dashboard-summary"), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["registered_clients"], 1)
+        self.assertEqual(response.data["appointments_today"], 1)
+        self.assertEqual(response.data["active_admissions"], 0)

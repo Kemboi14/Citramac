@@ -58,12 +58,22 @@ class DiagnosisCode(TenantScopedModel):
     """
     Mandatory ICD-11 mapping — docs/08-DHA-SHA-INTEGRATION.md §8.2: "diagnosis
     field is a required, validated FK — no free-text diagnosis without a code."
+    `clinical_notes`/`diagnostic_criteria_met`/`status` are additive — the
+    Diagnoses tab detail view from mockups/citramac_clinical_workspace.html.
     """
+
+    STATUS_CHOICES = [("ACTIVE", "Active"), ("HISTORICAL", "Historical"), ("RESOLVED", "Resolved")]
 
     encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="diagnoses")
     icd11_code = models.ForeignKey(IcdCodeIndex, on_delete=models.PROTECT, related_name="+")
     is_primary = models.BooleanField(default=False)
     noted_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="ACTIVE")
+    clinical_notes = models.TextField(blank=True)
+    diagnostic_criteria_met = models.TextField(blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-noted_at"]
 
     def __str__(self):
         return f"{self.icd11_code.code} ({'primary' if self.is_primary else 'secondary'})"

@@ -7,6 +7,8 @@ from .models import (
     NacadaNdoReport,
     PsychotherapySession,
     RehabMilestone,
+    ReviewOfSystemEntry,
+    SubstanceUseEntry,
     SudRehabPlan,
     SupervisionRequest,
     UrineDrugScreen,
@@ -19,12 +21,54 @@ class CareTeamMembershipSerializer(serializers.ModelSerializer):
         fields = ["id", "patient", "user", "role", "assigned_at"]
 
 
+class SubstanceUseEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubstanceUseEntry
+        fields = ["id", "assessment", "substance", "first_use", "last_use", "frequency", "route"]
+
+
+class SubstanceUseEntryRestrictedSerializer(serializers.ModelSerializer):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — existence only, no content."""
+
+    class Meta:
+        model = SubstanceUseEntry
+        fields = ["id", "assessment"]
+
+
+class ReviewOfSystemEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReviewOfSystemEntry
+        fields = ["id", "assessment", "category", "notes", "review_date", "clinician"]
+        read_only_fields = ["clinician"]
+
+
+class ReviewOfSystemEntryRestrictedSerializer(serializers.ModelSerializer):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — existence only, no content."""
+
+    class Meta:
+        model = ReviewOfSystemEntry
+        fields = ["id", "assessment", "category"]
+
+
 class BiopsychosocialAssessmentSerializer(serializers.ModelSerializer):
+    """
+    Also serves as the "Client History" intake form from
+    mockups/citramac_clinical_workspace.html — the CIF-style fields below
+    (hpi_*, substance use, clinical-history breakdown, structured risk,
+    plan) are additive to the original six free-text fields.
+    """
+
+    substance_use_entries = SubstanceUseEntrySerializer(many=True, read_only=True)
+    review_of_systems = ReviewOfSystemEntrySerializer(many=True, read_only=True)
+    patient_name = serializers.SerializerMethodField()
+    author_name = serializers.SerializerMethodField()
+
     class Meta:
         model = BiopsychosocialAssessment
         fields = [
             "id",
             "patient",
+            "patient_name",
             "developmental_history",
             "social_history",
             "psychological_history",
@@ -32,9 +76,43 @@ class BiopsychosocialAssessmentSerializer(serializers.ModelSerializer):
             "presenting_problem",
             "risk_factors",
             "author",
+            "author_name",
             "created_at",
+            "status",
+            "date_of_intake",
+            "hpi_onset_date",
+            "hpi_duration",
+            "hpi_severity",
+            "main_drug_problem",
+            "other_main_drug_problem",
+            "injecting_drug_use",
+            "treatment_before",
+            "substance_use_details",
+            "substance_use_entries",
+            "past_medical_surgical_history",
+            "current_medications",
+            "family_psychiatric_history",
+            "forensic_history",
+            "premorbid_history",
+            "collateral_history",
+            "vegetative_history",
+            "withdrawal_risk",
+            "suicide_risk_level",
+            "self_harm_risk_level",
+            "violence_risk_level",
+            "plan_details",
+            "admission_type_at_intake",
+            "level_of_care",
+            "next_steps",
+            "review_of_systems",
         ]
         read_only_fields = ["author", "created_at"]
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name() if obj.patient_id else ""
+
+    def get_author_name(self, obj):
+        return obj.author.get_full_name() if obj.author_id else ""
 
 
 class BiopsychosocialAssessmentRestrictedSerializer(serializers.ModelSerializer):
@@ -42,7 +120,7 @@ class BiopsychosocialAssessmentRestrictedSerializer(serializers.ModelSerializer)
 
     class Meta:
         model = BiopsychosocialAssessment
-        fields = ["id", "patient", "created_at"]
+        fields = ["id", "patient", "status", "created_at"]
 
 
 class PsychotherapySessionSerializer(serializers.ModelSerializer):

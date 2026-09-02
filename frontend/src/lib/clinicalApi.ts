@@ -66,6 +66,19 @@ export function createEncounter(accessToken: string, patientId: string, encounte
   });
 }
 
+export interface EncounterRow {
+  id: string;
+  patient: string;
+  encounter_type: string;
+  status: string;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export function listEncountersForPatient(accessToken: string, patientId: string) {
+  return apiRequest<Paginated<EncounterRow>>(`/encounters/?patient=${patientId}`, { accessToken });
+}
+
 export function submitVitals(
   accessToken: string,
   encounterId: string,

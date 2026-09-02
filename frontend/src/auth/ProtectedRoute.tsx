@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { shellPathForRole } from "../lib/roleRouting";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./useAuth";
 
 function FullPageSpinner() {
   return (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../auth/AuthContext";
-import { usePatientContext } from "../../clinical/PatientContext";
+import { useAuth } from "../../auth/useAuth";
+import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
 import {
   completeSupervisionRequest,
@@ -53,7 +53,7 @@ export function SupervisionRequestsPage() {
     return (
       <p className="text-ink-500">
         Select a client from the{" "}
-        <Link to="/clinical" className="font-semibold text-brand-green hover:underline">
+        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
           Client Registry
         </Link>{" "}
         first.

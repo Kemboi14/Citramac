@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BedDouble, CalendarPlus, Stethoscope, Users } from "lucide-react";
-import { useAuth } from "../../auth/AuthContext";
+import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getOrgDashboardStats, type OrgDashboardStats } from "../../lib/organizationsApi";
 import { listStaff, type Staff } from "../../lib/governanceApi";

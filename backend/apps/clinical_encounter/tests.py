@@ -200,3 +200,81 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         self.assertEqual(send_response.status_code, 200, send_response.data)
         self.assertEqual(send_response.data["transmission_status"], "FAILED")
         self.assertEqual(send_response.data["referral"]["status"], "DRAFT")
+
+    def test_diagnosis_list_is_filterable_by_patient_across_encounters(self):
+        """Diagnoses tab — cross-encounter, patient-scoped diagnosis list."""
+        with platform_admin_context():
+            code = IcdCodeIndex.objects.get(code="6A70")
+
+        first_encounter_id = self._open_encounter()
+        self.client.post(
+            reverse("encounter-diagnoses", args=[first_encounter_id]),
+            {"icd11_code": code.code, "is_primary": True},
+            format="json",
+            **self.auth,
+        )
+        second_encounter_id = self._open_encounter()
+        self.client.post(
+            reverse("encounter-diagnoses", args=[second_encounter_id]),
+            {"icd11_code": code.code, "is_primary": False},
+            format="json",
+            **self.auth,
+        )
+
+        response = self.client.get(
+            reverse("diagnosis-code-list") + f"?patient={self.patient.id}", **self.auth
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["results"][0]["patient"], str(self.patient.id))
+
+    def test_diagnosis_detail_fields_are_editable_after_creation(self):
+        with platform_admin_context():
+            code = IcdCodeIndex.objects.get(code="6A70")
+        encounter_id = self._open_encounter()
+        create_response = self.client.post(
+            reverse("encounter-diagnoses", args=[encounter_id]),
+            {"icd11_code": code.code, "is_primary": True},
+            format="json",
+            **self.auth,
+        )
+        diagnosis_id = create_response.data["id"]
+
+        response = self.client.patch(
+            reverse("diagnosis-code-detail", args=[diagnosis_id]),
+            {
+                "clinical_notes": "Client presents with excessive worry more days than not.",
+                "diagnostic_criteria_met": "Excessive anxiety; difficulty controlling worry.",
+                "status": "HISTORICAL",
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], "HISTORICAL")
+        self.assertIn("excessive worry", response.data["clinical_notes"])
+
+    def test_encounter_list_filters_by_patient(self):
+        self._open_encounter()
+        with platform_admin_context():
+            other_patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Other",
+                last_name="Client",
+                gender="MALE",
+                date_of_birth="1990-01-01",
+                citramac_number="TEST-OTHER-001",
+            )
+        self.client.post(
+            reverse("encounter-list"),
+            {"patient": str(other_patient.id), "encounter_type": "OUTPATIENT"},
+            format="json",
+            **self.auth,
+        )
+
+        response = self.client.get(
+            reverse("encounter-list") + f"?patient={self.patient.id}", **self.auth
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(str(response.data["results"][0]["patient"]), str(self.patient.id))

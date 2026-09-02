@@ -10,17 +10,21 @@ instruction.
 
 import json
 
+from fhir.resources.R4B.annotation import Annotation
 from fhir.resources.R4B.bundle import Bundle, BundleEntry
 from fhir.resources.R4B.codeableconcept import CodeableConcept
 from fhir.resources.R4B.coding import Coding
 from fhir.resources.R4B.composition import Composition, CompositionSection
 from fhir.resources.R4B.condition import Condition
+from fhir.resources.R4B.consent import Consent
 from fhir.resources.R4B.dosage import Dosage
+from fhir.resources.R4B.encounter import Encounter
 from fhir.resources.R4B.humanname import HumanName
 from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.medicationrequest import MedicationRequest
 from fhir.resources.R4B.patient import Patient as FhirPatient
 from fhir.resources.R4B.reference import Reference
+from fhir.resources.R4B.riskassessment import RiskAssessment
 
 _GENDER_MAP = {"MALE": "male", "FEMALE": "female", "OTHER": "other"}
 
@@ -159,7 +163,156 @@ def build_referral_bundle(referral_packet):
     entries.insert(0, BundleEntry(fullUrl=composition_ref, resource=composition))
 
     bundle = Bundle(type="document", entry=entries)
-    # `.json()` (not `.dict()`) so dates serialize to proper FHIR ISO8601
-    # strings — `.dict()` leaves native `datetime` objects in the tree,
-    # which the plain `models.JSONField` encoder can't serialize on save.
-    return json.loads(bundle.json(exclude_none=True))
+    # `.model_dump_json()` (not `.model_dump()`) so dates serialize to proper
+    # FHIR ISO8601 strings — `.model_dump()` leaves native `datetime` objects
+    # in the tree, which the plain `models.JSONField` encoder can't
+    # serialize on save. (Pydantic v1's `.json()` did the same thing but is
+    # deprecated since Pydantic v2.)
+    return json.loads(bundle.model_dump_json(exclude_none=True))
+
+
+_ENCOUNTER_STATUS_MAP = {
+    "ADMITTED": "in-progress",
+    "TRANSFERRED": "in-progress",
+    "DISCHARGED": "finished",
+}
+
+_CONSENT_STATUS_MAP = {
+    "OBTAINED": "active",
+    "PENDING": "proposed",
+    "DECLINED": "rejected",
+    "": "proposed",
+}
+
+
+def build_encounter_resource(admission, patient_ref):
+    """
+    Inpatient Encounter for an Admission — docs/07-CLINICAL-MODULES-SPEC.md
+    §7.7. No Encounter FHIR builder existed before this; ADT admissions
+    otherwise had no FHIR representation at all.
+    """
+    from fhir.resources.R4B.period import Period
+
+    period_kwargs = {"start": admission.admitted_at.isoformat()}
+    if admission.discharged_at:
+        period_kwargs["end"] = admission.discharged_at.isoformat()
+
+    return Encounter(
+        id=str(admission.id),
+        status=_ENCOUNTER_STATUS_MAP.get(admission.status, "unknown"),
+        class_fhir=Coding(
+            system="http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            code="IMP",
+            display="inpatient encounter",
+        ),
+        subject=Reference(reference=patient_ref),
+        period=Period(**period_kwargs),
+        reasonCode=(
+            [CodeableConcept(text=admission.reason_for_admission)]
+            if admission.reason_for_admission
+            else None
+        ),
+    )
+
+
+def build_consent_resource(admission, patient_ref):
+    """
+    Treatment consent for a Voluntary Admission — distinct from the
+    HIE-data-sharing Consent captured on Patient/ConsentRecord. No Consent
+    FHIR builder existed before this.
+    """
+    return Consent(
+        id=str(admission.id),
+        status=_CONSENT_STATUS_MAP.get(admission.consent_status, "proposed"),
+        scope=CodeableConcept(
+            coding=[
+                Coding(
+                    system="http://terminology.hl7.org/CodeSystem/consentscope",
+                    code="treatment",
+                    display="Treatment",
+                )
+            ]
+        ),
+        category=[
+            CodeableConcept(
+                coding=[
+                    Coding(
+                        system="http://loinc.org",
+                        code="59284-0",
+                        display="Patient Consent",
+                    )
+                ]
+            )
+        ],
+        patient=Reference(reference=patient_ref),
+        dateTime=admission.consent_at.isoformat() if admission.consent_at else None,
+    )
+
+
+def build_risk_assessment_resource(admission, patient_ref):
+    """
+    Admission-time risk assessment for an Involuntary Admission (legal
+    order under the Mental Health Act, Cap. 248) — the only risk-assessment
+    FHIR representation before this was Encounter-level via MSE, never tied
+    to an inpatient Admission.
+    """
+    risk_labels = {
+        "risk_self_harm": "Self-harm / suicide risk",
+        "risk_to_others": "Risk to others",
+        "risk_absconding": "Absconding / wandering risk",
+        "risk_medical": "Medical / physical risk",
+    }
+    active_risks = [label for field, label in risk_labels.items() if getattr(admission, field)]
+    note_lines = []
+    if active_risks:
+        note_lines.append("Identified risks: " + ", ".join(active_risks))
+    if admission.observation_level:
+        note_lines.append(f"Observation level: {admission.get_observation_level_display()}")
+    if admission.risk_summary:
+        note_lines.append(admission.risk_summary)
+
+    return RiskAssessment(
+        id=str(admission.id),
+        status="final",
+        subject=Reference(reference=patient_ref),
+        occurrenceDateTime=admission.admitted_at.isoformat(),
+        note=[Annotation(text="\n".join(note_lines))] if note_lines else None,
+    )
+
+
+def build_admission_bundle(admission):
+    """
+    Encounter + (Consent for a voluntary admission, or RiskAssessment for an
+    involuntary one) — surfaced via AdmissionViewSet.fhir, not auto-
+    transmitted to the HIE (no submission pipeline exists for these resource
+    types yet, matching the honest real-vs-stub pattern used elsewhere in
+    this module rather than faking a transmission).
+    """
+    patient = admission.patient
+    patient_ref = _urn("Patient", patient.id)
+    encounter_ref = _urn("Encounter", admission.id)
+
+    entries = [
+        BundleEntry(fullUrl=patient_ref, resource=build_patient_resource(patient)),
+        BundleEntry(
+            fullUrl=encounter_ref, resource=build_encounter_resource(admission, patient_ref)
+        ),
+    ]
+
+    if admission.admission_type == "INVOLUNTARY":
+        risk_ref = _urn("RiskAssessment", admission.id)
+        entries.append(
+            BundleEntry(
+                fullUrl=risk_ref, resource=build_risk_assessment_resource(admission, patient_ref)
+            )
+        )
+    else:
+        consent_ref = _urn("Consent", admission.id)
+        entries.append(
+            BundleEntry(
+                fullUrl=consent_ref, resource=build_consent_resource(admission, patient_ref)
+            )
+        )
+
+    bundle = Bundle(type="collection", entry=entries)
+    return json.loads(bundle.model_dump_json(exclude_none=True))
