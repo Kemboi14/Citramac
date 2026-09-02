@@ -61,6 +61,27 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
+      # Uploaded media (platform/org logos, patient attachments) was landing
+      # in the pod's own ephemeral container filesystem — the base
+      # Deployment never mounted anything at MEDIA_ROOT (/app/mediafiles).
+      # Host nginx serves the public /media/ path straight from
+      # /opt/citramac/mediafiles (same bind-mount the Compose-era deployment
+      # used, per project deployment notes), so every upload was invisible
+      # to it and 404'd. This hostPath makes writes land where nginx already
+      # looks. citramac-backend runs a single replica here (see `replicas:`
+      # below), so there's no cross-pod staleness to worry about.
+      - op: add
+        path: /spec/template/spec/volumes
+        value:
+          - name: mediafiles
+            hostPath:
+              path: /opt/citramac/mediafiles
+              type: DirectoryOrCreate
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts
+        value:
+          - name: mediafiles
+            mountPath: /app/mediafiles
   - target:
       kind: Deployment
       name: citramac-frontend
