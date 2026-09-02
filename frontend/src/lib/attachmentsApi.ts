@@ -1,7 +1,12 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, ApiError } from "./apiClient";
 
 // Mirrors apps/client_registry's Attachment — global document manager +
 // Document Insights, from mockups/citramac_clinical_workspace.html.
+
+// Matches the backend's settings.UPLOAD_MAX_SIZE_BYTES — checked client-side
+// too so a too-large file is rejected instantly, not after a full upload
+// round-trip.
+export const ATTACHMENT_MAX_SIZE_BYTES = 30 * 1024 * 1024;
 
 export interface Paginated<T> {
   count: number;
@@ -69,6 +74,11 @@ export function uploadAttachment(
     description?: string;
   },
 ) {
+  if (payload.file.size > ATTACHMENT_MAX_SIZE_BYTES) {
+    throw new ApiError(400, {
+      error: { code: "FILE_TOO_LARGE", message: "File must be 30MB or smaller." },
+    });
+  }
   const body = new FormData();
   body.set("patient", payload.patient);
   body.set("file", payload.file);

@@ -47,3 +47,45 @@ variable "postgres_password" {
   type      = string
   sensitive = true
 }
+
+# ── Email (OTP dispatch, activation invites) ──────────────────────────────
+# Empty EMAIL_HOST default preserves the honest console-backend fallback in
+# config/settings/production.py — set these in terraform.tfvars once real
+# SMTP credentials exist, then `terraform apply` + roll the backend and
+# celery-worker Deployments (OTP emails send from a Celery task).
+variable "email_host" {
+  type    = string
+  default = ""
+}
+
+variable "email_port" {
+  type    = string
+  default = "587"
+}
+
+variable "email_host_user" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "email_host_password" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "email_use_tls" {
+  type    = string
+  default = "True"
+}
+
+variable "email_use_ssl" {
+  type    = string
+  default = "False"
+}
+
+variable "default_from_email" {
+  type    = string
+  default = "no-reply@citramac.local"
+}

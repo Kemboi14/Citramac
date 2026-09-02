@@ -7,3 +7,17 @@ django_secret_key    = "change-me" # pragma: allowlist secret
 field_encryption_key = "change-me" # pragma: allowlist secret
 database_url         = "postgres://citramac:change-me@postgres:5432/citramac" # pragma: allowlist secret
 postgres_password    = "change-me" # pragma: allowlist secret
+
+# Leaving email_host empty keeps the honest console-backend fallback
+# (config/settings/production.py) — OTP/invite emails print to
+# `kubectl logs -n citramac deploy/citramac-celery-worker` instead of being
+# delivered. Fill these in once real SMTP credentials exist, `terraform
+# apply`, then `kubectl -n citramac rollout restart deployment/citramac-backend
+# deployment/citramac-celery-worker` (OTP emails send from a Celery task).
+email_host          = "" # e.g. mail.softlinkoptions.co.ke
+email_port          = "587" # 587 = STARTTLS (email_use_tls), 465 = implicit SSL (email_use_ssl)
+email_host_user     = "" # e.g. notifications@softlinkoptions.co.ke — full mailbox address
+email_host_password = "" # pragma: allowlist secret
+email_use_tls       = "True"
+email_use_ssl       = "False"
+default_from_email  = "" # e.g. CITRAMAC <notifications@softlinkoptions.co.ke>

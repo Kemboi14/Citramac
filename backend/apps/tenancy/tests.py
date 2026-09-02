@@ -268,6 +268,36 @@ class PlatformBrandingApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_accepts_a_large_source_logo_up_to_30mb(self):
+        """A high-res source logo up to the 30MB ceiling must be accepted, not just tiny files."""
+        from apps.tenancy.views import LOGO_MAX_SIZE_BYTES
+
+        large_logo = SimpleUploadedFile(
+            "logo.png", b"x" * (LOGO_MAX_SIZE_BYTES - 1), content_type="image/png"
+        )
+        response = self.client.post(
+            reverse("platform-branding"),
+            {"logo": large_logo},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_rejects_a_logo_over_30mb(self):
+        from apps.tenancy.views import LOGO_MAX_SIZE_BYTES
+
+        oversized_logo = SimpleUploadedFile(
+            "logo.png", b"x" * (LOGO_MAX_SIZE_BYTES + 1), content_type="image/png"
+        )
+        response = self.client.post(
+            reverse("platform-branding"),
+            {"logo": oversized_logo},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "FILE_TOO_LARGE")
+
 
 class OrganizationConsoleApiTests(APITestCase):
     """Super Admin's Organizations screen — multi-vertical onboarding,
@@ -616,3 +646,107 @@ class OrgDashboardStatsViewTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["outpatient_ccp_volume"], 1)
+
+
+class InviteStaffCommandTests(TestCase):
+    """
+    Narrower alternative to onboard_tenant for adding one staff member to an
+    *existing* org without risking an accidental Organization-level upsert.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Existing Centre", slug="existing-centre", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.branch = Branch.objects.create(organization=self.org, name="Main Branch")
+
+    def test_invites_a_new_staff_member_with_a_valid_role(self):
+        call_command(
+            "invite_staff",
+            org_slug="existing-centre",
+            email="new.doctor@existing-centre.invalid",
+            first_name="Grace",
+            last_name="Otieno",
+            role="Doctor",
+            staff_id="",
+            branch_name="",
+        )
+
+        with platform_admin_context():
+            user = User.objects.get(email="new.doctor@existing-centre.invalid")
+            self.assertFalse(user.is_active)
+            self.assertEqual(user.organization_id, self.org.id)
+            self.assertTrue(user.roles.filter(name="Doctor").exists())
+            self.assertTrue(ActivationInvite.all_objects.filter(user=user).exists())
+
+    def test_grants_branch_access_when_branch_name_given(self):
+        call_command(
+            "invite_staff",
+            org_slug="existing-centre",
+            email="branch.doctor@existing-centre.invalid",
+            first_name="Kevin",
+            last_name="Mwangi",
+            role="Doctor",
+            staff_id="",
+            branch_name="Main Branch",
+        )
+
+        with platform_admin_context():
+            user = User.objects.get(email="branch.doctor@existing-centre.invalid")
+            self.assertTrue(user.branch_access.filter(id=self.branch.id).exists())
+
+    def test_rejects_unknown_org_slug(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "invite_staff",
+                org_slug="does-not-exist",
+                email="x@existing-centre.invalid",
+                first_name="X",
+                last_name="Y",
+                role="Doctor",
+                staff_id="",
+                branch_name="",
+            )
+
+    def test_rejects_unknown_role(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "invite_staff",
+                org_slug="existing-centre",
+                email="x@existing-centre.invalid",
+                first_name="X",
+                last_name="Y",
+                role="Not A Real Role",
+                staff_id="",
+                branch_name="",
+            )
+
+    def test_does_not_re_invite_an_existing_user(self):
+        with platform_admin_context():
+            User.objects.create(
+                organization=self.org,
+                email="already.here@existing-centre.invalid",
+                first_name="Already",
+                last_name="Here",
+                is_active=True,
+            )
+
+        call_command(
+            "invite_staff",
+            org_slug="existing-centre",
+            email="already.here@existing-centre.invalid",
+            first_name="Different",
+            last_name="Name",
+            role="Doctor",
+            staff_id="",
+            branch_name="",
+        )
+
+        with platform_admin_context():
+            user = User.objects.get(email="already.here@existing-centre.invalid")
+            # Untouched — still active, name unchanged, no new invite created.
+            self.assertTrue(user.is_active)
+            self.assertEqual(user.first_name, "Already")
+            self.assertFalse(ActivationInvite.all_objects.filter(user=user).exists())

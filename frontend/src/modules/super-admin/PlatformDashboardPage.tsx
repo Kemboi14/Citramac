@@ -14,6 +14,11 @@ import { StatCard } from "../../components/StatCard";
 import { BarChart } from "../../components/charts/BarChart";
 import { DonutChart } from "../../components/charts/DonutChart";
 
+// Matches the backend's LOGO_MAX_SIZE_BYTES (apps.tenancy.views) — checked
+// client-side too so a too-large file is rejected instantly, not after a
+// full upload round-trip.
+const LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024;
+
 /**
  * Upload-once, shows-everywhere platform logo (AppShell's sidebar mark +
  * the generic login screen all read the same /platform/branding/ record).
@@ -38,6 +43,10 @@ function PlatformBrandingCard() {
   const handleFile = async (file: File) => {
     if (!accessToken) return;
     setError(null);
+    if (file.size > LOGO_MAX_SIZE_BYTES) {
+      setError("Logo must be 30MB or smaller.");
+      return;
+    }
     setUploading(true);
     try {
       await uploadPlatformLogo(accessToken, file);
@@ -61,7 +70,7 @@ function PlatformBrandingCard() {
         <div className="font-display text-sm font-semibold text-ink-900">Platform Branding</div>
         <p className="text-xs text-ink-500">
           Shown in every shell&rsquo;s sidebar and the generic login screen. PNG, JPG, WEBP, or SVG,
-          up to 2MB.
+          up to 30MB.
         </p>
         {error && <p className="mt-1 text-xs text-status-red">{error}</p>}
       </div>

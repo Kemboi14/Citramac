@@ -159,7 +159,7 @@ class OrganizationStatusView(APIView):
 
 
 LOGO_ALLOWED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".svg", ".webp")
-LOGO_MAX_SIZE_BYTES = 2 * 1024 * 1024
+LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024
 
 
 def _validate_logo_upload(request):
@@ -190,7 +190,7 @@ def _validate_logo_upload(request):
         )
     if logo.size > LOGO_MAX_SIZE_BYTES:
         return None, Response(
-            {"error": {"code": "FILE_TOO_LARGE", "message": "Logo must be 2MB or smaller."}},
+            {"error": {"code": "FILE_TOO_LARGE", "message": "Logo must be 30MB or smaller."}},
             status=status.HTTP_400_BAD_REQUEST,
         )
     return logo, None

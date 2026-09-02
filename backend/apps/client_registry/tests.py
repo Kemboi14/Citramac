@@ -453,6 +453,27 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         self.assertEqual(response.data["category"], "CONSENT")
         self.assertEqual(response.data["doc_status"], "ACTIVE")
 
+    def test_attachment_rejects_a_file_over_the_upload_ceiling(self):
+        """Attachment uploads were previously unbounded — now capped at UPLOAD_MAX_SIZE_BYTES."""
+        from django.conf import settings
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        oversized = SimpleUploadedFile(
+            "scan.pdf", b"x" * (settings.UPLOAD_MAX_SIZE_BYTES + 1), content_type="application/pdf"
+        )
+        response = self.client.post(
+            reverse("attachment-list"),
+            {
+                "patient": str(self.patient.id),
+                "file": oversized,
+                "classification": "CURRENT",
+                "category": "CONSENT",
+            },
+            format="multipart",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_attachment_insights_aggregates_by_category(self):
         with platform_admin_context():
             Attachment.objects.create(

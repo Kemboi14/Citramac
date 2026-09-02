@@ -43,6 +43,11 @@ const BUTTON_PRIMARY =
 // paginated server-side, so we page against it rather than faking it.
 const PAGE_SIZE = 25;
 
+// Matches the backend's LOGO_MAX_SIZE_BYTES (apps.tenancy.views) — checked
+// client-side too so a too-large file is rejected instantly, not after a
+// full upload round-trip.
+const LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024;
+
 const STATUS_TINT: Record<OrganizationStatus, string> = {
   ACTIVE: "bg-brand-green-tint text-brand-green-dark",
   PENDING_VERIFICATION: "bg-status-amber-tint text-status-amber",
@@ -686,7 +691,16 @@ function OrganizationDrawer({
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/svg+xml"
                     className="hidden"
-                    onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file && file.size > LOGO_MAX_SIZE_BYTES) {
+                        setError("Logo must be 30MB or smaller.");
+                        e.target.value = "";
+                        return;
+                      }
+                      setError(null);
+                      setLogoFile(file);
+                    }}
                   />
                   <button
                     type="button"
@@ -697,7 +711,7 @@ function OrganizationDrawer({
                     {logoFile ? logoFile.name : "Upload Logo"}
                   </button>
                   <span className="text-[11px] text-ink-400">
-                    PNG, JPG, WEBP, or SVG, up to 2MB
+                    PNG, JPG, WEBP, or SVG, up to 30MB
                   </span>
                 </div>
               </div>

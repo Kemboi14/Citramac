@@ -198,6 +198,21 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
+# ── Upload size ceiling ────────────────────────────────────────────────────
+# Django's own default (2.5MB) is well below what a real source logo or a
+# scanned clinical document needs — raised to match the ingress's
+# `proxy-body-size` (infra/k8s/base/ingress.yaml) and the per-field limits in
+# apps.tenancy.views (logo) and apps.client_registry.serializers (attachment).
+# UPLOAD_MAX_SIZE_BYTES is the actual business limit those validators enforce
+# (30MB); DATA_UPLOAD_MAX_MEMORY_SIZE/FILE_UPLOAD_MAX_MEMORY_SIZE are set a
+# little higher to give multipart overhead (boundaries, other form fields)
+# room — otherwise a request right at the 30MB line would trip Django's own
+# request-parsing guard first, returning its generic error page instead of
+# the field validators' friendly `{"error": {code, message}}` JSON.
+UPLOAD_MAX_SIZE_BYTES = 30 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_SIZE_BYTES + (2 * 1024 * 1024)
+FILE_UPLOAD_MAX_MEMORY_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── DRF / JWT (docs/05-AUTHENTICATION-FLOW.md §5.3, docs/10-API-SPECIFICATION.md) ──
@@ -271,10 +286,19 @@ CACHES = {
 }
 
 # ── Email (OTP dispatch via Mailhog in dev, see docs/12-DEVOPS-DEPLOYMENT.md §12.1) ──
+# EMAIL_HOST_USER/PASSWORD were missing entirely before this — any real mail
+# server (including a plain cPanel mailbox) requires SMTP AUTH, so without
+# these Django would attempt an unauthenticated connection and every send
+# would fail. EMAIL_USE_SSL covers the cPanel-style implicit-TLS port 465
+# alongside EMAIL_USE_TLS's STARTTLS port 587 — set whichever one your mail
+# server actually uses via env vars; Django errors clearly if both are true.
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = env("EMAIL_HOST", default="localhost")
 EMAIL_PORT = env.int("EMAIL_PORT", default=1025)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@citramac.local")
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:5173"])

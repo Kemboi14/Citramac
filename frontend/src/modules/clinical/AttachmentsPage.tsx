@@ -185,6 +185,7 @@ export function AttachmentsPage() {
               className="text-sm"
               onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
             />
+            <span className="text-[10px] text-ink-400">Up to 30MB</span>
           </label>
           <button
             type="button"

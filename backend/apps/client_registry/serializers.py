@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 
 from .models import (
@@ -126,6 +127,19 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "uploaded_at",
         ]
         read_only_fields = ["uploaded_by", "uploaded_at"]
+
+    def validate_file(self, value):
+        """
+        Previously unbounded — any authenticated clinician could upload a
+        file of any size to patient storage. Caps at the same ceiling as the
+        ingress's `proxy-body-size` (infra/k8s/base/ingress.yaml) and the
+        platform logo (apps.tenancy.views.LOGO_MAX_SIZE_BYTES) so a scanned
+        clinical document or lab report has real headroom.
+        """
+        if value.size > settings.UPLOAD_MAX_SIZE_BYTES:
+            max_mb = settings.UPLOAD_MAX_SIZE_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f"File must be {max_mb}MB or smaller.")
+        return value
 
     def get_patient_name(self, obj):
         return obj.patient.get_full_name() if obj.patient_id else ""

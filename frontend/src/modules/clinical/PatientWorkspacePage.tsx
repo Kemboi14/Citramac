@@ -579,7 +579,10 @@ export function PatientWorkspacePage() {
                 <option value="OTHER">Other</option>
               </select>
             </label>
-            <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
+            <div className="flex flex-col gap-1">
+              <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
+              <span className="text-[10px] text-ink-400">Up to 30MB</span>
+            </div>
             <button
               type="button"
               disabled={busy || !uploadFile}
