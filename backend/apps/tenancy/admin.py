@@ -1,5 +1,7 @@
+from django import forms
 from django.contrib import admin
 
+from .crypto import encrypt_value
 from .models import (
     Branch,
     Organization,
@@ -111,10 +113,32 @@ class PlatformBrandingAdmin(admin.ModelAdmin):
         return not PlatformBranding.objects.exists()
 
 
+class PlatformEmailSettingsForm(forms.ModelForm):
+    host_password = forms.CharField(
+        label="Host password",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Leave blank to keep the currently saved password.",
+    )
+
+    class Meta:
+        model = PlatformEmailSettings
+        exclude = ["host_password_encrypted"]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        new_password = self.cleaned_data.get("host_password")
+        if new_password:
+            instance.host_password_encrypted = encrypt_value(new_password)
+        if commit:
+            instance.save()
+        return instance
+
+
 @admin.register(PlatformEmailSettings)
 class PlatformEmailSettingsAdmin(admin.ModelAdmin):
+    form = PlatformEmailSettingsForm
     list_display = ["host", "host_user", "use_tls", "use_ssl", "updated_at", "updated_by"]
-    exclude = ["host_password_encrypted"]
 
     def has_add_permission(self, request):
         # Singleton — always pk=1, editing is the only meaningful action.

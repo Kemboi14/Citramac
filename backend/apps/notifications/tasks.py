@@ -1,10 +1,27 @@
 import structlog
 from celery import shared_task
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 
 from apps.tenancy.context import platform_admin_context
 
 logger = structlog.get_logger(__name__)
+
+
+def _send_html_email(
+    subject, template_name, context, plain_message, from_email, recipient_list, connection
+):
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=plain_message,
+        from_email=from_email,
+        to=recipient_list,
+        connection=connection,
+    )
+    email.attach_alternative(
+        render_to_string(template_name, {**context, "subject": subject}), "text/html"
+    )
+    email.send()
 
 
 def _resolve_connection(organization_id):
@@ -56,9 +73,16 @@ def send_otp_email(email, code, purpose, organization_id=None):
         "RESET": "Your CITRAMAC password reset code",
     }
     connection, from_email = _resolve_connection(organization_id)
-    send_mail(
-        subject=subject_by_purpose.get(purpose, "Your CITRAMAC verification code"),
-        message=(
+    subject = subject_by_purpose.get(purpose, "Your CITRAMAC verification code")
+    _send_html_email(
+        subject=subject,
+        template_name="notifications/emails/otp_email.html",
+        context={
+            "intro": subject + ":",
+            "code": code,
+            "expires_minutes": 10,
+        },
+        plain_message=(
             f"Your verification code is {code}. It expires in 10 minutes and can "
             "only be used once. If you didn't request this, you can ignore this email."
         ),
@@ -87,9 +111,11 @@ def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
     if not supervisor_emails:
         return
     connection, from_email = _resolve_connection(organization_id)
-    send_mail(
+    _send_html_email(
         subject="URGENT: Risk flag raised on a Mental Status Exam",
-        message=(
+        template_name="notifications/emails/risk_alert_email.html",
+        context={"patient_name": patient_name, "encounter_id": encounter_id},
+        plain_message=(
             f"A Mental Status Exam for {patient_name} (encounter {encounter_id}) flagged "
             "positive suicidal or homicidal ideation. Please review immediately."
         ),
@@ -108,9 +134,11 @@ def send_invite_email(email, organization_name, activation_token, organization_i
     (docs/05-AUTHENTICATION-FLOW.md §5.5).
     """
     connection, from_email = _resolve_connection(organization_id)
-    send_mail(
+    _send_html_email(
         subject=f"You've been invited to CITRAMAC — {organization_name}",
-        message=(
+        template_name="notifications/emails/invite_email.html",
+        context={"organization_name": organization_name, "activation_token": activation_token},
+        plain_message=(
             f"You've been invited to set up {organization_name} on CITRAMAC. "
             f"Use this activation code to get started: {activation_token}"
         ),

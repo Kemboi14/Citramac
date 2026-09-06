@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ subject }}</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border-radius:8px; overflow:hidden;">
+            <tr>
+              <td style="background-color:#9f1c1c; padding:24px 32px;">
+                <span style="color:#ffffff; font-size:18px; font-weight:700; letter-spacing:0.5px;">CITRAMAC &mdash; URGENT</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 16px; color:#1f2933; font-size:16px; line-height:1.5;">
+                  A Mental Status Exam for <strong>{{ patient_name }}</strong> (encounter {{ encounter_id }}) flagged
+                  positive suicidal or homicidal ideation.
+                </p>
+                <p style="margin:0; color:#9f1c1c; font-size:15px; font-weight:600; line-height:1.5;">Please review immediately.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 32px 24px; border-top:1px solid #e4e7eb;">
+                <p style="margin:0; color:#9aa5b1; font-size:12px;">Sent by CITRAMAC &mdash; please don't reply to this automated message.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
