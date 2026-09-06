@@ -26,6 +26,13 @@ spec:
                 name: citramac-backend
                 port:
                   number: 8000
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: citramac-backend
+                port:
+                  number: 8000
           - path: /
             pathType: Prefix
             backend:
