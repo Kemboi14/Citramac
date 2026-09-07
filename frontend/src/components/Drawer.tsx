@@ -1,7 +1,18 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
-/** Slide-in side panel — citramac_SUPER-ADMIN.html `.drawer` / `.overlay`. */
+/**
+ * Slide-in side panel — citramac_SUPER-ADMIN.html `.drawer` / `.overlay`.
+ * Rendered via a portal straight into `document.body`: pages that use this
+ * wrap their content in `animate-fade-in`, and that keyframe's `transform`
+ * (held by the animation's `both` fill-mode after it finishes) makes the
+ * page's own root div a CSS containing block for any `position: fixed`
+ * descendant — without the portal, the backdrop/panel below end up sized
+ * and positioned relative to that div instead of the real viewport, which
+ * is what made the drawer look like a permanently-docked panel instead of
+ * a full-screen overlay that animates in on open.
+ */
 export function Drawer({
   open,
   title,
@@ -17,7 +28,7 @@ export function Drawer({
   children: ReactNode;
   footer?: ReactNode;
 }) {
-  return (
+  return createPortal(
     <>
       <div
         className={`fixed inset-0 z-[80] bg-[rgba(14,30,26,0.4)] backdrop-blur-[1px] transition-opacity duration-200 ${
@@ -50,6 +61,7 @@ export function Drawer({
           <div className="flex gap-2.5 border-t border-surface-border px-6 py-4">{footer}</div>
         )}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
