@@ -84,6 +84,8 @@ const EMPTY_NEW_BRANCH: NewBranchState = {
  * single client-side filter over one fetch covers name + org + MFL code +
  * active/CCP status without extra round-trips.
  */
+const branchFormId = "branch-form";
+
 export function BranchesPage() {
   const { accessToken } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -249,91 +251,96 @@ export function BranchesPage() {
         </div>
       </div>
 
-      <form onSubmit={submitNewBranch}>
-        <Drawer
-          open={showForm}
-          title="Add Branch"
-          subtitle="Register a new facility under an organization"
-          onClose={() => setShowForm(false)}
-          footer={
-            <>
-              <button
-                type="button"
-                className="flex-1 rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
-                onClick={() => setShowForm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className={`${BUTTON_CLASS} flex-1 justify-center`}
-              >
-                {busy ? "Creating…" : "Create Branch"}
-              </button>
-            </>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            <label className={LABEL_CLASS}>
-              Parent Organization <span className="text-status-red">*</span>
-              <select
-                className={FIELD_CLASS}
-                value={newBranch.organization}
-                onChange={(e) => setNewBranch({ ...newBranch, organization: e.target.value })}
-                required
-              >
-                <option value="">Select an organization…</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={LABEL_CLASS}>
-              Branch Name <span className="text-status-red">*</span>
-              <input
-                className={FIELD_CLASS}
-                value={newBranch.name}
-                onChange={(e) => setNewBranch({ ...newBranch, name: e.target.value })}
-                placeholder="e.g. Rehab Wing"
-                required
-              />
-            </label>
-            <label className={LABEL_CLASS}>
-              Branch DHA MFL Code
-              <input
-                className={FIELD_CLASS}
-                value={newBranch.mfl_code}
-                onChange={(e) => setNewBranch({ ...newBranch, mfl_code: e.target.value })}
-                placeholder="e.g. MFL-14238-B2"
-              />
-            </label>
-            <label className={LABEL_CLASS}>
-              Facility Level <span className="text-status-red">*</span>
-              <select
-                className={FIELD_CLASS}
-                value={newBranch.facility_level}
-                onChange={(e) => setNewBranch({ ...newBranch, facility_level: e.target.value })}
-              >
-                {FACILITY_LEVEL_OPTIONS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={LABEL_CLASS}>
-              Address
-              <input
-                className={FIELD_CLASS}
-                value={newBranch.address}
-                onChange={(e) => setNewBranch({ ...newBranch, address: e.target.value })}
-                placeholder="e.g. Waiyaki Way, Westlands"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
+      <Drawer
+        open={showForm}
+        title="Add Branch"
+        subtitle="Register a new facility under an organization"
+        onClose={() => setShowForm(false)}
+        footer={
+          <>
+            <button
+              type="button"
+              className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
+              onClick={() => setShowForm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form={branchFormId}
+              disabled={busy}
+              className={`${BUTTON_CLASS} flex-1`}
+            >
+              {busy ? "Creating…" : "Create Branch"}
+            </button>
+          </>
+        }
+      >
+        <form id={branchFormId} onSubmit={submitNewBranch} className="flex flex-col gap-4">
+          <label className={LABEL_CLASS}>
+            Parent Organization <span className="text-status-red">*</span>
+            <select
+              className={FIELD_CLASS}
+              value={newBranch.organization}
+              onChange={(e) => setNewBranch({ ...newBranch, organization: e.target.value })}
+              required
+            >
+              <option value="">Select an organization…</option>
+              {organizations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={LABEL_CLASS}>
+            Branch Name <span className="text-status-red">*</span>
+            <input
+              className={FIELD_CLASS}
+              value={newBranch.name}
+              onChange={(e) => setNewBranch({ ...newBranch, name: e.target.value })}
+              placeholder="e.g. Rehab Wing"
+              required
+            />
+          </label>
+
+          <div>
+            <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">
+              Facility Details
+            </h3>
+            <div className="flex flex-col gap-4">
+              <label className={LABEL_CLASS}>
+                Facility Level <span className="text-status-red">*</span>
+                <select
+                  className={FIELD_CLASS}
+                  value={newBranch.facility_level}
+                  onChange={(e) => setNewBranch({ ...newBranch, facility_level: e.target.value })}
+                >
+                  {FACILITY_LEVEL_OPTIONS.map((level) => (
+                    <option key={level.value} value={level.value}>
+                      {level.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={LABEL_CLASS}>
+                Branch DHA MFL Code
+                <input
+                  className={FIELD_CLASS}
+                  value={newBranch.mfl_code}
+                  onChange={(e) => setNewBranch({ ...newBranch, mfl_code: e.target.value })}
+                  placeholder="e.g. MFL-14238-B2"
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Address
+                <input
+                  className={FIELD_CLASS}
+                  value={newBranch.address}
+                  onChange={(e) => setNewBranch({ ...newBranch, address: e.target.value })}
+                  placeholder="e.g. Waiyaki Way, Westlands"
+                />
+              </label>
               <label className={LABEL_CLASS}>
                 County
                 <input
@@ -353,74 +360,83 @@ export function BranchesPage() {
                 />
               </label>
             </div>
-            <label className={LABEL_CLASS}>
-              Outpatient Capacity (patients/day)
-              <input
-                type="number"
-                min={0}
-                className={FIELD_CLASS}
-                value={newBranch.outpatient_capacity_per_day}
-                onChange={(e) =>
-                  setNewBranch({ ...newBranch, outpatient_capacity_per_day: e.target.value })
-                }
-                placeholder="e.g. 90"
-              />
-            </label>
+          </div>
 
-            <div className="mt-1 flex items-start justify-between gap-3 rounded-md border border-surface-border p-3">
-              <span className="flex flex-col">
-                <span className="text-sm font-medium text-ink-900">CCP registration available</span>
-                <span className="text-xs text-ink-500">
-                  Enables Community Care Program registration at this branch
+          <div>
+            <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">
+              Capacity &amp; Program
+            </h3>
+            <div className="flex flex-col gap-4">
+              <label className={LABEL_CLASS}>
+                Outpatient Capacity (patients/day)
+                <input
+                  type="number"
+                  min={0}
+                  className={FIELD_CLASS}
+                  value={newBranch.outpatient_capacity_per_day}
+                  onChange={(e) =>
+                    setNewBranch({ ...newBranch, outpatient_capacity_per_day: e.target.value })
+                  }
+                  placeholder="e.g. 90"
+                />
+              </label>
+              <div className="flex items-start justify-between gap-3 rounded-md border border-surface-border p-3">
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium text-ink-900">
+                    CCP registration available
+                  </span>
+                  <span className="text-xs text-ink-500">
+                    Enables Community Care Program registration at this branch
+                  </span>
                 </span>
-              </span>
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-8 shrink-0 cursor-pointer accent-brand-green"
-                checked={newBranch.ccp_open}
-                onChange={(e) => setNewBranch({ ...newBranch, ccp_open: e.target.checked })}
-              />
-            </div>
-
-            <div>
-              <div className={`${LABEL_CLASS} mb-2`}>Status</div>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    { value: true, title: "Active", desc: "Live and visible to org staff." },
-                    { value: false, title: "Inactive", desc: "Hidden; history preserved." },
-                  ] as const
-                ).map((opt) => (
-                  <label
-                    key={opt.title}
-                    className={`cursor-pointer rounded-md border p-3 text-left transition ${
-                      newBranch.is_active === opt.value
-                        ? "border-brand-green bg-brand-green-tint"
-                        : "border-surface-border"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="branch-status"
-                      className="sr-only"
-                      checked={newBranch.is_active === opt.value}
-                      onChange={() => setNewBranch({ ...newBranch, is_active: opt.value })}
-                    />
-                    <div className="text-sm font-semibold text-ink-900">{opt.title}</div>
-                    <div className="text-xs text-ink-500">{opt.desc}</div>
-                  </label>
-                ))}
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-8 shrink-0 cursor-pointer accent-brand-green"
+                  checked={newBranch.ccp_open}
+                  onChange={(e) => setNewBranch({ ...newBranch, ccp_open: e.target.checked })}
+                />
               </div>
             </div>
-
-            {formError && (
-              <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
-                {formError}
-              </p>
-            )}
           </div>
-        </Drawer>
-      </form>
+
+          <div>
+            <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">Status</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  { value: true, title: "Active", desc: "Live and visible to org staff." },
+                  { value: false, title: "Inactive", desc: "Hidden; history preserved." },
+                ] as const
+              ).map((opt) => (
+                <label
+                  key={opt.title}
+                  className={`cursor-pointer rounded-md border p-3 text-left transition ${
+                    newBranch.is_active === opt.value
+                      ? "border-brand-green bg-brand-green-tint"
+                      : "border-surface-border"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="branch-status"
+                    className="sr-only"
+                    checked={newBranch.is_active === opt.value}
+                    onChange={() => setNewBranch({ ...newBranch, is_active: opt.value })}
+                  />
+                  <div className="text-sm font-semibold text-ink-900">{opt.title}</div>
+                  <div className="text-xs text-ink-500">{opt.desc}</div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {formError && (
+            <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {formError}
+            </p>
+          )}
+        </form>
+      </Drawer>
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <table className="w-full text-left text-sm">
