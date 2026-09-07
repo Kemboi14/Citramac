@@ -14,10 +14,13 @@ import {
   Plus,
   Search,
   Upload,
+  UserPlus,
 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { Drawer } from "../../components/Drawer";
+import { listBranches, type Branch } from "../../lib/branchesApi";
+import { inviteStaff, listRoles, type Role } from "../../lib/governanceApi";
 import {
   createOrganization,
   listOrganizations,
@@ -821,6 +824,190 @@ function OrganizationDrawer({
   );
 }
 
+const EMPTY_STAFF_INVITE = {
+  email: "",
+  first_name: "",
+  last_name: "",
+  staff_id: "",
+  role: "",
+  primary_branch: "",
+};
+
+/**
+ * Super Admin's entry point for staffing a specific organization — the
+ * screen that previously didn't exist (StaffViewSet used to be Org-Admin
+ * only; see its docstring history). Role/branch choices are scoped to the
+ * `organization` passed in, same set that org's own Org Admin would see on
+ * their own Staff page.
+ */
+function OrgStaffInviteDrawer({
+  open,
+  organization,
+  onClose,
+  onInvited,
+}: {
+  open: boolean;
+  organization: Organization | null;
+  onClose: () => void;
+  onInvited: () => void;
+}) {
+  const { accessToken } = useAuth();
+  const [form, setForm] = useState(EMPTY_STAFF_INVITE);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const formId = "org-staff-invite-form";
+
+  useEffect(() => {
+    if (!open || !organization || !accessToken) return;
+    const orgId = organization.id;
+    void Promise.resolve().then(() => {
+      setError(null);
+      setForm(EMPTY_STAFF_INVITE);
+      Promise.all([listRoles(accessToken, orgId), listBranches(accessToken)])
+        .then(([roleRes, branchRes]) => {
+          setRoles(roleRes.results);
+          setBranches(branchRes.results.filter((b) => b.organization === orgId));
+        })
+        .catch(() => {
+          setRoles([]);
+          setBranches([]);
+        });
+    });
+  }, [open, organization, accessToken]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !organization || !form.role) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await inviteStaff(accessToken, {
+        email: form.email,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        staff_id: form.staff_id || undefined,
+        role: Number(form.role),
+        primary_branch: form.primary_branch || undefined,
+        organization: organization.id,
+      });
+      onInvited();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't add this staff member.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Drawer
+      open={open}
+      title="Add Staff"
+      subtitle={organization ? `New staff member for ${organization.name}` : undefined}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            disabled={isSubmitting || !organization}
+            className={`${BUTTON_PRIMARY} flex-1`}
+          >
+            {isSubmitting ? "Adding…" : "Add Staff"}
+          </button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <label className={LABEL_CLASS}>
+          Email <span className="text-status-red">*</span>
+          <input
+            required
+            type="email"
+            className={FIELD_CLASS}
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
+        </label>
+        <label className={LABEL_CLASS}>
+          First Name <span className="text-status-red">*</span>
+          <input
+            required
+            className={FIELD_CLASS}
+            value={form.first_name}
+            onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+          />
+        </label>
+        <label className={LABEL_CLASS}>
+          Last Name <span className="text-status-red">*</span>
+          <input
+            required
+            className={FIELD_CLASS}
+            value={form.last_name}
+            onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
+          />
+        </label>
+        <label className={LABEL_CLASS}>
+          Staff ID (optional)
+          <input
+            className={FIELD_CLASS}
+            value={form.staff_id}
+            onChange={(e) => setForm((f) => ({ ...f, staff_id: e.target.value }))}
+          />
+        </label>
+        <label className={LABEL_CLASS}>
+          Role <span className="text-status-red">*</span>
+          <select
+            required
+            className={FIELD_CLASS}
+            value={form.role}
+            onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+          >
+            <option value="">Select a role…</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL_CLASS}>
+          Primary Branch
+          <select
+            className={FIELD_CLASS}
+            value={form.primary_branch}
+            onChange={(e) => setForm((f) => ({ ...f, primary_branch: e.target.value }))}
+          >
+            <option value="">Select a branch…</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red"
+          >
+            {error}
+          </p>
+        )}
+      </form>
+    </Drawer>
+  );
+}
+
 /** Small dropdown menu, similar visual weight to the status filter chips. */
 function GroupByMenu({ value, onChange }: { value: GroupBy; onChange: (v: GroupBy) => void }) {
   const [open, setOpen] = useState(false);
@@ -877,11 +1064,13 @@ function RowActionsMenu({
   busy,
   onEdit,
   onToggleStatus,
+  onAddStaff,
 }: {
   org: Organization;
   busy: boolean;
   onEdit: () => void;
   onToggleStatus: () => void;
+  onAddStaff: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -929,6 +1118,17 @@ function RowActionsMenu({
             >
               <Pencil className="h-3.5 w-3.5" />
               View / Edit organization
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onAddStaff();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-700 hover:bg-surface-bg"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Add staff to this organization
             </button>
             <button
               type="button"
@@ -1060,6 +1260,10 @@ export function OrganizationsPage() {
     open: false,
     organization: null,
   });
+  const [staffDrawer, setStaffDrawer] = useState<{
+    open: boolean;
+    organization: Organization | null;
+  }>({ open: false, organization: null });
 
   const refresh = () => {
     if (!accessToken) return;
@@ -1236,6 +1440,7 @@ export function OrganizationsPage() {
                         busy={busyId === org.id}
                         onEdit={() => setDrawer({ open: true, organization: org })}
                         onToggleStatus={() => toggleStatus(org)}
+                        onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
                       />
                     </td>
                   </tr>
@@ -1269,6 +1474,13 @@ export function OrganizationsPage() {
           setDrawer((d) => ({ ...d, open: false }));
           refresh();
         }}
+      />
+
+      <OrgStaffInviteDrawer
+        open={staffDrawer.open}
+        organization={staffDrawer.organization}
+        onClose={() => setStaffDrawer((d) => ({ ...d, open: false }))}
+        onInvited={() => setStaffDrawer((d) => ({ ...d, open: false }))}
       />
     </div>
   );

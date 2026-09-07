@@ -32,6 +32,8 @@ export interface Staff {
   phone: string;
   roles: number[];
   role_names: string[];
+  organization: string | null;
+  organization_name: string | null;
   primary_branch: string | null;
   primary_branch_name: string | null;
   branch_access: string[];
@@ -47,14 +49,25 @@ export interface StaffInvitePayload {
   staff_id?: string;
   role: number;
   primary_branch?: string;
+  /** Super Admin only — which org to create this staff member in. Ignored
+   * (an Org Admin's own org is used instead) for any other caller. */
+  organization?: string;
 }
 
 export function listPermissions(accessToken: string) {
   return apiRequest<Permission[]>("/permissions/", { accessToken });
 }
 
-export function listRoles(accessToken: string) {
-  return apiRequest<Paginated<Role>>("/roles/", { accessToken });
+/**
+ * `organizationId` lets a Super Admin fetch a specific org's roles (its
+ * custom roles + the ORG_TEMPLATE platform templates — the same set that
+ * org's own Org Admin sees) instead of the platform-only role set they'd
+ * otherwise get. Ignored for a non-superuser caller, who always sees their
+ * own org's roles regardless.
+ */
+export function listRoles(accessToken: string, organizationId?: string) {
+  const query = organizationId ? `?organization=${organizationId}` : "";
+  return apiRequest<Paginated<Role>>(`/roles/${query}`, { accessToken });
 }
 
 export function createRole(

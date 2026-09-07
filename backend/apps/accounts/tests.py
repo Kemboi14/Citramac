@@ -513,6 +513,104 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             self.assertFalse(staff.is_active)
             self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
 
+    def test_super_admin_can_create_staff_in_a_chosen_organization(self):
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "doctor@amani.test",
+                "first_name": "Kevin",
+                "last_name": "Otieno",
+                "role": self.psychiatrist_template.id,
+                "organization": self.org.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["organization"], self.org.id)
+        with platform_admin_context():
+            staff = User.objects.get(email="doctor@amani.test")
+            self.assertEqual(staff.organization_id, self.org.id)
+            self.assertFalse(staff.is_active)
+            self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
+
+    def test_super_admin_staff_create_requires_an_organization(self):
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "orphan@amani.test",
+                "first_name": "No",
+                "last_name": "Org",
+                "role": self.psychiatrist_template.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("organization", response.data)
+
+    def test_org_admin_cannot_plant_staff_in_a_different_organization(self):
+        with platform_admin_context():
+            other_org = Organization.objects.create(
+                name="Other Org", slug="other-org-plant", facility_type="CLINIC"
+            )
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "sneaky@amani.test",
+                "first_name": "Sneaky",
+                "last_name": "Staff",
+                "role": self.org_admin_role.id,
+                "organization": other_org.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            staff = User.objects.get(email="sneaky@amani.test")
+            self.assertEqual(staff.organization_id, self.org.id)
+
+    def test_super_admin_sees_all_org_staff_and_org_admin_sees_only_their_own(self):
+        with platform_admin_context():
+            User.objects.create_user(
+                email="roster-check@amani.test", organization=self.org, is_active=True
+            )
+        response = self.client.get(
+            reverse("staff-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        emails = {row["email"] for row in response.data["results"]}
+        self.assertIn("roster-check@amani.test", emails)
+
+    def test_super_admin_can_resend_invite_for_org_staff(self):
+        create_response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "resend-target@amani.test",
+                "first_name": "Resend",
+                "last_name": "Target",
+                "role": self.psychiatrist_template.id,
+                "organization": self.org.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        staff_id = create_response.data["id"]
+        response = self.client.post(
+            reverse("staff-resend-invite", args=[staff_id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_super_admin_can_scope_roles_to_a_chosen_organization(self):
+        response = self.client.get(
+            f"{reverse('role-list')}?organization={self.org.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        names = {row["name"] for row in response.data["results"]}
+        self.assertIn("Psychiatrist", names)
+
     def test_resend_invite_self_heals_a_staff_row_with_no_activation_invite(self):
         with platform_admin_context():
             staff = User.objects.create_user(

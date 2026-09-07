@@ -1,7 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from apps.tenancy.models import Branch
+from apps.tenancy.models import Branch, Organization
 
 from .models import Permission, Role, User
 
@@ -142,6 +142,8 @@ class StaffSerializer(serializers.ModelSerializer):
         queryset=Branch.objects.all(), many=True, required=False
     )
     primary_branch_name = serializers.CharField(source="primary_branch.name", read_only=True)
+    organization = serializers.PrimaryKeyRelatedField(read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
 
     class Meta:
         model = User
@@ -154,6 +156,8 @@ class StaffSerializer(serializers.ModelSerializer):
             "phone",
             "roles",
             "role_names",
+            "organization",
+            "organization_name",
             "primary_branch",
             "primary_branch_name",
             "branch_access",
@@ -169,7 +173,12 @@ class StaffSerializer(serializers.ModelSerializer):
 
 class StaffInviteSerializer(serializers.Serializer):
     """Provisions an inactive User + ActivationInvite — mirrors the Org
-    Admin invite flow used during Organization onboarding."""
+    Admin invite flow used during Organization onboarding.
+
+    `organization` is only meaningful when a Super Admin is the caller
+    (StaffViewSet.create): an Org Admin's staff always land in their own
+    org regardless of what's submitted here — see StaffViewSet.create.
+    """
 
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=150)
@@ -178,6 +187,9 @@ class StaffInviteSerializer(serializers.Serializer):
     role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
     primary_branch = serializers.PrimaryKeyRelatedField(
         queryset=Branch.objects.all(), required=False, allow_null=True
+    )
+    organization = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), required=False, allow_null=True
     )
 
     def validate_email(self, value):

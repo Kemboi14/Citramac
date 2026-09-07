@@ -1,3 +1,5 @@
+import contextlib
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
@@ -50,6 +52,13 @@ class RoleViewSet(viewsets.ModelViewSet):
         queryset = Role.objects.annotate(user_count=Count("users", distinct=True)).order_by("name")
         user = self.request.user
         if user.is_superuser:
+            # A Super Admin normally only manages platform-staff role
+            # templates here (see class docstring), but staffing a chosen
+            # organization (StaffViewSet.create) needs that org's own
+            # roles — same set an Org Admin of that org would see.
+            organization_id = self.request.query_params.get("organization")
+            if organization_id:
+                return queryset.filter(models_q_org_or_template(organization_id))
             return queryset.filter(scope=Role.SCOPE_PLATFORM, organization__isnull=True)
         return queryset.filter(models_q_org_or_template(user.organization_id))
 
@@ -76,28 +85,78 @@ def models_q_org_or_template(organization_id):
 
 class StaffViewSet(viewsets.ModelViewSet):
     """
-    Org Admin's "Staff & CCP Team" roster. Always scoped to the caller's own
-    organization (Super Admin has no equivalent screen for a single org's
-    staff — that's out of scope for the platform console). See
-    PlatformStaffViewSet for Super Admin's own team roster.
+    Org Admin's "Staff & CCP Team" roster, scoped to their own organization.
+    A Super Admin caller instead sees/creates staff across every org — they
+    must specify which one via `organization` on create (see
+    StaffInviteSerializer) since they have no organization of their own.
+    See PlatformStaffViewSet for Super Admin's own platform-staff roster.
     """
 
     serializer_class = StaffSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            with platform_admin_context():
+                return list(
+                    User.all_objects.filter(organization__isnull=False)
+                    .select_related("organization")
+                    .prefetch_related("roles", "branch_access")
+                    .order_by("organization__name", "first_name", "last_name")
+                )
         return (
-            User.all_objects.filter(organization=self.request.user.organization)
+            User.all_objects.filter(organization=user.organization)
             .prefetch_related("roles", "branch_access")
             .order_by("first_name", "last_name")
         )
+
+    def get_object(self):
+        """
+        Mirrors PlatformStaffViewSet.get_object() — see its docstring.
+        get_queryset() above returns a plain list for a superuser caller
+        (platform_admin_context() must be active while it's evaluated, not
+        just constructed), and a plain list has no .get() for DRF's default
+        get_object_or_404() lookup, so the superuser path is re-queried here
+        instead of relying on the base implementation.
+        """
+        if self.request.user.is_superuser:
+            with platform_admin_context():
+                obj = generics.get_object_or_404(
+                    User.all_objects.filter(organization__isnull=False)
+                    .select_related("organization")
+                    .prefetch_related("roles", "branch_access"),
+                    pk=self.kwargs["pk"],
+                )
+            self.check_object_permissions(self.request, obj)
+            return obj
+        return super().get_object()
 
     def create(self, request, *args, **kwargs):
         serializer = StaffInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        organization = request.user.organization
+        is_superuser = request.user.is_superuser
 
+        if is_superuser:
+            organization = data.get("organization")
+            if organization is None:
+                return Response(
+                    {"organization": ["Required when a Super Admin creates org staff."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # An Org Admin's staff always land in their own org — any
+            # `organization` submitted here is silently ignored, not just
+            # unauthorized, since only a Super Admin has a legitimate reason
+            # to send it at all.
+            organization = request.user.organization
+
+        with platform_admin_context() if is_superuser else contextlib.nullcontext():
+            staff = self._create_staff(request, organization, data)
+        return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    def _create_staff(self, request, organization, data):
         with transaction.atomic():
             staff = User.objects.create_user(
                 email=data["email"],
@@ -121,7 +180,7 @@ class StaffViewSet(viewsets.ModelViewSet):
             )
             _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
 
-        return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+        return staff
 
     def destroy(self, request, *args, **kwargs):
         """Deactivate, never hard-delete a staff account (preserves audit/clinical FKs)."""
@@ -152,19 +211,20 @@ class StaffViewSet(viewsets.ModelViewSet):
                 {"detail": "This staff member has already activated their account."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        organization = request.user.organization
-        invite = (
-            ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
-            .order_by("-id")
-            .first()
-        )
-        if invite is None or not invite.is_valid():
-            invite = ActivationInvite.objects.create(
-                organization=organization,
-                user=staff,
-                created_by=request.user,
-                expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+        organization = staff.organization
+        with platform_admin_context() if request.user.is_superuser else contextlib.nullcontext():
+            invite = (
+                ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
+                .order_by("-id")
+                .first()
             )
+            if invite is None or not invite.is_valid():
+                invite = ActivationInvite.objects.create(
+                    organization=organization,
+                    user=staff,
+                    created_by=request.user,
+                    expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+                )
         _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
         return Response(StaffSerializer(staff).data)
 
