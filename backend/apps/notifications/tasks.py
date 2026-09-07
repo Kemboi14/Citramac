@@ -131,16 +131,25 @@ def send_invite_email(email, organization_name, activation_token, organization_i
     Dispatched when a Super Admin creates an Organization and its Org Admin
     invite — docs/04-MULTI-TENANCY.md §4.5. The activation link is what
     encodes the token Screen A of the auth flow validates against
-    (docs/05-AUTHENTICATION-FLOW.md §5.5).
+    (docs/05-AUTHENTICATION-FLOW.md §5.5) — ActivationPage.tsx reads it from
+    the `?token=` query param, with no manual-entry fallback, so the email
+    must carry a real clickable link and not just the bare code.
     """
+    from django.conf import settings
+
     connection, from_email = _resolve_connection(organization_id)
+    activation_link = f"{settings.FRONTEND_URL}/activate?token={activation_token}"
     _send_html_email(
         subject=f"You've been invited to CITRAMAC — {organization_name}",
         template_name="notifications/emails/invite_email.html",
-        context={"organization_name": organization_name, "activation_token": activation_token},
+        context={
+            "organization_name": organization_name,
+            "activation_token": activation_token,
+            "activation_link": activation_link,
+        },
         plain_message=(
             f"You've been invited to set up {organization_name} on CITRAMAC. "
-            f"Use this activation code to get started: {activation_token}"
+            f"Activate your account: {activation_link}"
         ),
         from_email=from_email,
         recipient_list=[email],

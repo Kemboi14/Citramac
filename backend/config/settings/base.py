@@ -306,6 +306,11 @@ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localho
 # (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.
 CORS_ALLOW_CREDENTIALS = True
 
+# The frontend's own public origin — used to build links that go out in
+# emails (e.g. the activation link in send_invite_email), since those are
+# rendered server-side with no request/Origin header to infer it from.
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5173")
+
 # ── Security headers (docs/09-SECURITY-COMPLIANCE.md §9.7) ───────────────
 # X-Frame-Options comes from XFrameOptionsMiddleware (default DENY);
 # Content-Security-Policy/Referrer-Policy/Permissions-Policy come from

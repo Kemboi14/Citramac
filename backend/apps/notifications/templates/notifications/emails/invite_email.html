@@ -20,10 +20,11 @@
                 <p style="margin:0 0 16px; color:#1f2933; font-size:16px; line-height:1.5;">
                   You've been invited to set up <strong>{{ organization_name }}</strong> on CITRAMAC.
                 </p>
-                <p style="margin:0 0 8px; color:#52606d; font-size:14px; line-height:1.5;">Use this activation code to get started:</p>
-                <div style="margin:16px 0 24px; text-align:center;">
-                  <span style="display:inline-block; padding:16px 32px; background-color:#f0f4f8; border:1px solid #d9e2ec; border-radius:6px; font-size:24px; font-weight:700; letter-spacing:2px; color:#1d4b6e; word-break:break-all;">{{ activation_token }}</span>
+                <div style="margin:8px 0 24px; text-align:center;">
+                  <a href="{{ activation_link }}" style="display:inline-block; padding:14px 32px; background-color:#1d4b6e; border-radius:6px; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none;">Activate your account</a>
                 </div>
+                <p style="margin:0 0 8px; color:#52606d; font-size:13px; line-height:1.5;">Or paste this link into your browser:</p>
+                <p style="margin:0 0 24px; color:#1d4b6e; font-size:13px; line-height:1.5; word-break:break-all;">{{ activation_link }}</p>
                 <p style="margin:0; color:#9aa5b1; font-size:13px; line-height:1.5;">If you weren't expecting this invitation, you can safely ignore this email.</p>
               </td>
             </tr>
