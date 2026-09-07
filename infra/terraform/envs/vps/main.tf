@@ -118,6 +118,7 @@ resource "kubernetes_secret" "backend" {
     FIELD_ENCRYPTION_KEY = var.field_encryption_key
     DJANGO_ALLOWED_HOSTS = var.django_allowed_hosts
     CORS_ALLOWED_ORIGINS = var.cors_allowed_origins
+    FRONTEND_URL         = var.frontend_url
     DATABASE_URL         = var.database_url
     REDIS_URL            = var.redis_url
     POSTGRES_DB          = var.postgres_db

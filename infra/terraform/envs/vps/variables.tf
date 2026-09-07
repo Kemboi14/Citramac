@@ -23,6 +23,11 @@ variable "cors_allowed_origins" {
   default = "https://demo.citramac.com"
 }
 
+variable "frontend_url" {
+  type    = string
+  default = "https://demo.citramac.com"
+}
+
 variable "database_url" {
   type      = string
   sensitive = true
