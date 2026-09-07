@@ -513,6 +513,67 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             self.assertFalse(staff.is_active)
             self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
 
+    def test_resend_invite_self_heals_a_staff_row_with_no_activation_invite(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="noinvite@amani.test",
+                organization=self.org,
+                is_active=False,
+            )
+        self.assertEqual(ActivationInvite.all_objects.filter(user=staff).count(), 0)
+        response = self.client.post(
+            reverse("staff-resend-invite", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        with platform_admin_context():
+            self.assertEqual(ActivationInvite.all_objects.filter(user=staff).count(), 1)
+        invite_email = mail.outbox[-1]
+        self.assertEqual(invite_email.to, ["noinvite@amani.test"])
+
+    def test_resend_invite_reuses_a_still_valid_invite(self):
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "pending@amani.test",
+                "first_name": "Grace",
+                "last_name": "Njeri",
+                "role": self.org_admin_role.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        staff_id = response.data["id"]
+        with platform_admin_context():
+            original_token = ActivationInvite.all_objects.get(user_id=staff_id).token
+
+        resend_response = self.client.post(
+            reverse("staff-resend-invite", args=[staff_id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(resend_response.status_code, 200, resend_response.data)
+        with platform_admin_context():
+            self.assertEqual(ActivationInvite.all_objects.filter(user_id=staff_id).count(), 1)
+            self.assertEqual(
+                ActivationInvite.all_objects.get(user_id=staff_id).token, original_token
+            )
+        self.assertIn(original_token, mail.outbox[-1].body)
+
+    def test_resend_invite_rejects_an_already_active_staff_member(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="active@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.post(
+            reverse("staff-resend-invite", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_staff_toggle_duty(self):
         with platform_admin_context():
             staff = User.objects.create_user(

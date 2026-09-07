@@ -92,6 +92,10 @@ export function toggleStaffDuty(accessToken: string, id: string) {
   return apiRequest<Staff>(`/staff/${id}/toggle_duty/`, { method: "POST", accessToken });
 }
 
+export function resendStaffInvite(accessToken: string, id: string) {
+  return apiRequest<Staff>(`/staff/${id}/resend_invite/`, { method: "POST", accessToken });
+}
+
 export function listPlatformStaff(accessToken: string) {
   return apiRequest<Paginated<Staff>>("/platform/staff/", { accessToken });
 }

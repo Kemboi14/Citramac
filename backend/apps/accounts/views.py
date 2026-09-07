@@ -138,6 +138,36 @@ class StaffViewSet(viewsets.ModelViewSet):
         staff.save(update_fields=["is_on_duty"])
         return Response(StaffSerializer(staff).data)
 
+    @action(detail=True, methods=["post"])
+    def resend_invite(self, request, pk=None):
+        """
+        Re-dispatches the activation invite email. Also self-heals the case
+        where no ActivationInvite exists at all (e.g. a staff row created
+        out-of-band) by issuing a fresh one, and reissues rather than reuses
+        an expired/already-used invite.
+        """
+        staff = self.get_object()
+        if staff.is_active:
+            return Response(
+                {"detail": "This staff member has already activated their account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        organization = request.user.organization
+        invite = (
+            ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
+            .order_by("-id")
+            .first()
+        )
+        if invite is None or not invite.is_valid():
+            invite = ActivationInvite.objects.create(
+                organization=organization,
+                user=staff,
+                created_by=request.user,
+                expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+            )
+        _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
+        return Response(StaffSerializer(staff).data)
+
 
 class PlatformStaffViewSet(viewsets.ModelViewSet):
     """Softlink Options' own team (organization=None) — the "Platform

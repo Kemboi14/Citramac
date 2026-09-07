@@ -8,6 +8,7 @@ import {
   inviteStaff,
   listRoles,
   listStaff,
+  resendStaffInvite,
   toggleStaffDuty,
   type Role,
   type Staff,
@@ -40,7 +41,9 @@ export function StaffTeamPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const [roleFilter, setRoleFilter] = useState("");
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -104,6 +107,21 @@ export function StaffTeamPage() {
       setStaff((prev) => prev.map((s) => (s.id === id ? updated : s)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't update duty status.");
+    }
+  };
+
+  const handleResendInvite = async (s: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setNotice(null);
+    setResendingId(s.id);
+    try {
+      await resendStaffInvite(accessToken, s.id);
+      setNotice(`Invite resent to ${s.email}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't resend the invite.");
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -265,6 +283,11 @@ export function StaffTeamPage() {
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
+      {notice && (
+        <p className="rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
+          {notice}
+        </p>
+      )}
 
       {!loading && (
         <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
@@ -322,7 +345,7 @@ export function StaffTeamPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {s.is_active && (
+                    {s.is_active ? (
                       <button
                         type="button"
                         disabled={busy}
@@ -331,6 +354,17 @@ export function StaffTeamPage() {
                       >
                         Deactivate
                       </button>
+                    ) : (
+                      !s.last_login && (
+                        <button
+                          type="button"
+                          disabled={resendingId === s.id}
+                          className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                          onClick={() => handleResendInvite(s)}
+                        >
+                          {resendingId === s.id ? "Sending…" : "Resend Invite"}
+                        </button>
+                      )
                     )}
                   </td>
                 </tr>
