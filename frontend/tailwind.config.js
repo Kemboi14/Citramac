@@ -59,11 +59,17 @@ export default {
           from: { transform: "scaleY(0)" },
           to: { transform: "scaleY(1)" },
         },
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%, 60%": { transform: "translateX(-4px)" },
+          "40%, 80%": { transform: "translateX(4px)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.35s ease-out both",
         "scale-in": "scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both",
         "grow-up": "grow-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        shake: "shake 0.4s ease-in-out",
       },
     },
   },

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Mail } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   getPlatformEmailSettings,
   updatePlatformEmailSettings,
@@ -11,8 +12,6 @@ import {
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
-const BUTTON_CLASS =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
 const SECTION_TITLE_CLASS = "mb-4 font-display text-base font-semibold text-ink-900";
 
@@ -72,8 +71,6 @@ export function PlatformEmailSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -88,12 +85,9 @@ export function PlatformEmailSettingsPage() {
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const save = async () => {
     if (!accessToken || !form) return;
     setSaveError(null);
-    setSaved(false);
-    setSaving(true);
     try {
       const updated = await updatePlatformEmailSettings(accessToken, {
         host: form.host,
@@ -106,11 +100,9 @@ export function PlatformEmailSettingsPage() {
       });
       setSettings(updated);
       setForm(formFromSettings(updated));
-      setSaved(true);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save email settings.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -150,7 +142,7 @@ export function PlatformEmailSettingsPage() {
                 pendingLabel="Not configured — emails fall back to the console/dev backend"
               />
             </div>
-            <form onSubmit={save} className="flex flex-col gap-3">
+            <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
               <label className={LABEL_CLASS}>
                 SMTP Host
                 <input
@@ -159,7 +151,6 @@ export function PlatformEmailSettingsPage() {
                   value={form.host}
                   onChange={(e) => {
                     setForm({ ...form, host: e.target.value });
-                    setSaved(false);
                   }}
                   placeholder="mail.softlinkoptions.co.ke"
                 />
@@ -173,7 +164,6 @@ export function PlatformEmailSettingsPage() {
                     value={form.port}
                     onChange={(e) => {
                       setForm({ ...form, port: e.target.value });
-                      setSaved(false);
                     }}
                     placeholder="587"
                   />
@@ -186,7 +176,6 @@ export function PlatformEmailSettingsPage() {
                     value={form.host_user}
                     onChange={(e) => {
                       setForm({ ...form, host_user: e.target.value });
-                      setSaved(false);
                     }}
                     placeholder="notifications@softlinkoptions.co.ke"
                   />
@@ -200,7 +189,6 @@ export function PlatformEmailSettingsPage() {
                   value={form.host_password}
                   onChange={(e) => {
                     setForm({ ...form, host_password: e.target.value });
-                    setSaved(false);
                   }}
                   placeholder={
                     settings.has_credentials
@@ -222,7 +210,6 @@ export function PlatformEmailSettingsPage() {
                         use_tls: e.target.checked,
                         use_ssl: e.target.checked ? false : form.use_ssl,
                       });
-                      setSaved(false);
                     }}
                   />
                   Use TLS (port 587)
@@ -238,7 +225,6 @@ export function PlatformEmailSettingsPage() {
                         use_ssl: e.target.checked,
                         use_tls: e.target.checked ? false : form.use_tls,
                       });
-                      setSaved(false);
                     }}
                   />
                   Use SSL (port 465)
@@ -252,17 +238,13 @@ export function PlatformEmailSettingsPage() {
                   value={form.default_from_email}
                   onChange={(e) => {
                     setForm({ ...form, default_from_email: e.target.value });
-                    setSaved(false);
                   }}
                   placeholder="CITRAMAC <notifications@softlinkoptions.co.ke>"
                 />
               </label>
-              <button type="submit" disabled={saving} className={BUTTON_CLASS}>
-                {saving ? "Saving…" : "Save Email Settings"}
-              </button>
-              {saved && (
-                <span className="text-sm font-medium text-brand-green">Settings saved</span>
-              )}
+              <div>
+                <SaveButton onSave={save}>Save Email Settings</SaveButton>
+              </div>
               {saveError && (
                 <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
                   {saveError}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   invitePlatformStaff,
   listPermissions,
@@ -111,6 +112,7 @@ export function GlobalRolesPage() {
       if (updated) setSelectedPermissionIds(updated.permissions);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save role permissions.");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -234,14 +236,9 @@ export function GlobalRolesPage() {
               </div>
 
               <div>
-                <button
-                  type="button"
-                  disabled={busy || !permissionsDirty}
-                  onClick={saveRolePermissions}
-                  className={BUTTON_CLASS}
-                >
+                <SaveButton onSave={saveRolePermissions} disabled={busy || !permissionsDirty}>
                   Save Changes
-                </button>
+                </SaveButton>
               </div>
             </div>
           )}

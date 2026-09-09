@@ -117,6 +117,13 @@ export function addSubstanceUseEntry(accessToken: string, payload: Omit<Substanc
   });
 }
 
+/** FHIR Bundle (Composition + Condition + Observation(s)) for one intake record. */
+export function getClientHistoryFhirBundle(accessToken: string, id: string) {
+  return apiRequest<Record<string, unknown>>(`/ccp/biopsychosocial-assessments/${id}/fhir/`, {
+    accessToken,
+  });
+}
+
 export function addReviewOfSystemEntry(
   accessToken: string,
   payload: Omit<ReviewOfSystemEntry, "id" | "clinician">,

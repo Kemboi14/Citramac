@@ -112,6 +112,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "patient_name",
+            "admission",
             "file",
             "file_size",
             "classification",
@@ -127,6 +128,19 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "uploaded_at",
         ]
         read_only_fields = ["uploaded_by", "uploaded_at"]
+
+    def validate(self, attrs):
+        # `admission` is an optional convenience link (Admission's
+        # "Attachments & handover" step) — never let it point at a
+        # different patient's admission than the one the file is actually
+        # being filed under, cross-tenant or not.
+        admission = attrs.get("admission")
+        patient = attrs.get("patient") or getattr(self.instance, "patient", None)
+        if admission is not None and patient is not None and admission.patient_id != patient.id:
+            raise serializers.ValidationError(
+                {"admission": "Admission does not belong to the selected patient."}
+            )
+        return attrs
 
     def validate_file(self, value):
         """
@@ -167,8 +181,11 @@ class PatientListSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "middle_other_names",
+            "photo",
             "uhid_number",
             "citramac_number",
+            "upi",
+            "national_id",
             "gender",
             "date_of_birth",
             "age",
@@ -178,6 +195,8 @@ class PatientListSerializer(serializers.ModelSerializer):
             "nationality",
             "marital_status",
             "patient_category",
+            "contact_phone",
+            "contact_email",
         ]
 
     def get_doctors_name(self, obj):
@@ -189,6 +208,14 @@ class PatientDetailSerializer(serializers.ModelSerializer):
     emergency_contacts = EmergencyContactSerializer(many=True, read_only=True)
     allergy_records = AllergyRecordSerializer(many=True, read_only=True)
     insurance_coverages = InsuranceCoverageSerializer(many=True, read_only=True)
+    doctor_name = serializers.SerializerMethodField()
+    registered_by_name = serializers.SerializerMethodField()
+
+    def get_doctor_name(self, obj):
+        return obj.doctor.get_full_name() if obj.doctor_id else ""
+
+    def get_registered_by_name(self, obj):
+        return obj.registered_by.get_full_name() if obj.registered_by_id else ""
 
     class Meta:
         model = Patient
@@ -200,6 +227,7 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "middle_other_names",
+            "photo",
             "gender",
             "date_of_birth",
             "age",
@@ -217,8 +245,10 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "next_of_kin",
             "allergy_status",
             "doctor",
+            "doctor_name",
             "registered_at",
             "registered_by",
+            "registered_by_name",
             "referral_source",
             "referral_mode",
             "referral_date",
@@ -231,6 +261,12 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "insurance_coverages",
         ]
         read_only_fields = ["citramac_number", "registered_at", "registered_by"]
+
+    def validate_photo(self, value):
+        if value and value.size > settings.AVATAR_MAX_SIZE_BYTES:
+            max_mb = settings.AVATAR_MAX_SIZE_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f"Client photo must be {max_mb}MB or smaller.")
+        return value
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
@@ -253,7 +289,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "appointment_type",
             "status",
             "notes",
+            "reminder_sent_at",
         ]
+        read_only_fields = ["reminder_sent_at"]
 
     def get_patient_name(self, obj):
         return obj.patient.get_full_name() if obj.patient_id else ""

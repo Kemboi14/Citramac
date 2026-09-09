@@ -404,3 +404,37 @@ class ClientHistoryIntakeTests(APITestCase):
         record = response.data["results"][0]
         self.assertNotIn("presenting_problem", record)
         self.assertIn("status", record)
+
+    def test_fhir_action_returns_a_bundle_for_this_intake(self):
+        """
+        End-to-end HTTP check for the `.fhir` action wired to
+        `build_client_history_bundle` — the unit test in
+        apps.dha_interop.tests covers the builder function directly, this
+        covers the actual endpoint the frontend calls
+        (ClientHistoryPage.tsx's "View FHIR bundle" button).
+        """
+        from .models import BiopsychosocialAssessment, SubstanceUseEntry
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                author=self.therapist,
+                presenting_problem="Persistent worry and sleep disturbance.",
+                status="SUBMITTED",
+            )
+            SubstanceUseEntry.objects.create(
+                organization=self.org,
+                assessment=assessment,
+                substance="Alcohol",
+                frequency="Weekly",
+            )
+
+        response = self.client.get(
+            reverse("biopsychosocial-assessment-fhir", args=[assessment.id]), **self.auth
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["resourceType"], "Bundle")
+        resource_types = [e["resource"]["resourceType"] for e in response.data["entry"]]
+        self.assertIn("Composition", resource_types)
+        self.assertIn("Observation", resource_types)

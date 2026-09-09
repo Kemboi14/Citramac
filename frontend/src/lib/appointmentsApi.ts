@@ -25,6 +25,7 @@ export interface Appointment {
   appointment_type: string;
   status: AppointmentStatus;
   notes: string;
+  reminder_sent_at: string | null;
 }
 
 export function listAppointments(

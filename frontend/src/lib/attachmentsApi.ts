@@ -29,6 +29,7 @@ export interface Attachment {
   id: string;
   patient: string;
   patient_name: string;
+  admission: string | null;
   file: string;
   file_size: number | null;
   classification: "HISTORICAL" | "CURRENT";
@@ -48,6 +49,7 @@ export function listAttachments(
   accessToken: string,
   params?: {
     patient?: string;
+    admission?: string;
     category?: AttachmentCategory;
     status?: AttachmentStatus;
     q?: string;
@@ -55,6 +57,7 @@ export function listAttachments(
 ) {
   const query = new URLSearchParams();
   if (params?.patient) query.set("patient", params.patient);
+  if (params?.admission) query.set("admission", params.admission);
   if (params?.category) query.set("category", params.category);
   if (params?.status) query.set("status", params.status);
   if (params?.q) query.set("q", params.q);
@@ -66,6 +69,7 @@ export function uploadAttachment(
   accessToken: string,
   payload: {
     patient: string;
+    admission?: string;
     file: File;
     classification: "HISTORICAL" | "CURRENT";
     category: AttachmentCategory;
@@ -81,6 +85,7 @@ export function uploadAttachment(
   }
   const body = new FormData();
   body.set("patient", payload.patient);
+  if (payload.admission) body.set("admission", payload.admission);
   body.set("file", payload.file);
   body.set("classification", payload.classification);
   body.set("category", payload.category);

@@ -4,6 +4,7 @@ import { usePatientContext } from "../../clinical/usePatientContext";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
 import { useOfflineSync } from "../../clinical/useOfflineSync";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   addDiagnosis,
   createLabOrder,
@@ -35,8 +36,6 @@ export function ClinicalEncounterPage() {
   const [savedNote, setSavedNote] = useState<{ id: string; is_locked: boolean } | null>(null);
   const [soapQueued, setSoapQueued] = useState(false);
   const [soapError, setSoapError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [signing, setSigning] = useState(false);
 
   const [icdQuery, setIcdQuery] = useState("");
   const [icdResults, setIcdResults] = useState<Icd11Code[]>([]);
@@ -46,12 +45,10 @@ export function ClinicalEncounterPage() {
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
   if (!encounterId) return <p className="text-ink-500">Loading…</p>;
 
-  const submitSoap = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitSoap = async () => {
     if (!accessToken) return;
     setSoapError(null);
     setSoapQueued(false);
-    setSaving(true);
     try {
       const { queued, result } = await submitOrQueue("SOAP_NOTE", encounterId, soap, () =>
         submitSoapNote(accessToken, encounterId, soap),
@@ -63,21 +60,18 @@ export function ClinicalEncounterPage() {
       }
     } catch (err) {
       setSoapError(err instanceof ApiError ? err.message : "Couldn't save the SOAP note.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
   const sign = async () => {
     if (!accessToken || !savedNote) return;
-    setSigning(true);
     try {
       await signSoapNote(accessToken, encounterId, savedNote.id);
       setSavedNote({ ...savedNote, is_locked: true });
     } catch {
       setSoapError("Couldn't sign the note.");
-    } finally {
-      setSigning(false);
+      throw new Error("sign failed");
     }
   };
 
@@ -150,7 +144,7 @@ export function ClinicalEncounterPage() {
       </div>
 
       <form
-        onSubmit={submitSoap}
+        onSubmit={(e) => e.preventDefault()}
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">S.O.A.P. Note</h2>
@@ -179,22 +173,13 @@ export function ClinicalEncounterPage() {
         )}
         {soapError && <p className="mt-4 text-sm text-status-red">{soapError}</p>}
         <div className="mt-4 flex gap-3">
-          <button
-            type="submit"
-            disabled={saving || savedNote?.is_locked}
-            className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
-          >
-            {saving ? "Saving…" : savedNote ? "Update Note" : "Save Note"}
-          </button>
+          <SaveButton onSave={submitSoap} disabled={savedNote?.is_locked}>
+            {savedNote ? "Update Note" : "Save Note"}
+          </SaveButton>
           {savedNote && !savedNote.is_locked && (
-            <button
-              type="button"
-              onClick={sign}
-              disabled={signing}
-              className="rounded-md border border-surface-border bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
-            >
-              {signing ? "Signing…" : "Sign & Lock"}
-            </button>
+            <SaveButton onSave={sign} variant="ghost" savingLabel="Signing…" savedLabel="Signed">
+              Sign & Lock
+            </SaveButton>
           )}
           {savedNote?.is_locked && (
             <span className="self-center text-sm font-medium text-brand-green-dark">

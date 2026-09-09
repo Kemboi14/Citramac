@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarClock, FileText, Paperclip, Users } from "lucide-react";
+import { Building2, CalendarClock, Paperclip, Radio, Users } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { StatCard } from "../../components/StatCard";
@@ -57,11 +57,24 @@ export function ClinicalDashboardPage() {
           tone="amber"
           value={summary?.appointments_today ?? "—"}
           label="Today's appointments"
+          trend={
+            summary
+              ? {
+                  label: `${summary.appointments_remaining_today} remaining`,
+                  direction: "neutral",
+                }
+              : undefined
+          }
         />
         <StatCard
-          icon={FileText}
-          value={summary?.active_admissions ?? "—"}
-          label="Active admissions"
+          icon={Building2}
+          value={summary ? `${summary.beds_occupied} / ${summary.beds_total}` : "—"}
+          label="Inpatient beds occupied"
+          trend={
+            summary
+              ? { label: `${summary.active_admissions} admitted`, direction: "neutral" }
+              : undefined
+          }
         />
         <StatCard
           icon={Paperclip}
@@ -69,6 +82,56 @@ export function ClinicalDashboardPage() {
           label="Documents on file"
         />
       </div>
+
+      <section className="rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-[15px] font-semibold text-ink-900">Ward capacity</h2>
+          <Link to="/clinical/ipd" className="text-[11px] font-semibold text-brand-green">
+            Manage beds
+          </Link>
+        </div>
+        {!summary?.ward_occupancy.length && (
+          <p className="text-sm text-ink-500">No wards configured yet.</p>
+        )}
+        <div className="flex flex-col gap-2.5">
+          {summary?.ward_occupancy.map((row) => {
+            const pct = row.total ? Math.round((row.occupied / row.total) * 100) : 0;
+            return (
+              <div key={row.ward}>
+                <div className="mb-1 flex justify-between text-[11px]">
+                  <span className="font-semibold text-ink-900">{row.ward}</span>
+                  <span className="text-ink-500">
+                    {row.occupied} / {row.total}
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-bg">
+                  <div
+                    className="h-full rounded-full bg-brand-green"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex items-start gap-2.5 rounded-md border border-surface-border bg-surface-bg p-3">
+          <Radio
+            className={`mt-0.5 h-4 w-4 flex-none ${summary?.fhir_status.configured ? "text-brand-green" : "text-ink-400"}`}
+          />
+          <div className="text-[11.5px] leading-relaxed text-ink-700">
+            {summary?.fhir_status.configured ? (
+              <>
+                Last FHIR transmission: <strong>{summary.fhir_status.status}</strong> (
+                {summary.fhir_status.resource_type},{" "}
+                {new Date(summary.fhir_status.last_transmitted_at as string).toLocaleString()})
+              </>
+            ) : (
+              "No FHIR/HIE transmission has been recorded for this organization yet."
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-[1.35fr_0.8fr] gap-4 max-lg:grid-cols-1">
         <section className="rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm">

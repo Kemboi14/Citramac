@@ -19,6 +19,7 @@ export function OrgAdminShell() {
       userName={name}
       userRole="Org Admin"
       searchPlaceholder="Search clients, staff, wards…"
+      profilePath="/org-admin/profile"
       topbarRight={
         <TopbarActions
           pill={

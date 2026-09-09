@@ -22,6 +22,7 @@ from fhir.resources.R4B.encounter import Encounter
 from fhir.resources.R4B.humanname import HumanName
 from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.medicationrequest import MedicationRequest
+from fhir.resources.R4B.observation import Observation
 from fhir.resources.R4B.patient import Patient as FhirPatient
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
@@ -90,6 +91,38 @@ def build_medication_request_resource(item, patient_ref):
                 or None
             )
         ],
+    )
+
+
+def build_observation_resource(substance_use_entry, patient_ref):
+    """
+    Substance-use screening finding, from a Client History intake's
+    `SubstanceUseEntry` (docs/07-CLINICAL-MODULES-SPEC.md §7.14.1). Closes a
+    real, already-documented gap: docs/08-DHA-SHA-INTEGRATION.md §8.1 names
+    `Observation` as a target resource for this app; nothing constructed one
+    until now. Coded with the same LOINC substance-use-screening panel code
+    used elsewhere for this exact concept (screening in the past 12 months),
+    following this module's existing convention of real-system coding
+    (`http://loinc.org`) rather than a custom `urn:citramac:*` code.
+    """
+    effective_date = substance_use_entry.last_use or substance_use_entry.first_use
+    note_text = " · ".join(filter(None, [substance_use_entry.frequency, substance_use_entry.route]))
+    return Observation(
+        id=str(substance_use_entry.id),
+        status="final",
+        code=CodeableConcept(
+            coding=[
+                Coding(
+                    system="http://loinc.org",
+                    code="74013-4",
+                    display="Alcohol and/or Substance Use in the past 12 Months",
+                )
+            ]
+        ),
+        subject=Reference(reference=patient_ref),
+        effectiveDateTime=effective_date.isoformat() if effective_date else None,
+        valueCodeableConcept=CodeableConcept(text=substance_use_entry.substance),
+        note=[Annotation(text=note_text)] if note_text else None,
     )
 
 
@@ -315,4 +348,79 @@ def build_admission_bundle(admission):
         )
 
     bundle = Bundle(type="collection", entry=entries)
+    return json.loads(bundle.model_dump_json(exclude_none=True))
+
+
+def build_client_history_bundle(assessment):
+    """
+    Composition + Patient + Condition (presenting problem) +
+    Observation(s) (substance-use screening), for a Client History intake
+    (`BiopsychosocialAssessment`) — docs/07-CLINICAL-MODULES-SPEC.md
+    §7.14.1. No FHIR representation of a Client History submission existed
+    before this. Deliberately does not construct `CarePlan` or
+    `FamilyMemberHistory` — neither is named anywhere in
+    docs/08-DHA-SHA-INTEGRATION.md's target resource list, unlike
+    `Observation`, which this closes a real gap for. Mirrors
+    `build_admission_bundle`'s pattern: surfaced for review, not
+    auto-transmitted (no submission pipeline exists for this bundle type
+    yet).
+    """
+    patient = assessment.patient
+    patient_ref = _urn("Patient", patient.id)
+
+    entries = [BundleEntry(fullUrl=patient_ref, resource=build_patient_resource(patient))]
+    section_references = []
+
+    if assessment.presenting_problem:
+        condition_ref = _urn("Condition", assessment.id)
+        entries.append(
+            BundleEntry(
+                fullUrl=condition_ref,
+                resource=Condition(
+                    id=str(assessment.id),
+                    subject=Reference(reference=patient_ref),
+                    code=CodeableConcept(text=assessment.presenting_problem),
+                    onsetDateTime=(
+                        assessment.hpi_onset_date.isoformat() if assessment.hpi_onset_date else None
+                    ),
+                ),
+            )
+        )
+        section_references.append(Reference(reference=condition_ref))
+
+    for entry in assessment.substance_use_entries.all():
+        obs_ref = _urn("Observation", entry.id)
+        entries.append(
+            BundleEntry(fullUrl=obs_ref, resource=build_observation_resource(entry, patient_ref))
+        )
+        section_references.append(Reference(reference=obs_ref))
+
+    author_name = "CITRAMAC System"
+    if assessment.author_id:
+        full_name = f"{assessment.author.first_name} {assessment.author.last_name}".strip()
+        if full_name:
+            author_name = full_name
+
+    composition = Composition(
+        id=str(assessment.id),
+        status="final" if assessment.status == "SUBMITTED" else "preliminary",
+        type=CodeableConcept(text="Client Intake History Form"),
+        subject=Reference(reference=patient_ref),
+        date=assessment.created_at.isoformat(),
+        author=[Reference(display=author_name)],
+        title="Client Intake History Form",
+        section=(
+            [
+                CompositionSection(
+                    title="Presenting Problem & Substance Use", entry=section_references
+                )
+            ]
+            if section_references
+            else None
+        ),
+    )
+    composition_ref = _urn("Composition", assessment.id)
+    entries.insert(0, BundleEntry(fullUrl=composition_ref, resource=composition))
+
+    bundle = Bundle(type="document", entry=entries)
     return json.loads(bundle.model_dump_json(exclude_none=True))

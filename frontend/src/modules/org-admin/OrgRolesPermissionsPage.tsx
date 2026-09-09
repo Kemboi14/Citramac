@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Plus, ShieldCheck } from "lucide-react";
+import { Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   createRole,
   listPermissions,
@@ -36,7 +37,6 @@ export function OrgRolesPermissionsPage() {
 
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [draftPermissionIds, setDraftPermissionIds] = useState<Set<number>>(new Set());
-  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [showNewRoleForm, setShowNewRoleForm] = useState(false);
@@ -99,7 +99,6 @@ export function OrgRolesPermissionsPage() {
 
   const saveRolePermissions = async () => {
     if (!accessToken || !selectedRole) return;
-    setSaving(true);
     setSaveError(null);
     try {
       const updated = await updateRole(accessToken, selectedRole.id, {
@@ -108,8 +107,7 @@ export function OrgRolesPermissionsPage() {
       setRoles((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save permission changes.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -211,8 +209,13 @@ export function OrgRolesPermissionsPage() {
                   </p>
                 )}
                 <div className="mt-3 flex gap-3">
-                  <button type="submit" disabled={creatingRole} className={BUTTON_CLASS}>
-                    Create Role
+                  <button
+                    type="submit"
+                    disabled={creatingRole}
+                    className={`${BUTTON_CLASS} inline-flex items-center gap-2 transition-all duration-200`}
+                  >
+                    {creatingRole && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {creatingRole ? "Creating…" : "Create Role"}
                   </button>
                   <button
                     type="button"
@@ -304,14 +307,7 @@ export function OrgRolesPermissionsPage() {
 
                 {editable && (
                   <div>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={saveRolePermissions}
-                      className={BUTTON_CLASS}
-                    >
-                      Save Changes
-                    </button>
+                    <SaveButton onSave={saveRolePermissions}>Save Changes</SaveButton>
                   </div>
                 )}
               </div>

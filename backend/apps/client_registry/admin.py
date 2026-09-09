@@ -56,8 +56,10 @@ class AppointmentAdmin(admin.ModelAdmin):
         "appointment_type",
         "status",
         "provider",
+        "reminder_sent_at",
     ]
     list_filter = ["status", "mode", "organization"]
+    readonly_fields = ["reminder_sent_at"]
 
 
 @admin.register(Attachment)

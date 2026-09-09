@@ -9,11 +9,31 @@ keeps sending exactly as it did before this feature existed.
 """
 
 from django.conf import settings
-from django.core.mail import get_connection
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.template.loader import render_to_string
 
 from apps.tenancy.crypto import decrypt_value
 
 SMTP_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+
+def send_html_email(
+    subject, template_name, context, plain_message, from_email, recipient_list, connection
+):
+    """Shared HTML+plaintext sender — every notification task in the project builds
+    its message with this so the multipart/alternative structure and the
+    `{subject}` template context var stay consistent."""
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=plain_message,
+        from_email=from_email,
+        to=recipient_list,
+        connection=connection,
+    )
+    email.attach_alternative(
+        render_to_string(template_name, {**context, "subject": subject}), "text/html"
+    )
+    email.send()
 
 
 def _smtp_kwargs(host, port, username, password_encrypted, use_tls, use_ssl):

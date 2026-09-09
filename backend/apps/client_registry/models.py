@@ -29,11 +29,21 @@ class Patient(TenantScopedModel):
         "Unique Personal Identifier (IPRS)", max_length=64, blank=True, db_index=True
     )
     uhid_number = models.CharField("UHID Number", max_length=64, blank=True)
-    citramac_number = models.CharField(max_length=32, blank=True, unique=True)
+    # NOT `unique=True` here — that would apply even to blank values, and
+    # `citramac_number` is `readonly_fields` in PatientAdmin (so an
+    # admin-created Patient always gets one blank), which used to make the
+    # *second* such admin-created Patient anywhere raise a raw
+    # IntegrityError. The real uniqueness constraint below excludes blanks,
+    # mirroring `unique_uhid_per_org`'s existing pattern.
+    citramac_number = models.CharField(max_length=32, blank=True)
 
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
     middle_other_names = models.CharField(max_length=150, blank=True)
+    # Client profile picture — shown in the registry table, the patient
+    # header, and the registration/detail modals. Optional; falls back to
+    # initials everywhere in the UI when unset.
+    photo = models.ImageField(upload_to="avatars/patients/%Y/%m/", null=True, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
     date_of_birth = models.DateField()
     marital_status = models.CharField(max_length=10, choices=MARITAL_STATUS_CHOICES, blank=True)
@@ -94,7 +104,12 @@ class Patient(TenantScopedModel):
                 fields=["organization", "uhid_number"],
                 name="unique_uhid_per_org",
                 condition=~models.Q(uhid_number=""),
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["citramac_number"],
+                name="unique_citramac_number_when_set",
+                condition=~models.Q(citramac_number=""),
+            ),
         ]
 
     def __str__(self):
@@ -191,6 +206,12 @@ class Appointment(TenantScopedModel):
     appointment_type = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="SCHEDULED")
     notes = models.TextField(blank=True)
+    # Set by apps.client_registry.tasks.send_appointment_reminders once a
+    # reminder email has gone out for this appointment, so the periodic scan
+    # never double-sends. Reset to null whenever `scheduled_for` moves (see
+    # AppointmentViewSet.perform_update) so a rescheduled appointment gets a
+    # fresh reminder for its new time.
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["scheduled_for"]
@@ -218,6 +239,20 @@ class Attachment(TenantScopedModel):
     DOC_STATUS_CHOICES = [("ACTIVE", "Active"), ("ARCHIVED", "Archived")]
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="attachments")
+    # Optional link to the specific inpatient admission this file was
+    # uploaded for (e.g. a signed consent form or legal order attached
+    # during the Admission workflow's "Attachments & handover" step) —
+    # docs/07-CLINICAL-MODULES-SPEC.md Module 7. Nullable/SET_NULL: an
+    # attachment always belongs to the patient first and foremost, and must
+    # not disappear if the admission record it was uploaded alongside is
+    # ever deleted.
+    admission = models.ForeignKey(
+        "ipd_ward.Admission",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attachments",
+    )
     file = models.FileField(upload_to="attachments/%Y/%m/")
     classification = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")

@@ -19,6 +19,7 @@ export function ClinicalWorkspaceShell() {
       userName={name}
       userRole={claims?.role.replace(/_/g, " ") || "Clinician"}
       searchPlaceholder="Search clients by name or UHID…"
+      profilePath="/clinical/profile"
       topbarRight={
         <TopbarActions
           pill={

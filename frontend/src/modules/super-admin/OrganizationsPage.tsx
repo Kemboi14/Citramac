@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Circle,
   Layers,
+  Loader2,
   Lock,
   MoreVertical,
   Pencil,
@@ -434,8 +435,9 @@ function OrganizationDrawer({
             type="submit"
             form={formId}
             disabled={isSubmitting}
-            className={`${BUTTON_PRIMARY} flex-1`}
+            className={`${BUTTON_PRIMARY} flex-1 inline-flex items-center justify-center gap-2 transition-all duration-200`}
           >
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSubmitting
               ? isEdit
                 ? "Saving…"
@@ -919,8 +921,9 @@ function OrgStaffInviteDrawer({
             type="submit"
             form={formId}
             disabled={isSubmitting || !organization}
-            className={`${BUTTON_PRIMARY} flex-1`}
+            className={`${BUTTON_PRIMARY} flex-1 inline-flex items-center justify-center gap-2 transition-all duration-200`}
           >
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSubmitting ? "Adding…" : "Add Staff"}
           </button>
         </>

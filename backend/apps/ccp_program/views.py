@@ -100,6 +100,14 @@ class BiopsychosocialAssessmentViewSet(CareTeamRestrictedMixin, viewsets.ModelVi
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, author=self.request.user)
 
+    @action(detail=True, methods=["get"])
+    def fhir(self, request, pk=None):
+        """FHIR Bundle (Composition + Condition + Observation(s)) for this Client History intake."""
+        from apps.dha_interop.fhir_mapper import build_client_history_bundle
+
+        assessment = self.get_object()
+        return Response(build_client_history_bundle(assessment))
+
 
 class SubstanceUseEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
     full_serializer_class = SubstanceUseEntrySerializer

@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/useAuth";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import { createPsychotherapySession } from "../../lib/clinicalApi";
 
 const FIELD_CLASS =
@@ -39,18 +40,14 @@ export function PsychotherapySessionForm({
     progress_rating: "",
     extra_notes: "",
   });
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
   if (!selected) return <p className="text-ink-500">Loading…</p>;
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async () => {
     if (!accessToken) return;
     setError(null);
-    setSaving(true);
     try {
       await createPsychotherapySession(accessToken, {
         patient: selected.patientId,
@@ -61,11 +58,9 @@ export function PsychotherapySessionForm({
         progress_rating: form.progress_rating ? Number(form.progress_rating) : null,
         extra: { notes: form.extra_notes },
       });
-      setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save this session.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -79,7 +74,7 @@ export function PsychotherapySessionForm({
       </h1>
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => e.preventDefault()}
         className="max-w-2xl rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <div className="flex flex-col gap-4">
@@ -132,19 +127,10 @@ export function PsychotherapySessionForm({
           </label>
         </div>
 
-        {saved && (
-          <p className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
-            Session saved.
-          </p>
-        )}
         {error && <p className="mt-4 text-sm text-status-red">{error}</p>}
-        <button
-          type="submit"
-          disabled={saving}
-          className="mt-4 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
-        >
-          {saving ? "Saving…" : "Save Session"}
-        </button>
+        <div className="mt-4">
+          <SaveButton onSave={handleSubmit}>Save Session</SaveButton>
+        </div>
       </form>
     </div>
   );

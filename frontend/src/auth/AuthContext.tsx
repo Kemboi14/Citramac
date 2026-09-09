@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import * as authApi from "../lib/authApi";
 import { ApiError } from "../lib/apiClient";
 import { decodeAccessToken } from "../lib/jwt";
+import { getMyProfile } from "../lib/myProfileApi";
 import { AuthContext, type LoginOutcome } from "./authContextObject";
 
 // Re-exported for existing consumers (e.g. steps/TenantLoginStep.tsx) — the
@@ -14,6 +15,7 @@ export type { LoginOutcome };
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   // On first load, a valid refresh_token cookie from a previous session
   // silently restores access — docs/05-AUTHENTICATION-FLOW.md §5.3.
@@ -56,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setAccessToken(null);
+    setAvatarUrl(null);
   }, [accessToken]);
 
   const claims = useMemo(
@@ -63,9 +66,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accessToken],
   );
 
+  const refreshProfile = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const profile = await getMyProfile(accessToken);
+      setAvatarUrl(profile.avatar);
+    } catch {
+      // Best-effort — a stale/missing avatar just means the initials
+      // fallback shows instead, never worth surfacing as an app-wide error.
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    // No "else clear avatarUrl" branch needed — it starts out `null` and
+    // `logout()` already resets it explicitly on that transition.
+    if (!accessToken) return;
+    let ignore = false;
+    getMyProfile(accessToken)
+      .then((profile) => {
+        if (!ignore) setAvatarUrl(profile.avatar);
+      })
+      .catch(() => {
+        // Best-effort — see refreshProfile's own comment.
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [accessToken]);
+
   const value = useMemo(
-    () => ({ accessToken, claims, isLoading, login, loginVerifyOtp, logout }),
-    [accessToken, claims, isLoading, login, loginVerifyOtp, logout],
+    () => ({
+      accessToken,
+      claims,
+      isLoading,
+      login,
+      loginVerifyOtp,
+      logout,
+      avatarUrl,
+      refreshProfile,
+    }),
+    [accessToken, claims, isLoading, login, loginVerifyOtp, logout, avatarUrl, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

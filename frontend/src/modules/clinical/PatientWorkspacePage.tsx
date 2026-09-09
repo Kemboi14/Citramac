@@ -3,13 +3,17 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
+import { AvatarUpload } from "../../components/AvatarUpload";
+import { ModulePlaceholder } from "../../components/ModulePlaceholder";
 import {
   createEncounter,
   getPatient,
   listEncountersForPatient,
   searchIcd11,
+  uploadPatientPhoto,
   type EncounterRow,
   type Icd11Code,
+  type PatientDetail,
 } from "../../lib/clinicalApi";
 import {
   createDiagnosis,
@@ -17,13 +21,8 @@ import {
   updateDiagnosis,
   type Diagnosis,
 } from "../../lib/diagnosesApi";
-import {
-  listAttachments,
-  uploadAttachment,
-  type Attachment,
-  type AttachmentCategory,
-} from "../../lib/attachmentsApi";
 import { createAppointment, listAppointments, type Appointment } from "../../lib/appointmentsApi";
+import { DocumentLibrary } from "../../components/DocumentLibrary";
 import {
   getAdmissionFhirBundle,
   listAdmissions,
@@ -31,26 +30,20 @@ import {
   type AdmissionType,
 } from "../../lib/ipdApi";
 import { ClientHistoryPage } from "./ClientHistoryPage";
-
-interface PatientDetail {
-  first_name: string;
-  last_name: string;
-  uhid_number: string;
-  citramac_number: string;
-  gender: string;
-  age: number;
-  allergy_status: string;
-  patient_category: string;
-  contact_phone: string;
-}
+import { PatientDetailsModal } from "./PatientDetailsModal";
 
 const TABS = [
   "Overview",
-  "Diagnoses",
   "Client History",
   "Admission",
-  "Documents",
+  "Encounters",
+  "Clinical Notes",
+  "Assessments",
+  "Diagnoses",
+  "Care Plan",
   "Appointments",
+  "Documents",
+  "Timeline",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -94,7 +87,6 @@ export function PatientWorkspacePage() {
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [encounters, setEncounters] = useState<EncounterRow[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [fhirPreview, setFhirPreview] = useState<string | null>(null);
@@ -108,21 +100,15 @@ export function PatientWorkspacePage() {
   const [isPrimary, setIsPrimary] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadCategory, setUploadCategory] = useState<AttachmentCategory>("CLINICAL");
+  const [showDetails, setShowDetails] = useState(false);
   const [apptDateTime, setApptDateTime] = useState("");
   const [apptType, setApptType] = useState("");
 
   const refresh = () => {
     if (!accessToken || !selected) return;
-    getPatient(accessToken, selected.patientId).then((data) =>
-      setPatient(data as unknown as PatientDetail),
-    );
+    getPatient(accessToken, selected.patientId).then(setPatient);
     listDiagnosesForPatient(accessToken, selected.patientId).then((d) => setDiagnoses(d.results));
     listEncountersForPatient(accessToken, selected.patientId).then((d) => setEncounters(d.results));
-    listAttachments(accessToken, { patient: selected.patientId }).then((d) =>
-      setAttachments(d.results),
-    );
     listAppointments(accessToken, { patient: selected.patientId }).then((d) =>
       setAppointments(d.results),
     );
@@ -207,24 +193,10 @@ export function PatientWorkspacePage() {
     }
   };
 
-  const upload = async () => {
-    if (!accessToken || !uploadFile) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await uploadAttachment(accessToken, {
-        patient: selected.patientId,
-        file: uploadFile,
-        classification: "CURRENT",
-        category: uploadCategory,
-      });
-      setUploadFile(null);
-      refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't upload the document.");
-    } finally {
-      setBusy(false);
-    }
+  const uploadPhoto = async (file: File) => {
+    if (!accessToken) return;
+    const updated = await uploadPatientPhoto(accessToken, selected.patientId, file);
+    setPatient(updated);
   };
 
   const bookAppointment = async () => {
@@ -249,14 +221,17 @@ export function PatientWorkspacePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div className="flex items-center gap-4 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
-        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-brand-green-tint text-lg font-bold text-brand-green-dark">
-          {selected.patientName
+      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
+        <AvatarUpload
+          imageUrl={patient?.photo}
+          initials={selected.patientName
             .split(" ")
             .map((p) => p[0])
             .join("")
             .slice(0, 2)}
-        </div>
+          size={56}
+          onUpload={uploadPhoto}
+        />
         <div className="min-w-[220px]">
           <h1 className="font-display text-lg font-bold text-ink-900">{selected.patientName}</h1>
           <p className="mt-1 text-xs text-ink-500">
@@ -266,10 +241,10 @@ export function PatientWorkspacePage() {
         </div>
         {patient && (
           <span className={`${STATUS_BADGE} ${ALLERGY_BADGE[patient.allergy_status] ?? ""}`}>
-            {patient.allergy_status.replace(/_/g, " ")}
+            {patient.allergy_status === "ACTIVE_ALLERGIES" ? "⚠ Allergies" : "No known allergies"}
           </span>
         )}
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <button
             type="button"
             className={BUTTON_CLASS}
@@ -286,6 +261,13 @@ export function PatientWorkspacePage() {
               Admission
             </button>
           )}
+          <button
+            type="button"
+            className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-brand-green-tint-2"
+            onClick={() => setShowDetails(true)}
+          >
+            View details
+          </button>
         </div>
       </div>
 
@@ -561,52 +543,8 @@ export function PatientWorkspacePage() {
       )}
 
       {tab === "Documents" && (
-        <section className="animate-fade-in rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Documents</h2>
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <label className={LABEL_CLASS}>
-              Category
-              <select
-                className={FIELD_CLASS}
-                value={uploadCategory}
-                onChange={(e) => setUploadCategory(e.target.value as AttachmentCategory)}
-              >
-                <option value="CLINICAL">Clinical Documents</option>
-                <option value="IDENTITY">Identity Documents</option>
-                <option value="ASSESSMENT">Assessments</option>
-                <option value="CONSENT">Consents</option>
-                <option value="LAB_RESULT">Lab Results</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </label>
-            <div className="flex flex-col gap-1">
-              <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
-              <span className="text-[10px] text-ink-400">Up to 30MB</span>
-            </div>
-            <button
-              type="button"
-              disabled={busy || !uploadFile}
-              className={BUTTON_CLASS}
-              onClick={upload}
-            >
-              Upload
-            </button>
-          </div>
-          {attachments.length === 0 && <p className="text-sm text-ink-500">No documents yet.</p>}
-          {attachments.map((a) => (
-            <a
-              key={a.id}
-              href={a.file}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between border-t border-surface-bg py-2.5 first:border-t-0 hover:bg-brand-green-tint-2"
-            >
-              <span className="text-sm text-brand-green">{a.file.split("/").pop()}</span>
-              <span className="text-xs text-ink-500">
-                {new Date(a.uploaded_at).toLocaleDateString()}
-              </span>
-            </a>
-          ))}
+        <section className="animate-fade-in">
+          <DocumentLibrary patientId={selected.patientId} />
         </section>
       )}
 
@@ -663,6 +601,73 @@ export function PatientWorkspacePage() {
           ))}
         </section>
       )}
+
+      {tab === "Encounters" && (
+        <section className="animate-fade-in rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
+          <h2 className="mb-4 font-display text-base font-semibold text-ink-900">All encounters</h2>
+          {encounters.length === 0 && <p className="text-sm text-ink-500">No encounters yet.</p>}
+          {encounters.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => {
+                setEncounter(e.id);
+                navigate("/clinical/encounter");
+              }}
+              className="flex w-full items-center justify-between border-t border-surface-bg py-2.5 text-left first:border-t-0 hover:bg-brand-green-tint-2"
+            >
+              <span className="text-sm text-ink-700">{e.encounter_type || "Encounter"}</span>
+              <span className="text-xs text-ink-500">
+                {new Date(e.opened_at).toLocaleString([], {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </span>
+              <span className={`${STATUS_BADGE} bg-brand-green-tint text-brand-green-dark`}>
+                {e.status}
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
+
+      {tab === "Clinical Notes" && (
+        <ModulePlaceholder
+          eyebrow="Client Workspace"
+          title="Clinical Notes"
+          description="A consolidated view of every SOAP note across this client's encounters — for now, open each entry from the Encounters tab to view its note."
+        />
+      )}
+
+      {tab === "Assessments" && (
+        <ModulePlaceholder
+          eyebrow="Client Workspace"
+          title="Assessments"
+          description="CORI, CRI and other structured assessment instruments for this client."
+        />
+      )}
+
+      {tab === "Care Plan" && (
+        <ModulePlaceholder
+          eyebrow="Client Workspace"
+          title="Care Plan"
+          description="A structured, longitudinal treatment/care plan distinct from a single session's plan."
+        />
+      )}
+
+      {tab === "Timeline" && (
+        <ModulePlaceholder
+          eyebrow="Client Workspace"
+          title="Timeline"
+          description="A single chronological timeline merging registration, encounters, admissions, documents and appointments."
+        />
+      )}
+
+      <PatientDetailsModal
+        open={showDetails}
+        onClose={() => setShowDetails(false)}
+        patient={patient}
+      />
     </div>
   );
 }

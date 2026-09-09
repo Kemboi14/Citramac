@@ -18,6 +18,13 @@ export interface AuthContextValue {
   login: (email: string, password: string, remember?: boolean) => Promise<LoginOutcome>;
   loginVerifyOtp: (otpToken: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Current user's uploaded profile picture, if any — null until fetched
+   * or if never set. Not carried on the JWT (avatars can change without a
+   * re-login), see `apps.accounts.views.MyProfileView`. */
+  avatarUrl: string | null;
+  /** Re-fetches the current user's profile (e.g. right after an avatar
+   * upload elsewhere in the app) so every avatar on screen updates. */
+  refreshProfile: () => Promise<void>;
 }
 
 // Split from AuthContext.tsx (the `AuthProvider` component) and useAuth.ts

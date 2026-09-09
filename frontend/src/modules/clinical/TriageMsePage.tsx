@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/useAuth";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
 import { useOfflineSync } from "../../clinical/useOfflineSync";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import { submitMse, submitVitals } from "../../lib/clinicalApi";
 
 const FIELD_CLASS =
@@ -32,7 +33,6 @@ export function TriageMsePage() {
   const [vitalsResult, setVitalsResult] = useState<{ bmi: string; bsa: string } | null>(null);
   const [vitalsQueued, setVitalsQueued] = useState(false);
   const [vitalsError, setVitalsError] = useState<string | null>(null);
-  const [vitalsSaving, setVitalsSaving] = useState(false);
 
   const [mse, setMse] = useState({
     appearance: "",
@@ -50,17 +50,14 @@ export function TriageMsePage() {
   const [homicidalIdeation, setHomicidalIdeation] = useState(false);
   const [mseSaved, setMseSaved] = useState<{ risk_escalated_to_supervisor: boolean } | null>(null);
   const [mseError, setMseError] = useState<string | null>(null);
-  const [mseSaving, setMseSaving] = useState(false);
 
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
   if (!encounterId) return <p className="text-ink-500">Loading…</p>;
 
-  const submitVitalsForm = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitVitalsForm = async () => {
     if (!accessToken) return;
     setVitalsError(null);
     setVitalsQueued(false);
-    setVitalsSaving(true);
     try {
       const payload = Object.fromEntries(
         Object.entries(vitals)
@@ -78,16 +75,13 @@ export function TriageMsePage() {
       }
     } catch (err) {
       setVitalsError(err instanceof ApiError ? err.message : "Couldn't save vitals.");
-    } finally {
-      setVitalsSaving(false);
+      throw err;
     }
   };
 
-  const submitMseForm = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitMseForm = async () => {
     if (!accessToken) return;
     setMseError(null);
-    setMseSaving(true);
     try {
       const result = await submitMse(accessToken, encounterId, {
         ...mse,
@@ -99,8 +93,7 @@ export function TriageMsePage() {
       setMseSaved({ risk_escalated_to_supervisor: Boolean(result.risk_escalated_to_supervisor) });
     } catch (err) {
       setMseError(err instanceof ApiError ? err.message : "Couldn't save the MSE.");
-    } finally {
-      setMseSaving(false);
+      throw err;
     }
   };
 
@@ -116,7 +109,7 @@ export function TriageMsePage() {
       </div>
 
       <form
-        onSubmit={submitVitalsForm}
+        onSubmit={(e) => e.preventDefault()}
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Vital Signs</h2>
@@ -197,17 +190,13 @@ export function TriageMsePage() {
           </p>
         )}
         {vitalsError && <p className="mt-4 text-sm text-status-red">{vitalsError}</p>}
-        <button
-          type="submit"
-          disabled={vitalsSaving}
-          className="mt-4 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
-        >
-          {vitalsSaving ? "Saving…" : "Save Vitals"}
-        </button>
+        <div className="mt-4">
+          <SaveButton onSave={submitVitalsForm}>Save Vitals</SaveButton>
+        </div>
       </form>
 
       <form
-        onSubmit={submitMseForm}
+        onSubmit={(e) => e.preventDefault()}
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
@@ -275,13 +264,9 @@ export function TriageMsePage() {
           </p>
         )}
         {mseError && <p className="mt-4 text-sm text-status-red">{mseError}</p>}
-        <button
-          type="submit"
-          disabled={mseSaving}
-          className="mt-4 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
-        >
-          {mseSaving ? "Saving…" : "Save MSE"}
-        </button>
+        <div className="mt-4">
+          <SaveButton onSave={submitMseForm}>Save MSE</SaveButton>
+        </div>
       </form>
     </div>
   );

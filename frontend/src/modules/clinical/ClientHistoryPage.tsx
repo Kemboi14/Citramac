@@ -7,6 +7,7 @@ import {
   addReviewOfSystemEntry,
   addSubstanceUseEntry,
   createClientHistory,
+  getClientHistoryFhirBundle,
   listClientHistory,
   type ClientHistoryRecord,
   type ClientHistoryRestricted,
@@ -122,6 +123,9 @@ export function ClientHistoryPage() {
   const { selected } = usePatientContext();
 
   const [records, setRecords] = useState<(ClientHistoryRecord | ClientHistoryRestricted)[]>([]);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [fhirBundleId, setFhirBundleId] = useState<string | null>(null);
+  const [fhirPreview, setFhirPreview] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
@@ -151,8 +155,28 @@ export function ClientHistoryPage() {
   const refresh = () => {
     if (!accessToken || !selected) return;
     listClientHistory(accessToken, selected.patientId)
-      .then((data) => setRecords(data.results))
+      .then((data) => {
+        setRecords(data.results);
+        setSelectedRecordId((current) =>
+          current && data.results.some((r) => r.id === current)
+            ? current
+            : (data.results[0]?.id ?? null),
+        );
+      })
       .catch(() => setError("Couldn't load client history."));
+  };
+
+  const viewFhirBundle = async (recordId: string) => {
+    if (!accessToken) return;
+    setFhirBundleId(recordId);
+    try {
+      const bundle = await getClientHistoryFhirBundle(accessToken, recordId);
+      setFhirPreview(JSON.stringify(bundle, null, 2));
+    } catch {
+      setError("Couldn't build the FHIR bundle for this intake record.");
+    } finally {
+      setFhirBundleId(null);
+    }
   };
 
   useEffect(refresh, [accessToken, selected]);
@@ -600,38 +624,264 @@ export function ClientHistoryPage() {
         </div>
       )}
 
-      <section className={SECTION_CLASS}>
-        <h2 className={SECTION_TITLE}>Intake history</h2>
-        {records.length === 0 && <p className="text-sm text-ink-500">No history captured yet.</p>}
-        <div className="flex flex-col">
-          {records.map((record) => (
-            <div key={record.id} className="border-t border-surface-bg py-3 first:border-t-0">
-              <div className="flex items-center justify-between">
-                <strong className="text-sm text-ink-900">
-                  {record.status === "SUBMITTED" ? "Intake History" : "Draft Intake"}
-                </strong>
-                <span className="rounded-full bg-brand-green-tint px-2.5 py-1 text-[10px] font-semibold text-brand-green-dark">
-                  {record.status}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-ink-500">
-                {new Date(record.created_at).toLocaleString()}
-              </p>
-              {hasFullAccess(record) && record.presenting_problem && (
-                <p className="mt-2 text-sm text-ink-700">{record.presenting_problem}</p>
-              )}
-              {hasFullAccess(record) &&
-                (record.substance_use_entries.length > 0 ||
-                  record.review_of_systems.length > 0) && (
-                  <p className="mt-1 text-xs text-ink-500">
-                    {record.substance_use_entries.length} substance entries ·{" "}
-                    {record.review_of_systems.length} systems reviewed
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+        <section className={SECTION_CLASS}>
+          <h2 className={SECTION_TITLE}>History Timeline</h2>
+          {records.length === 0 && <p className="text-sm text-ink-500">No history captured yet.</p>}
+          <div className="flex flex-col gap-1.5">
+            {records.map((record) => (
+              <button
+                key={record.id}
+                type="button"
+                onClick={() => setSelectedRecordId(record.id)}
+                className={`rounded-md border px-3 py-2.5 text-left transition-colors duration-150 ${
+                  selectedRecordId === record.id
+                    ? "border-brand-green bg-brand-green-tint"
+                    : "border-surface-border bg-white hover:border-brand-green"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <strong className="text-[12.5px] text-ink-900">
+                    {record.status === "SUBMITTED" ? "Intake History" : "Draft Intake"}
+                  </strong>
+                  <span className="rounded-full bg-brand-green-tint px-2 py-0.5 text-[9px] font-semibold text-brand-green-dark">
+                    {record.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-[10.5px] text-ink-500">
+                  {new Date(record.created_at).toLocaleString([], {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </p>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className={SECTION_CLASS}>
+          {(() => {
+            const record = records.find((r) => r.id === selectedRecordId);
+            if (!record) {
+              return (
+                <p className="text-sm text-ink-500">
+                  Select a captured history record to review its details.
+                </p>
+              );
+            }
+            return (
+              <div>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="font-display text-base font-semibold text-ink-900">
+                      {record.status === "SUBMITTED" ? "Intake History" : "Draft Intake"}
+                    </h2>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Captured {new Date(record.created_at).toLocaleString()}
+                      {hasFullAccess(record) && record.author_name && ` · ${record.author_name}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={fhirBundleId === record.id}
+                    onClick={() => viewFhirBundle(record.id)}
+                    className="rounded-md border border-surface-border px-3 py-1.5 text-[11.5px] font-semibold text-ink-700 hover:bg-brand-green-tint-2 disabled:opacity-50"
+                  >
+                    {fhirBundleId === record.id ? "Building…" : "View FHIR bundle"}
+                  </button>
+                </div>
+
+                {!hasFullAccess(record) && (
+                  <p className="rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-status-amber">
+                    Restricted view — full clinical detail on this record requires CCP team access.
                   </p>
                 )}
-            </div>
-          ))}
-        </div>
-      </section>
+
+                {hasFullAccess(record) && (
+                  <div className="flex flex-col gap-4">
+                    {record.presenting_problem && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          History of Presenting Problem
+                        </h3>
+                        <p className="whitespace-pre-wrap text-sm text-ink-700">
+                          {record.presenting_problem}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-500">
+                          {[
+                            record.hpi_onset_date && `Onset ${record.hpi_onset_date}`,
+                            record.hpi_duration,
+                            record.hpi_severity,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    )}
+
+                    {(record.main_drug_problem || record.substance_use_entries.length > 0) && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          Substance Use History
+                        </h3>
+                        <p className="text-xs text-ink-500">
+                          Main drug problem: {record.main_drug_problem || "—"}
+                          {record.injecting_drug_use && " · Injecting drug use"}
+                          {record.treatment_before && " · Previous treatment"}
+                        </p>
+                        {record.substance_use_entries.length > 0 && (
+                          <div className="mt-2 overflow-x-auto rounded-sm border border-surface-border">
+                            <table className="w-full min-w-[480px] text-left text-xs">
+                              <thead className="bg-surface-bg text-[9.5px] uppercase text-ink-400">
+                                <tr>
+                                  <th className="px-2.5 py-1.5">Substance</th>
+                                  <th className="px-2.5 py-1.5">First use</th>
+                                  <th className="px-2.5 py-1.5">Last use</th>
+                                  <th className="px-2.5 py-1.5">Frequency</th>
+                                  <th className="px-2.5 py-1.5">Route</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {record.substance_use_entries.map((s) => (
+                                  <tr key={s.id} className="border-t border-surface-border">
+                                    <td className="px-2.5 py-1.5 font-medium text-ink-900">
+                                      {s.substance}
+                                    </td>
+                                    <td className="px-2.5 py-1.5">{s.first_use || "—"}</td>
+                                    <td className="px-2.5 py-1.5">{s.last_use || "—"}</td>
+                                    <td className="px-2.5 py-1.5">{s.frequency || "—"}</td>
+                                    <td className="px-2.5 py-1.5">{s.route || "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {record.review_of_systems.length > 0 && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          Review of Systems
+                        </h3>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {record.review_of_systems.map((r) => (
+                            <div
+                              key={r.id}
+                              className="rounded-sm border border-surface-border p-2 text-xs"
+                            >
+                              <strong className="text-ink-900">{r.category}</strong>
+                              <p className="mt-0.5 text-ink-500">
+                                {r.notes || "No notes recorded."}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {CLINICAL_HISTORY_FIELDS.some(
+                      // eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `CLINICAL_HISTORY_FIELDS` const array, not user input.
+                      ({ key }) => (record as unknown as Record<string, unknown>)[key],
+                    ) && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          Clinical History
+                        </h3>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {CLINICAL_HISTORY_FIELDS.filter(
+                            // eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `CLINICAL_HISTORY_FIELDS` const array, not user input.
+                            ({ key }) => (record as unknown as Record<string, unknown>)[key],
+                          ).map(({ key, label }) => (
+                            <div key={key} className="rounded-sm border border-surface-border p-2">
+                              <strong className="text-[11px] text-ink-900">{label}</strong>
+                              <p className="mt-0.5 whitespace-pre-wrap text-xs text-ink-500">
+                                {
+                                  // eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `CLINICAL_HISTORY_FIELDS` const array, not user input.
+                                  String((record as unknown as Record<string, unknown>)[key])
+                                }
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(record.suicide_risk_level ||
+                      record.self_harm_risk_level ||
+                      record.violence_risk_level ||
+                      record.withdrawal_risk) && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          Risk Assessment
+                        </h3>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="rounded-sm border border-surface-border p-2">
+                            <span className="text-ink-500">Suicide</span>
+                            <strong className="block text-ink-900">
+                              {record.suicide_risk_level || "—"}
+                            </strong>
+                          </div>
+                          <div className="rounded-sm border border-surface-border p-2">
+                            <span className="text-ink-500">Self-harm</span>
+                            <strong className="block text-ink-900">
+                              {record.self_harm_risk_level || "—"}
+                            </strong>
+                          </div>
+                          <div className="rounded-sm border border-surface-border p-2">
+                            <span className="text-ink-500">Violence</span>
+                            <strong className="block text-ink-900">
+                              {record.violence_risk_level || "—"}
+                            </strong>
+                          </div>
+                        </div>
+                        {record.withdrawal_risk && (
+                          <p className="mt-2 whitespace-pre-wrap text-xs text-ink-700">
+                            {record.withdrawal_risk}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {(record.plan_details || record.next_steps) && (
+                      <div>
+                        <h3 className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-brand-green-dark">
+                          Plan
+                        </h3>
+                        <p className="whitespace-pre-wrap text-sm text-ink-700">
+                          {record.plan_details}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-500">
+                          {[record.level_of_care, record.next_steps].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {fhirPreview && fhirBundleId === null && (
+                  <div className="mt-4 animate-scale-in rounded-md border border-surface-border p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <strong className="text-sm text-ink-900">FHIR Bundle</strong>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-brand-green"
+                        onClick={() => setFhirPreview(null)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <pre className="max-h-72 overflow-auto rounded-sm bg-surface-bg p-3 text-xs text-ink-700">
+                      {fhirPreview}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </section>
+      </div>
     </div>
   );
 }

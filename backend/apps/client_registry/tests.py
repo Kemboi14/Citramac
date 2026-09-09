@@ -111,6 +111,34 @@ class ClientRegistryTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_two_patients_with_blank_citramac_number_can_coexist(self):
+        """
+        Regression test: `citramac_number` used to be a plain `unique=True`
+        field with no exclusion for blanks — since it's `readonly_fields` in
+        PatientAdmin, a Patient created directly via /admin/ always gets a
+        blank one, so a *second* such admin-created Patient anywhere would
+        raise a raw IntegrityError. Fixed with a conditional unique
+        constraint (`unique_citramac_number_when_set`) mirroring
+        `unique_uhid_per_org`'s existing blank-exclusion pattern.
+        """
+        with platform_admin_context():
+            first = Patient.objects.create(
+                organization=self.org_a,
+                first_name="First",
+                last_name="Blank",
+                gender="MALE",
+                date_of_birth="1990-01-01",
+            )
+            second = Patient.objects.create(
+                organization=self.org_a,
+                first_name="Second",
+                last_name="Blank",
+                gender="FEMALE",
+                date_of_birth="1991-01-01",
+            )
+        self.assertEqual(first.citramac_number, "")
+        self.assertEqual(second.citramac_number, "")
+
     def test_verify_iprs_and_verify_sha_are_honest_stubs(self):
         create_response = self.client.post(
             reverse("patient-list"),
@@ -453,6 +481,96 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         self.assertEqual(response.data["category"], "CONSENT")
         self.assertEqual(response.data["doc_status"], "ACTIVE")
 
+    def test_attachment_can_link_to_an_admission_and_be_filtered_by_it(self):
+        """
+        drifting-baking-falcon.md — Admission's "Attachments & handover"
+        section links a document to a specific admission, not just the
+        patient. Real end-to-end check of the field + `?admission=` filter.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Female Ward")
+            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="FW-01")
+            admission = Admission.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                bed=bed,
+                admitted_by=self.clinician,
+                admission_type="VOLUNTARY",
+            )
+
+        upload = SimpleUploadedFile(
+            "handover.pdf", b"%PDF-1.4 test", content_type="application/pdf"
+        )
+        response = self.client.post(
+            reverse("attachment-list"),
+            {
+                "patient": str(self.patient.id),
+                "admission": str(admission.id),
+                "file": upload,
+                "classification": "CURRENT",
+                "category": "CLINICAL",
+            },
+            format="multipart",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(response.data["admission"]), str(admission.id))
+
+        filtered = self.client.get(
+            reverse("attachment-list") + f"?admission={admission.id}", **self.auth
+        )
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(filtered.data["count"], 1)
+
+    def test_attachment_rejects_an_admission_belonging_to_a_different_patient(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        with platform_admin_context():
+            other_patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Other",
+                last_name="Patient",
+                gender="MALE",
+                date_of_birth="1990-01-01",
+                # Plain `unique=True` (no conditional exclusion for blank
+                # like `uhid_number` has) — a second same-org patient with
+                # the default blank citramac_number collides with `self.patient`.
+                citramac_number="TESTNUM-OTHER",
+            )
+            ward = Ward.objects.create(organization=self.org, name="Male Ward")
+            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="MW-01")
+            admission = Admission.objects.create(
+                organization=self.org,
+                patient=other_patient,
+                bed=bed,
+                admitted_by=self.clinician,
+                admission_type="VOLUNTARY",
+            )
+
+        upload = SimpleUploadedFile(
+            "mismatch.pdf", b"%PDF-1.4 test", content_type="application/pdf"
+        )
+        response = self.client.post(
+            reverse("attachment-list"),
+            {
+                "patient": str(self.patient.id),
+                "admission": str(admission.id),
+                "file": upload,
+                "classification": "CURRENT",
+                "category": "CLINICAL",
+            },
+            format="multipart",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("admission", response.data)
+
     def test_attachment_rejects_a_file_over_the_upload_ceiling(self):
         """Attachment uploads were previously unbounded — now capped at UPLOAD_MAX_SIZE_BYTES."""
         from django.conf import settings
@@ -520,6 +638,126 @@ class AttachmentAppointmentDashboardTests(APITestCase):
             response.data["results"][0]["appointment_type"], "Individual therapy session"
         )
 
+    def test_send_appointment_reminders_emails_patients_in_the_window(self):
+        from django.core import mail
+        from django.test import override_settings
+
+        from .tasks import send_appointment_reminders
+
+        with platform_admin_context():
+            self.patient.contact_email = "grace@example.com"
+            self.patient.save(update_fields=["contact_email"])
+            due_soon = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=2),
+                appointment_type="Psychiatric review",
+                status="SCHEDULED",
+            )
+            too_far_out = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=48),
+                appointment_type="Follow-up",
+                status="SCHEDULED",
+            )
+            already_reminded = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=1),
+                appointment_type="Group therapy",
+                status="SCHEDULED",
+                reminder_sent_at=timezone.now(),
+            )
+            cancelled = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=1),
+                appointment_type="Cancelled slot",
+                status="CANCELLED",
+            )
+
+        with override_settings(APPOINTMENT_REMINDER_HOURS_BEFORE=24):
+            sent = send_appointment_reminders()
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("grace@example.com", mail.outbox[0].to)
+
+        with platform_admin_context():
+            due_soon.refresh_from_db()
+            too_far_out.refresh_from_db()
+            already_reminded.refresh_from_db()
+            cancelled.refresh_from_db()
+        self.assertIsNotNone(due_soon.reminder_sent_at)
+        self.assertIsNone(too_far_out.reminder_sent_at)
+        # already_reminded and cancelled were never touched by the task.
+        self.assertIsNone(cancelled.reminder_sent_at)
+
+    def test_send_appointment_reminders_skips_patients_with_no_contact_email(self):
+        from django.core import mail
+
+        from .tasks import send_appointment_reminders
+
+        with platform_admin_context():
+            Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=2),
+                appointment_type="Psychiatric review",
+                status="SCHEDULED",
+            )
+
+        sent = send_appointment_reminders()
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_rescheduling_an_appointment_resets_its_reminder(self):
+        with platform_admin_context():
+            self.patient.contact_email = "grace@example.com"
+            self.patient.save(update_fields=["contact_email"])
+            appointment = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=2),
+                appointment_type="Psychiatric review",
+                status="SCHEDULED",
+                reminder_sent_at=timezone.now(),
+            )
+        new_time = (timezone.now() + timezone.timedelta(days=3)).isoformat()
+
+        response = self.client.patch(
+            reverse("appointment-detail", args=[appointment.id]),
+            {"scheduled_for": new_time},
+            **self.auth,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["reminder_sent_at"])
+
+    def test_updating_an_appointment_without_moving_it_keeps_its_reminder(self):
+        with platform_admin_context():
+            self.patient.contact_email = "grace@example.com"
+            self.patient.save(update_fields=["contact_email"])
+            appointment = Appointment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheduled_for=timezone.now() + timezone.timedelta(hours=2),
+                appointment_type="Psychiatric review",
+                status="SCHEDULED",
+                reminder_sent_at=timezone.now(),
+            )
+
+        response = self.client.patch(
+            reverse("appointment-detail", args=[appointment.id]),
+            {"notes": "Patient requested a reminder call too."},
+            **self.auth,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.data["reminder_sent_at"])
+
     def test_dashboard_summary_returns_real_counts(self):
         with platform_admin_context():
             Appointment.objects.create(
@@ -533,3 +771,44 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         self.assertEqual(response.data["registered_clients"], 1)
         self.assertEqual(response.data["appointments_today"], 1)
         self.assertEqual(response.data["active_admissions"], 0)
+
+    def test_dashboard_summary_includes_ward_occupancy_and_honest_fhir_status(self):
+        """
+        drifting-baking-falcon.md Phase 2 item 3 — bed/ward occupancy and an
+        honest (never-fabricated) FHIR transmission status.
+        """
+        from apps.dha_interop.models import FhirResourceCache
+        from apps.ipd_ward.models import Bed, Ward
+
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Female Ward")
+            Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="FW-01", status="OCCUPIED"
+            )
+            Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="FW-02", status="AVAILABLE"
+            )
+
+        response = self.client.get(reverse("clinical-dashboard-summary"), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["beds_total"], 2)
+        self.assertEqual(response.data["beds_occupied"], 1)
+        self.assertEqual(
+            response.data["ward_occupancy"],
+            [{"ward": "Female Ward", "occupied": 1, "total": 2}],
+        )
+        # No transmissions recorded yet for this org — must say so honestly,
+        # never fabricate a "healthy, synced N minutes ago" status.
+        self.assertEqual(response.data["fhir_status"]["configured"], False)
+
+        with platform_admin_context():
+            FhirResourceCache.objects.create(
+                organization_id=self.org.id,
+                resource_type="Bundle",
+                direction="OUTBOUND",
+                fhir_json={},
+                status="SENT",
+            )
+        response = self.client.get(reverse("clinical-dashboard-summary"), **self.auth)
+        self.assertTrue(response.data["fhir_status"]["configured"])
+        self.assertEqual(response.data["fhir_status"]["status"], "SENT")

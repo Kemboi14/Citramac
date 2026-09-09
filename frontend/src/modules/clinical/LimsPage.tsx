@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/useAuth";
 import { createEncounter } from "../../lib/clinicalApi";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   collectSpecimen,
   createLabOrder,
@@ -113,8 +114,7 @@ export function LimsPage() {
     }
   };
 
-  const submitResult = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submitResult = async () => {
     if (!accessToken || !order || !specimen) return;
     setError(null);
     setBusy(true);
@@ -123,6 +123,7 @@ export function LimsPage() {
       loadQueue();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't record the result.");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -271,7 +272,7 @@ export function LimsPage() {
 
           {specimen && !result?.is_validated && (
             <form
-              onSubmit={submitResult}
+              onSubmit={(e) => e.preventDefault()}
               className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
             >
               <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
@@ -313,9 +314,11 @@ export function LimsPage() {
                 />
                 Abnormal
               </label>
-              <button type="submit" disabled={busy} className={`${BUTTON_CLASS} mt-4`}>
-                {result ? "Update Result" : "Save Result"}
-              </button>
+              <div className="mt-4">
+                <SaveButton onSave={submitResult} disabled={busy}>
+                  {result ? "Update Result" : "Save Result"}
+                </SaveButton>
+              </div>
             </form>
           )}
 

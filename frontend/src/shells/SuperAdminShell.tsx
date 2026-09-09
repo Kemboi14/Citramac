@@ -18,6 +18,7 @@ export function SuperAdminShell() {
       userName={name}
       userRole="Super Admin"
       searchPlaceholder="Search organizations, branches, users…"
+      profilePath="/super-admin/profile"
       topbarRight={
         <TopbarActions
           pill={

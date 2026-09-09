@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router-dom";
-import { Menu, Search } from "lucide-react";
-import type { NavGroup } from "./navConfig";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { ChevronDown, LogOut, Menu, Search, UserRound } from "lucide-react";
+import type { NavGroup, NavItem } from "./navConfig";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
+import { useAuth } from "../auth/useAuth";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
 const DESKTOP_BREAKPOINT = 1024; // matches Tailwind's `lg`
@@ -33,6 +34,7 @@ export function AppShell({
   userRole,
   topbarRight,
   searchPlaceholder,
+  profilePath,
 }: {
   brandName: string;
   brandSub: string;
@@ -42,10 +44,27 @@ export function AppShell({
   userRole: string;
   topbarRight?: ReactNode;
   searchPlaceholder: string;
+  /** Portal-relative route to this shell's "My Profile" page — every
+   * portal gets one so every user, any role, can set their own avatar. */
+  profilePath: string;
 }) {
   const [collapsed, setCollapsed] = useState(readStoredCollapse);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const { avatarUrl, logout } = useAuth();
+  const navigate = useNavigate();
+  // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
+  // sub-screens) — keyed by label, collapsed by default. See navConfig.tsx.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (label: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   useEffect(() => {
     getPlatformBranding()
@@ -71,6 +90,21 @@ export function AppShell({
   };
 
   const closeMobile = () => setMobileOpen(false);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) setProfileMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [profileMenuOpen]);
+
+  const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="flex min-h-screen w-full">
@@ -134,7 +168,7 @@ export function AppShell({
                 if (item.soon) {
                   return (
                     <div
-                      key={item.to}
+                      key={item.label}
                       title={collapsed ? item.label : undefined}
                       className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#d6ede4] opacity-45 ${collapsed ? "justify-center" : ""}`}
                     >
@@ -150,46 +184,104 @@ export function AppShell({
                     </div>
                   );
                 }
+
+                if (item.children?.length) {
+                  const isOpen = expandedGroups.has(item.label);
+                  return (
+                    <div key={item.label} className="mb-0.5">
+                      <button
+                        type="button"
+                        title={collapsed ? item.label : undefined}
+                        onClick={() => !collapsed && toggleGroup(item.label)}
+                        aria-expanded={isOpen}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium text-[#d6ede4] transition-colors duration-150 hover:bg-white/[0.07] hover:text-white ${collapsed ? "justify-center" : ""}`}
+                      >
+                        <Icon className="h-[17px] w-[17px] flex-shrink-0" />
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1">{item.label}</span>
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+                            />
+                          </>
+                        )}
+                      </button>
+                      {!collapsed && isOpen && (
+                        <div className="mt-0.5 flex flex-col gap-0.5 pl-[17px]">
+                          {item.children.map((child) => (
+                            <ClinicalNavLeaf
+                              key={child.label}
+                              item={child}
+                              collapsed={false}
+                              onClick={closeMobile}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    // Exact match only — every entry here is its own distinct
-                    // screen, never a section header that should stay lit
-                    // while a nested child screen (with its own nav entry,
-                    // e.g. /clinical/ipd vs /clinical/ipd/nursing) is open.
-                    end
-                    title={collapsed ? item.label : undefined}
+                  <ClinicalNavLeaf
+                    key={item.label}
+                    item={item}
+                    collapsed={collapsed}
                     onClick={closeMobile}
-                    className={({ isActive }) =>
-                      `mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors duration-150 ${collapsed ? "justify-center" : ""} ${
-                        isActive
-                          ? "bg-[#eafaf4] font-semibold text-brand-green-dark"
-                          : "text-[#d6ede4] hover:bg-white/[0.07] hover:text-white"
-                      }`
-                    }
-                  >
-                    <Icon className="h-[17px] w-[17px] flex-shrink-0" />
-                    {!collapsed && item.label}
-                  </NavLink>
+                  />
                 );
               })}
             </div>
           ))}
         </nav>
 
-        <div
-          className={`flex items-center gap-2.5 border-t border-white/10 py-3.5 ${collapsed ? "justify-center px-2" : "px-4"}`}
-        >
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-white/25 bg-brand-green text-xs font-bold text-white">
-            {userInitials}
-          </div>
-          {!collapsed && (
-            <div className="overflow-hidden leading-tight">
-              <div className="truncate text-[12.5px] font-semibold text-white">{userName}</div>
-              <div className="truncate text-[10.5px] text-[#8fc9b3]">{userRole}</div>
+        <div ref={profileMenuRef} className="relative border-t border-white/10">
+          {profileMenuOpen && (
+            <div className="absolute bottom-full left-2 right-2 mb-1.5 animate-scale-in overflow-hidden rounded-[10px] border border-surface-border bg-white py-1.5 shadow-md">
+              <Link
+                to={profilePath}
+                onClick={() => setProfileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3.5 py-2.5 text-[12.5px] font-medium text-ink-700 hover:bg-surface-bg"
+              >
+                <UserRound className="h-4 w-4 text-ink-400" />
+                My Profile
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12.5px] font-medium text-status-red hover:bg-status-red-tint"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setProfileMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen}
+            className={`flex w-full items-center gap-2.5 py-3.5 transition-colors duration-150 hover:bg-white/[0.06] ${collapsed ? "justify-center px-2" : "px-4"}`}
+          >
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/25 bg-brand-green text-xs font-bold text-white">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                userInitials
+              )}
+            </div>
+            {!collapsed && (
+              <>
+                <div className="min-w-0 flex-1 overflow-hidden text-left leading-tight">
+                  <div className="truncate text-[12.5px] font-semibold text-white">{userName}</div>
+                  <div className="truncate text-[10.5px] text-[#8fc9b3]">{userRole}</div>
+                </div>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 flex-shrink-0 text-[#8fc9b3] transition-transform duration-150 ${profileMenuOpen ? "rotate-180" : ""}`}
+                />
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -222,5 +314,41 @@ export function AppShell({
         </main>
       </div>
     </div>
+  );
+}
+
+/** A single navigable leaf — either a top-level item or a nested child under an expandable group. */
+function ClinicalNavLeaf({
+  item,
+  collapsed,
+  onClick,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  const Icon = item.icon;
+  if (!item.to) return null;
+  return (
+    <NavLink
+      to={item.to}
+      // Exact match only — every entry here is its own distinct screen,
+      // never a section header that should stay lit while a nested child
+      // screen (with its own nav entry, e.g. /clinical/ipd vs
+      // /clinical/ipd/nursing) is open.
+      end
+      title={collapsed ? item.label : undefined}
+      onClick={onClick}
+      className={({ isActive }) =>
+        `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors duration-150 ${collapsed ? "justify-center" : ""} ${
+          isActive
+            ? "bg-[#eafaf4] font-semibold text-brand-green-dark"
+            : "text-[#d6ede4] hover:bg-white/[0.07] hover:text-white"
+        }`
+      }
+    >
+      <Icon className="h-[17px] w-[17px] flex-shrink-0" />
+      {!collapsed && item.label}
+    </NavLink>
   );
 }

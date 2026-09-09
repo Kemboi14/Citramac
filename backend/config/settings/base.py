@@ -213,6 +213,11 @@ UPLOAD_MAX_SIZE_BYTES = 30 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_SIZE_BYTES + (2 * 1024 * 1024)
 FILE_UPLOAD_MAX_MEMORY_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
+# Profile pictures (User.avatar, Patient.photo) are a much smaller, distinct
+# ceiling from general clinical-document uploads above — no reason to allow
+# a 30MB "avatar".
+AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── DRF / JWT (docs/05-AUTHENTICATION-FLOW.md §5.3, docs/10-API-SPECIFICATION.md) ──
@@ -275,7 +280,18 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.dha_interop.tasks.sync_national_drug_index",
         "schedule": crontab(hour=2, minute=30),
     },
+    # Appointments Calendar email reminders (docs/07-CLINICAL-MODULES-SPEC.md
+    # §7.1) — runs every 15 minutes so a reminder goes out close to the
+    # APPOINTMENT_REMINDER_HOURS_BEFORE mark, and quickly for same-day
+    # bookings made inside that window. See apps/client_registry/tasks.py.
+    "send-appointment-reminders": {
+        "task": "apps.client_registry.tasks.send_appointment_reminders",
+        "schedule": crontab(minute="*/15"),
+    },
 }
+
+# How far ahead of an appointment its one reminder email goes out.
+APPOINTMENT_REMINDER_HOURS_BEFORE = env.int("APPOINTMENT_REMINDER_HOURS_BEFORE", default=24)
 
 # ── Cache (rate limiting for the auth flow, docs/05-AUTHENTICATION-FLOW.md §5.5) ──
 CACHES = {

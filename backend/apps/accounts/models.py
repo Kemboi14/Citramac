@@ -150,6 +150,11 @@ class User(AbstractBaseUser):
     last_name = models.CharField(max_length=150, blank=True)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=32, blank=True)
+    # Self-service profile picture — every user, any role, any portal
+    # (Super Admin/Org Admin/Clinical Workspace) can set their own. Kept
+    # off the JWT (avatars can change without forcing a re-login) — fetched
+    # via MyProfileView instead.
+    avatar = models.ImageField(upload_to="avatars/users/%Y/%m/", null=True, blank=True)
 
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)

@@ -133,6 +133,81 @@ class FhirMapperAndHieClientTests(APITestCase):
         self.assertEqual(cache_entry.status, "SENT")
 
 
+class ClientHistoryFhirBundleTests(APITestCase):
+    """
+    docs/08-DHA-SHA-INTEGRATION.md §8.1 names `Observation` as a target
+    resource nothing constructed until this — closes that gap for Client
+    History's substance-use screening entries, per
+    /home/nick/.claude/plans/drifting-baking-falcon.md.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Faith",
+                last_name="Mwangi",
+                gender="FEMALE",
+                date_of_birth="1997-03-14",
+            )
+
+    def test_build_client_history_bundle_includes_condition_and_observation(self):
+        from apps.ccp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
+
+        from .fhir_mapper import build_client_history_bundle
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                presenting_problem="Persistent anxiety and sleep disturbance.",
+                status="SUBMITTED",
+            )
+            SubstanceUseEntry.objects.create(
+                organization=self.org,
+                assessment=assessment,
+                substance="Alcohol",
+                frequency="Weekly",
+                route="Oral",
+            )
+            bundle = build_client_history_bundle(assessment)
+
+        self.assertEqual(bundle["resourceType"], "Bundle")
+        self.assertEqual(bundle["type"], "document")
+        resource_types = [e["resource"]["resourceType"] for e in bundle["entry"]]
+        self.assertIn("Composition", resource_types)
+        self.assertIn("Patient", resource_types)
+        self.assertIn("Condition", resource_types)
+        self.assertIn("Observation", resource_types)
+
+        observation = next(
+            e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Observation"
+        )
+        self.assertEqual(observation["code"]["coding"][0]["system"], "http://loinc.org")
+        self.assertEqual(observation["valueCodeableConcept"]["text"], "Alcohol")
+
+    def test_build_client_history_bundle_without_substance_entries_still_builds(self):
+        from apps.ccp_program.models import BiopsychosocialAssessment
+
+        from .fhir_mapper import build_client_history_bundle
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org, patient=self.patient, status="DRAFT"
+            )
+            bundle = build_client_history_bundle(assessment)
+
+        self.assertEqual(bundle["resourceType"], "Bundle")
+        resource_types = [e["resource"]["resourceType"] for e in bundle["entry"]]
+        self.assertIn("Patient", resource_types)
+        self.assertIn("Composition", resource_types)
+        self.assertNotIn("Observation", resource_types)
+
+
 class TerminologySyncTests(APITestCase):
     """docs/08-DHA-SHA-INTEGRATION.md §8.2 — generic terminology sync job pattern."""
 

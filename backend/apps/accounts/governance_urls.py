@@ -11,5 +11,6 @@ router.register(r"platform/staff", views.PlatformStaffViewSet, basename="platfor
 urlpatterns = [
     path("permissions/", views.PermissionListView.as_view(), name="permission-list"),
     path("me/enabled-modules/", views.EnabledModulesView.as_view(), name="me-enabled-modules"),
+    path("me/profile/", views.MyProfileView.as_view(), name="me-profile"),
     path("", include(router.urls)),
 ]

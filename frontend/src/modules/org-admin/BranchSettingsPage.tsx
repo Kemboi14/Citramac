@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { KeyRound, Mail, MapPin, PlugZap, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   listBranches,
   setBranchCredentials,
@@ -18,8 +19,6 @@ import {
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
-const BUTTON_CLASS =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
 const SECTION_TITLE_CLASS = "mb-4 font-display text-base font-semibold text-ink-900";
 
@@ -174,23 +173,17 @@ export function BranchSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [togglingField, setTogglingField] = useState<string | null>(null);
 
   const [credentialValue, setCredentialValue] = useState("");
   const [credentialError, setCredentialError] = useState<string | null>(null);
-  const [credentialSaved, setCredentialSaved] = useState(false);
-  const [savingCredentials, setSavingCredentials] = useState(false);
 
   const [emailSettings, setEmailSettings] = useState<OrganizationEmailSettings | null>(null);
   const [emailForm, setEmailForm] = useState<EmailFormState | null>(null);
   const [emailLoadError, setEmailLoadError] = useState<string | null>(null);
   const [emailSaveError, setEmailSaveError] = useState<string | null>(null);
-  const [emailSaved, setEmailSaved] = useState(false);
-  const [savingEmail, setSavingEmail] = useState(false);
 
   const load = async () => {
     if (!accessToken) return;
@@ -229,12 +222,9 @@ export function BranchSettingsPage() {
       );
   }, [accessToken, claims?.organization_id]);
 
-  const saveEmailSettings = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveEmailSettings = async () => {
     if (!accessToken || !claims?.organization_id || !emailForm) return;
     setEmailSaveError(null);
-    setEmailSaved(false);
-    setSavingEmail(true);
     try {
       const updated = await updateOrganizationEmailSettings(accessToken, claims.organization_id, {
         email_host: emailForm.email_host,
@@ -249,26 +239,21 @@ export function BranchSettingsPage() {
       });
       setEmailSettings(updated);
       setEmailForm(emailFormFromSettings(updated));
-      setEmailSaved(true);
     } catch (err) {
       setEmailSaveError(
         err instanceof ApiError ? err.message : "Couldn't save email configuration.",
       );
-    } finally {
-      setSavingEmail(false);
+      throw err;
     }
   };
 
   const updateForm = (patch: Partial<FormState>) => {
     setForm((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSaved(false);
   };
 
-  const saveForm = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveForm = async () => {
     if (!accessToken || !branch || !form) return;
     setSaveError(null);
-    setSaving(true);
     try {
       const payload: Partial<Branch> = {
         name: form.name,
@@ -286,11 +271,9 @@ export function BranchSettingsPage() {
       const updated = await updateBranch(accessToken, branch.id, payload);
       setBranch(updated);
       setForm(formFromBranch(updated));
-      setSaved(true);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save branch settings.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -312,21 +295,16 @@ export function BranchSettingsPage() {
     }
   };
 
-  const saveCredentials = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveCredentials = async () => {
     if (!accessToken || !branch || !credentialValue) return;
     setCredentialError(null);
-    setCredentialSaved(false);
-    setSavingCredentials(true);
     try {
       await setBranchCredentials(accessToken, branch.id, credentialValue);
       setCredentialValue("");
-      setCredentialSaved(true);
       await load();
     } catch (err) {
       setCredentialError(err instanceof ApiError ? err.message : "Couldn't save credentials.");
-    } finally {
-      setSavingCredentials(false);
+      throw err;
     }
   };
 
@@ -372,17 +350,14 @@ export function BranchSettingsPage() {
               <StatPill label="CCP Registration" value={humanize(branch.ccp_registration_status)} />
             </div>
 
-            <form onSubmit={saveForm} className="flex flex-col gap-6">
+            <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-6">
               <div className={CARD_CLASS}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="font-display text-base font-semibold text-ink-900">
                     Basic Details
                   </h2>
                   <div className="flex items-center gap-3">
-                    {saved && <span className="text-sm font-medium text-brand-green">Saved</span>}
-                    <button type="submit" disabled={saving} className={BUTTON_CLASS}>
-                      {saving ? "Saving…" : "Save Changes"}
-                    </button>
+                    <SaveButton onSave={saveForm}>Save Changes</SaveButton>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -626,31 +601,23 @@ export function BranchSettingsPage() {
                   pendingLabel="Not configured"
                 />
               </div>
-              <form onSubmit={saveCredentials} className="flex flex-col gap-3">
+              <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
                 <label className={LABEL_CLASS}>
                   New Credentials
                   <input
                     type="password"
                     className={FIELD_CLASS}
                     value={credentialValue}
-                    onChange={(e) => {
-                      setCredentialValue(e.target.value);
-                      setCredentialSaved(false);
-                    }}
+                    onChange={(e) => setCredentialValue(e.target.value)}
                     placeholder="Paste SHA API credential string"
                     autoComplete="new-password"
                   />
                 </label>
-                <button
-                  type="submit"
-                  disabled={savingCredentials || !credentialValue}
-                  className={BUTTON_CLASS}
-                >
-                  {savingCredentials ? "Saving…" : "Save Credentials"}
-                </button>
-                {credentialSaved && (
-                  <span className="text-sm font-medium text-brand-green">Credentials saved</span>
-                )}
+                <div>
+                  <SaveButton onSave={saveCredentials} disabled={!credentialValue}>
+                    Save Credentials
+                  </SaveButton>
+                </div>
                 {credentialError && (
                   <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
                     {credentialError}
@@ -672,7 +639,7 @@ export function BranchSettingsPage() {
                 </p>
               )}
               {emailSettings && emailForm && (
-                <form onSubmit={saveEmailSettings} className="flex flex-col gap-3">
+                <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
                   <div className="mb-1">
                     <StatusPill
                       ok={emailSettings.has_email_credentials}
@@ -689,7 +656,6 @@ export function BranchSettingsPage() {
                       value={emailForm.email_host}
                       onChange={(e) => {
                         setEmailForm({ ...emailForm, email_host: e.target.value });
-                        setEmailSaved(false);
                       }}
                       placeholder="mail.yourdomain.org"
                     />
@@ -703,7 +669,6 @@ export function BranchSettingsPage() {
                         value={emailForm.email_port}
                         onChange={(e) => {
                           setEmailForm({ ...emailForm, email_port: e.target.value });
-                          setEmailSaved(false);
                         }}
                         placeholder="587"
                       />
@@ -716,7 +681,6 @@ export function BranchSettingsPage() {
                         value={emailForm.email_host_user}
                         onChange={(e) => {
                           setEmailForm({ ...emailForm, email_host_user: e.target.value });
-                          setEmailSaved(false);
                         }}
                         placeholder="notifications@yourdomain.org"
                       />
@@ -730,7 +694,6 @@ export function BranchSettingsPage() {
                       value={emailForm.email_host_password}
                       onChange={(e) => {
                         setEmailForm({ ...emailForm, email_host_password: e.target.value });
-                        setEmailSaved(false);
                       }}
                       placeholder={
                         emailSettings.has_email_credentials
@@ -752,7 +715,6 @@ export function BranchSettingsPage() {
                             email_use_tls: e.target.checked,
                             email_use_ssl: e.target.checked ? false : emailForm.email_use_ssl,
                           });
-                          setEmailSaved(false);
                         }}
                       />
                       Use TLS (port 587)
@@ -768,7 +730,6 @@ export function BranchSettingsPage() {
                             email_use_ssl: e.target.checked,
                             email_use_tls: e.target.checked ? false : emailForm.email_use_tls,
                           });
-                          setEmailSaved(false);
                         }}
                       />
                       Use SSL (port 465)
@@ -782,19 +743,13 @@ export function BranchSettingsPage() {
                       value={emailForm.email_from_address}
                       onChange={(e) => {
                         setEmailForm({ ...emailForm, email_from_address: e.target.value });
-                        setEmailSaved(false);
                       }}
                       placeholder="Your Organization <notifications@yourdomain.org>"
                     />
                   </label>
-                  <button type="submit" disabled={savingEmail} className={BUTTON_CLASS}>
-                    {savingEmail ? "Saving…" : "Save Email Configuration"}
-                  </button>
-                  {emailSaved && (
-                    <span className="text-sm font-medium text-brand-green">
-                      Email configuration saved
-                    </span>
-                  )}
+                  <div>
+                    <SaveButton onSave={saveEmailSettings}>Save Email Configuration</SaveButton>
+                  </div>
                   {emailSaveError && (
                     <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
                       {emailSaveError}

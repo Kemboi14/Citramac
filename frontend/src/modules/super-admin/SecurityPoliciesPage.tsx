@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { SaveButton } from "../../components/SaveButton";
 import {
   getSecurityPolicy,
   updateSecurityPolicy,
@@ -12,8 +13,6 @@ import {
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
-const BUTTON_CLASS =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
 type NumericFieldKey =
   | "minimum_password_length"
@@ -69,8 +68,6 @@ export function SecurityPoliciesPage() {
   const [complexity, setComplexity] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   const applyPolicy = (p: SecurityPolicy) => {
     setPolicy(p);
@@ -93,12 +90,9 @@ export function SecurityPoliciesPage() {
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     if (!accessToken || !policy) return;
     setError(null);
-    setSaved(false);
-    setSaving(true);
     try {
       const payload: Partial<SecurityPolicy> = {};
       NUMERIC_FIELDS.forEach(({ key }) => {
@@ -115,11 +109,9 @@ export function SecurityPoliciesPage() {
       }
       const updated = await updateSecurityPolicy(accessToken, payload);
       applyPolicy(updated);
-      setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save the security baseline.");
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -135,12 +127,6 @@ export function SecurityPoliciesPage() {
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
-      {saved && (
-        <p className="rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
-          Baseline saved.
-        </p>
-      )}
-
       {loading && !policy && <p className="text-sm text-ink-500">Loading policy…</p>}
 
       {policy && (
@@ -173,7 +159,7 @@ export function SecurityPoliciesPage() {
           </div>
 
           <form
-            onSubmit={submit}
+            onSubmit={(e) => e.preventDefault()}
             className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
           >
             <h2 className="mb-1 font-display text-base font-semibold text-ink-900">
@@ -206,9 +192,7 @@ export function SecurityPoliciesPage() {
               ))}
             </div>
             <div className="mt-5">
-              <button type="submit" disabled={saving} className={BUTTON_CLASS}>
-                {saving ? "Saving…" : "Save Baseline"}
-              </button>
+              <SaveButton onSave={submit}>Save Baseline</SaveButton>
             </div>
           </form>
         </>

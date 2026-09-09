@@ -8,8 +8,11 @@ export interface PatientListRow {
   first_name: string;
   last_name: string;
   middle_other_names: string;
+  photo: string | null;
   uhid_number: string;
   citramac_number: string;
+  upi: string;
+  national_id: string;
   gender: string;
   date_of_birth: string;
   age: number;
@@ -19,6 +22,82 @@ export interface PatientListRow {
   nationality: string;
   marital_status: string;
   patient_category: string;
+  contact_phone: string;
+  contact_email: string;
+}
+
+export interface EmergencyContact {
+  id: string;
+  patient: string;
+  name: string;
+  relationship: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
+export interface AllergyRecord {
+  id: string;
+  patient: string;
+  substance: string;
+  reaction: string;
+  severity: string;
+  noted_at: string;
+}
+
+export interface InsuranceCoverage {
+  id: string;
+  patient: string;
+  scheme_type: string;
+  policy_number: string;
+  corporate_account: string;
+  sha_verified: boolean;
+  sha_member_status: string;
+  sha_premium_compliant: boolean;
+  sha_last_checked_at: string | null;
+}
+
+/** Mirrors `PatientDetailSerializer` in full — every registration-modal field. */
+export interface PatientDetail {
+  id: string;
+  upi: string;
+  uhid_number: string;
+  citramac_number: string;
+  first_name: string;
+  last_name: string;
+  middle_other_names: string;
+  photo: string | null;
+  gender: string;
+  date_of_birth: string;
+  age: number;
+  marital_status: string;
+  nationality: string;
+  occupation: string;
+  employment_status: string;
+  living_with_disability: boolean;
+  national_id: string;
+  passport_number: string;
+  contact_phone: string;
+  contact_email: string;
+  address: string;
+  county: string;
+  next_of_kin: string | null;
+  allergy_status: string;
+  doctor: string | null;
+  doctor_name: string;
+  registered_at: string;
+  registered_by: string | null;
+  registered_by_name: string;
+  referral_source: string;
+  referral_mode: string;
+  referral_date: string | null;
+  patient_category: string;
+  insurer_details: string;
+  consent_data_sharing: boolean;
+  consent_captured_at: string | null;
+  emergency_contacts: EmergencyContact[];
+  allergy_records: AllergyRecord[];
+  insurance_coverages: InsuranceCoverage[];
 }
 
 export interface Paginated<T> {
@@ -40,6 +119,9 @@ export interface NewPatientPayload {
   date_of_birth: string;
   marital_status?: string;
   nationality?: string;
+  occupation?: string;
+  employment_status?: string;
+  living_with_disability?: boolean;
   uhid_number?: string;
   contact_phone?: string;
   contact_email?: string;
@@ -48,14 +130,76 @@ export interface NewPatientPayload {
   allergy_status?: string;
   patient_category?: string;
   referral_source?: string;
+  referral_mode?: string;
+  referral_date?: string;
+  insurer_details?: string;
+  doctor?: string;
 }
 
 export function createPatient(accessToken: string, payload: NewPatientPayload) {
-  return apiRequest<{ id: string }>("/patients/", { method: "POST", body: payload, accessToken });
+  return apiRequest<PatientDetail>("/patients/", { method: "POST", body: payload, accessToken });
+}
+
+export function updatePatient(
+  accessToken: string,
+  patientId: string,
+  payload: Partial<NewPatientPayload>,
+) {
+  return apiRequest<PatientDetail>(`/patients/${patientId}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
+const PATIENT_PHOTO_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+/** Separate multipart call — keeps `createPatient`/`updatePatient` plain-JSON. */
+export function uploadPatientPhoto(accessToken: string, patientId: string, photo: File) {
+  if (photo.size > PATIENT_PHOTO_MAX_SIZE_BYTES) {
+    throw new Error("Client photo must be 5MB or smaller.");
+  }
+  const body = new FormData();
+  body.set("photo", photo);
+  return apiRequest<PatientDetail>(`/patients/${patientId}/`, {
+    method: "PATCH",
+    body,
+    accessToken,
+  });
 }
 
 export function getPatient(accessToken: string, patientId: string) {
-  return apiRequest<Record<string, unknown>>(`/patients/${patientId}/`, { accessToken });
+  return apiRequest<PatientDetail>(`/patients/${patientId}/`, { accessToken });
+}
+
+export function createEmergencyContact(
+  accessToken: string,
+  patientId: string,
+  payload: {
+    name: string;
+    relationship?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  },
+) {
+  return apiRequest<EmergencyContact>(`/patients/${patientId}/emergency-contacts/`, {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
+export function createAllergyRecord(
+  accessToken: string,
+  patientId: string,
+  payload: { substance: string; reaction?: string; severity?: string },
+) {
+  return apiRequest<AllergyRecord>(`/patients/${patientId}/allergy-records/`, {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
 }
 
 export function createEncounter(accessToken: string, patientId: string, encounterType: string) {

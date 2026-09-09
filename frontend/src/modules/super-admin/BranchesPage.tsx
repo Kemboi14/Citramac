@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BedDouble, Building2, Landmark, Plus, Search, ShieldCheck } from "lucide-react";
+import { BedDouble, Building2, Landmark, Loader2, Plus, Search, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -269,8 +269,9 @@ export function BranchesPage() {
               type="submit"
               form={branchFormId}
               disabled={busy}
-              className={`${BUTTON_CLASS} flex-1`}
+              className={`${BUTTON_CLASS} flex-1 inline-flex items-center justify-center gap-2 transition-all duration-200`}
             >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {busy ? "Creating…" : "Create Branch"}
             </button>
           </>

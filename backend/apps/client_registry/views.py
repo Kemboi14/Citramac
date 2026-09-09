@@ -194,6 +194,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
 
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        new_scheduled_for = serializer.validated_data.get("scheduled_for")
+        if new_scheduled_for and new_scheduled_for != instance.scheduled_for:
+            serializer.save(reminder_sent_at=None)
+        else:
+            serializer.save()
+
 
 class AttachmentViewSet(viewsets.ModelViewSet):
     """
@@ -212,6 +220,8 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
         if params.get("patient"):
             queryset = queryset.filter(patient_id=params["patient"])
+        if params.get("admission"):
+            queryset = queryset.filter(admission_id=params["admission"])
         if params.get("category"):
             queryset = queryset.filter(category=params["category"])
         if params.get("status"):
@@ -256,21 +266,70 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
 class ClinicalDashboardSummaryView(APIView):
     """
-    Clinical Workspace dashboard — mockups/citramac_clinical_workspace.html.
-    Every figure here is a real, directly-derivable count; there is no
-    "documentation completeness %" style metric since nothing in the data
-    model can honestly compute one yet (same real-vs-stub discipline as the
-    SHA/IPRS verification stubs elsewhere — don't fabricate a positive-
-    looking number rather than admit the data isn't there).
+    Clinical Workspace dashboard — see the second (2026-09) clinical-
+    workspace mockup and /home/nick/.claude/plans/drifting-baking-falcon.md
+    Phase 2 item 3. Every figure here is a real, directly-derivable count;
+    there is no "documentation completeness %" style metric since nothing in
+    the data model can honestly compute one yet (same real-vs-stub
+    discipline as the SHA/IPRS verification stubs elsewhere — don't
+    fabricate a positive-looking number rather than admit the data isn't
+    there). `fhir_status` is likewise real: the most recent outbound
+    `FhirResourceCache` row for this org, or an honest "not yet configured"
+    state — never the mockup's fabricated "4 minutes ago".
     """
 
     def get(self, request):
-        from apps.ipd_ward.models import Admission
+        from apps.dha_interop.models import FhirResourceCache
+        from apps.ipd_ward.models import Admission, Bed, Ward
 
         today = timezone.localdate()
+        now = timezone.now()
+        organization_id = request.user.organization_id
+
         patients = Patient.objects.all()
         appointments_today = Appointment.objects.filter(scheduled_for__date=today)
+        appointments_remaining_today = appointments_today.filter(
+            scheduled_for__gte=now, status="SCHEDULED"
+        )
         active_admissions = Admission.objects.filter(status="ADMITTED")
+
+        beds = Bed.objects.select_related("ward").all()
+        beds_total = beds.count()
+        beds_occupied = beds.filter(status="OCCUPIED").count()
+
+        ward_occupancy = []
+        for ward in Ward.objects.all().order_by("name"):
+            ward_beds = [b for b in beds if b.ward_id == ward.id]
+            if not ward_beds:
+                continue
+            ward_occupancy.append(
+                {
+                    "ward": ward.name,
+                    "occupied": sum(1 for b in ward_beds if b.status == "OCCUPIED"),
+                    "total": len(ward_beds),
+                }
+            )
+
+        last_transmission = (
+            FhirResourceCache.objects.filter(organization_id=organization_id, direction="OUTBOUND")
+            .order_by("-created_at")
+            .first()
+        )
+        fhir_status = (
+            {
+                "configured": True,
+                "status": last_transmission.status,
+                "resource_type": last_transmission.resource_type,
+                "last_transmitted_at": last_transmission.created_at.isoformat(),
+            }
+            if last_transmission
+            else {
+                "configured": False,
+                "status": None,
+                "resource_type": None,
+                "last_transmitted_at": None,
+            }
+        )
 
         recent_patients = patients.order_by("-registered_at")[:5]
         recent_appointments = appointments_today.select_related("patient").order_by(
@@ -281,8 +340,13 @@ class ClinicalDashboardSummaryView(APIView):
             {
                 "registered_clients": patients.count(),
                 "appointments_today": appointments_today.count(),
+                "appointments_remaining_today": appointments_remaining_today.count(),
                 "active_admissions": active_admissions.count(),
+                "beds_occupied": beds_occupied,
+                "beds_total": beds_total,
+                "ward_occupancy": ward_occupancy,
                 "attachments_total": Attachment.objects.count(),
+                "fhir_status": fhir_status,
                 "recent_patients": PatientListSerializer(recent_patients, many=True).data,
                 "recent_appointments": AppointmentSerializer(recent_appointments, many=True).data,
             }

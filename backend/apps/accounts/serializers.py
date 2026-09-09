@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
@@ -154,6 +155,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "last_name",
             "email",
             "phone",
+            "avatar",
             "roles",
             "role_names",
             "organization",
@@ -165,10 +167,50 @@ class StaffSerializer(serializers.ModelSerializer):
             "is_on_duty",
             "last_login",
         ]
-        read_only_fields = ["last_login"]
+        # `avatar` is read-only here — it's self-service only (MyProfileView),
+        # never set by an Org/Platform Admin on someone else's behalf; this
+        # roster view just displays whatever the staff member has set.
+        read_only_fields = ["last_login", "avatar"]
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]
+
+
+class MyProfileSerializer(serializers.ModelSerializer):
+    """
+    Self-service "My Profile" — every authenticated user, any role, any
+    portal (Super Admin/Org Admin/Clinical Workspace), can view/update
+    their own name, phone and avatar. Deliberately excludes
+    roles/branch_access/is_active/staff_id/organization — those stay
+    governance-only, edited via StaffSerializer/PlatformStaffViewSet by an
+    admin, never by the user themself.
+    """
+
+    role_names = serializers.SerializerMethodField()
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "avatar",
+            "role_names",
+            "organization_name",
+        ]
+        read_only_fields = ["email"]
+
+    def get_role_names(self, obj):
+        return [role.name for role in obj.roles.all()]
+
+    def validate_avatar(self, value):
+        if value and value.size > settings.AVATAR_MAX_SIZE_BYTES:
+            max_mb = settings.AVATAR_MAX_SIZE_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f"Profile picture must be {max_mb}MB or smaller.")
+        return value
 
 
 class StaffInviteSerializer(serializers.Serializer):

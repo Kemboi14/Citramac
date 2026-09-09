@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,6 +14,7 @@ from apps.tenancy.context import platform_admin_context
 
 from .models import ActivationInvite, OneTimePassword, Permission, Role, User
 from .serializers import (
+    MyProfileSerializer,
     PermissionSerializer,
     RoleSerializer,
     StaffInviteSerializer,
@@ -306,6 +308,29 @@ class EnabledModulesView(APIView):
     def get(self, request):
         organization = request.user.organization
         return Response({"enabled_modules": organization.enabled_modules if organization else []})
+
+
+class MyProfileView(APIView):
+    """
+    `GET/PATCH /api/v1/me/profile/` — self-service profile for every
+    authenticated user regardless of role or portal (Super Admin/Org
+    Admin/Clinical Workspace), including uploading/replacing their own
+    avatar. See MyProfileSerializer's docstring for what's excluded and why.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        return Response(MyProfileSerializer(request.user, context={"request": request}).data)
+
+    def patch(self, request):
+        serializer = MyProfileSerializer(
+            request.user, data=request.data, partial=True, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 def _dispatch_invite_email(email, organization_name, token, organization_id=None):

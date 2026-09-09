@@ -16,6 +16,18 @@ def _extract_code(email_body):
     return email_body.split("code is ")[1].split(".")[0]
 
 
+def _make_test_png():
+    """A real, tiny, valid PNG — Pillow's ImageField validation rejects
+    hand-rolled byte strings that aren't genuinely decodable images."""
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), color="green").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 class FullActivationAndLoginFlowTests(APITestCase):
     """
     docs/11-ROADMAP-AND-PHASES.md Phase 1 exit criteria: "a Super Admin can
@@ -753,3 +765,92 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         )
         self.assertEqual(patch_response.status_code, 200, patch_response.data)
         self.assertEqual(patch_response.data["first_name"], "Updated")
+
+
+class MyProfileTests(APITestCase):
+    """
+    `/me/profile/` — self-service profile + avatar upload for every
+    authenticated user, any role, any portal. Part of
+    /home/nick/.claude/plans/drifting-baking-falcon.md's "every user must be
+    able to add their profile picture" follow-up.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.user = User.objects.create_user(
+                email="clinician@org.test",
+                password="Password123!",
+                organization=self.org,
+                first_name="Faith",
+                last_name="Mwangi",
+                is_active=True,
+            )
+        self.access, _ = issue_tokens(self.user)
+
+    def _auth(self):
+        return {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
+
+    def test_get_my_profile_returns_own_data_only(self):
+        response = self.client.get(reverse("me-profile"), **self._auth())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["email"], "clinician@org.test")
+        self.assertEqual(response.data["first_name"], "Faith")
+        self.assertIsNone(response.data["avatar"])
+
+    def test_patch_my_profile_updates_name_and_phone_but_not_email(self):
+        response = self.client.patch(
+            reverse("me-profile"),
+            {"first_name": "Faith N.", "phone": "0712345678", "email": "hijacked@evil.test"},
+            format="json",
+            **self._auth(),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["first_name"], "Faith N.")
+        self.assertEqual(response.data["phone"], "0712345678")
+        self.assertEqual(response.data["email"], "clinician@org.test")
+
+    def test_upload_avatar_returns_absolute_url(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        tiny_png = _make_test_png()
+        response = self.client.patch(
+            reverse("me-profile"),
+            {"avatar": SimpleUploadedFile("me.png", tiny_png, content_type="image/png")},
+            format="multipart",
+            **self._auth(),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["avatar"].startswith("http"))
+        self.assertIn("avatars/users/", response.data["avatar"])
+
+    def test_avatar_over_size_limit_is_rejected(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        tiny_png = _make_test_png()
+        with override_settings(AVATAR_MAX_SIZE_BYTES=10):
+            response = self.client.patch(
+                reverse("me-profile"),
+                {"avatar": SimpleUploadedFile("big.png", tiny_png, content_type="image/png")},
+                format="multipart",
+                **self._auth(),
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("avatar", response.data)
+
+    def test_cannot_set_roles_or_organization_via_my_profile(self):
+        """MyProfileSerializer deliberately excludes governance fields."""
+        response = self.client.patch(
+            reverse("me-profile"),
+            {"is_active": False, "roles": []},
+            format="json",
+            **self._auth(),
+        )
+        self.assertEqual(response.status_code, 200)
+        with platform_admin_context():
+            self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
