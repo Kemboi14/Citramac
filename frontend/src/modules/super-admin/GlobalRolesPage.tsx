@@ -13,6 +13,7 @@ import {
   type Staff,
   type StaffInvitePayload,
 } from "../../lib/governanceApi";
+import { listOrganizations, type Organization } from "../../lib/organizationsApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -39,6 +40,8 @@ export function GlobalRolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,10 +50,10 @@ export function GlobalRolesPage() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invite, setInvite] = useState<StaffInvitePayload>(EMPTY_INVITE);
 
-  const refresh = async () => {
+  const refresh = async (organizationId = selectedOrganizationId) => {
     if (!accessToken) return;
     const [roleRes, permissionRes, staffRes] = await Promise.all([
-      listRoles(accessToken),
+      listRoles(accessToken, organizationId || undefined),
       listPermissions(accessToken),
       listPlatformStaff(accessToken),
     ]);
@@ -63,12 +66,13 @@ export function GlobalRolesPage() {
   useEffect(() => {
     if (!accessToken) return;
     void Promise.resolve().then(() =>
-      refresh()
-        .then((loadedRoles) => {
-          const platformRoles = (loadedRoles ?? []).filter((r) => r.scope === "PLATFORM");
-          if (platformRoles.length > 0 && selectedRoleId === null) {
-            setSelectedRoleId(platformRoles[0].id);
-            setSelectedPermissionIds(platformRoles[0].permissions);
+      Promise.all([refresh(), listOrganizations(accessToken)])
+        .then(([loadedRoles, organizationRes]) => {
+          setOrganizations(organizationRes.results);
+          const visibleRoles = (loadedRoles ?? []).filter((role) => role.scope === "PLATFORM");
+          if (visibleRoles.length > 0) {
+            setSelectedRoleId(visibleRoles[0].id);
+            setSelectedPermissionIds(visibleRoles[0].permissions);
           }
         })
         .catch((err) =>
@@ -79,14 +83,36 @@ export function GlobalRolesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  const platformRoles = roles.filter((r) => r.scope === "PLATFORM");
+  const visibleRoles = selectedOrganizationId
+    ? roles
+    : roles.filter((role) => role.scope === "PLATFORM");
 
   const selectRole = (role: Role) => {
     setSelectedRoleId(role.id);
     setSelectedPermissionIds(role.permissions);
   };
 
-  const selectedRole = platformRoles.find((r) => r.id === selectedRoleId) ?? null;
+  const selectedRole = visibleRoles.find((role) => role.id === selectedRoleId) ?? null;
+
+  const changeOrganization = (organizationId: string) => {
+    setSelectedOrganizationId(organizationId);
+    setSelectedRoleId(null);
+    setSelectedPermissionIds([]);
+    setIsLoading(true);
+    setError(null);
+    void refresh(organizationId)
+      .then((loadedRoles) => {
+        const nextRole = loadedRoles?.[0];
+        if (nextRole) {
+          setSelectedRoleId(nextRole.id);
+          setSelectedPermissionIds(nextRole.permissions);
+        }
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Couldn't load organization roles."),
+      )
+      .finally(() => setIsLoading(false));
+  };
 
   const togglePermission = (permissionId: number) => {
     setSelectedPermissionIds((prev) =>
@@ -150,20 +176,43 @@ export function GlobalRolesPage() {
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
 
-      {isLoading && platformRoles.length === 0 && <p className="text-sm text-ink-500">Loading…</p>}
+      {isLoading && visibleRoles.length === 0 && <p className="text-sm text-ink-500">Loading…</p>}
 
-      {!isLoading && platformRoles.length === 0 && (
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
+        <label className={LABEL_CLASS}>
+          Role scope
+          <select
+            className={FIELD_CLASS}
+            value={selectedOrganizationId}
+            onChange={(event) => changeOrganization(event.target.value)}
+          >
+            <option value="">Platform roles</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organization.name} roles
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-sm text-ink-500">
+          {selectedOrganizationId
+            ? "Showing this organization's custom roles and available templates."
+            : "Showing platform roles."}
+        </p>
+      </div>
+
+      {!isLoading && visibleRoles.length === 0 && (
         <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <p className="text-sm text-ink-500">No platform roles have been configured yet.</p>
+          <p className="text-sm text-ink-500">No roles have been configured for this scope.</p>
         </div>
       )}
 
-      {platformRoles.length > 0 && (
+      {visibleRoles.length > 0 && (
         <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
           <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Roles</h2>
 
           <div className="flex flex-wrap gap-2">
-            {platformRoles.map((role) => (
+            {visibleRoles.map((role) => (
               <button
                 key={role.id}
                 type="button"
@@ -299,7 +348,7 @@ export function GlobalRolesPage() {
                 required
               >
                 <option value="">Select a role…</option>
-                {platformRoles.map((role) => (
+                {visibleRoles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
                   </option>
