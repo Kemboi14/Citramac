@@ -54,14 +54,13 @@ class RoleViewSet(viewsets.ModelViewSet):
         queryset = Role.objects.annotate(user_count=Count("users", distinct=True)).order_by("name")
         user = self.request.user
         if user.is_superuser:
-            # A Super Admin normally only manages platform-staff role
-            # templates here (see class docstring), but staffing a chosen
-            # organization (StaffViewSet.create) needs that org's own
-            # roles — same set an Org Admin of that org would see.
+            # Super Admin can inspect and manage the complete role catalog.
+            # An organization filter remains available for focused staffing
+            # workflows and returns that organization's roles plus templates.
             organization_id = self.request.query_params.get("organization")
             if organization_id:
                 return queryset.filter(models_q_org_or_template(organization_id))
-            return queryset.filter(scope=Role.SCOPE_PLATFORM, organization__isnull=True)
+            return queryset
         return queryset.filter(models_q_org_or_template(user.organization_id))
 
     def perform_create(self, serializer):

@@ -75,10 +75,10 @@ export function GlobalRolesPage() {
       Promise.all([refresh(), listOrganizations(accessToken)])
         .then(([loadedRoles, organizationRes]) => {
           setOrganizations(organizationRes.results);
-          const visibleRoles = (loadedRoles ?? []).filter((role) => role.scope === "PLATFORM");
-          if (visibleRoles.length > 0) {
-            setSelectedRoleId(visibleRoles[0].id);
-            setSelectedPermissionIds(visibleRoles[0].permissions);
+          const initialRole = loadedRoles?.[0];
+          if (initialRole) {
+            setSelectedRoleId(initialRole.id);
+            setSelectedPermissionIds(initialRole.permissions);
           }
         })
         .catch((err) =>
@@ -90,8 +90,8 @@ export function GlobalRolesPage() {
   }, [accessToken]);
 
   const visibleRoles = selectedOrganizationId
-    ? roles
-    : roles.filter((role) => role.scope === "PLATFORM");
+    ? roles.filter((role) => role.organization === selectedOrganizationId)
+    : roles;
 
   const selectRole = (role: Role) => {
     setSelectedRoleId(role.id);
@@ -206,7 +206,7 @@ export function GlobalRolesPage() {
             value={selectedOrganizationId}
             onChange={(event) => changeOrganization(event.target.value)}
           >
-            <option value="">Platform roles</option>
+            <option value="">All roles</option>
             {organizations.map((organization) => (
               <option key={organization.id} value={organization.id}>
                 {organization.name} roles
@@ -217,7 +217,7 @@ export function GlobalRolesPage() {
         <p className="text-sm text-ink-500">
           {selectedOrganizationId
             ? "Showing this organization's custom roles and available templates."
-            : "Showing platform roles."}
+            : "Showing all platform and organization roles."}
         </p>
       </div>
 
@@ -244,6 +244,7 @@ export function GlobalRolesPage() {
                 }`}
               >
                 {role.name}
+                {role.organization_name ? ` · ${role.organization_name}` : " · Platform"}
                 <span
                   className={`ml-1.5 text-xs ${
                     role.id === selectedRoleId ? "text-white/80" : "text-ink-500"

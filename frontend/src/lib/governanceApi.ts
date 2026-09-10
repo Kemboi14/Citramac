@@ -17,6 +17,7 @@ export interface Role {
   id: number;
   name: string;
   organization: string | null;
+  organization_name: string | null;
   scope: RoleScope;
   description: string;
   permissions: number[];

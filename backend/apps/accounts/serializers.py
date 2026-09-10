@@ -87,6 +87,7 @@ class RoleSerializer(serializers.ModelSerializer):
         queryset=Permission.objects.all(), many=True, required=False
     )
     user_count = serializers.SerializerMethodField()
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
 
     class Meta:
         model = Role
@@ -94,6 +95,7 @@ class RoleSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "organization",
+            "organization_name",
             "scope",
             "description",
             "permissions",

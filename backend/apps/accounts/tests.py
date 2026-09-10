@@ -472,13 +472,13 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertIn("Psychiatrist", names)
         self.assertNotIn("Support Agent", names)
 
-    def test_super_admin_sees_only_platform_roles(self):
+    def test_super_admin_sees_all_roles(self):
         response = self.client.get(
             reverse("role-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
         )
         names = {row["name"] for row in response.data["results"]}
         self.assertIn("Support Agent", names)
-        self.assertNotIn("Psychiatrist", names)
+        self.assertIn("Psychiatrist", names)
 
     def test_org_admin_can_create_custom_role_within_template_ceiling(self):
         allowed_permission = self.psychiatrist_template.permissions.first()
