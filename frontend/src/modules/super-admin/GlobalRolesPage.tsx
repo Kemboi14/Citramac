@@ -7,6 +7,8 @@ import {
   listPermissions,
   listPlatformStaff,
   listRoles,
+  listStaff,
+  updateStaff,
   updateRole,
   type Permission,
   type Role,
@@ -55,11 +57,15 @@ export function GlobalRolesPage() {
     const [roleRes, permissionRes, staffRes] = await Promise.all([
       listRoles(accessToken, organizationId || undefined),
       listPermissions(accessToken),
-      listPlatformStaff(accessToken),
+      organizationId ? listStaff(accessToken) : listPlatformStaff(accessToken),
     ]);
     setRoles(roleRes.results);
     setPermissions(permissionRes);
-    setStaff(staffRes.results);
+    setStaff(
+      organizationId
+        ? staffRes.results.filter((member) => member.organization === organizationId)
+        : staffRes.results,
+    );
     return roleRes.results;
   };
 
@@ -139,6 +145,20 @@ export function GlobalRolesPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save role permissions.");
       throw err;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const assignStaffRole = async (staffId: string, roleId: string) => {
+    if (!accessToken || !roleId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const updated = await updateStaff(accessToken, staffId, { roles: [Number(roleId)] });
+      setStaff((current) => current.map((member) => (member.id === staffId ? updated : member)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't assign this role.");
     } finally {
       setBusy(false);
     }
@@ -296,7 +316,9 @@ export function GlobalRolesPage() {
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex items-center justify-between px-6 pt-6">
-          <h2 className="font-display text-base font-semibold text-ink-900">Platform Staff</h2>
+          <h2 className="font-display text-base font-semibold text-ink-900">
+            {selectedOrganizationId ? "Organization Staff" : "Platform Staff"}
+          </h2>
           <button
             type="button"
             onClick={() => setShowInviteForm((prev) => !prev)}
@@ -366,7 +388,7 @@ export function GlobalRolesPage() {
             <tr>
               <th className="px-6 py-3">Name</th>
               <th className="px-6 py-3">Email</th>
-              <th className="px-6 py-3">Role(s)</th>
+              <th className="px-6 py-3">Assign Role</th>
               <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3">Last Login</th>
             </tr>
@@ -378,7 +400,21 @@ export function GlobalRolesPage() {
                   {s.first_name} {s.last_name}
                 </td>
                 <td className="px-6 py-3 text-ink-700">{s.email}</td>
-                <td className="px-6 py-3 text-ink-700">{s.role_names.join(", ") || "—"}</td>
+                <td className="px-6 py-3">
+                  <select
+                    className={FIELD_CLASS}
+                    value={s.roles[0] ?? ""}
+                    disabled={busy || visibleRoles.length === 0}
+                    onChange={(event) => void assignStaffRole(s.id, event.target.value)}
+                  >
+                    <option value="">No role</option>
+                    {visibleRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td className="px-6 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
