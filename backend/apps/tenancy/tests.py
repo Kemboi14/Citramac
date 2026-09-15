@@ -134,6 +134,13 @@ class OnboardTenantCommandTests(TestCase):
             )
             self.assertTrue(ActivationInvite.all_objects.filter(user=admin).exists())
 
+    def test_registers_admin_email_domain(self):
+        self._run(branch_name="Main Branch")
+
+        with platform_admin_context():
+            org = Organization.objects.get(slug="test-centre")
+        self.assertIn("test-centre.invalid", org.email_domains)
+
     def test_rerun_is_idempotent(self):
         self._run(branch_name="Main Branch")
         self._run(branch_name="Main Branch")
@@ -333,6 +340,9 @@ class OrganizationConsoleApiTests(APITestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["status"], Organization.STATUS_PENDING)
         self.assertEqual(response.data["org_type"], "SCHOOL")
+        with platform_admin_context():
+            org = Organization.objects.get(slug="greenview-primary")
+        self.assertIn("greenview.test", org.email_domains)
 
     def test_create_organization_with_subscription_and_branding(self):
         with platform_admin_context():
@@ -709,6 +719,22 @@ class InviteStaffCommandTests(TestCase):
             self.assertTrue(user.roles.filter(name="Doctor").exists())
             self.assertTrue(ActivationInvite.all_objects.filter(user=user).exists())
 
+    def test_registers_staff_email_domain(self):
+        call_command(
+            "invite_staff",
+            org_slug="existing-centre",
+            email="new.doctor@a-brand-new-domain.example",
+            first_name="Grace",
+            last_name="Otieno",
+            role="Doctor",
+            staff_id="",
+            branch_name="",
+        )
+
+        with platform_admin_context():
+            self.org.refresh_from_db()
+        self.assertIn("a-brand-new-domain.example", self.org.email_domains)
+
     def test_grants_branch_access_when_branch_name_given(self):
         call_command(
             "invite_staff",
@@ -926,3 +952,97 @@ class OrganizationEmailSettingsApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["email_host"], "mail.org-b.example")
+
+
+class OrganizationEmailDomainTests(TestCase):
+    """
+    Organization.email_domains drives tenant-branded login's discovery step
+    (apps.accounts.auth_views.TenantDiscoveryView) — these cover the fix for
+    real org members incorrectly failing that lookup: normalization on save
+    (a stored mixed-case domain used to never match the casefolded incoming
+    lookup) and register_email_domain() (auto-keeps the list in sync with
+    real staff instead of requiring an admin to edit it by hand).
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Domain Org", slug="domain-org", facility_type="CLINIC"
+            )
+
+    def test_save_normalizes_case_and_dedupes(self):
+        with platform_admin_context():
+            self.org.email_domains = ["Cafric.ORG", "cafric.org", " other.example "]
+            self.org.save()
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, ["cafric.org", "other.example"])
+
+    def test_register_email_domain_adds_new_domain(self):
+        with platform_admin_context():
+            self.org.register_email_domain("nurse@newdomain.example")
+            self.org.refresh_from_db()
+        self.assertIn("newdomain.example", self.org.email_domains)
+
+    def test_register_email_domain_is_idempotent_and_case_insensitive(self):
+        with platform_admin_context():
+            self.org.email_domains = ["cafric.org"]
+            self.org.save()
+            self.org.register_email_domain("doctor@Cafric.ORG")
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, ["cafric.org"])
+
+    def test_register_email_domain_ignores_blank_email(self):
+        with platform_admin_context():
+            self.org.register_email_domain("")
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, [])
+
+
+class BackfillEmailDomainsCommandTests(TestCase):
+    """apps/tenancy/management/commands/backfill_email_domains.py — the
+    retroactive fix for organizations onboarded before email_domains was
+    kept in sync automatically."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Legacy Org", slug="legacy-org", facility_type="CLINIC"
+            )
+            User.objects.create(
+                organization=self.org,
+                email="doctor@legacy-org.example",
+                first_name="Legacy",
+                last_name="Doctor",
+                is_active=True,
+            )
+            User.objects.create(
+                organization=self.org,
+                email="nurse@Legacy-Org.example",
+                first_name="Legacy",
+                last_name="Nurse",
+                is_active=False,
+            )
+
+    def test_backfills_domains_from_existing_staff(self):
+        call_command("backfill_email_domains")
+
+        with platform_admin_context():
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, ["legacy-org.example"])
+
+    def test_dry_run_changes_nothing(self):
+        call_command("backfill_email_domains", dry_run=True)
+
+        with platform_admin_context():
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, [])
+
+    def test_rerun_is_idempotent(self):
+        call_command("backfill_email_domains")
+        call_command("backfill_email_domains")
+
+        with platform_admin_context():
+            self.org.refresh_from_db()
+        self.assertEqual(self.org.email_domains, ["legacy-org.example"])

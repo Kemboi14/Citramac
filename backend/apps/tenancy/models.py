@@ -199,7 +199,41 @@ class Organization(TimestampedModel):
 
     def save(self, *args, **kwargs):
         self.is_active = self.status == self.STATUS_ACTIVE
+        if self.email_domains:
+            # Normalize on every save so a manually-typed "Cafric.org" in
+            # Django admin still matches TenantDiscoveryView's casefolded
+            # lookup (apps.accounts.auth_views._email_domain) — this field
+            # used to be written with no normalization at all, so mixed-case
+            # values already on a row would otherwise never match.
+            normalized = []
+            for domain in self.email_domains:
+                cleaned = domain.strip().casefold()
+                if cleaned and cleaned not in normalized:
+                    normalized.append(cleaned)
+            self.email_domains = normalized
         super().save(*args, **kwargs)
+
+    def register_email_domain(self, email):
+        """
+        Ensures this org's `email_domains` includes the domain of `email` —
+        call this whenever a real staff member (org_admin invite, staff
+        invite, onboard_tenant/invite_staff CLI) is provisioned for this
+        organization, so the tenant-branded login's discovery step
+        (TenantDiscoveryView, apps.accounts.auth_views) can actually find
+        this org for that person going forward instead of relying on an
+        admin to remember to edit `email_domains` by hand (or an org
+        created via the API, whose CreateOrganizationSerializer never had
+        an email_domains field at all). A no-op if the domain is already
+        registered (case-insensitively) — safe to call on every invite.
+        """
+        domain = (email or "").strip().rsplit("@", 1)[-1].casefold()
+        if not domain:
+            return
+        existing = {d.casefold() for d in self.email_domains}
+        if domain in existing:
+            return
+        self.email_domains = [*self.email_domains, domain]
+        self.save(update_fields=["email_domains"])
 
     @property
     def has_email_configured(self):

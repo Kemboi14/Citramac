@@ -228,6 +228,9 @@ class Command(BaseCommand):
                 "is_active": False,
             },
         )
+        # Keeps tenant-branded login's discovery step able to find this org
+        # for this person even when --email-domain wasn't passed.
+        organization.register_email_domain(email)
         if not created:
             self.stdout.write(f"User '{email}' already exists — leaving activation state untouched")
         else:

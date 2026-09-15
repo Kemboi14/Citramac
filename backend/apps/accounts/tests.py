@@ -524,6 +524,8 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             staff = User.objects.get(email="nurse@amani.test")
             self.assertFalse(staff.is_active)
             self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
+            self.org.refresh_from_db()
+        self.assertIn("amani.test", self.org.email_domains)
 
     def test_super_admin_can_create_staff_in_a_chosen_organization(self):
         response = self.client.post(
@@ -545,6 +547,8 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             self.assertEqual(staff.organization_id, self.org.id)
             self.assertFalse(staff.is_active)
             self.assertTrue(ActivationInvite.all_objects.filter(user=staff).exists())
+            self.org.refresh_from_db()
+        self.assertIn("amani.test", self.org.email_domains)
 
     def test_super_admin_staff_create_requires_an_organization(self):
         response = self.client.post(

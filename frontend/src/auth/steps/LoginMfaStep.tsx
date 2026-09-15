@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MfaChannel, MfaDeliveryMethod } from "../../lib/authApi";
 import { resendOtp as resendOtpApi } from "../../lib/authApi";
 import { ApiError } from "../../lib/apiClient";
+import type { AuthButtonStatus } from "./AuthCard";
 import { AuthButton, SecureFooter } from "./AuthCard";
 
 const RESEND_COOLDOWN_SECONDS = 45;
@@ -40,10 +41,17 @@ export function LoginMfaStep({
   const [activeChannel, setActiveChannel] = useState<MfaChannel>(initialChannel);
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState<AuthButtonStatus>("idle");
   const [isSwitching, setIsSwitching] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -127,14 +135,23 @@ export function LoginMfaStep({
       return;
     }
     setError(null);
-    setIsSubmitting(true);
+    setVerifyStatus("loading");
     try {
       await verify(otpToken, otp);
-      onSuccess();
+      if (!mountedRef.current) return;
+      // Brief checkmark pulse before navigating away, so the click's
+      // outcome is visible rather than the screen just changing instantly.
+      setVerifyStatus("success");
+      window.setTimeout(() => {
+        if (mountedRef.current) onSuccess();
+      }, 500);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
+      setVerifyStatus("error");
+      window.setTimeout(() => {
+        if (mountedRef.current) setVerifyStatus("idle");
+      }, 900);
     }
   };
 
@@ -224,8 +241,13 @@ export function LoginMfaStep({
               {cooldown > 0 ? `Resend in ${mm}:${ss}` : "Resend code"}
             </button>
           </p>
-          <AuthButton disabled={isSubmitting || otp.length !== 6}>
-            {isSubmitting ? "Verifying..." : "Verify"}
+          <AuthButton
+            status={verifyStatus}
+            disabled={otp.length !== 6}
+            loadingLabel="Verifying…"
+            successLabel="Verified"
+          >
+            Verify
           </AuthButton>
         </form>
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { Check, Loader2 } from "lucide-react";
 import { EyeIcon, EyeOffIcon, ShieldIcon } from "./icons";
 
 /** Shared card/form chrome for every auth-flow screen — design tokens per docs/03-DESIGN-SYSTEM.md. */
@@ -130,18 +131,65 @@ export function SecureFooter({ label, edgeClassName }: { label: string; edgeClas
   );
 }
 
+export type AuthButtonStatus = "idle" | "loading" | "success" | "error";
+
+/**
+ * `status` is optional and defaults to "idle" (plain label, identical to the
+ * old unanimated button) so every other caller in the auth flow keeps
+ * rendering exactly as before. Steps that want the animated
+ * spinner/checkmark/shake lifecycle (currently the OTP "Verify" screens)
+ * pass their own idle/loading/success/error state in — same status-machine
+ * shape as components/SaveButton.tsx, reused here rather than duplicated
+ * since AuthButton can't own the async call itself (the step's <form
+ * onSubmit> does, so Enter-to-submit keeps working).
+ */
 export function AuthButton({
   children,
   className,
+  status = "idle",
+  loadingLabel = "Verifying…",
+  successLabel = "Verified",
   ...props
-}: { children: ReactNode; className?: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+}: {
+  children: ReactNode;
+  className?: string;
+  status?: AuthButtonStatus;
+  loadingLabel?: ReactNode;
+  successLabel?: ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const shake = status === "error" ? "animate-shake" : "";
   return (
     <button
       {...props}
       type={props.type ?? "submit"}
-      className={`flex min-h-[44px] w-full items-center justify-center gap-2.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-60 ${className ?? ""}`}
+      disabled={props.disabled || status === "loading" || status === "success"}
+      className={`relative flex min-h-[44px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-60 ${shake} ${className ?? ""}`}
     >
-      {children}
+      <span
+        className={`flex items-center gap-2.5 transition-all duration-200 ${
+          status === "idle" || status === "error" ? "opacity-100" : "opacity-0"
+        } ${status === "loading" || status === "success" ? "absolute" : ""}`}
+      >
+        {children}
+      </span>
+      <span
+        className={`flex items-center gap-2 transition-all duration-200 ${
+          status === "loading" ? "opacity-100" : "pointer-events-none absolute opacity-0"
+        }`}
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {loadingLabel}
+      </span>
+      <span
+        className={`flex items-center gap-2 transition-all duration-200 ${
+          status === "success"
+            ? "scale-100 opacity-100"
+            : "pointer-events-none absolute scale-75 opacity-0"
+        }`}
+      >
+        <Check className="h-4 w-4" />
+        {successLabel}
+      </span>
     </button>
   );
 }

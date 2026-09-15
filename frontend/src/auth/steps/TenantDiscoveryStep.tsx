@@ -12,6 +12,14 @@ import { AlertTriangleIcon, ArrowRightIcon, MailIcon } from "./icons";
  * states from the mockups (citramac-tenant-discovery.html /
  * citramac-tenant-discovery-error.html) rather than two separate routes,
  * since they're the same form with a different result.
+ *
+ * `Organization.register_email_domain()` (backend) now auto-registers every
+ * real staff member's email domain the moment they're invited/onboarded, so
+ * a genuine org member should essentially never land on the "not found"
+ * state below — that state (and its "continue without an organisation"
+ * escape hatch) is really only for platform staff (Super Admin and other
+ * organization=None accounts, whose domain by definition isn't any
+ * tenant's) or a genuine typo in the email address.
  */
 export function TenantDiscoveryStep({
   onSuccess,
@@ -111,7 +119,7 @@ export function TenantDiscoveryStep({
               onClick={() => onSuccess(email.trim(), null)}
               className="mt-1 text-center text-xs font-medium text-ink-500 hover:text-brand-green-dark hover:underline"
             >
-              Continue without an organisation
+              I&rsquo;m platform staff — continue without an organisation
             </button>
           )}
         </form>

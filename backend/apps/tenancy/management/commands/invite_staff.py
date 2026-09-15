@@ -87,6 +87,10 @@ class Command(BaseCommand):
                 )
                 return
 
+            # Keeps tenant-branded login's discovery step able to find this
+            # org for this person automatically.
+            organization.register_email_domain(email)
+
             if branch is not None:
                 user.branch_access.add(branch)
             user.roles.add(role)

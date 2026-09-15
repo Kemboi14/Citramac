@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resendOtp } from "../../lib/authApi";
 import { ApiError } from "../../lib/apiClient";
+import type { AuthButtonStatus } from "./AuthCard";
 import { AuthButton, AuthCard, AuthField } from "./AuthCard";
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -22,8 +23,15 @@ export function OtpStep<T>({
   const [otpToken, setOtpToken] = useState(initialOtpToken);
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState<AuthButtonStatus>("idle");
   const [cooldown, setCooldown] = useState(0);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -34,14 +42,21 @@ export function OtpStep<T>({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    setIsSubmitting(true);
+    setVerifyStatus("loading");
     try {
       const result = await verify(otpToken, otp);
-      onSuccess(result);
+      if (!mountedRef.current) return;
+      setVerifyStatus("success");
+      window.setTimeout(() => {
+        if (mountedRef.current) onSuccess(result);
+      }, 500);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
+      setVerifyStatus("error");
+      window.setTimeout(() => {
+        if (mountedRef.current) setVerifyStatus("idle");
+      }, 900);
     }
   };
 
@@ -85,8 +100,8 @@ export function OtpStep<T>({
         onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
         placeholder="123456"
       />
-      <AuthButton disabled={isSubmitting || otp.length !== 6}>
-        {isSubmitting ? "Verifying…" : "Verify"}
+      <AuthButton status={verifyStatus} disabled={otp.length !== 6}>
+        Verify
       </AuthButton>
     </AuthCard>
   );

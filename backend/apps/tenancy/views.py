@@ -117,6 +117,13 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 phone=org_admin_data.get("phone", ""),
                 is_active=False,
             )
+            # CreateOrganizationSerializer has no email_domains field, so
+            # without this a brand-new org created through this screen would
+            # never resolve on the tenant-branded login's discovery step
+            # (apps.accounts.auth_views.TenantDiscoveryView) for anyone,
+            # including its own Org Admin, until someone remembered to add
+            # it by hand in Django admin.
+            organization.register_email_domain(org_admin.email)
 
             org_admin_role = Role.objects.filter(
                 name="Org Admin", organization__isnull=True

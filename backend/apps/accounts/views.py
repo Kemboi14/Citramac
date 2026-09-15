@@ -167,6 +167,12 @@ class StaffViewSet(viewsets.ModelViewSet):
                 staff_id=data.get("staff_id", ""),
                 is_active=False,
             )
+            # Keeps tenant-branded login's discovery step
+            # (apps.accounts.auth_views.TenantDiscoveryView) able to find
+            # this org for every real staff member automatically, rather
+            # than depending on Organization.email_domains being kept
+            # manually in sync by an admin.
+            organization.register_email_domain(staff.email)
             staff.roles.add(data["role"])
             if data.get("primary_branch"):
                 staff.primary_branch = data["primary_branch"]
