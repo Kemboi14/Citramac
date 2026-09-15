@@ -280,6 +280,31 @@ export function updateOrganizationSmsSettings(
   );
 }
 
+export interface SmsTestResult {
+  success: boolean;
+  message: string;
+}
+
+export interface SmsTestPayload {
+  phone: string;
+  sender_id?: string;
+  client_id?: string;
+  access_key?: string;
+  api_key?: string;
+}
+
+export function testOrganizationSmsSettings(
+  accessToken: string,
+  organizationId: string,
+  payload: SmsTestPayload,
+) {
+  return apiRequest<SmsTestResult>(`/platform/organizations/${organizationId}/sms-settings/test/`, {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
 // Super Admin's platform-wide SMS gateway fallback (Settings screen) — used
 // for any tenant that hasn't configured its own.
 export interface PlatformSmsSettings {
@@ -308,6 +333,14 @@ export function updatePlatformSmsSettings(
 ) {
   return apiRequest<PlatformSmsSettings>("/platform/sms-settings/", {
     method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
+export function testPlatformSmsSettings(accessToken: string, payload: SmsTestPayload) {
+  return apiRequest<SmsTestResult>("/platform/sms-settings/test/", {
+    method: "POST",
     body: payload,
     accessToken,
   });

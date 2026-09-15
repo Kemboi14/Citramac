@@ -13,6 +13,7 @@ import {
 import {
   getOrganizationEmailSettings,
   getOrganizationSmsSettings,
+  testOrganizationSmsSettings,
   updateOrganizationEmailSettings,
   updateOrganizationSmsSettings,
   type OrganizationEmailSettings,
@@ -214,6 +215,10 @@ export function BranchSettingsPage() {
   const [smsForm, setSmsForm] = useState<SmsFormState | null>(null);
   const [smsLoadError, setSmsLoadError] = useState<string | null>(null);
   const [smsSaveError, setSmsSaveError] = useState<string | null>(null);
+  const [smsTestPhone, setSmsTestPhone] = useState("");
+  const [smsTestResult, setSmsTestResult] = useState<{ success: boolean; message: string } | null>(
+    null,
+  );
 
   const load = async () => {
     if (!accessToken) return;
@@ -304,6 +309,27 @@ export function BranchSettingsPage() {
       setSmsForm(smsFormFromSettings(updated));
     } catch (err) {
       setSmsSaveError(err instanceof ApiError ? err.message : "Couldn't save SMS configuration.");
+      throw err;
+    }
+  };
+
+  const testSmsSettings = async () => {
+    if (!accessToken || !claims?.organization_id || !smsForm) return;
+    setSmsTestResult(null);
+    try {
+      const result = await testOrganizationSmsSettings(accessToken, claims.organization_id, {
+        phone: smsTestPhone,
+        sender_id: smsForm.sms_sender_id,
+        client_id: smsForm.sms_client_id,
+        ...(smsForm.sms_access_key ? { access_key: smsForm.sms_access_key } : {}),
+        ...(smsForm.sms_api_key ? { api_key: smsForm.sms_api_key } : {}),
+      });
+      setSmsTestResult(result);
+      if (!result.success) throw new Error(result.message);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSmsTestResult({ success: false, message: err.message });
+      }
       throw err;
     }
   };
@@ -908,6 +934,45 @@ export function BranchSettingsPage() {
                       {smsSaveError}
                     </p>
                   )}
+
+                  <div className="mt-2 border-t border-surface-border pt-4">
+                    <p className="mb-2 text-xs text-ink-500">
+                      Send a real test SMS to confirm Onfon is reachable with the values above — the
+                      number you registered with Onfon works well for this.
+                    </p>
+                    <label className={LABEL_CLASS}>
+                      Test Phone Number
+                      <input
+                        type="text"
+                        className={FIELD_CLASS}
+                        value={smsTestPhone}
+                        onChange={(e) => setSmsTestPhone(e.target.value)}
+                        placeholder="07XXXXXXXX"
+                      />
+                    </label>
+                    <div className="mt-3">
+                      <SaveButton
+                        onSave={testSmsSettings}
+                        variant="ghost"
+                        disabled={!smsTestPhone.trim()}
+                        savingLabel="Sending…"
+                        savedLabel="Sent"
+                      >
+                        Send Test SMS
+                      </SaveButton>
+                    </div>
+                    {smsTestResult && (
+                      <p
+                        className={`mt-2 rounded-sm px-3 py-2 text-sm ${
+                          smsTestResult.success
+                            ? "bg-brand-green-tint text-brand-green-dark"
+                            : "bg-status-red-tint text-status-red"
+                        }`}
+                      >
+                        {smsTestResult.message}
+                      </p>
+                    )}
+                  </div>
                 </form>
               )}
             </div>

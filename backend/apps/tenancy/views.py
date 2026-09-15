@@ -13,7 +13,9 @@ from rest_framework.views import APIView
 from apps.accounts.models import ActivationInvite, Role, User
 from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
 from apps.ipd_ward.models import Bed
+from apps.notifications.sms import resolve_credentials_with_overrides, test_sms_connection
 from apps.tenancy.context import platform_admin_context
+from apps.tenancy.crypto import decrypt_value
 
 from .models import (
     Branch,
@@ -382,6 +384,43 @@ class PlatformSmsSettingsView(APIView):
         return Response(serializer.data)
 
 
+class PlatformSmsTestView(APIView):
+    """
+    "Test connection" button on the Super Admin SMS Settings screen — sends
+    a real one-off SMS via Onfon using the platform-wide fallback
+    credentials, so an admin can confirm Onfon is reachable (and see
+    exactly which credential is wrong, if not) before any tenant ends up
+    depending on this for OTP delivery. Accepts optional sender_id/
+    client_id/access_key/api_key overrides in the body so unsaved form
+    edits can be tested without a PATCH first — same "blank keeps the
+    saved value" semantics as the settings PATCH itself.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def post(self, request):
+        phone = (request.data.get("phone") or "").strip()
+        if not phone:
+            return Response({"detail": "phone is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        sms_settings = PlatformSmsSettings.get_solo()
+        credentials = resolve_credentials_with_overrides(
+            sms_settings.sender_id,
+            sms_settings.client_id,
+            decrypt_value(sms_settings.access_key_encrypted),
+            decrypt_value(sms_settings.api_key_encrypted),
+            request.data,
+        )
+        if credentials is None:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Sender ID, Client ID, Access Key and API Key are all required.",
+                }
+            )
+        return Response(test_sms_connection(credentials, phone))
+
+
 class OrganizationSmsSettingsView(APIView):
     """
     Self-service Onfon Media SMS gateway configuration for a single
@@ -413,6 +452,42 @@ class OrganizationSmsSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class OrganizationSmsTestView(APIView):
+    """
+    "Test connection" button on the Org Admin Branch Settings > SMS
+    Configuration card — sends a real one-off SMS via Onfon using this
+    organization's own gateway credentials. Same unsaved-edit-override and
+    object-level access rules as OrganizationSmsSettingsView.
+    """
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+
+    def post(self, request, pk):
+        with platform_admin_context():
+            organization = generics.get_object_or_404(Organization, pk=pk)
+        self.check_object_permissions(request, organization)
+
+        phone = (request.data.get("phone") or "").strip()
+        if not phone:
+            return Response({"detail": "phone is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        credentials = resolve_credentials_with_overrides(
+            organization.sms_sender_id,
+            organization.sms_client_id,
+            decrypt_value(organization.sms_access_key_encrypted),
+            decrypt_value(organization.sms_api_key_encrypted),
+            request.data,
+        )
+        if credentials is None:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Sender ID, Client ID, Access Key and API Key are all required.",
+                }
+            )
+        return Response(test_sms_connection(credentials, phone))
 
 
 class BranchViewSet(viewsets.ModelViewSet):

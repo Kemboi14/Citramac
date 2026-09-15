@@ -96,24 +96,19 @@ def get_sms_credentials(organization=None):
     )
 
 
-def send_sms(phone, message, organization=None):
+def _post_to_onfon(credentials, phone, message):
     """
-    Sends one SMS via Onfon Media's SendBulkSMS API. Resolves credentials
-    with get_sms_credentials() first — if nothing is configured anywhere,
-    logs a structured, code-free stub event (same honest-stub posture the
-    OTP-over-SMS task had before any gateway was wired up) and returns
-    False rather than raising, since callers (OTP dispatch, appointment
-    reminders) always have another channel or can simply skip a reminder.
+    The actual Onfon SendBulkSMS HTTP call, factored out of send_sms so the
+    "Test connection" button (test_sms_connection, below) can reuse it and
+    get back *why* a send failed instead of a bare boolean — a masked
+    True/False on a credentials-test screen tells an admin nothing about
+    whether the Sender ID, Client ID, Access Key or API Key is the one
+    that's wrong.
 
-    Returns True once Onfon accepts the message (ErrorCode 0), False on any
-    failure (not configured, network error, or Onfon rejecting the send).
+    Returns (ok, detail) — detail is a JSON-safe dict describing the
+    outcome, shaped differently per failure reason but always carrying
+    enough to log or show to an admin.
     """
-    phone_last4 = phone[-4:] if phone else ""
-    credentials = get_sms_credentials(organization)
-    if credentials is None:
-        logger.info("sms_stub_dispatch", phone_last4=phone_last4)
-        return False
-
     to = normalize_msisdn(phone)
     payload = {
         "SenderId": credentials["sender_id"],
@@ -132,21 +127,119 @@ def send_sms(phone, message, organization=None):
         response = requests.post(
             ONFON_SEND_URL, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS
         )
-        response.raise_for_status()
+    except requests.RequestException as exc:
+        return False, {"reason": "network_error", "detail": str(exc)}
+
+    try:
         data = response.json()
-    except (requests.RequestException, ValueError) as exc:
-        logger.error("sms_send_failed", error=str(exc), phone_last4=phone_last4)
-        return False
+    except ValueError:
+        return False, {
+            "reason": "invalid_response",
+            "status_code": response.status_code,
+            "detail": response.text[:500],
+        }
 
     error_code = data.get("ErrorCode")
     if error_code not in (0, "0"):
-        logger.error(
-            "sms_send_rejected",
-            error_code=error_code,
-            error_description=data.get("ErrorDescription"),
-            phone_last4=phone_last4,
-        )
+        return False, {
+            "reason": "rejected",
+            "error_code": error_code,
+            "error_description": data.get("ErrorDescription"),
+            "status_code": response.status_code,
+        }
+
+    if not response.ok:
+        return False, {"reason": "http_error", "status_code": response.status_code}
+
+    return True, {"error_code": error_code, "status_code": response.status_code}
+
+
+def send_sms(phone, message, organization=None):
+    """
+    Sends one SMS via Onfon Media's SendBulkSMS API. Resolves credentials
+    with get_sms_credentials() first — if nothing is configured anywhere,
+    logs a structured, code-free stub event (same honest-stub posture the
+    OTP-over-SMS task had before any gateway was wired up) and returns
+    False rather than raising, since callers (OTP dispatch, appointment
+    reminders) always have another channel or can simply skip a reminder.
+
+    Returns True once Onfon accepts the message (ErrorCode 0), False on any
+    failure (not configured, network error, or Onfon rejecting the send).
+    """
+    phone_last4 = phone[-4:] if phone else ""
+    credentials = get_sms_credentials(organization)
+    if credentials is None:
+        logger.info("sms_stub_dispatch", phone_last4=phone_last4)
+        return False
+
+    ok, detail = _post_to_onfon(credentials, phone, message)
+    if not ok:
+        if detail["reason"] in ("network_error", "invalid_response"):
+            logger.error("sms_send_failed", error=detail.get("detail"), phone_last4=phone_last4)
+        else:
+            logger.error(
+                "sms_send_rejected",
+                error_code=detail.get("error_code"),
+                error_description=detail.get("error_description"),
+                phone_last4=phone_last4,
+            )
         return False
 
     logger.info("sms_sent", phone_last4=phone_last4)
     return True
+
+
+def resolve_credentials_with_overrides(sender_id, client_id, access_key, api_key, overrides):
+    """
+    Merges a saved (already-decrypted) credential set with any non-blank
+    values from a request body — lets the SMS settings screen's "Test
+    connection" button test values an admin just typed but hasn't saved
+    yet, falling back to the stored value for anything left blank. Same
+    "blank means keep the current one" semantics as the settings PATCH
+    endpoints. Returns None if the merged set is still incomplete.
+    """
+
+    def pick(saved, key):
+        value = overrides.get(key)
+        return value if value else saved
+
+    return _onfon_credentials(
+        pick(sender_id, "sender_id"),
+        pick(client_id, "client_id"),
+        pick(access_key, "access_key"),
+        pick(api_key, "api_key"),
+    )
+
+
+def test_sms_connection(credentials, phone):
+    """
+    Sends a real, one-off test SMS via Onfon using the given credentials —
+    backs the SMS settings screen's "Test connection" button so an admin can
+    confirm Onfon is reachable (and which credential is wrong, if not)
+    before relying on it for OTP delivery. Returns a JSON-safe dict with a
+    human-readable `message` describing exactly what Onfon said.
+    """
+    ok, detail = _post_to_onfon(credentials, phone, "Citramac SMS gateway test message.")
+    if ok:
+        return {"success": True, "message": "Onfon accepted the test message."}
+
+    reason = detail.get("reason")
+    if reason == "network_error":
+        return {"success": False, "message": f"Could not reach Onfon: {detail.get('detail')}"}
+    if reason == "invalid_response":
+        return {
+            "success": False,
+            "message": f"Onfon returned an unexpected response (HTTP {detail.get('status_code')}).",
+        }
+    if reason == "rejected":
+        description = detail.get("error_description") or "no description given"
+        return {
+            "success": False,
+            "message": (
+                f"Onfon rejected the message — ErrorCode {detail.get('error_code')}: {description}."
+            ),
+        }
+    return {
+        "success": False,
+        "message": f"Onfon returned HTTP {detail.get('status_code')}.",
+    }

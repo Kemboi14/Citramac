@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
 import {
   getPlatformSmsSettings,
+  testPlatformSmsSettings,
   updatePlatformSmsSettings,
   type PlatformSmsSettings,
 } from "../../lib/organizationsApi";
@@ -65,6 +66,8 @@ export function PlatformSmsSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -93,6 +96,27 @@ export function PlatformSmsSettingsPage() {
       setForm(formFromSettings(updated));
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save SMS settings.");
+      throw err;
+    }
+  };
+
+  const runTest = async () => {
+    if (!accessToken || !form) return;
+    setTestResult(null);
+    try {
+      const result = await testPlatformSmsSettings(accessToken, {
+        phone: testPhone,
+        sender_id: form.sender_id,
+        client_id: form.client_id,
+        ...(form.access_key ? { access_key: form.access_key } : {}),
+        ...(form.api_key ? { api_key: form.api_key } : {}),
+      });
+      setTestResult(result);
+      if (!result.success) throw new Error(result.message);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setTestResult({ success: false, message: err.message });
+      }
       throw err;
     }
   };
@@ -200,6 +224,45 @@ export function PlatformSmsSettingsPage() {
                   {saveError}
                 </p>
               )}
+
+              <div className="mt-2 border-t border-surface-border pt-4">
+                <p className="mb-2 text-xs text-ink-500">
+                  Send a real test SMS to confirm Onfon is reachable with the values above — the
+                  number registered with Onfon works well for this.
+                </p>
+                <label className={LABEL_CLASS}>
+                  Test Phone Number
+                  <input
+                    type="text"
+                    className={FIELD_CLASS}
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    placeholder="07XXXXXXXX"
+                  />
+                </label>
+                <div className="mt-3">
+                  <SaveButton
+                    onSave={runTest}
+                    variant="ghost"
+                    disabled={!testPhone.trim()}
+                    savingLabel="Sending…"
+                    savedLabel="Sent"
+                  >
+                    Send Test SMS
+                  </SaveButton>
+                </div>
+                {testResult && (
+                  <p
+                    className={`mt-2 rounded-sm px-3 py-2 text-sm ${
+                      testResult.success
+                        ? "bg-brand-green-tint text-brand-green-dark"
+                        : "bg-status-red-tint text-status-red"
+                    }`}
+                  >
+                    {testResult.message}
+                  </p>
+                )}
+              </div>
             </form>
           </div>
 
