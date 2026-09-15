@@ -171,6 +171,32 @@ class Organization(TimestampedModel):
         help_text="e.g. 'Cafric Demo <notifications@cafric.org>'. Blank uses the platform default.",
     )
 
+    # Self-service SMS gateway (Org Admin's own "SMS Configuration" settings
+    # screen, right next to Email Configuration) — used for OTP-over-SMS
+    # (apps.accounts.auth_views) and appointment reminders
+    # (apps.client_registry.tasks.send_appointment_reminders). Onfon Media
+    # (https://www.docs.onfonmedia.co.ke/rest/sms/) is the only gateway
+    # wired up today (sms_provider exists so a second gateway can be added
+    # later without another migration); blank sms_sender_id/sms_client_id
+    # means "not configured", same fallback semantics as email_host: falls
+    # back to PlatformSmsSettings, then settings.py's ONFON_* env vars, then
+    # an honest stub log — see apps.notifications.sms.
+    SMS_PROVIDER_CHOICES = [("onfon", "Onfon Media")]
+    sms_provider = models.CharField(max_length=20, choices=SMS_PROVIDER_CHOICES, default="onfon")
+    sms_sender_id = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Onfon 'Sender ID' — must be an Approved Sender ID on your Onfon account.",
+    )
+    sms_client_id = models.CharField(max_length=255, blank=True, help_text="Onfon 'Client ID'.")
+    # Fernet-encrypted (apps/tenancy/crypto.py), same pattern as
+    # email_host_password_encrypted — never round-tripped in plaintext via
+    # the API.
+    sms_access_key_encrypted = models.TextField(
+        blank=True, help_text="Onfon 'Access Key' (sent as the AccessKey header)."
+    )
+    sms_api_key_encrypted = models.TextField(blank=True, help_text="Onfon 'API Key'.")
+
     def save(self, *args, **kwargs):
         self.is_active = self.status == self.STATUS_ACTIVE
         super().save(*args, **kwargs)
@@ -182,6 +208,14 @@ class Organization(TimestampedModel):
     @property
     def has_email_credentials(self):
         return bool(self.email_host_password_encrypted)
+
+    @property
+    def has_sms_configured(self):
+        return bool(self.sms_sender_id and self.sms_client_id)
+
+    @property
+    def has_sms_credentials(self):
+        return bool(self.sms_access_key_encrypted and self.sms_api_key_encrypted)
 
     def __str__(self):
         return self.name
@@ -259,6 +293,48 @@ class PlatformEmailSettings(models.Model):
 
     def __str__(self):
         return "Platform email settings"
+
+
+class PlatformSmsSettings(models.Model):
+    """
+    Singleton (always pk=1): the platform-wide default Onfon Media SMS
+    gateway credentials, used as the fallback for any tenant that hasn't
+    configured its own via Organization.sms_* — see apps.notifications.sms
+    for the org -> platform -> settings.py resolution order. Same singleton
+    pattern as PlatformEmailSettings.
+    """
+
+    provider = models.CharField(
+        max_length=20, choices=Organization.SMS_PROVIDER_CHOICES, default="onfon"
+    )
+    sender_id = models.CharField(max_length=32, blank=True)
+    client_id = models.CharField(max_length=255, blank=True)
+    # Fernet-encrypted (apps/tenancy/crypto.py).
+    access_key_encrypted = models.TextField(blank=True)
+    api_key_encrypted = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name_plural = "platform sms settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def has_credentials(self):
+        return bool(self.access_key_encrypted and self.api_key_encrypted)
+
+    def __str__(self):
+        return "Platform SMS settings"
 
 
 class Branch(TenantScopedModel):

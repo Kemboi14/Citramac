@@ -20,6 +20,7 @@ from .models import (
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
+    PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
 )
@@ -28,9 +29,11 @@ from .serializers import (
     CreateOrganizationSerializer,
     OrganizationEmailSettingsSerializer,
     OrganizationSerializer,
+    OrganizationSmsSettingsSerializer,
     OrganizationStatusSerializer,
     PlatformBrandingSerializer,
     PlatformEmailSettingsSerializer,
+    PlatformSmsSettingsSerializer,
     SubscriptionPlanSerializer,
     SubscriptionSerializer,
 )
@@ -342,6 +345,62 @@ class OrganizationEmailSettingsView(APIView):
     def patch(self, request, pk):
         organization = self._get_organization(request, pk)
         serializer = OrganizationEmailSettingsSerializer(
+            organization, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class PlatformSmsSettingsView(APIView):
+    """
+    Super Admin's platform-wide Onfon Media SMS gateway fallback (Settings
+    screen) — used for any tenant that hasn't configured its own SMS
+    gateway (see OrganizationSmsSettingsView, apps.notifications.sms). GET
+    is Super-Admin-only, same as PlatformEmailSettingsView: this holds
+    gateway credentials, not a public value.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        sms_settings = PlatformSmsSettings.get_solo()
+        return Response(PlatformSmsSettingsSerializer(sms_settings).data)
+
+    def patch(self, request):
+        sms_settings = PlatformSmsSettings.get_solo()
+        serializer = PlatformSmsSettingsSerializer(sms_settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(serializer.data)
+
+
+class OrganizationSmsSettingsView(APIView):
+    """
+    Self-service Onfon Media SMS gateway configuration for a single
+    organization's outbound SMS (OTP + appointment reminders) — lets each
+    tenant configure its own gateway without Super Admin/terraform
+    involvement. A narrow endpoint over Organization's sms_* fields only,
+    same precedent as OrganizationEmailSettingsView. Org Admins may only
+    read/write their own organization — enforced by
+    IsPlatformSuperAdminOrOrgAdmin's object-level check.
+    """
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+
+    def _get_organization(self, request, pk):
+        with platform_admin_context():
+            organization = generics.get_object_or_404(Organization, pk=pk)
+        self.check_object_permissions(request, organization)
+        return organization
+
+    def get(self, request, pk):
+        organization = self._get_organization(request, pk)
+        return Response(OrganizationSmsSettingsSerializer(organization).data)
+
+    def patch(self, request, pk):
+        organization = self._get_organization(request, pk)
+        serializer = OrganizationSmsSettingsSerializer(
             organization, data=request.data, partial=True
         )
         serializer.is_valid(raise_exception=True)

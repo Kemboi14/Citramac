@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, Mail, MapPin, PlugZap, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, MapPin, MessageSquare, PlugZap, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -12,8 +12,11 @@ import {
 } from "../../lib/branchesApi";
 import {
   getOrganizationEmailSettings,
+  getOrganizationSmsSettings,
   updateOrganizationEmailSettings,
+  updateOrganizationSmsSettings,
   type OrganizationEmailSettings,
+  type OrganizationSmsSettings,
 } from "../../lib/organizationsApi";
 
 const FIELD_CLASS =
@@ -166,6 +169,28 @@ function emailFormFromSettings(settings: OrganizationEmailSettings): EmailFormSt
   };
 }
 
+const SMS_FIELD_HELP =
+  "Blank uses the platform default (or no SMS at all if the platform hasn't set one up either). " +
+  "Used for login OTP codes and appointment reminders. Onfon Media is the supported gateway — " +
+  "find your Sender ID, Client ID, Access Key and API Key under your Onfon dashboard's " +
+  "Settings → API Settings tab.";
+
+interface SmsFormState {
+  sms_sender_id: string;
+  sms_client_id: string;
+  sms_access_key: string;
+  sms_api_key: string;
+}
+
+function smsFormFromSettings(settings: OrganizationSmsSettings): SmsFormState {
+  return {
+    sms_sender_id: settings.sms_sender_id,
+    sms_client_id: settings.sms_client_id,
+    sms_access_key: "",
+    sms_api_key: "",
+  };
+}
+
 export function BranchSettingsPage() {
   const { accessToken, claims } = useAuth();
   const [branch, setBranch] = useState<Branch | null>(null);
@@ -184,6 +209,11 @@ export function BranchSettingsPage() {
   const [emailForm, setEmailForm] = useState<EmailFormState | null>(null);
   const [emailLoadError, setEmailLoadError] = useState<string | null>(null);
   const [emailSaveError, setEmailSaveError] = useState<string | null>(null);
+
+  const [smsSettings, setSmsSettings] = useState<OrganizationSmsSettings | null>(null);
+  const [smsForm, setSmsForm] = useState<SmsFormState | null>(null);
+  const [smsLoadError, setSmsLoadError] = useState<string | null>(null);
+  const [smsSaveError, setSmsSaveError] = useState<string | null>(null);
 
   const load = async () => {
     if (!accessToken) return;
@@ -243,6 +273,37 @@ export function BranchSettingsPage() {
       setEmailSaveError(
         err instanceof ApiError ? err.message : "Couldn't save email configuration.",
       );
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    if (!accessToken || !claims?.organization_id) return;
+    const organizationId = claims.organization_id;
+    getOrganizationSmsSettings(accessToken, organizationId)
+      .then((settings) => {
+        setSmsSettings(settings);
+        setSmsForm(smsFormFromSettings(settings));
+      })
+      .catch((err) =>
+        setSmsLoadError(err instanceof ApiError ? err.message : "Couldn't load SMS configuration."),
+      );
+  }, [accessToken, claims?.organization_id]);
+
+  const saveSmsSettings = async () => {
+    if (!accessToken || !claims?.organization_id || !smsForm) return;
+    setSmsSaveError(null);
+    try {
+      const updated = await updateOrganizationSmsSettings(accessToken, claims.organization_id, {
+        sms_sender_id: smsForm.sms_sender_id,
+        sms_client_id: smsForm.sms_client_id,
+        ...(smsForm.sms_access_key ? { sms_access_key: smsForm.sms_access_key } : {}),
+        ...(smsForm.sms_api_key ? { sms_api_key: smsForm.sms_api_key } : {}),
+      });
+      setSmsSettings(updated);
+      setSmsForm(smsFormFromSettings(updated));
+    } catch (err) {
+      setSmsSaveError(err instanceof ApiError ? err.message : "Couldn't save SMS configuration.");
       throw err;
     }
   };
@@ -753,6 +814,98 @@ export function BranchSettingsPage() {
                   {emailSaveError && (
                     <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
                       {emailSaveError}
+                    </p>
+                  )}
+                </form>
+              )}
+            </div>
+
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>
+                <span className="inline-flex items-center gap-2">
+                  <MessageSquare size={16} className="text-brand-green" />
+                  SMS Configuration
+                </span>
+              </h2>
+              {smsLoadError && (
+                <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {smsLoadError}
+                </p>
+              )}
+              {smsSettings && smsForm && (
+                <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
+                  <div className="mb-1">
+                    <StatusPill
+                      ok={smsSettings.has_sms_credentials}
+                      okLabel="SMS gateway configured"
+                      pendingLabel="Using platform default"
+                    />
+                  </div>
+                  <p className="text-xs text-ink-500">{SMS_FIELD_HELP}</p>
+                  <label className={LABEL_CLASS}>
+                    Sender ID
+                    <input
+                      type="text"
+                      className={FIELD_CLASS}
+                      value={smsForm.sms_sender_id}
+                      onChange={(e) => {
+                        setSmsForm({ ...smsForm, sms_sender_id: e.target.value });
+                      }}
+                      placeholder="CITRAMAC"
+                    />
+                  </label>
+                  <label className={LABEL_CLASS}>
+                    Client ID
+                    <input
+                      type="text"
+                      className={FIELD_CLASS}
+                      value={smsForm.sms_client_id}
+                      onChange={(e) => {
+                        setSmsForm({ ...smsForm, sms_client_id: e.target.value });
+                      }}
+                      placeholder="Onfon Client ID"
+                    />
+                  </label>
+                  <label className={LABEL_CLASS}>
+                    Access Key
+                    <input
+                      type="password"
+                      className={FIELD_CLASS}
+                      value={smsForm.sms_access_key}
+                      onChange={(e) => {
+                        setSmsForm({ ...smsForm, sms_access_key: e.target.value });
+                      }}
+                      placeholder={
+                        smsSettings.has_sms_credentials
+                          ? "Leave blank to keep the current Access Key"
+                          : "Onfon Access Key"
+                      }
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <label className={LABEL_CLASS}>
+                    API Key
+                    <input
+                      type="password"
+                      className={FIELD_CLASS}
+                      value={smsForm.sms_api_key}
+                      onChange={(e) => {
+                        setSmsForm({ ...smsForm, sms_api_key: e.target.value });
+                      }}
+                      placeholder={
+                        smsSettings.has_sms_credentials
+                          ? "Leave blank to keep the current API Key"
+                          : "Onfon API Key"
+                      }
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <div>
+                    <SaveButton onSave={saveSmsSettings}>Save SMS Configuration</SaveButton>
+                  </div>
+                  {smsSaveError && (
+                    <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                      {smsSaveError}
                     </p>
                   )}
                 </form>

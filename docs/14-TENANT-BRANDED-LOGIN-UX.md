@@ -105,11 +105,17 @@ Step 4: Redirect to the user's shell (Super Admin / Org Admin / Clinical Workspa
 - `ResendOtpSerializer` gained an optional `channel` — only meaningful for
   `LOGIN_2FA` purpose OTPs (activation/reset resends ignore it and keep
   using email, unchanged).
-- `apps/notifications/tasks.py` gained `send_otp_sms` — an honest stub (logs
-  a structured, code-free event; no SMS gateway is wired up yet), same
+- `apps/notifications/tasks.py`'s `send_otp_sms` now dispatches through
+  `apps/notifications/sms.py`, which sends via Onfon Media
+  (https://www.docs.onfonmedia.co.ke/rest/sms/) using that tenant's own
+  gateway credentials (`Organization.sms_*`, configured on Org Admin's
+  Branch Settings > SMS Configuration screen), falling back to
+  `PlatformSmsSettings` (Super Admin's SMS Settings page), then
+  `settings.py`'s `ONFON_*` env vars. If nothing is configured anywhere it
+  still logs the same structured, code-free stub event as before (same
   pattern as the Sentry-DSN-empty stub already established in
-  `config/settings`. Swapping in a real gateway (e.g. Africa's Talking)
-  later doesn't require any caller change.
+  `config/settings`) rather than failing — the OTP itself stays valid via
+  the email channel either way.
 
 ## 14.4 Security notes
 

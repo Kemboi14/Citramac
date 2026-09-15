@@ -8,37 +8,48 @@ from .email import send_html_email
 logger = structlog.get_logger(__name__)
 
 
-def _resolve_connection(organization_id):
+def _load_organization(organization_id):
     """
-    Loads the Organization (if any) and delegates to
-    apps.notifications.email's org -> platform -> settings.py resolution —
-    shared by every task below so each one sends through that tenant's own
-    SMTP when it has one configured.
+    Loads the Organization (if any) under platform_admin_context() — shared
+    by every task below so each one resolves that tenant's own configured
+    channel (SMTP or SMS gateway) rather than always the platform default.
     """
-    from apps.notifications.email import get_email_connection_and_sender
     from apps.tenancy.models import Organization
 
     organization = None
     if organization_id:
         with platform_admin_context():
             organization = Organization.objects.filter(pk=organization_id).first()
-    return get_email_connection_and_sender(organization)
+    return organization
+
+
+def _resolve_connection(organization_id):
+    """
+    Delegates to apps.notifications.email's org -> platform -> settings.py
+    resolution for the Organization loaded above.
+    """
+    from apps.notifications.email import get_email_connection_and_sender
+
+    return get_email_connection_and_sender(_load_organization(organization_id))
 
 
 @shared_task
-def send_otp_sms(phone, code, purpose):
+def send_otp_sms(phone, code, purpose, organization_id=None):
     """
     SMS delivery for login OTPs (docs/14-TENANT-BRANDED-LOGIN-UX.md) when a
-    user's preferred_mfa_channel is SMS. Honest stub, same pattern as the
-    Sentry-DSN-empty stub in config/settings — no SMS gateway (e.g. Africa's
-    Talking) is wired up yet, so this logs a structured, code-free event
-    instead of silently pretending delivery happened. Swap the body for a
-    real gateway call when one is provisioned; callers (LoginView,
-    ResendOtpView) don't need to change either way, since the OTP itself is
-    still valid and verifiable via the email channel or the sandbox log in
-    dev.
+    user's preferred_mfa_channel is SMS. Routes through the caller's own
+    organization's Onfon Media gateway when configured
+    (apps.notifications.sms), else the platform default, else settings.py's
+    ONFON_* env vars, else an honest stub log — never raises, since the OTP
+    itself is still valid and verifiable via the email channel or the
+    sandbox log in dev even when SMS delivery fails or nothing is
+    configured. Never logs the code itself outside the SMS body.
     """
-    logger.info("otp_sms_stub_dispatch", phone_last4=phone[-4:] if phone else "", purpose=purpose)
+    from apps.notifications.sms import send_sms
+
+    organization = _load_organization(organization_id)
+    message = f"Your CITRAMAC verification code is {code}. It expires in 10 minutes."
+    send_sms(phone, message, organization=organization)
 
 
 @shared_task

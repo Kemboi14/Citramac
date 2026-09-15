@@ -18,6 +18,7 @@ import {
   LifeBuoy,
   LogOut,
   Mail,
+  MessageSquare,
   Paperclip,
   Phone,
   Pill,
@@ -58,6 +59,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
       { label: "Branches", to: "/super-admin/branches", icon: Landmark },
       { label: "Subscriptions", to: "/super-admin/subscriptions", icon: CreditCard },
       { label: "Email Settings", to: "/super-admin/email-settings", icon: Mail },
+      { label: "SMS Settings", to: "/super-admin/sms-settings", icon: MessageSquare },
     ],
   },
   {

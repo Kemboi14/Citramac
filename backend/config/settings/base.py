@@ -317,6 +317,16 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@citramac.local")
 
+# ── SMS (OTP + appointment reminders via Onfon Media, see apps/notifications/sms.py) ──
+# Platform-wide fallback gateway credentials for any tenant that hasn't
+# configured its own under Organization.sms_* — same "opt into as much as
+# you configure" resolution order as email above (org -> PlatformSmsSettings
+# -> these env vars -> honest stub log if nothing is set anywhere).
+ONFON_SENDER_ID = env("ONFON_SENDER_ID", default="")
+ONFON_CLIENT_ID = env("ONFON_CLIENT_ID", default="")
+ONFON_ACCESS_KEY = env("ONFON_ACCESS_KEY", default="")
+ONFON_API_KEY = env("ONFON_API_KEY", default="")
+
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:5173"])
 # The frontend needs the httpOnly refresh_token cookie sent/received cross-origin
 # (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.

@@ -601,10 +601,10 @@ def _dispatch_otp_email(user, code, purpose):
     send_otp_email.delay(user.email, code, purpose, organization_id=user.organization_id)
 
 
-def _dispatch_otp_sms(phone, code, purpose):
+def _dispatch_otp_sms(user, code, purpose):
     from apps.notifications.tasks import send_otp_sms
 
-    send_otp_sms.delay(phone, code, purpose)
+    send_otp_sms.delay(user.phone, code, purpose, organization_id=user.organization_id)
 
 
 def _available_channels(user):
@@ -627,7 +627,7 @@ def _dispatch_login_otp(user, code, purpose, channel=None):
     """
     resolved = channel or user.preferred_mfa_channel
     if resolved == User.MFA_CHANNEL_SMS and user.phone:
-        _dispatch_otp_sms(user.phone, code, purpose)
+        _dispatch_otp_sms(user, code, purpose)
         return User.MFA_CHANNEL_SMS
     _dispatch_otp_email(user, code, purpose)
     return User.MFA_CHANNEL_EMAIL

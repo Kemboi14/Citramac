@@ -239,3 +239,76 @@ export function updatePlatformEmailSettings(
     accessToken,
   });
 }
+
+// Self-service SMS gateway (Onfon Media) — Org Admin's own "SMS
+// Configuration" (or Super Admin acting on a tenant's behalf), a narrow
+// field subset distinct from the rest of Organization (see backend
+// OrganizationSmsSettingsView's docstring). Mirrors the email settings
+// shape above.
+export type SmsProvider = "onfon";
+
+export interface OrganizationSmsSettings {
+  sms_provider: SmsProvider;
+  sms_sender_id: string;
+  sms_client_id: string;
+  has_sms_credentials: boolean;
+}
+
+export interface OrganizationSmsSettingsPayload {
+  sms_provider?: SmsProvider;
+  sms_sender_id?: string;
+  sms_client_id?: string;
+  sms_access_key?: string;
+  sms_api_key?: string;
+}
+
+export function getOrganizationSmsSettings(accessToken: string, organizationId: string) {
+  return apiRequest<OrganizationSmsSettings>(
+    `/platform/organizations/${organizationId}/sms-settings/`,
+    { accessToken },
+  );
+}
+
+export function updateOrganizationSmsSettings(
+  accessToken: string,
+  organizationId: string,
+  payload: OrganizationSmsSettingsPayload,
+) {
+  return apiRequest<OrganizationSmsSettings>(
+    `/platform/organizations/${organizationId}/sms-settings/`,
+    { method: "PATCH", body: payload, accessToken },
+  );
+}
+
+// Super Admin's platform-wide SMS gateway fallback (Settings screen) — used
+// for any tenant that hasn't configured its own.
+export interface PlatformSmsSettings {
+  provider: SmsProvider;
+  sender_id: string;
+  client_id: string;
+  has_credentials: boolean;
+  updated_at: string;
+}
+
+export interface PlatformSmsSettingsPayload {
+  provider?: SmsProvider;
+  sender_id?: string;
+  client_id?: string;
+  access_key?: string;
+  api_key?: string;
+}
+
+export function getPlatformSmsSettings(accessToken: string) {
+  return apiRequest<PlatformSmsSettings>("/platform/sms-settings/", { accessToken });
+}
+
+export function updatePlatformSmsSettings(
+  accessToken: string,
+  payload: PlatformSmsSettingsPayload,
+) {
+  return apiRequest<PlatformSmsSettings>("/platform/sms-settings/", {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}

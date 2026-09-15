@@ -7,6 +7,7 @@ from .models import (
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
+    PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
 )
@@ -80,6 +81,19 @@ class OrganizationAdmin(admin.ModelAdmin):
                 "classes": ("collapse",),
             },
         ),
+        (
+            "Self-service SMS gateway",
+            {
+                "description": (
+                    "Org Admin's own 'SMS Configuration' settings screen writes "
+                    "these fields via a narrow API endpoint, not this admin. The "
+                    "Onfon Access Key/API Key are Fernet-encrypted at rest and "
+                    "never shown here."
+                ),
+                "fields": ("sms_provider", "sms_sender_id", "sms_client_id"),
+                "classes": ("collapse",),
+            },
+        ),
         ("Advanced", {"fields": ("theme_overrides",), "classes": ("collapse",)}),
     )
 
@@ -143,3 +157,44 @@ class PlatformEmailSettingsAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         # Singleton — always pk=1, editing is the only meaningful action.
         return not PlatformEmailSettings.objects.exists()
+
+
+class PlatformSmsSettingsForm(forms.ModelForm):
+    access_key = forms.CharField(
+        label="Access key",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Leave blank to keep the currently saved Access Key.",
+    )
+    api_key = forms.CharField(
+        label="API key",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Leave blank to keep the currently saved API Key.",
+    )
+
+    class Meta:
+        model = PlatformSmsSettings
+        exclude = ["access_key_encrypted", "api_key_encrypted"]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        new_access_key = self.cleaned_data.get("access_key")
+        if new_access_key:
+            instance.access_key_encrypted = encrypt_value(new_access_key)
+        new_api_key = self.cleaned_data.get("api_key")
+        if new_api_key:
+            instance.api_key_encrypted = encrypt_value(new_api_key)
+        if commit:
+            instance.save()
+        return instance
+
+
+@admin.register(PlatformSmsSettings)
+class PlatformSmsSettingsAdmin(admin.ModelAdmin):
+    form = PlatformSmsSettingsForm
+    list_display = ["provider", "sender_id", "client_id", "updated_at", "updated_by"]
+
+    def has_add_permission(self, request):
+        # Singleton — always pk=1, editing is the only meaningful action.
+        return not PlatformSmsSettings.objects.exists()

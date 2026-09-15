@@ -34,6 +34,7 @@ import { SecurityAuditLogsPage } from "./modules/super-admin/SecurityAuditLogsPa
 import { SecurityAlertsPage } from "./modules/super-admin/SecurityAlertsPage";
 import { PlatformDashboardPage } from "./modules/super-admin/PlatformDashboardPage";
 import { PlatformEmailSettingsPage } from "./modules/super-admin/PlatformEmailSettingsPage";
+import { PlatformSmsSettingsPage } from "./modules/super-admin/PlatformSmsSettingsPage";
 import { OrganizationsPage } from "./modules/super-admin/OrganizationsPage";
 import { BranchesPage } from "./modules/super-admin/BranchesPage";
 import { SubscriptionsPage } from "./modules/super-admin/SubscriptionsPage";
@@ -61,6 +62,7 @@ function App() {
           <Route path="branches" element={<BranchesPage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
           <Route path="email-settings" element={<PlatformEmailSettingsPage />} />
+          <Route path="sms-settings" element={<PlatformSmsSettingsPage />} />
           <Route path="roles" element={<GlobalRolesPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
           <Route path="security-dashboard" element={<SecurityDashboardPage />} />

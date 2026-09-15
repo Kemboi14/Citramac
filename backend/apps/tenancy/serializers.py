@@ -8,6 +8,7 @@ from .models import (
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
+    PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
 )
@@ -348,4 +349,92 @@ class OrganizationEmailSettingsSerializer(serializers.ModelSerializer):
         password = validated_data.pop("email_host_password", None)
         if password:
             validated_data["email_host_password_encrypted"] = encrypt_value(password)
+        return super().update(instance, validated_data)
+
+
+class PlatformSmsSettingsSerializer(serializers.ModelSerializer):
+    """
+    Super Admin's platform-wide Onfon Media SMS gateway fallback (Settings
+    screen) — the Organization-level equivalent is
+    OrganizationSmsSettingsSerializer. `access_key`/`api_key` are write-only
+    and only ever encrypted-at-rest (apps/tenancy/crypto.py), same pattern
+    as PlatformEmailSettingsSerializer's host_password.
+    """
+
+    has_credentials = serializers.BooleanField(read_only=True)
+    access_key = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new Onfon Access Key (encrypted at rest).",
+    )
+    api_key = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new Onfon API Key (encrypted at rest).",
+    )
+
+    class Meta:
+        model = PlatformSmsSettings
+        fields = [
+            "provider",
+            "sender_id",
+            "client_id",
+            "access_key",
+            "api_key",
+            "has_credentials",
+            "updated_at",
+        ]
+
+    def update(self, instance, validated_data):
+        access_key = validated_data.pop("access_key", None)
+        if access_key:
+            validated_data["access_key_encrypted"] = encrypt_value(access_key)
+        api_key = validated_data.pop("api_key", None)
+        if api_key:
+            validated_data["api_key_encrypted"] = encrypt_value(api_key)
+        return super().update(instance, validated_data)
+
+
+class OrganizationSmsSettingsSerializer(serializers.ModelSerializer):
+    """
+    Self-service Onfon Media SMS gateway configuration for a single tenant
+    (Org Admin's own "SMS Configuration" settings screen, or Super Admin
+    editing it on a tenant's behalf) — a narrow field subset of
+    Organization, mirroring OrganizationEmailSettingsSerializer.
+    """
+
+    has_sms_credentials = serializers.BooleanField(read_only=True)
+    sms_access_key = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new Onfon Access Key (encrypted at rest).",
+    )
+    sms_api_key = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Write-only. Set to store a new Onfon API Key (encrypted at rest).",
+    )
+
+    class Meta:
+        model = Organization
+        fields = [
+            "sms_provider",
+            "sms_sender_id",
+            "sms_client_id",
+            "sms_access_key",
+            "sms_api_key",
+            "has_sms_credentials",
+        ]
+
+    def update(self, instance, validated_data):
+        access_key = validated_data.pop("sms_access_key", None)
+        if access_key:
+            validated_data["sms_access_key_encrypted"] = encrypt_value(access_key)
+        api_key = validated_data.pop("sms_api_key", None)
+        if api_key:
+            validated_data["sms_api_key_encrypted"] = encrypt_value(api_key)
         return super().update(instance, validated_data)
