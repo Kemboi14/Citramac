@@ -124,8 +124,10 @@ def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
 def send_invite_email(email, organization_name, activation_token, organization_id=None):
     """
     Dispatched when a Super Admin creates an Organization and its Org Admin
-    invite — docs/04-MULTI-TENANCY.md §4.5. The activation link is what
-    encodes the token Screen A of the auth flow validates against
+    invite, or invites a platform-staff member directly (organization_name/
+    organization_id=None — see apps.accounts.views.PlatformStaffViewSet.create)
+    — docs/04-MULTI-TENANCY.md §4.5. The activation link is what encodes the
+    token Screen A of the auth flow validates against
     (docs/05-AUTHENTICATION-FLOW.md §5.5) — ActivationPage.tsx reads it from
     the `?token=` query param, with no manual-entry fallback, so the email
     must carry a real clickable link and not just the bare code.
@@ -134,18 +136,27 @@ def send_invite_email(email, organization_name, activation_token, organization_i
 
     connection, from_email = _resolve_connection(organization_id)
     activation_link = f"{settings.FRONTEND_URL}/activate?token={activation_token}"
+    if organization_name:
+        subject = f"You've been invited to CITRAMAC — {organization_name}"
+        plain_message = (
+            f"You've been invited to set up {organization_name} on CITRAMAC. "
+            f"Activate your account: {activation_link}"
+        )
+    else:
+        subject = "Welcome to CITRAMAC"
+        plain_message = (
+            "You've been invited to join the CITRAMAC platform team. "
+            f"Activate your account: {activation_link}"
+        )
     send_html_email(
-        subject=f"You've been invited to CITRAMAC — {organization_name}",
+        subject=subject,
         template_name="notifications/emails/invite_email.html",
         context={
             "organization_name": organization_name,
             "activation_token": activation_token,
             "activation_link": activation_link,
         },
-        plain_message=(
-            f"You've been invited to set up {organization_name} on CITRAMAC. "
-            f"Activate your account: {activation_link}"
-        ),
+        plain_message=plain_message,
         from_email=from_email,
         recipient_list=[email],
         connection=connection,

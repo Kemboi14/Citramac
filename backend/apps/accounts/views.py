@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
 from apps.tenancy.context import platform_admin_context
 
-from .models import ActivationInvite, OneTimePassword, Permission, Role, User
+from .models import ActivationInvite, Permission, Role, User
 from .serializers import (
     MyProfileSerializer,
     PermissionSerializer,
@@ -271,14 +271,13 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """
-        Platform staff have organization=None, so they can't own an
-        ActivationInvite (TenantScopedModel requires a non-null
-        organization — see its docstring). Instead: create the account
-        active immediately (a Super Admin vouches for a colleague in
-        person, unlike self-service tenant onboarding) with an unusable
-        random password, then issue the same OTP + set-password challenge
-        ForgotPasswordView uses so the new hire sets their own password
-        through already-battle-tested plumbing rather than a bespoke path.
+        Platform staff have organization=None. ActivationInvite.organization
+        is nullable for exactly this case (see its docstring and
+        migrations/0009_alter_activationinvite_organization.py), so this
+        mirrors StaffViewSet._create_staff's real "Welcome to CITRAMAC"
+        activation-invite flow instead of the OTP-reset-code email this view
+        used before — same activate/set-password experience every other
+        invited staff member gets, not a bespoke one.
         """
         serializer = StaffInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -292,16 +291,44 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                 last_name=data["last_name"],
                 staff_id=data.get("staff_id", ""),
                 is_staff=True,
-                is_active=True,
+                is_active=False,
             )
-            staff.set_unusable_password()
-            staff.save(update_fields=["password"])
             staff.roles.add(data["role"])
 
-            otp, code = OneTimePassword.issue(staff, OneTimePassword.PURPOSE_RESET)
-            _dispatch_otp_email(staff.email, code, otp.purpose, staff.organization_id)
+            invite = ActivationInvite.objects.create(
+                organization=None,
+                user=staff,
+                created_by=request.user,
+                expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+            )
+            _dispatch_invite_email(staff.email, None, invite.token, organization_id=None)
 
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def resend_invite(self, request, pk=None):
+        """Platform-staff mirror of StaffViewSet.resend_invite."""
+        staff = self.get_object()
+        if staff.is_active:
+            return Response(
+                {"detail": "This staff member has already activated their account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with platform_admin_context():
+            invite = (
+                ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
+                .order_by("-id")
+                .first()
+            )
+            if invite is None or not invite.is_valid():
+                invite = ActivationInvite.objects.create(
+                    organization=None,
+                    user=staff,
+                    created_by=request.user,
+                    expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+                )
+        _dispatch_invite_email(staff.email, None, invite.token, organization_id=None)
+        return Response(StaffSerializer(staff).data)
 
 
 class EnabledModulesView(APIView):
@@ -342,9 +369,3 @@ def _dispatch_invite_email(email, organization_name, token, organization_id=None
     from apps.notifications.tasks import send_invite_email
 
     send_invite_email.delay(email, organization_name, token, organization_id=organization_id)
-
-
-def _dispatch_otp_email(email, code, purpose, organization_id=None):
-    from apps.notifications.tasks import send_otp_email
-
-    send_otp_email.delay(email, code, purpose, organization_id=organization_id)

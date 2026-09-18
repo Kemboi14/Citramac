@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { tenantDiscovery, type TenantBranding } from "../../lib/authApi";
 import { ApiError } from "../../lib/apiClient";
 import { AuthButton, AuthField, SecureFooter } from "./AuthCard";
@@ -16,10 +17,12 @@ import { AlertTriangleIcon, ArrowRightIcon, MailIcon } from "./icons";
  * `Organization.register_email_domain()` (backend) now auto-registers every
  * real staff member's email domain the moment they're invited/onboarded, so
  * a genuine org member should essentially never land on the "not found"
- * state below — that state (and its "continue without an organisation"
- * escape hatch) is really only for platform staff (Super Admin and other
- * organization=None accounts, whose domain by definition isn't any
- * tenant's) or a genuine typo in the email address.
+ * state below — it's really only a genuine typo in the email address.
+ * Platform staff (Super Admin and other organization=None accounts, whose
+ * domain by definition isn't any tenant's) sign in from a separate,
+ * deliberately low-visibility "Platform staff sign-in" link below, not from
+ * this failure state — onSuccess here only ever fires on a real tenant
+ * match, never a bypass.
  */
 export function TenantDiscoveryStep({
   onSuccess,
@@ -112,16 +115,6 @@ export function TenantDiscoveryStep({
             {isSubmitting ? "Checking email..." : notFound ? "Try Again" : "Continue"}
             {!isSubmitting && <ArrowRightIcon className="h-[18px] w-[18px]" />}
           </AuthButton>
-
-          {notFound && (
-            <button
-              type="button"
-              onClick={() => onSuccess(email.trim(), null)}
-              className="mt-1 text-center text-xs font-medium text-ink-500 hover:text-brand-green-dark hover:underline"
-            >
-              I&rsquo;m platform staff — continue without an organisation
-            </button>
-          )}
         </form>
 
         <div
@@ -136,6 +129,12 @@ export function TenantDiscoveryStep({
         >
           Need help? Contact your organisation administrator.
         </a>
+        <Link
+          to="/login/platform-staff"
+          className="mt-2 block text-center text-[11px] text-ink-400 hover:text-ink-500 hover:underline"
+        >
+          Platform staff sign-in
+        </Link>
 
         <SecureFooter label="Your data is secure and encrypted" edgeClassName="-mx-11 -mb-7" />
       </div>

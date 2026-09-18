@@ -75,10 +75,10 @@ export type LoginResult =
       delivery_methods: MfaDeliveryMethod[];
     };
 
-export function login(email: string, password: string, remember = false) {
+export function login(email: string, password: string, remember = false, noOrganization = false) {
   return apiRequest<LoginResult>("/auth/login/", {
     method: "POST",
-    body: { email, password, remember },
+    body: { email, password, remember, no_organization: noOrganization },
   });
 }
 

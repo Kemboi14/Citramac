@@ -28,8 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (email: string, password: string, remember = false): Promise<LoginOutcome> => {
-      const result = await authApi.login(email, password, remember);
+    async (
+      email: string,
+      password: string,
+      remember = false,
+      noOrganization = false,
+    ): Promise<LoginOutcome> => {
+      const result = await authApi.login(email, password, remember, noOrganization);
       if ("access" in result) {
         setAccessToken(result.access);
         return { requiresOtp: false };

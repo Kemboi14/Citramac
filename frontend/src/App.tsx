@@ -50,6 +50,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/login/platform-staff" element={<LoginPage startAtPlatformLogin />} />
       <Route path="/activate" element={<ActivationPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 

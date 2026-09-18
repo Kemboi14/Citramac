@@ -50,6 +50,11 @@ class LoginSerializer(serializers.Serializer):
     # whether the refresh-token cookie persists across browser restarts, not
     # the token's own lifetime (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME).
     remember = serializers.BooleanField(required=False, default=False)
+    # True only when submitted from the dedicated platform-staff sign-in
+    # screen (`/login/platform-staff`), which skips tenant discovery.
+    # LoginView rejects this unless the account genuinely has
+    # organization=None — see LoginView.post.
+    no_organization = serializers.BooleanField(required=False, default=False)
 
 
 class LoginVerifyOtpSerializer(serializers.Serializer):
