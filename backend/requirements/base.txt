@@ -17,3 +17,4 @@ django-structlog==10.1.0
 sentry-sdk==2.36.0
 django-prometheus==2.5.0
 Pillow==12.3.0
+jsonschema==4.26.0

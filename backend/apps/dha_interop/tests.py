@@ -2,6 +2,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
@@ -12,9 +13,10 @@ from apps.insurance_claims.models import InsuranceClaim, PreAuthorization, Remit
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .fhir_mapper import build_referral_bundle
+from .fhir_mapper import build_admission_bundle, build_client_history_bundle, build_referral_bundle
+from .fhir_validation import assert_conformant, validate_resource
 from .hie_client import transmit_referral
-from .models import FhirResourceCache, IcdCodeIndex
+from .models import FhirResourceCache, IcdCodeIndex, NationalDrugIndex
 from .sync import sync_terminology_source
 
 
@@ -319,3 +321,159 @@ class SeedDhaSandboxDemoCommandTests(TestCase):
             )
         with self.assertRaises(CommandError):
             call_command("seed_dha_sandbox_demo", org_slug=org.slug)
+
+
+class FhirR4ConformanceTests(APITestCase):
+    """
+    CLAUDE.md "Project standing rules — FHIR R4 conformance" §2 rung 2 —
+    every FHIR bundle/resource this app actually constructs must pass HL7's
+    real R4 4.0.1 base schema (`apps.dha_interop.fhir_validation`),
+    independent of `fhir_mapper.py`'s use of `fhir.resources.R4B` for
+    construction (see that module's docstring, and CLAUDE.md §1's documented
+    exception, for why R4B). A failure here means `fhir_mapper.py` produced
+    something R4B allows but real R4 doesn't — exactly the drift this
+    validator exists to catch, and exactly what "Validator green in CI ...
+    a profile violation fails the build" (CLAUDE.md §3 item 5) means for the
+    resources this app already builds.
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-fhir-conformance", facility_type="MENTAL_HEALTH_CCP"
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Faith",
+                last_name="Mwangi",
+                gender="FEMALE",
+                date_of_birth="1997-03-14",
+            )
+
+    def test_validator_rejects_a_resource_missing_a_required_field(self):
+        """Proves the gate has teeth: a real R4 cardinality violation must fail."""
+        errors = validate_resource(
+            {
+                "resourceType": "Encounter",
+                "status": "in-progress",
+                "subject": {"reference": "urn:x"},
+            }
+        )
+        self.assertTrue(any("class" in message for message in errors))
+
+    def test_validator_accepts_a_conformant_resource(self):
+        self.assertEqual(validate_resource({"resourceType": "Patient", "gender": "female"}), [])
+
+    def test_referral_bundle_with_diagnosis_and_prescription_is_r4_conformant(self):
+        from apps.clinical_encounter.models import DiagnosisCode, Prescription, PrescriptionItem
+
+        with platform_admin_context():
+            encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
+            DiagnosisCode.objects.create(
+                organization=self.org,
+                encounter=encounter,
+                icd11_code=IcdCodeIndex.objects.get(code="6A70"),
+                is_primary=True,
+            )
+            drug = NationalDrugIndex.objects.create(
+                code="RX-CONF-001", generic_name="Fluoxetine", form="Capsule", strength="20mg"
+            )
+            prescription = Prescription.objects.create(organization=self.org, encounter=encounter)
+            PrescriptionItem.objects.create(
+                organization=self.org,
+                prescription=prescription,
+                drug=drug,
+                dose="20mg",
+                route="Oral",
+                frequency="Once daily",
+                duration="30 days",
+            )
+            referral = ReferralPacket.objects.create(
+                organization=self.org, encounter=encounter, destination_facility="KNH"
+            )
+            bundle = build_referral_bundle(referral)
+        assert_conformant(bundle)
+
+    def test_referral_bundle_with_no_diagnoses_or_prescriptions_is_r4_conformant(self):
+        """Edge case: a referral with nothing but the Composition + Patient."""
+        with platform_admin_context():
+            encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
+            referral = ReferralPacket.objects.create(
+                organization=self.org, encounter=encounter, destination_facility="KNH"
+            )
+            bundle = build_referral_bundle(referral)
+        assert_conformant(bundle)
+
+    def test_admission_bundle_for_voluntary_admission_is_r4_conformant(self):
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Ward A")
+            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="A1")
+            admission = Admission.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                bed=bed,
+                admission_type="VOLUNTARY",
+                reason_for_admission="Stabilization",
+                consent_status="OBTAINED",
+                consent_at=timezone.now(),
+            )
+            bundle = build_admission_bundle(admission)
+        assert_conformant(bundle)
+
+    def test_admission_bundle_for_involuntary_admission_with_risk_flags_is_r4_conformant(self):
+        """
+        Edge case: Mental Health Act (Cap. 248) involuntary admission with
+        active risk flags — the RiskAssessment branch, not the Consent one.
+        """
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Ward B")
+            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="B1")
+            admission = Admission.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                bed=bed,
+                admission_type="INVOLUNTARY",
+                risk_self_harm=True,
+                risk_to_others=False,
+                observation_level="CLOSE",
+                risk_summary="Actively suicidal on presentation; continuous observation ordered.",
+                legal_status="Cap. 248 s.14 order",
+            )
+            bundle = build_admission_bundle(admission)
+        assert_conformant(bundle)
+
+    def test_client_history_bundle_with_substance_entry_is_r4_conformant(self):
+        from apps.ccp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                presenting_problem="Persistent anxiety and sleep disturbance.",
+                status="SUBMITTED",
+            )
+            SubstanceUseEntry.objects.create(
+                organization=self.org,
+                assessment=assessment,
+                substance="Alcohol",
+                frequency="Weekly",
+                route="Oral",
+            )
+            bundle = build_client_history_bundle(assessment)
+        assert_conformant(bundle)
+
+    def test_client_history_bundle_without_substance_entries_is_r4_conformant(self):
+        """Refusal/omission case: a draft intake with no presenting problem or substance entries."""
+        from apps.ccp_program.models import BiopsychosocialAssessment
+
+        with platform_admin_context():
+            assessment = BiopsychosocialAssessment.objects.create(
+                organization=self.org, patient=self.patient, status="DRAFT"
+            )
+            bundle = build_client_history_bundle(assessment)
+        assert_conformant(bundle)
