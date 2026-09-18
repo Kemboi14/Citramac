@@ -73,6 +73,9 @@ jobs:
       - name: Tenant-isolation negative-path tests (cannot be skipped)
         run: pytest apps/tenancy/tests.py -v
 
+      - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
+        run: pytest apps/dha_interop/tests.py -k FhirR4Conformance -v
+
       - name: Tests (coverage)
         run: pytest --cov=apps --cov-report=term-missing
 
