@@ -3,6 +3,7 @@ from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
+from apps.security.models import SecurityPolicy
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
@@ -362,6 +363,28 @@ class LoginSecurityTests(APITestCase):
         self.assertIn("access", response.data)
         self.assertNotIn("requires_otp", response.data)
 
+    def test_lockout_threshold_and_duration_follow_security_policy(self):
+        """
+        LoginView must read SecurityPolicy.max_failed_login_attempts/
+        lockout_duration_minutes rather than hardcoded values — the Security
+        Policies screen previously had zero effect on actual login lockout.
+        """
+        with platform_admin_context():
+            policy = SecurityPolicy.get_solo()
+            policy.max_failed_login_attempts = 2
+            policy.lockout_duration_minutes = 1
+            policy.save()
+
+        for _ in range(2):
+            self.client.post(
+                reverse("auth-login"), {"email": "jane@org-x.test", "password": "wrong-password"}
+            )
+        locked_response = self.client.post(
+            reverse("auth-login"), {"email": "jane@org-x.test", "password": "Correct!Horse99"}
+        )
+        self.assertEqual(locked_response.status_code, 423)
+        self.assertLessEqual(cache.ttl("login-lockout:jane@org-x.test"), 60)
+
 
 class NoOrganizationLoginTests(APITestCase):
     """
@@ -600,6 +623,7 @@ class RolesAndStaffConsoleApiTests(APITestCase):
     """
 
     def setUp(self):
+        cache.clear()
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
@@ -955,6 +979,58 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         )
         self.assertEqual(patch_response.status_code, 200, patch_response.data)
         self.assertEqual(patch_response.data["first_name"], "Updated")
+
+    def test_org_admin_can_unlock_their_own_staff(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="locked@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        cache.set("login-lockout:locked@amani.test", 5, timeout=900)
+        response = self.client.post(
+            reverse("staff-unlock", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(cache.get("login-lockout:locked@amani.test"))
+
+    def test_org_admin_cannot_unlock_another_orgs_staff(self):
+        with platform_admin_context():
+            other_org = Organization.objects.create(
+                name="Other Org", slug="other-org-unlock", facility_type="CLINIC"
+            )
+            other_staff = User.objects.create_user(
+                email="ghost-locked@other-org.test",
+                password="Password123!",
+                organization=other_org,
+                is_active=True,
+            )
+        cache.set("login-lockout:ghost-locked@other-org.test", 5, timeout=900)
+        response = self.client.post(
+            reverse("staff-unlock", args=[other_staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(cache.get("login-lockout:ghost-locked@other-org.test"), 5)
+
+    def test_super_admin_can_unlock_platform_staff(self):
+        role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
+        with platform_admin_context():
+            platform_staff = User.objects.create_user(
+                email="platform-locked@softlink.test",
+                is_staff=True,
+                is_active=True,
+            )
+            platform_staff.roles.add(role)
+        cache.set("login-lockout:platform-locked@softlink.test", 5, timeout=900)
+        response = self.client.post(
+            reverse("platform-staff-unlock", args=[platform_staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(cache.get("login-lockout:platform-locked@softlink.test"))
 
 
 class MyProfileTests(APITestCase):

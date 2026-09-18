@@ -25,6 +25,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.security.models import SecurityPolicy
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
 
@@ -425,7 +426,11 @@ class LoginView(APIView):
         lockout_key = f"login-lockout:{email}"
         from django.core.cache import cache
 
-        if cache.get(lockout_key, 0) >= 5:
+        policy = SecurityPolicy.get_solo()
+        max_attempts = policy.max_failed_login_attempts
+        lockout_seconds = policy.lockout_duration_minutes * 60
+
+        if cache.get(lockout_key, 0) >= max_attempts:
             return _error(
                 "ACCOUNT_LOCKED",
                 "Too many failed attempts. Try again later or contact an admin.",
@@ -437,7 +442,7 @@ class LoginView(APIView):
 
         password_ok = bool(user) and user.is_active and user.check_password(data["password"])
         if not password_ok:
-            cache.set(lockout_key, cache.get(lockout_key, 0) + 1, timeout=900)
+            cache.set(lockout_key, cache.get(lockout_key, 0) + 1, timeout=lockout_seconds)
             _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
             return _error(
                 "INVALID_CREDENTIALS", "Incorrect email or password.", status.HTTP_401_UNAUTHORIZED
