@@ -1032,6 +1032,28 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertIsNone(cache.get("login-lockout:platform-locked@softlink.test"))
 
+    def test_staff_list_reports_is_locked(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="badge-check@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.get(
+            reverse("staff-detail", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["is_locked"])
+
+        cache.set("login-lockout:badge-check@amani.test", 5, timeout=900)
+        response = self.client.get(
+            reverse("staff-detail", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertTrue(response.data["is_locked"])
+
 
 class MyProfileTests(APITestCase):
     """
