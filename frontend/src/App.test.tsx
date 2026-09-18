@@ -46,4 +46,10 @@ describe("App routing", () => {
     renderAt("/activate?token=abc123");
     await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
   });
+
+  it("renders the platform-staff sign-in screen directly, skipping tenant discovery", async () => {
+    renderAt("/login/platform-staff");
+    await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
+    expect(screen.queryByText("Welcome to CITRAMAC")).not.toBeInTheDocument();
+  });
 });

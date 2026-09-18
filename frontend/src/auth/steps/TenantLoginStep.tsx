@@ -9,9 +9,9 @@ import { ArrowRightIcon, BuildingIcon, LockIcon, MailIcon } from "./icons";
 // Platform staff (Super Admin, and any other organization=None account) have
 // no tenant for TenantDiscoveryStep to resolve — email domain lookup is
 // scoped to Organization.email_domains, which by definition doesn't cover
-// them. Rather than dead-ending the whole login flow (the bug this constant
-// fixes — see TenantDiscoveryStep's "Continue without an organisation"
-// fallback), this generic branding renders in that case instead.
+// them. They sign in via the separate `/login/platform-staff` entry point
+// (LoginPage's `startAtPlatformLogin`), which renders this step with
+// `tenant={null}` directly — this generic branding renders in that case.
 const PLATFORM_BRANDING: TenantBranding = {
   id: "",
   name: "CITRAMAC",
@@ -37,14 +37,23 @@ export function TenantLoginStep({
   tenant,
   email,
   onChangeEmail,
+  onEmailChange,
   login,
   onSuccess,
   onRequiresOtp,
 }: {
   tenant: TenantBranding | null;
   email: string;
-  onChangeEmail: () => void;
-  login: (email: string, password: string, remember: boolean) => Promise<LoginOutcome>;
+  /** Normal tenant-matched path: email is fixed, "Change" goes back to discovery. */
+  onChangeEmail?: () => void;
+  /** Platform-staff sign-in path (no discovery step): email is editable here instead. */
+  onEmailChange?: (value: string) => void;
+  login: (
+    email: string,
+    password: string,
+    remember: boolean,
+    noOrganization?: boolean,
+  ) => Promise<LoginOutcome>;
   onSuccess: () => void;
   onRequiresOtp: (outcome: {
     otpToken: string;
@@ -77,7 +86,7 @@ export function TenantLoginStep({
     }
     setIsSubmitting(true);
     try {
-      const outcome = await login(email, password, remember);
+      const outcome = await login(email, password, remember, tenant === null);
       if (outcome.requiresOtp) {
         onRequiresOtp({
           otpToken: outcome.otpToken,
@@ -136,19 +145,24 @@ export function TenantLoginStep({
             <div className="flex flex-col gap-1.5 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-ink-700">Email</span>
-                <button
-                  type="button"
-                  onClick={onChangeEmail}
-                  className="text-[11px] font-medium text-[color:var(--tenant-primary)] hover:underline"
-                >
-                  Change
-                </button>
+                {onChangeEmail && (
+                  <button
+                    type="button"
+                    onClick={onChangeEmail}
+                    className="text-[11px] font-medium text-[color:var(--tenant-primary)] hover:underline"
+                  >
+                    Change
+                  </button>
+                )}
               </div>
               <span className="relative flex items-center">
                 <MailIcon className="pointer-events-none absolute left-3 h-[17px] w-[17px] text-ink-400" />
                 <input
+                  type="email"
+                  autoComplete="email"
                   value={email}
-                  disabled
+                  disabled={!onEmailChange}
+                  onChange={onEmailChange ? (e) => onEmailChange(e.target.value) : undefined}
                   className="h-[50px] w-full rounded-md border border-surface-border bg-surface-bg pl-10 pr-3 text-sm text-ink-700"
                 />
               </span>

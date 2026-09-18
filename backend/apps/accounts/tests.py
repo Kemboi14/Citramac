@@ -225,6 +225,96 @@ class FullActivationAndLoginFlowTests(APITestCase):
         self.assertIn(AuditLogEntry.ACTION_LOGIN, login_actions)
         self.assertIn(AuditLogEntry.ACTION_LOGOUT, login_actions)
 
+    def test_platform_staff_invite_full_activation_and_login_flow(self):
+        """
+        Same walkthrough as test_full_flow_org_creation_through_login, for a
+        platform-staff invite (organization=None) — the one that would catch
+        a real-RLS regression from migrations/0009_alter_activationinvite_organization.py
+        making ActivationInvite.organization nullable, since it runs the
+        whole identify -> confirm-email -> verify-otp -> set-password ->
+        login sequence against the real Postgres RLS policy, not a mock.
+        """
+        access = self._login_super_admin()
+
+        with platform_admin_context():
+            role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
+
+        create_response = self.client.post(
+            reverse("platform-staff-list"),
+            {
+                "email": "platform.hire@softlink.test",
+                "first_name": "Amina",
+                "last_name": "Yusuf",
+                "role": role.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+
+        with platform_admin_context():
+            staff = User.objects.get(email="platform.hire@softlink.test")
+            invite = ActivationInvite.objects.get(user=staff, organization__isnull=True)
+        self.assertIsNone(staff.organization_id)
+        self.assertFalse(staff.is_active)
+
+        invite_email = mail.outbox[-1]
+        self.assertEqual(invite_email.subject, "Welcome to CITRAMAC")
+        self.assertIn(invite.token, invite_email.body)
+
+        # Screen A — identify.
+        identify_response = self.client.post(
+            reverse("auth-identify"),
+            {"activation_token": invite.token, "name": "Amina Yusuf"},
+        )
+        self.assertEqual(identify_response.status_code, 200, identify_response.data)
+
+        # Screen B — confirm email, dispatches OTP.
+        confirm_response = self.client.post(
+            reverse("auth-confirm-email"),
+            {"activation_token": invite.token, "email": "platform.hire@softlink.test"},
+        )
+        self.assertEqual(confirm_response.status_code, 200, confirm_response.data)
+        otp_token = confirm_response.data["otp_token"]
+        code = _extract_code(mail.outbox[-1].body)
+
+        # Screen C — verify OTP.
+        verify_response = self.client.post(
+            reverse("auth-verify-otp"), {"otp_token": otp_token, "otp": code}
+        )
+        self.assertEqual(verify_response.status_code, 200, verify_response.data)
+        password_setup_token = verify_response.data["password_setup_token"]
+
+        # Screen D — set password.
+        set_password_response = self.client.post(
+            reverse("auth-set-password"),
+            {"password_setup_token": password_setup_token, "password": "Amina!StrongPass77"},
+        )
+        self.assertEqual(set_password_response.status_code, 200, set_password_response.data)
+
+        with platform_admin_context():
+            staff.refresh_from_db()
+            invite.refresh_from_db()
+        self.assertTrue(staff.is_active)
+        self.assertTrue(staff.check_password("Amina!StrongPass77"))
+        self.assertIsNotNone(invite.used_at)
+
+        # Returning-user login, with 2FA since mfa_enabled defaults True.
+        login_response = self.client.post(
+            reverse("auth-login"),
+            {"email": "platform.hire@softlink.test", "password": "Amina!StrongPass77"},
+        )
+        self.assertEqual(login_response.status_code, 200, login_response.data)
+        self.assertTrue(login_response.data["requires_otp"])
+        login_code = _extract_code(mail.outbox[-1].body)
+
+        login_otp_response = self.client.post(
+            reverse("auth-login-verify-otp"),
+            {"otp_token": login_response.data["otp_token"], "otp": login_code},
+        )
+        self.assertEqual(login_otp_response.status_code, 200, login_otp_response.data)
+        self.assertIn("access", login_otp_response.data)
+
 
 class LoginSecurityTests(APITestCase):
     def setUp(self):
@@ -271,6 +361,76 @@ class LoginSecurityTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertIn("access", response.data)
         self.assertNotIn("requires_otp", response.data)
+
+
+class NoOrganizationLoginTests(APITestCase):
+    """
+    The `/login/platform-staff` sign-in screen skips tenant discovery and
+    sends `no_organization: true` — LoginView must only honor that for a
+    genuine organization=None account, not let it bypass the normal
+    tenant-scoped login for anyone (docs/14-TENANT-BRANDED-LOGIN-UX.md).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            org = Organization.objects.create(name="Org", slug="org-z", facility_type="CLINIC")
+            self.org_user = User.objects.create_user(
+                email="org-person@org-z.test",
+                password="Correct!Horse99",
+                organization=org,
+                is_active=True,
+                mfa_enabled=False,
+            )
+            self.platform_user = User.objects.create_user(
+                email="staff@platform.test",
+                password="Correct!Horse99",
+                organization=None,
+                is_active=True,
+                mfa_enabled=False,
+            )
+
+    def test_no_organization_flag_rejected_for_org_scoped_account(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {
+                "email": "org-person@org-z.test",
+                "password": "Correct!Horse99",
+                "no_organization": True,
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "ORGANIZATION_REQUIRED")
+
+    def test_no_organization_flag_succeeds_for_platform_staff_account(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {
+                "email": "staff@platform.test",
+                "password": "Correct!Horse99",
+                "no_organization": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("access", response.data)
+
+    def test_normal_login_without_flag_is_unaffected_for_org_scoped_account(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "org-person@org-z.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("access", response.data)
+
+    def test_wrong_password_with_no_organization_flag_still_generic(self):
+        """No enumeration: a bad password + the flag looks identical to a normal bad password."""
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "org-person@org-z.test", "password": "wrong", "no_organization": True},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "INVALID_CREDENTIALS")
 
 
 class ForgotPasswordEnumerationTests(APITestCase):
@@ -720,7 +880,9 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         emails = {row["email"] for row in response.data["results"]}
         self.assertNotIn("ghost@other-org.test", emails)
 
-    def test_platform_staff_invite_is_immediately_active_with_unusable_password(self):
+    def test_platform_staff_invite_creates_inactive_user_with_activation_invite_and_welcome_email(
+        self,
+    ):
         role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
         response = self.client.post(
             reverse("platform-staff-list"),
@@ -736,9 +898,33 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             staff = User.objects.get(email="support@softlink.test")
-        self.assertTrue(staff.is_active)
-        self.assertFalse(staff.has_usable_password())
-        self.assertTrue(OneTimePassword.objects.filter(user=staff).exists())
+            invite = ActivationInvite.objects.get(user=staff, organization__isnull=True)
+        self.assertFalse(staff.is_active)
+
+        invite_email = mail.outbox[-1]
+        self.assertEqual(invite_email.subject, "Welcome to CITRAMAC")
+        self.assertIn(invite.token, invite_email.body)
+
+    def test_super_admin_can_resend_invite_for_platform_staff(self):
+        role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
+        create_response = self.client.post(
+            reverse("platform-staff-list"),
+            {
+                "email": "resend-target@softlink.test",
+                "first_name": "Resend",
+                "last_name": "Target",
+                "role": role.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        staff_id = create_response.data["id"]
+        response = self.client.post(
+            reverse("platform-staff-resend-invite", args=[staff_id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(mail.outbox[-1].subject, "Welcome to CITRAMAC")
 
     def test_super_admin_can_retrieve_and_update_a_platform_staff_member(self):
         """

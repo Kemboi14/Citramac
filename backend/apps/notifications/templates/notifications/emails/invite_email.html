@@ -18,7 +18,11 @@
             <tr>
               <td style="padding:32px;">
                 <p style="margin:0 0 16px; color:#1f2933; font-size:16px; line-height:1.5;">
+                  {% if organization_name %}
                   You've been invited to set up <strong>{{ organization_name }}</strong> on CITRAMAC.
+                  {% else %}
+                  You've been invited to join the CITRAMAC platform team.
+                  {% endif %}
                 </p>
                 <div style="margin:8px 0 24px; text-align:center;">
                   <a href="{{ activation_link }}" style="display:inline-block; padding:14px 32px; background-color:#1d4b6e; border-radius:6px; font-size:15px; font-weight:700; color:#ffffff; text-decoration:none;">Activate your account</a>

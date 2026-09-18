@@ -445,6 +445,27 @@ class LoginView(APIView):
 
         cache.delete(lockout_key)
 
+        # Only reached after a *correct* password, so disclosing the org
+        # mismatch here isn't a new enumeration vector (the caller already
+        # proved account ownership) — checking this before password
+        # verification would let `no_organization` be used to probe whether
+        # an email belongs to an organisation. `no_organization=True` is
+        # only ever sent by the dedicated platform-staff sign-in screen
+        # (frontend/src/auth/LoginPage.tsx's `/login/platform-staff` route),
+        # which skips tenant discovery entirely — see docs/14-TENANT-BRANDED-LOGIN-UX.md.
+        # Not counted against the lockout counter: a correct password with
+        # the wrong flag is a routing mistake, not a credential guess, and
+        # counting it would let anyone lock out a real org user for free by
+        # replaying their own valid password against this endpoint.
+        if data.get("no_organization") and user.organization_id is not None:
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "ORGANIZATION_REQUIRED",
+                "This sign-in page is for platform staff accounts only. Please sign in from "
+                "your organisation's login page.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
         if user.mfa_enabled:
             with platform_admin_context():
                 otp, code = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)

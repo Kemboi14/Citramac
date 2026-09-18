@@ -221,8 +221,19 @@ class ActivationInvite(TenantScopedModel):
     auth flow safe (docs/05-AUTHENTICATION-FLOW.md §5.5): without a valid,
     unexpired token the identify endpoint can't be used as a name-guessing
     oracle across the whole platform.
+
+    `organization` overrides `TenantScopedModel`'s non-nullable FK:
+    `organization=None` means a platform-staff invite (Softlink's own team,
+    same convention as `User.organization`/`Role.organization`). Every code
+    path that creates or reads a `NULL`-organization row here already runs
+    inside `apps.tenancy.context.platform_admin_context()`, so the existing
+    RLS policy's `is_platform_admin` clause covers it — no policy change was
+    needed to add this (see `migrations/0002_rls.py`).
     """
 
+    organization = models.ForeignKey(
+        "tenancy.Organization", on_delete=models.PROTECT, db_index=True, null=True, blank=True
+    )
     user = models.ForeignKey(
         "accounts.User", on_delete=models.CASCADE, related_name="activation_invites"
     )

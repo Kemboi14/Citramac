@@ -15,7 +15,12 @@ export interface AuthContextValue {
   accessToken: string | null;
   claims: AccessTokenClaims | null;
   isLoading: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<LoginOutcome>;
+  login: (
+    email: string,
+    password: string,
+    remember?: boolean,
+    noOrganization?: boolean,
+  ) => Promise<LoginOutcome>;
   loginVerifyOtp: (otpToken: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Current user's uploaded profile picture, if any — null until fetched
