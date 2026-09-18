@@ -41,6 +41,8 @@ export interface Staff {
   is_active: boolean;
   is_on_duty: boolean;
   last_login: string | null;
+  /** True while this account is inside LoginView's failed-attempt lockout window. */
+  is_locked: boolean;
 }
 
 export interface StaffInvitePayload {
@@ -110,10 +112,18 @@ export function resendStaffInvite(accessToken: string, id: string) {
   return apiRequest<Staff>(`/staff/${id}/resend_invite/`, { method: "POST", accessToken });
 }
 
+export function unlockStaff(accessToken: string, id: string) {
+  return apiRequest<Staff>(`/staff/${id}/unlock/`, { method: "POST", accessToken });
+}
+
 export function listPlatformStaff(accessToken: string) {
   return apiRequest<Paginated<Staff>>("/platform/staff/", { accessToken });
 }
 
 export function invitePlatformStaff(accessToken: string, payload: StaffInvitePayload) {
   return apiRequest<Staff>("/platform/staff/", { method: "POST", body: payload, accessToken });
+}
+
+export function unlockPlatformStaff(accessToken: string, id: string) {
+  return apiRequest<Staff>(`/platform/staff/${id}/unlock/`, { method: "POST", accessToken });
 }

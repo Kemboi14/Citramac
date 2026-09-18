@@ -8,6 +8,8 @@ import {
   listPlatformStaff,
   listRoles,
   listStaff,
+  unlockPlatformStaff,
+  unlockStaff,
   updateStaff,
   updateRole,
   type Permission,
@@ -49,6 +51,7 @@ export function GlobalRolesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invite, setInvite] = useState<StaffInvitePayload>(EMPTY_INVITE);
 
@@ -161,6 +164,25 @@ export function GlobalRolesPage() {
       setError(err instanceof ApiError ? err.message : "Couldn't assign this role.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleUnlock = async (member: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setUnlockingId(member.id);
+    try {
+      // Mirrors refresh()'s org-vs-platform split: StaffViewSet never
+      // includes organization=None rows, so an org-scoped call would 404
+      // on a platform-staff row and vice versa.
+      const updated = selectedOrganizationId
+        ? await unlockStaff(accessToken, member.id)
+        : await unlockPlatformStaff(accessToken, member.id);
+      setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't unlock this account.");
+    } finally {
+      setUnlockingId(null);
     }
   };
 
@@ -392,6 +414,7 @@ export function GlobalRolesPage() {
               <th className="px-6 py-3">Assign Role</th>
               <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3">Last Login</th>
+              <th className="px-6 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -417,24 +440,43 @@ export function GlobalRolesPage() {
                   </select>
                 </td>
                 <td className="px-6 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      s.is_active
-                        ? "bg-brand-green-tint text-brand-green-dark"
-                        : "bg-status-red-tint text-status-red"
-                    }`}
-                  >
-                    {s.is_active ? "Active" : "Inactive"}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        s.is_active
+                          ? "bg-brand-green-tint text-brand-green-dark"
+                          : "bg-status-red-tint text-status-red"
+                      }`}
+                    >
+                      {s.is_active ? "Active" : "Inactive"}
+                    </span>
+                    {s.is_locked && (
+                      <span className="rounded-full bg-status-red-tint px-2 py-0.5 text-xs font-semibold text-status-red">
+                        Locked
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-3 text-ink-700">
                   {s.last_login ? new Date(s.last_login).toLocaleString() : "Never"}
+                </td>
+                <td className="px-6 py-3">
+                  {s.is_locked && (
+                    <button
+                      type="button"
+                      disabled={unlockingId === s.id}
+                      className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                      onClick={() => handleUnlock(s)}
+                    >
+                      {unlockingId === s.id ? "Unlocking…" : "Unlock"}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
             {staff.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-6 text-center text-ink-500">
+                <td colSpan={6} className="px-6 py-6 text-center text-ink-500">
                   No platform staff yet.
                 </td>
               </tr>

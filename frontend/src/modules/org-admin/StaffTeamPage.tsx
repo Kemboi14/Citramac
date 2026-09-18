@@ -10,6 +10,7 @@ import {
   listStaff,
   resendStaffInvite,
   toggleStaffDuty,
+  unlockStaff,
   type Role,
   type Staff,
 } from "../../lib/governanceApi";
@@ -44,6 +45,7 @@ export function StaffTeamPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
   const [roleFilter, setRoleFilter] = useState("");
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -122,6 +124,22 @@ export function StaffTeamPage() {
       setError(err instanceof ApiError ? err.message : "Couldn't resend the invite.");
     } finally {
       setResendingId(null);
+    }
+  };
+
+  const handleUnlock = async (s: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setNotice(null);
+    setUnlockingId(s.id);
+    try {
+      const updated = await unlockStaff(accessToken, s.id);
+      setStaff((prev) => prev.map((row) => (row.id === s.id ? updated : row)));
+      setNotice(`${s.first_name} ${s.last_name}'s account has been unlocked.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't unlock this account.");
+    } finally {
+      setUnlockingId(null);
     }
   };
 
@@ -334,38 +352,57 @@ export function StaffTeamPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
-                        s.is_active
-                          ? "bg-brand-green-tint text-brand-green-dark"
-                          : "bg-status-red-tint text-status-red"
-                      }`}
-                    >
-                      {s.is_active ? "Active" : "Inactive"}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
+                          s.is_active
+                            ? "bg-brand-green-tint text-brand-green-dark"
+                            : "bg-status-red-tint text-status-red"
+                        }`}
+                      >
+                        {s.is_active ? "Active" : "Inactive"}
+                      </span>
+                      {s.is_locked && (
+                        <span className="rounded-sm bg-status-red-tint px-2 py-0.5 text-xs font-semibold text-status-red">
+                          Locked
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    {s.is_active ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="text-sm font-semibold text-status-red hover:underline"
-                        onClick={() => handleDeactivate(s.id)}
-                      >
-                        Deactivate
-                      </button>
-                    ) : (
-                      !s.last_login && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      {s.is_active ? (
                         <button
                           type="button"
-                          disabled={resendingId === s.id}
-                          className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
-                          onClick={() => handleResendInvite(s)}
+                          disabled={busy}
+                          className="text-sm font-semibold text-status-red hover:underline"
+                          onClick={() => handleDeactivate(s.id)}
                         >
-                          {resendingId === s.id ? "Sending…" : "Resend Invite"}
+                          Deactivate
                         </button>
-                      )
-                    )}
+                      ) : (
+                        !s.last_login && (
+                          <button
+                            type="button"
+                            disabled={resendingId === s.id}
+                            className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                            onClick={() => handleResendInvite(s)}
+                          >
+                            {resendingId === s.id ? "Sending…" : "Resend Invite"}
+                          </button>
+                        )
+                      )}
+                      {s.is_locked && (
+                        <button
+                          type="button"
+                          disabled={unlockingId === s.id}
+                          className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                          onClick={() => handleUnlock(s)}
+                        >
+                          {unlockingId === s.id ? "Unlocking…" : "Unlock"}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

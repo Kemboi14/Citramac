@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 from rest_framework import serializers
 
+from apps.security.models import SecurityPolicy
 from apps.tenancy.models import Branch, Organization
 
 from .models import Permission, Role, User
@@ -152,6 +154,7 @@ class StaffSerializer(serializers.ModelSerializer):
     primary_branch_name = serializers.CharField(source="primary_branch.name", read_only=True)
     organization = serializers.PrimaryKeyRelatedField(read_only=True)
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -173,6 +176,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "is_active",
             "is_on_duty",
             "last_login",
+            "is_locked",
         ]
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
@@ -181,6 +185,17 @@ class StaffSerializer(serializers.ModelSerializer):
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]
+
+    def get_is_locked(self, obj):
+        """
+        Whether this account is currently in the LoginView lockout window —
+        same cache key LoginView (auth_views.py) and the unlock actions
+        (views.py) build, so this reflects real lockout state, not a
+        separate/derived signal.
+        """
+        lockout_key = f"login-lockout:{obj.email.strip().casefold()}"
+        max_attempts = SecurityPolicy.get_solo().max_failed_login_attempts
+        return cache.get(lockout_key, 0) >= max_attempts
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
