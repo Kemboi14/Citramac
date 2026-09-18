@@ -1,5 +1,6 @@
 import contextlib
 
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
@@ -235,6 +236,21 @@ class StaffViewSet(viewsets.ModelViewSet):
         _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
         return Response(StaffSerializer(staff).data)
 
+    @action(detail=True, methods=["post"])
+    def unlock(self, request, pk=None):
+        """
+        Clears an in-progress login lockout early. Rebuilds the exact cache
+        key LoginView (auth_views.py) uses — `.strip().casefold()` on the
+        email guarantees a match regardless of how the local-part case was
+        originally stored, since login lookups are already case-insensitive
+        (User.all_objects.filter(email__iexact=...)) and invite-time
+        uniqueness is enforced the same way (StaffInviteSerializer.validate_email).
+        """
+        staff = self.get_object()
+        lockout_key = f"login-lockout:{staff.email.strip().casefold()}"
+        cache.delete(lockout_key)
+        return Response(StaffSerializer(staff).data)
+
 
 class PlatformStaffViewSet(viewsets.ModelViewSet):
     """Softlink Options' own team (organization=None) — the "Platform
@@ -328,6 +344,14 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                     expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
                 )
         _dispatch_invite_email(staff.email, None, invite.token, organization_id=None)
+        return Response(StaffSerializer(staff).data)
+
+    @action(detail=True, methods=["post"])
+    def unlock(self, request, pk=None):
+        """Platform-staff mirror of StaffViewSet.unlock."""
+        staff = self.get_object()
+        lockout_key = f"login-lockout:{staff.email.strip().casefold()}"
+        cache.delete(lockout_key)
         return Response(StaffSerializer(staff).data)
 
 
