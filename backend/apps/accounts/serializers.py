@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.security.models import SecurityPolicy
-from apps.tenancy.models import Branch, Organization
+from apps.tenancy.models import Branch, Department, Organization
 
 from .models import Permission, Role, User
 
@@ -148,13 +149,29 @@ class StaffSerializer(serializers.ModelSerializer):
         queryset=Role.objects.all(), many=True, required=False
     )
     role_names = serializers.SerializerMethodField()
+    # `Branch.objects`/`Department.objects` are TenantScopedManager-backed —
+    # `.all()` bakes in whatever ambient tenant context is active at the
+    # moment it's called. For an explicit class-body field declaration
+    # like this one, that's Django *startup* (module import), with no
+    # tenant context at all — `.all()` would return `.none()` forever,
+    # rejecting every real branch/department id on every real request.
+    # `all_objects` (the unscoped manager) sidesteps that; validate() below
+    # is what actually enforces "must belong to this org" instead.
     branch_access = serializers.PrimaryKeyRelatedField(
-        queryset=Branch.objects.all(), many=True, required=False
+        queryset=Branch.all_objects.all(), many=True, required=False
+    )
+    primary_branch = serializers.PrimaryKeyRelatedField(
+        queryset=Branch.all_objects.all(), required=False, allow_null=True
     )
     primary_branch_name = serializers.CharField(source="primary_branch.name", read_only=True)
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.all_objects.all(), required=False, allow_null=True
+    )
+    department_name = serializers.CharField(source="department.name", read_only=True, default="")
     organization = serializers.PrimaryKeyRelatedField(read_only=True)
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     is_locked = serializers.SerializerMethodField()
+    access_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -172,11 +189,16 @@ class StaffSerializer(serializers.ModelSerializer):
             "organization_name",
             "primary_branch",
             "primary_branch_name",
+            "department",
+            "department_name",
             "branch_access",
             "is_active",
             "is_on_duty",
             "last_login",
             "is_locked",
+            "access_starts_at",
+            "access_ends_at",
+            "access_status",
         ]
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
@@ -196,6 +218,56 @@ class StaffSerializer(serializers.ModelSerializer):
         lockout_key = f"login-lockout:{obj.email.strip().casefold()}"
         max_attempts = SecurityPolicy.get_solo().max_failed_login_attempts
         return cache.get(lockout_key, 0) >= max_attempts
+
+    def get_access_status(self, obj):
+        """
+        None when this account has no time-bound restriction at all (the
+        common case) — "not_started"/"active"/"expired" otherwise, driving
+        the roster's status badge without duplicating
+        User.is_within_access_window's window logic here.
+        """
+        if not obj.access_starts_at and not obj.access_ends_at:
+            return None
+        now = timezone.now()
+        if obj.access_starts_at and now < obj.access_starts_at:
+            return "not_started"
+        if obj.access_ends_at and now >= obj.access_ends_at:
+            return "expired"
+        return "active"
+
+    def validate(self, attrs):
+        organization = self.instance.organization if self.instance else None
+        if organization is not None:
+            for field_name in ("primary_branch", "department"):
+                value = attrs.get(field_name)
+                if value is not None and value.organization_id != organization.id:
+                    raise serializers.ValidationError(
+                        {field_name: "Does not belong to this staff member's organization."}
+                    )
+            branch_access = attrs.get("branch_access")
+            if branch_access and any(b.organization_id != organization.id for b in branch_access):
+                raise serializers.ValidationError(
+                    {"branch_access": "One or more branches do not belong to this organization."}
+                )
+
+        starts = attrs.get(
+            "access_starts_at", getattr(self.instance, "access_starts_at", None)
+        )
+        ends = attrs.get("access_ends_at", getattr(self.instance, "access_ends_at", None))
+        if starts and ends and ends <= starts:
+            raise serializers.ValidationError(
+                {"access_ends_at": "Must be after the access start date."}
+            )
+        if attrs.get("is_active") and ends and ends <= timezone.now():
+            raise serializers.ValidationError(
+                {
+                    "is_active": (
+                        "Cannot activate — this account's access end date is in the past. "
+                        "Update or clear it first."
+                    )
+                }
+            )
+        return attrs
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
@@ -249,14 +321,35 @@ class StaffInviteSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=150)
     staff_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
     role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    # `all_objects`, not `objects` — see StaffSerializer's identical fields
+    # for why a TenantScopedManager-backed `.objects.all()` here would bake
+    # in an empty queryset forever. `organization` isn't resolved yet at
+    # this point (StaffViewSet.create resolves it after validation, from
+    # either the caller's own org or a superuser's payload), so the
+    # "must belong to this org" check happens in
+    # StaffViewSet._create_staff instead of here.
     primary_branch = serializers.PrimaryKeyRelatedField(
-        queryset=Branch.objects.all(), required=False, allow_null=True
+        queryset=Branch.all_objects.all(), required=False, allow_null=True
+    )
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.all_objects.all(), required=False, allow_null=True
     )
     organization = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.all(), required=False, allow_null=True
     )
+    access_starts_at = serializers.DateTimeField(required=False, allow_null=True)
+    access_ends_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate_email(self, value):
         if User.all_objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
+
+    def validate(self, attrs):
+        starts = attrs.get("access_starts_at")
+        ends = attrs.get("access_ends_at")
+        if starts and ends and ends <= starts:
+            raise serializers.ValidationError(
+                {"access_ends_at": "Must be after the access start date."}
+            )
+        return attrs

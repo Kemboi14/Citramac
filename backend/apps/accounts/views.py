@@ -5,6 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,7 +14,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
 from apps.tenancy.context import platform_admin_context
 
-from .models import ActivationInvite, Permission, Role, User
+from .models import ActivationInvite, OneTimePassword, Permission, Role, User
 from .serializers import (
     MyProfileSerializer,
     PermissionSerializer,
@@ -159,6 +160,13 @@ class StaffViewSet(viewsets.ModelViewSet):
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
 
     def _create_staff(self, request, organization, data):
+        primary_branch = data.get("primary_branch")
+        if primary_branch is not None and primary_branch.organization_id != organization.id:
+            raise ValidationError({"primary_branch": "Does not belong to this organization."})
+        department = data.get("department")
+        if department is not None and department.organization_id != organization.id:
+            raise ValidationError({"department": "Does not belong to this organization."})
+
         with transaction.atomic():
             staff = User.objects.create_user(
                 email=data["email"],
@@ -179,6 +187,11 @@ class StaffViewSet(viewsets.ModelViewSet):
                 staff.primary_branch = data["primary_branch"]
                 staff.branch_access.add(data["primary_branch"])
                 staff.save(update_fields=["primary_branch"])
+            if data.get("department") or data.get("access_starts_at") or data.get("access_ends_at"):
+                staff.department = data.get("department")
+                staff.access_starts_at = data.get("access_starts_at")
+                staff.access_ends_at = data.get("access_ends_at")
+                staff.save(update_fields=["department", "access_starts_at", "access_ends_at"])
 
             invite = ActivationInvite.objects.create(
                 organization=organization,
@@ -250,6 +263,32 @@ class StaffViewSet(viewsets.ModelViewSet):
         lockout_key = f"login-lockout:{staff.email.strip().casefold()}"
         cache.delete(lockout_key)
         return Response(StaffSerializer(staff).data)
+
+    @action(detail=True, methods=["post"])
+    def reset_credentials(self, request, pk=None):
+        """
+        Admin-triggered credential reset — issues the exact same
+        PURPOSE_RESET OneTimePassword + email ForgotPasswordView issues for
+        a self-service request, just triggered by an admin selecting the
+        account instead of the user submitting their own email. Never
+        generates or returns a password: the code only ever reaches the
+        account's own inbox, and the existing OTP -> PasswordSetupToken ->
+        SetPasswordView flow (auth_views.py) is what actually sets the new
+        password, entirely in the user's own session. The account's current
+        password keeps working until they complete that flow.
+        """
+        staff = self.get_object()
+        if not staff.is_active:
+            return Response(
+                {"detail": "This account hasn't been activated yet — resend the invite instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from apps.accounts.auth_views import _dispatch_otp_email
+
+        with platform_admin_context() if request.user.is_superuser else contextlib.nullcontext():
+            otp, code = OneTimePassword.issue(staff, OneTimePassword.PURPOSE_RESET)
+        _dispatch_otp_email(staff, code, otp.purpose)
+        return Response({"detail": "A password reset code has been emailed to this user."})
 
 
 class PlatformStaffViewSet(viewsets.ModelViewSet):
@@ -353,6 +392,22 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         lockout_key = f"login-lockout:{staff.email.strip().casefold()}"
         cache.delete(lockout_key)
         return Response(StaffSerializer(staff).data)
+
+    @action(detail=True, methods=["post"])
+    def reset_credentials(self, request, pk=None):
+        """Platform-staff mirror of StaffViewSet.reset_credentials."""
+        staff = self.get_object()
+        if not staff.is_active:
+            return Response(
+                {"detail": "This account hasn't been activated yet — resend the invite instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from apps.accounts.auth_views import _dispatch_otp_email
+
+        with platform_admin_context():
+            otp, code = OneTimePassword.issue(staff, OneTimePassword.PURPOSE_RESET)
+        _dispatch_otp_email(staff, code, otp.purpose)
+        return Response({"detail": "A password reset code has been emailed to this user."})
 
 
 class EnabledModulesView(APIView):

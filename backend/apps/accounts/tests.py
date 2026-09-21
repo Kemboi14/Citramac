@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.core import mail
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.security.models import SecurityPolicy
@@ -384,6 +387,110 @@ class LoginSecurityTests(APITestCase):
         )
         self.assertEqual(locked_response.status_code, 423)
         self.assertLessEqual(cache.ttl("login-lockout:jane@org-x.test"), 60)
+
+
+class TimeBoundAccessTests(APITestCase):
+    """
+    User.access_starts_at/access_ends_at (a locum/fixed-term account) — both
+    the reactive checks (LoginView, TenantAwareJWTAuthentication) and the
+    proactive Celery Beat task (apps.accounts.tasks.enforce_access_windows).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-timebound", facility_type="CLINIC"
+            )
+
+    def _make_user(self, **kwargs):
+        with platform_admin_context():
+            return User.objects.create_user(
+                email=kwargs.pop("email", "locum@org-timebound.test"),
+                password="Correct!Horse99",
+                organization=self.org,
+                is_active=True,
+                mfa_enabled=False,
+                **kwargs,
+            )
+
+    def test_login_blocked_before_access_window_starts(self):
+        self._make_user(access_starts_at=timezone.now() + timedelta(days=1))
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "locum@org-timebound.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "ACCESS_WINDOW_CLOSED")
+
+    def test_login_blocked_after_access_window_ends(self):
+        self._make_user(access_ends_at=timezone.now() - timedelta(minutes=1))
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "locum@org-timebound.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "ACCESS_WINDOW_CLOSED")
+
+    def test_login_allowed_within_access_window(self):
+        self._make_user(
+            access_starts_at=timezone.now() - timedelta(days=1),
+            access_ends_at=timezone.now() + timedelta(days=1),
+        )
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "locum@org-timebound.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("access", response.data)
+
+    def test_already_issued_token_is_rejected_once_window_closes(self):
+        """
+        The reactive check must run on every authenticated request, not just
+        at /login — an access token issued while the window was still open
+        must stop working the moment it closes, without waiting for the
+        token to expire on its own.
+        """
+        user = self._make_user(access_ends_at=timezone.now() + timedelta(hours=1))
+        access, _ = issue_tokens(user)
+
+        ok_response = self.client.get(
+            reverse("me-enabled-modules"), HTTP_AUTHORIZATION=f"Bearer {access}"
+        )
+        self.assertEqual(ok_response.status_code, 200)
+
+        with platform_admin_context():
+            user.access_ends_at = timezone.now() - timedelta(minutes=1)
+            user.save(update_fields=["access_ends_at"])
+
+        blocked_response = self.client.get(
+            reverse("me-enabled-modules"), HTTP_AUTHORIZATION=f"Bearer {access}"
+        )
+        self.assertEqual(blocked_response.status_code, 401)
+
+    def test_enforce_access_windows_task_deactivates_expired_users(self):
+        from .tasks import enforce_access_windows
+
+        expired = self._make_user(
+            email="expired@org-timebound.test", access_ends_at=timezone.now() - timedelta(minutes=1)
+        )
+        still_valid = self._make_user(
+            email="still-valid@org-timebound.test",
+            access_ends_at=timezone.now() + timedelta(days=1),
+        )
+        unrestricted = self._make_user(email="unrestricted@org-timebound.test")
+
+        deactivated_count = enforce_access_windows()
+
+        self.assertEqual(deactivated_count, 1)
+        with platform_admin_context():
+            expired.refresh_from_db()
+            still_valid.refresh_from_db()
+            unrestricted.refresh_from_db()
+        self.assertFalse(expired.is_active)
+        self.assertTrue(still_valid.is_active)
+        self.assertTrue(unrestricted.is_active)
 
 
 class NoOrganizationLoginTests(APITestCase):
@@ -886,6 +993,136 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertTrue(response.data["is_on_duty"])
+
+    def test_staff_invite_can_set_branch_department_and_access_window(self):
+        from apps.tenancy.models import Branch, Department
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4"
+            )
+            department = Department.objects.create(organization=self.org, name="Pharmacy")
+        starts = timezone.now() + timedelta(days=1)
+        ends = timezone.now() + timedelta(days=30)
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "locum@amani.test",
+                "first_name": "Locum",
+                "last_name": "Doc",
+                "role": self.psychiatrist_template.id,
+                "primary_branch": branch.id,
+                "department": department.id,
+                "access_starts_at": starts.isoformat(),
+                "access_ends_at": ends.isoformat(),
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            staff = User.objects.get(email="locum@amani.test")
+            self.assertEqual(staff.primary_branch_id, branch.id)
+            self.assertEqual(staff.department_id, department.id)
+            self.assertIsNotNone(staff.access_starts_at)
+            self.assertIsNotNone(staff.access_ends_at)
+
+    def test_staff_invite_rejects_a_department_from_another_org(self):
+        from apps.tenancy.models import Department
+
+        with platform_admin_context():
+            other_org = Organization.objects.create(
+                name="Other Org", slug="other-org-dept", facility_type="CLINIC"
+            )
+            other_department = Department.objects.create(organization=other_org, name="Records")
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "crossorg@amani.test",
+                "first_name": "Cross",
+                "last_name": "Org",
+                "role": self.psychiatrist_template.id,
+                "department": other_department.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("department", response.data)
+
+    def test_cannot_patch_staff_into_a_department_from_another_org(self):
+        from apps.tenancy.models import Department
+
+        with platform_admin_context():
+            other_org = Organization.objects.create(
+                name="Other Org 2", slug="other-org-dept-2", facility_type="CLINIC"
+            )
+            other_department = Department.objects.create(organization=other_org, name="Records")
+            staff = User.objects.create_user(
+                email="editme@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.patch(
+            reverse("staff-detail", args=[staff.id]),
+            {"department": other_department.id},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("department", response.data)
+
+    def test_reset_credentials_emails_otp_to_active_staff(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="resetme@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.post(
+            reverse("staff-reset-credentials", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        with platform_admin_context():
+            self.assertTrue(
+                OneTimePassword.objects.filter(
+                    user=staff, purpose=OneTimePassword.PURPOSE_RESET
+                ).exists()
+            )
+        reset_email = mail.outbox[-1]
+        self.assertIn(staff.email, reset_email.to)
+
+    def test_reset_credentials_rejects_a_never_activated_staff_member(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="notyetactive@amani.test", organization=self.org, is_active=False
+            )
+        response = self.client.post(
+            reverse("staff-reset-credentials", args=[staff.id]),
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_reactivate_staff_whose_access_window_has_expired(self):
+        with platform_admin_context():
+            staff = User.objects.create_user(
+                email="expired@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=False,
+                access_ends_at=timezone.now() - timedelta(days=1),
+            )
+        response = self.client.patch(
+            reverse("staff-detail", args=[staff.id]),
+            {"is_active": True},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("is_active", response.data)
 
     def test_org_admin_cannot_see_other_orgs_staff(self):
         with platform_admin_context():

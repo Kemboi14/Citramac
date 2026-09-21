@@ -288,6 +288,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.client_registry.tasks.send_appointment_reminders",
         "schedule": crontab(minute="*/15"),
     },
+    # Time-bound (locum/fixed-term) account access — deactivates any User
+    # whose access_ends_at has passed, so `is_active` reflects an expired
+    # grant even for someone who never attempts to log in again. Hourly is
+    # the enforcement granularity; the reactive checks in
+    # authentication.py/auth_views.py close the gap between runs for anyone
+    # who *does* attempt to use an already-expired session.
+    "enforce-access-windows": {
+        "task": "apps.accounts.tasks.enforce_access_windows",
+        "schedule": crontab(minute=0),
+    },
 }
 
 # How far ahead of an appointment its one reminder email goes out.

@@ -44,6 +44,15 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                     raise AuthenticationFailed(
                         "This account's organization is no longer active."
                     )
+
+                # Same "reject on every call, not just new logins" principle
+                # as the suspended-org check above — a time-bound (e.g.
+                # locum/fixed-term) account whose window has closed loses
+                # access immediately, not just at its next login.
+                if not user.is_within_access_window():
+                    raise AuthenticationFailed(
+                        "This account's access is not currently active for this time period."
+                    )
         if result is not None:
             user, _token = result
             set_tenant_context(

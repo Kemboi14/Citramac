@@ -509,6 +509,15 @@ class LoginView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        if not user.is_within_access_window():
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "ACCESS_WINDOW_CLOSED",
+                "Your account access is not currently active for this time period. Please "
+                "contact your administrator.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
         # Checking this before password verification would let
         # `no_organization` be used to probe whether an email belongs to an
         # organisation. `no_organization=True` is only ever sent by the
@@ -602,6 +611,7 @@ class LoginVerifyOtpView(APIView):
                     user.organization_id is None
                     or user.organization.status != Organization.STATUS_SUSPENDED
                 )
+                and user.is_within_access_window()
                 and cache.get(f"login-lockout:{user.email.casefold()}", 0)
                 < policy.max_failed_login_attempts
             )

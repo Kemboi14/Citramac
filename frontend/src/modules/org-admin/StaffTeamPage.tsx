@@ -3,17 +3,22 @@ import { UserPlus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
+import { listDepartments, type Department } from "../../lib/departmentsApi";
 import {
   deactivateStaff,
   inviteStaff,
   listRoles,
   listStaff,
   resendStaffInvite,
+  resetStaffCredentials,
   toggleStaffDuty,
   unlockStaff,
+  updateStaff,
   type Role,
   type Staff,
 } from "../../lib/governanceApi";
+import { Drawer } from "../../components/Drawer";
+import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 
 const FIELD_CLASS =
@@ -23,6 +28,17 @@ const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
 
+const ACCESS_STATUS_TINT: Record<string, string> = {
+  not_started: "bg-status-amber-tint text-status-amber",
+  active: "bg-brand-green-tint text-brand-green-dark",
+  expired: "bg-status-red-tint text-status-red",
+};
+const ACCESS_STATUS_LABEL: Record<string, string> = {
+  not_started: "Access not started",
+  active: "Access time-limited",
+  expired: "Access expired",
+};
+
 const EMPTY_INVITE = {
   email: "",
   first_name: "",
@@ -30,7 +46,22 @@ const EMPTY_INVITE = {
   staff_id: "",
   role: "",
   primary_branch: "",
+  department: "",
+  access_starts_at: "",
+  access_ends_at: "",
 };
+
+interface AccessEditState {
+  primary_branch: string;
+  department: string;
+  access_starts_at: string;
+  access_ends_at: string;
+}
+
+function toDatetimeLocalInput(value: string | null) {
+  if (!value) return "";
+  return value.slice(0, 16);
+}
 
 /**
  * Org Admin's staff roster — doctors, nurses, therapists, supervisors.
@@ -41,17 +72,32 @@ export function StaffTeamPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   const [roleFilter, setRoleFilter] = useState("");
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const [accessDrawer, setAccessDrawer] = useState<{ open: boolean; staff: Staff | null }>({
+    open: false,
+    staff: null,
+  });
+  const [accessForm, setAccessForm] = useState<AccessEditState>({
+    primary_branch: "",
+    department: "",
+    access_starts_at: "",
+    access_ends_at: "",
+  });
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   const refreshStaff = async () => {
     if (!accessToken) return;
@@ -67,11 +113,13 @@ export function StaffTeamPage() {
         listStaff(accessToken),
         listRoles(accessToken),
         listBranches(accessToken),
+        listDepartments(accessToken),
       ])
-        .then(([staffRes, roleRes, branchRes]) => {
+        .then(([staffRes, roleRes, branchRes, deptRes]) => {
           setStaff(staffRes.results);
           setRoles(roleRes.results);
           setBranches(branchRes.results);
+          setDepartments(deptRes.results);
         })
         .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load staff."))
         .finally(() => setLoading(false));
@@ -91,6 +139,9 @@ export function StaffTeamPage() {
         staff_id: inviteForm.staff_id || undefined,
         role: Number(inviteForm.role),
         primary_branch: inviteForm.primary_branch || undefined,
+        department: inviteForm.department || undefined,
+        access_starts_at: inviteForm.access_starts_at || undefined,
+        access_ends_at: inviteForm.access_ends_at || undefined,
       });
       setInviteForm(EMPTY_INVITE);
       setShowInviteForm(false);
@@ -99,6 +150,66 @@ export function StaffTeamPage() {
       setInviteError(err instanceof ApiError ? err.message : "Couldn't invite this staff member.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openAccessDrawer = (s: Staff) => {
+    setAccessError(null);
+    setAccessForm({
+      primary_branch: s.primary_branch ?? "",
+      department: s.department ?? "",
+      access_starts_at: toDatetimeLocalInput(s.access_starts_at),
+      access_ends_at: toDatetimeLocalInput(s.access_ends_at),
+    });
+    setAccessDrawer({ open: true, staff: s });
+  };
+
+  const saveAccessDrawer = async () => {
+    if (!accessToken || !accessDrawer.staff) return;
+    setAccessError(null);
+    try {
+      const updated = await updateStaff(accessToken, accessDrawer.staff.id, {
+        primary_branch: accessForm.primary_branch || null,
+        department: accessForm.department || null,
+        access_starts_at: accessForm.access_starts_at || null,
+        access_ends_at: accessForm.access_ends_at || null,
+      });
+      setStaff((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      setAccessDrawer({ open: false, staff: null });
+    } catch (err) {
+      setAccessError(
+        err instanceof ApiError ? err.message : "Couldn't update this staff member's assignment.",
+      );
+      throw err;
+    }
+  };
+
+  const handleActivate = async (s: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setActivatingId(s.id);
+    try {
+      const updated = await updateStaff(accessToken, s.id, { is_active: true });
+      setStaff((prev) => prev.map((row) => (row.id === s.id ? updated : row)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reactivate this account.");
+    } finally {
+      setActivatingId(null);
+    }
+  };
+
+  const handleResetCredentials = async (s: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setNotice(null);
+    setResettingId(s.id);
+    try {
+      await resetStaffCredentials(accessToken, s.id);
+      setNotice(`A password reset code has been emailed to ${s.email}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reset this account's credentials.");
+    } finally {
+      setResettingId(null);
     }
   };
 
@@ -188,8 +299,13 @@ export function StaffTeamPage() {
     },
     {
       key: "branch",
-      header: "Primary Branch",
-      cell: (s) => s.primary_branch_name ?? "—",
+      header: "Branch / Department",
+      cell: (s) => (
+        <div>
+          <div>{s.primary_branch_name ?? "—"}</div>
+          {s.department_name && <div className="text-xs text-ink-500">{s.department_name}</div>}
+        </div>
+      ),
     },
     {
       key: "duty",
@@ -228,6 +344,13 @@ export function StaffTeamPage() {
               Locked
             </span>
           )}
+          {s.access_status && (
+            <span
+              className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${ACCESS_STATUS_TINT[s.access_status]}`}
+            >
+              {ACCESS_STATUS_LABEL[s.access_status]}
+            </span>
+          )}
         </div>
       ),
     },
@@ -236,78 +359,75 @@ export function StaffTeamPage() {
       header: "Actions",
       hideInCard: true,
       cell: (s) => (
-        <div className="flex flex-wrap items-center gap-3">
-          {s.is_active ? (
-            <button
-              type="button"
-              disabled={busy}
-              className="text-sm font-semibold text-status-red hover:underline"
-              onClick={() => handleDeactivate(s.id)}
-            >
-              Deactivate
-            </button>
-          ) : (
-            !s.last_login && (
-              <button
-                type="button"
-                disabled={resendingId === s.id}
-                className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
-                onClick={() => handleResendInvite(s)}
-              >
-                {resendingId === s.id ? "Sending…" : "Resend Invite"}
-              </button>
-            )
-          )}
-          {s.is_locked && (
-            <button
-              type="button"
-              disabled={unlockingId === s.id}
-              className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
-              onClick={() => handleUnlock(s)}
-            >
-              {unlockingId === s.id ? "Unlocking…" : "Unlock"}
-            </button>
-          )}
-        </div>
+        <div className="flex flex-wrap items-center gap-3">{staffRowActions(s)}</div>
       ),
     },
   ];
 
-  const staffCardActions = (s: Staff) => (
-    <>
-      {s.is_active ? (
-        <button
-          type="button"
-          disabled={busy}
-          className="flex-1 text-center text-sm font-semibold text-status-red hover:underline"
-          onClick={() => handleDeactivate(s.id)}
-        >
-          Deactivate
-        </button>
-      ) : (
-        !s.last_login && (
+  function staffRowActions(s: Staff, cardLayout = false) {
+    const itemClass = cardLayout ? "flex-1 text-center text-sm font-semibold" : "text-sm font-semibold";
+    return (
+      <>
+        {s.is_active ? (
+          <button
+            type="button"
+            disabled={busy}
+            className={`${itemClass} text-status-red hover:underline`}
+            onClick={() => handleDeactivate(s.id)}
+          >
+            Deactivate
+          </button>
+        ) : s.last_login ? (
+          <button
+            type="button"
+            disabled={activatingId === s.id}
+            className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
+            onClick={() => handleActivate(s)}
+          >
+            {activatingId === s.id ? "Activating…" : "Activate"}
+          </button>
+        ) : (
           <button
             type="button"
             disabled={resendingId === s.id}
-            className="flex-1 text-center text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+            className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
             onClick={() => handleResendInvite(s)}
           >
             {resendingId === s.id ? "Sending…" : "Resend Invite"}
           </button>
-        )
-      )}
-      {s.is_locked && (
+        )}
+        {s.is_active && (
+          <button
+            type="button"
+            disabled={resettingId === s.id}
+            className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
+            onClick={() => handleResetCredentials(s)}
+          >
+            {resettingId === s.id ? "Sending…" : "Reset Credentials"}
+          </button>
+        )}
+        {s.is_locked && (
+          <button
+            type="button"
+            disabled={unlockingId === s.id}
+            className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
+            onClick={() => handleUnlock(s)}
+          >
+            {unlockingId === s.id ? "Unlocking…" : "Unlock"}
+          </button>
+        )}
         <button
           type="button"
-          disabled={unlockingId === s.id}
-          className="flex-1 text-center text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
-          onClick={() => handleUnlock(s)}
+          className={`${itemClass} text-ink-700 hover:underline`}
+          onClick={() => openAccessDrawer(s)}
         >
-          {unlockingId === s.id ? "Unlocking…" : "Unlock"}
+          Branch / Access…
         </button>
-      )}
-    </>
-  );
+      </>
+    );
+  }
+
+  const staffCardActions = (s: Staff) => <>{staffRowActions(s, true)}</>;
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -417,6 +537,49 @@ export function StaffTeamPage() {
                 ))}
               </select>
             </label>
+            <label className={LABEL_CLASS}>
+              Department
+              <select
+                className={FIELD_CLASS}
+                value={inviteForm.department}
+                onChange={(e) => setInviteForm((f) => ({ ...f, department: e.target.value }))}
+              >
+                <option value="">Select a department…</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="mb-2 text-[11.5px] font-semibold text-ink-700">
+              Access window (optional — for a locum or fixed-term account)
+            </h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className={LABEL_CLASS}>
+                Access starts
+                <input
+                  type="datetime-local"
+                  className={FIELD_CLASS}
+                  value={inviteForm.access_starts_at}
+                  onChange={(e) =>
+                    setInviteForm((f) => ({ ...f, access_starts_at: e.target.value }))
+                  }
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Access ends
+                <input
+                  type="datetime-local"
+                  className={FIELD_CLASS}
+                  value={inviteForm.access_ends_at}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, access_ends_at: e.target.value }))}
+                />
+              </label>
+            </div>
           </div>
 
           {inviteError && (
@@ -464,6 +627,94 @@ export function StaffTeamPage() {
           emptyMessage="No staff members found."
         />
       )}
+
+      <Drawer
+        open={accessDrawer.open}
+        title="Branch, Department & Access"
+        subtitle={
+          accessDrawer.staff ? `${accessDrawer.staff.first_name} ${accessDrawer.staff.last_name}` : undefined
+        }
+        onClose={() => setAccessDrawer({ open: false, staff: null })}
+        footer={
+          <>
+            <button
+              type="button"
+              className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
+              onClick={() => setAccessDrawer({ open: false, staff: null })}
+            >
+              Cancel
+            </button>
+            <SaveButton onSave={saveAccessDrawer} className="flex-1">
+              Save changes
+            </SaveButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <label className={LABEL_CLASS}>
+            Primary Branch
+            <select
+              className={FIELD_CLASS}
+              value={accessForm.primary_branch}
+              onChange={(e) => setAccessForm((f) => ({ ...f, primary_branch: e.target.value }))}
+            >
+              <option value="">Unassigned</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={LABEL_CLASS}>
+            Department
+            <select
+              className={FIELD_CLASS}
+              value={accessForm.department}
+              onChange={(e) => setAccessForm((f) => ({ ...f, department: e.target.value }))}
+            >
+              <option value="">Unassigned</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <h3 className="mb-2 text-[11.5px] font-semibold text-ink-700">
+              Access window (optional — for a locum or fixed-term account)
+            </h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className={LABEL_CLASS}>
+                Access starts
+                <input
+                  type="datetime-local"
+                  className={FIELD_CLASS}
+                  value={accessForm.access_starts_at}
+                  onChange={(e) =>
+                    setAccessForm((f) => ({ ...f, access_starts_at: e.target.value }))
+                  }
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Access ends
+                <input
+                  type="datetime-local"
+                  className={FIELD_CLASS}
+                  value={accessForm.access_ends_at}
+                  onChange={(e) => setAccessForm((f) => ({ ...f, access_ends_at: e.target.value }))}
+                />
+              </label>
+            </div>
+          </div>
+          {accessError && (
+            <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {accessError}
+            </p>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 }

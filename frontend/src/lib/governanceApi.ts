@@ -24,6 +24,8 @@ export interface Role {
   user_count: number;
 }
 
+export type StaffAccessStatus = "not_started" | "active" | "expired" | null;
+
 export interface Staff {
   id: string;
   staff_id: string;
@@ -37,12 +39,18 @@ export interface Staff {
   organization_name: string | null;
   primary_branch: string | null;
   primary_branch_name: string | null;
+  department: string | null;
+  department_name: string | null;
   branch_access: string[];
   is_active: boolean;
   is_on_duty: boolean;
   last_login: string | null;
   /** True while this account is inside LoginView's failed-attempt lockout window. */
   is_locked: boolean;
+  /** Null when unrestricted; otherwise where `now` sits relative to the access window. */
+  access_starts_at: string | null;
+  access_ends_at: string | null;
+  access_status: StaffAccessStatus;
 }
 
 export interface StaffInvitePayload {
@@ -52,9 +60,13 @@ export interface StaffInvitePayload {
   staff_id?: string;
   role: number;
   primary_branch?: string;
+  department?: string;
   /** Super Admin only — which org to create this staff member in. Ignored
    * (an Org Admin's own org is used instead) for any other caller. */
   organization?: string;
+  /** Time-bound (e.g. locum/fixed-term) access window — both optional, null/omitted means unrestricted. */
+  access_starts_at?: string | null;
+  access_ends_at?: string | null;
 }
 
 export function listPermissions(accessToken: string) {
@@ -116,6 +128,13 @@ export function unlockStaff(accessToken: string, id: string) {
   return apiRequest<Staff>(`/staff/${id}/unlock/`, { method: "POST", accessToken });
 }
 
+export function resetStaffCredentials(accessToken: string, id: string) {
+  return apiRequest<{ detail: string }>(`/staff/${id}/reset_credentials/`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
 export function listPlatformStaff(accessToken: string) {
   return apiRequest<Paginated<Staff>>("/platform/staff/", { accessToken });
 }
@@ -126,4 +145,11 @@ export function invitePlatformStaff(accessToken: string, payload: StaffInvitePay
 
 export function unlockPlatformStaff(accessToken: string, id: string) {
   return apiRequest<Staff>(`/platform/staff/${id}/unlock/`, { method: "POST", accessToken });
+}
+
+export function resetPlatformStaffCredentials(accessToken: string, id: string) {
+  return apiRequest<{ detail: string }>(`/platform/staff/${id}/reset_credentials/`, {
+    method: "POST",
+    accessToken,
+  });
 }

@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.tenancy.managers import TenantScopedManager
-from apps.tenancy.models import Branch, Organization, TenantScopedModel, TimestampedModel
+from apps.tenancy.models import Branch, Department, Organization, TenantScopedModel, TimestampedModel
 
 
 def _opaque_token():
@@ -144,6 +144,9 @@ class User(AbstractBaseUser):
     primary_branch = models.ForeignKey(
         Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    department = models.ForeignKey(
+        Department, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_members"
+    )
 
     staff_id = models.CharField(max_length=64, blank=True)
     first_name = models.CharField(max_length=150, blank=True)
@@ -178,6 +181,19 @@ class User(AbstractBaseUser):
     )
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
+    # Time-bound account access (e.g. a locum or fixed-term contractor) —
+    # both null means unrestricted, the default for every ordinary staff
+    # member. Checked at every authentication (TenantAwareJWTAuthentication,
+    # LoginView, LoginVerifyOtpView in auth_views.py) so an already-issued
+    # access token is rejected the moment the window closes, not just at the
+    # next login — the same "reject on every call, not just new logins"
+    # principle STATUS_SUSPENDED already uses. Also enforced proactively by
+    # apps.accounts.tasks.enforce_access_windows (CELERY_BEAT_SCHEDULE,
+    # hourly) so `is_active` reflects an expired window even for a user who
+    # never attempts to log in again.
+    access_starts_at = models.DateTimeField(null=True, blank=True)
+    access_ends_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -211,6 +227,14 @@ class User(AbstractBaseUser):
 
     def get_short_name(self):
         return self.first_name or self.email
+
+    def is_within_access_window(self, at=None):
+        at = at or timezone.now()
+        if self.access_starts_at and at < self.access_starts_at:
+            return False
+        if self.access_ends_at and at >= self.access_ends_at:
+            return False
+        return True
 
 
 class ActivationInvite(TenantScopedModel):
