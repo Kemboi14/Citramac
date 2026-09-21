@@ -45,6 +45,7 @@ import { WardBedManagementPage } from "./modules/org-admin/WardBedManagementPage
 import { StaffTeamPage } from "./modules/org-admin/StaffTeamPage";
 import { OrgRolesPermissionsPage } from "./modules/org-admin/OrgRolesPermissionsPage";
 import { BranchSettingsPage } from "./modules/org-admin/BranchSettingsPage";
+import { BranchesAndDepartmentsPage } from "./modules/org-admin/BranchesAndDepartmentsPage";
 
 function App() {
   return (
@@ -79,6 +80,7 @@ function App() {
         <Route path="/org-admin" element={<OrgAdminShell />}>
           <Route index element={<OrgDashboardPage />} />
           <Route path="wards" element={<WardBedManagementPage />} />
+          <Route path="branches" element={<BranchesAndDepartmentsPage />} />
           <Route path="staff" element={<StaffTeamPage />} />
           <Route path="branch-settings" element={<BranchSettingsPage />} />
           <Route path="roles" element={<OrgRolesPermissionsPage />} />

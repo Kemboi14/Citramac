@@ -19,6 +19,7 @@ import {
   LogOut,
   Mail,
   MessageSquare,
+  Network,
   Paperclip,
   Phone,
   Pill,
@@ -83,6 +84,7 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
     items: [
       { label: "Org Dashboard", to: "/org-admin", icon: LayoutDashboard },
       { label: "Ward & Bed Management", to: "/org-admin/wards", icon: Building2 },
+      { label: "Branches & Departments", to: "/org-admin/branches", icon: Network },
       { label: "Staff / MHP Team", to: "/org-admin/staff", icon: Users },
       { label: "Branch Settings", to: "/org-admin/branch-settings", icon: Settings },
       { label: "Roles & Permissions", to: "/org-admin/roles", icon: ShieldCheck },

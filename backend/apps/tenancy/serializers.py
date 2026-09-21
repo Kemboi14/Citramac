@@ -5,6 +5,7 @@ from rest_framework import serializers
 from .crypto import encrypt_value
 from .models import (
     Branch,
+    Department,
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
@@ -248,6 +249,25 @@ class BranchSerializer(serializers.ModelSerializer):
         if credentials:
             validated_data["sha_api_credentials_encrypted"] = encrypt_value(credentials)
         return super().update(instance, validated_data)
+
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True, default="")
+
+    class Meta:
+        model = Department
+        fields = [
+            "id",
+            "organization",
+            "organization_name",
+            "branch",
+            "branch_name",
+            "name",
+            "description",
+            "is_active",
+        ]
+        read_only_fields = ["organization"]
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):

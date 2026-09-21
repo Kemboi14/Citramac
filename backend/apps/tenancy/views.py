@@ -19,6 +19,7 @@ from apps.tenancy.crypto import decrypt_value
 
 from .models import (
     Branch,
+    Department,
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
@@ -29,6 +30,7 @@ from .models import (
 from .serializers import (
     BranchSerializer,
     CreateOrganizationSerializer,
+    DepartmentSerializer,
     OrganizationEmailSettingsSerializer,
     OrganizationSerializer,
     OrganizationSmsSettingsSerializer,
@@ -544,15 +546,18 @@ class OrganizationSmsTestView(APIView):
 class BranchViewSet(viewsets.ModelViewSet):
     """
     Super Admin: every branch across every tenant (Branches screen). Org
-    Admin: only their own organization's branch(es) (Branch Settings screen)
-    — enforced by TenantScopedManager auto-scoping for get_queryset() and
-    IsPlatformSuperAdminOrOrgAdmin for object-level writes. Branch *creation*
-    is Super-Admin-only (docs/04-MULTI-TENANCY.md §4.1).
+    Admin: their own organization's branches, including creating new ones
+    (Branches & Departments screen) — docs/04-MULTI-TENANCY.md §4.1: "Org
+    Admin... manages that org's Branches". Enforced by TenantScopedManager
+    auto-scoping for get_queryset() and IsPlatformSuperAdminOrOrgAdmin for
+    object-level writes; perform_create below is what actually confines an
+    Org Admin's new Branch to their own organization no matter what
+    `organization` value the request body sends.
     """
 
     serializer_class = BranchSerializer
     permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
-    org_admin_can_create = False
+    org_admin_can_create = True
 
     def get_queryset(self):
         queryset = Branch.objects.annotate(
@@ -569,15 +574,71 @@ class BranchViewSet(viewsets.ModelViewSet):
         return queryset.order_by("name")
 
     def perform_create(self, serializer):
-        organization_id = self.request.data.get("organization")
-        with platform_admin_context():
-            organization = generics.get_object_or_404(Organization, pk=organization_id)
+        user = self.request.user
+        if user.is_superuser:
+            organization_id = self.request.data.get("organization")
+            with platform_admin_context():
+                organization = generics.get_object_or_404(Organization, pk=organization_id)
+        else:
+            # Org Admin's new Branch always belongs to their own
+            # organization — any `organization` the request body sent is
+            # ignored, not merely validated, so it can't be used to create
+            # a Branch under a different tenant.
+            organization = user.organization
         serializer.save(
             organization=organization,
             ownership_type=serializer.validated_data.get(
                 "ownership_type", organization.ownership_type
             ),
         )
+
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """
+    Org unit one level below Branch (docs/04-MULTI-TENANCY.md §4.1) — a
+    branch's Pharmacy, Records, Nursing, etc. Same tenant-scoping shape as
+    BranchViewSet, but creation was never restricted to Super Admin here:
+    there's no MFL/registration concept at this level.
+    """
+
+    serializer_class = DepartmentSerializer
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+    org_admin_can_create = True
+
+    def get_queryset(self):
+        queryset = Department.objects.select_related("organization", "branch")
+        params = self.request.query_params
+        q = params.get("q")
+        if q:
+            queryset = queryset.filter(name__icontains=q)
+        branch_id = params.get("branch")
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+        return queryset.order_by("name")
+
+    def _resolve_organization(self):
+        user = self.request.user
+        if user.is_superuser:
+            organization_id = self.request.data.get("organization")
+            with platform_admin_context():
+                return generics.get_object_or_404(Organization, pk=organization_id)
+        return user.organization
+
+    def _validate_branch(self, branch, organization):
+        if branch is not None and branch.organization_id != organization.id:
+            raise ValidationError({"branch": "This branch does not belong to your organization."})
+
+    def perform_create(self, serializer):
+        organization = self._resolve_organization()
+        branch = serializer.validated_data.get("branch")
+        self._validate_branch(branch, organization)
+        serializer.save(organization=organization)
+
+    def perform_update(self, serializer):
+        organization = serializer.instance.organization
+        branch = serializer.validated_data.get("branch", serializer.instance.branch)
+        self._validate_branch(branch, organization)
+        serializer.save()
 
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):

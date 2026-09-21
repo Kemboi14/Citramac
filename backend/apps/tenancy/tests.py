@@ -14,6 +14,7 @@ from apps.accounts.tokens import issue_tokens
 from apps.tenancy.context import clear_tenant_context, platform_admin_context, set_tenant_context
 from apps.tenancy.models import (
     Branch,
+    Department,
     Organization,
     PlatformBranding,
     PlatformEmailSettings,
@@ -90,6 +91,36 @@ class TenantIsolationTests(TestCase):
         with platform_admin_context():
             names = set(Branch.objects.values_list("name", flat=True))
         self.assertEqual(names, {"Branch A1", "Branch B1"})
+
+
+class DepartmentIsolationTests(TestCase):
+    """Same RLS contract as TenantIsolationTests, for the new Department table."""
+
+    def setUp(self):
+        self.org_a = Organization.objects.create(name="Org A", slug="dept-iso-a", facility_type="CLINIC")
+        self.org_b = Organization.objects.create(name="Org B", slug="dept-iso-b", facility_type="CLINIC")
+        with platform_admin_context():
+            self.dept_a = Department.objects.create(organization=self.org_a, name="Pharmacy A")
+            self.dept_b = Department.objects.create(organization=self.org_b, name="Pharmacy B")
+        self.addCleanup(clear_tenant_context)
+
+    def test_scoped_manager_only_sees_own_org(self):
+        set_tenant_context(organization_id=self.org_a.id)
+        names = set(Department.objects.values_list("name", flat=True))
+        self.assertEqual(names, {"Pharmacy A"})
+
+    def test_raw_sql_still_blocked_by_rls(self):
+        """No Django ORM involved — proves this is a database-level control, same as Branch's."""
+        set_tenant_context(organization_id=self.org_a.id)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT name FROM tenancy_department")
+            rows = [row[0] for row in cursor.fetchall()]
+        self.assertEqual(rows, ["Pharmacy A"])
+
+    def test_platform_admin_context_sees_all_orgs(self):
+        with platform_admin_context():
+            names = set(Department.objects.values_list("name", flat=True))
+        self.assertEqual(names, {"Pharmacy A", "Pharmacy B"})
 
 
 class OnboardTenantCommandTests(TestCase):
@@ -587,14 +618,26 @@ class BranchAndSubscriptionScopingTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.branch_a.id))
 
-    def test_org_admin_cannot_create_branch(self):
+    def test_org_admin_can_create_branch_in_own_org(self):
         response = self.client.post(
             reverse("branch-list"),
             {"organization": str(self.org_a.id), "name": "New Branch", "facility_level": "L3"},
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(response.data["organization"]), str(self.org_a.id))
+
+    def test_org_admin_cannot_create_branch_in_another_org(self):
+        """Submitting a different org's id doesn't work — it's ignored, not honored."""
+        response = self.client.post(
+            reverse("branch-list"),
+            {"organization": str(self.org_b.id), "name": "Sneaky Branch", "facility_level": "L3"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(response.data["organization"]), str(self.org_a.id))
 
     def test_org_admin_can_update_own_branch(self):
         response = self.client.patch(
@@ -633,6 +676,111 @@ class BranchAndSubscriptionScopingTests(APITestCase):
             self.branch_a.refresh_from_db()
         self.assertNotIn("super-secret-api-key", self.branch_a.sha_api_credentials_encrypted)
         self.assertTrue(self.branch_a.has_sha_credentials)
+
+
+class DepartmentScopingTests(APITestCase):
+    """Branches & Departments screen — same isolation contract as
+    BranchAndSubscriptionScopingTests, plus branch-assignment rules."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org_a = Organization.objects.create(
+                name="Org A", slug="dept-org-a", facility_type="CLINIC"
+            )
+            self.org_b = Organization.objects.create(
+                name="Org B", slug="dept-org-b", facility_type="CLINIC"
+            )
+            self.branch_a = Branch.objects.create(
+                organization=self.org_a, name="Branch A1", facility_level="L4"
+            )
+            self.branch_b = Branch.objects.create(
+                organization=self.org_b, name="Branch B1", facility_level="L4"
+            )
+            self.dept_a = Department.objects.create(
+                organization=self.org_a, branch=self.branch_a, name="Pharmacy"
+            )
+            Department.objects.create(organization=self.org_b, branch=self.branch_b, name="Records")
+
+            self.super_admin = User.objects.create_superuser(
+                email="root3@platform.test", password="Password123!"
+            )
+            from apps.accounts.models import Role
+
+            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            self.org_a_admin = User.objects.create_user(
+                email="admin@dept-org-a.test",
+                password="Password123!",
+                organization=self.org_a,
+                is_active=True,
+            )
+            self.org_a_admin.roles.add(org_admin_role)
+
+        self.super_access, _ = issue_tokens(self.super_admin)
+        self.org_a_access, _ = issue_tokens(self.org_a_admin)
+
+    def test_super_admin_sees_all_departments(self):
+        response = self.client.get(
+            reverse("department-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
+        )
+        self.assertEqual(response.data["count"], 2)
+
+    def test_org_admin_sees_only_own_department(self):
+        response = self.client.get(
+            reverse("department-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}"
+        )
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], str(self.dept_a.id))
+
+    def test_org_admin_can_create_unassigned_department(self):
+        response = self.client.post(
+            reverse("department-list"),
+            {"name": "New Department"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(response.data["organization"]), str(self.org_a.id))
+        self.assertIsNone(response.data["branch"])
+
+    def test_org_admin_can_assign_department_to_own_branch(self):
+        response = self.client.patch(
+            reverse("department-detail", args=[self.dept_a.id]),
+            {"branch": str(self.branch_a.id)},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(str(response.data["branch"]), str(self.branch_a.id))
+
+    def test_org_admin_cannot_assign_department_to_another_orgs_branch(self):
+        response = self.client.patch(
+            reverse("department-detail", args=[self.dept_a.id]),
+            {"branch": str(self.branch_b.id)},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_org_admin_cannot_create_department_in_another_org(self):
+        response = self.client.post(
+            reverse("department-list"),
+            {"organization": str(self.org_b.id), "name": "Sneaky Department"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(str(response.data["organization"]), str(self.org_a.id))
+
+    def test_org_admin_can_deactivate_own_department(self):
+        response = self.client.patch(
+            reverse("department-detail", args=[self.dept_a.id]),
+            {"is_active": False},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["is_active"])
 
 
 class OrgDashboardStatsViewTests(APITestCase):

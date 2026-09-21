@@ -48,7 +48,8 @@ export function listBranches(accessToken: string, params: ListBranchesParams = {
 }
 
 export interface CreateBranchPayload {
-  organization: string;
+  /** Required for Super Admin (creating on behalf of a tenant); ignored for Org Admin, whose new branch always belongs to their own organization. */
+  organization?: string;
   name: string;
   facility_level: string;
   address?: string;

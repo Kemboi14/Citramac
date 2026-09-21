@@ -472,6 +472,30 @@ class Branch(TenantScopedModel):
         return f"{self.name} ({self.organization_id})"
 
 
+class Department(TenantScopedModel):
+    """
+    An organisational unit within a tenant — docs/04-MULTI-TENANCY.md §4.1's
+    hierarchy stops at Branch, but real facilities subdivide further (a
+    branch's Nursing department, Pharmacy, Records, etc.). Deliberately not
+    required to belong to a Branch at creation time: a department can be
+    created first and assigned/reassigned afterward (Org Admin's Branches &
+    Departments screen), so `branch` is nullable rather than `PROTECT`.
+    """
+
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name="departments"
+    )
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.organization_id})"
+
+
 class Subscription(TenantScopedModel):
     """
     A tenant's SaaS billing subscription to CITRAMAC itself — distinct from

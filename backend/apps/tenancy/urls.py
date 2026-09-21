@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     BranchViewSet,
+    DepartmentViewSet,
     OrganizationDetailView,
     OrganizationEmailSettingsView,
     OrganizationListCreateView,
@@ -23,6 +24,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r"branches", BranchViewSet, basename="branch")
+router.register(r"departments", DepartmentViewSet, basename="department")
 router.register(r"subscription-plans", SubscriptionPlanViewSet, basename="subscription-plan")
 router.register(r"subscriptions", SubscriptionViewSet, basename="subscription")
 
