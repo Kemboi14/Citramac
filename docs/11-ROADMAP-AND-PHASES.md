@@ -25,11 +25,11 @@ Copilot must follow this order. Each phase should end with a working, tested, de
 - Wire the auth flow UI (`AuthFlowController` + steps) to the Phase 1 backend endpoints.
 - **Exit criteria:** logging in as each of the three role tiers lands on the correct shell, visually matching the mockups, with working navigation between (initially empty/placeholder) module pages.
 
-## Phase 3 — Core clinical path (Modules 1–3 + CCP core)
+## Phase 3 — Core clinical path (Modules 1–3 + MHP core)
 - Client Registry (Module 1) with IPRS stub + SHA coverage stub (real SHA sandbox wiring comes in Phase 6).
 - Triage (Module 2) + Mental Status Exam (§7.14.2) with BMI/BSA calculators and ESI acuity.
 - Clinical Encounter/EHR (Module 3): SOAP notes, ICD-11-coded diagnosis (local mirrored index), CPOE stub, e-prescribing stub.
-- CCP core: Biopsychosocial Assessment, Individual/Family/Group Psychotherapy session logging.
+- MHP core: Biopsychosocial Assessment, Individual/Family/Group Psychotherapy session logging.
 - **Exit criteria:** a full outpatient mental-health encounter can be recorded end-to-end for a demo patient, matching the Client Registry table layout from the AppSheet reference screenshot.
 
 ## Phase 4 — Billing & Insurance foundation
@@ -38,7 +38,7 @@ Copilot must follow this order. Each phase should end with a working, tested, de
 - **Exit criteria:** an encounter cannot progress to a billable clinical order without a validated payment method; a mock SHA member-verification call round-trips against the sandbox.
 
 ## Phase 5 — Remaining clinical modules (as needed per tenant type)
-- LIMS (Module 4), Pharmacy (Module 6), IPD/Ward (Module 7) for general facilities; SUD Rehab Workflows + Supervision Requests + CCP Team + NACADA NDO Report for CCP tenants.
+- LIMS (Module 4), Pharmacy (Module 6), IPD/Ward (Module 7) for general facilities; SUD Rehab Workflows + Supervision Requests + MHP Team + NACADA NDO Report for MHP tenants.
 - RIS/PACS (Module 5), Theatre (Module 8), MCH (Module 9), Mortuary (Module 12) — only for `GENERAL_HOSPITAL` tenants, deprioritized relative to CAfRIC's needs.
 - **Exit criteria:** module bundle toggling (`04-MULTI-TENANCY.md` §4.4) correctly shows/hides these per tenant facility type.
 

@@ -12,7 +12,7 @@ class CareTeamMembership(TenantScopedModel):
     patient's Org Admin can see full session content; everyone else in the
     org sees only that an active care episode exists. Enforced in
     PsychotherapySessionViewSet/BiopsychosocialAssessmentViewSet via
-    apps.ccp_program.permissions.has_full_ccp_access(), not just here.
+    apps.mhp_program.permissions.has_full_mhp_access(), not just here.
     """
 
     ROLE_CHOICES = [("THERAPIST", "Therapist"), ("SUPERVISOR", "Supervisor")]

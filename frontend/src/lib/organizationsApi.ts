@@ -152,7 +152,7 @@ export interface OrgDashboardStats {
   beds_occupied: number;
   beds_total: number;
   admissions_today: number;
-  outpatient_ccp_volume: number;
+  outpatient_mhp_volume: number;
   staff_on_duty: number;
   ward_occupancy: { id: string; name: string; occupied: number; total: number }[];
 }

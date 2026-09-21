@@ -64,7 +64,7 @@ Unlike a general Level 5/6 acute hospital (e.g., the Apeiro/KNH deployment), CAf
 - Substance Use Disorder (SUD) Rehab Workflows (multi-phase plans, recovery milestones, periodic urine drug screening)
 - Elevated Privacy & Consent Management for psychiatric records (Data Protection Act compliance, stricter than general medical records)
 
-The system must therefore support **per-tenant clinical module configuration** — a general hospital tenant enables surgical/IPD-heavy modules; a CCP-type tenant enables the mental-health module set. See `04-MULTI-TENANCY.md` §"Feature flags per tenant type."
+The system must therefore support **per-tenant clinical module configuration** — a general hospital tenant enables surgical/IPD-heavy modules; a MHP-type tenant enables the mental-health module set. See `04-MULTI-TENANCY.md` §"Feature flags per tenant type."
 
 ## 1.6 Non-functional summary (expanded in later docs)
 

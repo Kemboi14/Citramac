@@ -31,7 +31,7 @@ class Migration(migrations.Migration):
                     models.CharField(
                         choices=[
                             ("GENERAL_HOSPITAL", "General Hospital"),
-                            ("MENTAL_HEALTH_CCP", "Mental Health / CCP Centre"),
+                            ("MENTAL_HEALTH_MHP", "Mental Health / MHP Centre"),
                             ("DISPENSARY", "Dispensary / Level 2-3"),
                             ("CLINIC", "Outpatient Clinic"),
                         ],

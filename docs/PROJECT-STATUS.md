@@ -10,7 +10,7 @@ rather than hand-edit stale sections._
 Multi-tenant, DHA-certifiable, SHA-integrated Hospital & Mental Health
 Management Information System for Kenya. Reference tenant: **CAfRIC Centre**
 (mental-health/trauma/SUD-rehab facility). This deployment is scoped strictly
-to mental-health/CCP facilities — general-hospital-only modules are
+to mental-health/MHP facilities — general-hospital-only modules are
 deliberately not wired in (see "Excluded modules" below).
 
 Spec docs (read-only source of truth): `docs/01` through `docs/13`. Everything
@@ -24,9 +24,9 @@ fact.
 | 0 | `f4bea19` | Repo/tooling scaffold, split settings, pre-commit, CI skeleton |
 | 1 | `3186b96` | Tenancy (Postgres RLS + `TenantScopedManager`), Identity & Auth (JWT, 5-step flow), RBAC scaffold, audit log |
 | 2 | `f203af7` | Design system + Tailwind tokens, Super Admin / Org Admin / Clinical Workspace shells |
-| 3 | `67a802d` | Core clinical path: Client Registry, Triage/MSE, Clinical Encounter (Modules 1–3) + CCP core (Biopsychosocial, Psychotherapy sessions) |
+| 3 | `67a802d` | Core clinical path: Client Registry, Triage/MSE, Clinical Encounter (Modules 1–3) + MHP core (Biopsychosocial, Psychotherapy sessions) |
 | 4 | `36339f7` | Billing + Insurance/Claims (Modules 10–11), POS validation gate, SHA gateway skeleton |
-| 5 | `8317f5f` | LIMS, Pharmacy (FEFO dispensing), IPD/Ward, CCP extensions (SUD Rehab, Supervision Requests, CCP Team, NACADA NDO report) |
+| 5 | `8317f5f` | LIMS, Pharmacy (FEFO dispensing), IPD/Ward, MHP extensions (SUD Rehab, Supervision Requests, MHP Team, NACADA NDO report) |
 | 6 | `872d2c2` | Real FHIR Bundle construction + HIE transmission stub, terminology sync scaffolding, SHA gateway real-vs-stub flag + JWS signing, offline-mode sync (push/pull, last-write-wins) + frontend local-first queue |
 | 7 | `d32eac5` | RBAC gap closure, sensitive-record VIEW audit logging, versioned consent capture, two-person right-to-erasure workflow, security headers, backup/restore runbook, DPIA |
 | 8 | `731395e` | Kubernetes manifests + Kustomize overlays, Terraform (VPC/EKS/RDS/storage), GitHub Actions CI/CD (build→scan→staging→gated production), django-structlog + Sentry (PHI-stripped) |
@@ -53,7 +53,7 @@ the index, not the detail.
 | `billing` | 113 lines | 2 | Module 10 — billing engine, POS validation gate |
 | `insurance_claims` | 82 lines | 2 | Module 11 — domestic claims + SHA gateway |
 | `sysadmin_audit` | 83 lines | 3 | Immutable audit log, sensitive-record view logging |
-| `ccp_program` | 232 lines | 4 | CCP core + extensions: Biopsychosocial, Psychotherapy, SUD Rehab, Supervision Requests, CCP Team, NACADA NDO |
+| `mhp_program` | 232 lines | 4 | MHP core + extensions: Biopsychosocial, Psychotherapy, SUD Rehab, Supervision Requests, MHP Team, NACADA NDO |
 | `dha_interop` | 160 lines | 4 | FHIR mapping, HIE client, SHA gateway (real + stub), terminology sync |
 | `notifications` | models stub; `tasks.py` has `send_otp_email`/`send_otp_sms`/`send_invite_email`/risk-alert Celery tasks | 0 | No persisted `Notification` model yet — dispatch-only tasks used by the auth flow |
 | `offline_sync` | 64 lines | 3 | Local-first push/pull sync, conflict log |
@@ -86,7 +86,7 @@ React 19 + Vite 8 + TypeScript (strict) + Tailwind + React Router 7. Three
 role-based shells (`frontend/src/shells/`) for Super Admin / Org Admin /
 Clinical Workspace. Built-out clinical pages under
 `frontend/src/modules/clinical/`: Client Registry, Triage/MSE, Clinical
-Encounter, individual/family/group Psychotherapy, IPD, Pharmacy, LIMS, CCP
+Encounter, individual/family/group Psychotherapy, IPD, Pharmacy, LIMS, MHP
 Team, Supervision Requests, NACADA report, Clinical Review. One Org Admin
 page built (`ErasureRequestsPage.tsx`); unbuilt module slots render via
 `PlaceholderPage.tsx` with a "Soon" badge per the design spec. Test tooling:
@@ -119,7 +119,7 @@ clinical record VIEW audit logging, security headers middleware (CSP,
 Referrer-Policy, Permissions-Policy), backup/restore runbook (drill-tested
 against a real local Postgres, dedicated `citramac_backup` role with
 BYPASSRLS+CREATEDB), and a DPIA document
-(`docs/DPIA-CAFRIC-MENTAL-HEALTH-CCP.md`) specific to CAfRIC's mental-health
+(`docs/DPIA-CAFRIC-MENTAL-HEALTH-MHP.md`) specific to CAfRIC's mental-health
 data processing.
 
 ## Demo / sandbox data
@@ -196,7 +196,7 @@ every request regardless.
 |---|---|---|
 | Org Dashboard | `/org-admin` | Placeholder |
 | Ward & Bed Management | `/org-admin/wards` | Placeholder |
-| Staff / CCP Team | `/org-admin/staff` | Placeholder |
+| Staff / MHP Team | `/org-admin/staff` | Placeholder |
 | Branch Settings | `/org-admin/branch-settings` | Placeholder |
 | Roles & Permissions | `/org-admin/roles` | Placeholder |
 | Data Requests (right-to-erasure) | `/org-admin/data-requests` | **Built** |
@@ -214,12 +214,12 @@ every request regardless.
 | Laboratory (LIMS) | `/clinical/lims` | **Built** |
 | Pharmacy | `/clinical/pharmacy` | **Built** |
 | Inpatient & Ward | `/clinical/ipd` | **Built** |
-| Individual Psychotherapy | `/clinical/ccp/individual` | **Built** |
-| Family Therapy | `/clinical/ccp/family` | **Built** |
-| Group Psychotherapy | `/clinical/ccp/group` | **Built** |
-| Supervision Requests | `/clinical/ccp/supervision` | **Built** |
-| NACADA NDO Report | `/clinical/ccp/nacada` | **Built** |
-| CCP Team | `/clinical/ccp/team` | **Built** |
+| Individual Psychotherapy | `/clinical/mhp/individual` | **Built** |
+| Family Therapy | `/clinical/mhp/family` | **Built** |
+| Group Psychotherapy | `/clinical/mhp/group` | **Built** |
+| Supervision Requests | `/clinical/mhp/supervision` | **Built** |
+| NACADA NDO Report | `/clinical/mhp/nacada` | **Built** |
+| MHP Team | `/clinical/mhp/team` | **Built** |
 | About | `/clinical/about` | In sidebar nav (`soon: true`) but **no route exists** — currently 404s to `/` |
 
 ### Auth (unauthenticated)
@@ -238,7 +238,7 @@ every request regardless.
 | Platform | `platform/organizations/` | `tenancy` |
 | Patients | `patients/`, `appointments/`, `erasure-requests/` (DRF router) | `client_registry` |
 | Clinical encounters | `encounters/` (DRF router) | `clinical_encounter` |
-| CCP program | `ccp/biopsychosocial-assessments/`, `ccp/psychotherapy-sessions/`, `ccp/care-team/`, `ccp/sud-rehab-plans/`, `ccp/urine-drug-screens/`, `ccp/clinical-reviews/`, `ccp/supervision-requests/`, `ccp/nacada-ndo-reports/`, `ccp/team-roster/` | `ccp_program` |
+| MHP program | `mhp/biopsychosocial-assessments/`, `mhp/psychotherapy-sessions/`, `mhp/care-team/`, `mhp/sud-rehab-plans/`, `mhp/urine-drug-screens/`, `mhp/clinical-reviews/`, `mhp/supervision-requests/`, `mhp/nacada-ndo-reports/`, `mhp/team-roster/` | `mhp_program` |
 | Billing | `billing/invoices/`, `billing/cost-centers/`, `billing/cost-centers/report/` | `billing` |
 | Insurance claims | `claims/pre-authorizations/`, `claims/e-claims/`, `claims/remittances/` | `insurance_claims` |
 | LIMS | `lab/orders/`, `lab/specimens/`, `lab/results/` | `lims` |

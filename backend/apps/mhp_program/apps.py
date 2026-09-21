@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class CcpProgramConfig(AppConfig):
+class MhpProgramConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.ccp_program"
+    name = "apps.mhp_program"

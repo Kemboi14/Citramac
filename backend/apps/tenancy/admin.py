@@ -102,7 +102,7 @@ class OrganizationAdmin(admin.ModelAdmin):
 class BranchAdmin(admin.ModelAdmin):
     list_display = ["name", "organization", "facility_level", "county", "is_active"]
     search_fields = ["name", "organization__name", "mfl_code"]
-    list_filter = ["facility_level", "is_active", "ccp_registration_status"]
+    list_filter = ["facility_level", "is_active", "mhp_registration_status"]
     exclude = ["sha_api_credentials_encrypted"]
 
 

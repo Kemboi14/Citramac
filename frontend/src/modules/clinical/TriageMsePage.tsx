@@ -12,7 +12,7 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 
 /**
  * Modules 2 — Triage (vitals, BMI/BSA/ESI computed server-side) and the
- * Mental Status Exam that replaces vitals-only triage for CCP tenants —
+ * Mental Status Exam that replaces vitals-only triage for MHP tenants —
  * docs/07-CLINICAL-MODULES-SPEC.md §7.2, §7.14.2.
  */
 export function TriageMsePage() {

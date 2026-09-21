@@ -33,7 +33,7 @@ const EMPTY_INVITE = {
 
 /**
  * Org Admin's staff roster — doctors, nurses, therapists, supervisors.
- * citramac_ORG-admin.html "Staff / CCP Team".
+ * citramac_ORG-admin.html "Staff / MHP Team".
  */
 export function StaffTeamPage() {
   const { accessToken } = useAuth();
@@ -167,7 +167,7 @@ export function StaffTeamPage() {
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
           Org Admin · Team
         </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">Staff / CCP Team</h1>
+        <h1 className="font-display text-2xl font-bold text-ink-900">Staff / MHP Team</h1>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

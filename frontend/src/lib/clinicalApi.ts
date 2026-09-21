@@ -1,7 +1,7 @@
 import { apiRequest } from "./apiClient";
 
 // Mirrors apps/client_registry, apps/clinical_encounter, apps/triage,
-// apps/ccp_program, apps/dha_interop serializers — docs/10-API-SPECIFICATION.md.
+// apps/mhp_program, apps/dha_interop serializers — docs/10-API-SPECIFICATION.md.
 
 export interface PatientListRow {
   id: string;
@@ -332,7 +332,7 @@ export function createPrescription(
 }
 
 export function createPsychotherapySession(accessToken: string, payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>("/ccp/psychotherapy-sessions/", {
+  return apiRequest<Record<string, unknown>>("/mhp/psychotherapy-sessions/", {
     method: "POST",
     body: payload,
     accessToken,
@@ -343,7 +343,7 @@ export function createBiopsychosocialAssessment(
   accessToken: string,
   payload: Record<string, unknown>,
 ) {
-  return apiRequest<Record<string, unknown>>("/ccp/biopsychosocial-assessments/", {
+  return apiRequest<Record<string, unknown>>("/mhp/biopsychosocial-assessments/", {
     method: "POST",
     body: payload,
     accessToken,

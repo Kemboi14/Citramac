@@ -87,7 +87,7 @@ def models_q_org_or_template(organization_id):
 
 class StaffViewSet(viewsets.ModelViewSet):
     """
-    Org Admin's "Staff & CCP Team" roster, scoped to their own organization.
+    Org Admin's "Staff & MHP Team" roster, scoped to their own organization.
     A Super Admin caller instead sees/creates staff across every org — they
     must specify which one via `organization` on create (see
     StaffInviteSerializer) since they have no organization of their own.

@@ -18,12 +18,12 @@ from .models import (
     SupervisionRequest,
     UrineDrugScreen,
 )
-from .permissions import has_full_ccp_access
+from .permissions import has_full_mhp_access
 from .serializers import (
     BiopsychosocialAssessmentRestrictedSerializer,
     BiopsychosocialAssessmentSerializer,
     CareTeamMembershipSerializer,
-    CcpTeamRosterSerializer,
+    MhpTeamRosterSerializer,
     ClinicalReviewSerializer,
     NacadaNdoReportSerializer,
     PsychotherapySessionRestrictedSerializer,
@@ -43,14 +43,14 @@ from .serializers import (
 class CareTeamRestrictedMixin:
     """
     Swaps in the restricted serializer per-object for anyone without full
-    CCP access, and audit-logs the view itself whenever full sensitive
+    MHP access, and audit-logs the view itself whenever full sensitive
     content is actually returned — docs/09-SECURITY-COMPLIANCE.md §9.4:
     "Sensitive record views (not just edits) must also be logged."
     """
 
     full_serializer_class = None
     restricted_serializer_class = None
-    # Most CCP records FK straight to Patient; UrineDrugScreen only has one
+    # Most MHP records FK straight to Patient; UrineDrugScreen only has one
     # via its SudRehabPlan, so it overrides this accessor.
     patient_accessor = staticmethod(lambda obj: obj.patient)
 
@@ -58,7 +58,7 @@ class CareTeamRestrictedMixin:
         return self.full_serializer_class
 
     def _serializer_for(self, obj, request):
-        if has_full_ccp_access(request.user, self.patient_accessor(obj)):
+        if has_full_mhp_access(request.user, self.patient_accessor(obj)):
             log_view(obj)
             return self.full_serializer_class(obj, context={"request": request})
         return self.restricted_serializer_class(obj, context={"request": request})
@@ -188,7 +188,7 @@ class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
 class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
     """
     docs/09-SECURITY-COMPLIANCE.md §9.3 explicitly names UrineDrugScreen
-    among the records the elevated CCP privacy tier gates — panel_results
+    among the records the elevated MHP privacy tier gates — panel_results
     is SUD screening data, not just metadata.
     """
 
@@ -296,9 +296,9 @@ class NacadaNdoReportViewSet(viewsets.ModelViewSet):
         return Response(NacadaNdoReportSerializer(report).data)
 
 
-class CcpTeamRosterView(APIView):
+class MhpTeamRosterView(APIView):
     """
-    Roster/caseload view of the CCP team — docs/07-CLINICAL-MODULES-SPEC.md
+    Roster/caseload view of the MHP team — docs/07-CLINICAL-MODULES-SPEC.md
     §7.14.6. "specialties" is sourced from each member's assigned Roles (no
     separate specialty taxonomy exists yet).
     """
@@ -321,4 +321,4 @@ class CcpTeamRosterView(APIView):
                     "specialties": list(user.roles.values_list("name", flat=True)),
                 }
             )
-        return Response(CcpTeamRosterSerializer(roster, many=True).data)
+        return Response(MhpTeamRosterSerializer(roster, many=True).data)

@@ -14,7 +14,7 @@ Every module below must be implemented as its own Django app (see repo layout in
 - Vital signs capture: systolic/diastolic BP, heart rate, respiratory rate, temperature, SpO2.
 - Automated calculators: BMI and BSA from height/weight.
 - Acuity stratification via Emergency Severity Index (ESI); flag unstable/critical patients on clinician dashboards.
-- For CCP/mental-health tenants, this module is paired with the Mental Status Exam (§7.14).
+- For MHP/mental-health tenants, this module is paired with the Mental Status Exam (§7.14).
 
 ## 7.3 Module 3 — Clinical Encounter & Consultation (EHR)
 - S.O.A.P. structured documentation (Subjective/Objective/Assessment/Plan).
@@ -80,7 +80,7 @@ Every module below must be implemented as its own Django app (see repo layout in
 
 ## 7.14 CAfRIC-specific: Mental Health, Trauma & Rehabilitation Modules
 
-These **replace or supplement** modules 2, 3, 8, 9, 12 for `MENTAL_HEALTH_CCP`-type tenants (module bundle logic in `04-MULTI-TENANCY.md` §4.4).
+These **replace or supplement** modules 2, 3, 8, 9, 12 for `MENTAL_HEALTH_MHP`-type tenants (module bundle logic in `04-MULTI-TENANCY.md` §4.4).
 
 ### 7.14.1 Comprehensive Psychiatric & Biopsychosocial Assessment
 - Structured intake form: developmental history, social history, psychological history, family history, presenting problem, risk factors.
@@ -101,8 +101,8 @@ These **replace or supplement** modules 2, 3, 8, 9, 12 for `MENTAL_HEALTH_CCP`-t
 - **Clinical Review**: peer/senior review workflow on complex or high-risk cases before finalizing a treatment plan.
 - **Supervision Requests**: junior clinicians request supervisor time on a specific case; tracked to completion — mirrors the mockup's "Supervision Requests" nav item.
 
-### 7.14.6 CCP Team & Reporting
-- **CCP Team**: roster/management view of the clinical psychology/counseling team (their caseloads, specialties, supervision relationships).
+### 7.14.6 MHP Team & Reporting
+- **MHP Team**: roster/management view of the clinical psychology/counseling team (their caseloads, specialties, supervision relationships).
 - **NACADA NDO Report**: periodic aggregated reporting output required for Kenya's National Authority for the Campaign Against Alcohol and Drug Abuse (NACADA) National Drug Observatory — auto-compiled from `SudRehabPlan`/`UrineDrugScreen` data, exportable and (phase 3) API-submittable.
 
 ### 7.14.7 Elevated privacy & consent
@@ -110,4 +110,4 @@ These **replace or supplement** modules 2, 3, 8, 9, 12 for `MENTAL_HEALTH_CCP`-t
 
 ## 7.15 Module build priority
 
-Follow the phase ordering in `11-ROADMAP-AND-PHASES.md`; do not build Modules 8/9/12 (theatre, MCH, mortuary) before Modules 1–3, 10, 13 and the CCP core (§7.14.1–7.14.3) are stable, since CAfRIC (the reference tenant) needs the mental-health path first.
+Follow the phase ordering in `11-ROADMAP-AND-PHASES.md`; do not build Modules 8/9/12 (theatre, MCH, mortuary) before Modules 1–3, 10, 13 and the MHP core (§7.14.1–7.14.3) are stable, since CAfRIC (the reference tenant) needs the mental-health path first.

@@ -511,7 +511,7 @@ class BranchViewSet(viewsets.ModelViewSet):
         q = params.get("q")
         if q:
             queryset = queryset.filter(Q(name__icontains=q) | Q(mfl_code__icontains=q))
-        for field in ("county", "facility_level", "ccp_registration_status"):
+        for field in ("county", "facility_level", "mhp_registration_status"):
             value = params.get(field)
             if value:
                 queryset = queryset.filter(**{field: value})
@@ -645,12 +645,12 @@ class PlatformDashboardStatsView(APIView):
 
 class OrgDashboardStatsView(APIView):
     """Stat cards on the Org Admin dashboard — bed occupancy, admissions
-    today, outpatient/CCP volume, staff on duty, ward occupancy breakdown."""
+    today, outpatient/MHP volume, staff on duty, ward occupancy breakdown."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from apps.ccp_program.models import PsychotherapySession
+        from apps.mhp_program.models import PsychotherapySession
         from apps.client_registry.models import Patient
         from apps.ipd_ward.models import Admission, Ward
 
@@ -665,7 +665,7 @@ class OrgDashboardStatsView(APIView):
         outpatient_today = Patient.objects.filter(
             created_at__date=today, patient_category="OUTPATIENT"
         ).count()
-        ccp_sessions_today = PsychotherapySession.objects.filter(session_date__date=today).count()
+        mhp_sessions_today = PsychotherapySession.objects.filter(session_date__date=today).count()
         staff_on_duty = User.all_objects.filter(
             organization=organization, is_on_duty=True, is_active=True
         ).count()
@@ -690,7 +690,7 @@ class OrgDashboardStatsView(APIView):
                 "beds_occupied": occupied_beds,
                 "beds_total": total_beds,
                 "admissions_today": admissions_today,
-                "outpatient_ccp_volume": outpatient_today + ccp_sessions_today,
+                "outpatient_mhp_volume": outpatient_today + mhp_sessions_today,
                 "staff_on_duty": staff_on_duty,
                 "ward_occupancy": ward_breakdown,
             }

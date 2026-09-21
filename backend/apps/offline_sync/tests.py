@@ -24,7 +24,7 @@ class OfflineSyncTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.nurse = User.objects.create_user(
                 email="nurse@org.test",
@@ -185,7 +185,7 @@ class ConcurrentPushRaceTests(TransactionTestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="race-org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="race-org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.nurse = User.objects.create_user(
                 email="nurse@race.test",

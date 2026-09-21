@@ -448,7 +448,7 @@ export function IpdPage() {
                   <option value="">Select source</option>
                   <option>Emergency / urgent referral</option>
                   <option>Outpatient service</option>
-                  <option>Community / CCP referral</option>
+                  <option>Community / MHP referral</option>
                   <option>Other health facility</option>
                   <option>Self / family presentation</option>
                 </select>

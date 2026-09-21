@@ -103,11 +103,11 @@ function App() {
           <Route path="lims" element={<LimsPage />} />
           <Route path="pharmacy" element={<PharmacyPage />} />
           <Route path="ipd" element={<IpdPage />} />
-          <Route path="ccp/individual" element={<IndividualPsychotherapyPage />} />
-          <Route path="ccp/family" element={<FamilyTherapyPage />} />
-          <Route path="ccp/group" element={<GroupPsychotherapyPage />} />
-          <Route path="ccp/supervision" element={<SupervisionRequestsPage />} />
-          <Route path="ccp/nacada" element={<NacadaReportPage />} />
+          <Route path="mhp/individual" element={<IndividualPsychotherapyPage />} />
+          <Route path="mhp/family" element={<FamilyTherapyPage />} />
+          <Route path="mhp/group" element={<GroupPsychotherapyPage />} />
+          <Route path="mhp/supervision" element={<SupervisionRequestsPage />} />
+          <Route path="mhp/nacada" element={<NacadaReportPage />} />
           <Route path="profile" element={<MyProfilePage />} />
 
           {/*

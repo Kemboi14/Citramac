@@ -10,14 +10,14 @@ from apps.tenancy.models import Organization
 from .models import CareTeamMembership, PsychotherapySession
 
 
-class CcpCareTeamRestrictionTests(APITestCase):
-    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — elevated privacy for CCP records."""
+class MhpCareTeamRestrictionTests(APITestCase):
+    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — elevated privacy for MHP records."""
 
     def setUp(self):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -107,14 +107,14 @@ class CcpCareTeamRestrictionTests(APITestCase):
             self.assertNotIn("session_notes", row)
 
 
-class CcpExtensionsTests(APITestCase):
+class MhpExtensionsTests(APITestCase):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4-§7.14.6."""
 
     def setUp(self):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -225,7 +225,7 @@ class CcpExtensionsTests(APITestCase):
         self.assertEqual(export_response.status_code, 200)
         self.assertEqual(export_response.data["status"], "EXPORTED")
 
-    def test_ccp_team_roster_reports_caseload_from_care_team_memberships(self):
+    def test_mhp_team_roster_reports_caseload_from_care_team_memberships(self):
         with platform_admin_context():
             CareTeamMembership.objects.create(
                 organization=self.org,
@@ -233,7 +233,7 @@ class CcpExtensionsTests(APITestCase):
                 user=self.case_manager,
                 role="THERAPIST",
             )
-        response = self.client.get(reverse("ccp-team-roster"), **self.auth)
+        response = self.client.get(reverse("mhp-team-roster"), **self.auth)
         self.assertEqual(response.status_code, 200)
         emails = {row["email"]: row["caseload_count"] for row in response.data}
         self.assertEqual(emails["casemanager@org.test"], 1)
@@ -242,7 +242,7 @@ class CcpExtensionsTests(APITestCase):
         """
         docs/09-SECURITY-COMPLIANCE.md §9.3 names UrineDrugScreen explicitly
         alongside PsychotherapySession/SudRehabPlan/BiopsychosocialAssessment
-        for the elevated CCP privacy tier; §9.4 requires the *view* itself
+        for the elevated MHP privacy tier; §9.4 requires the *view* itself
         (not just edits) to be audit-logged when full content is returned.
         """
         from apps.sysadmin_audit.models import AuditLogEntry
@@ -274,7 +274,7 @@ class CcpExtensionsTests(APITestCase):
 
         with platform_admin_context():
             view_count_before = AuditLogEntry.objects.filter(
-                model="ccp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
+                model="mhp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
             ).count()
 
         care_team_response = self.client.get(
@@ -285,7 +285,7 @@ class CcpExtensionsTests(APITestCase):
 
         with platform_admin_context():
             view_count_after = AuditLogEntry.objects.filter(
-                model="ccp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
+                model="mhp_program.urinedrugscreen", action=AuditLogEntry.ACTION_VIEW
             ).count()
         self.assertEqual(view_count_after, view_count_before + 1)
 
@@ -300,7 +300,7 @@ class ClientHistoryIntakeTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org-cif", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org-cif", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,

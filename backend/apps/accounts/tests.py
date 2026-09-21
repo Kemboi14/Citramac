@@ -76,7 +76,7 @@ class FullActivationAndLoginFlowTests(APITestCase):
             {
                 "name": "Amani Wellness Centre",
                 "slug": "amani-wellness",
-                "facility_type": "MENTAL_HEALTH_CCP",
+                "facility_type": "MENTAL_HEALTH_MHP",
                 "org_admin": {
                     "email": "admin@amaniwellness.co.ke",
                     "first_name": "Judy",
@@ -490,7 +490,7 @@ class TenantDiscoveryTests(APITestCase):
             Organization.objects.create(
                 name="CAfRIC Centre",
                 slug="cafric",
-                facility_type="MENTAL_HEALTH_CCP",
+                facility_type="MENTAL_HEALTH_MHP",
                 email_domains=["cafric.org"],
                 logo_url="https://example.org/cafric-logo.png",
                 tagline="Training, Treatment & Transition Centre",
@@ -616,7 +616,7 @@ class RememberMeCookieTests(APITestCase):
 
 class RolesAndStaffConsoleApiTests(APITestCase):
     """
-    citramac_ORG-admin.html "Roles & Permissions" + "Staff / CCP Team",
+    citramac_ORG-admin.html "Roles & Permissions" + "Staff / MHP Team",
     citramac_SUPER-ADMIN.html "Global Roles & Permissions" + "Platform
     Staff". Covers the permission-ceiling rule from
     docs/09-SECURITY-COMPLIANCE.md §9.3.
@@ -627,7 +627,7 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Amani Wellness", slug="amani-wellness", facility_type="MENTAL_HEALTH_CCP"
+                name="Amani Wellness", slug="amani-wellness", facility_type="MENTAL_HEALTH_MHP"
             )
             self.super_admin = User.objects.create_superuser(
                 email="root@platform.test", password="Password123!"
@@ -1067,7 +1067,7 @@ class MyProfileTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.user = User.objects.create_user(
                 email="clinician@org.test",

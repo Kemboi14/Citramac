@@ -4,7 +4,7 @@ import type { Paginated } from "./organizationsApi";
 // Mirrors apps.tenancy's BranchSerializer — citramac_SUPER-ADMIN.html
 // "Branches" + citramac_ORG-admin.html "Branch Settings".
 
-export type CcpRegistrationStatus = "OPEN" | "WAITLIST" | "CLOSED";
+export type MhpRegistrationStatus = "OPEN" | "WAITLIST" | "CLOSED";
 
 export interface Branch {
   id: string;
@@ -21,7 +21,7 @@ export interface Branch {
   phone: string;
   email: string;
   outpatient_capacity_per_day: number | null;
-  ccp_registration_status: CcpRegistrationStatus;
+  mhp_registration_status: MhpRegistrationStatus;
   sha_claims_enabled: boolean;
   mpesa_paybill_enabled: boolean;
   sms_reminders_enabled: boolean;
@@ -35,7 +35,7 @@ export interface ListBranchesParams {
   q?: string;
   county?: string;
   facility_level?: string;
-  ccp_registration_status?: string;
+  mhp_registration_status?: string;
 }
 
 export function listBranches(accessToken: string, params: ListBranchesParams = {}) {
@@ -56,7 +56,7 @@ export interface CreateBranchPayload {
   sub_county?: string;
   mfl_code?: string;
   outpatient_capacity_per_day?: number;
-  ccp_registration_status?: CcpRegistrationStatus;
+  mhp_registration_status?: MhpRegistrationStatus;
   is_active?: boolean;
 }
 

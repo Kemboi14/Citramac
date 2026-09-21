@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 django.setup()
 
-from apps.ccp_program.models import PsychotherapySession  # noqa: E402
+from apps.mhp_program.models import PsychotherapySession  # noqa: E402
 from apps.client_registry.models import Patient  # noqa: E402
 from apps.clinical_encounter.models import Encounter  # noqa: E402
 from apps.tenancy.context import platform_admin_context  # noqa: E402

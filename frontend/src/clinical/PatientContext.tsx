@@ -7,7 +7,7 @@ const STORAGE_KEY = "citramac.selectedPatient";
 /**
  * Holds the "currently open" patient + encounter, mirroring the mockups'
  * persistent patient-banner (mockups/citramac_clinical_workspace.html) that
- * carries across Triage/MSE, Clinical Encounter, and CCP session tabs.
+ * carries across Triage/MSE, Clinical Encounter, and MHP session tabs.
  * sessionStorage-backed so a page refresh mid-encounter doesn't lose it.
  */
 export function PatientProvider({ children }: { children: ReactNode }) {

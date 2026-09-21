@@ -13,9 +13,9 @@ creation, module bundle assignment, Org Admin invite, and optional bulk
 staff invites — from the command line rather than only through the Super
 Admin API, so it can be scripted and re-run idempotently.
 
-This deployment only ever onboards `MENTAL_HEALTH_CCP` facilities (see
+This deployment only ever onboards `MENTAL_HEALTH_MHP` facilities (see
 `config/settings/base.py`'s `LOCAL_APPS` comment) — the command assigns the
-`MENTAL_HEALTH_CCP` module bundle unconditionally, restricted to apps
+`MENTAL_HEALTH_MHP` module bundle unconditionally, restricted to apps
 actually installed in this build.
 
 ```bash

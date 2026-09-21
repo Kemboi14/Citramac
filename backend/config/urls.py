@@ -42,7 +42,7 @@ urlpatterns = [
     path("api/v1/", include("apps.client_registry.urls")),
     path("api/v1/", include("apps.dha_interop.urls")),
     path("api/v1/", include("apps.clinical_encounter.urls")),
-    path("api/v1/", include("apps.ccp_program.urls")),
+    path("api/v1/", include("apps.mhp_program.urls")),
     path("api/v1/", include("apps.billing.urls")),
     path("api/v1/", include("apps.insurance_claims.urls")),
     path("api/v1/", include("apps.lims.urls")),

@@ -4,7 +4,7 @@ export function GroupPsychotherapyPage() {
   return (
     <PsychotherapySessionForm
       sessionType="GROUP"
-      eyebrow="CCP · Group Psychotherapy"
+      eyebrow="MHP · Group Psychotherapy"
       title="Group Session"
       extraFieldsLabel="Topic / Facilitator Observations"
     />

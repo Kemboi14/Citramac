@@ -5,7 +5,7 @@ import { createEncounter } from "../lib/clinicalApi";
 import { usePatientContext } from "./usePatientContext";
 
 /**
- * Every clinical tab (Triage/MSE, Clinical Encounter, CCP sessions) needs an
+ * Every clinical tab (Triage/MSE, Clinical Encounter, MHP sessions) needs an
  * open Encounter for the selected patient — docs/06-DATA-MODEL.md §6.3's
  * "umbrella object every clinical touchpoint attaches to". Redirects to the
  * Client Registry if no patient is selected; otherwise reuses the

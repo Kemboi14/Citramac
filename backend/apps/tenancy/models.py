@@ -60,7 +60,7 @@ class Organization(TimestampedModel):
 
     FACILITY_TYPE_CHOICES = [
         ("GENERAL_HOSPITAL", "General Hospital"),
-        ("MENTAL_HEALTH_CCP", "Mental Health / CCP Centre"),
+        ("MENTAL_HEALTH_MHP", "Mental Health / MHP Centre"),
         ("DISPENSARY", "Dispensary / Level 2-3"),
         ("CLINIC", "Outpatient Clinic"),
     ]
@@ -379,7 +379,7 @@ class Branch(TenantScopedModel):
         ("L5", "Level 5"),
         ("L6", "Level 6"),
     ]
-    CCP_STATUS_CHOICES = [
+    MHP_STATUS_CHOICES = [
         ("OPEN", "Open"),
         ("WAITLIST", "Waitlist Only"),
         ("CLOSED", "Closed"),
@@ -407,8 +407,8 @@ class Branch(TenantScopedModel):
     phone = models.CharField(max_length=32, blank=True)
     email = models.EmailField(blank=True)
     outpatient_capacity_per_day = models.PositiveIntegerField(null=True, blank=True)
-    ccp_registration_status = models.CharField(
-        max_length=10, choices=CCP_STATUS_CHOICES, default="OPEN"
+    mhp_registration_status = models.CharField(
+        max_length=10, choices=MHP_STATUS_CHOICES, default="OPEN"
     )
     sha_claims_enabled = models.BooleanField(default=False)
     mpesa_paybill_enabled = models.BooleanField(default=False)

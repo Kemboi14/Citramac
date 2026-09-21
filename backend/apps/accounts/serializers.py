@@ -77,9 +77,9 @@ class LogoutSerializer(serializers.Serializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Governance: Roles & Permissions, Staff / CCP Team rosters
+# Governance: Roles & Permissions, Staff / MHP Team rosters
 # (citramac_SUPER-ADMIN.html "Global Roles & Permissions" + "Platform Staff",
-# citramac_ORG-admin.html "Roles & Permissions" + "Staff / CCP Team").
+# citramac_ORG-admin.html "Roles & Permissions" + "Staff / MHP Team").
 # ─────────────────────────────────────────────────────────────────────────
 
 

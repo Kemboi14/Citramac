@@ -248,7 +248,7 @@ class NacadaNdoReportSerializer(serializers.ModelSerializer):
         read_only_fields = ["generated_by", "generated_at", "summary_data", "status"]
 
 
-class CcpTeamRosterSerializer(serializers.Serializer):
+class MhpTeamRosterSerializer(serializers.Serializer):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.6 — roster/caseload view, not a stored model."""
 
     user_id = serializers.UUIDField()

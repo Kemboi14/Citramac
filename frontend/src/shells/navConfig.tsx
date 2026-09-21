@@ -83,7 +83,7 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
     items: [
       { label: "Org Dashboard", to: "/org-admin", icon: LayoutDashboard },
       { label: "Ward & Bed Management", to: "/org-admin/wards", icon: Building2 },
-      { label: "Staff / CCP Team", to: "/org-admin/staff", icon: Users },
+      { label: "Staff / MHP Team", to: "/org-admin/staff", icon: Users },
       { label: "Branch Settings", to: "/org-admin/branch-settings", icon: Settings },
       { label: "Roles & Permissions", to: "/org-admin/roles", icon: ShieldCheck },
     ],
@@ -99,7 +99,7 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
 // table and rationale for every relocation/placeholder/deletion below —
 // this nav is not a 1:1 mirror of that mockup's raw nav-item list: Lab and
 // Pharmacy stay live/reachable (deviating from the mockup's disabled
-// placement) because they already work against the real backend, and CCP
+// placement) because they already work against the real backend, and MHP
 // Team is deleted entirely (matching the mockup, which has no nav slot for
 // it at all). Items marked `soon` are the mockup's genuinely disabled
 // leaves (Physical Exercise, Bills and Claims, Centre Operations); every
@@ -174,9 +174,9 @@ export const CLINICAL_NAV: NavGroup[] = [
         label: "Psychotherapy",
         icon: User,
         children: [
-          { label: "Individual Psychotherapy", to: "/clinical/ccp/individual", icon: User },
-          { label: "Group Psychotherapy", to: "/clinical/ccp/group", icon: UsersRound },
-          { label: "Family Therapy", to: "/clinical/ccp/family", icon: Users },
+          { label: "Individual Psychotherapy", to: "/clinical/mhp/individual", icon: User },
+          { label: "Group Psychotherapy", to: "/clinical/mhp/group", icon: UsersRound },
+          { label: "Family Therapy", to: "/clinical/mhp/family", icon: Users },
           {
             label: "Morning Meeting Observations",
             to: "/clinical/psychotherapy/morning-meeting",
@@ -199,7 +199,7 @@ export const CLINICAL_NAV: NavGroup[] = [
         label: "Supervision",
         icon: ShieldCheck,
         children: [
-          { label: "Supervision Requests", to: "/clinical/ccp/supervision", icon: ShieldCheck },
+          { label: "Supervision Requests", to: "/clinical/mhp/supervision", icon: ShieldCheck },
           {
             label: "Supervision Sessions",
             to: "/clinical/supervision/sessions",
@@ -234,7 +234,7 @@ export const CLINICAL_NAV: NavGroup[] = [
         label: "Clinical Reports",
         icon: FileBarChart,
         children: [
-          { label: "NACADA", to: "/clinical/ccp/nacada", icon: FileBarChart },
+          { label: "NACADA", to: "/clinical/mhp/nacada", icon: FileBarChart },
           { label: "MOH", to: "/clinical/reports/moh", icon: FileBarChart },
           { label: "MOH - Discharge", to: "/clinical/reports/moh-discharge", icon: FileBarChart },
           { label: "Others", to: "/clinical/reports/others", icon: FileBarChart },

@@ -693,7 +693,7 @@ export function ClientHistoryPage() {
 
                 {!hasFullAccess(record) && (
                   <p className="rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-status-amber">
-                    Restricted view — full clinical detail on this record requires CCP team access.
+                    Restricted view — full clinical detail on this record requires MHP team access.
                   </p>
                 )}
 

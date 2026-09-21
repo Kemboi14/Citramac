@@ -90,7 +90,7 @@ All three tiers share one shell pattern — a fixed sidebar + scrollable content
 }
 ```
 
-- **Sidebar** (248px fixed width): brand logo/name at top, then a vertically stacked, icon + label navigation list, grouped under section headers (e.g. "Platform" / "Governance" for Super Admin; "Facility" for Org Admin; "Core Clinical (DHA)" / "CCP Program" for Clinical Workspace). Modules not yet built show a small **"Soon"** badge (amber tint) rather than being hidden — this signals the full roadmap to users without exposing incomplete features.
+- **Sidebar** (248px fixed width): brand logo/name at top, then a vertically stacked, icon + label navigation list, grouped under section headers (e.g. "Platform" / "Governance" for Super Admin; "Facility" for Org Admin; "Core Clinical (DHA)" / "MHP Program" for Clinical Workspace). Modules not yet built show a small **"Soon"** badge (amber tint) rather than being hidden — this signals the full roadmap to users without exposing incomplete features.
 - **Topbar**: global search input (rounded, green-tinted background, placeholder text like "Search Client Registration"), a refresh/sync icon, a dropdown chevron (tenant/branch switcher for multi-branch orgs), and a circular user avatar/initial badge on the far right.
 - **Content area**: page title (Lexend, bold) top-left, primary action button top-right (e.g. green "+ Add" button with `--radius-md` corners), an export icon (PDF), a filter/funnel icon. Below: a data table or card grid on `--card` background with `--border` dividers, `--radius-lg` corners, `--shadow-sm`.
 
@@ -99,7 +99,7 @@ All three tiers share one shell pattern — a fixed sidebar + scrollable content
 - **Buttons**: primary = solid `--green` background, white text, `--radius-md`, `--shadow-sm`, semibold Inter; secondary = white background, `--border` outline, `--ink-700` text; destructive = `--red` background or `--red-tint` background with `--red` text/icon.
 - **Tables**: header row uses `--ink-700` bold small-caps-style label text on `--card`/`--green-tint-2` background; body rows alternate subtly or use hover-state `--green-tint`; status badges (e.g. "Active Allergies") are pill-shaped chips using the semantic tint colors.
 - **Badges/chips**: pill shape (`border-radius: 999px`), tint background + saturated text of the same hue (e.g. amber-tint bg + amber text for "Pending"; red-tint bg + red text for "Critical/Allergy").
-- **Section grouping in sidebars**: an uppercase, letter-spaced, small `--ink-400`-colored label divides nav groups (`Platform`, `Governance`, `Facility`, `Core Clinical (DHA)`, `CCP Program`).
+- **Section grouping in sidebars**: an uppercase, letter-spaced, small `--ink-400`-colored label divides nav groups (`Platform`, `Governance`, `Facility`, `Core Clinical (DHA)`, `MHP Program`).
 - **Cards/KPI tiles** on dashboards: white card, `--radius-lg`, large Lexend numeral in `--ink-900` or `--green-dark`, small Inter label underneath in `--ink-500`, optional small trend indicator in green/red.
 - **Forms**: label above input, Inter font, `--border` outline inputs with `--radius-sm`, focus state uses `--green` outline/ring, helper/error text in `--ink-500`/`--red` respectively.
 
@@ -110,11 +110,11 @@ All three tiers share one shell pattern — a fixed sidebar + scrollable content
 - Section "Governance": Roles & Permissions, Audit Log
 
 **Org Admin** (`citramac_ORG-admin.html`)
-- Section "Facility": Org Dashboard, Ward & Bed Management, Staff / CCP Team, Branch Settings, Roles & Permissions
+- Section "Facility": Org Dashboard, Ward & Bed Management, Staff / MHP Team, Branch Settings, Roles & Permissions
 
 **Clinical Workspace** (`citramac_clinical_workspace.html`)
 - Section "Core Clinical (DHA)": Client Registry, Attachments, Triage & MSE, Clinical Review, Clinical Encounter, Laboratory (LIMS) *[Soon]*, Pharmacy *[Soon]*, Inpatient & Ward *[Soon]*
-- Section "CCP Program": Individual Psychotherapy, Family Therapy, Group Psychotherapy, Supervision Requests *[Soon]*, NACADA NDO Report, CCP Team *[Soon]*
+- Section "MHP Program": Individual Psychotherapy, Family Therapy, Group Psychotherapy, Supervision Requests *[Soon]*, NACADA NDO Report, MHP Team *[Soon]*
 - Footer: About *[Soon]*
 
 This matches the reference AppSheet screenshot (`Client Registration` list view with columns: First Name, Last Name, Middle/Other Names, UHID Number, Gender, Date Of Birth, Age, DOA, Doctors Name, Allergy Status, Nationality, Marital Status — replicate this exact column set for the Client Registry table, grouped by patient category e.g. "Inpatient").

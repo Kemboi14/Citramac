@@ -1,6 +1,6 @@
 import { apiRequest } from "./apiClient";
 
-// Mirrors apps/ccp_program's §7.14.5/§7.14.6 extensions serializers.
+// Mirrors apps/mhp_program's §7.14.5/§7.14.6 extensions serializers.
 
 export interface Paginated<T> {
   count: number;
@@ -18,11 +18,11 @@ export interface ClinicalReview {
 }
 
 export function listClinicalReviews(accessToken: string) {
-  return apiRequest<Paginated<ClinicalReview>>("/ccp/clinical-reviews/", { accessToken });
+  return apiRequest<Paginated<ClinicalReview>>("/mhp/clinical-reviews/", { accessToken });
 }
 
 export function requestClinicalReview(accessToken: string, patientId: string, caseSummary: string) {
-  return apiRequest<ClinicalReview>("/ccp/clinical-reviews/", {
+  return apiRequest<ClinicalReview>("/mhp/clinical-reviews/", {
     method: "POST",
     body: { patient: patientId, case_summary: caseSummary },
     accessToken,
@@ -35,7 +35,7 @@ export function decideClinicalReview(
   status: "APPROVED" | "CHANGES_REQUESTED",
   reviewNotes: string,
 ) {
-  return apiRequest<ClinicalReview>(`/ccp/clinical-reviews/${reviewId}/decide/`, {
+  return apiRequest<ClinicalReview>(`/mhp/clinical-reviews/${reviewId}/decide/`, {
     method: "POST",
     body: { status, review_notes: reviewNotes },
     accessToken,
@@ -53,11 +53,11 @@ export interface SupervisionRequest {
 }
 
 export function listSupervisionRequests(accessToken: string) {
-  return apiRequest<Paginated<SupervisionRequest>>("/ccp/supervision-requests/", { accessToken });
+  return apiRequest<Paginated<SupervisionRequest>>("/mhp/supervision-requests/", { accessToken });
 }
 
 export function createSupervisionRequest(accessToken: string, patientId: string, topic: string) {
-  return apiRequest<SupervisionRequest>("/ccp/supervision-requests/", {
+  return apiRequest<SupervisionRequest>("/mhp/supervision-requests/", {
     method: "POST",
     body: { patient: patientId, topic },
     accessToken,
@@ -65,21 +65,21 @@ export function createSupervisionRequest(accessToken: string, patientId: string,
 }
 
 export function scheduleSupervisionRequest(accessToken: string, requestId: string) {
-  return apiRequest<SupervisionRequest>(`/ccp/supervision-requests/${requestId}/schedule/`, {
+  return apiRequest<SupervisionRequest>(`/mhp/supervision-requests/${requestId}/schedule/`, {
     method: "POST",
     accessToken,
   });
 }
 
 export function completeSupervisionRequest(accessToken: string, requestId: string, notes: string) {
-  return apiRequest<SupervisionRequest>(`/ccp/supervision-requests/${requestId}/complete/`, {
+  return apiRequest<SupervisionRequest>(`/mhp/supervision-requests/${requestId}/complete/`, {
     method: "POST",
     body: { notes },
     accessToken,
   });
 }
 
-export interface CcpTeamRosterRow {
+export interface MhpTeamRosterRow {
   user_id: string;
   email: string;
   first_name: string;
@@ -88,8 +88,8 @@ export interface CcpTeamRosterRow {
   specialties: string[];
 }
 
-export function getCcpTeamRoster(accessToken: string) {
-  return apiRequest<CcpTeamRosterRow[]>("/ccp/team-roster/", { accessToken });
+export function getMhpTeamRoster(accessToken: string) {
+  return apiRequest<MhpTeamRosterRow[]>("/mhp/team-roster/", { accessToken });
 }
 
 export interface NacadaNdoReport {
@@ -102,11 +102,11 @@ export interface NacadaNdoReport {
 }
 
 export function listNacadaReports(accessToken: string) {
-  return apiRequest<Paginated<NacadaNdoReport>>("/ccp/nacada-ndo-reports/", { accessToken });
+  return apiRequest<Paginated<NacadaNdoReport>>("/mhp/nacada-ndo-reports/", { accessToken });
 }
 
 export function generateNacadaReport(accessToken: string, periodStart: string, periodEnd: string) {
-  return apiRequest<NacadaNdoReport>("/ccp/nacada-ndo-reports/", {
+  return apiRequest<NacadaNdoReport>("/mhp/nacada-ndo-reports/", {
     method: "POST",
     body: { period_start: periodStart, period_end: periodEnd },
     accessToken,
@@ -114,7 +114,7 @@ export function generateNacadaReport(accessToken: string, periodStart: string, p
 }
 
 export function exportNacadaReport(accessToken: string, reportId: string) {
-  return apiRequest<NacadaNdoReport>(`/ccp/nacada-ndo-reports/${reportId}/export/`, {
+  return apiRequest<NacadaNdoReport>(`/mhp/nacada-ndo-reports/${reportId}/export/`, {
     method: "POST",
     accessToken,
   });

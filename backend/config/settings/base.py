@@ -64,7 +64,7 @@ THIRD_PARTY_APPS = [
 # Apps are scaffolded ahead of their build phase (docs/11-ROADMAP-AND-PHASES.md) but
 # stay logic-free until their phase begins.
 #
-# This deployment is strictly a mental-health/CCP facility (CAfRIC), not a
+# This deployment is strictly a mental-health/MHP facility (CAfRIC), not a
 # general hospital — apps.ris_pacs/theatre/mch/mortuary (Modules 5/8/9/12) are
 # general-hospital-only per docs/07-CLINICAL-MODULES-SPEC.md §7.14 and are
 # deliberately not installed; their app directories stay in apps/ as inert
@@ -81,7 +81,7 @@ LOCAL_APPS = [
     "apps.billing",
     "apps.insurance_claims",
     "apps.sysadmin_audit",
-    "apps.ccp_program",
+    "apps.mhp_program",
     "apps.dha_interop",
     "apps.notifications",
     "apps.offline_sync",

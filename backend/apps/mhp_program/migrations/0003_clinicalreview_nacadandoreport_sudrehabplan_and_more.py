@@ -11,7 +11,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("ccp_program", "0002_rls"),
+        ("mhp_program", "0002_rls"),
         ("client_registry", "0002_rls"),
         ("tenancy", "0002_branch_rls"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -237,7 +237,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="milestones",
-                        to="ccp_program.sudrehabplan",
+                        to="mhp_program.sudrehabplan",
                     ),
                 ),
             ],
@@ -362,7 +362,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="urine_drug_screens",
-                        to="ccp_program.sudrehabplan",
+                        to="mhp_program.sudrehabplan",
                     ),
                 ),
             ],

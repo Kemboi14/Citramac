@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("ccp_program", "0004_rls_extensions"),
+        ("mhp_program", "0004_rls_extensions"),
         ("tenancy", "0007_platformbranding"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -208,7 +208,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="review_of_systems",
-                        to="ccp_program.biopsychosocialassessment",
+                        to="mhp_program.biopsychosocialassessment",
                     ),
                 ),
                 (
@@ -258,7 +258,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="substance_use_entries",
-                        to="ccp_program.biopsychosocialassessment",
+                        to="mhp_program.biopsychosocialassessment",
                     ),
                 ),
                 (

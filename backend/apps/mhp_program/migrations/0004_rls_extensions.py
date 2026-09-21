@@ -3,14 +3,18 @@ from django.db import migrations
 from apps.tenancy.rls import enable_rls_for_tables
 
 FORWARD_SQL, REVERSE_SQL = enable_rls_for_tables(
-    "ccp_program_substanceuseentry",
-    "ccp_program_reviewofsystementry",
+    "mhp_program_sudrehabplan",
+    "mhp_program_rehabmilestone",
+    "mhp_program_urinedrugscreen",
+    "mhp_program_clinicalreview",
+    "mhp_program_supervisionrequest",
+    "mhp_program_nacadandoreport",
 )
 
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("ccp_program", "0005_alter_biopsychosocialassessment_options_and_more"),
+        ("mhp_program", "0003_clinicalreview_nacadandoreport_sudrehabplan_and_more"),
     ]
 
     operations = [

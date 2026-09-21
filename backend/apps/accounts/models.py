@@ -164,7 +164,7 @@ class User(AbstractBaseUser):
     roles = models.ManyToManyField(Role, blank=True, related_name="users")
     branch_access = models.ManyToManyField(Branch, blank=True, related_name="staff_members")
 
-    # Manually toggled by an Org Admin from the Staff & CCP Team roster
+    # Manually toggled by an Org Admin from the Staff & MHP Team roster
     # (citramac_ORG-admin.html "On duty / Off duty" status pill) — there is
     # no shift-scheduling module in this build, so this is a plain presence
     # flag, not derived from a roster/attendance system.

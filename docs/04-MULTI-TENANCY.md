@@ -6,13 +6,13 @@ CITRAMAC uses a **three-level hierarchy**:
 
 ```
 Platform (CITRAMAC itself — Super Admin tier)
- └─ Organization (tenant — a hospital group / CCP centre / clinic network)
+ └─ Organization (tenant — a hospital group / MHP centre / clinic network)
       └─ Branch (a physical facility location under that Organization)
            └─ Staff, Patients, Clinical Records, Billing, Inventory (all scoped to Branch → Organization)
 ```
 
 - **Super Admin** operates above all tenants: creates/suspends Organizations, manages Subscriptions/billing plans for tenants, views a cross-tenant Governance/Audit Log, defines global Roles & Permission templates.
-- **Org Admin** operates within exactly one Organization: manages that org's Branches, Ward & Bed setup, Staff/CCP Team, branch-level settings, and role assignment scoped to their org.
+- **Org Admin** operates within exactly one Organization: manages that org's Branches, Ward & Bed setup, Staff/MHP Team, branch-level settings, and role assignment scoped to their org.
 - **Clinical Workspace users** (doctors, nurses, therapists, lab techs, pharmacists, cashiers) operate within one Branch at a time, switchable if they have multi-branch access.
 
 ## 4.2 Isolation strategy: shared database, shared schema, `tenant_id` discriminator + Postgres Row-Level Security
@@ -36,7 +36,7 @@ class Organization(models.Model):
     slug = models.SlugField(unique=True)
     facility_type = models.CharField(choices=[
         ("GENERAL_HOSPITAL", "General Hospital"),
-        ("MENTAL_HEALTH_CCP", "Mental Health / CCP Centre"),
+        ("MENTAL_HEALTH_MHP", "Mental Health / MHP Centre"),
         ("DISPENSARY", "Dispensary / Level 2-3"),
         ("CLINIC", "Outpatient Clinic"),
     ])
@@ -72,10 +72,10 @@ branch = models.ForeignKey(Branch, on_delete=models.PROTECT, db_index=True, null
 
 ## 4.4 Feature flags per tenant type (module toggling)
 
-`Organization.enabled_modules` is a list of module codes (e.g. `["client_registry","triage","lims","ccp_psychotherapy","ccp_sud_rehab"]`). Onboarding wizard (Org Admin, first login) presents a **facility type** choice which pre-selects a sane module bundle:
+`Organization.enabled_modules` is a list of module codes (e.g. `["client_registry","triage","lims","mhp_psychotherapy","mhp_sud_rehab"]`). Onboarding wizard (Org Admin, first login) presents a **facility type** choice which pre-selects a sane module bundle:
 
 - `GENERAL_HOSPITAL` bundle → Modules 1–13 standard set (registration, triage, EHR, LIMS, RIS/PACS, pharmacy, IPD, theatre, MCH, billing, insurance, mortuary, sysadmin).
-- `MENTAL_HEALTH_CCP` bundle → Modules 1, 2 (adapted MSE), 3 (adapted), 6, 10, 11, 13, **plus** CCP-specific modules: Psychiatric & Biopsychosocial Assessment, Individual/Family/Group Psychotherapy, SUD Rehab Workflows, Supervision Requests, NACADA NDO Report — surgical/theatre/MCH/mortuary modules disabled by default but can be manually enabled.
+- `MENTAL_HEALTH_MHP` bundle → Modules 1, 2 (adapted MSE), 3 (adapted), 6, 10, 11, 13, **plus** MHP-specific modules: Psychiatric & Biopsychosocial Assessment, Individual/Family/Group Psychotherapy, SUD Rehab Workflows, Supervision Requests, NACADA NDO Report — surgical/theatre/MCH/mortuary modules disabled by default but can be manually enabled.
 
 The frontend sidebar renders only enabled modules (plus a "Soon" badge for modules purchased/planned-but-not-yet-configured, matching the mockup pattern), driven by `GET /api/v1/me/enabled-modules/`.
 

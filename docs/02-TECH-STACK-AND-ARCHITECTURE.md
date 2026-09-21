@@ -110,7 +110,7 @@ citramac-hmis/
 │   │   ├── insurance_claims/        # Module 11 + SHA gateway
 │   │   ├── mortuary/                 # Module 12
 │   │   ├── sysadmin_audit/           # Module 13: RBAC, audit trail, backups
-│   │   ├── ccp_program/              # CAfRIC-specific: psychotherapy, SUD rehab, supervision
+│   │   ├── mhp_program/              # CAfRIC-specific: psychotherapy, SUD rehab, supervision
 │   │   ├── dha_interop/              # FHIR, ICD-11, LOINC, IPRS integration
 │   │   └── notifications/            # Email/SMS/OTP dispatch
 │   ├── requirements/

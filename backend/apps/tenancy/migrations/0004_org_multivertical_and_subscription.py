@@ -126,7 +126,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="branch",
-            name="ccp_registration_status",
+            name="mhp_registration_status",
             field=models.CharField(
                 max_length=10,
                 default="OPEN",

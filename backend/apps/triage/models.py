@@ -50,7 +50,7 @@ class VitalSigns(TenantScopedModel):
 
 class MentalStatusExam(TenantScopedModel):
     """
-    Replaces vitals-only triage for CCP tenants — docs/07-CLINICAL-MODULES-SPEC.md
+    Replaces vitals-only triage for MHP tenants — docs/07-CLINICAL-MODULES-SPEC.md
     §7.14.2. Field set mirrors mockups/citramac_clinical_workspace.html's
     lettered MSE sections (A. Appearance through I. Judgement/Insight/Plan).
     """

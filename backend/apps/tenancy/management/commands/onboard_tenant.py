@@ -19,13 +19,13 @@ from apps.tenancy.models import Branch, Organization
 
 INVITE_TTL_DAYS = 7
 
-# docs/04-MULTI-TENANCY.md §4.4's MENTAL_HEALTH_CCP bundle, expressed as the
+# docs/04-MULTI-TENANCY.md §4.4's MENTAL_HEALTH_MHP bundle, expressed as the
 # app labels actually present in settings.LOCAL_APPS for this deployment.
 # This deployment never installs apps.ris_pacs/theatre/mch/mortuary at all
 # (see config/settings/base.py), so a GENERAL_HOSPITAL bundle has no meaning
 # here — this command deliberately only knows how to onboard the one
 # facility type this build can actually serve.
-MENTAL_HEALTH_CCP_BUNDLE = [
+MENTAL_HEALTH_MHP_BUNDLE = [
     "client_registry",
     "triage",
     "clinical_encounter",
@@ -35,13 +35,13 @@ MENTAL_HEALTH_CCP_BUNDLE = [
     "billing",
     "insurance_claims",
     "sysadmin_audit",
-    "ccp_program",
+    "mhp_program",
 ]
 
 
 class Command(BaseCommand):
     help = (
-        "Onboard a mental-health/CCP tenant Organization end-to-end: create "
+        "Onboard a mental-health/MHP tenant Organization end-to-end: create "
         "the Organization, assign its module bundle, create/invite the Org "
         "Admin, and optionally bulk-invite initial staff from a JSON spec "
         "file. Idempotent — safe to re-run against an Organization that "
@@ -145,10 +145,10 @@ class Command(BaseCommand):
             slug=options["slug"],
             defaults={
                 "name": options["name"],
-                "facility_type": "MENTAL_HEALTH_CCP",
+                "facility_type": "MENTAL_HEALTH_MHP",
                 "dha_facility_code": options["dha_facility_code"],
                 "sha_provider_code": options["sha_provider_code"],
-                "enabled_modules": MENTAL_HEALTH_CCP_BUNDLE,
+                "enabled_modules": MENTAL_HEALTH_MHP_BUNDLE,
                 **branding_defaults,
             },
         )
@@ -162,7 +162,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"Organization '{organization.slug}' already exists — updating module bundle"
             )
-            organization.enabled_modules = MENTAL_HEALTH_CCP_BUNDLE
+            organization.enabled_modules = MENTAL_HEALTH_MHP_BUNDLE
             if options["dha_facility_code"]:
                 organization.dha_facility_code = options["dha_facility_code"]
             if options["sha_provider_code"]:

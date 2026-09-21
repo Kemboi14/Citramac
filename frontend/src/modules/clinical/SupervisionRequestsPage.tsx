@@ -9,7 +9,7 @@ import {
   listSupervisionRequests,
   scheduleSupervisionRequest,
   type SupervisionRequest,
-} from "../../lib/ccpExtrasApi";
+} from "../../lib/mhpExtrasApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -107,7 +107,7 @@ export function SupervisionRequestsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          CCP Program · Clinical Review &amp; Supervision
+          MHP Program · Clinical Review &amp; Supervision
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">
           Supervision Requests — {selected.patientName}

@@ -166,7 +166,7 @@ class BranchSerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "outpatient_capacity_per_day",
-            "ccp_registration_status",
+            "mhp_registration_status",
             "sha_claims_enabled",
             "mpesa_paybill_enabled",
             "sms_reminders_enabled",

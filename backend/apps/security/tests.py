@@ -18,7 +18,7 @@ class SecurityConsoleApiTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Amani Wellness", slug="amani-sec", facility_type="MENTAL_HEALTH_CCP"
+                name="Amani Wellness", slug="amani-sec", facility_type="MENTAL_HEALTH_MHP"
             )
             self.super_admin = User.objects.create_superuser(
                 email="root@platform.test", password="Password123!"

@@ -6,7 +6,7 @@ import {
   generateNacadaReport,
   listNacadaReports,
   type NacadaNdoReport,
-} from "../../lib/ccpExtrasApi";
+} from "../../lib/mhpExtrasApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -72,7 +72,7 @@ export function NacadaReportPage() {
     <div className="flex flex-col gap-6">
       <div>
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          CCP Program · Regulatory Reporting
+          MHP Program · Regulatory Reporting
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">NACADA NDO Report</h1>
       </div>

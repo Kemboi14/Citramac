@@ -120,7 +120,7 @@ class Admission(TenantScopedModel):
     risk_summary = models.TextField(blank=True)
 
     # Ward/bed/care team already covered by `bed`; care team is free text —
-    # a formal link to apps.ccp_program.CareTeamMembership would couple two
+    # a formal link to apps.mhp_program.CareTeamMembership would couple two
     # otherwise-independent apps for a field that's informational here.
     primary_care_team = models.CharField(max_length=150, blank=True)
     consultant = models.ForeignKey(

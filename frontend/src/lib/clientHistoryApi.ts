@@ -1,6 +1,6 @@
 import { apiRequest } from "./apiClient";
 
-// Mirrors apps/ccp_program's BiopsychosocialAssessment/SubstanceUseEntry/
+// Mirrors apps/mhp_program's BiopsychosocialAssessment/SubstanceUseEntry/
 // ReviewOfSystemEntry — docs/07-CLINICAL-MODULES-SPEC.md §7.14.1. Also the
 // "Client History" / CIF intake form from mockups/citramac_clinical_workspace.html.
 
@@ -74,14 +74,14 @@ export interface ClientHistoryRecord {
   review_of_systems: ReviewOfSystemEntry[];
 }
 
-/** "existence only" shape returned to clinicians without full CCP access — §7.14.7. */
+/** "existence only" shape returned to clinicians without full MHP access — §7.14.7. */
 export type ClientHistoryRestricted = Pick<ClientHistoryRecord, "id" | "patient" | "status"> & {
   created_at: string;
 };
 
 export function listClientHistory(accessToken: string, patientId: string) {
   return apiRequest<Paginated<ClientHistoryRecord | ClientHistoryRestricted>>(
-    `/ccp/biopsychosocial-assessments/?patient=${patientId}`,
+    `/mhp/biopsychosocial-assessments/?patient=${patientId}`,
     { accessToken },
   );
 }
@@ -90,7 +90,7 @@ export function createClientHistory(
   accessToken: string,
   payload: Partial<ClientHistoryRecord> & { patient: string },
 ) {
-  return apiRequest<ClientHistoryRecord>("/ccp/biopsychosocial-assessments/", {
+  return apiRequest<ClientHistoryRecord>("/mhp/biopsychosocial-assessments/", {
     method: "POST",
     body: payload,
     accessToken,
@@ -102,7 +102,7 @@ export function updateClientHistory(
   id: string,
   payload: Partial<ClientHistoryRecord>,
 ) {
-  return apiRequest<ClientHistoryRecord>(`/ccp/biopsychosocial-assessments/${id}/`, {
+  return apiRequest<ClientHistoryRecord>(`/mhp/biopsychosocial-assessments/${id}/`, {
     method: "PATCH",
     body: payload,
     accessToken,
@@ -110,7 +110,7 @@ export function updateClientHistory(
 }
 
 export function addSubstanceUseEntry(accessToken: string, payload: Omit<SubstanceUseEntry, "id">) {
-  return apiRequest<SubstanceUseEntry>("/ccp/substance-use-entries/", {
+  return apiRequest<SubstanceUseEntry>("/mhp/substance-use-entries/", {
     method: "POST",
     body: payload,
     accessToken,
@@ -119,7 +119,7 @@ export function addSubstanceUseEntry(accessToken: string, payload: Omit<Substanc
 
 /** FHIR Bundle (Composition + Condition + Observation(s)) for one intake record. */
 export function getClientHistoryFhirBundle(accessToken: string, id: string) {
-  return apiRequest<Record<string, unknown>>(`/ccp/biopsychosocial-assessments/${id}/fhir/`, {
+  return apiRequest<Record<string, unknown>>(`/mhp/biopsychosocial-assessments/${id}/fhir/`, {
     accessToken,
   });
 }
@@ -128,7 +128,7 @@ export function addReviewOfSystemEntry(
   accessToken: string,
   payload: Omit<ReviewOfSystemEntry, "id" | "clinician">,
 ) {
-  return apiRequest<ReviewOfSystemEntry>("/ccp/review-of-systems/", {
+  return apiRequest<ReviewOfSystemEntry>("/mhp/review-of-systems/", {
     method: "POST",
     body: payload,
     accessToken,

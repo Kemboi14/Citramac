@@ -8,7 +8,7 @@ import {
   listClinicalReviews,
   requestClinicalReview,
   type ClinicalReview,
-} from "../../lib/ccpExtrasApi";
+} from "../../lib/mhpExtrasApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";

@@ -1,9 +1,9 @@
-"""docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — elevated privacy tier for CCP records."""
+"""docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — elevated privacy tier for MHP records."""
 
 from .models import CareTeamMembership
 
 
-def has_full_ccp_access(user, patient):
+def has_full_mhp_access(user, patient):
     """
     True if `user` may see full session/assessment content for `patient`:
     a superuser, an assigned care-team member (therapist/supervisor) for

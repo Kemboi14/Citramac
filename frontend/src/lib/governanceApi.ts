@@ -3,7 +3,7 @@ import type { Paginated } from "./organizationsApi";
 
 // Mirrors apps.accounts's Permission/Role/Staff serializers —
 // citramac_SUPER-ADMIN.html "Global Roles & Permissions" + "Platform Staff",
-// citramac_ORG-admin.html "Roles & Permissions" + "Staff / CCP Team".
+// citramac_ORG-admin.html "Roles & Permissions" + "Staff / MHP Team".
 
 export interface Permission {
   id: number;

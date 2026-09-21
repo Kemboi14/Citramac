@@ -287,7 +287,7 @@
         <div class="nav-group-label">Facility</div>
         <div class="nav-item" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Org Dashboard</div>
         <div class="nav-item" data-page="ward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18v-7a2 2 0 012-2h14a2 2 0 012 2v7"/><path d="M3 18h18M5 9V6a2 2 0 012-2h10a2 2 0 012 2v3"/></svg>Ward &amp; Bed Management</div>
-        <div class="nav-item" data-page="staff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff / CCP Team</div>
+        <div class="nav-item" data-page="staff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Staff / MHP Team</div>
         <div class="nav-item" data-page="branch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>Branch Settings</div>
         <div class="nav-item" data-page="roles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>Roles &amp; Permissions</div>
       </div>
@@ -318,7 +318,7 @@
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-top"><div class="stat-icon g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18v-7a2 2 0 012-2h14a2 2 0 012 2v7"/><path d="M3 18h18"/></svg></div></div><div class="stat-value">78%</div><div class="stat-label">Bed occupancy (39/50)</div><div class="stat-bar"><i style="width:78%"></i></div></div>
         <div class="stat-card"><div class="stat-top"><div class="stat-icon b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2h6l1 4H8z"/><rect x="5" y="6" width="14" height="16" rx="2"/></svg></div></div><div class="stat-value">6</div><div class="stat-label">Admissions today</div></div>
-        <div class="stat-card"><div class="stat-top"><div class="stat-icon a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg></div></div><div class="stat-value">23</div><div class="stat-label">Outpatient / CCP volume</div></div>
+        <div class="stat-card"><div class="stat-top"><div class="stat-icon a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg></div></div><div class="stat-value">23</div><div class="stat-label">Outpatient / MHP volume</div></div>
         <div class="stat-card"><div class="stat-top"><div class="stat-icon s"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div></div><div class="stat-value">14</div><div class="stat-label">Staff on duty</div></div>
       </div>
 
@@ -381,19 +381,19 @@
       </div>
     </div>
 
-    <!-- STAFF / CCP TEAM -->
+    <!-- STAFF / MHP TEAM -->
     <div class="page" id="page-staff" hidden>
       <div class="page-head">
         <div class="eyebrow">Facility</div>
         <div class="page-title-row">
-          <div><div class="page-title">Staff &amp; CCP Team</div><div class="page-desc">Doctors, nurses, therapists and supervisors at Chiromo Branch — assign roles and departments.</div></div>
+          <div><div class="page-title">Staff &amp; MHP Team</div><div class="page-desc">Doctors, nurses, therapists and supervisors at Chiromo Branch — assign roles and departments.</div></div>
           <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Staff Member</button>
         </div>
       </div>
 
       <div class="sup-toolbar">
         <select><option>All Roles</option><option>Psychiatrist</option><option>Nurse</option><option>Therapist</option><option>Supervisor</option></select>
-        <select><option>All Departments</option><option>Male Ward</option><option>Female Ward</option><option>Rehab Wing</option><option>CCP Team</option></select>
+        <select><option>All Departments</option><option>Male Ward</option><option>Female Ward</option><option>Rehab Wing</option><option>MHP Team</option></select>
         <button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>Filter</button>
       </div>
 
@@ -402,9 +402,9 @@
         <div class="staff-row"><div class="staff-dot">VC</div><div><div class="staff-name">Dr. Vundi Caroline</div><div class="staff-role">Psychiatrist · Male Ward</div></div><div class="staff-status on">On duty</div></div>
         <div class="staff-row"><div class="staff-dot">KN</div><div><div class="staff-name">Dr. Kennedy Njoroge</div><div class="staff-role">Psychiatrist · Female Ward</div></div><div class="staff-status on">On duty</div></div>
         <div class="staff-row"><div class="staff-dot">AM</div><div><div class="staff-name">Ann Mutua</div><div class="staff-role">Ward Nurse · Rehab Wing</div></div><div class="staff-status on">On duty</div></div>
-        <div class="staff-row"><div class="staff-dot">PO</div><div><div class="staff-name">Peter Odhiambo</div><div class="staff-role">Therapist · CCP Team</div></div><div class="staff-status off">Off duty</div></div>
-        <div class="staff-row"><div class="staff-dot">BW</div><div><div class="staff-name">Beatrice Wanjiku</div><div class="staff-role">Clinical Supervisor · CCP Team</div></div><div class="staff-status on">On duty</div></div>
-        <div class="staff-row"><div class="staff-dot">SK</div><div><div class="staff-name">Samuel Kiptoo</div><div class="staff-role">Therapist · CCP Team</div></div><div class="staff-status off">Off duty</div></div>
+        <div class="staff-row"><div class="staff-dot">PO</div><div><div class="staff-name">Peter Odhiambo</div><div class="staff-role">Therapist · MHP Team</div></div><div class="staff-status off">Off duty</div></div>
+        <div class="staff-row"><div class="staff-dot">BW</div><div><div class="staff-name">Beatrice Wanjiku</div><div class="staff-role">Clinical Supervisor · MHP Team</div></div><div class="staff-status on">On duty</div></div>
+        <div class="staff-row"><div class="staff-dot">SK</div><div><div class="staff-name">Samuel Kiptoo</div><div class="staff-role">Therapist · MHP Team</div></div><div class="staff-status off">Off duty</div></div>
         <div class="staff-row"><div class="staff-dot">GN</div><div><div class="staff-name">Grace Njeri</div><div class="staff-role">Ward Nurse · Isolation</div></div><div class="staff-status on">On duty</div></div>
       </div>
     </div>
@@ -422,7 +422,7 @@
         <div class="cap-item"><div class="cv">4</div><div class="cl">Wards</div></div>
         <div class="cap-item"><div class="cv">50</div><div class="cl">Total Beds</div></div>
         <div class="cap-item"><div class="cv">40</div><div class="cl">Outpatient Capacity / Day</div></div>
-        <div class="cap-item"><div class="cv">Open</div><div class="cl">CCP Registration</div></div>
+        <div class="cap-item"><div class="cv">Open</div><div class="cl">MHP Registration</div></div>
       </div>
 
       <div class="settings-grid">
@@ -458,7 +458,7 @@
             <div class="field-group"><label>Total Bed Count</label><input type="number" value="50"></div>
             <div class="field-group"><label>Outpatient Capacity / Day</label><input type="number" value="40"></div>
           </div>
-          <div class="field-group"><label>CCP Registration Availability</label><div class="pill-group"><button type="button" class="pill active">Open</button><button type="button" class="pill">Waitlist Only</button><button type="button" class="pill">Closed</button></div></div>
+          <div class="field-group"><label>MHP Registration Availability</label><div class="pill-group"><button type="button" class="pill active">Open</button><button type="button" class="pill">Waitlist Only</button><button type="button" class="pill">Closed</button></div></div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:16px;">
@@ -512,7 +512,7 @@
         <div id="orgRoleDescNurse" class="role-desc-box" hidden><b>Ward Nurse</b> — manages bed status and vitals within an assigned ward; can view but not edit patient registration or billing.</div>
         <div id="orgRoleDescTherapist" class="role-desc-box" hidden><b>Therapist</b> — runs Individual/Family/Group Psychotherapy sessions and can raise supervision requests; no access to billing or branch settings.</div>
         <div id="orgRoleDescSupervisor" class="role-desc-box" hidden><b>Clinical Supervisor</b> — reviews and closes supervision requests, can view all staff caseloads; read-only on billing.</div>
-        <div id="orgRoleDescFrontdesk" class="role-desc-box" hidden><b>Front Desk</b> — handles outpatient/CCP registration and appointment check-in; no access to clinical notes or staff management.</div>
+        <div id="orgRoleDescFrontdesk" class="role-desc-box" hidden><b>Front Desk</b> — handles outpatient/MHP registration and appointment check-in; no access to clinical notes or staff management.</div>
         <div id="orgRoleDescBilling" class="role-desc-box" hidden><b>Billing Clerk</b> — manages invoices, SHA claims and M-Pesa reconciliation; read-only on ward and staff data.</div>
 
         <div class="table-scroll" style="overflow-x:auto;">
@@ -522,9 +522,9 @@
             </thead>
             <tbody>
               <tr><td class="mod-name">Ward &amp; Bed Management</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
-              <tr><td class="mod-name">Patient Registration (In/Out/CCP)</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
-              <tr><td class="mod-name">CCP Program (Family / Group / Supervision)</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
-              <tr><td class="mod-name">Staff / CCP Team</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
+              <tr><td class="mod-name">Patient Registration (In/Out/MHP)</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
+              <tr><td class="mod-name">MHP Program (Family / Group / Supervision)</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
+              <tr><td class="mod-name">Staff / MHP Team</td><td class="center"><input type="checkbox" class="perm-check" checked></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
               <tr><td class="mod-name">Branch Settings</td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check" disabled></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check" disabled></td></tr>
               <tr><td class="mod-name">Billing / SHA Claims</td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td><td class="center"><input type="checkbox" class="perm-check"></td></tr>
             </tbody>
@@ -544,10 +544,10 @@
           <div class="role-user-row"><div class="staff-dot">AM</div><div><div class="staff-name">Ann Mutua</div><div class="staff-role">Ward Nurse · Rehab Wing</div></div>
             <select><option>Ward Nurse</option><option selected>Ward Nurse</option><option>Psychiatrist</option><option>Therapist</option><option>Front Desk</option><option>Billing Clerk</option></select>
           </div>
-          <div class="role-user-row"><div class="staff-dot">PO</div><div><div class="staff-name">Peter Odhiambo</div><div class="staff-role">Therapist · CCP Team</div></div>
+          <div class="role-user-row"><div class="staff-dot">PO</div><div><div class="staff-name">Peter Odhiambo</div><div class="staff-role">Therapist · MHP Team</div></div>
             <select><option>Therapist</option><option>Clinical Supervisor</option><option>Psychiatrist</option><option>Ward Nurse</option><option>Front Desk</option><option>Billing Clerk</option></select>
           </div>
-          <div class="role-user-row"><div class="staff-dot">BW</div><div><div class="staff-name">Beatrice Wanjiku</div><div class="staff-role">Clinical Supervisor · CCP Team</div></div>
+          <div class="role-user-row"><div class="staff-dot">BW</div><div><div class="staff-name">Beatrice Wanjiku</div><div class="staff-role">Clinical Supervisor · MHP Team</div></div>
             <select><option>Clinical Supervisor</option><option>Psychiatrist</option><option>Therapist</option><option>Ward Nurse</option><option>Front Desk</option><option>Billing Clerk</option></select>
           </div>
         </div>
@@ -615,11 +615,11 @@
     currentRegType = type;
     document.getElementById('regInpatientFields').style.display = type==='inpatient' ? '' : 'none';
     document.getElementById('regOutpatientFields').style.display = type==='outpatient' ? '' : 'none';
-    document.getElementById('regCcpFields').style.display = type==='ccp' ? '' : 'none';
+    document.getElementById('regMhpFields').style.display = type==='mhp' ? '' : 'none';
     const note = document.getElementById('careNote').querySelector('span');
     if(type==='inpatient') note.textContent = 'Inpatient path requires ward & bed assignment, admitting doctor and date of admission before the record can be saved.';
     if(type==='outpatient') note.textContent = 'Outpatient registration skips bed assignment — walk-in visits still require a doctor to be assigned before checkout.';
-    if(type==='ccp') note.textContent = 'CCP intake feeds directly into the CCP-specific modules (Individual/Family/Group Psychotherapy, NACADA reporting).';
+    if(type==='mhp') note.textContent = 'MHP intake feeds directly into the MHP-specific modules (Individual/Family/Group Psychotherapy, NACADA reporting).';
   }
 
   // ---- Supervision request drawer ----
@@ -644,7 +644,7 @@
     const baseRequired = ['reg-first','reg-last','reg-gender','reg-dob','reg-phone','reg-nok-name','reg-nok-rel','reg-nok-phone','reg-doctor','reg-doa'];
     let typeRequired = [];
     if(currentRegType === 'inpatient') typeRequired = ['reg-inp-ward','reg-inp-bed','reg-inp-doctor','reg-inp-doa'];
-    if(currentRegType === 'ccp') typeRequired = ['reg-ccp-track'];
+    if(currentRegType === 'mhp') typeRequired = ['reg-mhp-track'];
     const required = baseRequired.concat(typeRequired);
 
     let hasError = false, firstInvalid = null;
@@ -665,7 +665,7 @@
     const uhid = 'UHID-' + regSeq;
     document.getElementById('reg-uhid').value = uhid;
     let citramacNo = '';
-    if(currentRegType === 'ccp'){
+    if(currentRegType === 'mhp'){
       citramacSeq++;
       citramacNo = '202608MDCV-' + String(citramacSeq).padStart(3,'0');
       document.getElementById('reg-citramac').value = citramacNo;
@@ -673,9 +673,9 @@
 
     const name = rv('reg-first') + ' ' + rv('reg-last');
     const doctor = rv('reg-doctor');
-    const typeLabel = currentRegType === 'inpatient' ? 'Inpatient' : currentRegType === 'outpatient' ? 'Outpatient' : 'CCP';
+    const typeLabel = currentRegType === 'inpatient' ? 'Inpatient' : currentRegType === 'outpatient' ? 'Outpatient' : 'MHP';
     const extra = currentRegType === 'inpatient' ? document.getElementById('reg-inp-ward').value + ' · ' + document.getElementById('reg-inp-bed').value
-                : currentRegType === 'ccp' ? (citramacNo || 'CCP Intake')
+                : currentRegType === 'mhp' ? (citramacNo || 'MHP Intake')
                 : 'Walk-in / Appointment';
 
     registeredClients.unshift({ name, doctor, uhid, typeLabel, extra, time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) });
@@ -686,7 +686,7 @@
 
   function resetRegistrationForm(){
     const allFields = ['reg-first','reg-last','reg-gender','reg-dob','reg-phone','reg-nok-name','reg-nok-rel','reg-nok-phone','reg-doctor','reg-doa',
-      'reg-inp-doctor','reg-inp-doa','reg-ccp-track'];
+      'reg-inp-doctor','reg-inp-doa','reg-mhp-track'];
     allFields.forEach(id => { markInvalid(id, false); const el = document.getElementById(id); if(el && el.tagName !== 'SELECT') el.value = ''; });
   }
 

@@ -42,7 +42,7 @@ function initials(s: Staff) {
 
 /**
  * Org Admin's live operational snapshot — bed occupancy, admissions,
- * outpatient/CCP volume, staffing, per-ward occupancy, and today's duty roster.
+ * outpatient/MHP volume, staffing, per-ward occupancy, and today's duty roster.
  */
 export function OrgDashboardPage() {
   const { accessToken } = useAuth();
@@ -104,8 +104,8 @@ export function OrgDashboardPage() {
 
             <StatCard
               icon={<Stethoscope size={16} />}
-              label="Outpatient / CCP Volume"
-              value={stats.outpatient_ccp_volume}
+              label="Outpatient / MHP Volume"
+              value={stats.outpatient_mhp_volume}
             />
 
             <StatCard

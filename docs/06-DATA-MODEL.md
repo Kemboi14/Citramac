@@ -68,7 +68,7 @@ VitalSigns  (Module 2 — Triage)
   - esi_acuity_level (1-5, Emergency Severity Index)
   - recorded_by, recorded_at
 
-MentalStatusExam (MSE)             # CCP-adapted "triage" for mental health
+MentalStatusExam (MSE)             # MHP-adapted "triage" for mental health
   - encounter (FK), appearance, behavior, speech, mood, affect, thought_process,
     thought_content, perception, cognition, insight, judgment, risk_assessment (SI/HI flags)
 
@@ -90,7 +90,7 @@ ReferralPacket (E-Referral)
   - encounter (FK), destination_facility, fhir_bundle_json, sent_at, status
 ```
 
-## 6.4 CCP / mental-health specific (CAfRIC modules — see 07 §7.14)
+## 6.4 MHP / mental-health specific (CAfRIC modules — see 07 §7.14)
 
 ```
 BiopsychosocialAssessment

@@ -19,7 +19,7 @@ class InsuranceClaimsTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.clinician = User.objects.create_user(
                 email="clinician@org.test",

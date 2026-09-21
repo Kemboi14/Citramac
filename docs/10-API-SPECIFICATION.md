@@ -108,15 +108,15 @@ POST       /claims/e-claims/{id}/submit-to-sha/
 GET        /claims/remittances/
 ```
 
-## 10.12 CCP Program / §7.14
+## 10.12 MHP Program / §7.14
 ```
-POST       /ccp/biopsychosocial-assessments/
-POST       /ccp/psychotherapy-sessions/                   (session_type: INDIVIDUAL|FAMILY|GROUP)
-POST       /ccp/sud-rehab-plans/
-POST       /ccp/sud-rehab-plans/{id}/urine-screens/
-POST       /ccp/supervision-requests/
-GET/POST   /ccp/team/
-GET        /ccp/nacada-ndo-report/?period=
+POST       /mhp/biopsychosocial-assessments/
+POST       /mhp/psychotherapy-sessions/                   (session_type: INDIVIDUAL|FAMILY|GROUP)
+POST       /mhp/sud-rehab-plans/
+POST       /mhp/sud-rehab-plans/{id}/urine-screens/
+POST       /mhp/supervision-requests/
+GET/POST   /mhp/team/
+GET        /mhp/nacada-ndo-report/?period=
 ```
 
 ## 10.13 System Admin / Module 13

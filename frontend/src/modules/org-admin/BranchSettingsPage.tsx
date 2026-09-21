@@ -8,7 +8,7 @@ import {
   setBranchCredentials,
   updateBranch,
   type Branch,
-  type CcpRegistrationStatus,
+  type MhpRegistrationStatus,
 } from "../../lib/branchesApi";
 import {
   getOrganizationEmailSettings,
@@ -35,7 +35,7 @@ const OWNERSHIP_TYPES = [
   "PARTNERSHIP",
   "OTHER",
 ] as const;
-const CCP_OPTIONS: { value: CcpRegistrationStatus; label: string }[] = [
+const MHP_OPTIONS: { value: MhpRegistrationStatus; label: string }[] = [
   { value: "OPEN", label: "Open" },
   { value: "WAITLIST", label: "Waitlist Only" },
   { value: "CLOSED", label: "Closed" },
@@ -51,7 +51,7 @@ interface FormState {
   phone: string;
   email: string;
   outpatient_capacity_per_day: string;
-  ccp_registration_status: CcpRegistrationStatus;
+  mhp_registration_status: MhpRegistrationStatus;
 }
 
 function formFromBranch(branch: Branch): FormState {
@@ -66,7 +66,7 @@ function formFromBranch(branch: Branch): FormState {
     email: branch.email,
     outpatient_capacity_per_day:
       branch.outpatient_capacity_per_day === null ? "" : String(branch.outpatient_capacity_per_day),
-    ccp_registration_status: branch.ccp_registration_status,
+    mhp_registration_status: branch.mhp_registration_status,
   };
 }
 
@@ -353,7 +353,7 @@ export function BranchSettingsPage() {
         email: form.email,
         outpatient_capacity_per_day:
           form.outpatient_capacity_per_day === "" ? null : Number(form.outpatient_capacity_per_day),
-        ccp_registration_status: form.ccp_registration_status,
+        mhp_registration_status: form.mhp_registration_status,
       };
       const updated = await updateBranch(accessToken, branch.id, payload);
       setBranch(updated);
@@ -434,7 +434,7 @@ export function BranchSettingsPage() {
                     : String(branch.outpatient_capacity_per_day)
                 }
               />
-              <StatPill label="CCP Registration" value={humanize(branch.ccp_registration_status)} />
+              <StatPill label="MHP Registration" value={humanize(branch.mhp_registration_status)} />
             </div>
 
             <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-6">
@@ -583,16 +583,16 @@ export function BranchSettingsPage() {
                   </label>
                   <div className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-ink-700">
-                      CCP Registration Availability
+                      MHP Registration Availability
                     </span>
                     <div className="inline-flex w-fit overflow-hidden rounded-md border border-surface-border">
-                      {CCP_OPTIONS.map((option) => (
+                      {MHP_OPTIONS.map((option) => (
                         <button
                           key={option.value}
                           type="button"
-                          onClick={() => updateForm({ ccp_registration_status: option.value })}
+                          onClick={() => updateForm({ mhp_registration_status: option.value })}
                           className={`px-3 py-1.5 text-sm font-semibold transition-colors ${
-                            form.ccp_registration_status === option.value
+                            form.mhp_registration_status === option.value
                               ? "bg-brand-green text-white"
                               : "bg-surface-card text-ink-700 hover:bg-brand-green-tint"
                           } ${option.value !== "CLOSED" ? "border-r border-surface-border" : ""}`}

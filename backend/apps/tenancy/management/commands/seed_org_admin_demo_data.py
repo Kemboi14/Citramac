@@ -58,7 +58,7 @@ class Command(BaseCommand):
                 "phone": "+254700112233",
                 "email": "chiromo@cafric-demo.test",
                 "outpatient_capacity_per_day": 40,
-                "ccp_registration_status": "OPEN",
+                "mhp_registration_status": "OPEN",
                 "mpesa_paybill_enabled": True,
                 "sms_reminders_enabled": True,
             },

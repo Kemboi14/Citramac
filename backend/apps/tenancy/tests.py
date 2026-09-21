@@ -124,8 +124,8 @@ class OnboardTenantCommandTests(TestCase):
             org = Organization.objects.get(slug="test-centre")
             admin = User.objects.get(email="admin@test-centre.invalid")
 
-            self.assertEqual(org.facility_type, "MENTAL_HEALTH_CCP")
-            self.assertIn("ccp_program", org.enabled_modules)
+            self.assertEqual(org.facility_type, "MENTAL_HEALTH_MHP")
+            self.assertIn("mhp_program", org.enabled_modules)
             self.assertIn("client_registry", org.enabled_modules)
             self.assertFalse(admin.is_active)
             self.assertTrue(admin.roles.filter(name="Org Admin").exists())
@@ -359,7 +359,7 @@ class OrganizationConsoleApiTests(APITestCase):
                 "name": "Branded Wellness Centre",
                 "slug": "branded-wellness",
                 "org_type": "HOSPITAL",
-                "facility_type": "MENTAL_HEALTH_CCP",
+                "facility_type": "MENTAL_HEALTH_MHP",
                 "dha_facility_code": "MFL-77123",
                 "subscription_plan_code": plan.code,
                 "billing_cycle": "MONTHLY",
@@ -638,7 +638,7 @@ class BranchAndSubscriptionScopingTests(APITestCase):
 class OrgDashboardStatsViewTests(APITestCase):
     """
     citramac_ORG-admin.html "Org Dashboard" stat cards + Ward Occupancy panel.
-    Regression test for a real bug this suite didn't catch: the outpatient/CCP
+    Regression test for a real bug this suite didn't catch: the outpatient/MHP
     volume query filtered on `Patient.care_type`, a field that doesn't exist
     (the real field is `patient_category`) — every Org Admin's dashboard 500'd.
     """
@@ -683,7 +683,7 @@ class OrgDashboardStatsViewTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {self.org_admin_access}",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["outpatient_ccp_volume"], 1)
+        self.assertEqual(response.data["outpatient_mhp_volume"], 1)
 
 
 class InviteStaffCommandTests(TestCase):
@@ -696,7 +696,7 @@ class InviteStaffCommandTests(TestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Existing Centre", slug="existing-centre", facility_type="MENTAL_HEALTH_CCP"
+                name="Existing Centre", slug="existing-centre", facility_type="MENTAL_HEALTH_MHP"
             )
             self.branch = Branch.objects.create(organization=self.org, name="Main Branch")
 

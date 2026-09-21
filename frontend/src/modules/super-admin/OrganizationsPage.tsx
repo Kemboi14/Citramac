@@ -127,7 +127,7 @@ const IDENTITY_CODE_HINT: Record<OrgType, string> = {
 
 const FACILITY_TYPE_OPTIONS = [
   { value: "GENERAL_HOSPITAL", label: "General Hospital" },
-  { value: "MENTAL_HEALTH_CCP", label: "Mental Health CCP" },
+  { value: "MENTAL_HEALTH_MHP", label: "Mental Health MHP" },
   { value: "DISPENSARY", label: "Dispensary" },
   { value: "CLINIC", label: "Clinic" },
 ];

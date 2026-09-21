@@ -17,10 +17,10 @@ class ClientRegistryTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org_a = Organization.objects.create(
-                name="Org A", slug="orga", facility_type="MENTAL_HEALTH_CCP"
+                name="Org A", slug="orga", facility_type="MENTAL_HEALTH_MHP"
             )
             self.org_b = Organization.objects.create(
-                name="Org B", slug="orgb", facility_type="MENTAL_HEALTH_CCP"
+                name="Org B", slug="orgb", facility_type="MENTAL_HEALTH_MHP"
             )
             self.clinician_a = User.objects.create_user(
                 email="clinician-a@orga.test",
@@ -247,7 +247,7 @@ class RightToErasureTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -444,7 +444,7 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org-history", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org-history", facility_type="MENTAL_HEALTH_MHP"
             )
             self.clinician = User.objects.create_user(
                 email="clinician@org-history.test",

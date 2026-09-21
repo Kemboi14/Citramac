@@ -396,7 +396,7 @@
     .donut-wrap{ flex-direction:column; align-items:flex-start; }
   }
 
-  /* ===== Toggle switch (CCP registration etc.) ===== */
+  /* ===== Toggle switch (MHP registration etc.) ===== */
   .switch-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:#fff; }
   .switch-row .sw-label{ font-size:12.8px; font-weight:600; color:var(--ink-900); }
   .switch-row .sw-desc{ font-size:11.3px; color:var(--ink-500); margin-top:2px; }
@@ -852,7 +852,7 @@
         <div class="page-title-row">
           <div>
             <div class="page-title">Branches</div>
-            <div class="page-desc">Every physical facility under each organization — wards, beds, capacity, and CCP registration.</div>
+            <div class="page-desc">Every physical facility under each organization — wards, beds, capacity, and MHP registration.</div>
           </div>
           <button class="btn btn-primary" onclick="openBranchDrawer()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -880,7 +880,7 @@
         <div class="stat-card">
           <div class="stat-top"><div class="stat-icon a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg></div></div>
           <div class="stat-value">64</div>
-          <div class="stat-label">CCP-Registered Branches</div>
+          <div class="stat-label">MHP-Registered Branches</div>
         </div>
       </div>
 
@@ -891,7 +891,7 @@
         </div>
         <button class="chip active" data-status="all" onclick="setBranchFilter(this)">All (112)</button>
         <button class="chip" data-status="active" onclick="setBranchFilter(this)">Active (101)</button>
-        <button class="chip" data-status="ccp" onclick="setBranchFilter(this)">CCP-Registered (64)</button>
+        <button class="chip" data-status="mhp" onclick="setBranchFilter(this)">MHP-Registered (64)</button>
         <button class="chip" data-status="inactive" onclick="setBranchFilter(this)">Inactive (11)</button>
       </div>
 
@@ -900,11 +900,11 @@
           <table class="data-table" id="branchTable">
             <thead>
               <tr>
-                <th>Branch</th><th>Organization</th><th>MFL Code</th><th>Level</th><th>Wards</th><th>Beds</th><th>OP Capacity/day</th><th>CCP</th><th>Status</th><th></th>
+                <th>Branch</th><th>Organization</th><th>MFL Code</th><th>Level</th><th>Wards</th><th>Beds</th><th>OP Capacity/day</th><th>MHP</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody>
-              <tr data-status="active" data-ccp="yes" data-name="rehab wing amani wellness centre mfl-14238-b2">
+              <tr data-status="active" data-mhp="yes" data-name="rehab wing amani wellness centre mfl-14238-b2">
                 <td><div class="org-name-cell">Rehab Wing</div><div class="org-sub-cell">Westlands, Nairobi</div></td>
                 <td>Amani Wellness Centre</td>
                 <td><span class="mono-code">MFL-14238-B2</span></td>
@@ -917,7 +917,7 @@
                   <div class="icon-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
                 </div></td>
               </tr>
-              <tr data-status="active" data-ccp="no" data-name="main campus tumaini mind clinic mfl-19042-b1">
+              <tr data-status="active" data-mhp="no" data-name="main campus tumaini mind clinic mfl-19042-b1">
                 <td><div class="org-name-cell">Main Campus</div><div class="org-sub-cell">Ruiru, Kiambu</div></td>
                 <td>Tumaini Mind Clinic</td>
                 <td><span class="mono-code">MFL-19042-B1</span></td>
@@ -930,7 +930,7 @@
                   <div class="icon-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
                 </div></td>
               </tr>
-              <tr data-status="active" data-ccp="yes" data-name="lakeside annex serenity recovery house mfl-11875-b2">
+              <tr data-status="active" data-mhp="yes" data-name="lakeside annex serenity recovery house mfl-11875-b2">
                 <td><div class="org-name-cell">Lakeside Annex</div><div class="org-sub-cell">Nyali, Mombasa</div></td>
                 <td>Serenity Recovery House</td>
                 <td><span class="mono-code">MFL-11875-B2</span></td>
@@ -943,7 +943,7 @@
                   <div class="icon-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
                 </div></td>
               </tr>
-              <tr data-status="inactive" data-ccp="no" data-name="north wing northview psychiatric unit mfl-08820-b3">
+              <tr data-status="inactive" data-mhp="no" data-name="north wing northview psychiatric unit mfl-08820-b3">
                 <td><div class="org-name-cell">North Wing</div><div class="org-sub-cell">Eldoret, Uasin Gishu</div></td>
                 <td>Northview Psychiatric Unit</td>
                 <td><span class="mono-code">MFL-08820-B3</span></td>
@@ -956,7 +956,7 @@
                   <div class="icon-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
                 </div></td>
               </tr>
-              <tr data-status="active" data-ccp="yes" data-name="rehab wing chiromo lane medical centre mfl-05531-b2">
+              <tr data-status="active" data-mhp="yes" data-name="rehab wing chiromo lane medical centre mfl-05531-b2">
                 <td><div class="org-name-cell">Rehab Wing</div><div class="org-sub-cell">Chiromo, Nairobi</div></td>
                 <td>Chiromo Lane Medical Centre</td>
                 <td><span class="mono-code">MFL-05531-B2</span></td>
@@ -1461,10 +1461,10 @@
       <input type="number" placeholder="e.g. 90">
     </div>
 
-    <div class="section-label">CCP Registration</div>
+    <div class="section-label">MHP Registration</div>
     <div class="switch-row">
       <div>
-        <div class="sw-label">CCP registration available</div>
+        <div class="sw-label">MHP registration available</div>
         <div class="sw-desc">Enables Community Care Program registration at this branch</div>
       </div>
       <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
@@ -1566,7 +1566,7 @@
     const query = document.getElementById('branchSearch').value.toLowerCase();
     document.querySelectorAll('#branchTable tbody tr').forEach(row => {
       const matchStatus = status === 'all'
-        || (status === 'ccp' ? row.dataset.ccp === 'yes' : row.dataset.status === status);
+        || (status === 'mhp' ? row.dataset.mhp === 'yes' : row.dataset.status === status);
       const matchQuery = row.dataset.name.includes(query);
       row.style.display = (matchStatus && matchQuery) ? '' : 'none';
     });

@@ -6,13 +6,13 @@
 
 ## 0. What you are building
 
-**CITRAMAC** is a cloud-native, multi-tenant HMIS. A single deployment serves many organizations (hospitals, clinics, rehab/CCP centres), each fully data-isolated, each with their own branches, staff, patients, and billing — on shared infrastructure. It must be certifiable against Kenya's **Digital Health Agency (DHA)** standards and integrate natively with the **Social Health Authority (SHA)**.
+**CITRAMAC** is a cloud-native, multi-tenant HMIS. A single deployment serves many organizations (hospitals, clinics, rehab/MHP centres), each fully data-isolated, each with their own branches, staff, patients, and billing — on shared infrastructure. It must be certifiable against Kenya's **Digital Health Agency (DHA)** standards and integrate natively with the **Social Health Authority (SHA)**.
 
 It ships with three UI tiers, matching the reference mockups in `/mockups`:
 
 1. **Super Admin** (`citramac_SUPER-ADMIN.html`) — platform owner: manages Organizations (tenants), Branches, Subscriptions, cross-tenant Governance, Roles & Permissions, Global Audit Log.
-2. **Org Admin** (`citramac_ORG-admin.html`) — a tenant's facility admin: Org Dashboard, Ward & Bed Management, Staff/CCP Team, Branch Settings, Roles & Permissions (scoped to their org).
-3. **Clinical Workspace** (`citramac_clinical_workspace.html`) — the frontline EHR used by clinicians: Client Registry, Attachments, Triage & MSE, Clinical Review, Clinical Encounter, LIMS, Pharmacy, Inpatient & Ward, plus the **CCP Program** modules unique to mental-health/rehab facilities (Individual Psychotherapy, Family Therapy, Group Psychotherapy, Supervision Requests, NACADA NDO Report, CCP Team).
+2. **Org Admin** (`citramac_ORG-admin.html`) — a tenant's facility admin: Org Dashboard, Ward & Bed Management, Staff/MHP Team, Branch Settings, Roles & Permissions (scoped to their org).
+3. **Clinical Workspace** (`citramac_clinical_workspace.html`) — the frontline EHR used by clinicians: Client Registry, Attachments, Triage & MSE, Clinical Review, Clinical Encounter, LIMS, Pharmacy, Inpatient & Ward, plus the **MHP Program** modules unique to mental-health/rehab facilities (Individual Psychotherapy, Family Therapy, Group Psychotherapy, Supervision Requests, NACADA NDO Report, MHP Team).
 
 Read the full module list and clinical rationale in `docs/07-CLINICAL-MODULES-SPEC.md` before scaffolding any clinical screen.
 
@@ -38,7 +38,7 @@ When starting a new agent session or a new feature branch, load documents in thi
 | 4 | `docs/04-MULTI-TENANCY.md` | Tenancy model, isolation strategy, provisioning |
 | 5 | `docs/05-AUTHENTICATION-FLOW.md` | The exact login/OTP/password sequence |
 | 6 | `docs/06-DATA-MODEL.md` | Core Django app/model layout, ERD |
-| 7 | `docs/07-CLINICAL-MODULES-SPEC.md` | All 13 DHA modules + CCP mental-health modules |
+| 7 | `docs/07-CLINICAL-MODULES-SPEC.md` | All 13 DHA modules + MHP mental-health modules |
 | 8 | `docs/08-DHA-SHA-INTEGRATION.md` | FHIR, ICD-11, LOINC, e-claims, pre-auth, IPRS |
 | 9 | `docs/09-SECURITY-COMPLIANCE.md` | RBAC, encryption, audit, DPIA, offline sync |
 | 10 | `docs/10-API-SPECIFICATION.md` | REST endpoint contracts |

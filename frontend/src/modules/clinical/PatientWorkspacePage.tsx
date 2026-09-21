@@ -75,7 +75,7 @@ const CARE_LABEL_LOOKUP: Record<string, string> = {
  * Unified per-client workspace — mockups/citramac_clinical_workspace.html's
  * patient banner + tabs (Overview/Diagnoses/Client History/Documents/
  * Appointments). Encounters/Clinical Notes/Assessments stay on their own
- * dedicated pages (Triage & MSE, Clinical Encounter, CCP sessions) rather
+ * dedicated pages (Triage & MSE, Clinical Encounter, MHP sessions) rather
  * than being duplicated here — reached via the links below.
  */
 export function PatientWorkspacePage() {
@@ -328,7 +328,7 @@ export function PatientWorkspacePage() {
               <Link className="text-brand-green hover:underline" to="/clinical/ipd">
                 Inpatient &amp; Ward / Admission
               </Link>
-              <Link className="text-brand-green hover:underline" to="/clinical/ccp/individual">
+              <Link className="text-brand-green hover:underline" to="/clinical/mhp/individual">
                 Individual Psychotherapy
               </Link>
             </div>

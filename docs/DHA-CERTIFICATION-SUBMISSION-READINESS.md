@@ -68,7 +68,7 @@ claiming untested/unavailable external integrations work.
   against SHA's *actual* test gateway — `SHA_GATEWAY_MODE` defaults to
   `stub`; going live needs `SHA_GATEWAY_MODE=sandbox` plus a real signing
   certificate (`08-DHA-SHA-INTEGRATION.md` §8.4), neither configured here.
-- [x] **DPIA completed and on file** — `docs/DPIA-CAFRIC-MENTAL-HEALTH-CCP.md`
+- [x] **DPIA completed and on file** — `docs/DPIA-CAFRIC-MENTAL-HEALTH-MHP.md`
   (Phase 7).
 - [x] **Backup/restore drill completed, RTO/RPO documented** — Phase 7,
   drill-tested for real against the local dev Postgres cluster (see

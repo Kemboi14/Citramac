@@ -33,7 +33,7 @@ class TerminologySearchTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.user = User.objects.create_user(
                 email="clinician@org.test",
@@ -67,7 +67,7 @@ class FhirMapperAndHieClientTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -147,7 +147,7 @@ class ClientHistoryFhirBundleTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -158,7 +158,7 @@ class ClientHistoryFhirBundleTests(APITestCase):
             )
 
     def test_build_client_history_bundle_includes_condition_and_observation(self):
-        from apps.ccp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
+        from apps.mhp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
 
         from .fhir_mapper import build_client_history_bundle
 
@@ -193,7 +193,7 @@ class ClientHistoryFhirBundleTests(APITestCase):
         self.assertEqual(observation["valueCodeableConcept"]["text"], "Alcohol")
 
     def test_build_client_history_bundle_without_substance_entries_still_builds(self):
-        from apps.ccp_program.models import BiopsychosocialAssessment
+        from apps.mhp_program.models import BiopsychosocialAssessment
 
         from .fhir_mapper import build_client_history_bundle
 
@@ -260,7 +260,7 @@ class SeedDhaSandboxDemoCommandTests(TestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Demo Org", slug="demo-org", facility_type="MENTAL_HEALTH_CCP"
+                name="Demo Org", slug="demo-org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -301,7 +301,7 @@ class SeedDhaSandboxDemoCommandTests(TestCase):
     def test_raises_without_patient(self):
         with platform_admin_context():
             empty_org = Organization.objects.create(
-                name="Empty Org", slug="empty-org", facility_type="MENTAL_HEALTH_CCP"
+                name="Empty Org", slug="empty-org", facility_type="MENTAL_HEALTH_MHP"
             )
         with self.assertRaises(CommandError):
             call_command("seed_dha_sandbox_demo", org_slug=empty_org.slug)
@@ -309,7 +309,7 @@ class SeedDhaSandboxDemoCommandTests(TestCase):
     def test_raises_without_encounter(self):
         with platform_admin_context():
             org = Organization.objects.create(
-                name="No Encounter Org", slug="no-encounter-org", facility_type="MENTAL_HEALTH_CCP"
+                name="No Encounter Org", slug="no-encounter-org", facility_type="MENTAL_HEALTH_MHP"
             )
             Patient.objects.create(
                 organization=org,
@@ -341,7 +341,7 @@ class FhirR4ConformanceTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org-fhir-conformance", facility_type="MENTAL_HEALTH_CCP"
+                name="Org", slug="org-fhir-conformance", facility_type="MENTAL_HEALTH_MHP"
             )
             self.patient = Patient.objects.create(
                 organization=self.org,
@@ -448,7 +448,7 @@ class FhirR4ConformanceTests(APITestCase):
         assert_conformant(bundle)
 
     def test_client_history_bundle_with_substance_entry_is_r4_conformant(self):
-        from apps.ccp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
+        from apps.mhp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
 
         with platform_admin_context():
             assessment = BiopsychosocialAssessment.objects.create(
@@ -469,7 +469,7 @@ class FhirR4ConformanceTests(APITestCase):
 
     def test_client_history_bundle_without_substance_entries_is_r4_conformant(self):
         """Refusal/omission case: a draft intake with no presenting problem or substance entries."""
-        from apps.ccp_program.models import BiopsychosocialAssessment
+        from apps.mhp_program.models import BiopsychosocialAssessment
 
         with platform_admin_context():
             assessment = BiopsychosocialAssessment.objects.create(

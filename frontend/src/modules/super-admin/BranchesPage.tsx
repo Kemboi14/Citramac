@@ -7,7 +7,7 @@ import {
   listBranches,
   updateBranch,
   type Branch,
-  type CcpRegistrationStatus,
+  type MhpRegistrationStatus,
 } from "../../lib/branchesApi";
 import { listOrganizations, type Organization } from "../../lib/organizationsApi";
 import { StatCard } from "../../components/StatCard";
@@ -19,7 +19,7 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "inline-flex items-center gap-2 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
-const CCP_TINT: Record<CcpRegistrationStatus, string> = {
+const MHP_TINT: Record<MhpRegistrationStatus, string> = {
   OPEN: "bg-brand-green-tint text-brand-green-dark",
   WAITLIST: "bg-status-amber-tint text-status-amber",
   CLOSED: "bg-status-red-tint text-status-red",
@@ -37,12 +37,12 @@ function facilityLevelShort(level: string) {
   return `Level ${level.replace(/^L/, "")}`;
 }
 
-type StatusFilter = "all" | "active" | "ccp" | "inactive";
+type StatusFilter = "all" | "active" | "mhp" | "inactive";
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: "All", value: "all" },
   { label: "Active", value: "active" },
-  { label: "CCP-Registered", value: "ccp" },
+  { label: "MHP-Registered", value: "mhp" },
   { label: "Inactive", value: "inactive" },
 ];
 
@@ -55,7 +55,7 @@ interface NewBranchState {
   county: string;
   sub_county: string;
   outpatient_capacity_per_day: string;
-  ccp_open: boolean;
+  mhp_open: boolean;
   is_active: boolean;
 }
 
@@ -68,7 +68,7 @@ const EMPTY_NEW_BRANCH: NewBranchState = {
   county: "",
   sub_county: "",
   outpatient_capacity_per_day: "",
-  ccp_open: false,
+  mhp_open: false,
   is_active: true,
 };
 
@@ -82,7 +82,7 @@ const EMPTY_NEW_BRANCH: NewBranchState = {
  * only matches name/MFL code (see BranchViewSet.get_queryset), not
  * organization name, and there's no `is_active` query param at all, so a
  * single client-side filter over one fetch covers name + org + MFL code +
- * active/CCP status without extra round-trips.
+ * active/MHP status without extra round-trips.
  */
 const branchFormId = "branch-form";
 
@@ -136,7 +136,7 @@ export function BranchesPage() {
       }
       if (statusFilter === "active") return b.is_active;
       if (statusFilter === "inactive") return !b.is_active;
-      if (statusFilter === "ccp") return b.ccp_registration_status === "OPEN";
+      if (statusFilter === "mhp") return b.mhp_registration_status === "OPEN";
       return true;
     });
   }, [branches, search, statusFilter]);
@@ -164,7 +164,7 @@ export function BranchesPage() {
         outpatient_capacity_per_day: newBranch.outpatient_capacity_per_day
           ? Number(newBranch.outpatient_capacity_per_day)
           : undefined,
-        ccp_registration_status: newBranch.ccp_open ? "OPEN" : "CLOSED",
+        mhp_registration_status: newBranch.mhp_open ? "OPEN" : "CLOSED",
         is_active: newBranch.is_active,
       });
       setShowForm(false);
@@ -194,7 +194,7 @@ export function BranchesPage() {
   const totalBranches = count || branches.length;
   const totalWards = branches.reduce((sum, b) => sum + (b.ward_count ?? 0), 0);
   const totalBeds = branches.reduce((sum, b) => sum + (b.bed_count ?? 0), 0);
-  const ccpOpenCount = branches.filter((b) => b.ccp_registration_status === "OPEN").length;
+  const mhpOpenCount = branches.filter((b) => b.mhp_registration_status === "OPEN").length;
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -218,8 +218,8 @@ export function BranchesPage() {
         <StatCard
           icon={ShieldCheck}
           tone="amber"
-          value={ccpOpenCount}
-          label="CCP-Registered Branches"
+          value={mhpOpenCount}
+          label="MHP-Registered Branches"
         />
       </div>
 
@@ -384,17 +384,17 @@ export function BranchesPage() {
               <div className="flex items-start justify-between gap-3 rounded-md border border-surface-border p-3">
                 <span className="flex flex-col">
                   <span className="text-sm font-medium text-ink-900">
-                    CCP registration available
+                    MHP registration available
                   </span>
                   <span className="text-xs text-ink-500">
-                    Enables Community Care Program registration at this branch
+                    Enables Mental Health Program registration at this branch
                   </span>
                 </span>
                 <input
                   type="checkbox"
                   className="mt-1 h-4 w-8 shrink-0 cursor-pointer accent-brand-green"
-                  checked={newBranch.ccp_open}
-                  onChange={(e) => setNewBranch({ ...newBranch, ccp_open: e.target.checked })}
+                  checked={newBranch.mhp_open}
+                  onChange={(e) => setNewBranch({ ...newBranch, mhp_open: e.target.checked })}
                 />
               </div>
             </div>
@@ -451,7 +451,7 @@ export function BranchesPage() {
               <th className="px-4 py-3">Wards</th>
               <th className="px-4 py-3">Beds</th>
               <th className="px-4 py-3">OP Capacity/day</th>
-              <th className="px-4 py-3">CCP</th>
+              <th className="px-4 py-3">MHP</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -473,10 +473,10 @@ export function BranchesPage() {
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
-                      CCP_TINT[b.ccp_registration_status]
+                      MHP_TINT[b.mhp_registration_status]
                     }`}
                   >
-                    {b.ccp_registration_status}
+                    {b.mhp_registration_status}
                   </span>
                 </td>
                 <td className="px-4 py-3">
