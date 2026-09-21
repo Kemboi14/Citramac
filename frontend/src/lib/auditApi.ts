@@ -4,7 +4,15 @@ import { apiRequest } from "./apiClient";
 // §9.4. citramac_SUPER-ADMIN.html "Audit Log" + "Security Audit Logs".
 
 export type AuditAction =
-  "CREATE" | "UPDATE" | "DELETE" | "VIEW" | "ERASURE" | "LOGIN" | "LOGIN_FAILED" | "LOGOUT";
+  | "CREATE"
+  | "UPDATE"
+  | "DELETE"
+  | "VIEW"
+  | "ERASURE"
+  | "LOGIN"
+  | "LOGIN_FAILED"
+  | "LOGOUT"
+  | "DISCOVERY_FAILED";
 
 export interface AuditLogEntry {
   id: string;

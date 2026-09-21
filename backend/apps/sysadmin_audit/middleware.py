@@ -21,7 +21,7 @@ class AuditMiddleware:
 
     def __call__(self, request):
         request_id = str(uuid.uuid4())
-        set_audit_request_meta(source_ip=_client_ip(request), request_id=request_id)
+        set_audit_request_meta(source_ip=get_client_ip(request), request_id=request_id)
 
         user = getattr(request, "user", None)
         if user is not None and user.is_authenticated:
@@ -35,7 +35,15 @@ class AuditMiddleware:
         return response
 
 
-def _client_ip(request):
+def get_client_ip(request):
+    """
+    The real client IP behind the k8s ingress/reverse proxy — plain
+    `REMOTE_ADDR` is the ingress's own address for every request once
+    deployed, which makes any per-IP rate limit keyed on it a single
+    shared (and trivially exhausted) global budget instead of a per-client
+    one. Used by this middleware's own audit `source_ip`, and imported
+    directly by apps.accounts.auth_views/throttling for the same reason.
+    """
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()

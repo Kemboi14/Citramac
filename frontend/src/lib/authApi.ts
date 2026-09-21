@@ -48,7 +48,6 @@ export function setPassword(passwordSetupToken: string, password: string) {
 
 /** Tenant branding surfaced by /auth/tenant-discovery/ — docs/14-TENANT-BRANDED-LOGIN-UX.md. */
 export interface TenantBranding {
-  id: string;
   name: string;
   logo_url: string;
   login_image_url: string;

@@ -1,3 +1,4 @@
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.sysadmin_audit.context import set_audit_actor
@@ -25,6 +26,24 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
         with platform_admin_context():
             result = super().authenticate(request)
+            if result is not None:
+                user, _token = result
+                # Rejects every API call on an already-issued token, not just
+                # new logins — a suspended org's staff otherwise keep full
+                # access until their access token happens to expire.
+                # Specifically SUSPENDED, not just `not is_active` — a
+                # brand-new org is also `is_active=False` while
+                # PENDING_VERIFICATION, and that must NOT block its own
+                # Org Admin from logging in and using the platform.
+                from apps.tenancy.models import Organization
+
+                if (
+                    user.organization_id
+                    and user.organization.status == Organization.STATUS_SUSPENDED
+                ):
+                    raise AuthenticationFailed(
+                        "This account's organization is no longer active."
+                    )
         if result is not None:
             user, _token = result
             set_tenant_context(

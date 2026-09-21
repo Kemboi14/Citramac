@@ -23,6 +23,7 @@ const ACTION_OPTIONS: { value: AuditAction | ""; label: string }[] = [
   { value: "LOGIN", label: "Login" },
   { value: "LOGIN_FAILED", label: "Login Failed" },
   { value: "LOGOUT", label: "Logout" },
+  { value: "DISCOVERY_FAILED", label: "Tenant Discovery Failed" },
 ];
 
 const ACTION_TINT: Record<AuditAction, string> = {
@@ -34,6 +35,7 @@ const ACTION_TINT: Record<AuditAction, string> = {
   ERASURE: "bg-status-red-tint text-status-red",
   VIEW: "bg-surface-bg text-ink-500",
   LOGOUT: "bg-surface-bg text-ink-500",
+  DISCOVERY_FAILED: "bg-status-amber-tint text-status-amber",
 };
 
 function ActionBadge({ action }: { action: AuditAction }) {

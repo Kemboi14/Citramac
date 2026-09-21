@@ -41,6 +41,7 @@ class AuditLogEntry(models.Model):
     ACTION_LOGIN = "LOGIN"
     ACTION_LOGIN_FAILED = "LOGIN_FAILED"
     ACTION_LOGOUT = "LOGOUT"
+    ACTION_DISCOVERY_FAILED = "DISCOVERY_FAILED"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -50,6 +51,7 @@ class AuditLogEntry(models.Model):
         (ACTION_LOGIN, "Login"),
         (ACTION_LOGIN_FAILED, "Login Failed"),
         (ACTION_LOGOUT, "Logout"),
+        (ACTION_DISCOVERY_FAILED, "Tenant Discovery Failed"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -26,6 +26,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.security.models import SecurityPolicy
+from apps.sysadmin_audit.middleware import get_client_ip
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
 
@@ -43,7 +44,12 @@ from .serializers import (
     TenantDiscoverySerializer,
     VerifyOtpSerializer,
 )
-from .throttling import RateLimitExceeded, enforce_cooldown, enforce_rate_limit
+from .throttling import (
+    RateLimitExceeded,
+    enforce_cooldown,
+    enforce_general_rate_limit,
+    enforce_rate_limit,
+)
 from .tokens import issue_tokens
 
 REFRESH_COOKIE_NAME = "refresh_token"
@@ -114,7 +120,7 @@ def _log_auth_event(user, action, request, extra_object_id=None):
         action=action,
         model="accounts.user",
         object_id=str(user.pk) if user else (extra_object_id or ""),
-        source_ip=request.META.get("REMOTE_ADDR"),
+        source_ip=get_client_ip(request),
         request_id=getattr(request, "request_id", ""),
     )
 
@@ -148,14 +154,19 @@ class TenantDiscoveryView(APIView):
         serializer = TenantDiscoverySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         domain = _email_domain(serializer.validated_data["email"])
+        client_ip = get_client_ip(request)
 
         try:
+            enforce_general_rate_limit(client_ip)
             enforce_rate_limit(
-                f"tenant-discovery:{request.META.get('REMOTE_ADDR', 'unknown')}",
+                f"tenant-discovery:{client_ip}",
                 max_attempts=20,
                 window_seconds=600,
             )
         except RateLimitExceeded as exc:
+            _log_auth_event(
+                None, AuditLogEntry.ACTION_DISCOVERY_FAILED, request, extra_object_id=domain
+            )
             return _error(
                 "RATE_LIMITED",
                 "Too many attempts. Try again later.",
@@ -169,16 +180,19 @@ class TenantDiscoveryView(APIView):
             org = (
                 Organization.objects.filter(is_active=True)
                 .filter(email_domains__contains=[domain])
+                .order_by("created_at")
                 .first()
             )
 
         if org is None:
+            _log_auth_event(
+                None, AuditLogEntry.ACTION_DISCOVERY_FAILED, request, extra_object_id=domain
+            )
             return Response(TENANT_NOT_FOUND_ERROR, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
                 "tenant": {
-                    "id": str(org.id),
                     "name": org.name,
                     "logo_url": org.logo_url,
                     "login_image_url": org.login_image_url,
@@ -422,8 +436,15 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         email = data["email"].strip().casefold()
+        client_ip = get_client_ip(request)
 
         lockout_key = f"login-lockout:{email}"
+        # Separate, higher-threshold IP counter — the email-keyed lockout
+        # above stops repeated guesses against one account, but does
+        # nothing against spraying a handful of guesses each across many
+        # different accounts from a single source.
+        ip_lockout_key = f"login-lockout-ip:{client_ip}"
+        ip_max_attempts = 20
         from django.core.cache import cache
 
         policy = SecurityPolicy.get_solo()
@@ -436,26 +457,62 @@ class LoginView(APIView):
                 "Too many failed attempts. Try again later or contact an admin.",
                 status.HTTP_423_LOCKED,
             )
+        if cache.get(ip_lockout_key, 0) >= ip_max_attempts:
+            return _error(
+                "RATE_LIMITED", "Too many attempts. Try again later.", status.HTTP_429_TOO_MANY_REQUESTS
+            )
 
         with platform_admin_context():
             user = User.all_objects.filter(email__iexact=email).first()
 
-        password_ok = bool(user) and user.is_active and user.check_password(data["password"])
+        # Argon2-verify a real password even when there's no user (or the
+        # user is inactive) to check it against, so this path takes
+        # comparable time to the "wrong password for a real, active user"
+        # path below — otherwise the two are distinguishable by response
+        # time alone, regardless of the identical error message/status.
+        # Mirrors Django's own ModelBackend.authenticate() decoy-hash
+        # pattern for the same reason.
+        if user and user.is_active:
+            password_ok = user.check_password(data["password"])
+        else:
+            User().set_password(data["password"])
+            password_ok = False
+
         if not password_ok:
             cache.set(lockout_key, cache.get(lockout_key, 0) + 1, timeout=lockout_seconds)
+            cache.set(ip_lockout_key, cache.get(ip_lockout_key, 0) + 1, timeout=lockout_seconds)
             _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
             return _error(
                 "INVALID_CREDENTIALS", "Incorrect email or password.", status.HTTP_401_UNAUTHORIZED
             )
 
         cache.delete(lockout_key)
+        cache.delete(ip_lockout_key)
 
-        # Only reached after a *correct* password, so disclosing the org
-        # mismatch here isn't a new enumeration vector (the caller already
-        # proved account ownership) — checking this before password
-        # verification would let `no_organization` be used to probe whether
-        # an email belongs to an organisation. `no_organization=True` is
-        # only ever sent by the dedicated platform-staff sign-in screen
+        # Only reached after a *correct* password, so disclosing the
+        # account/org state here isn't a new enumeration vector (the caller
+        # already proved account ownership). Specifically SUSPENDED, not
+        # just `not is_active` — a brand-new org is also `is_active=False`
+        # while PENDING_VERIFICATION, and that must not block its own Org
+        # Admin from logging in and using the platform.
+        from apps.tenancy.models import Organization
+
+        if (
+            user.organization_id is not None
+            and user.organization.status == Organization.STATUS_SUSPENDED
+        ):
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "ORGANIZATION_SUSPENDED",
+                "Your organisation's access is currently suspended. Please contact your "
+                "administrator.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        # Checking this before password verification would let
+        # `no_organization` be used to probe whether an email belongs to an
+        # organisation. `no_organization=True` is only ever sent by the
+        # dedicated platform-staff sign-in screen
         # (frontend/src/auth/LoginPage.tsx's `/login/platform-staff` route),
         # which skips tenant discovery entirely — see docs/14-TENANT-BRANDED-LOGIN-UX.md.
         # Not counted against the lockout counter: a correct password with
@@ -472,6 +529,15 @@ class LoginView(APIView):
             )
 
         if user.mfa_enabled:
+            try:
+                enforce_rate_limit(f"login-otp-send:{user.id}", max_attempts=5, window_seconds=1800)
+            except RateLimitExceeded as exc:
+                return _error(
+                    "RATE_LIMITED",
+                    "Too many verification codes requested. Try again later.",
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    fields={"retry_after_seconds": exc.retry_after_seconds},
+                )
             with platform_admin_context():
                 otp, code = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
             channel = _dispatch_login_otp(user, code, otp.purpose)
@@ -519,6 +585,28 @@ class LoginVerifyOtpView(APIView):
 
             otp.is_used = True
             otp.save(update_fields=["is_used"])
+
+            # Re-validate account/org state and the lockout counter, closing
+            # the window between a correct password and OTP entry (the
+            # OTP's own 10-minute TTL) during which the account could have
+            # been deactivated, locked out, or its organization suspended.
+            user = otp.user
+            from django.core.cache import cache
+
+            from apps.tenancy.models import Organization
+
+            policy = SecurityPolicy.get_solo()
+            account_still_valid = (
+                user.is_active
+                and (
+                    user.organization_id is None
+                    or user.organization.status != Organization.STATUS_SUSPENDED
+                )
+                and cache.get(f"login-lockout:{user.email.casefold()}", 0)
+                < policy.max_failed_login_attempts
+            )
+            if not account_still_valid:
+                return _generic_error()
 
         access, refresh = issue_tokens(otp.user)
         _log_auth_event(otp.user, AuditLogEntry.ACTION_LOGIN, request)
@@ -604,6 +692,19 @@ class ForgotPasswordView(APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"].strip().casefold()
+        client_ip = get_client_ip(request)
+
+        try:
+            enforce_general_rate_limit(client_ip)
+            enforce_rate_limit(f"forgot-password-ip:{client_ip}", max_attempts=20, window_seconds=600)
+            enforce_rate_limit(f"forgot-password:{email}", max_attempts=5, window_seconds=1800)
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
 
         with platform_admin_context():
             user = User.all_objects.filter(email__iexact=email, is_active=True).first()

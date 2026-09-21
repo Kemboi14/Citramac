@@ -7,6 +7,8 @@ since the limits here are step-specific (OTP dispatch, OTP verify attempts,
 login lockout), not a single global per-view rate.
 """
 
+import time
+
 from django.core.cache import cache
 
 
@@ -36,3 +38,21 @@ def enforce_cooldown(key, cooldown_seconds):
         ttl = cache.ttl(cache_key) if hasattr(cache, "ttl") else cooldown_seconds
         raise RateLimitExceeded(retry_after_seconds=ttl or cooldown_seconds)
     cache.set(cache_key, True, timeout=cooldown_seconds)
+
+
+def enforce_general_rate_limit(client_ip):
+    """
+    Coarse per-IP-per-minute safety net backed by the Super Admin's own
+    configurable SecurityPolicy.rate_limit_per_minute (Security Policies
+    screen) — previously read nowhere in the codebase, so tightening it in
+    the UI had no real effect anywhere. Layered on top of, not a
+    replacement for, each endpoint's own specifically-tuned window
+    (the enforce_rate_limit calls elsewhere in this module/auth_views) —
+    this just gives that one dashboard setting real teeth on the
+    highest-exposure unauthenticated endpoints.
+    """
+    from apps.security.models import SecurityPolicy
+
+    max_per_minute = SecurityPolicy.get_solo().rate_limit_per_minute
+    minute_bucket = int(time.time() // 60)
+    enforce_rate_limit(f"general:{client_ip}:{minute_bucket}", max_per_minute, window_seconds=60)

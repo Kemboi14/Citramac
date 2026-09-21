@@ -4,6 +4,28 @@ from django.db import models
 
 from .managers import TenantScopedManager
 
+# Never auto-registered against a tenant's email_domains (register_email_domain
+# below) — a free-mail domain shared by millions of unrelated people can't be
+# meaningfully "owned" by one organization, and doing so anyway makes every
+# other user of that provider resolve to this org's branding at tenant
+# discovery (apps.accounts.auth_views.TenantDiscoveryView).
+PUBLIC_EMAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "icloud.com",
+        "aol.com",
+        "protonmail.com",
+        "gmx.com",
+        "mail.com",
+        "yandex.com",
+        "zoho.com",
+    }
+)
+
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -225,12 +247,27 @@ class Organization(TimestampedModel):
         created via the API, whose CreateOrganizationSerializer never had
         an email_domains field at all). A no-op if the domain is already
         registered (case-insensitively) — safe to call on every invite.
+
+        Silently skipped (not an error — provisioning must still succeed)
+        for two cases where registering would corrupt tenant discovery
+        rather than help it: a public/free-mail domain (PUBLIC_EMAIL_DOMAINS
+        above), and a domain another organization has already claimed —
+        first claim wins, since TenantDiscoveryView's lookup can only ever
+        return one organization for a given domain.
         """
         domain = (email or "").strip().rsplit("@", 1)[-1].casefold()
-        if not domain:
+        if not domain or domain in PUBLIC_EMAIL_DOMAINS:
             return
         existing = {d.casefold() for d in self.email_domains}
         if domain in existing:
+            return
+        already_claimed = (
+            type(self)
+            .objects.exclude(pk=self.pk)
+            .filter(email_domains__contains=[domain])
+            .exists()
+        )
+        if already_claimed:
             return
         self.email_domains = [*self.email_domains, domain]
         self.save(update_fields=["email_domains"])
