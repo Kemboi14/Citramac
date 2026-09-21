@@ -13,7 +13,6 @@ import { ArrowRightIcon, BuildingIcon, LockIcon, MailIcon } from "./icons";
 // (LoginPage's `startAtPlatformLogin`), which renders this step with
 // `tenant={null}` directly — this generic branding renders in that case.
 const PLATFORM_BRANDING: TenantBranding = {
-  id: "",
   name: "CITRAMAC",
   logo_url: "",
   login_image_url: "",
