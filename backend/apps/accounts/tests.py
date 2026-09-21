@@ -629,6 +629,63 @@ class TenantDiscoveryTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
 
+    def test_platform_staff_email_is_not_matched_to_an_org_by_domain_coincidence(self):
+        """
+        A Platform Super Admin's email is organization_id=None by
+        definition, but nothing stops their domain from also appearing in
+        some org's email_domains (e.g. that domain was used to invite a
+        pilot org's staff at some point). Discovery must not show that
+        org's branding to the platform-staff account itself.
+        """
+        with platform_admin_context():
+            Organization.objects.create(
+                name="Shared Domain Org",
+                slug="shared-domain-org",
+                facility_type="CLINIC",
+                email_domains=["platform-staff-domain.test"],
+            )
+            User.objects.create_superuser(
+                email="root@platform-staff-domain.test", password="Password123!"
+            )
+        response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "root@platform-staff-domain.test"}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data["error"]["code"], "TENANT_NOT_FOUND")
+
+    def test_org_staff_email_resolves_to_their_own_org_not_a_domain_coincidence(self):
+        """
+        Two organizations can end up with overlapping email_domains entries
+        (e.g. a stale/incorrect claim) — a real staff member's exact email
+        must resolve to their actual employer, not whichever org happens to
+        sort first among the domain matches.
+        """
+        with platform_admin_context():
+            wrong_org = Organization.objects.create(
+                name="Wrong Org",
+                slug="wrong-org-domain",
+                facility_type="CLINIC",
+                email_domains=["multi-tenant-domain.test"],
+            )
+            right_org = Organization.objects.create(
+                name="Right Org",
+                slug="right-org-domain",
+                facility_type="CLINIC",
+                email_domains=["multi-tenant-domain.test"],
+            )
+            User.objects.create_user(
+                email="staff@multi-tenant-domain.test",
+                password="Password123!",
+                organization=right_org,
+                is_active=True,
+            )
+        response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "staff@multi-tenant-domain.test"}
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["tenant"]["name"], "Right Org")
+        self.assertNotEqual(response.data["tenant"]["name"], wrong_org.name)
+
 
 class LoginMfaChannelTests(APITestCase):
     """docs/14-TENANT-BRANDED-LOGIN-UX.md — SMS/email 2FA channel selection."""

@@ -176,13 +176,35 @@ class TenantDiscoveryView(APIView):
 
         from apps.tenancy.models import Organization
 
+        email = serializer.validated_data["email"].strip().casefold()
+
         with platform_admin_context():
-            org = (
-                Organization.objects.filter(is_active=True)
-                .filter(email_domains__contains=[domain])
-                .order_by("created_at")
-                .first()
-            )
+            # An exact-email match on a real, already-provisioned account
+            # always wins over the domain guess below — it's the only way
+            # to tell a platform-staff account (organization_id=None) apart
+            # from an org staff member whose email just happens to share a
+            # domain with a registered tenant (e.g. the same domain used to
+            # invite that org's staff at some point). Without this, a
+            # Platform Super Admin discovering their own email here could
+            # get shown a real organization's branding instead of the
+            # platform's, purely because of a domain coincidence — see the
+            # domain-only fallback further down, which still applies for an
+            # email that isn't a real account yet.
+            existing_user = User.all_objects.filter(email__iexact=email).first()
+            if existing_user is not None:
+                if existing_user.organization_id is None:
+                    _log_auth_event(
+                        None, AuditLogEntry.ACTION_DISCOVERY_FAILED, request, extra_object_id=domain
+                    )
+                    return Response(TENANT_NOT_FOUND_ERROR, status=status.HTTP_404_NOT_FOUND)
+                org = existing_user.organization
+            else:
+                org = (
+                    Organization.objects.filter(is_active=True)
+                    .filter(email_domains__contains=[domain])
+                    .order_by("created_at")
+                    .first()
+                )
 
         if org is None:
             _log_auth_event(
