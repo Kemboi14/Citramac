@@ -320,11 +320,13 @@ function OrganizationDrawer({
   organization,
   onClose,
   onSaved,
+  onStatusChanged,
 }: {
   open: boolean;
   organization: Organization | null;
   onClose: () => void;
   onSaved: () => void;
+  onStatusChanged: (updated: Organization) => void;
 }) {
   const { accessToken } = useAuth();
   const isEdit = Boolean(organization);
@@ -332,10 +334,27 @@ function OrganizationDrawer({
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const formId = "organization-form";
+
+  const handleSetStatus = async (status: OrganizationStatus) => {
+    if (!accessToken || !organization) return;
+    setStatusBusy(true);
+    setError(null);
+    try {
+      const updated = await setOrganizationStatus(accessToken, organization.id, status);
+      onStatusChanged(updated);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't update the organization status.",
+      );
+    } finally {
+      setStatusBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -465,6 +484,40 @@ function OrganizationDrawer({
       }
     >
       <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {isEdit && organization && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-surface-border bg-surface-bg p-3">
+            <div>
+              <div className="text-[11.5px] font-semibold text-ink-700">Status</div>
+              <div className="mt-1">
+                <StatusBadge status={organization.status} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {organization.status !== "ACTIVE" && (
+                <button
+                  type="button"
+                  disabled={statusBusy}
+                  onClick={() => handleSetStatus("ACTIVE")}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Activate
+                </button>
+              )}
+              {organization.status !== "SUSPENDED" && (
+                <button
+                  type="button"
+                  disabled={statusBusy}
+                  onClick={() => handleSetStatus("SUSPENDED")}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-status-red px-3 py-1.5 text-xs font-semibold text-status-red hover:bg-status-red-tint disabled:opacity-60"
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                  Suspend
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <label className={LABEL_CLASS}>
           Organization Name <span className="text-status-red">*</span>
           <input
@@ -1106,13 +1159,13 @@ function RowActionsMenu({
   org,
   busy,
   onEdit,
-  onToggleStatus,
+  onSetStatus,
   onAddStaff,
 }: {
   org: Organization;
   busy: boolean;
   onEdit: () => void;
-  onToggleStatus: () => void;
+  onSetStatus: (status: OrganizationStatus) => void;
   onAddStaff: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1173,29 +1226,34 @@ function RowActionsMenu({
               <UserPlus className="h-3.5 w-3.5" />
               Add staff to this organization
             </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setOpen(false);
-                onToggleStatus();
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-bg disabled:opacity-60 ${
-                org.status === "SUSPENDED" ? "text-brand-green-dark" : "text-status-red"
-              }`}
-            >
-              {org.status === "SUSPENDED" ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Reactivate access
-                </>
-              ) : (
-                <>
-                  <Ban className="h-3.5 w-3.5" />
-                  Suspend access
-                </>
-              )}
-            </button>
+            {org.status !== "ACTIVE" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false);
+                  onSetStatus("ACTIVE");
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-brand-green-dark hover:bg-surface-bg disabled:opacity-60"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Activate
+              </button>
+            )}
+            {org.status !== "SUSPENDED" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false);
+                  onSetStatus("SUSPENDED");
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-status-red hover:bg-surface-bg disabled:opacity-60"
+              >
+                <Ban className="h-3.5 w-3.5" />
+                Suspend
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1334,13 +1392,12 @@ export function OrganizationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, search, statusFilter, page]);
 
-  const toggleStatus = async (org: Organization) => {
+  const changeOrgStatus = async (org: Organization, status: OrganizationStatus) => {
     if (!accessToken) return;
-    const nextStatus: OrganizationStatus = org.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
     setBusyId(org.id);
     setError(null);
     try {
-      await setOrganizationStatus(accessToken, org.id, nextStatus);
+      await setOrganizationStatus(accessToken, org.id, status);
       refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't update the organization status.");
@@ -1482,7 +1539,7 @@ export function OrganizationsPage() {
                         org={org}
                         busy={busyId === org.id}
                         onEdit={() => setDrawer({ open: true, organization: org })}
-                        onToggleStatus={() => toggleStatus(org)}
+                        onSetStatus={(status) => changeOrgStatus(org, status)}
                         onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
                       />
                     </td>
@@ -1566,7 +1623,7 @@ export function OrganizationsPage() {
                     org={org}
                     busy={busyId === org.id}
                     onEdit={() => setDrawer({ open: true, organization: org })}
-                    onToggleStatus={() => toggleStatus(org)}
+                    onSetStatus={(status) => changeOrgStatus(org, status)}
                     onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
                   />
                 </div>
@@ -1598,6 +1655,10 @@ export function OrganizationsPage() {
         onClose={() => setDrawer((d) => ({ ...d, open: false }))}
         onSaved={() => {
           setDrawer((d) => ({ ...d, open: false }));
+          refresh();
+        }}
+        onStatusChanged={(updated) => {
+          setDrawer((d) => ({ ...d, organization: updated }));
           refresh();
         }}
       />
