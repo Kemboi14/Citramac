@@ -131,6 +131,7 @@ class Organization(TimestampedModel):
     # driven by org_type rather than five mutually-exclusive columns.
     dha_facility_code = models.CharField(max_length=64, blank=True)
     sha_provider_code = models.CharField(max_length=64, blank=True)
+    country = models.CharField(max_length=100, blank=True, default="Kenya")
     county = models.CharField(max_length=100, blank=True)
     sub_county = models.CharField(max_length=100, blank=True)
     subscription_plan = models.ForeignKey(
@@ -439,6 +440,7 @@ class Branch(TenantScopedModel):
         max_length=16, choices=Organization.OWNERSHIP_CHOICES, default="PRIVATE"
     )
     address = models.TextField(blank=True)
+    country = models.CharField(max_length=100, blank=True, default="Kenya")
     county = models.CharField(max_length=100, blank=True)
     sub_county = models.CharField(max_length=100, blank=True)
     gps_coordinates = models.CharField(max_length=64, blank=True)

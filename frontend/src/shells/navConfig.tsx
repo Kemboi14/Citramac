@@ -57,7 +57,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
     items: [
       { label: "Platform Dashboard", to: "/super-admin", icon: LayoutDashboard },
       { label: "Organizations", to: "/super-admin/organizations", icon: Building2 },
-      { label: "Branches", to: "/super-admin/branches", icon: Landmark },
+      { label: "Branches & Departments", to: "/super-admin/branches", icon: Landmark },
       { label: "Subscriptions", to: "/super-admin/subscriptions", icon: CreditCard },
       { label: "Email Settings", to: "/super-admin/email-settings", icon: Mail },
       { label: "SMS Settings", to: "/super-admin/sms-settings", icon: MessageSquare },

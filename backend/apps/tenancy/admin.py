@@ -31,6 +31,7 @@ class OrganizationAdmin(admin.ModelAdmin):
                     "ownership_type",
                     "dha_facility_code",
                     "sha_provider_code",
+                    "country",
                     "county",
                     "sub_county",
                     "subscription_plan",
@@ -100,7 +101,7 @@ class OrganizationAdmin(admin.ModelAdmin):
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
-    list_display = ["name", "organization", "facility_level", "county", "is_active"]
+    list_display = ["name", "organization", "facility_level", "country", "county", "is_active"]
     search_fields = ["name", "organization__name", "mfl_code"]
     list_filter = ["facility_level", "is_active", "mhp_registration_status"]
     exclude = ["sha_api_credentials_encrypted"]

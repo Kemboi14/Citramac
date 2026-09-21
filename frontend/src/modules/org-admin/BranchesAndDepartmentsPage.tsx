@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/apiClient";
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
+import { LocationFields } from "../../components/LocationFields";
 import { createBranch, listBranches, updateBranch, type Branch } from "../../lib/branchesApi";
 import {
   createDepartment,
@@ -33,6 +34,7 @@ interface BranchFormState {
   facility_level: Branch["facility_level"];
   mfl_code: string;
   address: string;
+  country: string;
   county: string;
   sub_county: string;
   phone: string;
@@ -44,6 +46,7 @@ const EMPTY_BRANCH_FORM: BranchFormState = {
   facility_level: "L4",
   mfl_code: "",
   address: "",
+  country: "Kenya",
   county: "",
   sub_county: "",
   phone: "",
@@ -121,6 +124,7 @@ export function BranchesAndDepartmentsPage() {
       facility_level: branch.facility_level,
       mfl_code: branch.mfl_code,
       address: branch.address,
+      country: branch.country || "Kenya",
       county: branch.county,
       sub_county: branch.sub_county,
       phone: branch.phone,
@@ -446,24 +450,16 @@ export function BranchesAndDepartmentsPage() {
               onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
             />
           </label>
-          <div className="flex flex-wrap gap-4">
-            <label className={`${LABEL_CLASS} flex-1`}>
-              County
-              <input
-                className={FIELD_CLASS}
-                value={branchForm.county}
-                onChange={(e) => setBranchForm({ ...branchForm, county: e.target.value })}
-              />
-            </label>
-            <label className={`${LABEL_CLASS} flex-1`}>
-              Sub-county
-              <input
-                className={FIELD_CLASS}
-                value={branchForm.sub_county}
-                onChange={(e) => setBranchForm({ ...branchForm, sub_county: e.target.value })}
-              />
-            </label>
-          </div>
+          <LocationFields
+            labelClassName={LABEL_CLASS}
+            fieldClassName={FIELD_CLASS}
+            country={branchForm.country}
+            county={branchForm.county}
+            subCounty={branchForm.sub_county}
+            onCountryChange={(v) => setBranchForm({ ...branchForm, country: v })}
+            onCountyChange={(v) => setBranchForm({ ...branchForm, county: v })}
+            onSubCountyChange={(v) => setBranchForm({ ...branchForm, sub_county: v })}
+          />
           <div className="flex flex-wrap gap-4">
             <label className={`${LABEL_CLASS} flex-1`}>
               Phone

@@ -3,6 +3,7 @@ import { KeyRound, Mail, MapPin, MessageSquare, Palette, PlugZap, ShieldCheck } 
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
+import { LocationFields } from "../../components/LocationFields";
 import {
   listBranches,
   setBranchCredentials,
@@ -50,6 +51,7 @@ interface FormState {
   name: string;
   facility_level: Branch["facility_level"];
   address: string;
+  country: string;
   county: string;
   sub_county: string;
   ownership_type: Branch["ownership_type"];
@@ -64,6 +66,7 @@ function formFromBranch(branch: Branch): FormState {
     name: branch.name,
     facility_level: branch.facility_level,
     address: branch.address,
+    country: branch.country || "Kenya",
     county: branch.county,
     sub_county: branch.sub_county,
     ownership_type: branch.ownership_type,
@@ -390,6 +393,7 @@ export function BranchSettingsPage() {
         name: form.name,
         facility_level: form.facility_level,
         address: form.address,
+        country: form.country,
         county: form.county,
         sub_county: form.sub_county,
         ownership_type: form.ownership_type,
@@ -537,24 +541,17 @@ export function BranchSettingsPage() {
                       onChange={(e) => updateForm({ address: e.target.value })}
                     />
                   </label>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <label className={LABEL_CLASS}>
-                      County
-                      <input
-                        className={FIELD_CLASS}
-                        value={form.county}
-                        onChange={(e) => updateForm({ county: e.target.value })}
-                      />
-                    </label>
-                    <label className={LABEL_CLASS}>
-                      Sub-County
-                      <input
-                        className={FIELD_CLASS}
-                        value={form.sub_county}
-                        onChange={(e) => updateForm({ sub_county: e.target.value })}
-                      />
-                    </label>
-                  </div>
+                  <LocationFields
+                    labelClassName={LABEL_CLASS}
+                    fieldClassName={FIELD_CLASS}
+                    rowClassName="grid grid-cols-1 gap-4 md:grid-cols-2"
+                    country={form.country}
+                    county={form.county}
+                    subCounty={form.sub_county}
+                    onCountryChange={(v) => updateForm({ country: v })}
+                    onCountyChange={(v) => updateForm({ county: v })}
+                    onSubCountyChange={(v) => updateForm({ sub_county: v })}
+                  />
                 </div>
               </div>
 

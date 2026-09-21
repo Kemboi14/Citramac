@@ -14,6 +14,7 @@ export interface Branch {
   facility_level: "L2" | "L3" | "L4" | "L5" | "L6";
   ownership_type: "PRIVATE" | "PUBLIC" | "FAITH_BASED" | "NGO" | "PARTNERSHIP" | "OTHER";
   address: string;
+  country: string;
   county: string;
   sub_county: string;
   gps_coordinates: string;
@@ -53,6 +54,7 @@ export interface CreateBranchPayload {
   name: string;
   facility_level: string;
   address?: string;
+  country?: string;
   county?: string;
   sub_county?: string;
   mfl_code?: string;

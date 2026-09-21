@@ -87,6 +87,7 @@ class CreateOrganizationSerializer(serializers.Serializer):
         choices=Organization.OWNERSHIP_CHOICES, default="PRIVATE"
     )
     dha_facility_code = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    country = serializers.CharField(max_length=100, required=False, allow_blank=True)
     county = serializers.CharField(max_length=100, required=False, allow_blank=True)
     sub_county = serializers.CharField(max_length=100, required=False, allow_blank=True)
     subscription_plan_code = serializers.CharField(required=False, allow_blank=True)
@@ -154,6 +155,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "dha_facility_code",
             "identity_code_label",
             "sha_provider_code",
+            "country",
             "county",
             "sub_county",
             "status",
@@ -209,6 +211,7 @@ class BranchSerializer(serializers.ModelSerializer):
             "facility_level",
             "ownership_type",
             "address",
+            "country",
             "county",
             "sub_county",
             "gps_coordinates",

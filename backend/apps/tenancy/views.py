@@ -70,7 +70,7 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 queryset = queryset.filter(
                     Q(name__icontains=q) | Q(slug__icontains=q) | Q(dha_facility_code__icontains=q)
                 )
-            for field in ("status", "org_type", "ownership_type", "county"):
+            for field in ("status", "org_type", "ownership_type", "country", "county"):
                 value = params.get(field)
                 if value:
                     queryset = queryset.filter(**{field: value})
@@ -89,6 +89,7 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 facility_type=data.get("facility_type", ""),
                 ownership_type=data.get("ownership_type", "PRIVATE"),
                 dha_facility_code=data.get("dha_facility_code", ""),
+                country=data.get("country") or "Kenya",
                 county=data.get("county", ""),
                 sub_county=data.get("sub_county", ""),
                 status=Organization.STATUS_PENDING,
@@ -567,7 +568,7 @@ class BranchViewSet(viewsets.ModelViewSet):
         q = params.get("q")
         if q:
             queryset = queryset.filter(Q(name__icontains=q) | Q(mfl_code__icontains=q))
-        for field in ("county", "facility_level", "mhp_registration_status"):
+        for field in ("country", "county", "facility_level", "mhp_registration_status"):
             value = params.get(field)
             if value:
                 queryset = queryset.filter(**{field: value})

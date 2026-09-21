@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { Drawer } from "../../components/Drawer";
+import { LocationFields } from "../../components/LocationFields";
 import { listBranches, type Branch } from "../../lib/branchesApi";
 import { inviteStaff, listRoles, type Role } from "../../lib/governanceApi";
 import {
@@ -226,6 +227,7 @@ type OrgFormState = {
   facility_type: string;
   ownership_type: OwnershipType;
   dha_facility_code: string;
+  country: string;
   county: string;
   sub_county: string;
   subscription_plan_code: string;
@@ -248,6 +250,7 @@ const EMPTY_FORM: OrgFormState = {
   facility_type: "",
   ownership_type: "PRIVATE",
   dha_facility_code: "",
+  country: "Kenya",
   county: "",
   sub_county: "",
   subscription_plan_code: "",
@@ -271,6 +274,7 @@ function organizationToFormState(org: Organization): OrgFormState {
     facility_type: org.facility_type ?? "",
     ownership_type: org.ownership_type,
     dha_facility_code: org.dha_facility_code ?? "",
+    country: org.country || "Kenya",
     county: org.county ?? "",
     sub_county: org.sub_county ?? "",
     subscription_plan_code: "",
@@ -387,6 +391,7 @@ function OrganizationDrawer({
           org_type: form.org_type,
           ownership_type: form.ownership_type,
           dha_facility_code: form.dha_facility_code,
+          country: form.country,
           county: form.county,
           sub_county: form.sub_county,
           logo_url: form.logo_url,
@@ -545,22 +550,16 @@ function OrganizationDrawer({
           <IdentityCodeStatus orgType={form.org_type} value={form.dha_facility_code} />
         </div>
 
-        <label className={LABEL_CLASS}>
-          County
-          <input
-            className={FIELD_CLASS}
-            value={form.county}
-            onChange={(e) => setField("county", e.target.value)}
-          />
-        </label>
-        <label className={LABEL_CLASS}>
-          Sub-County
-          <input
-            className={FIELD_CLASS}
-            value={form.sub_county}
-            onChange={(e) => setField("sub_county", e.target.value)}
-          />
-        </label>
+        <LocationFields
+          labelClassName={LABEL_CLASS}
+          fieldClassName={FIELD_CLASS}
+          country={form.country}
+          county={form.county}
+          subCounty={form.sub_county}
+          onCountryChange={(v) => setField("country", v)}
+          onCountyChange={(v) => setField("county", v)}
+          onSubCountyChange={(v) => setField("sub_county", v)}
+        />
 
         {!isEdit && (
           <div>

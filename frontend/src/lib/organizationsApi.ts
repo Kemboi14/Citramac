@@ -24,6 +24,7 @@ export interface Organization {
   dha_facility_code: string;
   identity_code_label: string;
   sha_provider_code: string;
+  country: string;
   county: string;
   sub_county: string;
   status: OrganizationStatus;
@@ -48,6 +49,7 @@ export interface CreateOrganizationPayload {
   facility_type?: string;
   ownership_type: OwnershipType;
   dha_facility_code?: string;
+  country?: string;
   county?: string;
   sub_county?: string;
   subscription_plan_code?: string;

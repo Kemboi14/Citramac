@@ -30,6 +30,8 @@ export function listDepartments(accessToken: string, params: ListDepartmentsPara
 }
 
 export interface CreateDepartmentPayload {
+  /** Required for Super Admin (creating on behalf of a tenant); ignored for Org Admin, whose new department always belongs to their own organization. */
+  organization?: string;
   name: string;
   description?: string;
   branch?: string | null;
