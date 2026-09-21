@@ -85,20 +85,20 @@ export function MyProfilePage() {
       </div>
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-        <div className="flex items-center gap-5">
+        <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left">
           <AvatarUpload
             imageUrl={profile.avatar}
             initials={initials}
             size={88}
             onUpload={handleUploadAvatar}
           />
-          <div>
-            <div className="font-display text-lg font-bold text-ink-900">
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-display text-lg font-bold text-ink-900">
               {profile.first_name} {profile.last_name}
             </div>
-            <p className="mt-0.5 text-[13px] text-ink-500">{profile.email}</p>
+            <p className="mt-0.5 break-words text-[13px] text-ink-500">{profile.email}</p>
             {profile.role_names.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap justify-center gap-1.5 sm:justify-start">
                 {profile.role_names.map((role) => (
                   <span
                     key={role}
