@@ -141,10 +141,10 @@ export function SupervisionRequestsPage() {
             .map((r) => (
               <div
                 key={r.id}
-                className="flex items-center justify-between rounded-sm border border-surface-border p-3 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border p-3 text-sm"
               >
                 <span>{r.topic}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
                       STATUS_TINT[r.status] ?? ""

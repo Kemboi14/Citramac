@@ -4,6 +4,7 @@ import { ChevronDown, LogOut, Menu, Search, UserRound } from "lucide-react";
 import type { NavGroup, NavItem } from "./navConfig";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
+import { getOrganizationTheme } from "../lib/themeApi";
 import { useAuth } from "../auth/useAuth";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
@@ -15,6 +16,23 @@ function readStoredCollapse() {
   } catch {
     return false;
   }
+}
+
+/** Reactive `>= lg` check — a live media-query listener, not a one-time
+ * `window.innerWidth` read, so rotating/resizing across the breakpoint
+ * updates the layout immediately rather than only on the next hamburger
+ * click. */
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`).matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
 }
 
 /**
@@ -48,12 +66,17 @@ export function AppShell({
    * portal gets one so every user, any role, can set their own avatar. */
   profilePath: string;
 }) {
-  const [collapsed, setCollapsed] = useState(readStoredCollapse);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(readStoredCollapse);
+  const isDesktop = useIsDesktop();
+  // The collapse preference is a desktop density feature — never let it
+  // shrink the mobile drawer to icon-only, since that would make the nav
+  // labels (and the drawer's entire reason for existing) disappear on phone.
+  const collapsed = isDesktop && desktopCollapsed;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const { avatarUrl, logout } = useAuth();
+  const { accessToken, claims, avatarUrl, logout } = useAuth();
   const navigate = useNavigate();
   // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
   // sub-screens) — keyed by label, collapsed by default. See navConfig.tsx.
@@ -73,19 +96,34 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    // Platform-level users (Super Admin) have no organization to theme —
+    // they always see the fixed CITRAMAC brand palette.
+    if (!accessToken || !claims?.organization_id) return;
+    getOrganizationTheme(accessToken, claims.organization_id)
+      .then(({ theme_overrides }) => {
+        const root = document.documentElement.style;
+        if (theme_overrides.primary) root.setProperty("--green", theme_overrides.primary);
+        if (theme_overrides.secondary) root.setProperty("--green-dark", theme_overrides.secondary);
+      })
+      .catch(() => {
+        // Best-effort only — fall back to the default brand palette.
+      });
+  }, [accessToken, claims?.organization_id]);
+
+  useEffect(() => {
     try {
-      localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+      localStorage.setItem(COLLAPSE_KEY, desktopCollapsed ? "1" : "0");
     } catch {
       // Best-effort only — a private window or blocked storage just means
       // the collapse preference won't persist across reloads.
     }
-  }, [collapsed]);
+  }, [desktopCollapsed]);
 
   const toggleSidebar = () => {
-    if (window.innerWidth < DESKTOP_BREAKPOINT) {
-      setMobileOpen((v) => !v);
+    if (isDesktop) {
+      setDesktopCollapsed((v) => !v);
     } else {
-      setCollapsed((v) => !v);
+      setMobileOpen((v) => !v);
     }
   };
 
@@ -237,7 +275,7 @@ export function AppShell({
 
         <div ref={profileMenuRef} className="relative border-t border-white/10">
           {profileMenuOpen && (
-            <div className="absolute bottom-full left-2 right-2 mb-1.5 animate-scale-in overflow-hidden rounded-[10px] border border-surface-border bg-white py-1.5 shadow-md">
+            <div className="absolute bottom-full left-2 right-2 mb-1.5 animate-scale-in overflow-hidden rounded-[10px] border border-surface-border bg-surface-card py-1.5 shadow-md">
               <Link
                 to={profilePath}
                 onClick={() => setProfileMenuOpen(false)}
@@ -300,7 +338,7 @@ export function AppShell({
             <input
               type="text"
               placeholder={searchPlaceholder}
-              className="w-full rounded-[10px] border border-surface-border bg-surface-bg py-2.5 pl-9 pr-3.5 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-white"
+              className="w-full rounded-[10px] border border-surface-border bg-surface-bg py-2.5 pl-9 pr-3.5 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card"
             />
           </div>
           <div className="ml-auto flex items-center gap-3 sm:gap-4">{topbarRight}</div>

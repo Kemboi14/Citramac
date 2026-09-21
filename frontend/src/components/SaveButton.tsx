@@ -68,7 +68,7 @@ export function SaveButton({
     "relative inline-flex min-w-[9.5rem] items-center justify-center gap-2 overflow-hidden rounded-[10px] px-4 py-2.5 text-[13px] font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60";
   const variants = {
     primary: "bg-brand-green text-white shadow-sm hover:bg-brand-green-dark",
-    ghost: "border border-surface-border bg-white text-ink-700 hover:bg-surface-bg",
+    ghost: "border border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg",
   } as const;
   const shake = status === "error" ? "animate-shake" : "";
 

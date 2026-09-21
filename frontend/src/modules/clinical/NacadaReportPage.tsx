@@ -82,7 +82,7 @@ export function NacadaReportPage() {
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Generate Report</h2>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <label className={LABEL_CLASS}>
             Period start
             <input
@@ -114,12 +114,12 @@ export function NacadaReportPage() {
         <div className="flex flex-col gap-3">
           {reports.map((r) => (
             <div key={r.id} className="rounded-sm border border-surface-border p-3 text-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold text-ink-900">
                   {r.period_start} → {r.period_end}
                 </span>
                 <span
-                  className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
+                  className={`flex-shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${
                     r.status === "EXPORTED"
                       ? "bg-brand-green-tint text-brand-green-dark"
                       : "bg-ink-100 text-ink-700"

@@ -11,6 +11,7 @@ import {
 } from "../../lib/clinicalApi";
 import { PatientRegistrationModal } from "./PatientRegistrationModal";
 import { PatientDetailsModal } from "./PatientDetailsModal";
+import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 
 const ALLERGY_BADGE: Record<string, string> = {
   ACTIVE_ALLERGIES: "bg-status-red-tint text-status-red",
@@ -25,7 +26,7 @@ const CARE_LABEL: Record<string, string> = {
 };
 
 const FIELD_CLASS =
-  "rounded-sm border border-surface-border bg-white px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 
 function initialsFor(patient: PatientListRow) {
   return `${patient.first_name[0] ?? ""}${patient.last_name[0] ?? ""}`.toUpperCase() || "?";
@@ -104,6 +105,104 @@ export function ClientRegistryPage() {
     return matchesSearch && matchesCare && matchesStatus;
   });
 
+  const registryColumns: ResponsiveTableColumn<PatientListRow>[] = [
+    {
+      key: "client",
+      header: "Client / UHID",
+      cardTitle: true,
+      cell: (patient) => (
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-green-tint text-[11px] font-bold text-brand-green-dark">
+            {patient.photo ? (
+              <img src={patient.photo} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initialsFor(patient)
+            )}
+          </div>
+          <div>
+            <div className="font-semibold text-ink-900">
+              {patient.first_name} {patient.last_name}
+            </div>
+            <div className="font-mono text-[10.5px] text-ink-500">
+              {patient.uhid_number || patient.citramac_number}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "gender_dob",
+      header: "Gender / DOB",
+      cell: (patient) => (
+        <>
+          {patient.gender}
+          <div className="text-[10.5px] text-ink-500">{patient.date_of_birth}</div>
+        </>
+      ),
+    },
+    {
+      key: "care",
+      header: "Care",
+      cell: (patient) => (
+        <span className="rounded-full bg-brand-green-tint px-2.5 py-1 text-xs font-semibold text-brand-green-dark">
+          {CARE_LABEL[patient.patient_category] ?? patient.patient_category}
+        </span>
+      ),
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      cell: (patient) => (
+        <>
+          {patient.contact_phone || "—"}
+          <div className="text-[10.5px] text-ink-500">Mobile · Kenya</div>
+        </>
+      ),
+    },
+    {
+      key: "allergy",
+      header: "Allergy",
+      cell: (patient) => (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ALLERGY_BADGE[patient.allergy_status] ?? ""}`}
+        >
+          {patient.allergy_status.replace(/_/g, " ")}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cardBadge: true,
+      cell: (patient) => {
+        const status = statusFor(patient);
+        return (
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Active" ? "bg-brand-green-tint text-brand-green-dark" : "bg-status-amber-tint text-status-amber"}`}
+          >
+            {status}
+          </span>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: "",
+      hideInCard: true,
+      className: "px-4 py-3 text-right",
+      cell: (patient) => (
+        <button
+          type="button"
+          onClick={(e) => viewDetails(patient, e)}
+          disabled={detailsLoading === patient.id}
+          className="text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50"
+        >
+          {detailsLoading === patient.id ? "Loading…" : "Open"}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="animate-fade-in">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -170,113 +269,37 @@ export function ClientRegistryPage() {
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="bg-surface-bg text-[10px] font-bold uppercase tracking-wide text-ink-400">
-            <tr>
-              <th className="px-4 py-3">Client / UHID</th>
-              <th className="px-4 py-3">Gender / DOB</th>
-              <th className="px-4 py-3">Care</th>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Allergy</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {error && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-status-red">
-                  {error}
-                </td>
-              </tr>
-            )}
-            {!isLoading && !error && filteredPatients.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
-                  {patients.length === 0
-                    ? "No clients registered yet."
-                    : "No clients match these filters."}
-                </td>
-              </tr>
-            )}
-            {filteredPatients.map((patient) => {
-              const status = statusFor(patient);
-              return (
-                <tr
-                  key={patient.id}
-                  onClick={() => openPatient(patient)}
-                  className="cursor-pointer border-t border-surface-border transition-colors duration-150 hover:bg-brand-green-tint-2"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-green-tint text-[11px] font-bold text-brand-green-dark">
-                        {patient.photo ? (
-                          <img src={patient.photo} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          initialsFor(patient)
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-ink-900">
-                          {patient.first_name} {patient.last_name}
-                        </div>
-                        <div className="font-mono text-[10.5px] text-ink-500">
-                          {patient.uhid_number || patient.citramac_number}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">
-                    {patient.gender}
-                    <div className="text-[10.5px] text-ink-500">{patient.date_of_birth}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full bg-brand-green-tint px-2.5 py-1 text-xs font-semibold text-brand-green-dark">
-                      {CARE_LABEL[patient.patient_category] ?? patient.patient_category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-ink-700">
-                    {patient.contact_phone || "—"}
-                    <div className="text-[10.5px] text-ink-500">Mobile · Kenya</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ALLERGY_BADGE[patient.allergy_status] ?? ""}`}
-                    >
-                      {patient.allergy_status.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Active" ? "bg-brand-green-tint text-brand-green-dark" : "bg-status-amber-tint text-status-amber"}`}
-                    >
-                      {status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => viewDetails(patient, e)}
-                      disabled={detailsLoading === patient.id}
-                      className="text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50"
-                    >
-                      {detailsLoading === patient.id ? "Loading…" : "Open"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {isLoading ? (
+        <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-ink-500 shadow-sm">
+          Loading…
+        </p>
+      ) : error ? (
+        <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-status-red shadow-sm">
+          {error}
+        </p>
+      ) : (
+        <ResponsiveTable
+          columns={registryColumns}
+          rows={filteredPatients}
+          rowKey={(patient) => patient.id}
+          onRowClick={openPatient}
+          renderCardActions={(patient) => (
+            <button
+              type="button"
+              onClick={(e) => viewDetails(patient, e)}
+              disabled={detailsLoading === patient.id}
+              className="w-full text-center text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50"
+            >
+              {detailsLoading === patient.id ? "Loading…" : "Open"}
+            </button>
+          )}
+          emptyMessage={
+            patients.length === 0
+              ? "No clients registered yet."
+              : "No clients match these filters."
+          }
+        />
+      )}
 
       <PatientRegistrationModal
         open={showRegister}

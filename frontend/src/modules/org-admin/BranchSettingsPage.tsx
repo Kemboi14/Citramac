@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, Mail, MapPin, MessageSquare, PlugZap, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail, MapPin, MessageSquare, Palette, PlugZap, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -19,6 +19,11 @@ import {
   type OrganizationEmailSettings,
   type OrganizationSmsSettings,
 } from "../../lib/organizationsApi";
+import {
+  getOrganizationTheme,
+  updateOrganizationTheme,
+  type OrganizationTheme,
+} from "../../lib/themeApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -220,6 +225,13 @@ export function BranchSettingsPage() {
     null,
   );
 
+  const [themeForm, setThemeForm] = useState<{ primary: string; secondary: string }>({
+    primary: "#006e51",
+    secondary: "#00503a",
+  });
+  const [themeLoadError, setThemeLoadError] = useState<string | null>(null);
+  const [themeSaveError, setThemeSaveError] = useState<string | null>(null);
+
   const load = async () => {
     if (!accessToken) return;
     const res = await listBranches(accessToken);
@@ -330,6 +342,38 @@ export function BranchSettingsPage() {
       if (err instanceof ApiError) {
         setSmsTestResult({ success: false, message: err.message });
       }
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    if (!accessToken || !claims?.organization_id) return;
+    getOrganizationTheme(accessToken, claims.organization_id)
+      .then(({ theme_overrides }: OrganizationTheme) => {
+        setThemeForm({
+          primary: theme_overrides.primary ?? "#006e51",
+          secondary: theme_overrides.secondary ?? "#00503a",
+        });
+      })
+      .catch((err) =>
+        setThemeLoadError(err instanceof ApiError ? err.message : "Couldn't load brand colors."),
+      );
+  }, [accessToken, claims?.organization_id]);
+
+  const saveTheme = async () => {
+    if (!accessToken || !claims?.organization_id) return;
+    setThemeSaveError(null);
+    try {
+      await updateOrganizationTheme(accessToken, claims.organization_id, {
+        primary: themeForm.primary,
+        secondary: themeForm.secondary,
+      });
+      // Applies immediately without a reload — same mechanism AppShell.tsx
+      // uses on mount, so the sidebar/buttons re-theme live.
+      document.documentElement.style.setProperty("--green", themeForm.primary);
+      document.documentElement.style.setProperty("--green-dark", themeForm.secondary);
+    } catch (err) {
+      setThemeSaveError(err instanceof ApiError ? err.message : "Couldn't save brand colors.");
       throw err;
     }
   };
@@ -974,6 +1018,53 @@ export function BranchSettingsPage() {
                     )}
                   </div>
                 </form>
+              )}
+            </div>
+
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>
+                <span className="inline-flex items-center gap-2">
+                  <Palette size={16} className="text-brand-green" />
+                  Brand Colors
+                </span>
+              </h2>
+              <p className="mb-4 text-xs text-ink-500">
+                Applied across your organization's dashboard, buttons, and sidebar. Status colors
+                (red for alerts, amber for warnings) are never affected, so a risk flag always
+                reads as danger.
+              </p>
+              {themeLoadError && (
+                <p className="mb-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {themeLoadError}
+                </p>
+              )}
+              <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap gap-4">
+                <label className={LABEL_CLASS}>
+                  Primary
+                  <input
+                    type="color"
+                    className="h-10 w-16 rounded-sm border border-surface-border p-1"
+                    value={themeForm.primary}
+                    onChange={(e) => setThemeForm({ ...themeForm, primary: e.target.value })}
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  Secondary
+                  <input
+                    type="color"
+                    className="h-10 w-16 rounded-sm border border-surface-border p-1"
+                    value={themeForm.secondary}
+                    onChange={(e) => setThemeForm({ ...themeForm, secondary: e.target.value })}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <SaveButton onSave={saveTheme}>Save Brand Colors</SaveButton>
+                </div>
+              </form>
+              {themeSaveError && (
+                <p className="mt-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {themeSaveError}
+                </p>
               )}
             </div>
           </div>

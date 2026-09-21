@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth/useAuth";
 import { AvatarUpload } from "../components/AvatarUpload";
 import { SaveButton } from "../components/SaveButton";
+import { PillRadio } from "../components/PillRadio";
 import { getMyProfile, updateMyProfile, type MyProfile } from "../lib/myProfileApi";
+import { useTheme } from "../theme/useTheme";
+
+const THEME_OPTIONS: { value: "system" | "light" | "dark"; label: string }[] = [
+  { value: "system", label: "Match device" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 /**
  * Self-service "My Profile" — one shared page mounted in every portal
@@ -11,6 +19,7 @@ import { getMyProfile, updateMyProfile, type MyProfile } from "../lib/myProfileA
  */
 export function MyProfilePage() {
   const { accessToken, refreshProfile } = useAuth();
+  const { preference, setPreference } = useTheme();
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -103,7 +112,7 @@ export function MyProfilePage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-[11.5px] font-semibold text-ink-700">
               First name
@@ -112,7 +121,7 @@ export function MyProfilePage() {
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-white"
+              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-surface-card"
             />
           </div>
           <div>
@@ -123,7 +132,7 @@ export function MyProfilePage() {
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-white"
+              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-surface-card"
             />
           </div>
           <div>
@@ -135,7 +144,7 @@ export function MyProfilePage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="07XX XXX XXX"
-              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-white"
+              className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-surface-card"
             />
           </div>
           <div>
@@ -155,6 +164,16 @@ export function MyProfilePage() {
 
         <div className="mt-6 flex justify-end">
           <SaveButton onSave={handleSave}>Save changes</SaveButton>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
+        <h2 className="font-display text-base font-semibold text-ink-900">Appearance</h2>
+        <p className="mt-1 text-[13px] text-ink-500">
+          "Match device" follows your system's light/dark setting automatically.
+        </p>
+        <div className="mt-4">
+          <PillRadio value={preference} options={THEME_OPTIONS} onChange={setPreference} />
         </div>
       </div>
     </div>

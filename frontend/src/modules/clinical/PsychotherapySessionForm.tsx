@@ -96,7 +96,7 @@ export function PsychotherapySessionForm({
               onChange={(e) => setForm((f) => ({ ...f, session_notes: e.target.value }))}
             />
           </label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className={LABEL_CLASS}>
               Trauma Processing Stage
               <input

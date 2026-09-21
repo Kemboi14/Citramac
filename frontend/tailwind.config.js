@@ -5,6 +5,11 @@
 // by a token in that file.
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  // Colors are CSS-var-driven (see tokens.css) so dark mode never needs a
+  // `dark:` utility for them, but this still lets a `dark:` prefix be used
+  // for anything else (image filters, shadow intensity) and matches the
+  // `data-theme="dark"` attribute frontend/src/theme/useTheme.ts sets.
+  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {

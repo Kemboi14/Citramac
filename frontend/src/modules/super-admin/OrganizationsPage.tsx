@@ -1328,7 +1328,7 @@ export function OrganizationsPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
             Platform Console
@@ -1358,7 +1358,7 @@ export function OrganizationsPage() {
             }}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.label}
@@ -1386,7 +1386,7 @@ export function OrganizationsPage() {
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
+      <div className="hidden overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm md:block">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-surface-border text-xs font-semibold uppercase tracking-wide text-ink-500">
             <tr>
@@ -1466,8 +1466,91 @@ export function OrganizationsPage() {
             )}
           </tbody>
         </table>
-        <Pager page={page} totalPages={totalPages} onChange={setPage} />
       </div>
+
+      <div className="flex flex-col gap-2.5 md:hidden">
+        {groupedRows.map((group) => (
+          <Fragment key={group.label ?? "__all__"}>
+            {group.label !== null && (
+              <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-ink-500">
+                {group.label}
+                <span className="ml-1.5 font-normal normal-case text-ink-400">
+                  ({group.orgs.length})
+                </span>
+              </div>
+            )}
+            {group.orgs.map((org) => (
+              <div
+                key={org.id}
+                className="rounded-md border border-surface-border bg-surface-card p-3.5 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-ink-900">{org.name}</div>
+                    <div className="text-xs text-ink-500">{org.slug}</div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <StatusBadge status={org.status} />
+                  </div>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Identity Code
+                    </div>
+                    <div className="mt-0.5 text-ink-700">{org.dha_facility_code || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Type
+                    </div>
+                    <div className="mt-0.5 text-ink-700">
+                      {ORG_TYPE_LABEL[org.org_type] ?? org.org_type}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      County
+                    </div>
+                    <div className="mt-0.5 text-ink-700">{org.county || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Branches
+                    </div>
+                    <div className="mt-0.5 text-ink-700">{org.branch_count}</div>
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-surface-border pt-3">
+                  <RowActionsMenu
+                    org={org}
+                    busy={busyId === org.id}
+                    onEdit={() => setDrawer({ open: true, organization: org })}
+                    onToggleStatus={() => toggleStatus(org)}
+                    onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
+                  />
+                </div>
+              </div>
+            ))}
+          </Fragment>
+        ))}
+        {!isLoading && organizations.length === 0 && (
+          <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-ink-500 shadow-sm">
+            No organizations found.
+          </p>
+        )}
+        {isLoading && organizations.length === 0 && (
+          <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-ink-500 shadow-sm">
+            Loading…
+          </p>
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
+        </div>
+      )}
 
       <OrganizationDrawer
         open={drawer.open}

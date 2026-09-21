@@ -43,7 +43,7 @@ export function WideModal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-white"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card"
             >
               <X className="h-[15px] w-[15px]" />
             </button>

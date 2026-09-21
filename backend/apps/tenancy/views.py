@@ -33,6 +33,7 @@ from .serializers import (
     OrganizationSerializer,
     OrganizationSmsSettingsSerializer,
     OrganizationStatusSerializer,
+    OrganizationThemeSerializer,
     PlatformBrandingSerializer,
     PlatformEmailSettingsSerializer,
     PlatformSmsSettingsSerializer,
@@ -356,6 +357,36 @@ class OrganizationEmailSettingsView(APIView):
         serializer = OrganizationEmailSettingsSerializer(
             organization, data=request.data, partial=True
         )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class OrganizationThemeView(APIView):
+    """
+    Self-service org-wide primary/secondary brand accent — docs/03-DESIGN-SYSTEM.md
+    §3.6. Same narrow-endpoint-over-one-concern precedent as
+    OrganizationEmailSettingsView, rather than widening OrganizationDetailView's
+    Super-Admin-only PATCH. Org Admins may only read/write their own
+    organization — enforced by IsPlatformSuperAdminOrOrgAdmin's object-level
+    check.
+    """
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+
+    def _get_organization(self, request, pk):
+        with platform_admin_context():
+            organization = generics.get_object_or_404(Organization, pk=pk)
+        self.check_object_permissions(request, organization)
+        return organization
+
+    def get(self, request, pk):
+        organization = self._get_organization(request, pk)
+        return Response(OrganizationThemeSerializer(organization).data)
+
+    def patch(self, request, pk):
+        organization = self._get_organization(request, pk)
+        serializer = OrganizationThemeSerializer(organization, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)

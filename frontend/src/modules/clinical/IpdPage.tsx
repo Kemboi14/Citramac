@@ -385,7 +385,7 @@ export function IpdPage() {
         <button
           type="button"
           onClick={() => setShowBedBoard((v) => !v)}
-          className="rounded-md border border-surface-border bg-white px-3 py-2 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg"
+          className="rounded-md border border-surface-border bg-surface-card px-3 py-2 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg"
         >
           {showBedBoard ? "Hide bed board" : "Show bed board"}
         </button>

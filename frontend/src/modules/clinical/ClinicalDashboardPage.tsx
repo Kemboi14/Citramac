@@ -46,7 +46,7 @@ export function ClinicalDashboardPage() {
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
 
-      <div className="grid grid-cols-4 gap-3.5 max-md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
         <StatCard
           icon={Users}
           value={summary?.registered_clients ?? "—"}
@@ -133,7 +133,7 @@ export function ClinicalDashboardPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-[1.35fr_0.8fr] gap-4 max-lg:grid-cols-1">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_0.8fr]">
         <section className="rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-[15px] font-semibold text-ink-900">

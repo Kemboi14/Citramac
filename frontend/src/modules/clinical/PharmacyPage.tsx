@@ -130,7 +130,7 @@ export function PharmacyPage() {
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label className={LABEL_CLASS}>
             Dose
             <input
@@ -170,7 +170,7 @@ export function PharmacyPage() {
             {drugMatches.map((d) => (
               <li
                 key={d.code}
-                className="flex items-center justify-between rounded-sm border border-surface-border px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border px-3 py-2 text-sm"
               >
                 <span>
                   <span className="font-semibold">{d.generic_name}</span> {d.strength} ({d.form})
@@ -200,7 +200,7 @@ export function PharmacyPage() {
           <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
             2. Dispense (FEFO + POS Gate)
           </h2>
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <label className={LABEL_CLASS}>
               Store
               <select

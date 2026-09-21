@@ -98,7 +98,7 @@ export function WeekCalendar({
             <button
               type="button"
               onClick={() => onWeekChange(startOfWeek(new Date()))}
-              className="rounded-md border border-surface-border bg-white px-2.5 py-1.5 text-[11px] font-semibold text-ink-700 hover:bg-surface-bg"
+              className="rounded-md border border-surface-border bg-surface-card px-2.5 py-1.5 text-[11px] font-semibold text-ink-700 hover:bg-surface-bg"
             >
               Today
             </button>
@@ -106,7 +106,7 @@ export function WeekCalendar({
               type="button"
               aria-label="Previous week"
               onClick={() => onWeekChange(addDays(start, -7))}
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-surface-border bg-white text-ink-700 hover:bg-surface-bg"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
@@ -114,7 +114,7 @@ export function WeekCalendar({
               type="button"
               aria-label="Next week"
               onClick={() => onWeekChange(addDays(start, 7))}
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-surface-border bg-white text-ink-700 hover:bg-surface-bg"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>

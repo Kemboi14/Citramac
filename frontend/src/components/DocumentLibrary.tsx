@@ -27,7 +27,7 @@ const CATEGORY_LABEL: Record<AttachmentCategory, string> = {
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as AttachmentCategory[];
 
 const FIELD_CLASS =
-  "rounded-sm border border-surface-border bg-white px-3 py-2 text-[12.5px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.5px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-[11.5px] font-semibold text-ink-700";
 
 function formatSize(bytes: number | null) {
@@ -160,7 +160,7 @@ export function DocumentLibrary({
           className={`flex items-center gap-1.5 rounded-sm border px-3 py-2 text-[12px] font-semibold transition-colors duration-150 ${
             favouritesOnly
               ? "border-status-amber bg-status-amber-tint text-status-amber"
-              : "border-surface-border bg-white text-ink-700 hover:bg-surface-bg"
+              : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
           }`}
         >
           <Star className="h-3.5 w-3.5" fill={favouritesOnly ? "currentColor" : "none"} />

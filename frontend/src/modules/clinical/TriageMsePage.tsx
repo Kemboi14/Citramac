@@ -113,7 +113,7 @@ export function TriageMsePage() {
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Vital Signs</h2>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <label className={LABEL_CLASS}>
             Systolic BP
             <input
@@ -202,7 +202,7 @@ export function TriageMsePage() {
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
           Mental Status Exam
         </h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {(
             [
               ["appearance", "Appearance"],
@@ -228,7 +228,7 @@ export function TriageMsePage() {
               />
             </label>
           ))}
-          <label className={`${LABEL_CLASS} col-span-2`}>
+          <label className={`${LABEL_CLASS} sm:col-span-2`}>
             Plan
             <textarea
               className={FIELD_CLASS}
@@ -239,7 +239,7 @@ export function TriageMsePage() {
           </label>
         </div>
 
-        <div className="mt-4 flex gap-6 rounded-sm bg-status-red-tint px-4 py-3">
+        <div className="mt-4 flex flex-wrap gap-4 rounded-sm bg-status-red-tint px-4 py-3 sm:gap-6">
           <label className="flex items-center gap-2 text-sm font-medium text-status-red">
             <input
               type="checkbox"

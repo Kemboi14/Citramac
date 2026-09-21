@@ -130,10 +130,10 @@ export function ClinicalReviewPage() {
             .filter((r) => r.patient === selected.patientId)
             .map((r) => (
               <div key={r.id} className="rounded-sm border border-surface-border p-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-ink-700">{r.case_summary}</span>
                   <span
-                    className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
+                    className={`flex-shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${
                       STATUS_TINT[r.status] ?? ""
                     }`}
                   >
@@ -141,9 +141,9 @@ export function ClinicalReviewPage() {
                   </span>
                 </div>
                 {r.status === "PENDING" && (
-                  <div className="mt-3 flex items-end gap-2">
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
                     <input
-                      className={`${FIELD_CLASS} flex-1`}
+                      className={`${FIELD_CLASS} w-full flex-1 sm:w-auto`}
                       placeholder="Review notes"
                       value={reviewNotes[r.id] ?? ""}
                       onChange={(e) => setReviewNotes((n) => ({ ...n, [r.id]: e.target.value }))}

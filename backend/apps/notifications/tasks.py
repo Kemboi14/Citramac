@@ -33,6 +33,25 @@ def _resolve_connection(organization_id):
     return get_email_connection_and_sender(_load_organization(organization_id))
 
 
+def create_notification(recipient, category, title, body="", link="", organization_id=None):
+    """
+    Persists one in-app notification — the topbar bell
+    (frontend/src/shells/TopbarActions.tsx) reads these. Runs alongside,
+    never instead of, whatever outbound email/SMS a task already sends:
+    this is what the recipient sees once they're actually in the app.
+    """
+    from .models import Notification
+
+    Notification.objects.create(
+        recipient=recipient,
+        organization_id=organization_id,
+        category=category,
+        title=title,
+        body=body,
+        link=link,
+    )
+
+
 @shared_task
 def send_otp_sms(phone, code, purpose, organization_id=None):
     """
@@ -98,13 +117,28 @@ def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
     from apps.accounts.models import User
 
     with platform_admin_context():
-        supervisor_emails = list(
+        supervisors = list(
             User.objects.filter(
                 organization_id=organization_id, roles__name="Supervisor", is_active=True
-            ).values_list("email", flat=True)
+            )
         )
-    if not supervisor_emails:
+    if not supervisors:
         return
+
+    for supervisor in supervisors:
+        create_notification(
+            recipient=supervisor,
+            category="RISK_ALERT",
+            title="Risk flag raised on a Mental Status Exam",
+            body=(
+                f"A Mental Status Exam for {patient_name} flagged positive suicidal or "
+                "homicidal ideation. Please review immediately."
+            ),
+            link="/clinical/encounter",
+            organization_id=organization_id,
+        )
+
+    supervisor_emails = [s.email for s in supervisors]
     connection, from_email = _resolve_connection(organization_id)
     send_html_email(
         subject="URGENT: Risk flag raised on a Mental Status Exam",

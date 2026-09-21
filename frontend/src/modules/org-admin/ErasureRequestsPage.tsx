@@ -122,7 +122,7 @@ export function ErasureRequestsPage() {
         className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
       >
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">New Request</h2>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <label className={LABEL_CLASS}>
             Client
             <select
@@ -139,7 +139,7 @@ export function ErasureRequestsPage() {
               ))}
             </select>
           </label>
-          <label className={`${LABEL_CLASS} flex-1`}>
+          <label className={`${LABEL_CLASS} w-full sm:w-auto sm:flex-1`}>
             Reason
             <input
               className={FIELD_CLASS}

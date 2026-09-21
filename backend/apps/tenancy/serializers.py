@@ -352,6 +352,44 @@ class OrganizationEmailSettingsSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class OrganizationThemeSerializer(serializers.ModelSerializer):
+    """
+    Self-service org-wide brand accent (Org Admin's "Brand Colors" settings
+    screen) — docs/03-DESIGN-SYSTEM.md §3.6. Deliberately narrow: only
+    `primary`/`secondary` hex colors, applied client-side to `--green`/
+    `--green-dark` only (frontend/src/theme/tokens.css derives every tint
+    from those two). Status colors (success/warning/error) are never part
+    of this shape, so a tenant can never theme away what "danger" looks
+    like. Distinct from `Organization.primary_color`
+    (`OrganizationSerializer`), which only recolors the pre-login tenant
+    login panel and is Super-Admin-managed at org-creation time.
+    """
+
+    class Meta:
+        model = Organization
+        fields = ["theme_overrides"]
+
+    def validate_theme_overrides(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        allowed_keys = {"primary", "secondary"}
+        extra_keys = set(value) - allowed_keys
+        if extra_keys:
+            raise serializers.ValidationError(
+                f"Unsupported key(s): {', '.join(sorted(extra_keys))}. Only "
+                f"{', '.join(sorted(allowed_keys))} are allowed."
+            )
+        for key, color in value.items():
+            if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
+                raise serializers.ValidationError(
+                    f"'{key}' must be a hex color like #006e51, got {color!r}."
+                )
+        return value
+
+
 class PlatformSmsSettingsSerializer(serializers.ModelSerializer):
     """
     Super Admin's platform-wide Onfon Media SMS gateway fallback (Settings

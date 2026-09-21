@@ -22,7 +22,7 @@ export function PillRadio<T extends string>({
               ? opt.value === warnValue
                 ? "border-status-red bg-status-red text-white"
                 : "border-brand-green bg-brand-green text-white"
-              : "border-surface-border bg-white text-ink-700 hover:border-brand-green"
+              : "border-surface-border bg-surface-card text-ink-700 hover:border-brand-green"
           }`}
         >
           {opt.label}

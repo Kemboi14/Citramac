@@ -5,15 +5,18 @@ import "./index.css";
 import App from "./App.tsx";
 import { AuthProvider } from "./auth/AuthContext.tsx";
 import { PatientProvider } from "./clinical/PatientContext.tsx";
+import { ThemeProvider } from "./theme/useTheme.ts";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <PatientProvider>
-          <App />
-        </PatientProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <PatientProvider>
+            <App />
+          </PatientProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </StrictMode>,
 );

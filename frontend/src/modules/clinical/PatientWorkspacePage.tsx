@@ -293,7 +293,7 @@ export function PatientWorkspacePage() {
       )}
 
       {tab === "Overview" && (
-        <div className="grid animate-fade-in grid-cols-2 gap-4 max-lg:grid-cols-1">
+        <div className="grid animate-fade-in grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
             <h2 className="mb-3 font-display text-base font-semibold text-ink-900">
               Recent encounters
@@ -337,7 +337,7 @@ export function PatientWorkspacePage() {
       )}
 
       {tab === "Diagnoses" && (
-        <div className="grid animate-fade-in grid-cols-[1fr_1.4fr] gap-4 max-lg:grid-cols-1">
+        <div className="grid animate-fade-in grid-cols-1 gap-4 lg:grid-cols-[1fr_1.4fr]">
           <section className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-base font-semibold text-ink-900">Diagnoses</h2>

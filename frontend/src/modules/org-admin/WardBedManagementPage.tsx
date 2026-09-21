@@ -276,7 +276,7 @@ export function WardBedManagementPage() {
                 <h2 className="font-display text-base font-semibold text-ink-900">
                   {selectedWard.name} · Beds
                 </h2>
-                <form onSubmit={submitBed} className="flex items-end gap-2">
+                <form onSubmit={submitBed} className="flex flex-wrap items-end gap-2">
                   <label className={LABEL_CLASS}>
                     Bed Number
                     <input

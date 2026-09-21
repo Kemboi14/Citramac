@@ -637,7 +637,7 @@ export function ClientHistoryPage() {
                 className={`rounded-md border px-3 py-2.5 text-left transition-colors duration-150 ${
                   selectedRecordId === record.id
                     ? "border-brand-green bg-brand-green-tint"
-                    : "border-surface-border bg-white hover:border-brand-green"
+                    : "border-surface-border bg-surface-card hover:border-brand-green"
                 }`}
               >
                 <div className="flex items-center justify-between">

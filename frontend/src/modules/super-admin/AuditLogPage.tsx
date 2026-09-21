@@ -8,6 +8,7 @@ import {
   type AuditLogEntry,
   type AuditLogPage,
 } from "../../lib/auditApi";
+import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -107,6 +108,54 @@ export function AuditLogPage() {
   const canGoPrevious = pageNumber > 1;
   const canGoNext = pageSize > 0 && pageNumber * pageSize < count;
 
+  const auditColumns: ResponsiveTableColumn<AuditLogEntry>[] = [
+    {
+      key: "timestamp",
+      header: "Timestamp",
+      className: "whitespace-nowrap px-4 py-3 text-ink-700",
+      cell: (entry) => new Date(entry.timestamp).toLocaleString(),
+    },
+    {
+      key: "actor",
+      header: "Actor",
+      cardTitle: true,
+      cell: (entry) => (
+        <span className="flex items-center gap-2">
+          <ActorAvatar name={entry.actor_name || "?"} />
+          {entry.actor_name || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "organization",
+      header: "Organization",
+      cardSubtitle: true,
+      cell: (entry) => entry.organization_name || "Platform",
+    },
+    {
+      key: "action",
+      header: "Action",
+      cardBadge: true,
+      cell: (entry) => <ActionBadge action={entry.action} />,
+    },
+    {
+      key: "model",
+      header: "Model",
+      cell: (entry) => entry.model,
+    },
+    {
+      key: "object_id",
+      header: "Object ID",
+      className: "max-w-[10rem] truncate px-4 py-3 font-mono text-xs text-ink-500",
+      cell: (entry) => entry.object_id,
+    },
+    {
+      key: "source_ip",
+      header: "Source IP",
+      cell: (entry) => entry.source_ip || "—",
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
@@ -166,52 +215,12 @@ export function AuditLogPage() {
 
       {isLoading && entries.length === 0 && <p className="text-sm text-ink-500">Loading…</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
-            <tr>
-              <th className="px-4 py-3">Timestamp</th>
-              <th className="px-4 py-3">Actor</th>
-              <th className="px-4 py-3">Organization</th>
-              <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Model</th>
-              <th className="px-4 py-3">Object ID</th>
-              <th className="px-4 py-3">Source IP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id} className="border-b border-surface-border last:border-0">
-                <td className="whitespace-nowrap px-4 py-3 text-ink-700">
-                  {new Date(entry.timestamp).toLocaleString()}
-                </td>
-                <td className="px-4 py-3 font-medium text-ink-900">
-                  <span className="flex items-center gap-2">
-                    <ActorAvatar name={entry.actor_name || "?"} />
-                    {entry.actor_name || "—"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-ink-700">{entry.organization_name || "Platform"}</td>
-                <td className="px-4 py-3">
-                  <ActionBadge action={entry.action} />
-                </td>
-                <td className="px-4 py-3 text-ink-700">{entry.model}</td>
-                <td className="max-w-[10rem] truncate px-4 py-3 font-mono text-xs text-ink-500">
-                  {entry.object_id}
-                </td>
-                <td className="px-4 py-3 text-ink-700">{entry.source_ip || "—"}</td>
-              </tr>
-            ))}
-            {!isLoading && entries.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
-                  No audit log entries found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ResponsiveTable
+        columns={auditColumns}
+        rows={entries}
+        rowKey={(entry) => entry.id}
+        emptyMessage="No audit log entries found."
+      />
 
       {page && count > 0 && (
         <div className="flex items-center justify-between text-sm text-ink-700">

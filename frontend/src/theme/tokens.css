@@ -2,19 +2,31 @@
  * Design tokens — verbatim from docs/03-DESIGN-SYSTEM.md §3.1.
  * This file is authoritative. Do not add, remove, or rename a token here
  * without updating that doc first — every screen must reuse these tokens.
+ *
+ * Dark mode: the light values below are the defaults; a dark palette is
+ * redefined under a `prefers-color-scheme: dark` media query (guarded so an
+ * explicit `data-theme="light"` can still force light) and again under
+ * `[data-theme="dark"]` for an explicit override — see
+ * frontend/src/theme/useTheme.ts. Tint tokens are derived from their base
+ * hue via `color-mix()` rather than hardcoded, so a dark-mode switch or a
+ * per-organization color override (frontend/src/lib/themeApi.ts, applied by
+ * AppShell.tsx) only ever needs to set the base `--green`/`--green-dark`
+ * variables and every tint follows automatically.
  */
 :root {
   /* Brand green (primary) */
   --green: #006e51;
   --green-dark: #00503a;
-  --green-tint: #e5f3ef;
-  --green-tint-2: #f2f9f7;
+  --green-tint: color-mix(in srgb, var(--green) 12%, white);
+  --green-tint-2: color-mix(in srgb, var(--green) 6%, white);
 
-  /* Semantic status colors */
+  /* Semantic status colors — never overridden by org theming or dark mode's
+     brand-color changes, only by the light/dark palette switch itself, so
+     "danger" always reads as danger. */
   --red: #fe0000;
-  --red-tint: #fff0ef;
+  --red-tint: color-mix(in srgb, var(--red) 6%, white);
   --amber: #b8790a;
-  --amber-tint: #fdf3e2;
+  --amber-tint: color-mix(in srgb, var(--amber) 10%, white);
 
   /* Ink (text) scale */
   --ink-900: #0e1e1a; /* primary text / headings */
@@ -40,4 +52,56 @@
   /* Typography */
   --font-display: "Lexend", sans-serif; /* headings, brand, nav labels, KPI numbers */
   --font-body: "Inter", sans-serif; /* body copy, table data, form inputs */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --green: #2bd39e;
+    --green-dark: #1a9b74;
+    --green-tint: color-mix(in srgb, var(--green) 18%, var(--card));
+    --green-tint-2: color-mix(in srgb, var(--green) 10%, var(--card));
+
+    --red: #ff6b6a;
+    --red-tint: color-mix(in srgb, var(--red) 16%, var(--card));
+    --amber: #ffb84d;
+    --amber-tint: color-mix(in srgb, var(--amber) 16%, var(--card));
+
+    --ink-900: #f1f7f5;
+    --ink-700: #c7d6d1;
+    --ink-500: #94a8a1;
+    --ink-400: #6d827b;
+    --ink-300: #40514b;
+
+    --bg: #0b1512;
+    --card: #10201b;
+    --border: #23342e;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  --green: #2bd39e;
+  --green-dark: #1a9b74;
+  --green-tint: color-mix(in srgb, var(--green) 18%, var(--card));
+  --green-tint-2: color-mix(in srgb, var(--green) 10%, var(--card));
+
+  --red: #ff6b6a;
+  --red-tint: color-mix(in srgb, var(--red) 16%, var(--card));
+  --amber: #ffb84d;
+  --amber-tint: color-mix(in srgb, var(--amber) 16%, var(--card));
+
+  --ink-900: #f1f7f5;
+  --ink-700: #c7d6d1;
+  --ink-500: #94a8a1;
+  --ink-400: #6d827b;
+  --ink-300: #40514b;
+
+  --bg: #0b1512;
+  --card: #10201b;
+  --border: #23342e;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
 }

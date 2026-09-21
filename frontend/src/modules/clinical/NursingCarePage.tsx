@@ -168,7 +168,7 @@ export function NursingCarePage() {
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
           Medication Administration Record
         </h2>
-        <div className="mb-4 flex items-end gap-3">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className={LABEL_CLASS}>
             Schedule time
             <input
@@ -191,7 +191,7 @@ export function NursingCarePage() {
         {marEntries.map((entry) => (
           <div
             key={entry.id}
-            className="flex items-center gap-3 border-t border-surface-bg py-2.5 transition-colors duration-150 first:border-t-0 hover:bg-brand-green-tint-2"
+            className="flex flex-wrap items-center gap-3 border-t border-surface-bg py-2.5 transition-colors duration-150 first:border-t-0 hover:bg-brand-green-tint-2"
           >
             <span className="flex-1 text-sm text-ink-700">
               {new Date(entry.scheduled_time).toLocaleString([], {
@@ -228,7 +228,7 @@ export function NursingCarePage() {
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Nursing Notes</h2>
-        <div className="mb-4 flex items-end gap-3">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className={LABEL_CLASS}>
             Shift
             <select
@@ -240,7 +240,7 @@ export function NursingCarePage() {
               <option value="NIGHT">Night</option>
             </select>
           </label>
-          <label className={`${LABEL_CLASS} flex-1`}>
+          <label className={`${LABEL_CLASS} w-full sm:w-auto sm:flex-1`}>
             Note
             <textarea
               className={FIELD_CLASS}

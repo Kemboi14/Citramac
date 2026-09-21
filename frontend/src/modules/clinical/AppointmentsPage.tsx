@@ -129,7 +129,7 @@ export function AppointmentsPage() {
           </div>
           <h1 className="font-display text-2xl font-bold text-ink-900">Appointments Calendar</h1>
         </div>
-        <div className="flex rounded-md border border-surface-border bg-white p-0.5">
+        <div className="flex rounded-md border border-surface-border bg-surface-card p-0.5">
           {(["Week", "Agenda"] as ViewMode[]).map((v) => (
             <button
               key={v}

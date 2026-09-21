@@ -170,7 +170,7 @@ export function LimsPage() {
             {queue.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-sm border border-surface-border px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border px-3 py-2 text-sm"
               >
                 <span>
                   Result <span className="font-mono">{r.id.slice(0, 8)}</span> — {r.result_value}{" "}
@@ -217,7 +217,7 @@ export function LimsPage() {
                 {matches.map((m) => (
                   <li
                     key={m.code}
-                    className="flex items-center justify-between rounded-sm border border-surface-border px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border px-3 py-2 text-sm"
                   >
                     <span>
                       <span className="font-semibold">{m.code}</span> — {m.description}
@@ -278,7 +278,7 @@ export function LimsPage() {
               <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
                 3. Record Result
               </h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <label className={LABEL_CLASS}>
                   Value
                   <input

@@ -150,7 +150,7 @@ export function ClinicalEncounterPage() {
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">S.O.A.P. Note</h2>
         <fieldset
           disabled={savedNote?.is_locked}
-          className="grid grid-cols-2 gap-4 disabled:opacity-60"
+          className="grid grid-cols-1 gap-4 disabled:opacity-60 sm:grid-cols-2"
         >
           {(["subjective", "objective", "assessment", "plan"] as const).map((key) => (
             <label key={key} className={LABEL_CLASS}>
@@ -204,7 +204,7 @@ export function ClinicalEncounterPage() {
             onChange={(e) => runIcdSearch(e.target.value)}
           />
           {icdResults.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full rounded-md border border-surface-border bg-white shadow-md">
+            <ul className="absolute z-10 mt-1 w-full rounded-md border border-surface-border bg-surface-card shadow-md">
               {icdResults.map((code) => (
                 <li key={code.code}>
                   <button
@@ -256,7 +256,7 @@ export function ClinicalEncounterPage() {
               type="button"
               onClick={payAndClearBilling}
               disabled={paying}
-              className="rounded-md border border-surface-border bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+              className="rounded-md border border-surface-border bg-surface-card px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
             >
               {paying ? "Recording…" : "Record KES 1,000 Cash Payment"}
             </button>

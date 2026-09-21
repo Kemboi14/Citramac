@@ -54,7 +54,7 @@ export function AttachmentsPage() {
         <h1 className="font-display text-2xl font-bold text-ink-900">Attachments</h1>
       </div>
 
-      <div className="grid grid-cols-3 gap-3.5 max-md:grid-cols-1">
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
         <StatCard icon={Paperclip} value={insights?.total ?? "—"} label="Total documents" />
         <StatCard icon={Star} tone="amber" value={insights?.favourites ?? "—"} label="Favourited" />
         <StatCard
