@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
-import { KeyRound, Mail, MapPin, MessageSquare, Palette, PlugZap, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  KeyRound,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Palette,
+  PlugZap,
+  ShieldCheck,
+  Upload,
+} from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -17,6 +27,7 @@ import {
   testOrganizationSmsSettings,
   updateOrganizationEmailSettings,
   updateOrganizationSmsSettings,
+  uploadOrganizationLogo,
   type OrganizationEmailSettings,
   type OrganizationSmsSettings,
 } from "../../lib/organizationsApi";
@@ -25,6 +36,8 @@ import {
   updateOrganizationTheme,
   type OrganizationTheme,
 } from "../../lib/themeApi";
+
+const LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024;
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -235,6 +248,11 @@ export function BranchSettingsPage() {
   const [themeLoadError, setThemeLoadError] = useState<string | null>(null);
   const [themeSaveError, setThemeSaveError] = useState<string | null>(null);
 
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   const load = async () => {
     if (!accessToken) return;
     const res = await listBranches(accessToken);
@@ -352,11 +370,12 @@ export function BranchSettingsPage() {
   useEffect(() => {
     if (!accessToken || !claims?.organization_id) return;
     getOrganizationTheme(accessToken, claims.organization_id)
-      .then(({ theme_overrides }: OrganizationTheme) => {
+      .then(({ theme_overrides, logo_url }: OrganizationTheme) => {
         setThemeForm({
           primary: theme_overrides.primary ?? "#006e51",
           secondary: theme_overrides.secondary ?? "#00503a",
         });
+        setLogoUrl(logo_url || null);
       })
       .catch((err) =>
         setThemeLoadError(err instanceof ApiError ? err.message : "Couldn't load brand colors."),
@@ -378,6 +397,24 @@ export function BranchSettingsPage() {
     } catch (err) {
       setThemeSaveError(err instanceof ApiError ? err.message : "Couldn't save brand colors.");
       throw err;
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    if (!accessToken || !claims?.organization_id) return;
+    if (file.size > LOGO_MAX_SIZE_BYTES) {
+      setLogoError("Logo must be 30MB or smaller.");
+      return;
+    }
+    setLogoError(null);
+    setLogoUploading(true);
+    try {
+      const updated = await uploadOrganizationLogo(accessToken, claims.organization_id, file);
+      setLogoUrl(updated.logo_url || null);
+    } catch (err) {
+      setLogoError(err instanceof ApiError ? err.message : "Couldn't upload the logo.");
+    } finally {
+      setLogoUploading(false);
     }
   };
 
@@ -1015,6 +1052,59 @@ export function BranchSettingsPage() {
                     )}
                   </div>
                 </form>
+              )}
+            </div>
+
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>
+                <span className="inline-flex items-center gap-2">
+                  <Upload size={16} className="text-brand-green" />
+                  Logo
+                </span>
+              </h2>
+              <p className="mb-4 text-xs text-ink-500">
+                Shown on your organization's branded login screen before staff sign in.
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-bg">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Organization logo" className="h-full w-full object-contain p-1.5" />
+                  ) : (
+                    <span className="text-[9px] font-semibold text-ink-400">No logo</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      if (file) void handleLogoUpload(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={logoUploading}
+                    onClick={() => logoInputRef.current?.click()}
+                    className="flex items-center gap-1.5 rounded-md border border-surface-border px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors duration-150 hover:bg-surface-bg disabled:opacity-60"
+                  >
+                    {logoUploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    {logoUploading ? "Uploading…" : "Upload Logo"}
+                  </button>
+                  <span className="text-[11px] text-ink-400">PNG, JPG, WEBP, or SVG, up to 30MB</span>
+                </div>
+              </div>
+              {logoError && (
+                <p className="mt-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                  {logoError}
+                </p>
               )}
             </div>
 

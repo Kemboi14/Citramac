@@ -442,6 +442,119 @@ class OrganizationConsoleApiTests(APITestCase):
             org.refresh_from_db()
             self.assertIn("organizations/logos/logo-org", org.logo_url)
 
+    def test_org_admin_can_upload_their_own_organization_logo(self):
+        from apps.accounts.models import Role
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Own Logo Org", slug="own-logo-org", facility_type="CLINIC"
+            )
+            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin = User.objects.create_user(
+                email="admin@own-logo-org.test",
+                password="Password123!",
+                organization=org,
+                is_active=True,
+            )
+            org_admin.roles.add(org_admin_role)
+        access, _ = issue_tokens(org_admin)
+
+        logo = SimpleUploadedFile("logo.png", b"fake-png-bytes", content_type="image/png")
+        response = self.client.post(
+            reverse("platform-organization-logo", args=[org.id]),
+            {"logo": logo},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("organizations/logos/own-logo-org", response.data["logo_url"])
+
+    def test_org_admin_cannot_upload_another_organizations_logo(self):
+        from apps.accounts.models import Role
+
+        with platform_admin_context():
+            own_org = Organization.objects.create(
+                name="Own Org", slug="own-org-logo", facility_type="CLINIC"
+            )
+            other_org = Organization.objects.create(
+                name="Other Org", slug="other-org-logo", facility_type="CLINIC"
+            )
+            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin = User.objects.create_user(
+                email="admin@own-org-logo.test",
+                password="Password123!",
+                organization=own_org,
+                is_active=True,
+            )
+            org_admin.roles.add(org_admin_role)
+        access, _ = issue_tokens(org_admin)
+
+        logo = SimpleUploadedFile("logo.png", b"fake-png-bytes", content_type="image/png")
+        response = self.client.post(
+            reverse("platform-organization-logo", args=[other_org.id]),
+            {"logo": logo},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_org_admin_can_read_and_update_their_own_theme(self):
+        from apps.accounts.models import Role
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Theme Org", slug="theme-org", facility_type="CLINIC", logo_url="https://x/logo.png"
+            )
+            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin = User.objects.create_user(
+                email="admin@theme-org.test",
+                password="Password123!",
+                organization=org,
+                is_active=True,
+            )
+            org_admin.roles.add(org_admin_role)
+        access, _ = issue_tokens(org_admin)
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {access}"}
+
+        get_response = self.client.get(reverse("platform-organization-theme", args=[org.id]), **auth)
+        self.assertEqual(get_response.status_code, 200, get_response.data)
+        self.assertEqual(get_response.data["logo_url"], "https://x/logo.png")
+
+        patch_response = self.client.patch(
+            reverse("platform-organization-theme", args=[org.id]),
+            {"theme_overrides": {"primary": "#123456"}},
+            format="json",
+            **auth,
+        )
+        self.assertEqual(patch_response.status_code, 200, patch_response.data)
+        self.assertEqual(patch_response.data["theme_overrides"]["primary"], "#123456")
+
+    def test_org_admin_cannot_read_another_orgs_theme(self):
+        from apps.accounts.models import Role
+
+        with platform_admin_context():
+            own_org = Organization.objects.create(
+                name="Own Theme Org", slug="own-theme-org", facility_type="CLINIC"
+            )
+            other_org = Organization.objects.create(
+                name="Other Theme Org", slug="other-theme-org", facility_type="CLINIC"
+            )
+            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin = User.objects.create_user(
+                email="admin@own-theme-org.test",
+                password="Password123!",
+                organization=own_org,
+                is_active=True,
+            )
+            org_admin.roles.add(org_admin_role)
+        access, _ = issue_tokens(org_admin)
+
+        response = self.client.get(
+            reverse("platform-organization-theme", args=[other_org.id]),
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_non_super_admin_cannot_upload_organization_logo(self):
         with platform_admin_context():
             org = Organization.objects.create(

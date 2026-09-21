@@ -8,6 +8,7 @@ export interface OrganizationTheme {
     primary?: string;
     secondary?: string;
   };
+  logo_url: string;
 }
 
 export function getOrganizationTheme(accessToken: string, organizationId: string) {

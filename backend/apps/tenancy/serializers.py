@@ -432,19 +432,24 @@ HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 class OrganizationThemeSerializer(serializers.ModelSerializer):
     """
-    Self-service org-wide brand accent (Org Admin's "Brand Colors" settings
-    screen) — docs/03-DESIGN-SYSTEM.md §3.6. Also settable by Super Admin
-    directly on `OrganizationSerializer` (the Organizations table's create
-    +edit drawer) — this narrower endpoint exists so an Org Admin, who
+    Self-service org-wide branding (Org Admin's "Brand Colors"/"Logo"
+    settings screen) — docs/03-DESIGN-SYSTEM.md §3.6. Also settable by Super
+    Admin directly on `OrganizationSerializer` (the Organizations table's
+    create+edit drawer) — this narrower endpoint exists so an Org Admin, who
     can't reach `OrganizationDetailView`'s broader Super-Admin-only PATCH,
-    still has a scoped way to change just this one field on their own org.
+    still has a scoped way to change these fields on their own org.
     Distinct from `Organization.primary_color`, which only recolors the
-    pre-login tenant login panel.
+    pre-login tenant login panel. `logo_url` is read-only here — actually
+    replacing the logo is a real file upload, via
+    OrganizationLogoUploadView, not a pasted URL through this endpoint;
+    it's included so the same "Branding" screen can show the current logo
+    without a second round-trip.
     """
 
     class Meta:
         model = Organization
-        fields = ["theme_overrides"]
+        fields = ["theme_overrides", "logo_url"]
+        read_only_fields = ["logo_url"]
 
     def validate_theme_overrides(self, value):
         return validate_theme_overrides_shape(value)

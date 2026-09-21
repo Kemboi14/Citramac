@@ -253,17 +253,28 @@ def _validate_logo_upload(request):
 class OrganizationLogoUploadView(APIView):
     """
     Attach/replace a specific organization's own logo (Add/Edit Organization
-    drawer's "Branding" section — citramac_SUPER-ADMIN-v4.html). Distinct
-    from PlatformBrandingView: this sets `Organization.logo_url` (already a
-    plain URLField, read by TenantDiscoveryView/TenantLoginStep for that
-    org's branded login screen — docs/14-TENANT-BRANDED-LOGIN-UX.md), not the
+    drawer's "Branding" section — citramac_SUPER-ADMIN-v4.html — and Org
+    Admin's own Branch Settings "Branding" section). Distinct from
+    PlatformBrandingView: this sets `Organization.logo_url` (already a plain
+    URLField, read by TenantDiscoveryView/TenantLoginStep for that org's
+    branded login screen — docs/14-TENANT-BRANDED-LOGIN-UX.md), not the
     platform-wide mark. A real file upload, stored via Django's default
     storage under a per-org path, rather than requiring the caller to already
     have the image hosted somewhere and paste a URL — pasting a URL directly
-    is still supported too, via the ordinary PATCH on OrganizationDetailView.
+    is still supported too, via the ordinary PATCH on OrganizationDetailView
+    (Super Admin) or OrganizationThemeView-adjacent self-service (Org Admin).
+
+    Same permission shape as OrganizationThemeView: Org Admin may only
+    upload their own organization's logo, checked per-object since the pk
+    is caller-supplied and get_object_or_404 alone doesn't confine it.
+    `org_admin_can_create` isn't really about creation here — this is a
+    file upload, so it has to be POST — but IsPlatformSuperAdminOrOrgAdmin's
+    has_permission() blocks any Org Admin POST unless this flag is set,
+    regardless of what the POST actually does.
     """
 
-    permission_classes = [IsPlatformSuperAdmin]
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+    org_admin_can_create = True
 
     def post(self, request, pk):
         from django.core.files.storage import default_storage
@@ -274,6 +285,9 @@ class OrganizationLogoUploadView(APIView):
 
         with platform_admin_context():
             organization = generics.get_object_or_404(Organization, pk=pk)
+        self.check_object_permissions(request, organization)
+
+        with platform_admin_context():
             extension = logo.name.rsplit(".", 1)[-1].lower()
             stored_path = default_storage.save(
                 f"organizations/logos/{organization.slug}.{extension}", logo
