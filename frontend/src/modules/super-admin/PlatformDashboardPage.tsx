@@ -9,7 +9,8 @@ import {
   type PlatformActivityEntry,
   type PlatformDashboardStats,
 } from "../../lib/organizationsApi";
-import { getPlatformBranding, uploadPlatformLogo } from "../../lib/brandingApi";
+import { getPlatformBranding, updatePlatformTheme, uploadPlatformLogo } from "../../lib/brandingApi";
+import { SaveButton } from "../../components/SaveButton";
 import { StatCard } from "../../components/StatCard";
 import { BarChart } from "../../components/charts/BarChart";
 import { DonutChart } from "../../components/charts/DonutChart";
@@ -34,11 +35,33 @@ function PlatformBrandingCard() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [themePrimary, setThemePrimary] = useState("#006e51");
+  const [themeSecondary, setThemeSecondary] = useState("#00503a");
+  const [themeError, setThemeError] = useState<string | null>(null);
+
   useEffect(() => {
     getPlatformBranding()
-      .then((b) => setLogo(b.logo))
+      .then((b) => {
+        setLogo(b.logo);
+        setThemePrimary(b.theme_overrides.primary || "#006e51");
+        setThemeSecondary(b.theme_overrides.secondary || "#00503a");
+      })
       .catch(() => setLogo(null));
   }, []);
+
+  const saveTheme = async () => {
+    if (!accessToken) return;
+    setThemeError(null);
+    try {
+      await updatePlatformTheme(accessToken, { primary: themePrimary, secondary: themeSecondary });
+      // Applies immediately — same mechanism AppShell.tsx uses on mount.
+      document.documentElement.style.setProperty("--green", themePrimary);
+      document.documentElement.style.setProperty("--green-dark", themeSecondary);
+    } catch (err) {
+      setThemeError(err instanceof ApiError ? err.message : "Couldn't save the platform theme.");
+      throw err;
+    }
+  };
 
   const handleFile = async (file: File) => {
     if (!accessToken) return;
@@ -58,41 +81,73 @@ function PlatformBrandingCard() {
   };
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
-      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-bg">
-        {logo ? (
-          <img src={logo} alt="Platform logo" className="h-full w-full object-contain p-1" />
-        ) : (
-          <span className="text-[10px] font-semibold text-ink-400">No logo</span>
-        )}
+    <div className="flex flex-col gap-4 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-bg">
+          {logo ? (
+            <img src={logo} alt="Platform logo" className="h-full w-full object-contain p-1" />
+          ) : (
+            <span className="text-[10px] font-semibold text-ink-400">No logo</span>
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="font-display text-sm font-semibold text-ink-900">Platform Branding</div>
+          <p className="text-xs text-ink-500">
+            Shown in every shell&rsquo;s sidebar and the generic login screen. PNG, JPG, WEBP, or
+            SVG, up to 30MB.
+          </p>
+          {error && <p className="mt-1 text-xs text-status-red">{error}</p>}
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+          }}
+        />
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-2 text-xs font-semibold text-ink-700 transition-colors duration-150 hover:bg-surface-bg disabled:opacity-60"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {uploading ? "Uploading…" : logo ? "Replace Logo" : "Upload Logo"}
+        </button>
       </div>
-      <div className="flex-1">
-        <div className="font-display text-sm font-semibold text-ink-900">Platform Branding</div>
-        <p className="text-xs text-ink-500">
-          Shown in every shell&rsquo;s sidebar and the generic login screen. PNG, JPG, WEBP, or SVG,
-          up to 30MB.
-        </p>
-        {error && <p className="mt-1 text-xs text-status-red">{error}</p>}
+
+      <div className="flex flex-wrap items-center gap-4 border-t border-surface-border pt-4">
+        <div className="flex-1">
+          <div className="font-display text-sm font-semibold text-ink-900">Platform Theme</div>
+          <p className="text-xs text-ink-500">
+            The default accent every user sees, including Super Admin. An organization's own
+            theme (if set) applies on top of this for its members.
+          </p>
+          {themeError && <p className="mt-1 text-xs text-status-red">{themeError}</p>}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-ink-700">
+          Primary
+          <input
+            type="color"
+            className="h-8 w-12 cursor-pointer rounded-sm border border-surface-border p-0.5"
+            value={themePrimary}
+            onChange={(e) => setThemePrimary(e.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-ink-700">
+          Secondary
+          <input
+            type="color"
+            className="h-8 w-12 cursor-pointer rounded-sm border border-surface-border p-0.5"
+            value={themeSecondary}
+            onChange={(e) => setThemeSecondary(e.target.value)}
+          />
+        </label>
+        <SaveButton onSave={saveTheme}>Save Theme</SaveButton>
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-        }}
-      />
-      <button
-        type="button"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-2 text-xs font-semibold text-ink-700 transition-colors duration-150 hover:bg-surface-bg disabled:opacity-60"
-      >
-        <Upload className="h-3.5 w-3.5" />
-        {uploading ? "Uploading…" : logo ? "Replace Logo" : "Upload Logo"}
-      </button>
     </div>
   );
 }

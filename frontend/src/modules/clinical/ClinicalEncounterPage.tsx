@@ -16,7 +16,7 @@ import {
 import { createInvoice, recordPayment } from "../../lib/billingApi";
 
 const FIELD_CLASS =
-  "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 
 /** Module 3 — SOAP notes + mandatory ICD-11 diagnosis coding, docs/07-CLINICAL-MODULES-SPEC.md §7.3. */

@@ -96,6 +96,14 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 support_email=data.get("support_email", ""),
                 support_phone=data.get("support_phone", ""),
                 website=data.get("website", ""),
+                theme_overrides={
+                    k: v
+                    for k, v in {
+                        "primary": data.get("theme_primary"),
+                        "secondary": data.get("theme_secondary"),
+                    }.items()
+                    if v
+                },
             )
 
             plan_code = data.get("subscription_plan_code")
@@ -300,6 +308,18 @@ class PlatformBrandingView(APIView):
         branding.updated_by = request.user
         branding.save()
         return Response(PlatformBrandingSerializer(branding, context={"request": request}).data)
+
+    def patch(self, request):
+        # Theme-only update — GET stays AllowAny (needed pre-login), but
+        # get_permissions() above already restricts every non-GET method
+        # (including this PATCH) to IsPlatformSuperAdmin.
+        branding = PlatformBranding.get_solo()
+        serializer = PlatformBrandingSerializer(
+            branding, data=request.data, partial=True, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(serializer.data)
 
 
 class PlatformEmailSettingsView(APIView):

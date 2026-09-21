@@ -13,6 +13,36 @@ from .models import (
     SubscriptionPlan,
 )
 
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def validate_theme_overrides_shape(value):
+    """
+    Shared by OrganizationSerializer and OrganizationThemeSerializer — both
+    expose the same `theme_overrides` field (Super Admin's Organizations
+    drawer and Org Admin's Branch Settings respectively,
+    docs/03-DESIGN-SYSTEM.md §3.6), so the validation must match: only
+    `primary`/`secondary`, each a `#RRGGBB` hex string. Status colors are
+    never part of this shape, so a tenant can never theme away what
+    "danger" looks like.
+    """
+    if not isinstance(value, dict):
+        raise serializers.ValidationError("Must be an object.")
+    allowed_keys = {"primary", "secondary"}
+    extra_keys = set(value) - allowed_keys
+    if extra_keys:
+        raise serializers.ValidationError(
+            f"Unsupported key(s): {', '.join(sorted(extra_keys))}. Only "
+            f"{', '.join(sorted(allowed_keys))} are allowed."
+        )
+    for key, color in value.items():
+        if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
+            raise serializers.ValidationError(
+                f"'{key}' must be a hex color like #006e51, got {color!r}."
+            )
+    return value
+
+
 # Per org_type, which label + validation pattern the single "identity code"
 # field (Organization.dha_facility_code) should use — mirrors the mockup's
 # per-org-type Add Organization drawer (citramac_SUPER-ADMIN.html
@@ -72,11 +102,26 @@ class CreateOrganizationSerializer(serializers.Serializer):
     support_email = serializers.EmailField(required=False, allow_blank=True)
     support_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     website = serializers.URLField(required=False, allow_blank=True)
+    # App-wide theme (docs/03-DESIGN-SYSTEM.md §3.6) — composed into
+    # Organization.theme_overrides on create. Distinct from primary_color
+    # above, which only recolors the pre-login tenant login panel.
+    theme_primary = serializers.CharField(max_length=7, required=False, allow_blank=True)
+    theme_secondary = serializers.CharField(max_length=7, required=False, allow_blank=True)
     org_admin = OrgAdminInviteSerializer()
 
     def validate_slug(self, value):
         if Organization.objects.filter(slug=value).exists():
             raise serializers.ValidationError("An organization with this slug already exists.")
+        return value
+
+    def validate_theme_primary(self, value):
+        if value and not HEX_COLOR_RE.match(value):
+            raise serializers.ValidationError(f"Must be a hex color like #006e51, got {value!r}.")
+        return value
+
+    def validate_theme_secondary(self, value):
+        if value and not HEX_COLOR_RE.match(value):
+            raise serializers.ValidationError(f"Must be a hex color like #006e51, got {value!r}.")
         return value
 
     def validate(self, attrs):
@@ -122,6 +167,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "support_email",
             "support_phone",
             "website",
+            "theme_overrides",
         ]
         read_only_fields = ["is_active", "mfl_verified_at", "created_at"]
 
@@ -131,6 +177,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
     def get_branch_count(self, obj):
         count = getattr(obj, "branch_count", None)
         return count if count is not None else obj.branch_set.count()
+
+    def validate_theme_overrides(self, value):
+        return validate_theme_overrides_shape(value)
 
 
 class OrganizationStatusSerializer(serializers.Serializer):
@@ -250,7 +299,10 @@ class PlatformBrandingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlatformBranding
-        fields = ["logo", "updated_at"]
+        fields = ["logo", "theme_overrides", "updated_at"]
+
+    def validate_theme_overrides(self, value):
+        return validate_theme_overrides_shape(value)
 
     def get_logo(self, obj):
         if not obj.logo:
@@ -358,14 +410,13 @@ HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 class OrganizationThemeSerializer(serializers.ModelSerializer):
     """
     Self-service org-wide brand accent (Org Admin's "Brand Colors" settings
-    screen) — docs/03-DESIGN-SYSTEM.md §3.6. Deliberately narrow: only
-    `primary`/`secondary` hex colors, applied client-side to `--green`/
-    `--green-dark` only (frontend/src/theme/tokens.css derives every tint
-    from those two). Status colors (success/warning/error) are never part
-    of this shape, so a tenant can never theme away what "danger" looks
-    like. Distinct from `Organization.primary_color`
-    (`OrganizationSerializer`), which only recolors the pre-login tenant
-    login panel and is Super-Admin-managed at org-creation time.
+    screen) — docs/03-DESIGN-SYSTEM.md §3.6. Also settable by Super Admin
+    directly on `OrganizationSerializer` (the Organizations table's create
+    +edit drawer) — this narrower endpoint exists so an Org Admin, who
+    can't reach `OrganizationDetailView`'s broader Super-Admin-only PATCH,
+    still has a scoped way to change just this one field on their own org.
+    Distinct from `Organization.primary_color`, which only recolors the
+    pre-login tenant login panel.
     """
 
     class Meta:
@@ -373,21 +424,7 @@ class OrganizationThemeSerializer(serializers.ModelSerializer):
         fields = ["theme_overrides"]
 
     def validate_theme_overrides(self, value):
-        if not isinstance(value, dict):
-            raise serializers.ValidationError("Must be an object.")
-        allowed_keys = {"primary", "secondary"}
-        extra_keys = set(value) - allowed_keys
-        if extra_keys:
-            raise serializers.ValidationError(
-                f"Unsupported key(s): {', '.join(sorted(extra_keys))}. Only "
-                f"{', '.join(sorted(allowed_keys))} are allowed."
-            )
-        for key, color in value.items():
-            if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
-                raise serializers.ValidationError(
-                    f"'{key}' must be a hex color like #006e51, got {color!r}."
-                )
-        return value
+        return validate_theme_overrides_shape(value)
 
 
 class PlatformSmsSettingsSerializer(serializers.ModelSerializer):

@@ -18,7 +18,7 @@ import {
 } from "../../lib/limsApi";
 
 const FIELD_CLASS =
-  "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
@@ -170,7 +170,7 @@ export function LimsPage() {
             {queue.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm"
               >
                 <span>
                   Result <span className="font-mono">{r.id.slice(0, 8)}</span> — {r.result_value}{" "}
@@ -217,7 +217,7 @@ export function LimsPage() {
                 {matches.map((m) => (
                   <li
                     key={m.code}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm"
                   >
                     <span>
                       <span className="font-semibold">{m.code}</span> — {m.description}

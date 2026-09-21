@@ -25,7 +25,7 @@ import {
 } from "../../lib/ipdApi";
 
 const FIELD_CLASS =
-  "w-full rounded-sm border border-surface-border px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-[11.8px] font-semibold text-ink-700";
 const SECTION_CLASS = "rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm";
 const SECTION_TITLE_CLASS =

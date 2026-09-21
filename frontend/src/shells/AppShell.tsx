@@ -96,14 +96,24 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
-    // Platform-level users (Super Admin) have no organization to theme —
-    // they always see the fixed CITRAMAC brand palette.
-    if (!accessToken || !claims?.organization_id) return;
-    getOrganizationTheme(accessToken, claims.organization_id)
-      .then(({ theme_overrides }) => {
-        const root = document.documentElement.style;
-        if (theme_overrides.primary) root.setProperty("--green", theme_overrides.primary);
-        if (theme_overrides.secondary) root.setProperty("--green-dark", theme_overrides.secondary);
+    // Platform theme is the baseline for every user, including Super
+    // Admin (who has no organization to further theme). An org's own
+    // theme, if set, applies on top of it — sequential (not parallel) so
+    // the org override always wins regardless of which request resolves
+    // first over the network.
+    const root = document.documentElement.style;
+    const applyTheme = (overrides: { primary?: string; secondary?: string }) => {
+      if (overrides.primary) root.setProperty("--green", overrides.primary);
+      if (overrides.secondary) root.setProperty("--green-dark", overrides.secondary);
+    };
+
+    getPlatformBranding()
+      .then((b) => {
+        applyTheme(b.theme_overrides);
+        if (!accessToken || !claims?.organization_id) return;
+        return getOrganizationTheme(accessToken, claims.organization_id).then(
+          ({ theme_overrides }) => applyTheme(theme_overrides),
+        );
       })
       .catch(() => {
         // Best-effort only — fall back to the default brand palette.

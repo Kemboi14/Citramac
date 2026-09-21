@@ -14,6 +14,13 @@
  * variables and every tint follows automatically.
  */
 :root {
+  /* Tells the browser which palette to use for native form-control chrome
+     (checkboxes, date pickers, select arrows, scrollbars) — without this,
+     those stay light-styled even in dark mode regardless of the custom
+     properties below, which is a separate concern from any single
+     element's own background/text color. */
+  color-scheme: light;
+
   /* Brand green (primary) */
   --green: #006e51;
   --green-dark: #00503a;
@@ -56,6 +63,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --green: #2bd39e;
     --green-dark: #1a9b74;
     --green-tint: color-mix(in srgb, var(--green) 18%, var(--card));
@@ -82,6 +90,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --green: #2bd39e;
   --green-dark: #1a9b74;
   --green-tint: color-mix(in srgb, var(--green) 18%, var(--card));

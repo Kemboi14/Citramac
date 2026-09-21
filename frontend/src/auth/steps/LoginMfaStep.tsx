@@ -223,7 +223,7 @@ export function LoginMfaStep({
                 maxLength={1}
                 autoFocus={index === 0}
                 aria-label={`Digit ${index + 1}`}
-                className="h-[53px] w-[49px] rounded-lg border border-surface-border text-center text-xl font-semibold text-ink-900 outline-none focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="h-[53px] w-[49px] rounded-lg border border-surface-border bg-surface-card text-center text-xl font-semibold text-ink-900 outline-none focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
               />
             ))}
           </div>

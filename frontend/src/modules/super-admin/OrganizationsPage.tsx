@@ -37,7 +37,7 @@ import {
 import { listSubscriptionPlans, type SubscriptionPlan } from "../../lib/subscriptionsApi";
 
 const FIELD_CLASS =
-  "rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_PRIMARY =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
@@ -236,6 +236,8 @@ type OrgFormState = {
   support_email: string;
   support_phone: string;
   website: string;
+  theme_primary: string;
+  theme_secondary: string;
   org_admin: { email: string; first_name: string; last_name: string; phone: string };
 };
 
@@ -256,6 +258,8 @@ const EMPTY_FORM: OrgFormState = {
   support_email: "",
   support_phone: "",
   website: "",
+  theme_primary: "#006e51",
+  theme_secondary: "#00503a",
   org_admin: { email: "", first_name: "", last_name: "", phone: "" },
 };
 
@@ -277,6 +281,8 @@ function organizationToFormState(org: Organization): OrgFormState {
     support_email: org.support_email ?? "",
     support_phone: org.support_phone ?? "",
     website: org.website ?? "",
+    theme_primary: org.theme_overrides?.primary || "#006e51",
+    theme_secondary: org.theme_overrides?.secondary || "#00503a",
     org_admin: { email: "", first_name: "", last_name: "", phone: "" },
   };
 }
@@ -389,6 +395,10 @@ function OrganizationDrawer({
           support_email: form.support_email,
           support_phone: form.support_phone,
           website: form.website,
+          theme_overrides: {
+            ...(form.theme_primary ? { primary: form.theme_primary } : {}),
+            ...(form.theme_secondary ? { secondary: form.theme_secondary } : {}),
+          },
         };
         if (form.org_type === "HOSPITAL") payload.facility_type = form.facility_type;
         saved = await updateOrganization(accessToken, organization.id, payload);
@@ -757,7 +767,38 @@ function OrganizationDrawer({
                   onChange={(e) => setField("primary_color", e.target.value)}
                 />
               </span>
+              <span className="mt-1 block text-[11px] font-normal text-ink-400">
+                Only recolors this tenant's pre-login screen.
+              </span>
             </label>
+            <div>
+              <span className="text-sm font-medium text-ink-700">App Theme</span>
+              <p className="mb-2 mt-0.5 text-[11px] text-ink-400">
+                Applied throughout the org's dashboard, buttons, and sidebar after login. The
+                org's own Admin can also change this from Branch Settings. Status colors (risk
+                alerts, errors) are never affected.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <label className={LABEL_CLASS}>
+                  Theme Primary
+                  <input
+                    type="color"
+                    className="h-9 w-16 cursor-pointer rounded-sm border border-surface-border p-0.5"
+                    value={form.theme_primary}
+                    onChange={(e) => setField("theme_primary", e.target.value)}
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  Theme Secondary
+                  <input
+                    type="color"
+                    className="h-9 w-16 cursor-pointer rounded-sm border border-surface-border p-0.5"
+                    value={form.theme_secondary}
+                    onChange={(e) => setField("theme_secondary", e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
             <label className={LABEL_CLASS}>
               Support Email
               <input

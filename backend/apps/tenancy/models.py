@@ -266,6 +266,12 @@ class PlatformBranding(models.Model):
     """
 
     logo = models.FileField(upload_to="platform/branding/", blank=True)
+    # Platform-wide default primary/secondary accent (docs/03-DESIGN-SYSTEM.md
+    # §3.6) — the baseline every user sees (including Super Admin, who has
+    # no Organization to theme). An org's own theme_overrides
+    # (Organization.theme_overrides) is applied on top of this, not instead
+    # of it, for anyone who belongs to one.
+    theme_overrides = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

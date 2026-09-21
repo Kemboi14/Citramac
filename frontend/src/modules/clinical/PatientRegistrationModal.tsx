@@ -13,7 +13,7 @@ import {
 import { listStaff, type Staff } from "../../lib/governanceApi";
 
 const FIELD_CLASS =
-  "w-full rounded-sm border border-surface-border px-3 py-2 text-[12.8px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green disabled:bg-surface-bg disabled:text-ink-400";
+  "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.8px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green disabled:bg-surface-bg disabled:text-ink-400";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-[11.8px] font-semibold text-ink-700";
 const SECTION_CLASS = "rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm";
 const SECTION_TITLE_CLASS = "mb-4 font-display text-[14.5px] font-semibold text-ink-900";

@@ -7,6 +7,7 @@ import { apiRequest } from "./apiClient";
 
 export interface PlatformBranding {
   logo: string | null;
+  theme_overrides: { primary?: string; secondary?: string };
   updated_at: string;
 }
 
@@ -20,6 +21,20 @@ export function uploadPlatformLogo(accessToken: string, file: File) {
   return apiRequest<PlatformBranding>("/platform/branding/", {
     method: "POST",
     body,
+    accessToken,
+  });
+}
+
+/** Platform-wide default primary/secondary accent — the baseline every user
+ * sees (including Super Admin, who has no Organization to theme). An org's
+ * own theme applies on top of this, not instead of it. */
+export function updatePlatformTheme(
+  accessToken: string,
+  themeOverrides: PlatformBranding["theme_overrides"],
+) {
+  return apiRequest<PlatformBranding>("/platform/branding/", {
+    method: "PATCH",
+    body: { theme_overrides: themeOverrides },
     accessToken,
   });
 }

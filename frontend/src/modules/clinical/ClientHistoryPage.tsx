@@ -15,7 +15,7 @@ import {
 } from "../../lib/clientHistoryApi";
 
 const FIELD_CLASS =
-  "w-full rounded-sm border border-surface-border px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
+  "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
@@ -366,7 +366,7 @@ export function ClientHistoryPage() {
                   {substanceEntries.map((entry, index) => (
                     <div
                       key={`${entry.substance}-${index}`}
-                      className="flex items-center justify-between rounded-sm border border-surface-border px-3 py-2 text-xs text-ink-700"
+                      className="flex items-center justify-between rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-xs text-ink-700"
                     >
                       <span>
                         <strong>{entry.substance}</strong>
@@ -455,7 +455,7 @@ export function ClientHistoryPage() {
                 {rosEntries.map((entry, index) => (
                   <div
                     key={`${entry.category}-${index}`}
-                    className="flex items-center justify-between rounded-sm border border-surface-border px-3 py-2 text-xs text-ink-700"
+                    className="flex items-center justify-between rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-xs text-ink-700"
                   >
                     <span>
                       <strong>{entry.category}</strong>
