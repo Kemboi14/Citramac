@@ -18,15 +18,7 @@ describe("TenantDiscoveryStep", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows the platform-staff sign-in link, with no inline bypass button, before any submission", () => {
-    renderStep();
-    expect(screen.getByText("Platform staff sign-in")).toBeInTheDocument();
-    expect(
-      screen.queryByText("I'm platform staff — continue without an organisation"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("still shows the platform-staff sign-in link, and no inline bypass, after a not-found result", async () => {
+  it("shows the not-found state and never calls onSuccess for a genuinely unknown email", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -48,14 +40,28 @@ describe("TenantDiscoveryStep", () => {
         screen.getByText("We couldn't continue with the information provided."),
       ).toBeInTheDocument(),
     );
-
-    // The old escape hatch used to call onSuccess(email, null) here — it
-    // must not exist at all any more, so onSuccess is never called on a
-    // not-found result.
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it("calls onSuccess with a null tenant for a platform-staff email, not the not-found state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ tenant: null }),
+      }),
+    );
+    const onSuccess = renderStep();
+
+    fireEvent.change(screen.getByLabelText("Email Address"), {
+      target: { value: "root@platform.test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith("root@platform.test", null));
     expect(
-      screen.queryByText("I'm platform staff — continue without an organisation"),
+      screen.queryByText("We couldn't continue with the information provided."),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Platform staff sign-in")).toBeInTheDocument();
   });
 });

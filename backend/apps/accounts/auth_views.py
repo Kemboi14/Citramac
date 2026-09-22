@@ -144,11 +144,21 @@ class TenantDiscoveryView(APIView):
     docs/14-TENANT-BRANDED-LOGIN-UX.md — the pre-login step that shows a
     staff member their own organization's branding before they ever type a
     password. Resolves by **email domain**, not by looking up a specific
-    user, so this can never be used to confirm "does this exact person have
-    an account" (the anti-enumeration principle in
-    docs/05-AUTHENTICATION-FLOW.md §5.5 still holds) — the worst it discloses
-    is "does any CITRAMAC tenant use this email domain", which is no more
+    user, so an org match can never be used to confirm "does this exact
+    person have an account" (the anti-enumeration principle in
+    docs/05-AUTHENTICATION-FLOW.md §5.5 still holds there) — the worst that
+    discloses is "does any CITRAMAC tenant use this email domain", no more
     sensitive than knowing a company's own public domain name.
+
+    Three possible outcomes: a real org match (branding returned), a
+    platform-staff match (`{"tenant": null}`, 200 — organization_id=None,
+    picked up by TenantLoginStep.tsx's generic-branding/no_organization
+    handling, the same path `/login/platform-staff` used before it was
+    folded into this flow), or genuinely not found (404). Distinguishing
+    platform-staff from not-found is a deliberate, accepted trade-off: it
+    lets email alone route someone straight to sign-in with no separate
+    URL to know about, at the cost of a narrow signal ("is this email one
+    of Softlink's own staff") — not tenant or patient data.
     """
 
     permission_classes = [AllowAny]
@@ -196,10 +206,10 @@ class TenantDiscoveryView(APIView):
             existing_user = User.all_objects.filter(email__iexact=email).first()
             if existing_user is not None:
                 if existing_user.organization_id is None:
-                    _log_auth_event(
-                        None, AuditLogEntry.ACTION_DISCOVERY_FAILED, request, extra_object_id=domain
-                    )
-                    return Response(TENANT_NOT_FOUND_ERROR, status=status.HTTP_404_NOT_FOUND)
+                    # Platform staff — a real match, not a failure, so
+                    # unlike the not-found path below this isn't audit-logged
+                    # (a successful org match a few lines down isn't either).
+                    return Response({"tenant": None}, status=status.HTTP_200_OK)
                 org = existing_user.organization
             else:
                 org = (

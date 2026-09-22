@@ -182,11 +182,7 @@ function App() {
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
-        <Route path="/login" element={<LoginPage key="tenant-login" />} />
-        <Route
-          path="/login/platform-staff"
-          element={<LoginPage key="platform-staff-login" startAtPlatformLogin />}
-        />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/activate" element={<ActivationPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 

@@ -26,25 +26,21 @@ type LoginFlowState =
  * CITRAMAC page. Mirrors AuthFlowController's shape (state machine, each
  * step server-validated) but for the returning-user path specifically.
  *
- * `startAtPlatformLogin` (from the `/login/platform-staff` route) skips the
- * discovery step entirely and starts on the password screen with no tenant
- * and an editable email field — the deliberate, low-visibility entry point
- * for platform staff (Super Admin and other organization=None accounts),
- * separate from the public "organisation not found" failure state. The
- * backend independently enforces that this path only succeeds for a real
- * organization=None account (see LoginView.post's `no_organization` check).
+ * Platform staff (Super Admin and other organization=None accounts) go
+ * through the same discovery step as everyone else — TenantDiscoveryStep's
+ * onSuccess fires with `tenant: null` for them (a real match, not a
+ * failure; see TenantDiscoveryView's docstring), which the "password" case
+ * below renders as generic platform branding. The backend independently
+ * enforces that a `no_organization` login attempt only succeeds for a real
+ * organization=None account (see LoginView.post).
  */
-export function LoginPage({
-  startAtPlatformLogin = false,
-}: { startAtPlatformLogin?: boolean } = {}) {
+export function LoginPage() {
   const { login, loginVerifyOtp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = (location.state as { toast?: string } | null)?.toast;
 
-  const [state, setState] = useState<LoginFlowState>(
-    startAtPlatformLogin ? { step: "password", email: "", tenant: null } : { step: "discovery" },
-  );
+  const [state, setState] = useState<LoginFlowState>({ step: "discovery" });
 
   switch (state.step) {
     case "discovery":
@@ -60,9 +56,7 @@ export function LoginPage({
         <TenantLoginStep
           tenant={state.tenant}
           email={state.email}
-          {...(startAtPlatformLogin
-            ? { onEmailChange: (value: string) => setState({ ...state, email: value }) }
-            : { onChangeEmail: () => setState({ step: "discovery" }) })}
+          onChangeEmail={() => setState({ step: "discovery" })}
           login={login}
           onSuccess={() => navigate("/", { replace: true })}
           onRequiresOtp={({ otpToken, channel, deliveryMethods }) =>

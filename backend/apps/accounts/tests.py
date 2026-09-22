@@ -642,7 +642,9 @@ class TenantDiscoveryTests(APITestCase):
         definition, but nothing stops their domain from also appearing in
         some org's email_domains (e.g. that domain was used to invite a
         pilot org's staff at some point). Discovery must not show that
-        org's branding to the platform-staff account itself.
+        org's branding to the platform-staff account itself — it gets a
+        real (200, tenant: null) match instead, which TenantLoginStep.tsx
+        renders as generic platform branding, not TENANT_NOT_FOUND.
         """
         with platform_admin_context():
             Organization.objects.create(
@@ -657,8 +659,8 @@ class TenantDiscoveryTests(APITestCase):
         response = self.client.post(
             reverse("auth-tenant-discovery"), {"email": "root@platform-staff-domain.test"}
         )
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.data["error"]["code"], "TENANT_NOT_FOUND")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["tenant"])
 
     def test_org_staff_email_resolves_to_their_own_org_not_a_domain_coincidence(self):
         """

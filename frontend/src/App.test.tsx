@@ -47,17 +47,32 @@ describe("App routing", () => {
     await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
   });
 
-  it("renders the platform-staff sign-in screen directly, skipping tenant discovery", async () => {
-    renderAt("/login/platform-staff");
-    await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
-    expect(screen.queryByText("Welcome to CITRAMAC")).not.toBeInTheDocument();
-  });
+  it("routes a platform-staff email straight to sign-in from the normal /login flow", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => {
+        if (url.toString().includes("/auth/tenant-discovery/")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ tenant: null }),
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          text: async () => JSON.stringify({ error: { code: "MISSING_REFRESH_TOKEN", message: "" } }),
+        });
+      }),
+    );
 
-  it("navigates to the platform-staff sign-in screen when the link is clicked from /login", async () => {
     renderAt("/login");
     await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText("Platform staff sign-in"));
+    fireEvent.change(screen.getByLabelText("Email Address"), {
+      target: { value: "root@platform.test" },
+    });
+    fireEvent.click(screen.getByText("Continue"));
 
     await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
     expect(screen.queryByText("Welcome to CITRAMAC")).not.toBeInTheDocument();

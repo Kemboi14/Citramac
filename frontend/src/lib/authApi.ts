@@ -59,7 +59,10 @@ export interface TenantBranding {
 }
 
 export function tenantDiscovery(email: string) {
-  return apiRequest<{ tenant: TenantBranding }>("/auth/tenant-discovery/", {
+  // tenant: null means a platform-staff match (organization_id=None) — a
+  // real, successful discovery, not a failure — see TenantDiscoveryView's
+  // docstring. Only a genuinely unknown email 404s (ApiError).
+  return apiRequest<{ tenant: TenantBranding | null }>("/auth/tenant-discovery/", {
     method: "POST",
     body: { email },
   });
