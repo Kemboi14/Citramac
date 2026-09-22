@@ -159,6 +159,12 @@ export function BranchesPage() {
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [branchFormError, setBranchFormError] = useState<string | null>(null);
   const [newBranch, setNewBranch] = useState<NewBranchState>(EMPTY_NEW_BRANCH);
+  // Functional update, not `updateNewBranch({ ...patch })` — see
+  // the identical fix/comment in org-admin/BranchesAndDepartmentsPage.tsx:
+  // LocationFields' county handler fires two same-tick state updates that
+  // silently stomped each other under the stale-closure spread pattern.
+  const updateNewBranch = (patch: Partial<NewBranchState>) =>
+    setNewBranch((prev) => ({ ...prev, ...patch }));
 
   const [showDeptForm, setShowDeptForm] = useState(false);
   const [deptFormError, setDeptFormError] = useState<string | null>(null);
@@ -480,7 +486,7 @@ export function BranchesPage() {
             <select
               className={FIELD_CLASS}
               value={newBranch.organization}
-              onChange={(e) => setNewBranch({ ...newBranch, organization: e.target.value })}
+              onChange={(e) => updateNewBranch({ organization: e.target.value })}
               required
             >
               <option value="">Select an organization…</option>
@@ -496,7 +502,7 @@ export function BranchesPage() {
             <input
               className={FIELD_CLASS}
               value={newBranch.name}
-              onChange={(e) => setNewBranch({ ...newBranch, name: e.target.value })}
+              onChange={(e) => updateNewBranch({ name: e.target.value })}
               placeholder="e.g. Rehab Wing"
               required
             />
@@ -512,7 +518,7 @@ export function BranchesPage() {
                 <select
                   className={FIELD_CLASS}
                   value={newBranch.facility_level}
-                  onChange={(e) => setNewBranch({ ...newBranch, facility_level: e.target.value })}
+                  onChange={(e) => updateNewBranch({ facility_level: e.target.value })}
                 >
                   {FACILITY_LEVEL_OPTIONS.map((level) => (
                     <option key={level.value} value={level.value}>
@@ -526,7 +532,7 @@ export function BranchesPage() {
                 <input
                   className={FIELD_CLASS}
                   value={newBranch.mfl_code}
-                  onChange={(e) => setNewBranch({ ...newBranch, mfl_code: e.target.value })}
+                  onChange={(e) => updateNewBranch({ mfl_code: e.target.value })}
                   placeholder="e.g. MFL-14238-B2"
                 />
               </label>
@@ -535,7 +541,7 @@ export function BranchesPage() {
                 <input
                   className={FIELD_CLASS}
                   value={newBranch.address}
-                  onChange={(e) => setNewBranch({ ...newBranch, address: e.target.value })}
+                  onChange={(e) => updateNewBranch({ address: e.target.value })}
                   placeholder="e.g. Waiyaki Way, Westlands"
                 />
               </label>
@@ -545,9 +551,9 @@ export function BranchesPage() {
                 country={newBranch.country}
                 county={newBranch.county}
                 subCounty={newBranch.sub_county}
-                onCountryChange={(v) => setNewBranch({ ...newBranch, country: v })}
-                onCountyChange={(v) => setNewBranch({ ...newBranch, county: v })}
-                onSubCountyChange={(v) => setNewBranch({ ...newBranch, sub_county: v })}
+                onCountryChange={(v) => updateNewBranch({ country: v })}
+                onCountyChange={(v) => updateNewBranch({ county: v })}
+                onSubCountyChange={(v) => updateNewBranch({ sub_county: v })}
               />
             </div>
           </div>
@@ -565,7 +571,7 @@ export function BranchesPage() {
                   className={FIELD_CLASS}
                   value={newBranch.outpatient_capacity_per_day}
                   onChange={(e) =>
-                    setNewBranch({ ...newBranch, outpatient_capacity_per_day: e.target.value })
+                    updateNewBranch({ outpatient_capacity_per_day: e.target.value })
                   }
                   placeholder="e.g. 90"
                 />
@@ -583,7 +589,7 @@ export function BranchesPage() {
                   type="checkbox"
                   className="mt-1 h-4 w-8 shrink-0 cursor-pointer accent-brand-green"
                   checked={newBranch.mhp_open}
-                  onChange={(e) => setNewBranch({ ...newBranch, mhp_open: e.target.checked })}
+                  onChange={(e) => updateNewBranch({ mhp_open: e.target.checked })}
                 />
               </div>
             </div>
@@ -611,7 +617,7 @@ export function BranchesPage() {
                     name="branch-status"
                     className="sr-only"
                     checked={newBranch.is_active === opt.value}
-                    onChange={() => setNewBranch({ ...newBranch, is_active: opt.value })}
+                    onChange={() => updateNewBranch({ is_active: opt.value })}
                   />
                   <div className="text-sm font-semibold text-ink-900">{opt.title}</div>
                   <div className="text-xs text-ink-500">{opt.desc}</div>

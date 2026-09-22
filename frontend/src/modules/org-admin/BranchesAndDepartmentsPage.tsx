@@ -83,6 +83,16 @@ export function BranchesAndDepartmentsPage() {
   });
   const [branchForm, setBranchForm] = useState<BranchFormState>(EMPTY_BRANCH_FORM);
   const [branchFormError, setBranchFormError] = useState<string | null>(null);
+  // Functional update, not `setBranchForm({ ...branchForm, ...patch })` —
+  // LocationFields' county handler fires onCountyChange then
+  // onSubCountyChange("") synchronously in the same event, and both calls
+  // closing over the same stale `branchForm` meant the second call's spread
+  // silently discarded the first's change (the county selection never
+  // stuck, sub-county stayed permanently disabled on "Select a county
+  // first"). Reading the live `prev` here fixes that for any number of
+  // same-tick updates.
+  const updateBranchForm = (patch: Partial<BranchFormState>) =>
+    setBranchForm((prev) => ({ ...prev, ...patch }));
 
   const [deptDrawer, setDeptDrawer] = useState<{ open: boolean; department: Department | null }>({
     open: false,
@@ -410,7 +420,7 @@ export function BranchesAndDepartmentsPage() {
             <input
               className={FIELD_CLASS}
               value={branchForm.name}
-              onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })}
+              onChange={(e) => updateBranchForm({ name: e.target.value })}
               required
             />
           </label>
@@ -420,10 +430,7 @@ export function BranchesAndDepartmentsPage() {
               className={FIELD_CLASS}
               value={branchForm.facility_level}
               onChange={(e) =>
-                setBranchForm({
-                  ...branchForm,
-                  facility_level: e.target.value as Branch["facility_level"],
-                })
+                updateBranchForm({ facility_level: e.target.value as Branch["facility_level"] })
               }
             >
               {FACILITY_LEVELS.map((l) => (
@@ -438,7 +445,7 @@ export function BranchesAndDepartmentsPage() {
             <input
               className={FIELD_CLASS}
               value={branchForm.mfl_code}
-              onChange={(e) => setBranchForm({ ...branchForm, mfl_code: e.target.value })}
+              onChange={(e) => updateBranchForm({ mfl_code: e.target.value })}
               placeholder="Optional — can be added once verified"
             />
           </label>
@@ -447,7 +454,7 @@ export function BranchesAndDepartmentsPage() {
             <input
               className={FIELD_CLASS}
               value={branchForm.address}
-              onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
+              onChange={(e) => updateBranchForm({ address: e.target.value })}
             />
           </label>
           <LocationFields
@@ -456,9 +463,9 @@ export function BranchesAndDepartmentsPage() {
             country={branchForm.country}
             county={branchForm.county}
             subCounty={branchForm.sub_county}
-            onCountryChange={(v) => setBranchForm({ ...branchForm, country: v })}
-            onCountyChange={(v) => setBranchForm({ ...branchForm, county: v })}
-            onSubCountyChange={(v) => setBranchForm({ ...branchForm, sub_county: v })}
+            onCountryChange={(v) => updateBranchForm({ country: v })}
+            onCountyChange={(v) => updateBranchForm({ county: v })}
+            onSubCountyChange={(v) => updateBranchForm({ sub_county: v })}
           />
           <div className="flex flex-wrap gap-4">
             <label className={`${LABEL_CLASS} flex-1`}>
@@ -466,7 +473,7 @@ export function BranchesAndDepartmentsPage() {
               <input
                 className={FIELD_CLASS}
                 value={branchForm.phone}
-                onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })}
+                onChange={(e) => updateBranchForm({ phone: e.target.value })}
               />
             </label>
             <label className={`${LABEL_CLASS} flex-1`}>
@@ -475,7 +482,7 @@ export function BranchesAndDepartmentsPage() {
                 type="email"
                 className={FIELD_CLASS}
                 value={branchForm.email}
-                onChange={(e) => setBranchForm({ ...branchForm, email: e.target.value })}
+                onChange={(e) => updateBranchForm({ email: e.target.value })}
               />
             </label>
           </div>
