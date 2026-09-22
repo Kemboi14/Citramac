@@ -4,7 +4,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("security", "0001_initial"),
+        # apps.security's AppConfig.label is "platform_security", not
+        # "security" — migration dependency tuples key on the app_label,
+        # not the Python module path.
+        ("platform_security", "0001_initial"),
     ]
 
     operations = [
