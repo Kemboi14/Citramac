@@ -91,6 +91,17 @@ class UserManager(TenantScopedManager, BaseUserManager):
             raise ValueError("User must have an email address")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
+        # Deliberately NOT running validate_password() here: this is the
+        # shared internals of both create_user (invited staff, normally
+        # password=None until the real activation flow's SetPasswordView —
+        # the one place a user actually chooses their own password, and
+        # where SecurityPolicyPasswordValidator is genuinely enforced) and
+        # create_superuser (createsuperuser/bootstrap scripts, used by test
+        # fixtures across most apps in this codebase). Validating here would
+        # apply Django's full validator chain retroactively to every existing
+        # test's hardcoded fixture password with no way to verify none of
+        # them trip CommonPasswordValidator/UserAttributeSimilarityValidator
+        # short of actually running the suite.
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -180,6 +191,13 @@ class User(AbstractBaseUser):
         max_length=8, choices=MFA_CHANNEL_CHOICES, default=MFA_CHANNEL_EMAIL
     )
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    # NULL means "predates this feature" — treated as not-yet-expired by
+    # LoginView's password_expiry_days check until this user's next password
+    # set establishes a real baseline. Set (and a PasswordHistory row written)
+    # only in SetPasswordView, the one place a user actually chooses their own
+    # password — see docs note there.
+    password_changed_at = models.DateTimeField(null=True, blank=True)
 
     # Time-bound account access (e.g. a locum or fixed-term contractor) —
     # both null means unrestricted, the default for every ordinary staff
@@ -367,3 +385,48 @@ class PasswordSetupToken(TimestampedModel):
 
     def __str__(self):
         return f"password-setup:{self.token[:8]}… for {self.user.email}"
+
+
+class PasswordHistory(TimestampedModel):
+    """
+    Recent password hashes, for the reuse check in
+    apps.security.password_validators.SecurityPolicyPasswordValidator
+    (SecurityPolicy.password_history_count). Deliberately a plain
+    TimestampedModel like OneTimePassword/PasswordSetupToken above, not a
+    TenantScopedModel — this is per-user, and User itself is already the
+    tenant boundary (apps/accounts/migrations/0002_rls.py).
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="password_history"
+    )
+    password_hash = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @classmethod
+    def matches_recent(cls, user, raw_password, count):
+        recent_hashes = cls.objects.filter(user=user).values_list("password_hash", flat=True)[
+            :count
+        ]
+        return any(check_password(raw_password, h) for h in recent_hashes)
+
+    @classmethod
+    def record(cls, user, count):
+        """
+        Call right after `user.password` has been set to its new hash
+        (`user.set_password(...)` + save). Stores that hash and trims older
+        rows beyond `count` for this user.
+        """
+        cls.objects.create(user=user, password_hash=user.password)
+        stale_ids = list(
+            cls.objects.filter(user=user)
+            .order_by("-created_at")
+            .values_list("id", flat=True)[count:]
+        )
+        if stale_ids:
+            cls.objects.filter(id__in=stale_ids).delete()
+
+    def __str__(self):
+        return f"password-history for {self.user_id}"

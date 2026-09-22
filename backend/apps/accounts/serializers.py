@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import serializers
@@ -38,12 +37,13 @@ class TenantDiscoverySerializer(serializers.Serializer):
 
 
 class SetPasswordSerializer(serializers.Serializer):
+    # Deliberately no field-level validate_password() here: the real
+    # validate_password() call (SetPasswordView) needs the resolved User
+    # (from the password_setup_token) for the reuse-history check in
+    # SecurityPolicyPasswordValidator, which isn't known yet at this
+    # serializer's field-validation stage.
     password_setup_token = serializers.CharField()
     password = serializers.CharField()
-
-    def validate_password(self, value):
-        validate_password(value)
-        return value
 
 
 class LoginSerializer(serializers.Serializer):

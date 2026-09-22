@@ -169,12 +169,18 @@ DATABASES["default"]["ENGINE"] = "django_prometheus.db.backends.postgresql"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    # Absolute floor — stays even if SecurityPolicy.minimum_password_length is
+    # ever misconfigured lower than this by an admin.
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
         "OPTIONS": {"min_length": 12},
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # Live-reads SecurityPolicy.get_solo() (Super Admin's Security Policies
+    # screen) at validation time — length/complexity/history, on top of the
+    # static floor above.
+    {"NAME": "apps.security.password_validators.SecurityPolicyPasswordValidator"},
 ]
 
 # Argon2 primary hasher, per docs/09-SECURITY-COMPLIANCE.md §9.2.
@@ -297,6 +303,15 @@ CELERY_BEAT_SCHEDULE = {
     "enforce-access-windows": {
         "task": "apps.accounts.tasks.enforce_access_windows",
         "schedule": crontab(minute=0),
+    },
+    # SecurityPolicy.data_retention_years — deliberately scoped to ephemeral
+    # auth artifacts only (OTPs, activation/password-setup tokens, expired
+    # JWT blacklist rows), NOT clinical/patient records or the audit trail.
+    # See apps.security.tasks.purge_expired_auth_artifacts' own docstring for
+    # the full scope rationale.
+    "purge-expired-auth-artifacts": {
+        "task": "apps.security.tasks.purge_expired_auth_artifacts",
+        "schedule": crontab(hour=3, minute=0),
     },
 }
 

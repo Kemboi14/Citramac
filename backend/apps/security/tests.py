@@ -123,3 +123,75 @@ class SecurityConsoleApiTests(APITestCase):
         SecurityPolicy.get_solo()
         SecurityPolicy.get_solo()
         self.assertEqual(SecurityPolicy.objects.count(), 1)
+
+    def test_super_admin_can_toggle_password_complexity_requirements(self):
+        """
+        password_complexity used to be an unenforced free-text description —
+        now four real booleans SecurityPolicyPasswordValidator reads.
+        """
+        response = self.client.patch(
+            reverse("security-policy"),
+            {"require_symbol": False, "require_number": False},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["require_symbol"])
+        self.assertFalse(response.data["require_number"])
+        self.assertTrue(response.data["require_uppercase"])
+        self.assertTrue(response.data["require_lowercase"])
+
+
+class PurgeExpiredAuthArtifactsTests(APITestCase):
+    """apps.security.tasks.purge_expired_auth_artifacts — SecurityPolicy.
+    data_retention_years, scoped to ephemeral auth artifacts only."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+
+    def test_purges_only_old_used_or_expired_otps_not_recent_or_pending_ones(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.accounts.models import OneTimePassword, User
+        from apps.security.tasks import purge_expired_auth_artifacts
+
+        policy = SecurityPolicy.get_solo()
+        policy.data_retention_years = 1
+        policy.save()
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Purge Org", slug="purge-org", facility_type="CLINIC"
+            )
+            user = User.objects.create_user(
+                email="purge-target@purge-org.test",
+                password="Password123!",
+                organization=org,
+                is_active=True,
+            )
+            old_used, _ = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
+            old_used.is_used = True
+            old_used.save(update_fields=["is_used"])
+            OneTimePassword.objects.filter(pk=old_used.pk).update(
+                created_at=timezone.now() - timedelta(days=800)
+            )
+
+            recent_used, _ = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
+            recent_used.is_used = True
+            recent_used.save(update_fields=["is_used"])
+
+            old_pending, _ = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
+            OneTimePassword.objects.filter(pk=old_pending.pk).update(
+                created_at=timezone.now() - timedelta(days=800),
+                expires_at=timezone.now() + timedelta(days=1),
+            )
+
+        purge_expired_auth_artifacts()
+
+        with platform_admin_context():
+            remaining_ids = set(OneTimePassword.objects.values_list("id", flat=True))
+        self.assertNotIn(old_used.id, remaining_ids)
+        self.assertIn(recent_used.id, remaining_ids)
+        self.assertIn(old_pending.id, remaining_ids)

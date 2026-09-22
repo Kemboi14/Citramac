@@ -8,7 +8,10 @@ class SecurityPolicySerializer(serializers.ModelSerializer):
         model = SecurityPolicy
         fields = [
             "minimum_password_length",
-            "password_complexity",
+            "require_uppercase",
+            "require_lowercase",
+            "require_number",
+            "require_symbol",
             "password_expiry_days",
             "password_history_count",
             "max_failed_login_attempts",

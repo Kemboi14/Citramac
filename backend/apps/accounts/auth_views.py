@@ -16,13 +16,16 @@ illustrative JSON bodies, noted where they happen:
   in §5.5.
 """
 
+from datetime import timedelta
+
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.security.models import SecurityPolicy
@@ -30,7 +33,7 @@ from apps.sysadmin_audit.middleware import get_client_ip
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
 
-from .models import ActivationInvite, OneTimePassword, PasswordSetupToken, User
+from .models import ActivationInvite, OneTimePassword, PasswordHistory, PasswordSetupToken, User
 from .serializers import (
     ConfirmEmailSerializer,
     ForgotPasswordSerializer,
@@ -238,6 +241,16 @@ class IdentifyView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         with platform_admin_context():
             try:
                 invite = ActivationInvite.objects.select_related("user").get(
@@ -269,6 +282,16 @@ class ConfirmEmailView(APIView):
         serializer = ConfirmEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
 
         with platform_admin_context():
             try:
@@ -309,6 +332,16 @@ class ResendOtpView(APIView):
     def post(self, request):
         serializer = ResendOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
 
         with platform_admin_context():
             try:
@@ -372,6 +405,16 @@ class VerifyOtpView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         with platform_admin_context():
             try:
                 otp = OneTimePassword.objects.select_related("user", "activation_invite").get(
@@ -420,6 +463,16 @@ class SetPasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         with platform_admin_context():
             try:
                 setup_token = PasswordSetupToken.objects.select_related("user").get(
@@ -432,10 +485,20 @@ class SetPasswordView(APIView):
                 return _generic_error()
 
             user = setup_token.user
+            try:
+                validate_password(data["password"], user)
+            except DjangoValidationError as exc:
+                return _error(
+                    "INVALID_PASSWORD",
+                    " ".join(exc.messages),
+                    fields={"password": exc.messages},
+                )
             user.set_password(data["password"])
+            user.password_changed_at = timezone.now()
             if setup_token.purpose == PasswordSetupToken.PURPOSE_ACTIVATION:
                 user.is_active = True
             user.save()
+            PasswordHistory.record(user, SecurityPolicy.get_solo().password_history_count)
 
             setup_token.used_at = timezone.now()
             setup_token.save(update_fields=["used_at"])
@@ -472,6 +535,16 @@ class LoginView(APIView):
         policy = SecurityPolicy.get_solo()
         max_attempts = policy.max_failed_login_attempts
         lockout_seconds = policy.lockout_duration_minutes * 60
+
+        try:
+            enforce_general_rate_limit(client_ip)
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
 
         if cache.get(lockout_key, 0) >= max_attempts:
             return _error(
@@ -540,6 +613,22 @@ class LoginView(APIView):
                 status.HTTP_403_FORBIDDEN,
             )
 
+        # NULL password_changed_at means "predates this feature" — grandfathered
+        # in as not-yet-expired until this user's next real password set (via
+        # the reset flow below) establishes a baseline, rather than locking out
+        # every existing account the moment this ships.
+        if user.password_changed_at is not None:
+            expiry_days = policy.password_expiry_days
+            if timezone.now() - user.password_changed_at > timedelta(days=expiry_days):
+                _log_auth_event(
+                    user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email
+                )
+                return _error(
+                    "PASSWORD_EXPIRED",
+                    "Your password has expired. Please reset it via 'Forgot password?' below.",
+                    status.HTTP_403_FORBIDDEN,
+                )
+
         # Checking this before password verification would let
         # `no_organization` be used to probe whether an email belongs to an
         # organisation. `no_organization=True` is only ever sent by the
@@ -596,6 +685,16 @@ class LoginVerifyOtpView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         with platform_admin_context():
             try:
                 otp = OneTimePassword.objects.select_related("user").get(
@@ -649,10 +748,22 @@ class LoginVerifyOtpView(APIView):
 
 class RefreshView(APIView):
     """
-    Thin wrapper around SimpleJWT's own TokenRefreshSerializer (which already
-    implements rotate-and-blacklist correctly per SIMPLE_JWT settings) that
-    reads the refresh token from the httpOnly cookie and writes the rotated
-    one back to it, per docs/05-AUTHENTICATION-FLOW.md §5.3.
+    Reads the refresh token from the httpOnly cookie, rotates it, and writes
+    the rotated one back — per docs/05-AUTHENTICATION-FLOW.md §5.3.
+
+    Previously a thin wrapper around SimpleJWT's own TokenRefreshSerializer.
+    Reimplemented manually (still using RefreshToken directly, same class the
+    stock serializer uses internally) because the stock serializer always
+    mints the new access/refresh pair with the static SIMPLE_JWT lifetimes —
+    it has no hook to apply SecurityPolicy.session_timeout_minutes/
+    token_expiry_minutes, which would otherwise silently revert to the
+    hardcoded defaults after every refresh. jti/exp/iat are set in the same
+    order the library's own rotation does internally.
+
+    Deliberately does NOT call issue_tokens()/_enforce_concurrent_session_cap
+    — a refresh continues an existing session (old jti blacklisted, new one
+    minted 1:1), it isn't a new login, so it shouldn't count against
+    max_concurrent_sessions.
     """
 
     permission_classes = [AllowAny]
@@ -660,6 +771,17 @@ class RefreshView(APIView):
     def post(self, request):
         serializer = RefreshSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         refresh_str = serializer.validated_data.get("refresh") or request.COOKIES.get(
             REFRESH_COOKIE_NAME
         )
@@ -668,13 +790,12 @@ class RefreshView(APIView):
                 "MISSING_REFRESH_TOKEN", "No refresh token provided.", status.HTTP_401_UNAUTHORIZED
             )
 
-        token_serializer = TokenRefreshSerializer(data={"refresh": refresh_str})
         try:
-            # TokenRefreshSerializer looks the user up by the token's user_id
-            # claim internally (to check they still exist/aren't blacklisted)
-            # — the same pre-auth lookup problem as everywhere else here.
+            # Same pre-auth lookup problem as everywhere else here — the
+            # blacklist check queries simplejwt's own OutstandingToken/
+            # BlacklistedToken tables, not request-bound tenant context.
             with platform_admin_context():
-                token_serializer.is_valid(raise_exception=True)
+                refresh = RefreshToken(refresh_str)
         except TokenError:
             return _error(
                 "INVALID_REFRESH_TOKEN",
@@ -682,10 +803,22 @@ class RefreshView(APIView):
                 status.HTTP_401_UNAUTHORIZED,
             )
 
-        validated = token_serializer.validated_data
-        response = Response({"access": validated["access"]})
-        if "refresh" in validated:
-            _set_refresh_cookie(response, validated["refresh"], request)
+        policy = SecurityPolicy.get_solo()
+
+        try:
+            refresh.blacklist()
+        except (TokenError, AttributeError):
+            pass
+
+        refresh.set_jti()
+        refresh.set_exp(lifetime=timedelta(minutes=policy.session_timeout_minutes))
+        refresh.set_iat()
+
+        access = refresh.access_token
+        access.set_exp(lifetime=timedelta(minutes=policy.token_expiry_minutes))
+
+        response = Response({"access": str(access)})
+        _set_refresh_cookie(response, str(refresh), request)
         return response
 
 
@@ -695,6 +828,17 @@ class LogoutView(APIView):
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        try:
+            enforce_general_rate_limit(get_client_ip(request))
+        except RateLimitExceeded as exc:
+            return _error(
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                fields={"retry_after_seconds": exc.retry_after_seconds},
+            )
+
         refresh_str = serializer.validated_data.get("refresh") or request.COOKIES.get(
             REFRESH_COOKIE_NAME
         )

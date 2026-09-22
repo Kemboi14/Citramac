@@ -33,9 +33,13 @@ class SecurityPolicy(models.Model):
     """
 
     minimum_password_length = models.PositiveSmallIntegerField(default=12)
-    password_complexity = models.CharField(
-        max_length=255, default="Upper, lower, number and symbol"
-    )
+    # Structured toggles, not a free-text description — SecurityPolicyPasswordValidator
+    # (apps.security.password_validators) reads these directly, so changing one here
+    # actually changes what a new/reset password must contain.
+    require_uppercase = models.BooleanField(default=True)
+    require_lowercase = models.BooleanField(default=True)
+    require_number = models.BooleanField(default=True)
+    require_symbol = models.BooleanField(default=True)
     password_expiry_days = models.PositiveSmallIntegerField(default=90)
     password_history_count = models.PositiveSmallIntegerField(default=5)
     max_failed_login_attempts = models.PositiveSmallIntegerField(default=5)

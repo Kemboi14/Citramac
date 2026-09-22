@@ -17,7 +17,10 @@ export interface MandatoryControls {
 
 export interface SecurityPolicy {
   minimum_password_length: number;
-  password_complexity: string;
+  require_uppercase: boolean;
+  require_lowercase: boolean;
+  require_number: boolean;
+  require_symbol: boolean;
   password_expiry_days: number;
   password_history_count: number;
   max_failed_login_attempts: number;

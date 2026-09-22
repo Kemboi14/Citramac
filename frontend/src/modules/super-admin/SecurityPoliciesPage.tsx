@@ -26,6 +26,15 @@ type NumericFieldKey =
   | "rate_limit_per_minute"
   | "data_retention_years";
 
+type BooleanFieldKey = "require_uppercase" | "require_lowercase" | "require_number" | "require_symbol";
+
+const BOOLEAN_FIELDS: { key: BooleanFieldKey; label: string }[] = [
+  { key: "require_uppercase", label: "Require an uppercase letter" },
+  { key: "require_lowercase", label: "Require a lowercase letter" },
+  { key: "require_number", label: "Require a number" },
+  { key: "require_symbol", label: "Require a symbol" },
+];
+
 const NUMERIC_FIELDS: { key: NumericFieldKey; label: string }[] = [
   { key: "minimum_password_length", label: "Minimum Password Length" },
   { key: "password_expiry_days", label: "Password Expiry (days)" },
@@ -65,13 +74,20 @@ export function SecurityPoliciesPage() {
   const [form, setForm] = useState<Record<NumericFieldKey, string>>(
     {} as Record<NumericFieldKey, string>,
   );
-  const [complexity, setComplexity] = useState("");
+  const [complexity, setComplexity] = useState<Record<BooleanFieldKey, boolean>>(
+    {} as Record<BooleanFieldKey, boolean>,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const applyPolicy = (p: SecurityPolicy) => {
     setPolicy(p);
-    setComplexity(p.password_complexity);
+    const nextComplexity = {} as Record<BooleanFieldKey, boolean>;
+    BOOLEAN_FIELDS.forEach(({ key }) => {
+      // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `BOOLEAN_FIELDS` const array, not user input.
+      nextComplexity[key] = p[key];
+    });
+    setComplexity(nextComplexity);
     const nextForm = {} as Record<NumericFieldKey, string>;
     NUMERIC_FIELDS.forEach(({ key }) => {
       // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `NUMERIC_FIELDS` const array, not user input.
@@ -104,9 +120,13 @@ export function SecurityPoliciesPage() {
           payload[key] = num;
         }
       });
-      if (complexity !== policy.password_complexity) {
-        payload.password_complexity = complexity;
-      }
+      BOOLEAN_FIELDS.forEach(({ key }) => {
+        // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `BOOLEAN_FIELDS` const array, not user input.
+        if (complexity[key] !== policy[key]) {
+          // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `BOOLEAN_FIELDS` const array, not user input.
+          payload[key] = complexity[key];
+        }
+      });
       const updated = await updateSecurityPolicy(accessToken, payload);
       applyPolicy(updated);
     } catch (err) {
@@ -169,15 +189,29 @@ export function SecurityPoliciesPage() {
               Baseline defaults applied across tenants. Updating these affects the platform-wide
               minimums.
             </p>
+            <div className="mb-4 flex flex-col gap-2">
+              <span className="text-sm font-medium text-ink-700">Password Complexity</span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {BOOLEAN_FIELDS.map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 rounded-md border border-surface-border bg-surface-bg px-3 py-2 text-sm text-ink-700"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-[15px] w-[15px] accent-brand-green"
+                      // eslint-disable-next-line security/detect-object-injection -- `key` is destructured from the fixed `BOOLEAN_FIELDS` const array, not user input.
+                      checked={complexity[key] ?? false}
+                      onChange={(e) =>
+                        setComplexity((prev) => ({ ...prev, [key]: e.target.checked }))
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <label className={LABEL_CLASS}>
-                Password Complexity
-                <input
-                  className={FIELD_CLASS}
-                  value={complexity}
-                  onChange={(e) => setComplexity(e.target.value)}
-                />
-              </label>
               {NUMERIC_FIELDS.map(({ key, label }) => (
                 <label key={key} className={LABEL_CLASS}>
                   {label}

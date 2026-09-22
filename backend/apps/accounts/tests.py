@@ -11,7 +11,14 @@ from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .models import ActivationInvite, OneTimePassword, Permission, Role, User
+from .models import (
+    ActivationInvite,
+    OneTimePassword,
+    PasswordSetupToken,
+    Permission,
+    Role,
+    User,
+)
 from .tokens import issue_tokens
 
 
@@ -1436,3 +1443,117 @@ class MyProfileTests(APITestCase):
         with platform_admin_context():
             self.user.refresh_from_db()
         self.assertTrue(self.user.is_active)
+
+
+class SecurityPolicyEnforcementTests(APITestCase):
+    """
+    apps.security.SecurityPolicy audit (2026-09-22): rate limiting, password
+    policy, and token-lifetime fields were previously stored but never read
+    anywhere. These lock in that each is now actually enforced.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Enforcement Org", slug="enforcement-org", facility_type="CLINIC"
+            )
+            self.user = User.objects.create_user(
+                email="staff@enforcement-org.test",
+                password="Correct!Horse99",
+                organization=self.org,
+                is_active=True,
+                mfa_enabled=False,
+            )
+        policy = SecurityPolicy.get_solo()
+        policy.rate_limit_per_minute = 120
+        policy.save()
+
+    def _issue_setup_token(self):
+        return PasswordSetupToken.issue(self.user, PasswordSetupToken.PURPOSE_RESET).token
+
+    def test_previously_unprotected_endpoint_now_rate_limited(self):
+        policy = SecurityPolicy.get_solo()
+        policy.rate_limit_per_minute = 2
+        policy.save()
+        for _ in range(2):
+            self.client.post(reverse("auth-verify-otp"), {"otp_token": "x" * 20, "otp": "000000"})
+        response = self.client.post(
+            reverse("auth-verify-otp"), {"otp_token": "x" * 20, "otp": "000000"}
+        )
+        self.assertEqual(response.status_code, 429, response.data)
+        self.assertEqual(response.data["error"]["code"], "RATE_LIMITED")
+
+    def test_set_password_rejects_password_below_policy_minimum_length(self):
+        with platform_admin_context():
+            setup_token = self._issue_setup_token()
+        response = self.client.post(
+            reverse("auth-set-password"),
+            {"password_setup_token": setup_token, "password": "Ab1!"},
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.data["error"]["code"], "INVALID_PASSWORD")
+
+    def test_set_password_rejects_reused_password_from_history(self):
+        with platform_admin_context():
+            setup_token = self._issue_setup_token()
+        first = self.client.post(
+            reverse("auth-set-password"),
+            {"password_setup_token": setup_token, "password": "First!ChoicePass99"},
+        )
+        self.assertEqual(first.status_code, 200, first.data)
+
+        with platform_admin_context():
+            setup_token_2 = self._issue_setup_token()
+        reused = self.client.post(
+            reverse("auth-set-password"),
+            {"password_setup_token": setup_token_2, "password": "First!ChoicePass99"},
+        )
+        self.assertEqual(reused.status_code, 400, reused.data)
+        self.assertEqual(reused.data["error"]["code"], "INVALID_PASSWORD")
+
+    def test_login_rejected_once_password_has_expired(self):
+        policy = SecurityPolicy.get_solo()
+        policy.password_expiry_days = 90
+        policy.save()
+        with platform_admin_context():
+            self.user.password_changed_at = timezone.now() - timedelta(days=91)
+            self.user.save(update_fields=["password_changed_at"])
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@enforcement-org.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertEqual(response.data["error"]["code"], "PASSWORD_EXPIRED")
+
+    def test_issued_access_token_lifetime_matches_policy(self):
+        policy = SecurityPolicy.get_solo()
+        policy.token_expiry_minutes = 5
+        policy.save()
+        access, _ = issue_tokens(self.user)
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        token = AccessToken(access)
+        self.assertEqual(token["exp"] - token["iat"], 5 * 60)
+
+    def test_nth_plus_one_login_evicts_oldest_session(self):
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        policy = SecurityPolicy.get_solo()
+        policy.max_concurrent_sessions = 2
+        policy.save()
+
+        _, first_refresh = issue_tokens(self.user)
+        issue_tokens(self.user)
+        issue_tokens(self.user)
+
+        first_jti = RefreshToken(first_refresh)["jti"]
+        blacklisted_jtis = set(
+            OutstandingToken.objects.filter(
+                id__in=BlacklistedToken.objects.values_list("token_id", flat=True),
+                user=self.user,
+            ).values_list("jti", flat=True)
+        )
+        self.assertIn(first_jti, blacklisted_jtis)
