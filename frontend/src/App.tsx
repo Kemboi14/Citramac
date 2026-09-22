@@ -50,8 +50,11 @@ import { BranchesAndDepartmentsPage } from "./modules/org-admin/BranchesAndDepar
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/login/platform-staff" element={<LoginPage startAtPlatformLogin />} />
+      <Route path="/login" element={<LoginPage key="tenant-login" />} />
+      <Route
+        path="/login/platform-staff"
+        element={<LoginPage key="platform-staff-login" startAtPlatformLogin />}
+      />
       <Route path="/activate" element={<ActivationPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 

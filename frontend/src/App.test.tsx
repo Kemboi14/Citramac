@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
@@ -49,6 +50,16 @@ describe("App routing", () => {
 
   it("renders the platform-staff sign-in screen directly, skipping tenant discovery", async () => {
     renderAt("/login/platform-staff");
+    await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
+    expect(screen.queryByText("Welcome to CITRAMAC")).not.toBeInTheDocument();
+  });
+
+  it("navigates to the platform-staff sign-in screen when the link is clicked from /login", async () => {
+    renderAt("/login");
+    await waitFor(() => expect(screen.getByText("Welcome to CITRAMAC")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByText("Platform staff sign-in"));
+
     await waitFor(() => expect(screen.getByText("Sign in to CITRAMAC")).toBeInTheDocument());
     expect(screen.queryByText("Welcome to CITRAMAC")).not.toBeInTheDocument();
   });
