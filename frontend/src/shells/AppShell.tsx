@@ -112,11 +112,19 @@ export function AppShell({
         applyTheme(b.theme_overrides);
         if (!accessToken || !claims?.organization_id) return;
         return getOrganizationTheme(accessToken, claims.organization_id).then(
-          ({ theme_overrides }) => applyTheme(theme_overrides),
+          ({ theme_overrides, logo_url }) => {
+            applyTheme(theme_overrides);
+            // Org's own logo overrides the platform one in the sidebar, same
+            // "org wins over the platform baseline" rule as the colors above
+            // — this was already being fetched here but never applied, so
+            // every logged-in org member saw the generic platform mark
+            // regardless of what logo their org had set.
+            if (logo_url) setLogoUrl(logo_url);
+          },
         );
       })
       .catch(() => {
-        // Best-effort only — fall back to the default brand palette.
+        // Best-effort only — fall back to the default brand palette/logo.
       });
   }, [accessToken, claims?.organization_id]);
 

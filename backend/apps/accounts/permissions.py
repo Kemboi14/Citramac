@@ -55,3 +55,24 @@ class IsPlatformSuperAdminOrOrgAdmin(BasePermission):
         if request.method in SAFE_METHODS:
             return organization_id == user.organization_id
         return organization_id == user.organization_id
+
+
+class IsOwnOrganizationMember(BasePermission):
+    """
+    Any authenticated user belonging to the organization identified by the
+    view's `pk` URL kwarg — for read-only visibility (e.g. an org's own
+    branding/theme) that every staff member should see, not just its Org
+    Admin. Distinct from IsPlatformSuperAdminOrOrgAdmin above, which gates
+    *editing* to the Org Admin role specifically — this is deliberately
+    broader for reads, since AppShell (every portal's shared chrome) needs
+    it for any logged-in member of the org, e.g. a nurse in the Clinical
+    Workspace, not just whoever administers the org.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_superuser:
+            return True
+        return str(user.organization_id) == str(view.kwargs.get("pk"))

@@ -555,6 +555,44 @@ class OrganizationConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_any_org_member_can_read_their_orgs_theme_not_just_org_admin(self):
+        """
+        AppShell.tsx (every portal's shared chrome) fetches this for any
+        logged-in user to show their org's logo/colors over the platform
+        baseline — a plain staff member (no Org Admin role) must be able to
+        read it, or they'd only ever see the generic platform branding.
+        Write access stays Org-Admin-only, unaffected by this.
+        """
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Staff Theme Org",
+                slug="staff-theme-org",
+                facility_type="CLINIC",
+                logo_url="https://x/staff-org-logo.png",
+            )
+            staff = User.objects.create_user(
+                email="nurse@staff-theme-org.test",
+                password="Password123!",
+                organization=org,
+                is_active=True,
+            )
+        access, _ = issue_tokens(staff)
+
+        get_response = self.client.get(
+            reverse("platform-organization-theme", args=[org.id]),
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(get_response.status_code, 200, get_response.data)
+        self.assertEqual(get_response.data["logo_url"], "https://x/staff-org-logo.png")
+
+        patch_response = self.client.patch(
+            reverse("platform-organization-theme", args=[org.id]),
+            {"theme_overrides": {"primary": "#654321"}},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+        self.assertEqual(patch_response.status_code, 403, patch_response.data)
+
     def test_non_super_admin_cannot_upload_organization_logo(self):
         with platform_admin_context():
             org = Organization.objects.create(

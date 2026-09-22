@@ -11,7 +11,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import ActivationInvite, Role, User
-from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
+from apps.accounts.permissions import (
+    IsOwnOrganizationMember,
+    IsPlatformSuperAdmin,
+    IsPlatformSuperAdminOrOrgAdmin,
+)
 from apps.ipd_ward.models import Bed
 from apps.notifications.sms import resolve_credentials_with_overrides, test_sms_connection
 from apps.tenancy.context import platform_admin_context
@@ -404,12 +408,18 @@ class OrganizationThemeView(APIView):
     Self-service org-wide primary/secondary brand accent — docs/03-DESIGN-SYSTEM.md
     §3.6. Same narrow-endpoint-over-one-concern precedent as
     OrganizationEmailSettingsView, rather than widening OrganizationDetailView's
-    Super-Admin-only PATCH. Org Admins may only read/write their own
-    organization — enforced by IsPlatformSuperAdminOrOrgAdmin's object-level
-    check.
+    Super-Admin-only PATCH. Editing (PATCH) is Org-Admin-only, enforced by
+    IsPlatformSuperAdminOrOrgAdmin's object-level check. GET is broader —
+    IsOwnOrganizationMember, same get_permissions()-per-method shape as
+    PlatformBrandingView — since AppShell.tsx (every portal's shared chrome)
+    fetches this to apply the org's logo/colors over the platform baseline
+    for *any* logged-in member of the org, not just whoever administers it.
     """
 
-    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsOwnOrganizationMember()]
+        return [IsPlatformSuperAdminOrOrgAdmin()]
 
     def _get_organization(self, request, pk):
         with platform_admin_context():
