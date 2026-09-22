@@ -1546,10 +1546,13 @@ class SecurityPolicyEnforcementTests(APITestCase):
         policy.save()
 
         _, first_refresh = issue_tokens(self.user)
+        # Read before the 2nd/3rd logins evict it — reconstructing a
+        # RefreshToken re-verifies it, including the blacklist check, which
+        # would raise TokenError once it's (correctly) blacklisted below.
+        first_jti = RefreshToken(first_refresh)["jti"]
         issue_tokens(self.user)
         issue_tokens(self.user)
 
-        first_jti = RefreshToken(first_refresh)["jti"]
         blacklisted_jtis = set(
             OutstandingToken.objects.filter(
                 id__in=BlacklistedToken.objects.values_list("token_id", flat=True),
