@@ -42,7 +42,27 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                     and user.organization.status == Organization.STATUS_SUSPENDED
                 ):
                     raise AuthenticationFailed(
-                        "This account's organization is no longer active."
+                        "This account's organization is no longer active. Please contact "
+                        "your administrator.",
+                        code="organization_suspended",
+                    )
+
+                # Same "reject on every call, not just new logins" principle
+                # as the suspended-org check above, mirrored for Branch and
+                # Department (auth_views.py's LoginView applies the same
+                # checks at login time; this is what closes the gap for a
+                # token issued before the branch/department was deactivated).
+                if user.primary_branch_id and not user.primary_branch.is_active:
+                    raise AuthenticationFailed(
+                        "Your branch is no longer active. Please contact your administrator.",
+                        code="branch_inactive",
+                    )
+
+                if user.department_id and not user.department.is_active:
+                    raise AuthenticationFailed(
+                        "Your department is no longer active. Please contact your "
+                        "administrator.",
+                        code="department_inactive",
                     )
 
                 # Same "reject on every call, not just new logins" principle
@@ -51,7 +71,8 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                 # access immediately, not just at its next login.
                 if not user.is_within_access_window():
                     raise AuthenticationFailed(
-                        "This account's access is not currently active for this time period."
+                        "This account's access is not currently active for this time period.",
+                        code="access_window_closed",
                     )
         if result is not None:
             user, _token = result
@@ -61,3 +82,23 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
             )
             set_audit_actor(user)
         return result
+
+    def get_user(self, validated_token):
+        """
+        Same lookup as the base class, only with a friendlier message for the
+        `user_inactive` case (simplejwt's own default is a terse "User is
+        inactive") — this is the path a staff member's *already-issued*
+        access token hits the moment an admin deactivates their account
+        mid-session, not just at their next login attempt. Matched on the
+        library's own stable `code`, not the message text, so this doesn't
+        depend on simplejwt's exact wording.
+        """
+        try:
+            return super().get_user(validated_token)
+        except AuthenticationFailed as exc:
+            if exc.get_codes() == "user_inactive":
+                raise AuthenticationFailed(
+                    "Your account has been deactivated. Please contact your administrator.",
+                    code="user_inactive",
+                ) from exc
+            raise

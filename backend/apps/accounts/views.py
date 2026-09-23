@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
 from apps.tenancy.context import platform_admin_context
+from config.errors import error_response
 
 from .models import ActivationInvite, OneTimePassword, Permission, Role, User
 from .serializers import (
@@ -155,6 +156,13 @@ class StaffViewSet(viewsets.ModelViewSet):
             # to send it at all.
             organization = request.user.organization
 
+        from apps.tenancy.models import Organization
+
+        if organization.status == Organization.STATUS_SUSPENDED:
+            raise ValidationError(
+                {"organization": "This organisation is suspended — new staff cannot be added."}
+            )
+
         with platform_admin_context() if is_superuser else contextlib.nullcontext():
             staff = self._create_staff(request, organization, data)
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
@@ -163,9 +171,13 @@ class StaffViewSet(viewsets.ModelViewSet):
         primary_branch = data.get("primary_branch")
         if primary_branch is not None and primary_branch.organization_id != organization.id:
             raise ValidationError({"primary_branch": "Does not belong to this organization."})
+        if primary_branch is not None and not primary_branch.is_active:
+            raise ValidationError({"primary_branch": "This branch is no longer active."})
         department = data.get("department")
         if department is not None and department.organization_id != organization.id:
             raise ValidationError({"department": "Does not belong to this organization."})
+        if department is not None and not department.is_active:
+            raise ValidationError({"department": "This department is no longer active."})
 
         with transaction.atomic():
             staff = User.objects.create_user(
@@ -228,9 +240,10 @@ class StaffViewSet(viewsets.ModelViewSet):
         """
         staff = self.get_object()
         if staff.is_active:
-            return Response(
-                {"detail": "This staff member has already activated their account."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "ACCOUNT_ALREADY_ACTIVE",
+                "This staff member has already activated their account.",
+                status.HTTP_400_BAD_REQUEST,
             )
         organization = staff.organization
         with platform_admin_context() if request.user.is_superuser else contextlib.nullcontext():
@@ -279,9 +292,10 @@ class StaffViewSet(viewsets.ModelViewSet):
         """
         staff = self.get_object()
         if not staff.is_active:
-            return Response(
-                {"detail": "This account hasn't been activated yet — resend the invite instead."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "ACCOUNT_NOT_ACTIVATED",
+                "This account hasn't been activated yet — resend the invite instead.",
+                status.HTTP_400_BAD_REQUEST,
             )
         from apps.accounts.auth_views import _dispatch_otp_email
 
@@ -365,9 +379,10 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         """Platform-staff mirror of StaffViewSet.resend_invite."""
         staff = self.get_object()
         if staff.is_active:
-            return Response(
-                {"detail": "This staff member has already activated their account."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "ACCOUNT_ALREADY_ACTIVE",
+                "This staff member has already activated their account.",
+                status.HTTP_400_BAD_REQUEST,
             )
         with platform_admin_context():
             invite = (
@@ -398,9 +413,10 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         """Platform-staff mirror of StaffViewSet.reset_credentials."""
         staff = self.get_object()
         if not staff.is_active:
-            return Response(
-                {"detail": "This account hasn't been activated yet — resend the invite instead."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "ACCOUNT_NOT_ACTIVATED",
+                "This account hasn't been activated yet — resend the invite instead.",
+                status.HTTP_400_BAD_REQUEST,
             )
         from apps.accounts.auth_views import _dispatch_otp_email
 

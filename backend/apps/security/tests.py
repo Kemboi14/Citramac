@@ -119,6 +119,29 @@ class SecurityConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_super_admin_can_edit_discovery_and_otp_rate_limits(self):
+        """
+        tenant_discovery_*/otp_dispatch_* used to be hardcoded literals in
+        auth_views.py — now editable the same way max_failed_login_attempts
+        already is.
+        """
+        response = self.client.patch(
+            reverse("security-policy"),
+            {
+                "tenant_discovery_max_attempts": 10,
+                "tenant_discovery_window_minutes": 5,
+                "otp_dispatch_max_attempts": 3,
+                "otp_dispatch_window_minutes": 15,
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["tenant_discovery_max_attempts"], 10)
+        self.assertEqual(response.data["tenant_discovery_window_minutes"], 5)
+        self.assertEqual(response.data["otp_dispatch_max_attempts"], 3)
+        self.assertEqual(response.data["otp_dispatch_window_minutes"], 15)
+
     def test_policy_singleton_survives_multiple_saves(self):
         SecurityPolicy.get_solo()
         SecurityPolicy.get_solo()

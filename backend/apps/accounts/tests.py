@@ -500,12 +500,295 @@ class TimeBoundAccessTests(APITestCase):
         self.assertTrue(unrestricted.is_active)
 
 
+class DeactivatedUserLoginTests(APITestCase):
+    """
+    A deactivated (is_active=False) user gets a distinct, explicit
+    ACCOUNT_DEACTIVATED/"Access denied" message — but only once they've
+    proven they hold the real password; a wrong guess against the same
+    account stays exactly as generic as a wrong guess against any other
+    email (INVALID_CREDENTIALS), so an attacker without the real password
+    still learns nothing about whether the account exists.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Org", slug="org-deactivated-user", facility_type="CLINIC"
+            )
+            self.user = User.objects.create_user(
+                email="deactivated@org-deactivated-user.test",
+                password="Correct!Horse99",
+                organization=org,
+                is_active=False,
+                mfa_enabled=False,
+            )
+
+    def test_correct_password_for_deactivated_user_shows_access_denied(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "deactivated@org-deactivated-user.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "ACCOUNT_DEACTIVATED")
+        self.assertIn("Access denied", response.data["error"]["message"])
+
+    def test_wrong_password_for_deactivated_user_stays_generic(self):
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "deactivated@org-deactivated-user.test", "password": "wrong-password"},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "INVALID_CREDENTIALS")
+
+    def test_never_activated_invite_stays_generic_regardless_of_password(self):
+        """A never-activated user has an unusable password hash (set_password(None)
+        in UserManager._create_user) — check_password() can never succeed for it, so
+        this can never reach the ACCOUNT_DEACTIVATED branch and leak "this is a
+        pending invite" to a guesser."""
+        with platform_admin_context():
+            User.objects.create_user(
+                email="never-activated@org-deactivated-user.test",
+                organization=self.user.organization,
+                is_active=False,
+            )
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "never-activated@org-deactivated-user.test", "password": "anything-at-all"},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "INVALID_CREDENTIALS")
+
+
+class DeactivationLoginTests(APITestCase):
+    """
+    LoginView must refuse a *correct* password the moment the account's
+    Organization/Branch/Department is deactivated — mirroring
+    TimeBoundAccessTests' access-window checks, for the three entities
+    LoginView.post checks in sequence right after password verification.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-deactivation", facility_type="CLINIC", status=Organization.STATUS_ACTIVE
+            )
+
+    def _make_user(self, **kwargs):
+        with platform_admin_context():
+            return User.objects.create_user(
+                email=kwargs.pop("email", "staff@org-deactivation.test"),
+                password="Correct!Horse99",
+                organization=self.org,
+                is_active=True,
+                mfa_enabled=False,
+                **kwargs,
+            )
+
+    def test_login_blocked_when_organization_suspended(self):
+        self._make_user()
+        with platform_admin_context():
+            self.org.status = Organization.STATUS_SUSPENDED
+            self.org.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "ORGANIZATION_SUSPENDED")
+
+    def test_login_allowed_when_organization_only_pending_verification(self):
+        """PENDING_VERIFICATION also sets is_active=False on Organization —
+        must not be treated the same as SUSPENDED (a brand-new org's own Org
+        Admin needs to be able to log in)."""
+        self._make_user()
+        with platform_admin_context():
+            self.org.status = Organization.STATUS_PENDING
+            self.org.save(update_fields=["status"])
+
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_login_blocked_when_branch_inactive(self):
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4", is_active=False
+            )
+        self._make_user(primary_branch=branch)
+
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "BRANCH_INACTIVE")
+
+    def test_login_blocked_when_department_inactive(self):
+        from apps.tenancy.models import Department
+
+        with platform_admin_context():
+            department = Department.objects.create(
+                organization=self.org, name="Pharmacy", is_active=False
+            )
+        self._make_user(department=department)
+
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["error"]["code"], "DEPARTMENT_INACTIVE")
+
+    def test_login_unaffected_by_active_branch_and_department(self):
+        from apps.tenancy.models import Branch, Department
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4"
+            )
+            department = Department.objects.create(organization=self.org, name="Pharmacy")
+        self._make_user(primary_branch=branch, department=department)
+
+        response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_otp_verify_blocked_when_branch_deactivated_between_password_and_otp(self):
+        """Closes the same race window the organization-suspended check
+        already closes: the OTP's own 10-minute TTL outlives the branch
+        deactivation."""
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4"
+            )
+        user = self._make_user(primary_branch=branch, mfa_enabled=True)
+
+        login_response = self.client.post(
+            reverse("auth-login"),
+            {"email": "staff@org-deactivation.test", "password": "Correct!Horse99"},
+        )
+        self.assertEqual(login_response.status_code, 200, login_response.data)
+        self.assertTrue(login_response.data["requires_otp"])
+        code = _extract_code(mail.outbox[-1].body)
+
+        with platform_admin_context():
+            branch.is_active = False
+            branch.save(update_fields=["is_active"])
+
+        otp_response = self.client.post(
+            reverse("auth-login-verify-otp"),
+            {"otp_token": login_response.data["otp_token"], "otp": code},
+        )
+        self.assertEqual(otp_response.status_code, 400)
+        self.assertNotIn("access", otp_response.data)
+
+
+class MidSessionDeactivationTests(APITestCase):
+    """
+    TenantAwareJWTAuthentication must reject an *already-issued* access
+    token the moment the account/org/branch/department it belongs to is
+    deactivated — not just refuse a fresh login attempt — closing the same
+    "keeps working until the token happens to expire" gap
+    TimeBoundAccessTests.test_already_issued_token_is_rejected_once_window_closes
+    covers for access windows. `me-enabled-modules` is used purely as a
+    lightweight already-authenticated endpoint.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-midsession", facility_type="CLINIC", status=Organization.STATUS_ACTIVE
+            )
+            self.user = User.objects.create_user(
+                email="staff@org-midsession.test",
+                password="Correct!Horse99",
+                organization=self.org,
+                is_active=True,
+                mfa_enabled=False,
+            )
+        self.access, _ = issue_tokens(self.user)
+
+    def _get(self):
+        return self.client.get(
+            reverse("me-enabled-modules"), HTTP_AUTHORIZATION=f"Bearer {self.access}"
+        )
+
+    def test_token_rejected_once_organization_suspended(self):
+        self.assertEqual(self._get().status_code, 200)
+        with platform_admin_context():
+            self.org.status = Organization.STATUS_SUSPENDED
+            self.org.save(update_fields=["status"])
+        response = self._get()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "ORGANIZATION_SUSPENDED")
+
+    def test_token_rejected_once_branch_deactivated(self):
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4"
+            )
+            self.user.primary_branch = branch
+            self.user.save(update_fields=["primary_branch"])
+
+        self.assertEqual(self._get().status_code, 200)
+        with platform_admin_context():
+            branch.is_active = False
+            branch.save(update_fields=["is_active"])
+        response = self._get()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "BRANCH_INACTIVE")
+
+    def test_token_rejected_once_department_deactivated(self):
+        from apps.tenancy.models import Department
+
+        with platform_admin_context():
+            department = Department.objects.create(organization=self.org, name="Pharmacy")
+            self.user.department = department
+            self.user.save(update_fields=["department"])
+
+        self.assertEqual(self._get().status_code, 200)
+        with platform_admin_context():
+            department.is_active = False
+            department.save(update_fields=["is_active"])
+        response = self._get()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "DEPARTMENT_INACTIVE")
+
+    def test_token_rejected_once_user_deactivated(self):
+        self.assertEqual(self._get().status_code, 200)
+        with platform_admin_context():
+            self.user.is_active = False
+            self.user.save(update_fields=["is_active"])
+        response = self._get()
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["error"]["code"], "USER_INACTIVE")
+        self.assertIn("deactivated", response.data["error"]["message"])
+
+
 class NoOrganizationLoginTests(APITestCase):
     """
-    The `/login/platform-staff` sign-in screen skips tenant discovery and
-    sends `no_organization: true` — LoginView must only honor that for a
-    genuine organization=None account, not let it bypass the normal
-    tenant-scoped login for anyone (docs/14-TENANT-BRANDED-LOGIN-UX.md).
+    TenantDiscoveryStep sends `no_organization: true` whenever discovery
+    resolved a platform-staff email (`{"tenant": null}`) — LoginView must
+    only honor that for a genuine organization=None account, not let it
+    bypass the normal tenant-scoped login for anyone
+    (docs/14-TENANT-BRANDED-LOGIN-UX.md).
     """
 
     def setUp(self):
@@ -629,6 +912,27 @@ class TenantDiscoveryTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.data["error"]["code"], "TENANT_NOT_FOUND")
+
+    def test_discovery_rate_limit_follows_security_policy(self):
+        """
+        Previously a hardcoded 20/10min literal — must read
+        SecurityPolicy.tenant_discovery_max_attempts, the same pattern
+        LoginView already uses for max_failed_login_attempts.
+        """
+        with platform_admin_context():
+            policy = SecurityPolicy.get_solo()
+            policy.tenant_discovery_max_attempts = 2
+            policy.save()
+
+        for _ in range(2):
+            self.client.post(
+                reverse("auth-tenant-discovery"), {"email": "someone@unknown-domain.test"}
+            )
+        limited_response = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "someone@unknown-domain.test"}
+        )
+        self.assertEqual(limited_response.status_code, 429)
+        self.assertEqual(limited_response.data["error"]["code"], "RATE_LIMITED")
 
     def test_domain_match_is_case_insensitive(self):
         response = self.client.post(
@@ -1138,6 +1442,112 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("department", response.data)
+
+    def test_staff_invite_rejects_an_inactive_branch(self):
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Closed Branch", facility_level="L4", is_active=False
+            )
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "toinactivebranch@amani.test",
+                "first_name": "Ina",
+                "last_name": "Ctive",
+                "role": self.psychiatrist_template.id,
+                "primary_branch": branch.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("primary_branch", response.data)
+
+    def test_staff_invite_rejects_an_inactive_department(self):
+        from apps.tenancy.models import Department
+
+        with platform_admin_context():
+            department = Department.objects.create(
+                organization=self.org, name="Closed Dept", is_active=False
+            )
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "toinactivedept@amani.test",
+                "first_name": "Ina",
+                "last_name": "Ctive",
+                "role": self.psychiatrist_template.id,
+                "department": department.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("department", response.data)
+
+    def test_staff_invite_rejects_a_suspended_organization(self):
+        with platform_admin_context():
+            self.org.status = Organization.STATUS_SUSPENDED
+            self.org.save(update_fields=["status"])
+        response = self.client.post(
+            reverse("staff-list"),
+            {
+                "email": "intosuspended@amani.test",
+                "first_name": "Sus",
+                "last_name": "Pended",
+                "role": self.psychiatrist_template.id,
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("organization", response.data)
+
+    def test_cannot_patch_staff_into_an_inactive_branch(self):
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Closed Branch 2", facility_level="L4", is_active=False
+            )
+            staff = User.objects.create_user(
+                email="patchtoinactive@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.patch(
+            reverse("staff-detail", args=[staff.id]),
+            {"primary_branch": branch.id},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("primary_branch", response.data)
+
+    def test_cannot_patch_staff_branch_access_to_include_an_inactive_branch(self):
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            branch = Branch.objects.create(
+                organization=self.org, name="Closed Branch 3", facility_level="L4", is_active=False
+            )
+            staff = User.objects.create_user(
+                email="patchbranchaccess@amani.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        response = self.client.patch(
+            reverse("staff-detail", args=[staff.id]),
+            {"branch_access": [branch.id]},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("branch_access", response.data)
 
     def test_reset_credentials_emails_otp_to_active_staff(self):
         with platform_admin_context():

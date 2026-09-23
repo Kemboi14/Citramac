@@ -21,6 +21,10 @@ class SecurityPolicySerializer(serializers.ModelSerializer):
             "token_expiry_minutes",
             "rate_limit_per_minute",
             "data_retention_years",
+            "tenant_discovery_max_attempts",
+            "tenant_discovery_window_minutes",
+            "otp_dispatch_max_attempts",
+            "otp_dispatch_window_minutes",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

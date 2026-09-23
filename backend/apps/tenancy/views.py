@@ -20,6 +20,7 @@ from apps.ipd_ward.models import Bed
 from apps.notifications.sms import resolve_credentials_with_overrides, test_sms_connection
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.crypto import decrypt_value
+from config.errors import error_response
 
 from .models import (
     Branch,
@@ -48,6 +49,18 @@ from .serializers import (
 )
 
 INVITE_TTL_DAYS = 7
+
+
+def _reject_if_organization_suspended(organization):
+    """Shared by BranchViewSet/DepartmentViewSet creation — a suspended
+    organization's staff already can't log in at all (LoginView,
+    TenantAwareJWTAuthentication), but a Super Admin acting from the
+    platform console isn't gated by that, so this closes the same gap for
+    creating new org structure under it."""
+    if organization.status == Organization.STATUS_SUSPENDED:
+        raise ValidationError(
+            {"organization": "This organisation is suspended — its structure can't be changed."}
+        )
 
 
 class OrganizationListCreateView(generics.ListCreateAPIView):
@@ -479,7 +492,7 @@ class PlatformSmsTestView(APIView):
     def post(self, request):
         phone = (request.data.get("phone") or "").strip()
         if not phone:
-            return Response({"detail": "phone is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST)
 
         sms_settings = PlatformSmsSettings.get_solo()
         credentials = resolve_credentials_with_overrides(
@@ -549,7 +562,7 @@ class OrganizationSmsTestView(APIView):
 
         phone = (request.data.get("phone") or "").strip()
         if not phone:
-            return Response({"detail": "phone is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST)
 
         credentials = resolve_credentials_with_overrides(
             organization.sms_sender_id,
@@ -610,6 +623,7 @@ class BranchViewSet(viewsets.ModelViewSet):
             # ignored, not merely validated, so it can't be used to create
             # a Branch under a different tenant.
             organization = user.organization
+        _reject_if_organization_suspended(organization)
         serializer.save(
             organization=organization,
             ownership_type=serializer.validated_data.get(
@@ -652,9 +666,12 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     def _validate_branch(self, branch, organization):
         if branch is not None and branch.organization_id != organization.id:
             raise ValidationError({"branch": "This branch does not belong to your organization."})
+        if branch is not None and not branch.is_active:
+            raise ValidationError({"branch": "This branch is no longer active."})
 
     def perform_create(self, serializer):
         organization = self._resolve_organization()
+        _reject_if_organization_suspended(organization)
         branch = serializer.validated_data.get("branch")
         self._validate_branch(branch, organization)
         serializer.save(organization=organization)

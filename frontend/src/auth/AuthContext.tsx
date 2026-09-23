@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import * as authApi from "../lib/authApi";
-import { ApiError } from "../lib/apiClient";
+import { ApiError, setSessionInvalidatedHandler } from "../lib/apiClient";
 import { decodeAccessToken } from "../lib/jwt";
 import { getMyProfile } from "../lib/myProfileApi";
 import { AuthContext, type LoginOutcome } from "./authContextObject";
@@ -16,6 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [sessionEndedMessage, setSessionEndedMessage] = useState<string | null>(null);
 
   // On first load, a valid refresh_token cookie from a previous session
   // silently restores access — docs/05-AUTHENTICATION-FLOW.md §5.3.
@@ -26,6 +27,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setAccessToken(null))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // apiClient has no React context of its own — this is how it tells us an
+  // already-authenticated call came back with a session-ending error (see
+  // SESSION_INVALIDATING_CODES there), from anywhere in the app, so the
+  // user gets forced back to login with an explanation instead of silently
+  // failing whatever page they were on.
+  useEffect(() => {
+    setSessionInvalidatedHandler((message) => {
+      setAccessToken(null);
+      setAvatarUrl(null);
+      setSessionEndedMessage(message);
+    });
+    return () => setSessionInvalidatedHandler(null);
+  }, []);
+
+  const clearSessionEndedMessage = useCallback(() => setSessionEndedMessage(null), []);
 
   const login = useCallback(
     async (
@@ -109,8 +126,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       avatarUrl,
       refreshProfile,
+      sessionEndedMessage,
+      clearSessionEndedMessage,
     }),
-    [accessToken, claims, isLoading, login, loginVerifyOtp, logout, avatarUrl, refreshProfile],
+    [
+      accessToken,
+      claims,
+      isLoading,
+      login,
+      loginVerifyOtp,
+      logout,
+      avatarUrl,
+      refreshProfile,
+      sessionEndedMessage,
+      clearSessionEndedMessage,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

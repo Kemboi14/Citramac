@@ -24,7 +24,11 @@ type NumericFieldKey =
   | "max_concurrent_sessions"
   | "token_expiry_minutes"
   | "rate_limit_per_minute"
-  | "data_retention_years";
+  | "data_retention_years"
+  | "tenant_discovery_max_attempts"
+  | "tenant_discovery_window_minutes"
+  | "otp_dispatch_max_attempts"
+  | "otp_dispatch_window_minutes";
 
 type BooleanFieldKey = "require_uppercase" | "require_lowercase" | "require_number" | "require_symbol";
 
@@ -46,6 +50,10 @@ const NUMERIC_FIELDS: { key: NumericFieldKey; label: string }[] = [
   { key: "token_expiry_minutes", label: "Token Expiry (minutes)" },
   { key: "rate_limit_per_minute", label: "Rate Limit (requests/min)" },
   { key: "data_retention_years", label: "Data Retention (years)" },
+  { key: "tenant_discovery_max_attempts", label: "Discovery Attempts Before Rate-Limit" },
+  { key: "tenant_discovery_window_minutes", label: "Discovery Rate-Limit Window (minutes)" },
+  { key: "otp_dispatch_max_attempts", label: "Verification Codes Before Rate-Limit" },
+  { key: "otp_dispatch_window_minutes", label: "Verification Rate-Limit Window (minutes)" },
 ];
 
 const MANDATORY_LABELS: Record<keyof MandatoryControls, string> = {

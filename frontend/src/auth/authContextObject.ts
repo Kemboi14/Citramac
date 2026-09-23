@@ -30,6 +30,11 @@ export interface AuthContextValue {
   /** Re-fetches the current user's profile (e.g. right after an avatar
    * upload elsewhere in the app) so every avatar on screen updates. */
   refreshProfile: () => Promise<void>;
+  /** Set the moment any authenticated call comes back with a session-ending
+   * error (the account/org/branch/department was deactivated mid-session) —
+   * LoginPage reads this once to explain why the user landed back here. */
+  sessionEndedMessage: string | null;
+  clearSessionEndedMessage: () => void;
 }
 
 // Split from AuthContext.tsx (the `AuthProvider` component) and useAuth.ts

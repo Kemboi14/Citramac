@@ -127,6 +127,16 @@ const EMPTY_NEW_DEPARTMENT: NewDepartmentState = {
 const branchFormId = "branch-form";
 const deptFormId = "department-form";
 
+/** The Drawer's Save button lives in its `footer`, outside the `<form>`
+ * DOM subtree (see Drawer.tsx) — SaveButton has no way to trigger a real
+ * form submission, so the fields' own `required` attributes never fired on
+ * click. Calling reportValidity() directly on the form by id re-connects
+ * that (the ids above already existed for this, just weren't used yet). */
+function reportFormInvalid(formId: string): boolean {
+  const form = document.getElementById(formId);
+  return form instanceof HTMLFormElement ? !form.reportValidity() : false;
+}
+
 /**
  * Super Admin — Branches & Departments. Every physical facility and org
  * sub-unit across every tenant on the platform; the backend already scopes
@@ -234,7 +244,11 @@ export function BranchesPage() {
   };
 
   const submitNewBranch = async () => {
-    if (!accessToken || !newBranch.organization || !newBranch.name) return;
+    if (!accessToken) return;
+    if (reportFormInvalid(branchFormId)) {
+      setBranchFormError("Please fill in the required fields highlighted above.");
+      throw new Error("validation");
+    }
     setBranchFormError(null);
     try {
       const created = await createBranch(accessToken, {
@@ -283,7 +297,11 @@ export function BranchesPage() {
   };
 
   const submitNewDept = async () => {
-    if (!accessToken || !newDept.organization || !newDept.name) return;
+    if (!accessToken) return;
+    if (reportFormInvalid(deptFormId)) {
+      setDeptFormError("Please fill in the required fields highlighted above.");
+      throw new Error("validation");
+    }
     setDeptFormError(null);
     try {
       const created = await createDepartment(accessToken, {

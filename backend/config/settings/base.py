@@ -237,6 +237,12 @@ REST_FRAMEWORK = {
         "apps.accounts.authentication.TenantAwareJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    # Normalizes every raised exception whose DRF default shape is a bare
+    # {"detail": "..."} (AuthenticationFailed, PermissionDenied, Http404,
+    # Throttled, ...) into the app's own {"error": {code, message}} shape —
+    # see config/exceptions.py's module docstring for scope and why this
+    # matters to the frontend.
+    "EXCEPTION_HANDLER": "config.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,

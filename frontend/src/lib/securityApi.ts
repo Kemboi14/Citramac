@@ -30,6 +30,10 @@ export interface SecurityPolicy {
   token_expiry_minutes: number;
   rate_limit_per_minute: number;
   data_retention_years: number;
+  tenant_discovery_max_attempts: number;
+  tenant_discovery_window_minutes: number;
+  otp_dispatch_max_attempts: number;
+  otp_dispatch_window_minutes: number;
   updated_at: string;
   mandatory_controls: MandatoryControls;
 }

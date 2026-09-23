@@ -61,6 +61,20 @@ interface DepartmentFormState {
 
 const EMPTY_DEPARTMENT_FORM: DepartmentFormState = { name: "", description: "", branch: "" };
 
+const branchFormId = "org-branch-form";
+const departmentFormId = "org-department-form";
+
+/** The Drawer's Save button lives in its `footer`, outside the `<form>`
+ * DOM subtree (see Drawer.tsx) — SaveButton has no way to trigger a real
+ * form submission, so the fields' own `required` attributes never fired on
+ * click, letting an empty name reach the backend instead of being caught
+ * here. Calling reportValidity() directly on the form by id is what
+ * actually re-connects that. */
+function reportFormInvalid(formId: string): boolean {
+  const form = document.getElementById(formId);
+  return form instanceof HTMLFormElement ? !form.reportValidity() : false;
+}
+
 /**
  * Org Admin's org-structure screen — create/edit/activate branches and
  * departments, and assign a department to a branch. Deliberately separate
@@ -146,6 +160,10 @@ export function BranchesAndDepartmentsPage() {
 
   const saveBranch = async () => {
     if (!accessToken) return;
+    if (reportFormInvalid(branchFormId)) {
+      setBranchFormError("Please fill in the required fields highlighted above.");
+      throw new Error("validation");
+    }
     setBranchFormError(null);
     try {
       if (branchDrawer.branch) {
@@ -192,6 +210,10 @@ export function BranchesAndDepartmentsPage() {
 
   const saveDepartment = async () => {
     if (!accessToken) return;
+    if (reportFormInvalid(departmentFormId)) {
+      setDeptFormError("Please fill in the required fields highlighted above.");
+      throw new Error("validation");
+    }
     setDeptFormError(null);
     const payload = {
       name: deptForm.name,
@@ -414,7 +436,7 @@ export function BranchesAndDepartmentsPage() {
           </SaveButton>
         }
       >
-        <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
+        <form id={branchFormId} onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
           <label className={LABEL_CLASS}>
             Name
             <input
@@ -504,7 +526,11 @@ export function BranchesAndDepartmentsPage() {
           </SaveButton>
         }
       >
-        <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
+        <form
+          id={departmentFormId}
+          onSubmit={(e) => e.preventDefault()}
+          className="flex flex-col gap-4"
+        >
           <label className={LABEL_CLASS}>
             Name
             <input

@@ -27,10 +27,15 @@ export function TenantDiscoveryStep({
   onSuccess,
   initialEmail = "",
   toast,
+  toastVariant = "success",
 }: {
   onSuccess: (email: string, tenant: TenantBranding | null) => void;
   initialEmail?: string;
   toast?: string | null;
+  /** "warning" for a message explaining why the user landed back here (e.g.
+   * a mid-session deactivation) rather than confirming something that just
+   * succeeded — same banner slot, different tone. */
+  toastVariant?: "success" | "warning";
 }) {
   const [email, setEmail] = useState(initialEmail);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -75,7 +80,11 @@ export function TenantDiscoveryStep({
         {toast && !notFound && (
           <p
             role="status"
-            className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-center text-sm text-brand-green-dark"
+            className={
+              toastVariant === "warning"
+                ? "mt-4 rounded-sm bg-status-amber-tint px-3 py-2 text-center text-sm text-status-amber"
+                : "mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-center text-sm text-brand-green-dark"
+            }
           >
             {toast}
           </p>

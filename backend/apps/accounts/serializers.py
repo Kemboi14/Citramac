@@ -53,10 +53,10 @@ class LoginSerializer(serializers.Serializer):
     # whether the refresh-token cookie persists across browser restarts, not
     # the token's own lifetime (SIMPLE_JWT.REFRESH_TOKEN_LIFETIME).
     remember = serializers.BooleanField(required=False, default=False)
-    # True only when submitted from the dedicated platform-staff sign-in
-    # screen (`/login/platform-staff`), which skips tenant discovery.
-    # LoginView rejects this unless the account genuinely has
-    # organization=None — see LoginView.post.
+    # True whenever TenantDiscoveryStep resolved a platform-staff email
+    # (`{"tenant": null}`) rather than a real organization — see
+    # TenantDiscoveryView's docstring. LoginView rejects this unless the
+    # account genuinely has organization=None — see LoginView.post.
     no_organization = serializers.BooleanField(required=False, default=False)
 
 
@@ -244,10 +244,19 @@ class StaffSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         {field_name: "Does not belong to this staff member's organization."}
                     )
+                if value is not None and not value.is_active:
+                    label = "branch" if field_name == "primary_branch" else "department"
+                    raise serializers.ValidationError(
+                        {field_name: f"This {label} is no longer active."}
+                    )
             branch_access = attrs.get("branch_access")
             if branch_access and any(b.organization_id != organization.id for b in branch_access):
                 raise serializers.ValidationError(
                     {"branch_access": "One or more branches do not belong to this organization."}
+                )
+            if branch_access and any(not b.is_active for b in branch_access):
+                raise serializers.ValidationError(
+                    {"branch_access": "One or more branches are no longer active."}
                 )
 
         starts = attrs.get(

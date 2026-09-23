@@ -816,6 +816,32 @@ class BranchAndSubscriptionScopingTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.sub_a.id))
 
+    def test_org_admin_cannot_create_branch_under_suspended_organization(self):
+        with platform_admin_context():
+            self.org_a.status = Organization.STATUS_SUSPENDED
+            self.org_a.save(update_fields=["status"])
+        response = self.client.post(
+            reverse("branch-list"),
+            {"organization": str(self.org_a.id), "name": "New Branch", "facility_level": "L3"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("organization", response.data)
+
+    def test_super_admin_cannot_create_branch_under_suspended_organization(self):
+        with platform_admin_context():
+            self.org_b.status = Organization.STATUS_SUSPENDED
+            self.org_b.save(update_fields=["status"])
+        response = self.client.post(
+            reverse("branch-list"),
+            {"organization": str(self.org_b.id), "name": "New Branch", "facility_level": "L3"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("organization", response.data)
+
     def test_branch_sha_credentials_are_encrypted_at_rest(self):
         self.client.patch(
             reverse("branch-detail", args=[self.branch_a.id]),
@@ -912,6 +938,32 @@ class DepartmentScopingTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_org_admin_cannot_assign_department_to_an_inactive_branch(self):
+        with platform_admin_context():
+            self.branch_a.is_active = False
+            self.branch_a.save(update_fields=["is_active"])
+        response = self.client.patch(
+            reverse("department-detail", args=[self.dept_a.id]),
+            {"branch": str(self.branch_a.id)},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("branch", response.data)
+
+    def test_org_admin_cannot_create_department_under_suspended_organization(self):
+        with platform_admin_context():
+            self.org_a.status = Organization.STATUS_SUSPENDED
+            self.org_a.save(update_fields=["status"])
+        response = self.client.post(
+            reverse("department-list"),
+            {"name": "New Department"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("organization", response.data)
 
     def test_org_admin_cannot_create_department_in_another_org(self):
         response = self.client.post(

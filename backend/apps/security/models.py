@@ -50,6 +50,20 @@ class SecurityPolicy(models.Model):
     rate_limit_per_minute = models.PositiveIntegerField(default=120)
     data_retention_years = models.PositiveSmallIntegerField(default=7)
 
+    # How many tenant-discovery attempts (the pre-login "what's my
+    # organisation" email lookup, apps.accounts.auth_views.TenantDiscoveryView)
+    # a single IP gets per window before RATE_LIMITED — previously a hardcoded
+    # 20/10min, now tunable the same way max_failed_login_attempts already is.
+    tenant_discovery_max_attempts = models.PositiveSmallIntegerField(default=20)
+    tenant_discovery_window_minutes = models.PositiveSmallIntegerField(default=10)
+    # How many OTP codes (activation/reset dispatch AND login-2FA dispatch —
+    # every `otp-dispatch:*`/`login-otp-send:*` rate-limit key in
+    # auth_views.py) can be sent per window before RATE_LIMITED. Distinct
+    # from OneTimePassword.MAX_ATTEMPTS, which caps wrong *guesses* against
+    # an already-issued code, not how many codes can be requested.
+    otp_dispatch_max_attempts = models.PositiveSmallIntegerField(default=5)
+    otp_dispatch_window_minutes = models.PositiveSmallIntegerField(default=30)
+
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

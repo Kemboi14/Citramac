@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { MfaChannel, MfaDeliveryMethod, TenantBranding } from "../lib/authApi";
 import { useAuth } from "./useAuth";
@@ -35,18 +35,30 @@ type LoginFlowState =
  * organization=None account (see LoginView.post).
  */
 export function LoginPage() {
-  const { login, loginVerifyOtp } = useAuth();
+  const { login, loginVerifyOtp, sessionEndedMessage, clearSessionEndedMessage } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const toast = (location.state as { toast?: string } | null)?.toast;
+  const routeToast = (location.state as { toast?: string } | null)?.toast;
 
   const [state, setState] = useState<LoginFlowState>({ step: "discovery" });
+
+  // Captured once on mount so it survives the immediate clear below (which
+  // exists so a *later*, unrelated visit to /login — e.g. after a normal
+  // logout — doesn't still show a stale "you were signed out" message).
+  const [sessionToast] = useState(sessionEndedMessage);
+  useEffect(() => {
+    if (sessionEndedMessage) clearSessionEndedMessage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toast = sessionToast ?? routeToast;
 
   switch (state.step) {
     case "discovery":
       return (
         <TenantDiscoveryStep
           toast={toast}
+          toastVariant={sessionToast ? "warning" : "success"}
           onSuccess={(email, tenant) => setState({ step: "password", email, tenant })}
         />
       );

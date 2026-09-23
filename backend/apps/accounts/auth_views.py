@@ -32,6 +32,7 @@ from apps.security.models import SecurityPolicy
 from apps.sysadmin_audit.middleware import get_client_ip
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
+from config.errors import error_response
 
 from .models import ActivationInvite, OneTimePassword, PasswordHistory, PasswordSetupToken, User
 from .serializers import (
@@ -65,11 +66,7 @@ GENERIC_ERROR = {
 }
 
 
-def _error(code, message, http_status=status.HTTP_400_BAD_REQUEST, fields=None):
-    body = {"error": {"code": code, "message": message}}
-    if fields:
-        body["error"]["fields"] = fields
-    return Response(body, status=http_status)
+_error = error_response
 
 
 def _generic_error(http_status=status.HTTP_400_BAD_REQUEST):
@@ -169,12 +166,13 @@ class TenantDiscoveryView(APIView):
         domain = _email_domain(serializer.validated_data["email"])
         client_ip = get_client_ip(request)
 
+        policy = SecurityPolicy.get_solo()
         try:
             enforce_general_rate_limit(client_ip)
             enforce_rate_limit(
                 f"tenant-discovery:{client_ip}",
-                max_attempts=20,
-                window_seconds=600,
+                max_attempts=policy.tenant_discovery_max_attempts,
+                window_seconds=policy.tenant_discovery_window_minutes * 60,
             )
         except RateLimitExceeded as exc:
             _log_auth_event(
@@ -317,9 +315,12 @@ class ConfirmEmailView(APIView):
             if data["email"].strip().casefold() != invite.user.email.casefold():
                 return _generic_error()
 
+            policy = SecurityPolicy.get_solo()
             try:
                 enforce_rate_limit(
-                    f"otp-dispatch:{invite.token}", max_attempts=5, window_seconds=1800
+                    f"otp-dispatch:{invite.token}",
+                    max_attempts=policy.otp_dispatch_max_attempts,
+                    window_seconds=policy.otp_dispatch_window_minutes * 60,
                 )
             except RateLimitExceeded as exc:
                 return _error(
@@ -376,8 +377,13 @@ class ResendOtpView(APIView):
                 if old_otp.activation_invite_id
                 else f"otp-dispatch:{old_otp.purpose}:{old_otp.user_id}"
             )
+            policy = SecurityPolicy.get_solo()
             try:
-                enforce_rate_limit(dispatch_key, max_attempts=5, window_seconds=1800)
+                enforce_rate_limit(
+                    dispatch_key,
+                    max_attempts=policy.otp_dispatch_max_attempts,
+                    window_seconds=policy.otp_dispatch_window_minutes * 60,
+                )
             except RateLimitExceeded as exc:
                 return _error(
                     "RATE_LIMITED",
@@ -570,14 +576,18 @@ class LoginView(APIView):
         with platform_admin_context():
             user = User.all_objects.filter(email__iexact=email).first()
 
-        # Argon2-verify a real password even when there's no user (or the
-        # user is inactive) to check it against, so this path takes
-        # comparable time to the "wrong password for a real, active user"
-        # path below — otherwise the two are distinguishable by response
-        # time alone, regardless of the identical error message/status.
-        # Mirrors Django's own ModelBackend.authenticate() decoy-hash
-        # pattern for the same reason.
-        if user and user.is_active:
+        # Argon2-verify a real password even when there's no user at all to
+        # check it against, so this path takes comparable time to the "wrong
+        # password for a real user" path below — otherwise the two are
+        # distinguishable by response time alone, regardless of the
+        # identical error message/status. Mirrors Django's own
+        # ModelBackend.authenticate() decoy-hash pattern for the same
+        # reason. Deliberately checked for an inactive user too (not
+        # decoy'd) — a deactivated account gets its own ACCOUNT_DEACTIVATED
+        # message below once the password is confirmed correct, which by
+        # its own design only ever reveals account state to whoever already
+        # proved they hold the real password (see that check's comment).
+        if user is not None:
             password_ok = user.check_password(data["password"])
         else:
             User().set_password(data["password"])
@@ -593,6 +603,22 @@ class LoginView(APIView):
 
         cache.delete(lockout_key)
         cache.delete(ip_lockout_key)
+
+        # Only reached after a *correct* password, so telling a deactivated
+        # account apart from a wrong password here doesn't let a stranger
+        # enumerate accounts — it only tells someone who already holds the
+        # real password (a former colleague, a leaked credential) that this
+        # specific account exists and is deactivated, a deliberately
+        # accepted trade-off in exchange for the account holder getting a
+        # clear "access denied" instead of a misleading "wrong password".
+        if not user.is_active:
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "ACCOUNT_DEACTIVATED",
+                "Access denied. Your account has been deactivated. Please contact your "
+                "administrator.",
+                status.HTTP_403_FORBIDDEN,
+            )
 
         # Only reached after a *correct* password, so disclosing the
         # account/org state here isn't a new enumeration vector (the caller
@@ -611,6 +637,26 @@ class LoginView(APIView):
                 "ORGANIZATION_SUSPENDED",
                 "Your organisation's access is currently suspended. Please contact your "
                 "administrator.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        # Same "only after a correct password" reasoning as the org check
+        # above. Branch/Department are plain is_active toggles (no
+        # SUSPENDED-vs-PENDING distinction to worry about, unlike
+        # Organization), so a straight `not is_active` is the right test.
+        if user.primary_branch_id is not None and not user.primary_branch.is_active:
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "BRANCH_INACTIVE",
+                "Your branch is no longer active. Please contact your administrator.",
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        if user.department_id is not None and not user.department.is_active:
+            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            return _error(
+                "DEPARTMENT_INACTIVE",
+                "Your department is no longer active. Please contact your administrator.",
                 status.HTTP_403_FORBIDDEN,
             )
 
@@ -641,10 +687,10 @@ class LoginView(APIView):
 
         # Checking this before password verification would let
         # `no_organization` be used to probe whether an email belongs to an
-        # organisation. `no_organization=True` is only ever sent by the
-        # dedicated platform-staff sign-in screen
-        # (frontend/src/auth/LoginPage.tsx's `/login/platform-staff` route),
-        # which skips tenant discovery entirely — see docs/14-TENANT-BRANDED-LOGIN-UX.md.
+        # organisation. `no_organization=True` is sent whenever
+        # TenantDiscoveryStep resolved a platform-staff email
+        # (`{"tenant": null}`, no real organization) — see
+        # TenantDiscoveryView's docstring and docs/14-TENANT-BRANDED-LOGIN-UX.md.
         # Not counted against the lockout counter: a correct password with
         # the wrong flag is a routing mistake, not a credential guess, and
         # counting it would let anyone lock out a real org user for free by
@@ -660,7 +706,11 @@ class LoginView(APIView):
 
         if user.mfa_enabled:
             try:
-                enforce_rate_limit(f"login-otp-send:{user.id}", max_attempts=5, window_seconds=1800)
+                enforce_rate_limit(
+                    f"login-otp-send:{user.id}",
+                    max_attempts=policy.otp_dispatch_max_attempts,
+                    window_seconds=policy.otp_dispatch_window_minutes * 60,
+                )
             except RateLimitExceeded as exc:
                 return _error(
                     "RATE_LIMITED",
@@ -742,6 +792,8 @@ class LoginVerifyOtpView(APIView):
                     user.organization_id is None
                     or user.organization.status != Organization.STATUS_SUSPENDED
                 )
+                and (user.primary_branch_id is None or user.primary_branch.is_active)
+                and (user.department_id is None or user.department.is_active)
                 and user.is_within_access_window()
                 and cache.get(f"login-lockout:{user.email.casefold()}", 0)
                 < policy.max_failed_login_attempts
