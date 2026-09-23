@@ -5,7 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -23,7 +23,7 @@ from apps.tenancy.models import (
 )
 
 
-class TenantIsolationTests(TestCase):
+class TenantIsolationTests(TransactionTestCase):
     """
     Negative-path tenant isolation — docs/04-MULTI-TENANCY.md §4.6 checklist,
     docs/13-TESTING-QA-CHECKLIST.md §13.2 ("explicitly named, cannot be
@@ -31,6 +31,23 @@ class TenantIsolationTests(TestCase):
     the ORM's TenantScopedManager, and Postgres RLS itself — the second
     matters because it's what protects against an application bug in the
     first, so these tests deliberately try to bypass the ORM manager too.
+
+    TransactionTestCase, not TestCase: the RLS policies key off Postgres
+    session GUCs (`app.current_org_id`/`app.is_platform_admin`, set via
+    `set_config(..., false)` in apps.tenancy.context), and Postgres treats
+    *any* set_config call as transactional — a ROLLBACK undoes it
+    regardless of the `is_local` flag, which only affects whether the
+    change survives past a successful COMMIT. Plain TestCase wraps every
+    test method in a savepoint that gets rolled back, which silently
+    reverts these GUCs out from under the still-live Python-side
+    thread-local tenant context (apps.tenancy.context._state) that
+    set_tenant_context()/clear_tenant_context() also maintain — the two
+    fall out of sync, and a later test can inherit a stale
+    is_platform_admin='true' session GUC that nothing in its own setUp
+    would ever explicitly set. TransactionTestCase instead truncates
+    tables between tests (no rollback), so a GUC this test sets stays set
+    exactly as long as it says, and clear_tenant_context() calls actually
+    take effect for real instead of being erased by the next rollback.
     """
 
     def setUp(self):
@@ -93,8 +110,9 @@ class TenantIsolationTests(TestCase):
         self.assertEqual(names, {"Branch A1", "Branch B1"})
 
 
-class DepartmentIsolationTests(TestCase):
-    """Same RLS contract as TenantIsolationTests, for the new Department table."""
+class DepartmentIsolationTests(TransactionTestCase):
+    """Same RLS contract as TenantIsolationTests, for the new Department
+    table — TransactionTestCase for the same reason, see that class."""
 
     def setUp(self):
         self.org_a = Organization.objects.create(name="Org A", slug="dept-iso-a", facility_type="CLINIC")

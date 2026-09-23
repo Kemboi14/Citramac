@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.core import mail
 from django.core.cache import cache
@@ -378,6 +379,13 @@ class LoginSecurityTests(APITestCase):
         LoginView must read SecurityPolicy.max_failed_login_attempts/
         lockout_duration_minutes rather than hardcoded values — the Security
         Policies screen previously had zero effect on actual login lockout.
+
+        Asserts on the `timeout=` LoginView actually passes to cache.set()
+        rather than reading it back via cache.ttl() — that's a django-redis
+        extension method, not part of Django's cache API, and isn't
+        available on the LocMemCache backend config.settings.test uses (nor
+        on any other stock Django cache backend), so it fails here
+        regardless of whether LoginView's own behavior is correct.
         """
         with platform_admin_context():
             policy = SecurityPolicy.get_solo()
@@ -385,15 +393,23 @@ class LoginSecurityTests(APITestCase):
             policy.lockout_duration_minutes = 1
             policy.save()
 
-        for _ in range(2):
-            self.client.post(
-                reverse("auth-login"), {"email": "jane@org-x.test", "password": "wrong-password"}
-            )
+        with patch.object(cache, "set", wraps=cache.set) as mock_set:
+            for _ in range(2):
+                self.client.post(
+                    reverse("auth-login"), {"email": "jane@org-x.test", "password": "wrong-password"}
+                )
         locked_response = self.client.post(
             reverse("auth-login"), {"email": "jane@org-x.test", "password": "Correct!Horse99"}
         )
         self.assertEqual(locked_response.status_code, 423)
-        self.assertLessEqual(cache.ttl("login-lockout:jane@org-x.test"), 60)
+
+        lockout_calls = [
+            call
+            for call in mock_set.call_args_list
+            if call.args[:1] == ("login-lockout:jane@org-x.test",)
+        ]
+        self.assertTrue(lockout_calls, "LoginView never cached the lockout counter")
+        self.assertLessEqual(lockout_calls[-1].kwargs.get("timeout"), 60)
 
 
 class TimeBoundAccessTests(APITestCase):
