@@ -584,7 +584,7 @@ class DeactivationLoginTests(APITestCase):
                 password="Correct!Horse99",
                 organization=self.org,
                 is_active=True,
-                mfa_enabled=False,
+                mfa_enabled=kwargs.pop("mfa_enabled", False),
                 **kwargs,
             )
 
