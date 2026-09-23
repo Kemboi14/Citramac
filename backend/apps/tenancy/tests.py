@@ -816,19 +816,13 @@ class BranchAndSubscriptionScopingTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.sub_a.id))
 
-    def test_org_admin_cannot_create_branch_under_suspended_organization(self):
-        with platform_admin_context():
-            self.org_a.status = Organization.STATUS_SUSPENDED
-            self.org_a.save(update_fields=["status"])
-        response = self.client.post(
-            reverse("branch-list"),
-            {"organization": str(self.org_a.id), "name": "New Branch", "facility_level": "L3"},
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("organization", response.data)
-
+    # No "org admin tries to create a branch under their own suspended org"
+    # test here: once `self.org_a` is SUSPENDED, `self.org_a_access` itself
+    # is rejected at the authentication layer (TenantAwareJWTAuthentication
+    # — see accounts.tests.MidSessionDeactivationTests), a stronger, earlier
+    # block than BranchViewSet's own check below — that request never even
+    # reaches the view. A Super Admin acting on behalf of a suspended org
+    # from the platform console is the actual scenario this check guards.
     def test_super_admin_cannot_create_branch_under_suspended_organization(self):
         with platform_admin_context():
             self.org_b.status = Organization.STATUS_SUSPENDED
@@ -952,15 +946,19 @@ class DepartmentScopingTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("branch", response.data)
 
-    def test_org_admin_cannot_create_department_under_suspended_organization(self):
+    # No org-admin-token variant of this test — see the identical note above
+    # BranchAndSubscriptionScopingTests.test_super_admin_cannot_create_branch_under_suspended_organization:
+    # a suspended org's own admin token is rejected earlier, at the
+    # authentication layer, before ever reaching this view.
+    def test_super_admin_cannot_create_department_under_suspended_organization(self):
         with platform_admin_context():
             self.org_a.status = Organization.STATUS_SUSPENDED
             self.org_a.save(update_fields=["status"])
         response = self.client.post(
             reverse("department-list"),
-            {"name": "New Department"},
+            {"organization": str(self.org_a.id), "name": "New Department"},
             format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("organization", response.data)

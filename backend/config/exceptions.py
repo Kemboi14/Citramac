@@ -17,13 +17,21 @@ by hand. A `code` kwarg on the raised exception (e.g.
 `AuthenticationFailed("...", code="organization_suspended")`) is honored and
 upper-cased; otherwise a generic code is derived from the HTTP status.
 
-Deliberately scoped to exceptions whose `.detail` is a plain string
-(AuthenticationFailed, PermissionDenied, NotAuthenticated, Http404,
-Throttled, a bare `raise ValidationError("message")`) — DRF wraps those as
-`{"detail": "..."}` today, the shape this project never intended to ship.
+Deliberately scoped to exceptions whose `.detail` contains a "detail" key
+at all — either a plain string (AuthenticationFailed, PermissionDenied,
+NotAuthenticated, Http404, Throttled, a bare `raise ValidationError("msg")`,
+DRF wraps those as `{"detail": "..."}`), or `rest_framework_simplejwt`'s own
+exceptions, which use their own `DetailDictMixin` producing
+`{"detail": "...", "code": "...", ...}` — a *dict* even for a single error,
+critically different from plain DRF (this bit us for real: an inactive
+user's already-issued token hit this path and got simplejwt's un-reshaped
+dict instead of the app's error shape, since the original version of this
+handler only matched a dict whose *only* key was "detail"). Both shapes are
+"this project never intended to ship" in the same way.
+
 A `serializer.is_valid(raise_exception=True)` failure is untouched: DRF
-represents that as a raw per-field `{"field": ["msg"]}` dict (no "detail"
-key at all), which a substantial number of existing tests and, in
+represents that as a raw per-field `{"field": ["msg"]}` dict with no
+"detail" key at all, which a substantial number of existing tests and, in
 principle, frontend forms already assert on directly. Reshaping that too is
 a legitimate follow-up but a separate, much larger-blast-radius change
 (every `raise_exception=True` call site in every app) than what today's
@@ -53,15 +61,20 @@ def custom_exception_handler(exc, context):
         return None
 
     data = response.data
-    if not (isinstance(data, dict) and set(data.keys()) == {"detail"}):
+    if not (isinstance(data, dict) and "detail" in data):
         # Either already app-shaped ({"error": ...}, not actually reachable
         # via the handler but defensive) or a per-field validation dict/list
         # — left alone, see module docstring.
         return response
 
     detail = data["detail"]
-    code = getattr(detail, "code", None) or _STATUS_FALLBACK_CODES.get(
-        response.status_code, "ERROR"
+    # simplejwt's DetailDictMixin puts the real code at the top level
+    # (alongside "detail", sometimes "messages" too) rather than on the
+    # detail string itself — check there first.
+    code = (
+        data.get("code")
+        or getattr(detail, "code", None)
+        or _STATUS_FALLBACK_CODES.get(response.status_code, "ERROR")
     )
     response.data = {"error": {"code": str(code).upper(), "message": str(detail)}}
     return response

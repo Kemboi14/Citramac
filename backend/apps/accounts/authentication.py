@@ -92,11 +92,22 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
         mid-session, not just at their next login attempt. Matched on the
         library's own stable `code`, not the message text, so this doesn't
         depend on simplejwt's exact wording.
+
+        simplejwt's own `AuthenticationFailed` (rest_framework_simplejwt.
+        exceptions) is a different class from the one imported at the top of
+        this file (rest_framework.exceptions) — it uses a DetailDictMixin
+        that builds `exc.detail` as a *dict* (`{"detail": ..., "code": ...}`),
+        not a plain string. `APIException.get_codes()` reflects that shape
+        (returns a dict of sub-codes, not one string), so comparing it
+        directly to `"user_inactive"` never matches — has to be read off the
+        dict itself.
         """
         try:
             return super().get_user(validated_token)
         except AuthenticationFailed as exc:
-            if exc.get_codes() == "user_inactive":
+            detail = getattr(exc, "detail", None)
+            code = detail.get("code") if isinstance(detail, dict) else getattr(detail, "code", None)
+            if code == "user_inactive":
                 raise AuthenticationFailed(
                     "Your account has been deactivated. Please contact your administrator.",
                     code="user_inactive",

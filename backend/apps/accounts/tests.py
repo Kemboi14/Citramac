@@ -1488,19 +1488,28 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertIn("department", response.data)
 
     def test_staff_invite_rejects_a_suspended_organization(self):
+        """
+        Uses the Super Admin token, not the org's own admin: once `self.org`
+        is SUSPENDED, `self.org_access` itself is rejected at the
+        authentication layer (TenantAwareJWTAuthentication — see
+        MidSessionDeactivationTests), a stronger, earlier block than this
+        view-level check. A Super Admin acting on behalf of a suspended org
+        from the platform console is the actual scenario this check guards.
+        """
         with platform_admin_context():
             self.org.status = Organization.STATUS_SUSPENDED
             self.org.save(update_fields=["status"])
         response = self.client.post(
             reverse("staff-list"),
             {
+                "organization": str(self.org.id),
                 "email": "intosuspended@amani.test",
                 "first_name": "Sus",
                 "last_name": "Pended",
                 "role": self.psychiatrist_template.id,
             },
             format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("organization", response.data)
