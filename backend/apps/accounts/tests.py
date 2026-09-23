@@ -1974,6 +1974,37 @@ class SecurityPolicyEnforcementTests(APITestCase):
         token = AccessToken(access)
         self.assertEqual(token["exp"] - token["iat"], 5 * 60)
 
+    def test_issued_token_carries_real_role_and_branch_ids(self):
+        """
+        Regression test: issue_tokens() reads user.roles/user.branch_access
+        (both RLS-protected) from LoginView/LoginVerifyOtpView, i.e. before
+        any tenant context is bound for this request. Without
+        platform_admin_context() wrapping those two queries, RLS silently
+        returns nothing — branch_ids always [], and role only "worked" by
+        coincidence when the assigned Role happened to be a NULL-org
+        platform template (accounts_role's RLS policy has an extra clause
+        for that case; tenancy_branch has no equivalent, so branch_ids is
+        the one that would fail unconditionally, org-specific role
+        assignment or not). Only catchable with RLS actually enforced —
+        see the k3s deploy notes for how this was discovered.
+        """
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        from apps.tenancy.models import Branch
+
+        with platform_admin_context():
+            role = Role.objects.create(name="Ward Nurse", organization=self.org)
+            self.user.roles.add(role)
+            branch = Branch.objects.create(
+                organization=self.org, name="Main Branch", facility_level="L4"
+            )
+            self.user.branch_access.add(branch)
+
+        access, _ = issue_tokens(self.user)
+        token = AccessToken(access)
+        self.assertEqual(token["role"], "Ward Nurse")
+        self.assertEqual(token["branch_ids"], [str(branch.id)])
+
     def test_nth_plus_one_login_evicts_oldest_session(self):
         from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
         from rest_framework_simplejwt.tokens import RefreshToken

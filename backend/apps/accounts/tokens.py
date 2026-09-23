@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.tenancy.context import platform_admin_context
+
 
 def _primary_role_name(user):
     if user.is_superuser:
@@ -39,8 +41,19 @@ def issue_tokens(user):
     refresh = RefreshToken.for_user(user)
     refresh.set_exp(lifetime=timedelta(minutes=policy.session_timeout_minutes))
     refresh["organization_id"] = str(user.organization_id) if user.organization_id else None
-    refresh["branch_ids"] = [str(bid) for bid in user.branch_access.values_list("id", flat=True)]
-    refresh["role"] = _primary_role_name(user)
+    # branch_access (tenancy_branch) and roles (accounts_role) are both
+    # RLS-protected. issue_tokens() is called from LoginView/
+    # LoginVerifyOtpView *after* their own platform_admin_context() block
+    # has already closed — this is a pre-authentication moment with no
+    # tenant context of its own, so without this wrapper these queries
+    # silently return nothing (empty branch_ids every time; role only
+    # "works" by coincidence when the assigned Role happens to be a
+    # NULL-organization platform template, per accounts_role's RLS policy —
+    # see apps/accounts/migrations/0002_rls.py's own comment on why that
+    # table's policy has an extra clause Branch's doesn't).
+    with platform_admin_context():
+        refresh["branch_ids"] = [str(bid) for bid in user.branch_access.values_list("id", flat=True)]
+        refresh["role"] = _primary_role_name(user)
     refresh["email"] = user.email
     refresh["first_name"] = user.first_name
     refresh["last_name"] = user.last_name
