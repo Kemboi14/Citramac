@@ -574,7 +574,19 @@ class LoginView(APIView):
             )
 
         with platform_admin_context():
-            user = User.all_objects.filter(email__iexact=email).first()
+            # select_related, not a lazy load later: organization/
+            # primary_branch/department are all RLS-protected (Branch/
+            # Department genuinely so; Organization isn't, but there's no
+            # harm eager-loading it too), and every access below this point
+            # runs *outside* platform_admin_context — an unauthenticated
+            # login request has no tenant context of its own yet, so a
+            # lazy-load of an RLS-protected FK out there would find nothing
+            # and raise DoesNotExist instead of returning the real row.
+            user = (
+                User.all_objects.filter(email__iexact=email)
+                .select_related("organization", "primary_branch", "department")
+                .first()
+            )
 
         # Argon2-verify a real password even when there's no user at all to
         # check it against, so this path takes comparable time to the "wrong
