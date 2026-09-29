@@ -224,6 +224,8 @@ class SendSmsTests(TestCase):
             "Resp",
             (),
             {
+                "ok": True,
+                "status_code": 200,
                 "raise_for_status": lambda self: None,
                 "json": lambda self: {"ErrorCode": 0, "ErrorDescription": "Success", "Data": []},
             },
@@ -246,6 +248,8 @@ class SendSmsTests(TestCase):
             "Resp",
             (),
             {
+                "ok": True,
+                "status_code": 200,
                 "raise_for_status": lambda self: None,
                 "json": lambda self: {"ErrorCode": 4, "ErrorDescription": "Insufficient balance"},
             },
@@ -289,3 +293,141 @@ class SendOtpSmsTaskTests(TestCase):
         self.assertEqual(args[0], "0712345678")
         self.assertIn("654321", args[1])
         self.assertEqual(kwargs["organization"].id, self.org.id)
+
+
+class NotificationDeliveryTests(TestCase):
+    """apps.notifications.dispatch + tasks.deliver_notification — the durable outbox."""
+
+    def setUp(self):
+        from apps.accounts.models import User
+
+        self.addCleanup(clear_tenant_context)
+        self.addCleanup(mail.outbox.clear)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Outbox Org", slug="outbox-org", facility_type="CLINIC"
+            )
+            self.user = User.objects.create_user(
+                email="admin@outbox.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                phone="0712345678",
+            )
+
+    def _notify(self, key="evt:1"):
+        from .dispatch import EmailContent, notify
+        from .models import Notification
+
+        with self.captureOnCommitCallbacks(execute=True):
+            return notify(
+                [self.user],
+                category=Notification.CATEGORY_SUBSCRIPTION,
+                title="Heads up",
+                body="Something is due.",
+                dedupe_key=key,
+                organization_id=self.org.id,
+                email=EmailContent(
+                    subject="Heads up",
+                    body_text="Something is due.",
+                    context={"heading": "Heads up", "paragraphs": ["Something is due."]},
+                ),
+                sms_text="Something is due.",
+            )
+
+    def test_email_is_sent_and_recorded(self):
+        from .models import NotificationDelivery
+
+        with patch("apps.notifications.sms.requests.post"):
+            self._notify()
+        email = NotificationDelivery.objects.get(channel="EMAIL")
+        self.assertEqual(email.status, NotificationDelivery.STATUS_SENT)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Something is due.", mail.outbox[0].alternatives[0][0])
+
+    def test_same_event_is_never_sent_twice(self):
+        from .models import Notification, NotificationDelivery
+
+        self.assertEqual(self._notify(), 1)
+        self.assertEqual(self._notify(), 0)
+        self.assertEqual(Notification.objects.filter(recipient=self.user).count(), 1)
+        self.assertEqual(NotificationDelivery.objects.filter(channel="EMAIL").count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_missing_sms_gateway_is_recorded_not_silently_sent(self):
+        from .models import NotificationDelivery
+
+        self._notify()
+        sms = NotificationDelivery.objects.get(channel="SMS")
+        self.assertEqual(sms.status, NotificationDelivery.STATUS_NOT_CONFIGURED)
+
+    def test_console_email_backend_counts_as_not_configured(self):
+        from .models import NotificationDelivery
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend"):
+            self._notify()
+        email = NotificationDelivery.objects.get(channel="EMAIL")
+        self.assertEqual(email.status, NotificationDelivery.STATUS_NOT_CONFIGURED)
+
+    def test_transport_failure_backs_off_then_fails(self):
+        from .models import NotificationDelivery
+        from .tasks import DELIVERY_MAX_ATTEMPTS, deliver_notification
+
+        with patch("apps.notifications.tasks.send_html_email", side_effect=OSError("SMTP down")):
+            self._notify()
+            email = NotificationDelivery.objects.get(channel="EMAIL")
+            self.assertEqual(email.status, NotificationDelivery.STATUS_PENDING)
+            self.assertIsNotNone(email.next_attempt_at)
+            for _ in range(DELIVERY_MAX_ATTEMPTS - 1):
+                deliver_notification(str(email.id))
+        email.refresh_from_db()
+        self.assertEqual(email.status, NotificationDelivery.STATUS_FAILED)
+        self.assertEqual(email.attempts, DELIVERY_MAX_ATTEMPTS)
+        self.assertIn("SMTP down", email.last_error)
+
+
+class NotificationApiTests(TestCase):
+    def setUp(self):
+        from apps.accounts.models import User
+        from apps.accounts.tokens import issue_tokens
+
+        from .models import Notification
+
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Api Org", slug="api-org", facility_type="CLINIC"
+            )
+            self.me = User.objects.create_user(
+                email="me@api.test", password="Password123!", organization=org, is_active=True
+            )
+            self.other = User.objects.create_user(
+                email="other@api.test", password="Password123!", organization=org, is_active=True
+            )
+            Notification.objects.create(recipient=self.me, category="SYSTEM", title="Mine")
+            Notification.objects.create(recipient=self.other, category="SYSTEM", title="Theirs")
+        access, _ = issue_tokens(self.me)
+        self.auth = {"HTTP_AUTHORIZATION": f"Bearer {access}"}
+
+    def test_users_see_only_their_own_notifications(self):
+        from django.urls import reverse
+
+        response = self.client.get(reverse("notification-list"), **self.auth)
+        self.assertEqual([n["title"] for n in response.json()["results"]], ["Mine"])
+        count = self.client.get(reverse("notification-unread-count"), **self.auth)
+        self.assertEqual(count.json()["count"], 1)
+
+    def test_list_filters_by_category_and_unread(self):
+        from django.urls import reverse
+
+        from .models import Notification
+
+        with platform_admin_context():
+            Notification.objects.create(
+                recipient=self.me, category="SUBSCRIPTION", title="Renew", is_read=True
+            )
+        url = reverse("notification-list")
+        by_category = self.client.get(url, {"category": "SUBSCRIPTION"}, **self.auth).json()
+        self.assertEqual([n["title"] for n in by_category["results"]], ["Renew"])
+        unread = self.client.get(url, {"unread": "true"}, **self.auth).json()
+        self.assertEqual([n["title"] for n in unread["results"]], ["Mine"])

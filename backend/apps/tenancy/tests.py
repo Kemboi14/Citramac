@@ -115,8 +115,12 @@ class DepartmentIsolationTests(TransactionTestCase):
     table — TransactionTestCase for the same reason, see that class."""
 
     def setUp(self):
-        self.org_a = Organization.objects.create(name="Org A", slug="dept-iso-a", facility_type="CLINIC")
-        self.org_b = Organization.objects.create(name="Org B", slug="dept-iso-b", facility_type="CLINIC")
+        self.org_a = Organization.objects.create(
+            name="Org A", slug="dept-iso-a", facility_type="CLINIC"
+        )
+        self.org_b = Organization.objects.create(
+            name="Org B", slug="dept-iso-b", facility_type="CLINIC"
+        )
         with platform_admin_context():
             self.dept_a = Department.objects.create(organization=self.org_a, name="Pharmacy A")
             self.dept_b = Department.objects.create(organization=self.org_b, name="Pharmacy B")
@@ -467,7 +471,9 @@ class OrganizationConsoleApiTests(APITestCase):
             org = Organization.objects.create(
                 name="Own Logo Org", slug="own-logo-org", facility_type="CLINIC"
             )
-            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
             org_admin = User.objects.create_user(
                 email="admin@own-logo-org.test",
                 password="Password123!",
@@ -497,7 +503,9 @@ class OrganizationConsoleApiTests(APITestCase):
             other_org = Organization.objects.create(
                 name="Other Org", slug="other-org-logo", facility_type="CLINIC"
             )
-            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
             org_admin = User.objects.create_user(
                 email="admin@own-org-logo.test",
                 password="Password123!",
@@ -521,9 +529,14 @@ class OrganizationConsoleApiTests(APITestCase):
 
         with platform_admin_context():
             org = Organization.objects.create(
-                name="Theme Org", slug="theme-org", facility_type="CLINIC", logo_url="https://x/logo.png"
+                name="Theme Org",
+                slug="theme-org",
+                facility_type="CLINIC",
+                logo_url="https://x/logo.png",
             )
-            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
             org_admin = User.objects.create_user(
                 email="admin@theme-org.test",
                 password="Password123!",
@@ -534,7 +547,9 @@ class OrganizationConsoleApiTests(APITestCase):
         access, _ = issue_tokens(org_admin)
         auth = {"HTTP_AUTHORIZATION": f"Bearer {access}"}
 
-        get_response = self.client.get(reverse("platform-organization-theme", args=[org.id]), **auth)
+        get_response = self.client.get(
+            reverse("platform-organization-theme", args=[org.id]), **auth
+        )
         self.assertEqual(get_response.status_code, 200, get_response.data)
         self.assertEqual(get_response.data["logo_url"], "https://x/logo.png")
 
@@ -557,7 +572,9 @@ class OrganizationConsoleApiTests(APITestCase):
             other_org = Organization.objects.create(
                 name="Other Theme Org", slug="other-theme-org", facility_type="CLINIC"
             )
-            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
             org_admin = User.objects.create_user(
                 email="admin@own-theme-org.test",
                 password="Password123!",
@@ -834,6 +851,41 @@ class BranchAndSubscriptionScopingTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.sub_a.id))
 
+    def test_org_admin_cannot_modify_own_subscription(self):
+        """Read-only for Org Admin: extending their own renewal date or
+        flipping their own status must be refused, not just unlisted."""
+        url = reverse("subscription-detail", args=[self.sub_a.id])
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {self.org_a_access}"}
+        patch = self.client.patch(
+            url, {"current_period_end": "2099-01-01", "status": "ACTIVE"}, format="json", **auth
+        )
+        self.assertEqual(patch.status_code, 403)
+        put = self.client.put(url, {}, format="json", **auth)
+        self.assertEqual(put.status_code, 403)
+        with platform_admin_context():
+            self.sub_a.refresh_from_db()
+        self.assertEqual(self.sub_a.current_period_end, date(2027, 1, 1))
+
+    def test_subscription_cannot_be_deleted_by_anyone(self):
+        url = reverse("subscription-detail", args=[self.sub_a.id])
+        # DRF runs permission checks before resolving the method, so the Org
+        # Admin is refused with 403; the Super Admin reaches the method check.
+        org_admin = self.client.delete(url, HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}")
+        self.assertEqual(org_admin.status_code, 403)
+        super_admin = self.client.delete(url, HTTP_AUTHORIZATION=f"Bearer {self.super_access}")
+        self.assertEqual(super_admin.status_code, 405)
+        with platform_admin_context():
+            self.assertTrue(Subscription.objects.filter(pk=self.sub_a.pk).exists())
+
+    def test_super_admin_can_still_update_subscription(self):
+        response = self.client.patch(
+            reverse("subscription-detail", args=[self.sub_a.id]),
+            {"current_period_end": "2028-01-01"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
     # No "org admin tries to create a branch under their own suspended org"
     # test here: once `self.org_a` is SUSPENDED, `self.org_a_access` itself
     # is rejected at the authentication layer (TenantAwareJWTAuthentication
@@ -896,7 +948,9 @@ class DepartmentScopingTests(APITestCase):
             )
             from apps.accounts.models import Role
 
-            org_admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
+            org_admin_role = Role.objects.filter(
+                name="Org Admin", organization__isnull=True
+            ).first()
             self.org_a_admin = User.objects.create_user(
                 email="admin@dept-org-a.test",
                 password="Password123!",

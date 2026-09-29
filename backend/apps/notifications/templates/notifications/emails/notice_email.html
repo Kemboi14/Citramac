@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ subject }}</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border-radius:8px; overflow:hidden;">
+            <tr>
+              <td style="background-color:#006e51; padding:24px 32px;">
+                <span style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:0.5px;">CITRAMAC</span>
+              </td>
+            </tr>
+            {% if severity == "CRITICAL" or severity == "WARNING" %}
+            <tr>
+              <td style="background-color:{% if severity == 'CRITICAL' %}#fdecea{% else %}#fff6e5{% endif %}; padding:10px 32px;">
+                <span style="color:{% if severity == 'CRITICAL' %}#b3261e{% else %}#8a5a00{% endif %}; font-size:12px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;">{% if severity == "CRITICAL" %}Action required{% else %}Attention{% endif %}</span>
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0 0 16px; color:#1f2933; font-size:18px; font-weight:700; line-height:1.4;">{{ heading }}</p>
+                {% if organization_name %}
+                <p style="margin:0 0 16px; color:#52606d; font-size:13px; line-height:1.5;">Organisation: <strong>{{ organization_name }}</strong></p>
+                {% endif %}
+                {% for paragraph in paragraphs %}
+                <p style="margin:0 0 14px; color:#1f2933; font-size:15px; line-height:1.55;">{{ paragraph }}</p>
+                {% endfor %}
+                {% if facts %}
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px; background-color:#f2f9f7; border-radius:6px;">
+                  <tr>
+                    <td style="padding:16px 20px;">
+                      {% for fact in facts %}
+                      <p style="margin:0{% if not forloop.last %} 0 6px{% endif %}; color:#1f2933; font-size:14px; line-height:1.5;"><strong>{{ fact.label }}:</strong> {{ fact.value }}</p>
+                      {% endfor %}
+                    </td>
+                  </tr>
+                </table>
+                {% endif %}
+                {% if action_url %}
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+                  <tr>
+                    <td style="background-color:#006e51; border-radius:6px;">
+                      <a href="{{ action_url }}" style="display:inline-block; padding:12px 22px; color:#ffffff; font-size:14px; font-weight:600; text-decoration:none;">{{ action_label|default:"Open CITRAMAC" }}</a>
+                    </td>
+                  </tr>
+                </table>
+                {% endif %}
+                {% if footnote %}
+                <p style="margin:0; color:#52606d; font-size:13px; line-height:1.5;">{{ footnote }}</p>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 32px 24px; border-top:1px solid #e4e7eb;">
+                <p style="margin:0; color:#9aa5b1; font-size:12px;">Sent by CITRAMAC &mdash; please don't reply to this automated message.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -86,6 +86,7 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.offline_sync",
     "apps.security",
+    "apps.retention",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -318,6 +319,27 @@ CELERY_BEAT_SCHEDULE = {
     "purge-expired-auth-artifacts": {
         "task": "apps.security.tasks.purge_expired_auth_artifacts",
         "schedule": crontab(hour=3, minute=0),
+    },
+    # Tenant subscription lifecycle — reminders before the period ends,
+    # PAST_DUE/grace, then EXPIRED (read-only). 05:00 UTC = 08:00 EAT, so
+    # reminders land at the start of the working day. See
+    # apps/tenancy/subscription_lifecycle.py.
+    "process-subscription-lifecycle": {
+        "task": "apps.tenancy.tasks.process_subscription_lifecycle",
+        "schedule": crontab(hour=5, minute=0),
+    },
+    # Records retention scan — proposes archive batches for Org Admin
+    # approval and sends coming-due notices; never archives on its own.
+    # Weekly, Monday 01:00 UTC. See apps/retention/services.py.
+    "run-retention-scan": {
+        "task": "apps.retention.tasks.run_retention_scan",
+        "schedule": crontab(day_of_week=1, hour=1, minute=0),
+    },
+    # Durable outbox sweep for notification email/SMS — re-attempts
+    # deliveries that failed or whose queued task was lost.
+    "retry-pending-notification-deliveries": {
+        "task": "apps.notifications.tasks.retry_pending_deliveries",
+        "schedule": crontab(minute="*/10"),
     },
 }
 

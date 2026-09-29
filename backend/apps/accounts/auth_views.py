@@ -570,7 +570,9 @@ class LoginView(APIView):
             )
         if cache.get(ip_lockout_key, 0) >= ip_max_attempts:
             return _error(
-                "RATE_LIMITED", "Too many attempts. Try again later.", status.HTTP_429_TOO_MANY_REQUESTS
+                "RATE_LIMITED",
+                "Too many attempts. Try again later.",
+                status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
         with platform_admin_context():
@@ -642,12 +644,19 @@ class LoginView(APIView):
 
         if (
             user.organization_id is not None
-            and user.organization.status == Organization.STATUS_SUSPENDED
+            and user.organization.status in Organization.BLOCKED_STATUSES
         ):
             _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
+            # One code for both blocked states (the frontend's forced sign-out
+            # keys off it); the message says which one applies.
+            state = (
+                "archived"
+                if user.organization.status == Organization.STATUS_ARCHIVED
+                else "suspended"
+            )
             return _error(
                 "ORGANIZATION_SUSPENDED",
-                "Your organisation's access is currently suspended. Please contact your "
+                f"Your organisation's access is currently {state}. Please contact your "
                 "administrator.",
                 status.HTTP_403_FORBIDDEN,
             )
@@ -802,7 +811,7 @@ class LoginVerifyOtpView(APIView):
                 user.is_active
                 and (
                     user.organization_id is None
-                    or user.organization.status != Organization.STATUS_SUSPENDED
+                    or user.organization.status not in Organization.BLOCKED_STATUSES
                 )
                 and (user.primary_branch_id is None or user.primary_branch.is_active)
                 and (user.department_id is None or user.department.is_active)
@@ -888,6 +897,21 @@ class RefreshView(APIView):
         refresh.set_exp(lifetime=timedelta(minutes=policy.session_timeout_minutes))
         refresh.set_iat()
 
+        # Re-read identity claims (branches, role) rather than carrying the
+        # old token's forward — see tokens.apply_identity_claims.
+        from .models import User
+        from .tokens import apply_identity_claims
+
+        with platform_admin_context():
+            user = User.all_objects.filter(pk=refresh.get("user_id")).first()
+        if user is None or not user.is_active:
+            return _error(
+                "INVALID_REFRESH_TOKEN",
+                "Refresh token is invalid or expired.",
+                status.HTTP_401_UNAUTHORIZED,
+            )
+        apply_identity_claims(refresh, user)
+
         access = refresh.access_token
         access.set_exp(lifetime=timedelta(minutes=policy.token_expiry_minutes))
 
@@ -946,7 +970,9 @@ class ForgotPasswordView(APIView):
 
         try:
             enforce_general_rate_limit(client_ip)
-            enforce_rate_limit(f"forgot-password-ip:{client_ip}", max_attempts=20, window_seconds=600)
+            enforce_rate_limit(
+                f"forgot-password-ip:{client_ip}", max_attempts=20, window_seconds=600
+            )
             enforce_rate_limit(f"forgot-password:{email}", max_attempts=5, window_seconds=1800)
         except RateLimitExceeded as exc:
             return _error(

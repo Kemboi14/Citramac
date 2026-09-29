@@ -1,8 +1,12 @@
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.sysadmin_audit.context import set_audit_actor
 from apps.tenancy.context import platform_admin_context, set_tenant_context
+
+# Writes that stay allowed for a tenant whose subscription has EXPIRED.
+READ_ONLY_EXEMPT_PREFIXES = ("/api/v1/auth/", "/api/v1/me/", "/api/v1/notifications/")
 
 
 class TenantAwareJWTAuthentication(JWTAuthentication):
@@ -39,7 +43,7 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
 
                 if (
                     user.organization_id
-                    and user.organization.status == Organization.STATUS_SUSPENDED
+                    and user.organization.status in Organization.BLOCKED_STATUSES
                 ):
                     raise AuthenticationFailed(
                         "This account's organization is no longer active. Please contact "
@@ -52,6 +56,30 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                 # Department (auth_views.py's LoginView applies the same
                 # checks at login time; this is what closes the gap for a
                 # token issued before the branch/department was deactivated).
+                # An EXPIRED subscription (past its grace period) makes the
+                # tenant read-only rather than locking anyone out: clinicians
+                # keep access to every existing record, but nothing new can be
+                # written until it is renewed. Sign-in, sign-out, password and
+                # profile endpoints, and marking notifications read, stay open.
+                if (
+                    user.organization_id
+                    and not user.is_superuser
+                    and request.method not in SAFE_METHODS
+                    and not request.path.startswith(READ_ONLY_EXEMPT_PREFIXES)
+                ):
+                    from apps.tenancy.models import Subscription
+
+                    if Subscription.all_objects.filter(
+                        organization_id=user.organization_id,
+                        status=Subscription.STATUS_EXPIRED,
+                    ).exists():
+                        raise PermissionDenied(
+                            "Your organisation's subscription has expired, so CITRAMAC is "
+                            "read-only: you can view and export records, but not add or change "
+                            "them. Contact your Org Admin to renew.",
+                            code="subscription_expired",
+                        )
+
                 if user.primary_branch_id and not user.primary_branch.is_active:
                     raise AuthenticationFailed(
                         "Your branch is no longer active. Please contact your administrator.",

@@ -15,7 +15,13 @@ class NotificationListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        queryset = Notification.objects.filter(recipient=self.request.user)
+        params = self.request.query_params
+        if params.get("category"):
+            queryset = queryset.filter(category=params["category"])
+        if params.get("unread") == "true":
+            queryset = queryset.filter(is_read=False)
+        return queryset
 
 
 class NotificationUnreadCountView(APIView):

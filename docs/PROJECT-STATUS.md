@@ -55,7 +55,7 @@ the index, not the detail.
 | `sysadmin_audit` | 83 lines | 3 | Immutable audit log, sensitive-record view logging |
 | `mhp_program` | 232 lines | 4 | MHP core + extensions: Biopsychosocial, Psychotherapy, SUD Rehab, Supervision Requests, MHP Team, NACADA NDO |
 | `dha_interop` | 160 lines | 4 | FHIR mapping, HIE client, SHA gateway (real + stub), terminology sync |
-| `notifications` | models stub; `tasks.py` has `send_otp_email`/`send_otp_sms`/`send_invite_email`/risk-alert Celery tasks | 0 | No persisted `Notification` model yet — dispatch-only tasks used by the auth flow |
+| `notifications` | `Notification` + `NotificationDelivery` outbox; OTP/invite/risk-alert tasks; `dispatch.notify()` for subscription and retention notices | — | In-app + email + SMS, deduplicated per event |
 | `offline_sync` | 64 lines | 3 | Local-first push/pull sync, conflict log |
 
 Every app has a `tests.py`; no dedicated `tests/` packages were found, so exact
@@ -151,8 +151,10 @@ walkthroughs per `docs/08` §8.6.
 - **No live-cluster or live-AWS-account validation** for either the K8s
   manifests or the Terraform modules — both are validated only via
   local/offline tooling (`kubectl kustomize`, `terraform validate`).
-- **`notifications` app** is a stub (`models.py` is 1 line) — scaffolded per
-  the repo layout but not built out.
+- **`notifications` app** is built: in-app `Notification` (categories, severity,
+  per-event dedupe), a `NotificationDelivery` outbox for email/SMS with retries
+  and a visible NOT_CONFIGURED/FAILED state, and `dispatch.notify()` used by the
+  subscription lifecycle and records-retention jobs.
 - **README.md's "Current status" section is stale** — it still says "Phase 0
   complete, next up Phase 1," dated from before Phase 1 was built. Worth a
   quick update if this doc is being kept current.

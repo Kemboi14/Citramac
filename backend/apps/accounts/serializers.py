@@ -259,9 +259,7 @@ class StaffSerializer(serializers.ModelSerializer):
                     {"branch_access": "One or more branches are no longer active."}
                 )
 
-        starts = attrs.get(
-            "access_starts_at", getattr(self.instance, "access_starts_at", None)
-        )
+        starts = attrs.get("access_starts_at", getattr(self.instance, "access_starts_at", None))
         ends = attrs.get("access_ends_at", getattr(self.instance, "access_ends_at", None))
         if starts and ends and ends <= starts:
             raise serializers.ValidationError(
@@ -291,6 +289,13 @@ class MyProfileSerializer(serializers.ModelSerializer):
 
     role_names = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    # Read-only "where am I" context for the topbar organisation · branch
+    # pill (frontend/src/shells/OrgBranchPill.tsx). Served here rather than
+    # from /platform/branches/ because that list is admin-only, and every
+    # clinician needs to see their own branch names.
+    primary_branch = serializers.SerializerMethodField()
+    branches = serializers.SerializerMethodField()
+    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
 
     class Meta:
         model = User
@@ -302,12 +307,32 @@ class MyProfileSerializer(serializers.ModelSerializer):
             "phone",
             "avatar",
             "role_names",
+            "organization_id",
             "organization_name",
+            "primary_branch",
+            "branches",
+            "department_name",
         ]
-        read_only_fields = ["email"]
+        read_only_fields = ["email", "organization_id"]
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]
+
+    def get_primary_branch(self, obj):
+        branch = obj.primary_branch
+        if branch is None or not branch.is_active:
+            return None
+        return {"id": str(branch.id), "name": branch.name}
+
+    def get_branches(self, obj):
+        return [
+            {
+                "id": str(branch.id),
+                "name": branch.name,
+                "is_primary": branch.id == obj.primary_branch_id,
+            }
+            for branch in obj.branch_access.filter(is_active=True).order_by("name")
+        ]
 
     def validate_avatar(self, value):
         if value and value.size > settings.AVATAR_MAX_SIZE_BYTES:

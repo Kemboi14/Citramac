@@ -12,6 +12,7 @@ from .models import (
     PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
+    SubscriptionPolicy,
 )
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -292,6 +293,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
     renewing_soon = serializers.BooleanField(read_only=True)
+    grace_ends_on = serializers.DateField(read_only=True)
+    days_until_period_end = serializers.IntegerField(read_only=True)
+    is_read_only = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Subscription
@@ -304,9 +308,114 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "billing_cycle",
             "status",
             "seats_used",
+            "started_on",
             "current_period_end",
+            "past_due_since",
+            "grace_ends_on",
+            "days_until_period_end",
             "renewing_soon",
+            "is_read_only",
         ]
+        read_only_fields = ["past_due_since"]
+
+    def update(self, instance, validated_data):
+        """
+        Renewal: moving the period end into the future on a PAST_DUE or
+        EXPIRED subscription returns it to ACTIVE (unless the same request
+        sets a status explicitly), and tells the tenant it's renewed.
+        """
+        from django.utils import timezone
+
+        was_lapsed = instance.status in (Subscription.STATUS_PAST_DUE, Subscription.STATUS_EXPIRED)
+        new_end = validated_data.get("current_period_end")
+        renewed = (
+            was_lapsed
+            and "status" not in validated_data
+            and new_end is not None
+            and new_end >= timezone.localdate()
+        )
+        if renewed:
+            validated_data["status"] = Subscription.STATUS_ACTIVE
+        period_end = validated_data.get("current_period_end", instance.current_period_end)
+        if (
+            validated_data.get("status") == Subscription.STATUS_ACTIVE
+            and period_end < timezone.localdate()
+        ):
+            # Would be moved straight back to PAST_DUE by the next daily run,
+            # after telling the tenant it had been renewed.
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        "An Active subscription needs a period end date today or later. "
+                        "Set a new renewal date to renew it."
+                    )
+                }
+            )
+        subscription = super().update(instance, validated_data)
+        if was_lapsed and subscription.status == Subscription.STATUS_ACTIVE:
+            from .subscription_lifecycle import notify_renewed
+
+            notify_renewed(subscription)
+        return subscription
+
+
+class SubscriptionPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionPolicy
+        fields = ["reminder_days_before", "grace_period_days", "renewal_contact", "updated_at"]
+        read_only_fields = ["updated_at"]
+
+    def validate_reminder_days_before(self, value):
+        if (
+            not isinstance(value, list)
+            or not value
+            or not all(isinstance(v, int) and 0 < v <= 365 for v in value)
+        ):
+            raise serializers.ValidationError(
+                "At least one reminder, each a whole number of days between 1 and 365."
+            )
+        return sorted(set(value), reverse=True)
+
+    def validate_grace_period_days(self, value):
+        if value > 90:
+            raise serializers.ValidationError("At most 90 days.")
+        return value
+
+
+class MySubscriptionSerializer(serializers.ModelSerializer):
+    """What every member of a tenant sees about their own subscription (banner, Org Admin page)."""
+
+    plan_name = serializers.CharField(source="plan.name", read_only=True)
+    grace_ends_on = serializers.DateField(read_only=True)
+    days_until_period_end = serializers.IntegerField(read_only=True)
+    is_read_only = serializers.BooleanField(read_only=True)
+    renewing_soon = serializers.BooleanField(read_only=True)
+    renewal_contact = serializers.SerializerMethodField()
+    grace_period_days = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subscription
+        fields = [
+            "status",
+            "plan_name",
+            "billing_cycle",
+            "started_on",
+            "current_period_end",
+            "past_due_since",
+            "grace_ends_on",
+            "days_until_period_end",
+            "renewing_soon",
+            "is_read_only",
+            "renewal_contact",
+            "grace_period_days",
+        ]
+        read_only_fields = fields
+
+    def get_renewal_contact(self, obj):
+        return SubscriptionPolicy.get_solo().renewal_contact
+
+    def get_grace_period_days(self, obj):
+        return SubscriptionPolicy.get_solo().grace_period_days
 
 
 class PlatformBrandingSerializer(serializers.ModelSerializer):

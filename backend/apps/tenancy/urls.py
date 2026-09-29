@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     BranchViewSet,
     DepartmentViewSet,
+    MySubscriptionView,
     OrganizationDetailView,
     OrganizationEmailSettingsView,
     OrganizationListCreateView,
@@ -16,9 +17,11 @@ from .views import (
     PlatformBrandingView,
     PlatformDashboardStatsView,
     PlatformEmailSettingsView,
+    PlatformHealthView,
     PlatformSmsSettingsView,
     PlatformSmsTestView,
     SubscriptionPlanViewSet,
+    SubscriptionPolicyView,
     SubscriptionViewSet,
 )
 
@@ -70,6 +73,9 @@ urlpatterns = [
     path("email-settings/", PlatformEmailSettingsView.as_view(), name="platform-email-settings"),
     path("sms-settings/", PlatformSmsSettingsView.as_view(), name="platform-sms-settings"),
     path("sms-settings/test/", PlatformSmsTestView.as_view(), name="platform-sms-settings-test"),
+    path("health/", PlatformHealthView.as_view(), name="platform-health"),
+    path("subscription-policy/", SubscriptionPolicyView.as_view(), name="subscription-policy"),
+    path("my-subscription/", MySubscriptionView.as_view(), name="my-subscription"),
     path("org-dashboard-stats/", OrgDashboardStatsView.as_view(), name="org-dashboard-stats"),
     path("", include(router.urls)),
 ]

@@ -112,11 +112,18 @@ class Organization(TimestampedModel):
     STATUS_PENDING = "PENDING_VERIFICATION"
     STATUS_ACTIVE = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
+    # Offboarded tenant (subscription ended and not renewed). Its data is
+    # kept in full — never deleted — and it is restored by setting it
+    # ACTIVE again. Blocks sign-in exactly like SUSPENDED.
+    STATUS_ARCHIVED = "ARCHIVED"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending Verification"),
         (STATUS_ACTIVE, "Active"),
         (STATUS_SUSPENDED, "Suspended"),
+        (STATUS_ARCHIVED, "Archived"),
     ]
+    # Statuses whose staff can't sign in or use an already-issued token.
+    BLOCKED_STATUSES = frozenset({STATUS_SUSPENDED, STATUS_ARCHIVED})
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -263,10 +270,7 @@ class Organization(TimestampedModel):
         if domain in existing:
             return
         already_claimed = (
-            type(self)
-            .objects.exclude(pk=self.pk)
-            .filter(email_domains__contains=[domain])
-            .exists()
+            type(self).objects.exclude(pk=self.pk).filter(email_domains__contains=[domain]).exists()
         )
         if already_claimed:
             return
@@ -509,10 +513,12 @@ class Subscription(TenantScopedModel):
     BILLING_CYCLE_CHOICES = [("MONTHLY", "Monthly"), ("ANNUAL", "Annual")]
     STATUS_ACTIVE = "ACTIVE"
     STATUS_PAST_DUE = "PAST_DUE"
+    STATUS_EXPIRED = "EXPIRED"
     STATUS_CANCELED = "CANCELED"
     STATUS_CHOICES = [
         (STATUS_ACTIVE, "Active"),
         (STATUS_PAST_DUE, "Past Due"),
+        (STATUS_EXPIRED, "Expired"),
         (STATUS_CANCELED, "Canceled"),
     ]
 
@@ -520,22 +526,110 @@ class Subscription(TenantScopedModel):
     billing_cycle = models.CharField(max_length=8, choices=BILLING_CYCLE_CHOICES, default="ANNUAL")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     seats_used = models.PositiveIntegerField(default=0)
+    started_on = models.DateField(null=True, blank=True)
     current_period_end = models.DateField()
+    # The day the subscription first became PAST_DUE — whether the daily
+    # lifecycle job moved it there at the end of its period, or a Super
+    # Admin set it by hand (e.g. unpaid invoice). The grace period runs
+    # from here. Maintained by save(); cleared once it's ACTIVE again.
+    past_due_since = models.DateField(null=True, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         constraints = [
             models.UniqueConstraint(fields=["organization"], name="unique_subscription_per_org")
         ]
 
-    @property
-    def renewing_soon(self):
-        from datetime import timedelta
-
+    def save(self, *args, **kwargs):
         from django.utils import timezone
 
-        return self.status == self.STATUS_ACTIVE and self.current_period_end <= (
-            timezone.now().date() + timedelta(days=30)
+        if (
+            self.status in (self.STATUS_PAST_DUE, self.STATUS_EXPIRED)
+            and self.past_due_since is None
+        ):
+            self.past_due_since = timezone.localdate()
+        elif self.status in (self.STATUS_ACTIVE, self.STATUS_CANCELED):
+            self.past_due_since = None
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "status" in update_fields:
+            kwargs["update_fields"] = {*update_fields, "past_due_since"}
+        super().save(*args, **kwargs)
+
+    @property
+    def grace_ends_on(self):
+        from datetime import timedelta
+
+        if self.past_due_since is None:
+            return None
+        return self.past_due_since + timedelta(days=SubscriptionPolicy.get_solo().grace_period_days)
+
+    @property
+    def days_until_period_end(self):
+        from django.utils import timezone
+
+        return (self.current_period_end - timezone.localdate()).days
+
+    @property
+    def is_read_only(self):
+        """EXPIRED tenants keep read and export access, but can't write."""
+        return self.status == self.STATUS_EXPIRED
+
+    @property
+    def renewing_soon(self):
+        return (
+            self.status == self.STATUS_ACTIVE
+            and self.days_until_period_end <= SubscriptionPolicy.get_solo().reminder_window_days
         )
 
     def __str__(self):
         return f"{self.organization.name} — {self.plan.name}"
+
+
+def _default_reminder_days():
+    return [30, 14, 7, 3, 1]
+
+
+class SubscriptionPolicy(models.Model):
+    """
+    Singleton (always pk=1), Super Admin only: when tenants are reminded
+    about their subscription ending, and how long they keep full access
+    after it has. Drives apps.tenancy.subscription_lifecycle.
+
+    Reminders go out when the period end is within each of
+    `reminder_days_before` days, on the end date itself, and daily during
+    the grace period. After the grace period the subscription is EXPIRED:
+    the tenant can still read and export everything, but can't write
+    (apps.accounts.authentication) — never a lockout from existing clinical
+    records.
+    """
+
+    reminder_days_before = models.JSONField(default=_default_reminder_days, blank=True)
+    grace_period_days = models.PositiveSmallIntegerField(default=14)
+    # Shown in every reminder so a tenant knows who to call to renew.
+    renewal_contact = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="e.g. 'billing@example.com or +254 700 000 000'. Shown in every reminder.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name_plural = "subscription policy"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def reminder_window_days(self):
+        return max(self.reminder_days_before or [0])
+
+    def __str__(self):
+        return "Subscription policy"

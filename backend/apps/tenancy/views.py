@@ -31,11 +31,13 @@ from .models import (
     PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
+    SubscriptionPolicy,
 )
 from .serializers import (
     BranchSerializer,
     CreateOrganizationSerializer,
     DepartmentSerializer,
+    MySubscriptionSerializer,
     OrganizationEmailSettingsSerializer,
     OrganizationSerializer,
     OrganizationSmsSettingsSerializer,
@@ -45,6 +47,7 @@ from .serializers import (
     PlatformEmailSettingsSerializer,
     PlatformSmsSettingsSerializer,
     SubscriptionPlanSerializer,
+    SubscriptionPolicySerializer,
     SubscriptionSerializer,
 )
 
@@ -57,9 +60,14 @@ def _reject_if_organization_suspended(organization):
     TenantAwareJWTAuthentication), but a Super Admin acting from the
     platform console isn't gated by that, so this closes the same gap for
     creating new org structure under it."""
-    if organization.status == Organization.STATUS_SUSPENDED:
+    if organization.status in Organization.BLOCKED_STATUSES:
         raise ValidationError(
-            {"organization": "This organisation is suspended — its structure can't be changed."}
+            {
+                "organization": (
+                    "This organisation is suspended or archived — its structure can't be "
+                    "changed."
+                )
+            }
         )
 
 
@@ -136,7 +144,8 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                         organization=organization,
                         plan=plan,
                         billing_cycle=data.get("billing_cycle", "ANNUAL"),
-                        current_period_end=timezone.now().date() + timedelta(days=365),
+                        started_on=timezone.localdate(),
+                        current_period_end=timezone.localdate() + timedelta(days=365),
                     )
 
             org_admin_data = data["org_admin"]
@@ -492,7 +501,9 @@ class PlatformSmsTestView(APIView):
     def post(self, request):
         phone = (request.data.get("phone") or "").strip()
         if not phone:
-            return error_response("PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST
+            )
 
         sms_settings = PlatformSmsSettings.get_solo()
         credentials = resolve_credentials_with_overrides(
@@ -562,7 +573,9 @@ class OrganizationSmsTestView(APIView):
 
         phone = (request.data.get("phone") or "").strip()
         if not phone:
-            return error_response("PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "PHONE_REQUIRED", "phone is required.", status.HTTP_400_BAD_REQUEST
+            )
 
         credentials = resolve_credentials_with_overrides(
             organization.sms_sender_id,
@@ -699,11 +712,22 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """Super Admin: every tenant's subscription (Subscriptions & Billing
-    screen). Org Admin: read-only, their own org's subscription only."""
+    screen). Org Admin: read-only, their own org's subscription only.
+
+    IsPlatformSuperAdminOrOrgAdmin on its own only blocks an Org Admin's
+    POST, so writes are gated to Super Admin explicitly here — otherwise an
+    Org Admin could PATCH their own `status`/`current_period_end`/`plan`.
+    DELETE is not offered at all: a subscription that ends is CANCELED or
+    EXPIRED, never removed, so the tenant's billing history stays intact."""
 
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
     org_admin_can_create = False
+    http_method_names = ["get", "post", "patch", "put", "head", "options"]
+
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [IsPlatformSuperAdminOrOrgAdmin()]
+        return [IsPlatformSuperAdmin()]
 
     def get_queryset(self):
         return Subscription.objects.select_related("organization", "plan").order_by(
@@ -717,6 +741,91 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if Subscription.all_objects.filter(organization=organization).exists():
             raise ValidationError("This organization already has a subscription.")
         serializer.save(organization=organization)
+
+
+class PlatformHealthView(APIView):
+    """
+    Super Admin topbar status light. Real checks only — the database, the
+    cache/broker, and whether any notice failed to reach a tenant in the
+    last 24 hours (NotificationDelivery FAILED/NOT_CONFIGURED) — so "All
+    systems operational" is only ever shown when it's true. `/healthz` is
+    the Kubernetes probe and isn't routed to the browser by the ingress.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        from django.core.cache import cache
+        from django.db import connections
+        from django.db.utils import OperationalError
+
+        from apps.notifications.models import NotificationDelivery
+
+        checks = {}
+        try:
+            connections["default"].cursor()
+            checks["database"] = "ok"
+        except OperationalError:
+            checks["database"] = "unavailable"
+        try:
+            cache.set("platform-health-probe", "1", 10)
+            checks["cache"] = "ok" if cache.get("platform-health-probe") == "1" else "unavailable"
+        except Exception:  # noqa: BLE001 — any cache backend failure is "unavailable"
+            checks["cache"] = "unavailable"
+        undelivered = NotificationDelivery.objects.filter(
+            status__in=[
+                NotificationDelivery.STATUS_FAILED,
+                NotificationDelivery.STATUS_NOT_CONFIGURED,
+            ],
+            updated_at__gte=timezone.now() - timedelta(days=1),
+        ).count()
+        checks["notification_delivery"] = "ok" if undelivered == 0 else "degraded"
+        healthy = all(value == "ok" for value in checks.values())
+        return Response(
+            {
+                "status": "ok" if healthy else "degraded",
+                "checks": checks,
+                "undelivered_notices_24h": undelivered,
+            }
+        )
+
+
+class SubscriptionPolicyView(APIView):
+    """Super Admin: reminder schedule, grace period and renewal contact for every tenant."""
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        return Response(SubscriptionPolicySerializer(SubscriptionPolicy.get_solo()).data)
+
+    def patch(self, request):
+        serializer = SubscriptionPolicySerializer(
+            SubscriptionPolicy.get_solo(), data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(serializer.data)
+
+
+class MySubscriptionView(APIView):
+    """
+    Any member of a tenant: their own organization's subscription state —
+    drives the renewal/read-only banner every user sees and the Org Admin
+    Subscription page. `null` for platform staff and for a tenant with no
+    subscription record.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.organization_id:
+            return Response(None)
+        subscription = (
+            Subscription.objects.select_related("plan")
+            .filter(organization_id=request.user.organization_id)
+            .first()
+        )
+        return Response(MySubscriptionSerializer(subscription).data if subscription else None)
 
 
 class PlatformDashboardStatsView(APIView):
@@ -804,9 +913,9 @@ class OrgDashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from apps.mhp_program.models import PsychotherapySession
         from apps.client_registry.models import Patient
         from apps.ipd_ward.models import Admission, Ward
+        from apps.mhp_program.models import PsychotherapySession
 
         organization = request.user.organization
         today = timezone.localdate()

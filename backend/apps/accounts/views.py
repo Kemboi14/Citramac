@@ -158,9 +158,13 @@ class StaffViewSet(viewsets.ModelViewSet):
 
         from apps.tenancy.models import Organization
 
-        if organization.status == Organization.STATUS_SUSPENDED:
+        if organization.status in Organization.BLOCKED_STATUSES:
             raise ValidationError(
-                {"organization": "This organisation is suspended — new staff cannot be added."}
+                {
+                    "organization": (
+                        "This organisation is suspended or archived — new staff cannot be " "added."
+                    )
+                }
             )
 
         with platform_admin_context() if is_superuser else contextlib.nullcontext():
