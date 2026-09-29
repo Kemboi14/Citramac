@@ -30,7 +30,8 @@ type NumericFieldKey =
   | "otp_dispatch_max_attempts"
   | "otp_dispatch_window_minutes";
 
-type BooleanFieldKey = "require_uppercase" | "require_lowercase" | "require_number" | "require_symbol";
+type BooleanFieldKey =
+  "require_uppercase" | "require_lowercase" | "require_number" | "require_symbol";
 
 const BOOLEAN_FIELDS: { key: BooleanFieldKey; label: string }[] = [
   { key: "require_uppercase", label: "Require an uppercase letter" },
@@ -39,7 +40,7 @@ const BOOLEAN_FIELDS: { key: BooleanFieldKey; label: string }[] = [
   { key: "require_symbol", label: "Require a symbol" },
 ];
 
-const NUMERIC_FIELDS: { key: NumericFieldKey; label: string }[] = [
+const NUMERIC_FIELDS: { key: NumericFieldKey; label: string; help?: string }[] = [
   { key: "minimum_password_length", label: "Minimum Password Length" },
   { key: "password_expiry_days", label: "Password Expiry (days)" },
   { key: "password_history_count", label: "Password History Count" },
@@ -49,7 +50,12 @@ const NUMERIC_FIELDS: { key: NumericFieldKey; label: string }[] = [
   { key: "max_concurrent_sessions", label: "Max Concurrent Sessions" },
   { key: "token_expiry_minutes", label: "Token Expiry (minutes)" },
   { key: "rate_limit_per_minute", label: "Rate Limit (requests/min)" },
-  { key: "data_retention_years", label: "Data Retention (years)" },
+  {
+    // Only purges expired login/OTP/activation tokens — never clinical data.
+    key: "data_retention_years",
+    label: "Auth Token Retention (years)",
+    help: "How long expired sign-in, verification-code and activation tokens are kept before they are purged. Does not affect clinical records, which are governed by Data Lifecycle → Records retention floor.",
+  },
   { key: "tenant_discovery_max_attempts", label: "Discovery Attempts Before Rate-Limit" },
   { key: "tenant_discovery_window_minutes", label: "Discovery Rate-Limit Window (minutes)" },
   { key: "otp_dispatch_max_attempts", label: "Verification Codes Before Rate-Limit" },
@@ -220,7 +226,7 @@ export function SecurityPoliciesPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {NUMERIC_FIELDS.map(({ key, label }) => (
+              {NUMERIC_FIELDS.map(({ key, label, help }) => (
                 <label key={key} className={LABEL_CLASS}>
                   {label}
                   <input
@@ -230,6 +236,7 @@ export function SecurityPoliciesPage() {
                     value={form[key] ?? ""}
                     onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                   />
+                  {help && <span className="text-xs font-normal text-ink-500">{help}</span>}
                 </label>
               ))}
             </div>

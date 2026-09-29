@@ -26,6 +26,10 @@ const OrgAdminShell = lazyNamed(() => import("./shells/OrgAdminShell"), "OrgAdmi
 const SuperAdminShell = lazyNamed(() => import("./shells/SuperAdminShell"), "SuperAdminShell");
 
 const MyProfilePage = lazyNamed(() => import("./modules/MyProfilePage"), "MyProfilePage");
+const NotificationsPage = lazyNamed(
+  () => import("./modules/NotificationsPage"),
+  "NotificationsPage",
+);
 
 const ClinicalDashboardPage = lazyNamed(
   () => import("./modules/clinical/ClinicalDashboardPage"),
@@ -92,6 +96,18 @@ const ErasureRequestsPage = lazyNamed(
   () => import("./modules/org-admin/ErasureRequestsPage"),
   "ErasureRequestsPage",
 );
+const DataRetentionPage = lazyNamed(
+  () => import("./modules/org-admin/DataRetentionPage"),
+  "DataRetentionPage",
+);
+const SubscriptionPage = lazyNamed(
+  () => import("./modules/org-admin/SubscriptionPage"),
+  "SubscriptionPage",
+);
+const DataLifecyclePage = lazyNamed(
+  () => import("./modules/super-admin/DataLifecyclePage"),
+  "DataLifecyclePage",
+);
 const OrgDashboardPage = lazyNamed(
   () => import("./modules/org-admin/OrgDashboardPage"),
   "OrgDashboardPage",
@@ -100,10 +116,7 @@ const WardBedManagementPage = lazyNamed(
   () => import("./modules/org-admin/WardBedManagementPage"),
   "WardBedManagementPage",
 );
-const StaffTeamPage = lazyNamed(
-  () => import("./modules/org-admin/StaffTeamPage"),
-  "StaffTeamPage",
-);
+const StaffTeamPage = lazyNamed(() => import("./modules/org-admin/StaffTeamPage"), "StaffTeamPage");
 const OrgRolesPermissionsPage = lazyNamed(
   () => import("./modules/org-admin/OrgRolesPermissionsPage"),
   "OrgRolesPermissionsPage",
@@ -153,10 +166,7 @@ const OrganizationsPage = lazyNamed(
   () => import("./modules/super-admin/OrganizationsPage"),
   "OrganizationsPage",
 );
-const BranchesPage = lazyNamed(
-  () => import("./modules/super-admin/BranchesPage"),
-  "BranchesPage",
-);
+const BranchesPage = lazyNamed(() => import("./modules/super-admin/BranchesPage"), "BranchesPage");
 const SubscriptionsPage = lazyNamed(
   () => import("./modules/super-admin/SubscriptionsPage"),
   "SubscriptionsPage",
@@ -165,10 +175,7 @@ const GlobalRolesPage = lazyNamed(
   () => import("./modules/super-admin/GlobalRolesPage"),
   "GlobalRolesPage",
 );
-const AuditLogPage = lazyNamed(
-  () => import("./modules/super-admin/AuditLogPage"),
-  "AuditLogPage",
-);
+const AuditLogPage = lazyNamed(() => import("./modules/super-admin/AuditLogPage"), "AuditLogPage");
 
 function RouteLoadingFallback() {
   return (
@@ -194,6 +201,7 @@ function App() {
             <Route path="organizations" element={<OrganizationsPage />} />
             <Route path="branches" element={<BranchesPage />} />
             <Route path="subscriptions" element={<SubscriptionsPage />} />
+            <Route path="data-lifecycle" element={<DataLifecyclePage />} />
             <Route path="email-settings" element={<PlatformEmailSettingsPage />} />
             <Route path="sms-settings" element={<PlatformSmsSettingsPage />} />
             <Route path="roles" element={<GlobalRolesPage />} />
@@ -204,6 +212,7 @@ function App() {
             <Route path="security-audit-logs" element={<SecurityAuditLogsPage />} />
             <Route path="security-alerts" element={<SecurityAlertsPage />} />
             <Route path="profile" element={<MyProfilePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
         </Route>
 
@@ -217,6 +226,9 @@ function App() {
             <Route path="roles" element={<OrgRolesPermissionsPage />} />
             <Route path="profile" element={<MyProfilePage />} />
             <Route path="data-requests" element={<ErasureRequestsPage />} />
+            <Route path="data-retention" element={<DataRetentionPage />} />
+            <Route path="subscription" element={<SubscriptionPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
         </Route>
 
@@ -242,6 +254,7 @@ function App() {
             <Route path="mhp/supervision" element={<SupervisionRequestsPage />} />
             <Route path="mhp/nacada" element={<NacadaReportPage />} />
             <Route path="profile" element={<MyProfilePage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
 
             {/*
               Honest placeholders — nav leaves from the new mockup with no

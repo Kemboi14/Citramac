@@ -25,6 +25,8 @@ const CARE_LABEL: Record<string, string> = {
   POSTTREATMENT_SUPPORT: "Post-treatment support",
 };
 
+type ArchivedFilter = "" | "include" | "only";
+
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 
@@ -42,6 +44,9 @@ function initialsFor(patient: PatientListRow) {
  * registration-approval workflow, so rather than fabricate the mockup's
  * "Pending" state, it's derived from a real signal — whether any government
  * ID (UPI/IPRS or National ID) is on file yet — and labelled accordingly.
+ * Archived clients (retention period ended, archived by an Org Admin) are
+ * left out by default, as the backend does; the archived-records filter brings
+ * them back in, badged, and they open read-only.
  */
 export function ClientRegistryPage() {
   const { accessToken } = useAuth();
@@ -53,6 +58,7 @@ export function ClientRegistryPage() {
   const [search, setSearch] = useState("");
   const [careFilter, setCareFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>("");
   const [showRegister, setShowRegister] = useState(false);
   const [detailsPatient, setDetailsPatient] = useState<PatientDetail | null>(null);
   const [detailsLoading, setDetailsLoading] = useState<string | null>(null);
@@ -60,7 +66,8 @@ export function ClientRegistryPage() {
   const reload = () => {
     if (!accessToken) return;
     setIsLoading(true);
-    listPatients(accessToken)
+    setError(null);
+    listPatients(accessToken, { archived: archivedFilter || undefined })
       .then((data) => setPatients(data.results))
       .catch(() => setError("Couldn't load the client registry."))
       .finally(() => setIsLoading(false));
@@ -70,8 +77,8 @@ export function ClientRegistryPage() {
     // Deferred one microtask so `reload`'s setState calls don't run
     // synchronously in the effect body itself.
     void Promise.resolve().then(reload);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` is redefined each render but only depends on `accessToken`, already listed.
-  }, [accessToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` is redefined each render but only depends on `accessToken`/`archivedFilter`, already listed.
+  }, [accessToken, archivedFilter]);
 
   const openPatient = (patient: PatientListRow) => {
     selectPatient(patient.id, `${patient.first_name} ${patient.last_name}`);
@@ -177,11 +184,27 @@ export function ClientRegistryPage() {
       cell: (patient) => {
         const status = statusFor(patient);
         return (
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Active" ? "bg-brand-green-tint text-brand-green-dark" : "bg-status-amber-tint text-status-amber"}`}
-          >
-            {status}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {patient.archived_at ? (
+              <span
+                className="rounded-full border border-surface-border bg-surface-bg px-2.5 py-1 text-xs font-semibold text-ink-700"
+                title={`Archived ${new Date(patient.archived_at).toLocaleDateString()} — read-only`}
+              >
+                Archived
+              </span>
+            ) : (
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Active" ? "bg-brand-green-tint text-brand-green-dark" : "bg-status-amber-tint text-status-amber"}`}
+              >
+                {status}
+              </span>
+            )}
+            {patient.legal_hold && (
+              <span className="rounded-full bg-status-amber-tint px-2.5 py-1 text-xs font-semibold text-status-amber">
+                Legal hold
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -254,6 +277,16 @@ export function ClientRegistryPage() {
           <option value="Active">Active</option>
           <option value="ID Pending">ID Pending</option>
         </select>
+        <select
+          className={FIELD_CLASS}
+          value={archivedFilter}
+          onChange={(e) => setArchivedFilter(e.target.value as ArchivedFilter)}
+          aria-label="Archived records"
+        >
+          <option value="">Active records only</option>
+          <option value="include">Include archived</option>
+          <option value="only">Archived only</option>
+        </select>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-6 text-[11.5px] text-ink-500">
@@ -295,7 +328,11 @@ export function ClientRegistryPage() {
           )}
           emptyMessage={
             patients.length === 0
-              ? "No clients registered yet."
+              ? archivedFilter === "only"
+                ? "No archived clients."
+                : archivedFilter === ""
+                  ? "No active clients."
+                  : "No clients registered yet."
               : "No clients match these filters."
           }
         />

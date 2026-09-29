@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Menu, Search, UserRound } from "lucide-react";
 import type { NavGroup, NavItem } from "./navConfig";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
+import { SubscriptionBanner } from "./SubscriptionBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
 import { getOrganizationTheme } from "../lib/themeApi";
 import { useAuth } from "../auth/useAuth";
@@ -364,6 +365,7 @@ export function AppShell({
 
         <main className="w-full flex-1 px-4 py-5 pb-14 sm:px-6 lg:px-8 lg:py-7">
           <div className="mx-auto w-full max-w-[1920px]">
+            <SubscriptionBanner />
             <OfflineSyncBanner />
             <Outlet />
           </div>

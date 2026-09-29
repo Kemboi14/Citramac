@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
+import { NotificationIcon } from "../components/NotificationIcon";
+import { severityAccent, timeAgo } from "../lib/notificationFormat";
 import { useAuth } from "../auth/useAuth";
 import {
   getUnreadNotificationCount,
@@ -12,22 +14,19 @@ import {
 
 const POLL_INTERVAL_MS = 60_000;
 
-function timeAgo(iso: string): string {
-  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
 /**
  * Notification bell, shown on the right of every shell's topbar. Sign-out
  * moved into the sidebar's profile menu (AppShell.tsx) alongside "My
  * Profile" — one discoverable menu instead of a separate icon button.
+ * `notificationsPath` is this shell's full notifications page ("View all").
  */
-export function TopbarActions({ pill }: { pill: React.ReactNode }) {
+export function TopbarActions({
+  pill,
+  notificationsPath,
+}: {
+  pill: React.ReactNode;
+  notificationsPath: string;
+}) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -128,7 +127,7 @@ export function TopbarActions({ pill }: { pill: React.ReactNode }) {
             <div className="max-h-80 overflow-y-auto">
               {notifications.length === 0 && (
                 <p className="px-3.5 py-6 text-center text-[12.5px] text-ink-500">
-                  You're all caught up.
+                  You&apos;re all caught up.
                 </p>
               )}
               {notifications.map((n) => (
@@ -136,19 +135,36 @@ export function TopbarActions({ pill }: { pill: React.ReactNode }) {
                   key={n.id}
                   type="button"
                   onClick={() => openNotification(n)}
-                  className={`flex w-full flex-col gap-0.5 border-b border-surface-border px-3.5 py-2.5 text-left last:border-0 hover:bg-surface-bg ${
-                    n.is_read ? "" : "bg-brand-green-tint-2"
-                  }`}
+                  className={`flex w-full gap-2.5 border-b border-l-2 border-surface-border px-3.5 py-2.5 text-left last:border-b-0 hover:bg-surface-bg ${severityAccent(
+                    n.severity,
+                  )} ${n.is_read ? "" : "bg-brand-green-tint-2"}`}
                 >
-                  <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-900">
-                    {!n.is_read && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-green" />}
-                    {n.title}
+                  <NotificationIcon notification={n} className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-900">
+                      {!n.is_read && (
+                        <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-green" />
+                      )}
+                      {n.title}
+                    </span>
+                    {n.body && (
+                      <span className="line-clamp-3 text-[11.5px] text-ink-500">{n.body}</span>
+                    )}
+                    <span className="text-[10px] text-ink-400">{timeAgo(n.created_at)}</span>
                   </span>
-                  {n.body && <span className="text-[11.5px] text-ink-500">{n.body}</span>}
-                  <span className="text-[10px] text-ink-400">{timeAgo(n.created_at)}</span>
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                navigate(notificationsPath);
+              }}
+              className="block w-full border-t border-surface-border px-3.5 py-2.5 text-center text-[12px] font-semibold text-brand-green hover:bg-surface-bg"
+            >
+              View all notifications
+            </button>
           </div>
         )}
       </div>

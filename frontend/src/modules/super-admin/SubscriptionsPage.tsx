@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Clock, CreditCard, Plus, TrendingUp } from "lucide-react";
+import { AlertTriangle, Clock, CreditCard, Lock, Plus, TrendingUp } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -12,7 +12,13 @@ import {
   type SubscriptionPlan,
 } from "../../lib/subscriptionsApi";
 import { listOrganizations, type Organization } from "../../lib/organizationsApi";
+import {
+  SUBSCRIPTION_STATUS_LABEL,
+  SUBSCRIPTION_STATUS_TINT,
+  formatIsoDate,
+} from "../../lib/subscriptionDisplay";
 import { StatCard } from "../../components/StatCard";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -20,20 +26,27 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "inline-flex items-center gap-2 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
-const STATUS_TINT: Record<Subscription["status"], string> = {
-  ACTIVE: "bg-brand-green-tint text-brand-green-dark",
-  PAST_DUE: "bg-status-red-tint text-status-red",
-  CANCELED: "bg-surface-bg text-ink-500",
-};
-
-const STATUS_OPTIONS: Subscription["status"][] = ["ACTIVE", "PAST_DUE", "CANCELED"];
+const STATUS_OPTIONS: Subscription["status"][] = ["ACTIVE", "PAST_DUE", "EXPIRED", "CANCELED"];
 
 const STATUS_FILTERS = [
   { key: "ALL", label: "All" },
   { key: "ACTIVE", label: "Active" },
-  { key: "PAST_DUE", label: "Past Due" },
   { key: "RENEWING_SOON", label: "Renewing Soon" },
+  { key: "PAST_DUE", label: "Past Due" },
+  { key: "EXPIRED", label: "Expired" },
+  { key: "CANCELED", label: "Canceled" },
 ] as const;
+
+/** Today as "YYYY-MM-DD" in local time — compared against a `<input type="date">` value. */
+function todayIso(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function isLapsed(sub: Subscription) {
+  return sub.status === "PAST_DUE" || sub.status === "EXPIRED";
+}
 
 type StatusFilter = (typeof STATUS_FILTERS)[number]["key"];
 
@@ -96,6 +109,16 @@ export function SubscriptionsPage() {
   const [newSub, setNewSub] = useState<NewSubscriptionState>(EMPTY_NEW_SUBSCRIPTION);
   const [subFormError, setSubFormError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+
+  // Inline renewal-date editor: one row at a time.
+  const [renewal, setRenewal] = useState<{ id: string; date: string } | null>(null);
+  const [renewalBusy, setRenewalBusy] = useState(false);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Setting EXPIRED by hand makes the tenant read-only at once — confirmed first.
+  const [expireTarget, setExpireTarget] = useState<Subscription | null>(null);
+  const [expireBusy, setExpireBusy] = useState(false);
+  const [expireError, setExpireError] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!accessToken) return;
@@ -175,17 +198,67 @@ export function SubscriptionsPage() {
 
   const changeStatus = async (sub: Subscription, status: Subscription["status"]) => {
     if (!accessToken || status === sub.status) return;
+    if (status === "EXPIRED") {
+      setExpireError(null);
+      setExpireTarget(sub);
+      return;
+    }
     setError(null);
+    setNotice(null);
     try {
       await updateSubscription(accessToken, sub.id, { status });
+      if (status === "ACTIVE" && isLapsed(sub)) {
+        setNotice(`${sub.organization_name} is Active again and its admins have been notified.`);
+      }
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't update the subscription.");
     }
   };
 
+  const confirmExpire = async () => {
+    if (!accessToken || !expireTarget) return;
+    setExpireBusy(true);
+    setExpireError(null);
+    try {
+      await updateSubscription(accessToken, expireTarget.id, { status: "EXPIRED" });
+      setExpireTarget(null);
+      await refresh();
+    } catch (err) {
+      setExpireError(err instanceof ApiError ? err.message : "Couldn't update the subscription.");
+    } finally {
+      setExpireBusy(false);
+    }
+  };
+
+  const saveRenewal = async (sub: Subscription) => {
+    if (!accessToken || !renewal || !renewal.date) return;
+    setRenewalBusy(true);
+    setRenewalError(null);
+    setNotice(null);
+    try {
+      // Only the date is sent: the backend returns a lapsed subscription to
+      // ACTIVE (and notifies the tenant) only when `status` is left out.
+      const updated = await updateSubscription(accessToken, sub.id, {
+        current_period_end: renewal.date,
+      });
+      if (isLapsed(sub) && updated.status === "ACTIVE") {
+        setNotice(
+          `${sub.organization_name} renewed to ${formatIsoDate(updated.current_period_end)} — restored to Active and its admins have been notified.`,
+        );
+      }
+      setRenewal(null);
+      await refresh();
+    } catch (err) {
+      setRenewalError(err instanceof ApiError ? err.message : "Couldn't update the renewal date.");
+    } finally {
+      setRenewalBusy(false);
+    }
+  };
+
   const activeSubscriptions = subscriptions.filter((s) => s.status === "ACTIVE");
   const pastDueCount = subscriptions.filter((s) => s.status === "PAST_DUE").length;
+  const expiredCount = subscriptions.filter((s) => s.status === "EXPIRED").length;
   const renewingSoonCount = subscriptions.filter((s) => s.renewing_soon).length;
   const planById = new Map(plans.map((plan) => [plan.id, plan]));
   const mrr = activeSubscriptions.reduce((sum, sub) => {
@@ -208,7 +281,7 @@ export function SubscriptionsPage() {
         <h1 className="font-display text-2xl font-bold text-ink-900">Subscriptions & Billing</h1>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           icon={CreditCard}
           value={activeSubscriptions.length}
@@ -216,7 +289,8 @@ export function SubscriptionsPage() {
         />
         <StatCard icon={TrendingUp} value={formatMrr(mrr)} label="Monthly Recurring Revenue" />
         <StatCard icon={Clock} tone="amber" value={renewingSoonCount} label="Renewing Soon" />
-        <StatCard icon={AlertTriangle} tone="red" value={pastDueCount} label="Past Due" />
+        <StatCard icon={AlertTriangle} tone="amber" value={pastDueCount} label="Past Due" />
+        <StatCard icon={Lock} tone="red" value={expiredCount} label="Expired (read-only)" />
       </div>
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
@@ -280,7 +354,10 @@ export function SubscriptionsPage() {
                 <input
                   className={FIELD_CLASS}
                   value={newPlan.name}
-                  onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPlan((prev) => ({ ...prev, name: value }));
+                  }}
                   required
                 />
               </label>
@@ -289,7 +366,10 @@ export function SubscriptionsPage() {
                 <input
                   className={FIELD_CLASS}
                   value={newPlan.code}
-                  onChange={(e) => setNewPlan({ ...newPlan, code: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPlan((prev) => ({ ...prev, code: value }));
+                  }}
                   placeholder="e.g. standard"
                   required
                 />
@@ -301,7 +381,10 @@ export function SubscriptionsPage() {
                   min={0}
                   className={FIELD_CLASS}
                   value={newPlan.max_branches}
-                  onChange={(e) => setNewPlan({ ...newPlan, max_branches: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPlan((prev) => ({ ...prev, max_branches: value }));
+                  }}
                 />
               </label>
               <label className={LABEL_CLASS}>
@@ -311,7 +394,10 @@ export function SubscriptionsPage() {
                   min={0}
                   className={FIELD_CLASS}
                   value={newPlan.max_staff_seats}
-                  onChange={(e) => setNewPlan({ ...newPlan, max_staff_seats: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPlan((prev) => ({ ...prev, max_staff_seats: value }));
+                  }}
                   placeholder="Leave blank for unlimited"
                 />
               </label>
@@ -323,7 +409,10 @@ export function SubscriptionsPage() {
                   step="0.01"
                   className={FIELD_CLASS}
                   value={newPlan.price_monthly}
-                  onChange={(e) => setNewPlan({ ...newPlan, price_monthly: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPlan((prev) => ({ ...prev, price_monthly: value }));
+                  }}
                   required
                 />
               </label>
@@ -375,7 +464,10 @@ export function SubscriptionsPage() {
               <select
                 className={FIELD_CLASS}
                 value={newSub.organization}
-                onChange={(e) => setNewSub({ ...newSub, organization: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setNewSub((prev) => ({ ...prev, organization: value }));
+                }}
                 required
               >
                 <option value="">Select an organization…</option>
@@ -391,7 +483,10 @@ export function SubscriptionsPage() {
               <select
                 className={FIELD_CLASS}
                 value={newSub.plan}
-                onChange={(e) => setNewSub({ ...newSub, plan: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setNewSub((prev) => ({ ...prev, plan: value }));
+                }}
                 required
               >
                 <option value="">Select a plan…</option>
@@ -407,12 +502,10 @@ export function SubscriptionsPage() {
               <select
                 className={FIELD_CLASS}
                 value={newSub.billing_cycle}
-                onChange={(e) =>
-                  setNewSub({
-                    ...newSub,
-                    billing_cycle: e.target.value as "MONTHLY" | "ANNUAL",
-                  })
-                }
+                onChange={(e) => {
+                  const value = e.target.value as "MONTHLY" | "ANNUAL";
+                  setNewSub((prev) => ({ ...prev, billing_cycle: value }));
+                }}
               >
                 <option value="MONTHLY">Monthly</option>
                 <option value="ANNUAL">Annual</option>
@@ -424,7 +517,10 @@ export function SubscriptionsPage() {
                 type="date"
                 className={FIELD_CLASS}
                 value={newSub.current_period_end}
-                onChange={(e) => setNewSub({ ...newSub, current_period_end: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setNewSub((prev) => ({ ...prev, current_period_end: value }));
+                }}
                 required
               />
             </label>
@@ -447,6 +543,19 @@ export function SubscriptionsPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {notice && (
+        <p className="flex items-center justify-between gap-3 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
+          {notice}
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="text-xs font-semibold hover:underline"
+          >
+            Dismiss
+          </button>
+        </p>
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -488,27 +597,102 @@ export function SubscriptionsPage() {
                 </td>
                 <td className="px-4 py-3 text-ink-700">{sub.seats_used}</td>
                 <td className="px-4 py-3 text-ink-700">
-                  {sub.current_period_end}
-                  {sub.renewing_soon && (
-                    <span className="ml-2 rounded-sm bg-status-amber-tint px-2 py-0.5 text-xs font-semibold text-status-amber">
-                      Renewing Soon
-                    </span>
+                  {renewal?.id === sub.id ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          className={`${FIELD_CLASS} py-1`}
+                          value={renewal.date}
+                          onChange={(e) => {
+                            const date = e.target.value;
+                            setRenewal((prev) => (prev ? { ...prev, date } : prev));
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={renewalBusy || !renewal.date}
+                          onClick={() => saveRenewal(sub)}
+                          className="text-xs font-semibold text-brand-green hover:underline disabled:opacity-60"
+                        >
+                          {renewalBusy ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={renewalBusy}
+                          onClick={() => setRenewal(null)}
+                          className="text-xs font-semibold text-ink-500 hover:text-ink-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {isLapsed(sub) && renewal.date >= todayIso() && (
+                        <span className="max-w-xs text-xs text-brand-green-dark">
+                          Saving this date restores the subscription to Active and notifies{" "}
+                          {sub.organization_name}&rsquo;s admins that it has been renewed.
+                        </span>
+                      )}
+                      {isLapsed(sub) && renewal.date !== "" && renewal.date < todayIso() && (
+                        <span className="max-w-xs text-xs text-status-amber">
+                          This date is in the past — the subscription stays{" "}
+                          {SUBSCRIPTION_STATUS_LABEL[sub.status]}.
+                        </span>
+                      )}
+                      {renewalError && (
+                        <span className="max-w-xs text-xs font-medium text-status-red">
+                          {renewalError}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {formatIsoDate(sub.current_period_end)}
+                      {sub.renewing_soon && (
+                        <span className="rounded-sm bg-status-amber-tint px-2 py-0.5 text-xs font-semibold text-status-amber">
+                          Renewing Soon
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRenewalError(null);
+                          setRenewal({ id: sub.id, date: sub.current_period_end });
+                        }}
+                        className="text-xs font-semibold text-brand-green hover:underline"
+                      >
+                        {isLapsed(sub) ? "Renew" : "Change"}
+                      </button>
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   <select
                     className={`rounded-sm border-0 px-2 py-0.5 text-xs font-semibold outline-none ${
-                      STATUS_TINT[sub.status]
+                      SUBSCRIPTION_STATUS_TINT[sub.status]
                     }`}
                     value={sub.status}
                     onChange={(e) => changeStatus(sub, e.target.value as Subscription["status"])}
                   >
                     {STATUS_OPTIONS.map((status) => (
                       <option key={status} value={status}>
-                        {status}
+                        {/* eslint-disable-next-line security/detect-object-injection -- `status` is iterated from the fixed `STATUS_OPTIONS` const array, not user input. */}
+                        {SUBSCRIPTION_STATUS_LABEL[status]}
                       </option>
                     ))}
                   </select>
+                  {sub.status === "PAST_DUE" && (
+                    <div className="mt-1 text-xs text-ink-500">
+                      Past due since {formatIsoDate(sub.past_due_since)}
+                      {sub.grace_ends_on && <> · grace ends {formatIsoDate(sub.grace_ends_on)}</>}
+                    </div>
+                  )}
+                  {sub.status === "EXPIRED" && (
+                    <div className="mt-1 inline-flex items-center gap-1 text-xs text-status-red">
+                      <Lock className="h-3 w-3" />
+                      Read-only
+                      {sub.grace_ends_on && <> since {formatIsoDate(sub.grace_ends_on)}</>}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -531,6 +715,25 @@ export function SubscriptionsPage() {
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
+
+      <ConfirmDialog
+        open={expireTarget !== null}
+        title="Mark subscription as expired?"
+        confirmLabel="Mark as expired"
+        busyLabel="Updating…"
+        tone="danger"
+        busy={expireBusy}
+        error={expireError}
+        onConfirm={confirmExpire}
+        onCancel={() => setExpireTarget(null)}
+      >
+        <p>
+          <span className="font-semibold text-ink-900">{expireTarget?.organization_name}</span>{" "}
+          becomes read-only immediately, skipping any remaining grace period. Its staff can still
+          sign in, view and export records, but nothing can be added or changed.
+        </p>
+        <p>No data is deleted. Setting a future renewal date restores full access.</p>
+      </ConfirmDialog>
     </div>
   );
 }

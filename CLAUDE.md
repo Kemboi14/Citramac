@@ -187,3 +187,20 @@ Resolution, chosen by the project owner over the alternative of downgrading the 
 
 If `fhir_mapper.py` ever needs a field/shape that only exists in R4B and not R4, that is the
 trigger to revisit this exception — it will show up as a CI failure, not silently.
+
+### 2026-09-29 — §4 "durable local outbox" vs §5 "no browser storage for clinical data"
+
+These two rules can't both be met by a browser client: the only durable storage a web page
+has is browser storage. The offline clinical queue (`frontend/src/lib/offlineQueue.ts`,
+Triage vitals and SOAP notes) previously used `localStorage` — a live §5 violation.
+
+Resolution, chosen by the project owner over encrypted IndexedDB (which would have needed a
+§5 exception): **§5 wins**. The queue is held in page memory only. It survives a network drop
+but not closing or reloading the tab; the browser warns before unload while entries are
+pending, the offline banner tells the clinician to keep the tab open, and each entry records
+its author so a later sign-in on the same tab can't push someone else's notes. Anything the old
+version left in `localStorage` is moved into memory once and the keys are removed.
+
+§4's durable outbox therefore holds on the server side only (e.g. notification deliveries,
+`apps/notifications` `NotificationDelivery`), not in the browser. Revisit if a native/desktop
+client is ever built, where durable encrypted local storage outside the browser is possible.

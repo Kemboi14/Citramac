@@ -1,6 +1,7 @@
 import { createContext } from "react";
 import type { AccessTokenClaims } from "../lib/jwt";
 import type { MfaChannel, MfaDeliveryMethod } from "../lib/authApi";
+import type { MyProfile } from "../lib/myProfileApi";
 
 export type LoginOutcome =
   | { requiresOtp: false }
@@ -27,6 +28,10 @@ export interface AuthContextValue {
    * or if never set. Not carried on the JWT (avatars can change without a
    * re-login), see `apps.accounts.views.MyProfileView`. */
   avatarUrl: string | null;
+  /** The signed-in user's own profile — organisation, branches, department
+   * (`GET /me/profile/`). Null until fetched, and for a moment after each
+   * sign-in; drives the topbar organisation · branch pill. */
+  profile: MyProfile | null;
   /** Re-fetches the current user's profile (e.g. right after an avatar
    * upload elsewhere in the app) so every avatar on screen updates. */
   refreshProfile: () => Promise<void>;

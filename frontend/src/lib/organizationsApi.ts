@@ -12,7 +12,7 @@ export interface Paginated<T> {
 
 export type OrgType = "HOSPITAL" | "SCHOOL" | "UNIVERSITY" | "CORPORATE" | "INDIVIDUAL";
 export type OwnershipType = "PRIVATE" | "PUBLIC" | "FAITH_BASED" | "NGO" | "PARTNERSHIP" | "OTHER";
-export type OrganizationStatus = "PENDING_VERIFICATION" | "ACTIVE" | "SUSPENDED";
+export type OrganizationStatus = "PENDING_VERIFICATION" | "ACTIVE" | "SUSPENDED" | "ARCHIVED";
 
 export interface Organization {
   id: string;

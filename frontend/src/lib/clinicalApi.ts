@@ -24,6 +24,10 @@ export interface PatientListRow {
   patient_category: string;
   contact_phone: string;
   contact_email: string;
+  /** Read-only. Set when the record was archived at the end of its retention period. */
+  archived_at: string | null;
+  /** Read-only. A client on legal hold is never proposed for archiving. */
+  legal_hold: boolean;
 }
 
 export interface EmergencyContact {
@@ -98,6 +102,10 @@ export interface PatientDetail {
   emergency_contacts: EmergencyContact[];
   allergy_records: AllergyRecord[];
   insurance_coverages: InsuranceCoverage[];
+  /** Read-only — an archived record is readable but every write under it returns 409 RECORD_ARCHIVED. */
+  archived_at: string | null;
+  archive_reason: string;
+  legal_hold: boolean;
 }
 
 export interface Paginated<T> {
@@ -107,8 +115,28 @@ export interface Paginated<T> {
   results: T[];
 }
 
-export function listPatients(accessToken: string) {
-  return apiRequest<Paginated<PatientListRow>>("/patients/", { accessToken });
+/**
+ * Archived clients are excluded by default; `archived: "include"` lists them
+ * alongside active ones, `archived: "only"` lists just them. `q` matches
+ * name / UHID / CITRAMAC no. / national ID (case-insensitive); `legalHold`
+ * narrows to clients on legal hold. All combine.
+ */
+export function listPatients(
+  accessToken: string,
+  options?: {
+    archived?: "include" | "only";
+    q?: string;
+    legalHold?: boolean;
+    page?: number;
+  },
+) {
+  const params = new URLSearchParams();
+  if (options?.archived) params.set("archived", options.archived);
+  if (options?.q) params.set("q", options.q);
+  if (options?.legalHold) params.set("legal_hold", "true");
+  if (options?.page && options.page > 1) params.set("page", String(options.page));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return apiRequest<Paginated<PatientListRow>>(`/patients/${query}`, { accessToken });
 }
 
 export interface NewPatientPayload {

@@ -22,10 +22,62 @@ export interface Subscription {
   plan: number;
   plan_name: string;
   billing_cycle: "MONTHLY" | "ANNUAL";
-  status: "ACTIVE" | "PAST_DUE" | "CANCELED";
+  status: SubscriptionStatus;
   seats_used: number;
+  started_on: string | null;
   current_period_end: string;
+  /** Set when the subscription became PAST_DUE; the grace period runs from here. */
+  past_due_since: string | null;
+  grace_ends_on: string | null;
+  days_until_period_end: number;
   renewing_soon: boolean;
+  /** EXPIRED: staff can read and export, but not write. */
+  is_read_only: boolean;
+}
+
+export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELED";
+
+/** GET /platform/my-subscription/ — any member of a tenant; null for platform staff. */
+export interface MySubscription {
+  status: SubscriptionStatus;
+  plan_name: string;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  started_on: string | null;
+  current_period_end: string;
+  past_due_since: string | null;
+  grace_ends_on: string | null;
+  days_until_period_end: number;
+  renewing_soon: boolean;
+  is_read_only: boolean;
+  renewal_contact: string;
+  grace_period_days: number;
+}
+
+/** Super Admin: when tenants are reminded, and how long they keep full access afterwards. */
+export interface SubscriptionPolicy {
+  reminder_days_before: number[];
+  grace_period_days: number;
+  renewal_contact: string;
+  updated_at: string;
+}
+
+export function getMySubscription(accessToken: string) {
+  return apiRequest<MySubscription | null>("/platform/my-subscription/", { accessToken });
+}
+
+export function getSubscriptionPolicy(accessToken: string) {
+  return apiRequest<SubscriptionPolicy>("/platform/subscription-policy/", { accessToken });
+}
+
+export function updateSubscriptionPolicy(
+  accessToken: string,
+  payload: Partial<Omit<SubscriptionPolicy, "updated_at">>,
+) {
+  return apiRequest<SubscriptionPolicy>("/platform/subscription-policy/", {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
 }
 
 export function listSubscriptionPlans(accessToken: string) {

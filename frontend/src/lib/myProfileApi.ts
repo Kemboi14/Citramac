@@ -11,7 +11,13 @@ export interface MyProfile {
   phone: string;
   avatar: string | null;
   role_names: string[];
+  organization_id: string | null;
   organization_name: string | null;
+  /** Null when unassigned, or when the assigned branch has been deactivated. */
+  primary_branch: { id: string; name: string } | null;
+  /** Every active branch this user has access to, alphabetical. */
+  branches: { id: string; name: string; is_primary: boolean }[];
+  department_name: string | null;
 }
 
 const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;

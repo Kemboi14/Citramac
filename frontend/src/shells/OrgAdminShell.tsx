@@ -1,7 +1,7 @@
-import { ChevronDown } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { AppShell } from "./AppShell";
 import { ORG_ADMIN_NAV } from "./navConfig";
+import { OrgBranchPill } from "./OrgBranchPill";
 import { TopbarActions } from "./TopbarActions";
 import { initialsAndLabel } from "./userDisplay";
 
@@ -21,20 +21,7 @@ export function OrgAdminShell() {
       searchPlaceholder="Search clients, staff, wards…"
       profilePath="/org-admin/profile"
       topbarRight={
-        <TopbarActions
-          pill={
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-full border border-surface-border bg-surface-card px-3 py-1.5 text-[12.5px] font-medium text-ink-700"
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-green-tint text-[10px] font-bold text-brand-green-dark">
-                {initials}
-              </span>
-              Your Branch
-              <ChevronDown className="h-3.5 w-3.5 text-ink-400" />
-            </button>
-          }
-        />
+        <TopbarActions pill={<OrgBranchPill />} notificationsPath="/org-admin/notifications" />
       }
     />
   );

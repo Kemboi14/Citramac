@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import * as authApi from "../lib/authApi";
 import { ApiError, setSessionInvalidatedHandler } from "../lib/apiClient";
 import { decodeAccessToken } from "../lib/jwt";
-import { getMyProfile } from "../lib/myProfileApi";
+import { getMyProfile, type MyProfile } from "../lib/myProfileApi";
 import { AuthContext, type LoginOutcome } from "./authContextObject";
 
 // Re-exported for existing consumers (e.g. steps/TenantLoginStep.tsx) — the
@@ -15,7 +15,7 @@ export type { LoginOutcome };
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [profile, setProfile] = useState<MyProfile | null>(null);
   const [sessionEndedMessage, setSessionEndedMessage] = useState<string | null>(null);
 
   // On first load, a valid refresh_token cookie from a previous session
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSessionInvalidatedHandler((message) => {
       setAccessToken(null);
-      setAvatarUrl(null);
+      setProfile(null);
       setSessionEndedMessage(message);
     });
     return () => setSessionInvalidatedHandler(null);
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setAccessToken(null);
-    setAvatarUrl(null);
+    setProfile(null);
   }, [accessToken]);
 
   const claims = useMemo(
@@ -91,22 +91,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const profile = await getMyProfile(accessToken);
-      setAvatarUrl(profile.avatar);
+      setProfile(await getMyProfile(accessToken));
     } catch {
-      // Best-effort — a stale/missing avatar just means the initials
-      // fallback shows instead, never worth surfacing as an app-wide error.
+      // Best-effort — a stale/missing profile just means the initials
+      // fallback and a loading organisation pill show instead, never worth
+      // surfacing as an app-wide error.
     }
   }, [accessToken]);
 
   useEffect(() => {
-    // No "else clear avatarUrl" branch needed — it starts out `null` and
-    // `logout()` already resets it explicitly on that transition.
+    // No "else clear profile" branch needed — it starts out `null` and
+    // `logout()` already resets it explicitly on that transition. Re-fetched
+    // on every token change (each silent refresh too), so a branch or role
+    // change made by an admin shows up without a fresh sign-in.
     if (!accessToken) return;
     let ignore = false;
     getMyProfile(accessToken)
-      .then((profile) => {
-        if (!ignore) setAvatarUrl(profile.avatar);
+      .then((fetched) => {
+        if (!ignore) setProfile(fetched);
       })
       .catch(() => {
         // Best-effort — see refreshProfile's own comment.
@@ -115,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ignore = true;
     };
   }, [accessToken]);
+
+  const avatarUrl = profile?.avatar ?? null;
 
   const value = useMemo(
     () => ({
@@ -125,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginVerifyOtp,
       logout,
       avatarUrl,
+      profile,
       refreshProfile,
       sessionEndedMessage,
       clearSessionEndedMessage,
@@ -137,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginVerifyOtp,
       logout,
       avatarUrl,
+      profile,
       refreshProfile,
       sessionEndedMessage,
       clearSessionEndedMessage,

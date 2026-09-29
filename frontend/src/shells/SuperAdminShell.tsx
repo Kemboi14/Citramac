@@ -1,6 +1,7 @@
 import { useAuth } from "../auth/useAuth";
 import { AppShell } from "./AppShell";
 import { SUPER_ADMIN_NAV } from "./navConfig";
+import { PlatformStatusPill } from "./PlatformStatusPill";
 import { TopbarActions } from "./TopbarActions";
 import { initialsAndLabel } from "./userDisplay";
 
@@ -21,12 +22,8 @@ export function SuperAdminShell() {
       profilePath="/super-admin/profile"
       topbarRight={
         <TopbarActions
-          pill={
-            <div className="flex items-center gap-1.5 rounded-full bg-brand-green-tint px-3 py-1.5 text-[11.5px] font-semibold text-brand-green-dark">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-green" />
-              All Systems Operational
-            </div>
-          }
+          pill={<PlatformStatusPill />}
+          notificationsPath="/super-admin/notifications"
         />
       }
     />

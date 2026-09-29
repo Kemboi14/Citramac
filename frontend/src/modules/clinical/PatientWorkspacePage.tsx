@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Archive, Scale } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
@@ -29,6 +30,7 @@ import {
   type Admission,
   type AdmissionType,
 } from "../../lib/ipdApi";
+import { getPatientRetentionStatus, type PatientRetentionStatus } from "../../lib/retentionApi";
 import { ClientHistoryPage } from "./ClientHistoryPage";
 import { PatientDetailsModal } from "./PatientDetailsModal";
 
@@ -65,6 +67,11 @@ const ALLERGY_BADGE: Record<string, string> = {
   NONE: "bg-brand-green-tint text-brand-green-dark",
 };
 
+// Patient.ARCHIVE_REASON_CHOICES (backend/apps/client_registry/models.py).
+const ARCHIVE_REASON_LABEL: Record<string, string> = {
+  RETENTION_EXPIRED: "Retention period ended",
+};
+
 const CARE_LABEL_LOOKUP: Record<string, string> = {
   OUTPATIENT: "Outpatient",
   INPATIENT: "Inpatient",
@@ -77,6 +84,10 @@ const CARE_LABEL_LOOKUP: Record<string, string> = {
  * Appointments). Encounters/Clinical Notes/Assessments stay on their own
  * dedicated pages (Triage & MSE, Clinical Encounter, MHP sessions) rather
  * than being duplicated here — reached via the links below.
+ *
+ * An archived client record stays fully readable here; the banner says it is
+ * read-only, and any write attempted anyway comes back 409 RECORD_ARCHIVED,
+ * whose message every save on this page surfaces.
  */
 export function PatientWorkspacePage() {
   const { accessToken } = useAuth();
@@ -91,6 +102,8 @@ export function PatientWorkspacePage() {
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [fhirPreview, setFhirPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retention, setRetention] = useState<PatientRetentionStatus | null>(null);
+  const [retentionError, setRetentionError] = useState<string | null>(null);
 
   const [selectedDiagnosis, setSelectedDiagnosis] = useState<Diagnosis | null>(null);
   const [showNewDiagnosis, setShowNewDiagnosis] = useState(false);
@@ -118,6 +131,28 @@ export function PatientWorkspacePage() {
   };
 
   useEffect(refresh, [accessToken, selected]);
+
+  const selectedPatientId = selected?.patientId;
+  useEffect(() => {
+    if (!accessToken || !selectedPatientId) return;
+    let cancelled = false;
+    getPatientRetentionStatus(accessToken, selectedPatientId)
+      .then((status) => {
+        if (cancelled) return;
+        setRetention(status);
+        setRetentionError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRetention(null);
+        setRetentionError(
+          err instanceof ApiError ? err.message : "Couldn't load this record's retention status.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedPatientId]);
 
   if (!selected) {
     return (
@@ -178,9 +213,14 @@ export function PatientWorkspacePage() {
 
   const saveDiagnosisDetail = async (patch: Partial<Diagnosis>) => {
     if (!accessToken || !selectedDiagnosis) return;
-    const updated = await updateDiagnosis(accessToken, selectedDiagnosis.id, patch);
-    setSelectedDiagnosis(updated);
-    refresh();
+    setError(null);
+    try {
+      const updated = await updateDiagnosis(accessToken, selectedDiagnosis.id, patch);
+      setSelectedDiagnosis(updated);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save the diagnosis.");
+    }
   };
 
   const viewFhirBundle = async (admissionId: string) => {
@@ -221,6 +261,47 @@ export function PatientWorkspacePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
+      {retention?.patient === selected.patientId && retention.state === "ARCHIVED" && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-status-amber bg-status-amber-tint px-4 py-3 text-sm text-ink-900"
+        >
+          <Archive className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-amber" />
+          <div>
+            <p className="font-semibold">
+              This client record is archived and read-only. An Org Admin can restore it from Data
+              Retention &amp; Archive.
+            </p>
+            <p className="mt-0.5 text-xs text-ink-700">
+              {retention.archived_at
+                ? `Archived ${new Date(retention.archived_at).toLocaleDateString([], {
+                    dateStyle: "medium",
+                  })}`
+                : "Archived"}
+              {retention.archive_reason &&
+                ` · ${ARCHIVE_REASON_LABEL[retention.archive_reason] ?? retention.archive_reason}`}
+            </p>
+          </div>
+        </div>
+      )}
+      {retention?.patient === selected.patientId && retention.state === "LEGAL_HOLD" && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-md border border-surface-border bg-surface-card px-3 py-2 text-xs text-ink-700"
+        >
+          <Scale className="h-3.5 w-3.5 flex-shrink-0 text-status-amber" />
+          <span>
+            <strong className="font-semibold text-ink-900">Legal hold</strong> — this record is
+            excluded from retention archiving
+            {retention.legal_hold_reason && `: ${retention.legal_hold_reason}`}.
+          </span>
+        </div>
+      )}
+      {retentionError && (
+        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-xs text-status-red">
+          {retentionError}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
         <AvatarUpload
           imageUrl={patient?.photo}

@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/apiClient";
-import { enqueue, flushQueue, queueLength, type SyncEntityType } from "../lib/offlineQueue";
+import {
+  enqueue,
+  flushQueue,
+  queueLength,
+  subscribe,
+  type SyncEntityType,
+} from "../lib/offlineQueue";
 
 interface ConflictSummary {
   client_id: string;
@@ -10,24 +17,36 @@ interface ConflictSummary {
 /**
  * Local-first submission for core clinical entry screens — docs/08-DHA-SHA-INTEGRATION.md
  * §8.5. `submitOrQueue` tries the normal online API call; a network-level
- * failure (not a real 4xx/5xx from the server) falls back to the offline
- * queue instead of losing the clinician's work. Auto-flushes on reconnect.
+ * failure (not a real 4xx/5xx from the server) falls back to the in-memory
+ * offline queue (lib/offlineQueue.ts) instead of losing the clinician's
+ * work. Auto-flushes on reconnect. `pendingCount` is shared across every
+ * screen using this hook, since they all read the one queue.
  */
 export function useOfflineSync(accessToken: string | null) {
+  const { claims } = useAuth();
+  const userId = claims?.user_id ?? null;
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(queueLength());
+  const pendingCount = useSyncExternalStore(subscribe, queueLength);
   const [lastConflicts, setLastConflicts] = useState<ConflictSummary[]>([]);
+  // A flush the server *refused* (e.g. SUBSCRIPTION_EXPIRED makes the tenant
+  // read-only), as opposed to one that never reached it — shown to the user
+  // instead of an endless "syncing…".
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  const flush = useCallback(async () => {
-    if (!accessToken) return;
-    try {
-      const { conflicts } = await flushQueue(accessToken);
-      setPendingCount(queueLength());
-      if (conflicts.length > 0) setLastConflicts(conflicts);
-    } catch {
-      // Still unreachable — leave the queue as-is for the next attempt.
-    }
-  }, [accessToken]);
+  const flush = useCallback((): Promise<void> => {
+    if (!accessToken) return Promise.resolve();
+    return flushQueue(accessToken, userId).then(
+      ({ conflicts }) => {
+        setSyncError(null);
+        if (conflicts.length > 0) setLastConflicts(conflicts);
+      },
+      (err) => {
+        // Unreachable: leave the queue as-is for the next attempt. Refused:
+        // the entries stay queued too, but the user is told why.
+        if (err instanceof ApiError) setSyncError(err.message);
+      },
+    );
+  }, [accessToken, userId]);
 
   useEffect(() => {
     const goOnline = () => {
@@ -41,20 +60,11 @@ export function useOfflineSync(accessToken: string | null) {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [flush]);
 
   useEffect(() => {
-    if (!accessToken || !navigator.onLine) return;
-    flushQueue(accessToken)
-      .then(({ conflicts }) => {
-        setPendingCount(queueLength());
-        if (conflicts.length > 0) setLastConflicts(conflicts);
-      })
-      .catch(() => {
-        // Still unreachable — leave the queue as-is for the next attempt.
-      });
-  }, [accessToken]);
+    if (navigator.onLine) flush();
+  }, [flush]);
 
   const submitOrQueue = useCallback(
     async <T>(
@@ -72,12 +82,11 @@ export function useOfflineSync(accessToken: string | null) {
           // A network-level failure (fetch never got a response) — queue it.
         }
       }
-      enqueue(entityType, encounterId, payload);
-      setPendingCount(queueLength());
+      enqueue(entityType, encounterId, payload, userId);
       return { queued: true };
     },
-    [],
+    [userId],
   );
 
-  return { isOnline, pendingCount, lastConflicts, submitOrQueue, flush };
+  return { isOnline, pendingCount, lastConflicts, syncError, submitOrQueue, flush };
 }

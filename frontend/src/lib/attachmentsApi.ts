@@ -103,8 +103,15 @@ export function updateAttachment(accessToken: string, id: string, payload: Parti
   });
 }
 
-export function deleteAttachment(accessToken: string, id: string) {
-  return apiRequest<void>(`/attachments/${id}/`, { method: "DELETE", accessToken });
+// Documents are part of the clinical record and are never deleted — the
+// backend refuses DELETE (405). Archiving takes a document out of the active
+// list while keeping it in full; restoring brings it back.
+export function archiveAttachment(accessToken: string, id: string) {
+  return updateAttachment(accessToken, id, { doc_status: "ARCHIVED" });
+}
+
+export function restoreAttachment(accessToken: string, id: string) {
+  return updateAttachment(accessToken, id, { doc_status: "ACTIVE" });
 }
 
 export interface AttachmentInsights {

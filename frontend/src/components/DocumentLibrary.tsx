@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Download, FileText, Plus, Search, Star, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Download, FileText, Plus, Search, Star, X } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/apiClient";
 import {
-  deleteAttachment,
+  archiveAttachment,
   listAttachments,
+  restoreAttachment,
   updateAttachment,
   uploadAttachment,
   type Attachment,
@@ -42,10 +43,12 @@ function formatSize(bytes: number | null) {
  * pane) — the second clinical-workspace mockup's pattern, used identically
  * for both the global Attachments screen and a patient's Documents tab
  * (pass `patientId` to scope everything to one client and hide the Client
- * column). Delete/download stay the simple, immediate operations they are
- * today per the plan's decision 4 — the mockup's approval-gated delete and
- * "authorization required" download are fake in the mockup itself (never
- * wired to anything), so nothing here pretends otherwise.
+ * column). Documents are part of the clinical record and are never deleted:
+ * "Archive" takes one out of active use but keeps it in full, and an archived
+ * document can be restored. Download stays the simple, immediate operation it
+ * is today per the plan's decision 4 — the mockup's "authorization required"
+ * download is fake in the mockup itself (never wired to anything), so nothing
+ * here pretends otherwise.
  */
 export function DocumentLibrary({
   patientId,
@@ -126,20 +129,49 @@ export function DocumentLibrary({
     }
   };
 
+  // Writes under an archived client record come back 409 RECORD_ARCHIVED —
+  // every action here surfaces the backend's message rather than failing
+  // silently.
   const toggleFavorite = async (attachment: Attachment) => {
     if (!accessToken) return;
-    await updateAttachment(accessToken, attachment.id, { is_favorite: !attachment.is_favorite });
-    refresh();
+    setError(null);
+    try {
+      await updateAttachment(accessToken, attachment.id, {
+        is_favorite: !attachment.is_favorite,
+      });
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't update the document.");
+    }
   };
 
-  const remove = async (attachment: Attachment) => {
+  const archive = async (attachment: Attachment) => {
     if (!accessToken) return;
-    if (!window.confirm(`Delete "${attachment.file.split("/").pop()}"? This cannot be undone.`)) {
+    if (
+      !window.confirm(
+        `Archive "${attachment.file.split("/").pop()}"? The document is kept in full and can be restored at any time.`,
+      )
+    ) {
       return;
     }
-    await deleteAttachment(accessToken, attachment.id);
-    if (selectedId === attachment.id) setSelectedId(null);
-    refresh();
+    setError(null);
+    try {
+      await archiveAttachment(accessToken, attachment.id);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't archive the document.");
+    }
+  };
+
+  const restore = async (attachment: Attachment) => {
+    if (!accessToken) return;
+    setError(null);
+    try {
+      await restoreAttachment(accessToken, attachment.id);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't restore the document.");
+    }
   };
 
   return (
@@ -310,6 +342,11 @@ export function DocumentLibrary({
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 flex-none text-brand-green" />
                       <span className="font-medium text-ink-900">{a.file.split("/").pop()}</span>
+                      {a.doc_status === "ARCHIVED" && (
+                        <span className="rounded-full border border-surface-border bg-surface-bg px-2 py-0.5 text-[10px] font-semibold text-ink-700">
+                          Archived
+                        </span>
+                      )}
                     </div>
                   </td>
                   {!patientId && <td className="px-4 py-3 text-ink-700">{a.patient_name}</td>}
@@ -377,14 +414,25 @@ export function DocumentLibrary({
                   <Download className="h-3.5 w-3.5" />
                   Open
                 </a>
-                <button
-                  type="button"
-                  onClick={() => remove(selected)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-status-red/30 bg-status-red-tint py-2 text-[11.5px] font-semibold text-status-red hover:bg-status-red/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
+                {selected.doc_status === "ARCHIVED" ? (
+                  <button
+                    type="button"
+                    onClick={() => restore(selected)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-brand-green bg-brand-green-tint py-2 text-[11.5px] font-semibold text-brand-green-dark hover:bg-brand-green-tint-2"
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    Restore
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => archive(selected)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-surface-border py-2 text-[11.5px] font-semibold text-ink-700 hover:bg-surface-bg"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Archive
+                  </button>
+                )}
               </div>
             </div>
           )}

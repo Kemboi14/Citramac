@@ -8,16 +8,25 @@ import { useOfflineSync } from "../clinical/useOfflineSync";
  */
 export function OfflineSyncBanner() {
   const { accessToken } = useAuth();
-  const { isOnline, pendingCount, lastConflicts } = useOfflineSync(accessToken);
+  const { isOnline, pendingCount, lastConflicts, syncError } = useOfflineSync(accessToken);
 
   if (isOnline && pendingCount === 0 && lastConflicts.length === 0) return null;
 
   if (!isOnline) {
     return (
       <div className="mb-4 flex items-center gap-2 rounded-sm bg-status-amber-tint px-3 py-2 text-sm font-medium text-status-amber">
-        Offline — entries are being saved on this device
+        Offline — entries are held in this browser tab
         {pendingCount > 0 && ` (${pendingCount} pending)`} and will sync once you&apos;re back
-        online.
+        online. Keep this tab open until they do: nothing is stored on the device.
+      </div>
+    );
+  }
+
+  if (pendingCount > 0 && syncError) {
+    return (
+      <div className="mb-4 flex items-center gap-2 rounded-sm bg-status-red-tint px-3 py-2 text-sm font-medium text-status-red">
+        {pendingCount} queued entr{pendingCount === 1 ? "y" : "ies"} couldn&apos;t be saved:{" "}
+        {syncError} They&apos;re still held in this tab.
       </div>
     );
   }

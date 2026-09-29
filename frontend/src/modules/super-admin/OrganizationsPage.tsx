@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  Archive,
   Ban,
   CheckCircle2,
   ChevronDown,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { Drawer } from "../../components/Drawer";
 import { LocationFields } from "../../components/LocationFields";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -57,12 +59,14 @@ const STATUS_TINT: Record<OrganizationStatus, string> = {
   ACTIVE: "bg-brand-green-tint text-brand-green-dark",
   PENDING_VERIFICATION: "bg-status-amber-tint text-status-amber",
   SUSPENDED: "bg-status-red-tint text-status-red",
+  ARCHIVED: "bg-surface-bg text-ink-500 border border-surface-border",
 };
 
 const STATUS_LABEL: Record<OrganizationStatus, string> = {
   ACTIVE: "Active",
   PENDING_VERIFICATION: "Pending Verification",
   SUSPENDED: "Suspended",
+  ARCHIVED: "Archived",
 };
 
 const STATUS_FILTERS: { label: string; value: OrganizationStatus | "" }[] = [
@@ -70,7 +74,59 @@ const STATUS_FILTERS: { label: string; value: OrganizationStatus | "" }[] = [
   { label: "Active", value: "ACTIVE" },
   { label: "Pending Verification", value: "PENDING_VERIFICATION" },
   { label: "Suspended", value: "SUSPENDED" },
+  { label: "Archived", value: "ARCHIVED" },
 ];
+
+/** "Activate" for a tenant that was never live; "Reactivate" for one that was switched off. */
+function activateLabel(status: OrganizationStatus) {
+  return status === "SUSPENDED" || status === "ARCHIVED" ? "Reactivate" : "Activate";
+}
+
+/**
+ * Confirmation for offboarding a tenant — ARCHIVED blocks sign-in exactly
+ * like SUSPENDED, but is the deliberate end-of-relationship state. Nothing
+ * is deleted either way; reactivating restores access.
+ */
+function ArchiveOrganizationDialog({
+  organization,
+  busy,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  organization: Organization | null;
+  busy: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <ConfirmDialog
+      open={organization !== null}
+      title="Archive organisation?"
+      confirmLabel="Archive organisation"
+      busyLabel="Archiving…"
+      tone="danger"
+      busy={busy}
+      error={error}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    >
+      <p>
+        Archiving{" "}
+        <span className="font-semibold text-ink-900">
+          {organization?.name ?? "this organisation"}
+        </span>{" "}
+        offboards it from CITRAMAC:
+      </p>
+      <ul className="list-disc pl-5">
+        <li>Sign-in is blocked for all of its staff.</li>
+        <li>All of its data is kept in full — nothing is deleted.</li>
+        <li>It can be restored at any time by reactivating it.</li>
+      </ul>
+    </ConfirmDialog>
+  );
+}
 
 const ORG_TYPE_LABEL: Record<OrgType, string> = {
   HOSPITAL: "Hospital / Healthcare Provider",
@@ -340,6 +396,24 @@ function OrganizationDrawer({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const formId = "organization-form";
 
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  const confirmArchive = async () => {
+    if (!accessToken || !organization) return;
+    setStatusBusy(true);
+    setArchiveError(null);
+    try {
+      const updated = await setOrganizationStatus(accessToken, organization.id, "ARCHIVED");
+      setArchiveOpen(false);
+      onStatusChanged(updated);
+    } catch (err) {
+      setArchiveError(err instanceof ApiError ? err.message : "Couldn't archive the organization.");
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   const handleSetStatus = async (status: OrganizationStatus) => {
     if (!accessToken || !organization) return;
     setStatusBusy(true);
@@ -348,9 +422,7 @@ function OrganizationDrawer({
       const updated = await setOrganizationStatus(accessToken, organization.id, status);
       onStatusChanged(updated);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Couldn't update the organization status.",
-      );
+      setError(err instanceof ApiError ? err.message : "Couldn't update the organization status.");
     } finally {
       setStatusBusy(false);
     }
@@ -501,10 +573,10 @@ function OrganizationDrawer({
                   className="inline-flex items-center gap-1.5 rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Activate
+                  {activateLabel(organization.status)}
                 </button>
               )}
-              {organization.status !== "SUSPENDED" && (
+              {organization.status !== "SUSPENDED" && organization.status !== "ARCHIVED" && (
                 <button
                   type="button"
                   disabled={statusBusy}
@@ -515,8 +587,31 @@ function OrganizationDrawer({
                   Suspend
                 </button>
               )}
+              {organization.status !== "ARCHIVED" && (
+                <button
+                  type="button"
+                  disabled={statusBusy}
+                  onClick={() => {
+                    setArchiveError(null);
+                    setArchiveOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-surface-border px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  Archive
+                </button>
+              )}
             </div>
           </div>
+        )}
+        {isEdit && organization && (
+          <ArchiveOrganizationDialog
+            organization={archiveOpen ? organization : null}
+            busy={statusBusy}
+            error={archiveError}
+            onConfirm={confirmArchive}
+            onCancel={() => setArchiveOpen(false)}
+          />
         )}
         <label className={LABEL_CLASS}>
           Organization Name <span className="text-status-red">*</span>
@@ -820,14 +915,14 @@ function OrganizationDrawer({
                 />
               </span>
               <span className="mt-1 block text-[11px] font-normal text-ink-400">
-                Only recolors this tenant's pre-login screen.
+                Only recolors this tenant&rsquo;s pre-login screen.
               </span>
             </label>
             <div>
               <span className="text-sm font-medium text-ink-700">App Theme</span>
               <p className="mb-2 mt-0.5 text-[11px] text-ink-400">
-                Applied throughout the org's dashboard, buttons, and sidebar after login. The
-                org's own Admin can also change this from Branch Settings. Status colors (risk
+                Applied throughout the org&rsquo;s dashboard, buttons, and sidebar after login. The
+                org&rsquo;s own Admin can also change this from Branch Settings. Status colors (risk
                 alerts, errors) are never affected.
               </p>
               <div className="flex flex-wrap gap-4">
@@ -1154,18 +1249,21 @@ function GroupByMenu({ value, onChange }: { value: GroupBy; onChange: (v: GroupB
   );
 }
 
-/** Row actions: edit (pencil) + a kebab menu for view/edit and suspend/reactivate. */
+/** Row actions: edit (pencil) + a kebab menu for view/edit, suspend/archive and reactivate. */
 function RowActionsMenu({
   org,
   busy,
   onEdit,
   onSetStatus,
+  onArchive,
   onAddStaff,
 }: {
   org: Organization;
   busy: boolean;
   onEdit: () => void;
   onSetStatus: (status: OrganizationStatus) => void;
+  /** Opens the archive confirmation — archiving is never one click. */
+  onArchive: () => void;
   onAddStaff: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1237,10 +1335,10 @@ function RowActionsMenu({
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-brand-green-dark hover:bg-surface-bg disabled:opacity-60"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                Activate
+                {activateLabel(org.status)}
               </button>
             )}
-            {org.status !== "SUSPENDED" && (
+            {org.status !== "SUSPENDED" && org.status !== "ARCHIVED" && (
               <button
                 type="button"
                 disabled={busy}
@@ -1252,6 +1350,20 @@ function RowActionsMenu({
               >
                 <Ban className="h-3.5 w-3.5" />
                 Suspend
+              </button>
+            )}
+            {org.status !== "ARCHIVED" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false);
+                  onArchive();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archive organisation
               </button>
             )}
           </div>
@@ -1406,6 +1518,29 @@ export function OrganizationsPage() {
     }
   };
 
+  const [archiveTarget, setArchiveTarget] = useState<Organization | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  const openArchive = (org: Organization) => {
+    setArchiveError(null);
+    setArchiveTarget(org);
+  };
+
+  const confirmArchive = async () => {
+    if (!accessToken || !archiveTarget) return;
+    setBusyId(archiveTarget.id);
+    setArchiveError(null);
+    try {
+      await setOrganizationStatus(accessToken, archiveTarget.id, "ARCHIVED");
+      setArchiveTarget(null);
+      refresh();
+    } catch (err) {
+      setArchiveError(err instanceof ApiError ? err.message : "Couldn't archive the organization.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const groupedRows = useMemo(() => {
     if (groupBy === "none") return [{ label: null as string | null, orgs: organizations }];
     const order: string[] = [];
@@ -1540,6 +1675,7 @@ export function OrganizationsPage() {
                         busy={busyId === org.id}
                         onEdit={() => setDrawer({ open: true, organization: org })}
                         onSetStatus={(status) => changeOrgStatus(org, status)}
+                        onArchive={() => openArchive(org)}
                         onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
                       />
                     </td>
@@ -1624,6 +1760,7 @@ export function OrganizationsPage() {
                     busy={busyId === org.id}
                     onEdit={() => setDrawer({ open: true, organization: org })}
                     onSetStatus={(status) => changeOrgStatus(org, status)}
+                    onArchive={() => openArchive(org)}
                     onAddStaff={() => setStaffDrawer({ open: true, organization: org })}
                   />
                 </div>
@@ -1661,6 +1798,14 @@ export function OrganizationsPage() {
           setDrawer((d) => ({ ...d, organization: updated }));
           refresh();
         }}
+      />
+
+      <ArchiveOrganizationDialog
+        organization={archiveTarget}
+        busy={archiveTarget !== null && busyId === archiveTarget.id}
+        error={archiveError}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveTarget(null)}
       />
 
       <OrgStaffInviteDrawer

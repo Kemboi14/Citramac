@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  Archive,
   Building2,
   CalendarClock,
   ClipboardCheck,
@@ -59,6 +60,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
       { label: "Organizations", to: "/super-admin/organizations", icon: Building2 },
       { label: "Branches & Departments", to: "/super-admin/branches", icon: Landmark },
       { label: "Subscriptions", to: "/super-admin/subscriptions", icon: CreditCard },
+      { label: "Data Lifecycle", to: "/super-admin/data-lifecycle", icon: Archive },
       { label: "Email Settings", to: "/super-admin/email-settings", icon: Mail },
       { label: "SMS Settings", to: "/super-admin/sms-settings", icon: MessageSquare },
     ],
@@ -88,11 +90,15 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
       { label: "Staff / MHP Team", to: "/org-admin/staff", icon: Users },
       { label: "Branch Settings", to: "/org-admin/branch-settings", icon: Settings },
       { label: "Roles & Permissions", to: "/org-admin/roles", icon: ShieldCheck },
+      { label: "Subscription", to: "/org-admin/subscription", icon: CreditCard },
     ],
   },
   {
     label: "Governance",
-    items: [{ label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 }],
+    items: [
+      { label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 },
+      { label: "Data Retention & Archive", to: "/org-admin/data-retention", icon: Archive },
+    ],
   },
 ];
 

@@ -9,7 +9,11 @@ import {
   type PlatformActivityEntry,
   type PlatformDashboardStats,
 } from "../../lib/organizationsApi";
-import { getPlatformBranding, updatePlatformTheme, uploadPlatformLogo } from "../../lib/brandingApi";
+import {
+  getPlatformBranding,
+  updatePlatformTheme,
+  uploadPlatformLogo,
+} from "../../lib/brandingApi";
 import { SaveButton } from "../../components/SaveButton";
 import { StatCard } from "../../components/StatCard";
 import { BarChart } from "../../components/charts/BarChart";
@@ -123,7 +127,7 @@ function PlatformBrandingCard() {
         <div className="flex-1">
           <div className="font-display text-sm font-semibold text-ink-900">Platform Theme</div>
           <p className="text-xs text-ink-500">
-            The default accent every user sees, including Super Admin. An organization's own
+            The default accent every user sees, including Super Admin. An organization&rsquo;s own
             theme (if set) applies on top of this for its members.
           </p>
           {themeError && <p className="mt-1 text-xs text-status-red">{themeError}</p>}
@@ -156,12 +160,14 @@ const STATUS_TINT: Record<OrganizationStatus, string> = {
   ACTIVE: "bg-brand-green-tint text-brand-green-dark",
   PENDING_VERIFICATION: "bg-status-amber-tint text-status-amber",
   SUSPENDED: "bg-status-red-tint text-status-red",
+  ARCHIVED: "bg-surface-bg text-ink-500 border border-surface-border",
 };
 
 const STATUS_LABEL: Record<OrganizationStatus, string> = {
   ACTIVE: "Active",
   PENDING_VERIFICATION: "Pending Verification",
   SUSPENDED: "Suspended",
+  ARCHIVED: "Archived",
 };
 
 const ORG_TYPE_LABEL: Record<string, string> = {
