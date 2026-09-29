@@ -96,17 +96,22 @@ their justification:
 Residual risks not fully closed by the mitigations above, in order of
 priority:
 
-1. **Audit trail is application-layer append-only, not DB-role
-   append-only.** A compromised application DB credential could still
-   issue a raw `UPDATE`/`DELETE` against `sysadmin_audit_auditlogentry`
-   directly. True tamper-evidence (a DB role without `UPDATE`/`DELETE`
-   grants on that table, or hash-chained entries) is a documented,
-   not-yet-built hardening item.
-2. **Financial-record retention** is not independently configured from
-   clinical-record retention (§1) — both currently key off the same
-   `CLINICAL_RECORD_MINIMUM_RETENTION_YEARS` setting via the erasure
-   workflow's conflict check, which is a simplification, not a deliberate
-   financial-compliance decision.
+1. **Audit trail append-only is enforced in the database, but not
+   against the table owner.** A Postgres trigger now rejects any `UPDATE`
+   or `DELETE` on `sysadmin_audit_auditlogentry` (migration
+   `sysadmin_audit/0006_append_only_trigger`), so raw SQL through the
+   application credential can't rewrite history. The application role still
+   inherits table ownership, so it could drop the trigger or `TRUNCATE`.
+   Full tamper-evidence (a non-owner app role plus hash-chained entries)
+   remains a hardening item. Earlier `CREATE`/`UPDATE` entries also keep
+   the pre-erasure values of an erased patient's fields. Reconciling that
+   with append-only (e.g. field-level encryption with per-patient keys) is
+   an open decision.
+2. **Financial-record retention** is now configured separately from
+   clinical and mental-health retention (`apps.retention`: platform floor
+   plus per-organisation policy, longest applicable period wins). **VERIFY:**
+   none of the three periods is yet a confirmed statutory figure. Archiving
+   stays disabled until a Super Admin records the confirmed source.
 3. **NACADA NDO Report small-cohort re-identification** (§2, §3.4) has not
    been formally tested against CAfRIC's actual monthly volumes.
 4. **No automated continuous point-in-time-recovery** — the backup drill

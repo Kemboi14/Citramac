@@ -2,6 +2,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
+from apps.retention.mixins import NoHardDeleteMixin
 
 from .fefo import InsufficientStock, dispense_fefo
 from .models import DispenseRecord, DrugStockItem, StockMovement, Store
@@ -52,7 +53,7 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
         return StockMovement.objects.select_related("stock_item").order_by("-moved_at")
 
 
-class DispenseRecordViewSet(viewsets.ModelViewSet):
+class DispenseRecordViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     E-prescription fulfillment — docs/10-API-SPECIFICATION.md §10.8:
     POST /pharmacy/dispense/{prescription_item_id}/. The POS validation gate

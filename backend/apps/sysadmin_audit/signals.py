@@ -19,7 +19,17 @@ _PRE_SAVE_SNAPSHOTS = {}
 
 
 def _local_app_labels():
-    return {name.rsplit(".", 1)[-1] for name in settings.LOCAL_APPS} - {"sysadmin_audit"}
+    # Resolved via the app registry, not by splitting the module path: an
+    # app may override its label (apps.security's is "platform_security"),
+    # and a path-derived "security" would silently leave that app's models
+    # — SecurityPolicy included — out of the audit trail entirely.
+    from django.apps import apps as django_apps
+
+    return {
+        config.label
+        for config in django_apps.get_app_configs()
+        if config.name in settings.LOCAL_APPS
+    } - {"sysadmin_audit"}
 
 
 def _serialize(instance, field_names=None):
@@ -65,7 +75,19 @@ def _log_save(sender, instance, created, **kwargs):
 
 
 def _log_delete(sender, instance, **kwargs):
-    write_entry(instance, AuditLogEntry.ACTION_DELETE)
+    # The row itself is gone after this, so the entry carries its final
+    # field values — otherwise the audit trail records *that* something was
+    # deleted but not *what*, and the content survives only in backups.
+    # Raw column values (attname, i.e. `organization_id` not `organization`):
+    # a related row may already be gone mid-cascade, and resolving it here
+    # would query — or fail on — something that no longer exists.
+    diff = {}
+    for field in instance._meta.concrete_fields:
+        if field.name in SENSITIVE_FIELDS:
+            continue
+        value = getattr(instance, field.attname, None)
+        diff[field.name] = {"old": str(value) if value is not None else None, "new": None}
+    write_entry(instance, AuditLogEntry.ACTION_DELETE, diff)
 
 
 def connect_audit_signals():

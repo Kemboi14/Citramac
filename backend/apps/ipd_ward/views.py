@@ -3,6 +3,8 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.retention.mixins import NoHardDeleteMixin
+
 from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
 from .serializers import (
     AdmissionSerializer,
@@ -73,7 +75,7 @@ class BedViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
-class AdmissionViewSet(viewsets.ModelViewSet):
+class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     ADT — docs/07-CLINICAL-MODULES-SPEC.md §7.7. `admission_type` distinguishes
     voluntary (client-consented) from involuntary (Mental Health Act Cap. 248
@@ -115,9 +117,10 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         admitted_patient_ids = Admission.objects.filter(status="ADMITTED").values_list(
             "patient_id", flat=True
         )
-        patients = Patient.objects.filter(patient_category="INPATIENT").exclude(
-            id__in=admitted_patient_ids
-        )
+        # An archived record can't be admitted into until it is restored.
+        patients = Patient.objects.filter(
+            patient_category="INPATIENT", archived_at__isnull=True
+        ).exclude(id__in=admitted_patient_ids)
         return Response(PatientListSerializer(patients, many=True).data)
 
     @action(detail=True, methods=["get"])
@@ -160,7 +163,7 @@ class AdmissionViewSet(viewsets.ModelViewSet):
         return Response(AdmissionSerializer(admission).data)
 
 
-class MedicationAdministrationViewSet(viewsets.ModelViewSet):
+class MedicationAdministrationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = MedicationAdministrationSerializer
 
     def get_queryset(self):
@@ -187,7 +190,7 @@ class MedicationAdministrationViewSet(viewsets.ModelViewSet):
         return Response(MedicationAdministrationSerializer(entry).data)
 
 
-class NursingNoteViewSet(viewsets.ModelViewSet):
+class NursingNoteViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = NursingNoteSerializer
 
     def get_queryset(self):

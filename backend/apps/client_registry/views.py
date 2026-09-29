@@ -5,6 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.retention.mixins import NoHardDeleteMixin
+
 from .consent import capture_consent
 from .erasure import execute_erasure
 from .models import (
@@ -41,14 +43,37 @@ def _generate_citramac_number(organization):
     return f"{prefix}-{count_this_month + 1:03d}"
 
 
-class PatientViewSet(viewsets.ModelViewSet):
+class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.4 — Module 1."""
 
     def get_serializer_class(self):
         return PatientListSerializer if self.action == "list" else PatientDetailSerializer
 
     def get_queryset(self):
-        return Patient.objects.select_related("doctor").order_by("-registered_at")
+        queryset = Patient.objects.select_related("doctor").order_by("-registered_at")
+        if self.action == "list":
+            # Archived client records (apps.retention) drop out of the
+            # registry by default; `?archived=include` shows them alongside
+            # active ones, `?archived=only` shows just them. Opening one by
+            # id always works — it's read-only, not hidden.
+            params = self.request.query_params
+            archived = params.get("archived")
+            if archived == "only":
+                queryset = queryset.filter(archived_at__isnull=False)
+            elif archived != "include":
+                queryset = queryset.filter(archived_at__isnull=True)
+            if params.get("legal_hold") == "true":
+                queryset = queryset.filter(legal_hold=True)
+            q = (params.get("q") or "").strip()
+            if q:
+                queryset = queryset.filter(
+                    models.Q(first_name__icontains=q)
+                    | models.Q(last_name__icontains=q)
+                    | models.Q(uhid_number__icontains=q)
+                    | models.Q(citramac_number__icontains=q)
+                    | models.Q(national_id__icontains=q)
+                )
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(
@@ -171,7 +196,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         return Response(ConsentRecordSerializer(patient.consent_records.all(), many=True).data)
 
 
-class AppointmentViewSet(viewsets.ModelViewSet):
+class AppointmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """Appointments Calendar — filterable by `from`/`to` (ISO dates) and `status`."""
 
     serializer_class = AppointmentSerializer
@@ -203,7 +228,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             serializer.save()
 
 
-class AttachmentViewSet(viewsets.ModelViewSet):
+class AttachmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     Global document manager — mockups/citramac_clinical_workspace.html's
     "Attachments" nav item. Per-patient upload/list continues to also be
@@ -286,7 +311,7 @@ class ClinicalDashboardSummaryView(APIView):
         now = timezone.now()
         organization_id = request.user.organization_id
 
-        patients = Patient.objects.all()
+        patients = Patient.objects.filter(archived_at__isnull=True)
         appointments_today = Appointment.objects.filter(scheduled_for__date=today)
         appointments_remaining_today = appointments_today.filter(
             scheduled_for__gte=now, status="SCHEDULED"
@@ -353,7 +378,7 @@ class ClinicalDashboardSummaryView(APIView):
         )
 
 
-class ErasureRequestViewSet(viewsets.ModelViewSet):
+class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     Right-to-Erasure workflow — docs/09-SECURITY-COMPLIANCE.md §9.5.
     Distinct from routine soft-delete: requires Org Admin + compliance

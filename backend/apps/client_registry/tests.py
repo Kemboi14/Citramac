@@ -437,6 +437,74 @@ class RightToErasureTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class ErasureCoverageTests(APITestCase):
+    """The PII erasure removes, beyond the Patient's own name/ID fields."""
+
+    # Same fixture as RightToErasureTests, without re-running its tests.
+    setUp = RightToErasureTests.setUp
+    _auth = RightToErasureTests._auth
+    _create_request = RightToErasureTests._create_request
+
+    def _approve_and_execute(self, **payload):
+        request_id = self._create_request()
+        self.client.post(
+            reverse("erasure-request-approve-org-admin", args=[request_id]), **self.org_admin_auth
+        )
+        self.client.post(
+            reverse("erasure-request-approve-compliance", args=[request_id]), **self.auditor_auth
+        )
+        return self.client.post(
+            reverse("erasure-request-execute", args=[request_id]),
+            payload,
+            format="json",
+            **self.auditor_auth,
+        )
+
+    def test_related_identifying_data_is_erased_too(self):
+        from apps.client_registry.models import EmergencyContact, InsuranceCoverage
+
+        with platform_admin_context():
+            EmergencyContact.objects.create(
+                organization=self.org, patient=self.patient, name="Mama Faith", phone="0711111111"
+            )
+            InsuranceCoverage.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                scheme_type="PRIVATE",
+                policy_number="POL-998877",
+            )
+        response = self._approve_and_execute()
+        self.assertEqual(response.data["status"], "COMPLETED", response.data)
+        with platform_admin_context():
+            self.patient.refresh_from_db()
+            contact = EmergencyContact.objects.get(patient=self.patient)
+            coverage = InsuranceCoverage.objects.get(patient=self.patient)
+        self.assertEqual(str(self.patient.date_of_birth), "1997-01-01")
+        self.assertEqual(contact.name, "[ERASED]")
+        self.assertEqual(contact.phone, "")
+        self.assertEqual(coverage.policy_number, "")
+
+    def test_legal_hold_is_a_conflict(self):
+        with platform_admin_context():
+            Patient.objects.filter(pk=self.patient.pk).update(
+                legal_hold=True, legal_hold_reason="Court order"
+            )
+            self.patient.refresh_from_db()
+        response = self._approve_and_execute()
+        self.assertEqual(response.data["status"], "RETENTION_CONFLICT")
+        self.assertIn("legal hold", response.data["retention_conflict_detail"])
+
+    def test_mental_health_activity_counts_towards_the_statutory_minimum(self):
+        from apps.mhp_program.models import PsychotherapySession
+
+        with platform_admin_context():
+            PsychotherapySession.objects.create(
+                organization=self.org, patient=self.patient, session_type="INDIVIDUAL"
+            )
+        response = self._approve_and_execute()
+        self.assertEqual(response.data["status"], "RETENTION_CONFLICT")
+
+
 class AttachmentAppointmentDashboardTests(APITestCase):
     """Document manager, appointments calendar, and dashboard summary aggregates."""
 

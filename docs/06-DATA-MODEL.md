@@ -145,6 +145,10 @@ ShaTransactionLog         # every SHA API call: request payload, response, statu
 ## 6.7 Modeling conventions
 
 - Every model: `organization` FK (except platform-level like `SubscriptionPlan`), `created_at`, `updated_at`, and where relevant `created_by` / `updated_by`.
-- Soft-delete (`is_deleted`, `deleted_at`) on clinical records — **never hard-delete** patient data (DHA immutable audit requirement); hard deletes are reserved for GDPR/Data-Protection-Act "right to erasure" requests processed through a dedicated, audited workflow.
+- **Never hard-delete** patient data (DHA immutable audit requirement). Implemented as *archiving*, not a per-row soft-delete flag (`apps.retention`):
+  - Clinical and financial API endpoints do not offer `DELETE` (`apps.retention.mixins.NoHardDeleteMixin`), Django admin cannot delete them, and every foreign key inside the client record is `PROTECT`, never `CASCADE`. A mistaken entry is corrected by editing it or by its own status.
+  - The unit of archiving is the whole client record (every model in `apps.retention.registry.PATIENT_PATHS`). An archived client stays in place, in the same tables under the same RLS, but drops out of default registry lists and becomes read-only (`apps.retention.guards`, HTTP 409 `RECORD_ARCHIVED`) until an Org Admin restores it with a recorded reason.
+  - Archiving happens only at the end of the retention period, proposed by a weekly scan and approved per batch by an Org Admin. Every archive, restore and legal-hold change writes an `AuditLogEntry` (`ARCHIVE` / `RESTORE` / `LEGAL_HOLD`).
+  - The one exception is the Right-to-Erasure workflow (`apps.client_registry.erasure`), which anonymizes identifying data in place (§9.5) and still keeps the clinical record.
 - Use `UUIDField` primary keys platform-wide (avoids sequential ID leakage across tenants, simplifies future sharding).
 - All monetary fields: `DecimalField(max_digits=14, decimal_places=2)`, currency code stored alongside (`KES` default).

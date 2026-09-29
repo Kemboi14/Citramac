@@ -15,7 +15,7 @@ class Encounter(TenantScopedModel):
 
     STATUS_CHOICES = [("OPEN", "Open"), ("IN_PROGRESS", "In Progress"), ("CLOSED", "Closed")]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="encounters")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="encounters")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     opened_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -32,7 +32,7 @@ class Encounter(TenantScopedModel):
 class SoapNote(TenantScopedModel):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.3 — S.O.A.P. structured documentation."""
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="soap_notes")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="soap_notes")
     subjective = models.TextField(blank=True)
     objective = models.TextField(blank=True)
     assessment = models.TextField(blank=True)
@@ -64,7 +64,7 @@ class DiagnosisCode(TenantScopedModel):
 
     STATUS_CHOICES = [("ACTIVE", "Active"), ("HISTORICAL", "Historical"), ("RESOLVED", "Resolved")]
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="diagnoses")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="diagnoses")
     icd11_code = models.ForeignKey(IcdCodeIndex, on_delete=models.PROTECT, related_name="+")
     is_primary = models.BooleanField(default=False)
     noted_at = models.DateTimeField(default=timezone.now)
@@ -96,7 +96,7 @@ class ClinicalOrder(TenantScopedModel):
         ("CANCELLED", "Cancelled"),
     ]
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="orders")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="orders")
     order_type = models.CharField(max_length=16, choices=ORDER_TYPE_CHOICES)
     details = models.TextField(blank=True)
     ordered_by = models.ForeignKey(
@@ -110,7 +110,7 @@ class ClinicalOrder(TenantScopedModel):
 
 
 class Prescription(TenantScopedModel):
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="prescriptions")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="prescriptions")
     prescribed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -128,7 +128,7 @@ class PrescriptionItem(TenantScopedModel):
     they're stored so the workflow/UI is real even while the underlying data is thin.
     """
 
-    prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name="items")
+    prescription = models.ForeignKey(Prescription, on_delete=models.PROTECT, related_name="items")
     drug = models.ForeignKey(NationalDrugIndex, on_delete=models.PROTECT, related_name="+")
     dose = models.CharField(max_length=100)
     route = models.CharField(max_length=100, blank=True)
@@ -152,7 +152,7 @@ class ReferralPacket(TenantScopedModel):
 
     STATUS_CHOICES = [("DRAFT", "Draft"), ("SENT", "Sent"), ("ACKNOWLEDGED", "Acknowledged")]
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="referrals")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="referrals")
     destination_facility = models.CharField(max_length=255)
     fhir_bundle_json = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="DRAFT")

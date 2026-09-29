@@ -11,7 +11,7 @@ from apps.tenancy.models import TenantScopedModel
 class VitalSigns(TenantScopedModel):
     """docs/06-DATA-MODEL.md §6.3, docs/07-CLINICAL-MODULES-SPEC.md §7.2 — Module 2."""
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="vital_signs")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="vital_signs")
     systolic_bp = models.PositiveSmallIntegerField(null=True, blank=True)
     diastolic_bp = models.PositiveSmallIntegerField(null=True, blank=True)
     heart_rate = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -56,7 +56,7 @@ class MentalStatusExam(TenantScopedModel):
     """
 
     encounter = models.ForeignKey(
-        Encounter, on_delete=models.CASCADE, related_name="mental_status_exams"
+        Encounter, on_delete=models.PROTECT, related_name="mental_status_exams"
     )
 
     appearance = models.TextField(blank=True)

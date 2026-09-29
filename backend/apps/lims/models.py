@@ -23,7 +23,7 @@ class LabOrder(TenantScopedModel):
         ("CANCELLED", "Cancelled"),
     ]
 
-    encounter = models.ForeignKey(Encounter, on_delete=models.CASCADE, related_name="lab_orders")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="lab_orders")
     loinc_code = models.ForeignKey(LoincCodeIndex, on_delete=models.PROTECT, related_name="+")
     ordered_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -38,7 +38,7 @@ class LabOrder(TenantScopedModel):
 class LabSpecimen(TenantScopedModel):
     """Auto-generated barcode at accessioning — docs/07-CLINICAL-MODULES-SPEC.md §7.4."""
 
-    lab_order = models.ForeignKey(LabOrder, on_delete=models.CASCADE, related_name="specimens")
+    lab_order = models.ForeignKey(LabOrder, on_delete=models.PROTECT, related_name="specimens")
     barcode = models.CharField(max_length=32, unique=True, default=_generate_barcode)
     specimen_type = models.CharField(max_length=100, blank=True)
     collected_by = models.ForeignKey(
@@ -58,7 +58,7 @@ class LabResult(TenantScopedModel):
     for an unvalidated result; Lab Technician/Auditor/Super Admin do).
     """
 
-    lab_order = models.ForeignKey(LabOrder, on_delete=models.CASCADE, related_name="results")
+    lab_order = models.ForeignKey(LabOrder, on_delete=models.PROTECT, related_name="results")
     specimen = models.ForeignKey(
         LabSpecimen, on_delete=models.SET_NULL, null=True, blank=True, related_name="results"
     )

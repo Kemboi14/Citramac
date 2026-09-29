@@ -85,3 +85,55 @@ class AuditLogApiTests(APITestCase):
         )
         actions = {row["action"] for row in response.data["results"]}
         self.assertTrue(actions.issubset({"LOGIN", "LOGIN_FAILED", "ERASURE"}))
+
+
+class AppendOnlyAndCoverageTests(TestCase):
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+
+    def test_database_rejects_update_and_delete_of_audit_rows(self):
+        from django.db import connection, transaction
+        from django.db.utils import DatabaseError
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Audit Org", slug="audit-org", facility_type="CLINIC"
+            )
+        entry = AuditLogEntry.objects.filter(object_id=str(org.id)).first()
+        self.assertIsNotNone(entry)
+        for sql in (
+            "UPDATE sysadmin_audit_auditlogentry SET action = 'VIEW' WHERE id = %s",
+            "DELETE FROM sysadmin_audit_auditlogentry WHERE id = %s",
+        ):
+            with self.assertRaises(DatabaseError), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(sql, [str(entry.id)])
+
+    def test_security_policy_changes_are_audited(self):
+        """apps.security's app_label is platform_security — it used to fall
+        outside the audit wiring entirely."""
+        from apps.security.models import SecurityPolicy
+
+        policy = SecurityPolicy.get_solo()
+        policy.data_retention_years = policy.data_retention_years + 1
+        policy.save()
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                model="platform_security.securitypolicy", action=AuditLogEntry.ACTION_UPDATE
+            ).exists()
+        )
+
+    def test_delete_entries_keep_the_deleted_values(self):
+        from apps.tenancy.models import SubscriptionPlan
+
+        plan = SubscriptionPlan.objects.create(
+            name="Doomed", code="doomed", max_branches=1, price_monthly="1.00"
+        )
+        plan_id = plan.pk
+        plan.delete()
+        entry = AuditLogEntry.objects.get(
+            model="tenancy.subscriptionplan",
+            object_id=str(plan_id),
+            action=AuditLogEntry.ACTION_DELETE,
+        )
+        self.assertEqual(entry.field_diff["name"]["old"], "Doomed")

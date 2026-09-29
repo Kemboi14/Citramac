@@ -197,7 +197,10 @@ class PatientListSerializer(serializers.ModelSerializer):
             "patient_category",
             "contact_phone",
             "contact_email",
+            "archived_at",
+            "legal_hold",
         ]
+        read_only_fields = ["archived_at", "legal_hold"]
 
     def get_doctors_name(self, obj):
         return obj.doctor.get_full_name() if obj.doctor_id else ""
@@ -259,8 +262,18 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "emergency_contacts",
             "allergy_records",
             "insurance_coverages",
+            "archived_at",
+            "archive_reason",
+            "legal_hold",
         ]
-        read_only_fields = ["citramac_number", "registered_at", "registered_by"]
+        read_only_fields = [
+            "citramac_number",
+            "registered_at",
+            "registered_by",
+            "archived_at",
+            "archive_reason",
+            "legal_hold",
+        ]
 
     def validate_photo(self, value):
         if value and value.size > settings.AVATAR_MAX_SIZE_BYTES:

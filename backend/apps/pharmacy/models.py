@@ -27,7 +27,7 @@ class Store(TenantScopedModel):
 class DrugStockItem(TenantScopedModel):
     """A batch of a drug at a store — docs/07-CLINICAL-MODULES-SPEC.md §7.6's FEFO tracking."""
 
-    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="stock_items")
+    store = models.ForeignKey(Store, on_delete=models.PROTECT, related_name="stock_items")
     drug = models.ForeignKey(NationalDrugIndex, on_delete=models.PROTECT, related_name="+")
     batch_number = models.CharField(max_length=100)
     expiry_date = models.DateField()
@@ -55,7 +55,7 @@ class StockMovement(TenantScopedModel):
     ]
 
     stock_item = models.ForeignKey(
-        DrugStockItem, on_delete=models.CASCADE, related_name="movements"
+        DrugStockItem, on_delete=models.PROTECT, related_name="movements"
     )
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPE_CHOICES)
     quantity = models.IntegerField(help_text="Positive for inbound, negative for outbound.")

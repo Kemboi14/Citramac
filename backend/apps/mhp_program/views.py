@@ -1,9 +1,11 @@
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.retention.mixins import NoHardDeleteMixin
 from apps.sysadmin_audit.audit import log_view
 
 from .models import (
@@ -23,8 +25,8 @@ from .serializers import (
     BiopsychosocialAssessmentRestrictedSerializer,
     BiopsychosocialAssessmentSerializer,
     CareTeamMembershipSerializer,
-    MhpTeamRosterSerializer,
     ClinicalReviewSerializer,
+    MhpTeamRosterSerializer,
     NacadaNdoReportSerializer,
     PsychotherapySessionRestrictedSerializer,
     PsychotherapySessionSerializer,
@@ -76,8 +78,21 @@ class CareTeamRestrictedMixin:
             return self.get_paginated_response(data)
         return Response(data)
 
+    def perform_update(self, serializer):
+        # Editing sensitive content is gated exactly like reading it in full:
+        # someone who only sees "an active care episode exists" must not be
+        # able to rewrite the session note, assessment or screen behind it.
+        if not has_full_mhp_access(self.request.user, self.patient_accessor(serializer.instance)):
+            raise PermissionDenied(
+                "Only this client's care team or an Org Admin can change this record.",
+                code="not_on_care_team",
+            )
+        serializer.save()
 
-class BiopsychosocialAssessmentViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+
+class BiopsychosocialAssessmentViewSet(
+    NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet
+):
     """
     Also the "Client History" intake list/detail from
     mockups/citramac_clinical_workspace.html — filterable by `?patient=`.
@@ -109,7 +124,7 @@ class BiopsychosocialAssessmentViewSet(CareTeamRestrictedMixin, viewsets.ModelVi
         return Response(build_client_history_bundle(assessment))
 
 
-class SubstanceUseEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class SubstanceUseEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
     full_serializer_class = SubstanceUseEntrySerializer
     restricted_serializer_class = SubstanceUseEntryRestrictedSerializer
     patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
@@ -125,7 +140,7 @@ class SubstanceUseEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
-class ReviewOfSystemEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class ReviewOfSystemEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
     full_serializer_class = ReviewOfSystemEntrySerializer
     restricted_serializer_class = ReviewOfSystemEntryRestrictedSerializer
     patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
@@ -141,7 +156,9 @@ class ReviewOfSystemEntryViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet)
         serializer.save(organization=self.request.user.organization, clinician=self.request.user)
 
 
-class PsychotherapySessionViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class PsychotherapySessionViewSet(
+    NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet
+):
     full_serializer_class = PsychotherapySessionSerializer
     restricted_serializer_class = PsychotherapySessionRestrictedSerializer
 
@@ -168,7 +185,7 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
-class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class SudRehabPlanViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4."""
 
     full_serializer_class = SudRehabPlanSerializer
@@ -185,7 +202,7 @@ class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization, case_manager=self.request.user)
 
 
-class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class UrineDrugScreenViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
     """
     docs/09-SECURITY-COMPLIANCE.md §9.3 explicitly names UrineDrugScreen
     among the records the elevated MHP privacy tier gates — panel_results
@@ -203,7 +220,7 @@ class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization, collected_by=self.request.user)
 
 
-class ClinicalReviewViewSet(viewsets.ModelViewSet):
+class ClinicalReviewViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """Peer/senior review workflow — docs/07-CLINICAL-MODULES-SPEC.md §7.14.5."""
 
     serializer_class = ClinicalReviewSerializer
@@ -228,7 +245,7 @@ class ClinicalReviewViewSet(viewsets.ModelViewSet):
         return Response(ClinicalReviewSerializer(review).data)
 
 
-class SupervisionRequestViewSet(viewsets.ModelViewSet):
+class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.5 — mirrors the mockup's nav item."""
 
     serializer_class = SupervisionRequestSerializer
@@ -257,7 +274,7 @@ class SupervisionRequestViewSet(viewsets.ModelViewSet):
         return Response(SupervisionRequestSerializer(supervision_request).data)
 
 
-class NacadaNdoReportViewSet(viewsets.ModelViewSet):
+class NacadaNdoReportViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     NACADA National Drug Observatory report — docs/07-CLINICAL-MODULES-SPEC.md
     §7.14.6: auto-compiled from SudRehabPlan/UrineDrugScreen; API submission

@@ -25,7 +25,7 @@ class Bed(TenantScopedModel):
         ("MAINTENANCE", "Maintenance"),
     ]
 
-    ward = models.ForeignKey(Ward, on_delete=models.CASCADE, related_name="beds")
+    ward = models.ForeignKey(Ward, on_delete=models.PROTECT, related_name="beds")
     bed_number = models.CharField(max_length=50)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="AVAILABLE")
 
@@ -81,7 +81,7 @@ class Admission(TenantScopedModel):
         ("UNABLE_TO_REACH", "Unable to Reach"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="admissions")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="admissions")
     encounter = models.ForeignKey(
         Encounter, on_delete=models.SET_NULL, null=True, blank=True, related_name="admissions"
     )
@@ -172,7 +172,7 @@ class MedicationAdministration(TenantScopedModel):
         ("REFUSED", "Refused"),
     ]
 
-    admission = models.ForeignKey(Admission, on_delete=models.CASCADE, related_name="mar_entries")
+    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="mar_entries")
     prescription_item = models.ForeignKey(
         PrescriptionItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -193,7 +193,7 @@ class NursingNote(TenantScopedModel):
 
     SHIFT_CHOICES = [("DAY", "Day"), ("NIGHT", "Night")]
 
-    admission = models.ForeignKey(Admission, on_delete=models.CASCADE, related_name="nursing_notes")
+    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="nursing_notes")
     author = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )

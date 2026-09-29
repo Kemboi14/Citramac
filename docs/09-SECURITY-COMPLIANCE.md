@@ -38,7 +38,8 @@ This document is **non-negotiable**. Every PR touching auth, data access, or inf
 
 ## 9.6 Backup & disaster recovery
 
-- Automated daily full + continuous WAL-based point-in-time-recovery backups on managed Postgres, encrypted, retained per policy (minimum 35 days rolling, plus monthly archives to cold storage for 7 years to satisfy medical-record retention norms — confirm exact figure with legal/DHA guidance before production go-live).
+- Automated daily full + continuous WAL-based point-in-time-recovery backups on managed Postgres, encrypted: a 35-day rolling window, plus monthly archives to cold storage. The cold archives have **no expiry**. They move to Glacier after 90 days and to Deep Archive after 365 (`infra/terraform/modules/storage/main.tf`), consistent with "archive, never delete" (§6.7 of the data model).
+- **VERIFY:** the statutory retention period for medical, mental-health and financial records has not been confirmed. The previously quoted 7 years is an unconfirmed default (`CLINICAL_RECORD_MINIMUM_RETENTION_YEARS`), not a legal figure. Confirm with legal counsel / DHA before production go-live, and record the source in Super Admin → Data Lifecycle → Records retention floor. Until that is recorded, no archive batch can be approved in any tenant.
 - Documented, **tested** restore runbook (`12-DEVOPS-DEPLOYMENT.md` §12.6) — a backup that has never been restored in a drill is not a backup.
 - Multi-AZ database deployment in production; automated failover.
 

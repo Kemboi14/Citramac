@@ -3,12 +3,14 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.retention.mixins import NoHardDeleteMixin
+
 from . import sha_gateway
 from .models import InsuranceClaim, PreAuthorization, Remittance
 from .serializers import InsuranceClaimSerializer, PreAuthorizationSerializer, RemittanceSerializer
 
 
-class PreAuthorizationViewSet(viewsets.ModelViewSet):
+class PreAuthorizationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.11 — Module 11."""
 
     serializer_class = PreAuthorizationSerializer
@@ -30,7 +32,7 @@ class PreAuthorizationViewSet(viewsets.ModelViewSet):
         return Response(PreAuthorizationSerializer(pre_auth).data)
 
 
-class InsuranceClaimViewSet(viewsets.ModelViewSet):
+class InsuranceClaimViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = InsuranceClaimSerializer
 
     def get_queryset(self):

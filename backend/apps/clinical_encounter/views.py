@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from apps.dha_interop.fhir_mapper import build_referral_bundle
 from apps.dha_interop.hie_client import transmit_referral
+from apps.retention.mixins import NoHardDeleteMixin
 from apps.triage.serializers import MentalStatusExamSerializer, VitalSignsSerializer
 
 from .models import DiagnosisCode, Encounter, SoapNote
@@ -18,7 +19,7 @@ from .serializers import (
 )
 
 
-class EncounterViewSet(viewsets.ModelViewSet):
+class EncounterViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.5 — Modules 2-3."""
 
     serializer_class = EncounterSerializer
@@ -183,7 +184,7 @@ class EncounterViewSet(viewsets.ModelViewSet):
         )
 
 
-class DiagnosisCodeViewSet(viewsets.ModelViewSet):
+class DiagnosisCodeViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     Cross-encounter diagnosis list/detail — the Diagnoses tab from
     mockups/citramac_clinical_workspace.html's patient workspace.

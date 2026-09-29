@@ -4,13 +4,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
+from apps.retention.mixins import NoHardDeleteMixin
 
 from .models import LabOrder, LabResult, LabSpecimen
 from .permissions import can_see_unvalidated_results
 from .serializers import LabOrderSerializer, LabResultSerializer, LabSpecimenSerializer
 
 
-class LabOrderViewSet(viewsets.ModelViewSet):
+class LabOrderViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     docs/10-API-SPECIFICATION.md §10.6 — Module 4. Gated by the same POS
     validation check as generic clinical orders — docs/07-CLINICAL-MODULES-SPEC.md
@@ -37,7 +38,7 @@ class LabOrderViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-class LabSpecimenViewSet(viewsets.ModelViewSet):
+class LabSpecimenViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = LabSpecimenSerializer
 
     def get_queryset(self):
@@ -51,7 +52,7 @@ class LabSpecimenViewSet(viewsets.ModelViewSet):
         specimen.lab_order.save(update_fields=["status"])
 
 
-class LabResultViewSet(viewsets.ModelViewSet):
+class LabResultViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     QC gate — docs/07-CLINICAL-MODULES-SPEC.md §7.4: unvalidated results are
     excluded from the queryset entirely for anyone who isn't lab staff/an

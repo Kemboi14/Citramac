@@ -73,7 +73,7 @@ class InsuranceClaim(TenantScopedModel):
 
 
 class Remittance(TenantScopedModel):
-    claim = models.ForeignKey(InsuranceClaim, on_delete=models.CASCADE, related_name="remittances")
+    claim = models.ForeignKey(InsuranceClaim, on_delete=models.PROTECT, related_name="remittances")
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2)
     remittance_date = models.DateField(default=timezone.now)
     reference = models.CharField(max_length=100, blank=True)

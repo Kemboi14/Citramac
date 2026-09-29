@@ -106,6 +106,28 @@ class MhpCareTeamRestrictionTests(APITestCase):
         for row in response.data["results"]:
             self.assertNotIn("session_notes", row)
 
+    def test_unrelated_clinician_cannot_rewrite_session_notes(self):
+        url = reverse("psychotherapy-session-detail", args=[self.session.id])
+        response = self.client.patch(
+            url, {"session_notes": "overwritten"}, format="json", **self._auth(self.access_other)
+        )
+        self.assertEqual(response.status_code, 403)
+        with platform_admin_context():
+            self.session.refresh_from_db()
+        self.assertEqual(self.session.session_notes, "Highly sensitive trauma-processing content.")
+
+    def test_care_team_member_can_still_edit(self):
+        url = reverse("psychotherapy-session-detail", args=[self.session.id])
+        response = self.client.patch(
+            url, {"modality": "CBT"}, format="json", **self._auth(self.access_assigned)
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_sessions_cannot_be_deleted(self):
+        url = reverse("psychotherapy-session-detail", args=[self.session.id])
+        response = self.client.delete(url, **self._auth(self.access_assigned))
+        self.assertEqual(response.status_code, 405)
+
 
 class MhpExtensionsTests(APITestCase):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4-§7.14.6."""

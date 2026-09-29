@@ -54,23 +54,49 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     # docs/09-SECURITY-COMPLIANCE.md §9.6: "monthly archives to cold storage
     # for 7 years to satisfy medical-record retention norms — confirm exact
     # figure with legal/DHA guidance before production go-live."
+    #
+    # Records are archived, never deleted (docs/06-DATA-MODEL.md §6.7), so
+    # backups have no expiration: they step down to progressively colder
+    # storage instead. The 7-year figure above is still unconfirmed
+    # (VERIFY: statutory retention — legal counsel / DHA); nothing here
+    # depends on it any more. If a maximum backup age is ever mandated, it
+    # goes here as an explicit, dated decision — not as a default.
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-    expiration {
-      days = 2557 # ~7 years; revisit once legal/DHA confirms the exact figure
+    transition {
+      days          = 365
+      storage_class = "DEEP_ARCHIVE"
     }
   }
 
+  # The application never deletes or overwrites an attachment or a client
+  # photo (clinical DELETE endpoints are gone — apps.retention.mixins —
+  # and uploads get unique names), so a noncurrent version only appears
+  # when a Right-to-Erasure request removes identity documents or a photo
+  # (apps.client_registry.erasure). Expiring those versions is what
+  # completes the erasure in storage; the 30 days are a recovery window for
+  # an erasure executed in error.
   rule {
-    id     = "expire-noncurrent-attachment-versions"
+    id     = "expire-erased-attachment-versions"
     status = "Enabled"
     filter {
       prefix = "attachments/"
     }
     noncurrent_version_expiration {
-      noncurrent_days = 365
+      noncurrent_days = 30
+    }
+  }
+
+  rule {
+    id     = "expire-erased-patient-photo-versions"
+    status = "Enabled"
+    filter {
+      prefix = "avatars/patients/"
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 30
     }
   }
 }

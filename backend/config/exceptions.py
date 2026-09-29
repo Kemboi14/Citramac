@@ -38,7 +38,11 @@ a legitimate follow-up but a separate, much larger-blast-radius change
 login/deactivation error-handling work calls for.
 """
 
+from django.db.models import ProtectedError, RestrictedError
+from rest_framework import status
 from rest_framework.views import exception_handler as drf_exception_handler
+
+from config.errors import error_response
 
 _STATUS_FALLBACK_CODES = {
     400: "BAD_REQUEST",
@@ -46,6 +50,7 @@ _STATUS_FALLBACK_CODES = {
     403: "PERMISSION_DENIED",
     404: "NOT_FOUND",
     405: "METHOD_NOT_ALLOWED",
+    409: "CONFLICT",
     406: "NOT_ACCEPTABLE",
     415: "UNSUPPORTED_MEDIA_TYPE",
     429: "RATE_LIMITED",
@@ -54,6 +59,15 @@ _STATUS_FALLBACK_CODES = {
 
 
 def custom_exception_handler(exc, context):
+    if isinstance(exc, (ProtectedError, RestrictedError)):
+        # Clinical/financial foreign keys are PROTECT (never cascade-delete
+        # a chart), so deleting e.g. a ward that still has beds, or a stock
+        # item that has movements, lands here rather than as a raw 500.
+        return error_response(
+            "IN_USE",
+            "This can't be deleted because other records depend on it. Deactivate it instead.",
+            status.HTTP_409_CONFLICT,
+        )
     response = drf_exception_handler(exc, context)
     if response is None:
         # Not a DRF-recognized exception (e.g. an unhandled bug) — let

@@ -98,6 +98,40 @@ class Patient(TenantScopedModel):
         related_name="+",
     )
 
+    # Archive state — apps.retention. An archived client record is kept in
+    # full, never deleted: it drops out of default registry lists and the
+    # whole chart becomes read-only (apps.retention.guards) until restored.
+    # Only apps.retention.services writes these fields.
+    ARCHIVE_REASON_RETENTION = "RETENTION_EXPIRED"
+    ARCHIVE_REASON_CHOICES = [(ARCHIVE_REASON_RETENTION, "Retention period ended")]
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    archived_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    archive_reason = models.CharField(max_length=24, choices=ARCHIVE_REASON_CHOICES, blank=True)
+    # A legal hold (litigation, a regulator's request, a disputed erasure)
+    # keeps the record out of every archive scan until lifted.
+    legal_hold = models.BooleanField(default=False)
+    legal_hold_reason = models.TextField(blank=True)
+    legal_hold_set_at = models.DateTimeField(null=True, blank=True)
+    legal_hold_set_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    # The only fields a save() may touch while the record is archived.
+    LIFECYCLE_FIELDS = frozenset(
+        {
+            "archived_at",
+            "archived_by",
+            "archive_reason",
+            "legal_hold",
+            "legal_hold_reason",
+            "legal_hold_set_at",
+            "legal_hold_set_by",
+            "updated_at",
+        }
+    )
+
     class Meta(TenantScopedModel.Meta):
         constraints = [
             models.UniqueConstraint(
@@ -116,6 +150,10 @@ class Patient(TenantScopedModel):
         return f"{self.first_name} {self.last_name} ({self.uhid_number})"
 
     @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    @property
     def age_years(self):
         today = timezone.localdate()
         years = today.year - self.date_of_birth.year
@@ -131,7 +169,7 @@ class Patient(TenantScopedModel):
 
 class EmergencyContact(TenantScopedModel):
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="emergency_contacts"
+        Patient, on_delete=models.PROTECT, related_name="emergency_contacts"
     )
     name = models.CharField(max_length=255)
     relationship = models.CharField(max_length=100, blank=True)
@@ -144,7 +182,7 @@ class EmergencyContact(TenantScopedModel):
 
 
 class AllergyRecord(TenantScopedModel):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="allergy_records")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="allergy_records")
     substance = models.CharField(max_length=255)
     reaction = models.CharField(max_length=255, blank=True)
     severity = models.CharField(max_length=32, blank=True)
@@ -165,7 +203,7 @@ class InsuranceCoverage(TenantScopedModel):
     ]
 
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="insurance_coverages"
+        Patient, on_delete=models.PROTECT, related_name="insurance_coverages"
     )
     scheme_type = models.CharField(max_length=20, choices=SCHEME_TYPE_CHOICES)
     policy_number = models.CharField(max_length=100, blank=True)
@@ -194,7 +232,7 @@ class Appointment(TenantScopedModel):
         ("VIDEO", "Video"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="appointments")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     provider = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -238,7 +276,7 @@ class Attachment(TenantScopedModel):
     ]
     DOC_STATUS_CHOICES = [("ACTIVE", "Active"), ("ARCHIVED", "Archived")]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="attachments")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="attachments")
     # Optional link to the specific inpatient admission this file was
     # uploaded for (e.g. a signed consent form or legal order attached
     # during the Admission workflow's "Attachments & handover" step) —
@@ -289,7 +327,7 @@ class ConsentRecord(TenantScopedModel):
 
     CONSENT_TYPE_CHOICES = [("DATA_SHARING_HIE", "Data Sharing via National HIE")]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="consent_records")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="consent_records")
     consent_type = models.CharField(
         max_length=32, choices=CONSENT_TYPE_CHOICES, default="DATA_SHARING_HIE"
     )
@@ -334,7 +372,7 @@ class ErasureRequest(TenantScopedModel):
         (STATUS_COMPLETED, "Completed"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="erasure_requests")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="erasure_requests")
     requested_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )

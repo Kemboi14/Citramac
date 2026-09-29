@@ -18,7 +18,7 @@ class CareTeamMembership(TenantScopedModel):
     ROLE_CHOICES = [("THERAPIST", "Therapist"), ("SUPERVISOR", "Supervisor")]
 
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="care_team_memberships"
+        Patient, on_delete=models.PROTECT, related_name="care_team_memberships"
     )
     user = models.ForeignKey(
         "accounts.User", on_delete=models.CASCADE, related_name="care_team_memberships"
@@ -65,7 +65,7 @@ class BiopsychosocialAssessment(TenantScopedModel):
     STATUS_CHOICES = [("DRAFT", "Draft"), ("SUBMITTED", "Submitted")]
 
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="biopsychosocial_assessments"
+        Patient, on_delete=models.PROTECT, related_name="biopsychosocial_assessments"
     )
     developmental_history = models.TextField(blank=True)
     social_history = models.TextField(blank=True)
@@ -125,7 +125,7 @@ class SubstanceUseEntry(TenantScopedModel):
     """One recorded substance within a Client History intake's substance-use history."""
 
     assessment = models.ForeignKey(
-        BiopsychosocialAssessment, on_delete=models.CASCADE, related_name="substance_use_entries"
+        BiopsychosocialAssessment, on_delete=models.PROTECT, related_name="substance_use_entries"
     )
     substance = models.CharField(max_length=100)
     first_use = models.DateField(null=True, blank=True)
@@ -141,7 +141,7 @@ class ReviewOfSystemEntry(TenantScopedModel):
     """One system reviewed within a Client History intake."""
 
     assessment = models.ForeignKey(
-        BiopsychosocialAssessment, on_delete=models.CASCADE, related_name="review_of_systems"
+        BiopsychosocialAssessment, on_delete=models.PROTECT, related_name="review_of_systems"
     )
     category = models.CharField(max_length=100)
     notes = models.TextField(blank=True)
@@ -170,7 +170,7 @@ class PsychotherapySession(TenantScopedModel):
     ]
 
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="psychotherapy_sessions"
+        Patient, on_delete=models.PROTECT, related_name="psychotherapy_sessions"
     )
     session_type = models.CharField(max_length=16, choices=SESSION_TYPE_CHOICES)
     therapist = models.ForeignKey(
@@ -207,7 +207,7 @@ class SudRehabPlan(TenantScopedModel):
         ("AFTERCARE", "Aftercare"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="sud_rehab_plans")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="sud_rehab_plans")
     current_phase = models.CharField(max_length=20, choices=PHASE_CHOICES, default="INTAKE")
     substances_of_concern = models.TextField(blank=True)
     treatment_goals = models.TextField(blank=True)
@@ -222,7 +222,7 @@ class SudRehabPlan(TenantScopedModel):
 
 
 class RehabMilestone(TenantScopedModel):
-    plan = models.ForeignKey(SudRehabPlan, on_delete=models.CASCADE, related_name="milestones")
+    plan = models.ForeignKey(SudRehabPlan, on_delete=models.PROTECT, related_name="milestones")
     phase = models.CharField(max_length=20, choices=SudRehabPlan.PHASE_CHOICES)
     description = models.CharField(max_length=255)
     achieved = models.BooleanField(default=False)
@@ -239,7 +239,7 @@ class UrineDrugScreen(TenantScopedModel):
     """
 
     plan = models.ForeignKey(
-        SudRehabPlan, on_delete=models.CASCADE, related_name="urine_drug_screens"
+        SudRehabPlan, on_delete=models.PROTECT, related_name="urine_drug_screens"
     )
     collected_at = models.DateTimeField(default=timezone.now)
     panel_results = models.JSONField(
@@ -264,7 +264,7 @@ class ClinicalReview(TenantScopedModel):
         ("CHANGES_REQUESTED", "Changes Requested"),
     ]
 
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="clinical_reviews")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="clinical_reviews")
     requested_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -287,7 +287,7 @@ class SupervisionRequest(TenantScopedModel):
     STATUS_CHOICES = [("OPEN", "Open"), ("SCHEDULED", "Scheduled"), ("COMPLETED", "Completed")]
 
     patient = models.ForeignKey(
-        Patient, on_delete=models.CASCADE, related_name="supervision_requests"
+        Patient, on_delete=models.PROTECT, related_name="supervision_requests"
     )
     requested_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

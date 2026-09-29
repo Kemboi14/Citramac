@@ -26,11 +26,15 @@ class AuditLogEntry(models.Model):
     Admin actions may have no organization at all), so these are plain
     UUID/string fields, not relations.
 
-    App-layer immutability only (AppendOnlyQuerySet blocks .update()/.delete()
-    via the ORM) — true tamper-evidence would need the DB connection to use a
-    role without UPDATE/DELETE grants (or hash-chained entries), which is a
-    documented Phase 7 hardening item (docs/09-SECURITY-COMPLIANCE.md §9.4),
-    not a Phase 1 blocker.
+    Immutability is enforced twice: AppendOnlyQuerySet blocks .update()/
+    .delete() via the ORM, and a Postgres trigger (migration 0005) rejects
+    any UPDATE or DELETE on the table itself, so raw SQL, a bulk queryset
+    bug or an injected statement can't rewrite history either. What neither
+    layer covers: the table owner can still drop the trigger or TRUNCATE
+    (Django's TransactionTestCase flush relies on TRUNCATE, so it is left
+    alone). Full tamper-evidence against a compromised owner credential
+    needs a separate non-owner app role plus hash-chained entries —
+    docs/09-SECURITY-COMPLIANCE.md §9.4's remaining hardening item.
     """
 
     ACTION_CREATE = "CREATE"
@@ -42,6 +46,9 @@ class AuditLogEntry(models.Model):
     ACTION_LOGIN_FAILED = "LOGIN_FAILED"
     ACTION_LOGOUT = "LOGOUT"
     ACTION_DISCOVERY_FAILED = "DISCOVERY_FAILED"
+    ACTION_ARCHIVE = "ARCHIVE"
+    ACTION_RESTORE = "RESTORE"
+    ACTION_LEGAL_HOLD = "LEGAL_HOLD"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -52,6 +59,9 @@ class AuditLogEntry(models.Model):
         (ACTION_LOGIN_FAILED, "Login Failed"),
         (ACTION_LOGOUT, "Logout"),
         (ACTION_DISCOVERY_FAILED, "Tenant Discovery Failed"),
+        (ACTION_ARCHIVE, "Record Archived"),
+        (ACTION_RESTORE, "Record Restored from Archive"),
+        (ACTION_LEGAL_HOLD, "Legal Hold Changed"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

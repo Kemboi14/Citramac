@@ -4,11 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.retention.mixins import NoHardDeleteMixin
+
 from .models import CostCenter, Invoice, InvoiceLine
 from .serializers import CostCenterSerializer, InvoiceSerializer, PaymentSerializer
 
 
-class InvoiceViewSet(viewsets.ModelViewSet):
+class InvoiceViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.11 — Module 10."""
 
     serializer_class = InvoiceSerializer
