@@ -13,6 +13,10 @@ import {
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
+import { getPlatformBranding } from "../../lib/brandingApi";
+import { ThemeEditor } from "../../theme/ThemeEditor";
+import { setOrganizationTheme } from "../../theme/runtimeTheme";
+import { sanitizeOverrides, type ThemeOverrides } from "../../theme/themeTokens";
 import { LocationFields } from "../../components/LocationFields";
 import {
   listBranches,
@@ -241,10 +245,10 @@ export function BranchSettingsPage() {
     null,
   );
 
-  const [themeForm, setThemeForm] = useState<{ primary: string; secondary: string }>({
-    primary: "#006e51",
-    secondary: "#00503a",
-  });
+  const [savedTheme, setSavedTheme] = useState<ThemeOverrides | null>(null);
+  const [themeDraft, setThemeDraft] = useState<ThemeOverrides>({});
+  const [platformTheme, setPlatformThemeBaseline] = useState<ThemeOverrides>({});
+  const themeDirty = savedTheme !== null && JSON.stringify(savedTheme) !== JSON.stringify(themeDraft);
   const [themeLoadError, setThemeLoadError] = useState<string | null>(null);
   const [themeSaveError, setThemeSaveError] = useState<string | null>(null);
 
@@ -371,31 +375,37 @@ export function BranchSettingsPage() {
     if (!accessToken || !claims?.organization_id) return;
     getOrganizationTheme(accessToken, claims.organization_id)
       .then(({ theme_overrides, logo_url }: OrganizationTheme) => {
-        setThemeForm({
-          primary: theme_overrides.primary ?? "#006e51",
-          secondary: theme_overrides.secondary ?? "#00503a",
-        });
+        const overrides = sanitizeOverrides(theme_overrides, false);
+        setSavedTheme(overrides);
+        setThemeDraft(overrides);
         setLogoUrl(logo_url || null);
       })
       .catch((err) =>
-        setThemeLoadError(err instanceof ApiError ? err.message : "Couldn't load brand colors."),
+        setThemeLoadError(err instanceof ApiError ? err.message : "Couldn't load theme colors."),
       );
+    // The platform palette is what every un-overridden color falls back to.
+    getPlatformBranding()
+      .then((b) => setPlatformThemeBaseline(sanitizeOverrides(b.theme_overrides, true)))
+      .catch(() => setPlatformThemeBaseline({}));
   }, [accessToken, claims?.organization_id]);
 
   const saveTheme = async () => {
     if (!accessToken || !claims?.organization_id) return;
     setThemeSaveError(null);
     try {
-      await updateOrganizationTheme(accessToken, claims.organization_id, {
-        primary: themeForm.primary,
-        secondary: themeForm.secondary,
-      });
-      // Applies immediately without a reload — same mechanism AppShell.tsx
-      // uses on mount, so the sidebar/buttons re-theme live.
-      document.documentElement.style.setProperty("--green", themeForm.primary);
-      document.documentElement.style.setProperty("--green-dark", themeForm.secondary);
+      const organizationId = claims.organization_id;
+      const result = await updateOrganizationTheme(
+        accessToken,
+        organizationId,
+        sanitizeOverrides(themeDraft, false),
+      );
+      const overrides = sanitizeOverrides(result.theme_overrides, false);
+      setSavedTheme(overrides);
+      setThemeDraft(overrides);
+      // Re-themes this session live — same layer AppShell.tsx applies on mount.
+      setOrganizationTheme(organizationId, overrides);
     } catch (err) {
-      setThemeSaveError(err instanceof ApiError ? err.message : "Couldn't save brand colors.");
+      setThemeSaveError(err instanceof ApiError ? err.message : "Couldn't save theme colors.");
       throw err;
     }
   };
@@ -671,7 +681,7 @@ export function BranchSettingsPage() {
                           onClick={() => updateForm({ mhp_registration_status: option.value })}
                           className={`px-3 py-1.5 text-sm font-semibold transition-colors ${
                             form.mhp_registration_status === option.value
-                              ? "bg-brand-green text-white"
+                              ? "bg-brand-green text-on-primary"
                               : "bg-surface-card text-ink-700 hover:bg-brand-green-tint"
                           } ${option.value !== "CLOSED" ? "border-r border-surface-border" : ""}`}
                         >
@@ -1108,53 +1118,55 @@ export function BranchSettingsPage() {
               )}
             </div>
 
-            <div className={CARD_CLASS}>
-              <h2 className={SECTION_TITLE_CLASS}>
-                <span className="inline-flex items-center gap-2">
-                  <Palette size={16} className="text-brand-green" />
-                  Brand Colors
-                </span>
-              </h2>
-              <p className="mb-4 text-xs text-ink-500">
-                Applied across your organization's dashboard, buttons, and sidebar. Status colors
-                (red for alerts, amber for warnings) are never affected, so a risk flag always
-                reads as danger.
-              </p>
-              {themeLoadError && (
-                <p className="mb-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
-                  {themeLoadError}
-                </p>
-              )}
-              <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap gap-4">
-                <label className={LABEL_CLASS}>
-                  Primary
-                  <input
-                    type="color"
-                    className="h-10 w-16 rounded-sm border border-surface-border p-1"
-                    value={themeForm.primary}
-                    onChange={(e) => setThemeForm({ ...themeForm, primary: e.target.value })}
-                  />
-                </label>
-                <label className={LABEL_CLASS}>
-                  Secondary
-                  <input
-                    type="color"
-                    className="h-10 w-16 rounded-sm border border-surface-border p-1"
-                    value={themeForm.secondary}
-                    onChange={(e) => setThemeForm({ ...themeForm, secondary: e.target.value })}
-                  />
-                </label>
-                <div className="flex items-end">
-                  <SaveButton onSave={saveTheme}>Save Brand Colors</SaveButton>
-                </div>
-              </form>
-              {themeSaveError && (
-                <p className="mt-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
-                  {themeSaveError}
-                </p>
-              )}
-            </div>
           </div>
+        </div>
+      )}
+
+      {claims?.organization_id && (
+        <div className={CARD_CLASS}>
+          <h2 className={SECTION_TITLE_CLASS}>
+            <span className="inline-flex items-center gap-2">
+              <Palette size={16} className="text-brand-green" />
+              Theme &amp; Colors
+            </span>
+          </h2>
+          <p className="mb-5 text-xs text-ink-500">
+            Every color your staff see — brand, sidebar, surfaces, text and charts — in light and
+            dark mode, for your whole organization. Anything you don&rsquo;t change follows the
+            platform theme. Status colors (red for risk flags and allergies, amber for warnings) are
+            set platform-wide so a clinical alert reads the same everywhere.
+          </p>
+          {themeLoadError && (
+            <p className="mb-3 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {themeLoadError}
+            </p>
+          )}
+          {savedTheme && (
+            <>
+              <ThemeEditor
+                value={themeDraft}
+                onChange={setThemeDraft}
+                allowStatus={false}
+                baseline={platformTheme}
+                baselineLabel="platform theme"
+              />
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-surface-border pt-4">
+                {themeSaveError && <p className="mr-auto text-sm text-status-red">{themeSaveError}</p>}
+                {themeDirty && <span className="text-xs text-ink-500">Unsaved changes</span>}
+                <button
+                  type="button"
+                  disabled={!themeDirty}
+                  onClick={() => setThemeDraft(savedTheme)}
+                  className="rounded-md border border-surface-border bg-surface-card px-4 py-2.5 text-[13px] font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-50"
+                >
+                  Discard changes
+                </button>
+                <SaveButton onSave={saveTheme} disabled={!themeDirty}>
+                  Save Theme
+                </SaveButton>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -4,52 +4,28 @@
 
 ## 3.1 Color tokens (CSS custom properties)
 
-Define these exactly as a root theme file (`frontend/src/theme/tokens.css`), and expose them to Tailwind via `tailwind.config` `extend.colors` so utility classes stay consistent (e.g. `bg-brand-green`, `text-ink-900`).
+The token file is `frontend/src/theme/tokens.css`; it is exposed to Tailwind via `tailwind.config.js` `extend.colors` (e.g. `bg-brand-green`, `text-ink-900`, `text-on-primary`, `bg-sidebar-active-bg`, `bg-chart-1`). **No component may hard-code a hex/rgb color or `text-white`** — every color comes from a token so the theme editor (§3.6) can change it.
 
-```css
-:root {
-  /* Brand green (primary) */
-  --green: #006e51;
-  --green-dark: #00503a;
-  --green-tint: #e5f3ef;
-  --green-tint-2: #f2f9f7;
+`tokens.css` holds both palettes (light under `:root`, dark under `[data-theme="dark"]` and the `prefers-color-scheme` media query) and is also the single source of every default: `frontend/src/theme/themeTokens.ts` reads its raw text at build time, so "Reset to default" in the editor always restores what this file says.
 
-  /* Semantic status colors */
-  --red: #fe0000;
-  --red-tint: #fff0ef;
-  --amber: #b8790a;
-  --amber-tint: #fdf3e2;
+| Group | Token (CSS var → theme key) | Light default | Dark default |
+|---|---|---|---|
+| Brand | `--green` → `primary` | `#006e51` | `#2bd39e` |
+| | `--green-dark` → `primary_dark` | `#00503a` | `#1a9b74` |
+| | `--on-green` → `on_primary` (text on brand fills) | `#ffffff` | `#04261c` |
+| Sidebar | `--sidebar-top` / `--sidebar-bottom` → `sidebar_top` / `sidebar_bottom` | `#00503a` / `#003f2e` | same |
+| | `--sidebar-text`, `--sidebar-text-strong`, `--sidebar-muted` | `#d6ede4`, `#ffffff`, `#8fc9b3` | same |
+| | `--sidebar-active-bg` / `--sidebar-active-text` | `#eafaf4` / follows `--green-dark` | same |
+| Surfaces | `--bg`, `--card`, `--border` | `#f5f8f7`, `#ffffff`, `#e2e9e6` | `#0b1512`, `#10201b`, `#23342e` |
+| | `--scrim` → `scrim` (modal backdrop), `--shadow-color` → `shadow` | `#0e1e1a` | `#000000` |
+| Text | `--ink-900` … `--ink-300` → `ink_900` … `ink_300` | `#0e1e1a` `#33453f` `#5f736c` `#8a9c96` `#b6c3bd` | `#f1f7f5` `#c7d6d1` `#94a8a1` `#6d827b` `#40514b` |
+| Accents | `--info`, `--violet` | `#1a63c9`, `#6840a2` | `#6aa8ff`, `#b394f0` |
+| Charts | `--chart-1` … `--chart-6` | follows `--green`, `#34a884`, `#9bcdb9`, `#b8790a`, `#fe0000`, `#5f736c` | follows `--green`, `#5fb89a`, `#9bcdb9`, `#ffb84d`, `#ff6b6a`, `#94a8a1` |
+| Status (platform-only) | `--red` → `danger`, `--amber` → `warning`, `--on-status` → `on_status` | `#fe0000`, `#b8790a`, `#ffffff` | `#ff6b6a`, `#ffb84d`, `#1f0505` |
 
-  /* Ink (text) scale */
-  --ink-900: #0e1e1a;   /* primary text / headings */
-  --ink-700: #33453f;   /* secondary text */
-  --ink-500: #5f736c;   /* muted text */
-  --ink-400: #8a9c96;   /* placeholder / disabled */
-  --ink-300: #b6c3bd;   /* borders on dark surfaces */
+**Derived tokens — never set directly**: `--green-tint`, `--green-tint-2`, `--red-tint`, `--red-strong`, `--amber-tint`, `--info-tint`, `--violet-tint`, `--sidebar-hover`, `--sidebar-divider`, `--scrim-overlay`, `--shadow-sm`, `--shadow-md`. Each is a `color-mix()` of its base token (and `--card` for tints), so changing a base color in a theme updates every tint, hover and shadow automatically.
 
-  /* Surfaces */
-  --bg: #f5f8f7;        /* app background */
-  --card: #ffffff;      /* card / panel surface */
-  --border: #e2e9e6;    /* hairline borders */
-
-  /* Radii */
-  --radius-lg: 16px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
-
-  /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(14, 30, 26, 0.06);
-  --shadow-md: 0 8px 24px -8px rgba(14, 30, 26, 0.14);
-
-  /* Typography */
-  --font-display: 'Lexend', sans-serif;   /* headings, brand, nav labels, KPI numbers */
-  --font-body: 'Inter', sans-serif;       /* body copy, table data, form inputs */
-}
-```
-
-Additional tints observed across mockups for tables/badges/hover states (use for chip backgrounds, hover rows, subtle dividers):
-
-`#eafaf4`, `#d6ede4`, `#cfe4dd`, `#bcd9cd`, `#9bcdb9`, `#9fd6c3`, `#8fc9b3`, `#eaf1fc`, `#eef1f3`, `#fbfdfc`.
+Radii (`--radius-lg/md/sm` = 16/12/8px) and fonts (`--font-display` Lexend, `--font-body` Inter) are unchanged.
 
 ### Color usage rules
 
@@ -119,6 +95,20 @@ All three tiers share one shell pattern — a fixed sidebar + scrollable content
 
 This matches the reference AppSheet screenshot (`Client Registration` list view with columns: First Name, Last Name, Middle/Other Names, UHID Number, Gender, Date Of Birth, Age, DOA, Doctors Name, Allergy Status, Nationality, Marital Status — replicate this exact column set for the Client Registry table, grouped by patient category e.g. "Inpatient").
 
-## 3.6 Tenant branding within brand bounds
+## 3.6 Theming — platform and organization palettes
 
-Multi-tenant customization is allowed **only** as a controlled override: each Organization may set a single "accent" hue (used sparingly, e.g. their logo mark) while the structural chrome (sidebar green, ink scale, status colors) remains fixed CITRAMAC brand colors. This keeps every tenant DHA-demo-ready and visually consistent for support/audit purposes. Implement via a `theme_overrides` JSONB field on `Organization`, applied as a thin CSS-variable override layer — never replacing the base token file.
+Every color token in §3.1 (except the derived ones) is editable, separately for light and dark mode, in two layers:
+
+1. **Platform theme** — `PlatformBranding.theme_overrides`, edited by Super Admin at *Theme & Colors* (`/super-admin/theme`). The baseline for every user, including the login screens. **Only this layer may change status colors** (`danger`, `warning`, `on_status`), so a risk flag or allergy alert reads the same in every tenant.
+2. **Organization theme** — `Organization.theme_overrides`, edited by the Org Admin in *Branch Settings → Theme & Colors* or by Super Admin in the Organizations drawer (create and edit). Applied on top of the platform theme for that org's members; any token it doesn't set follows the platform theme. Status keys are rejected with a 400.
+
+Stored shape (validated by `backend/apps/tenancy/theme.py`, mirrored by `frontend/src/theme/themeTokens.ts`):
+
+```json
+{ "light": { "primary": "#1d5fa8", "sidebar_top": "#15457a" },
+  "dark":  { "primary": "#6aa8ff" } }
+```
+
+The old flat `{"primary", "secondary"}` shape is still accepted on input and normalized to `light.primary` / `light.primary_dark` (migration `tenancy.0015` converted stored data).
+
+At runtime `frontend/src/theme/runtimeTheme.ts` merges the two layers into one generated `<style>` element (never inline styles on `<html>`, which would beat the dark-mode blocks) and caches each layer in `localStorage` so the next load paints the right palette without a flash. The editor (`frontend/src/theme/ThemeEditor.tsx`) offers presets, "generate light & dark palettes from one brand color", a scoped live preview, per-token reset, and WCAG AA contrast checks for the key text/background pairs. Contrast warnings are advisory, not enforced.

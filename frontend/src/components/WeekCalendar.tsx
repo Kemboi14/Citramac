@@ -10,8 +10,8 @@ const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 07:00–19:00
 // invented. Falls back to the brand green for an untyped appointment.
 const PALETTE = [
   { bg: "bg-brand-green-tint", text: "text-brand-green-dark" },
-  { bg: "bg-[#eaf1fc]", text: "text-[#1a63c9]" },
-  { bg: "bg-[#f0eafd]", text: "text-[#6840a2]" },
+  { bg: "bg-accent-info-tint", text: "text-accent-info" },
+  { bg: "bg-accent-violet-tint", text: "text-accent-violet" },
   { bg: "bg-status-amber-tint", text: "text-status-amber" },
   { bg: "bg-status-red-tint", text: "text-status-red" },
 ];
@@ -204,7 +204,7 @@ export function WeekCalendar({
                   ? ""
                   : cell.toDateString() >= start.toDateString() &&
                       cell.toDateString() <= addDays(start, 6).toDateString()
-                    ? "bg-brand-green font-bold text-white"
+                    ? "bg-brand-green font-bold text-on-primary"
                     : "text-ink-700 hover:bg-brand-green-tint"
               }`}
             >

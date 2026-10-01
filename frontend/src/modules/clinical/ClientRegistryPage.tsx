@@ -241,7 +241,7 @@ export function ClientRegistryPage() {
         <button
           type="button"
           onClick={() => setShowRegister(true)}
-          className="flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-green-dark"
+          className="flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-colors duration-150 hover:bg-brand-green-dark"
         >
           <Plus className="h-4 w-4" />
           Register client

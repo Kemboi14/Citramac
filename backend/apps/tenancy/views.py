@@ -125,14 +125,7 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 support_email=data.get("support_email", ""),
                 support_phone=data.get("support_phone", ""),
                 website=data.get("website", ""),
-                theme_overrides={
-                    k: v
-                    for k, v in {
-                        "primary": data.get("theme_primary"),
-                        "secondary": data.get("theme_secondary"),
-                    }.items()
-                    if v
-                },
+                theme_overrides=data.get("theme_overrides") or {},
             )
 
             plan_code = data.get("subscription_plan_code")
@@ -428,8 +421,8 @@ class OrganizationEmailSettingsView(APIView):
 
 class OrganizationThemeView(APIView):
     """
-    Self-service org-wide primary/secondary brand accent — docs/03-DESIGN-SYSTEM.md
-    §3.6. Same narrow-endpoint-over-one-concern precedent as
+    Self-service org-wide light/dark theme (every color token except the
+    platform-only status colors) — docs/03-DESIGN-SYSTEM.md §3.6. Same narrow-endpoint-over-one-concern precedent as
     OrganizationEmailSettingsView, rather than widening OrganizationDetailView's
     Super-Admin-only PATCH. Editing (PATCH) is Org-Admin-only, enforced by
     IsPlatformSuperAdminOrOrgAdmin's object-level check. GET is broader —

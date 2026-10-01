@@ -29,7 +29,7 @@ export function WideModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[80] bg-[rgba(14,30,26,0.42)] backdrop-blur-[1px]"
+        className="fixed inset-0 z-[80] bg-surface-scrim backdrop-blur-[1px]"
         onClick={onClose}
       />
       <div className="fixed inset-0 z-[90] flex items-center justify-center p-5">

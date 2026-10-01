@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Building2, Landmark, Upload, Users } from "lucide-react";
+import { AlertTriangle, Building2, Landmark, Palette, Upload, Users } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -9,12 +9,8 @@ import {
   type PlatformActivityEntry,
   type PlatformDashboardStats,
 } from "../../lib/organizationsApi";
-import {
-  getPlatformBranding,
-  updatePlatformTheme,
-  uploadPlatformLogo,
-} from "../../lib/brandingApi";
-import { SaveButton } from "../../components/SaveButton";
+import { Link } from "react-router-dom";
+import { getPlatformBranding, uploadPlatformLogo } from "../../lib/brandingApi";
 import { StatCard } from "../../components/StatCard";
 import { BarChart } from "../../components/charts/BarChart";
 import { DonutChart } from "../../components/charts/DonutChart";
@@ -39,33 +35,11 @@ function PlatformBrandingCard() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [themePrimary, setThemePrimary] = useState("#006e51");
-  const [themeSecondary, setThemeSecondary] = useState("#00503a");
-  const [themeError, setThemeError] = useState<string | null>(null);
-
   useEffect(() => {
     getPlatformBranding()
-      .then((b) => {
-        setLogo(b.logo);
-        setThemePrimary(b.theme_overrides.primary || "#006e51");
-        setThemeSecondary(b.theme_overrides.secondary || "#00503a");
-      })
+      .then((b) => setLogo(b.logo))
       .catch(() => setLogo(null));
   }, []);
-
-  const saveTheme = async () => {
-    if (!accessToken) return;
-    setThemeError(null);
-    try {
-      await updatePlatformTheme(accessToken, { primary: themePrimary, secondary: themeSecondary });
-      // Applies immediately — same mechanism AppShell.tsx uses on mount.
-      document.documentElement.style.setProperty("--green", themePrimary);
-      document.documentElement.style.setProperty("--green-dark", themeSecondary);
-    } catch (err) {
-      setThemeError(err instanceof ApiError ? err.message : "Couldn't save the platform theme.");
-      throw err;
-    }
-  };
 
   const handleFile = async (file: File) => {
     if (!accessToken) return;
@@ -127,30 +101,17 @@ function PlatformBrandingCard() {
         <div className="flex-1">
           <div className="font-display text-sm font-semibold text-ink-900">Platform Theme</div>
           <p className="text-xs text-ink-500">
-            The default accent every user sees, including Super Admin. An organization&rsquo;s own
-            theme (if set) applies on top of this for its members.
+            Every color in the app, in light and dark mode — the baseline each organization&rsquo;s
+            own theme applies on top of.
           </p>
-          {themeError && <p className="mt-1 text-xs text-status-red">{themeError}</p>}
         </div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-ink-700">
-          Primary
-          <input
-            type="color"
-            className="h-8 w-12 cursor-pointer rounded-sm border border-surface-border p-0.5"
-            value={themePrimary}
-            onChange={(e) => setThemePrimary(e.target.value)}
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-ink-700">
-          Secondary
-          <input
-            type="color"
-            className="h-8 w-12 cursor-pointer rounded-sm border border-surface-border p-0.5"
-            value={themeSecondary}
-            onChange={(e) => setThemeSecondary(e.target.value)}
-          />
-        </label>
-        <SaveButton onSave={saveTheme}>Save Theme</SaveButton>
+        <Link
+          to="/super-admin/theme"
+          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-2 text-xs font-semibold text-ink-700 transition-colors duration-150 hover:bg-surface-bg"
+        >
+          <Palette className="h-3.5 w-3.5 text-brand-green" />
+          Customize colors
+        </Link>
       </div>
     </div>
   );

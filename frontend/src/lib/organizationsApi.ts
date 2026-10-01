@@ -1,3 +1,4 @@
+import type { ThemeOverrides } from "../theme/themeTokens";
 import { apiRequest } from "./apiClient";
 
 // Mirrors apps.tenancy's OrganizationSerializer/CreateOrganizationSerializer —
@@ -39,7 +40,7 @@ export interface Organization {
   support_email: string;
   support_phone: string;
   website: string;
-  theme_overrides: { primary?: string; secondary?: string };
+  theme_overrides: ThemeOverrides;
 }
 
 export interface CreateOrganizationPayload {
@@ -60,8 +61,7 @@ export interface CreateOrganizationPayload {
   support_email?: string;
   support_phone?: string;
   website?: string;
-  theme_primary?: string;
-  theme_secondary?: string;
+  theme_overrides?: ThemeOverrides;
   org_admin: { email: string; first_name: string; last_name: string; phone?: string };
 }
 

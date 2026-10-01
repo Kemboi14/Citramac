@@ -108,10 +108,10 @@ export function TenantDiscoveryStep({
           </p>
 
           {notFound && (
-            <div className="mb-2 flex items-start gap-2.5 rounded-md bg-status-red-tint px-3.5 py-3 text-xs leading-relaxed text-[#742018]">
+            <div className="mb-2 flex items-start gap-2.5 rounded-md bg-status-red-tint px-3.5 py-3 text-xs leading-relaxed text-status-red-strong">
               <AlertTriangleIcon className="mt-0.5 h-[17px] w-[17px] flex-shrink-0" />
               <span>
-                <strong className="mb-0.5 block font-semibold text-[#631b15]">
+                <strong className="mb-0.5 block font-semibold text-status-red-strong">
                   We couldn&rsquo;t continue with the information provided.
                 </strong>
                 Please contact your organisation administrator.

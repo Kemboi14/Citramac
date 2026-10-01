@@ -52,7 +52,7 @@ export function AvatarUpload({
         disabled={disabled || uploading}
         onClick={() => inputRef.current?.click()}
         style={{ width: size, height: size }}
-        className="group relative flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-brand-green text-white shadow-sm ring-1 ring-surface-border transition-transform duration-150 hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-70"
+        className="group relative flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-surface-card bg-brand-green text-on-primary shadow-sm ring-1 ring-surface-border transition-transform duration-150 hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-70"
         aria-label="Change profile picture"
       >
         {src ? (

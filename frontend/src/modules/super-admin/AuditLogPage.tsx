@@ -198,7 +198,7 @@ export function AuditLogPage() {
             </label>
             <button
               type="submit"
-              className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark"
+              className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark"
             >
               Search
             </button>

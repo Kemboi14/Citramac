@@ -49,7 +49,7 @@ export function PatientDetailsModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:bg-brand-green-dark"
+          className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary hover:bg-brand-green-dark"
         >
           Close
         </button>

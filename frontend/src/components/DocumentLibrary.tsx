@@ -201,7 +201,7 @@ export function DocumentLibrary({
         <button
           type="button"
           onClick={() => setShowUpload((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md bg-brand-green px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:bg-brand-green-dark"
+          className="flex items-center gap-1.5 rounded-md bg-brand-green px-3.5 py-2 text-[12.5px] font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark"
         >
           <Plus className="h-4 w-4" />
           Upload document

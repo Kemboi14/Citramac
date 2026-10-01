@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/apiClient";
 import { getPlatformBranding } from "../../lib/brandingApi";
 import { AuthButton, PasswordField, SecureFooter } from "./AuthCard";
 import { ArrowRightIcon, BuildingIcon, LockIcon, MailIcon } from "./icons";
+import { isHexColor, readableOn } from "../../theme/themeTokens";
 
 // Platform staff (Super Admin, and any other organization=None account) have
 // no organization for TenantDiscoveryStep to resolve — it reports them back
@@ -102,11 +103,21 @@ export function TenantLoginStep({
     <div
       className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8"
       style={
-        { "--tenant-primary": branding.primary_color || "var(--green)" } as React.CSSProperties
+        {
+          "--tenant-primary": branding.primary_color || "var(--green)",
+          // Text on the tenant's panel/button — picked for contrast so a
+          // light tenant color doesn't end up with white-on-yellow.
+          ...(isHexColor(branding.primary_color)
+            ? {
+                "--tenant-on-primary": readableOn(branding.primary_color),
+                "--on-green": readableOn(branding.primary_color),
+              }
+            : { "--tenant-on-primary": "var(--on-green)" }),
+        } as unknown as React.CSSProperties
       }
     >
-      <div className="grid w-full max-w-[850px] overflow-hidden rounded-lg border border-black/[0.06] bg-surface-card shadow-md md:grid-cols-[minmax(230px,0.82fr)_minmax(320px,1.18fr)]">
-        <aside className="flex min-h-[220px] flex-col items-center justify-center gap-4 bg-[var(--tenant-primary)] p-8 text-white md:min-h-[575px]">
+      <div className="grid w-full max-w-[850px] overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-md md:grid-cols-[minmax(230px,0.82fr)_minmax(320px,1.18fr)]">
+        <aside className="flex min-h-[220px] flex-col items-center justify-center gap-4 bg-[var(--tenant-primary)] p-8 text-[color:var(--tenant-on-primary)] md:min-h-[575px]">
           {branding.logo_url ? (
             <img
               src={branding.logo_url}
@@ -115,12 +126,12 @@ export function TenantLoginStep({
             />
           ) : (
             <>
-              <span className="grid h-[120px] w-[120px] place-items-center rounded-3xl bg-white/15">
+              <span className="grid h-[120px] w-[120px] place-items-center rounded-3xl bg-[color-mix(in_srgb,var(--tenant-on-primary)_15%,transparent)]">
                 <BuildingIcon className="h-14 w-14" />
               </span>
               <p className="font-display text-lg font-semibold">{branding.name}</p>
               {branding.tagline && (
-                <p className="max-w-[200px] text-center text-xs text-white/80">
+                <p className="max-w-[200px] text-center text-xs opacity-80">
                   {branding.tagline}
                 </p>
               )}

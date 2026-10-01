@@ -163,7 +163,7 @@ export function AuthButton({
       {...props}
       type={props.type ?? "submit"}
       disabled={props.disabled || status === "loading" || status === "success"}
-      className={`relative flex min-h-[44px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-60 ${shake} ${className ?? ""}`}
+      className={`relative flex min-h-[44px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-all duration-200 hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-60 ${shake} ${className ?? ""}`}
     >
       <span
         className={`flex items-center gap-2.5 transition-all duration-200 ${

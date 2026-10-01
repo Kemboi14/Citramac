@@ -19,11 +19,41 @@ export default {
           "green-tint": "var(--green-tint)",
           "green-tint-2": "var(--green-tint-2)",
         },
+        // Foreground for a solid brand/status fill — never `text-white`,
+        // which breaks the moment a theme picks a light primary.
+        on: {
+          primary: "var(--on-green)",
+          status: "var(--on-status)",
+        },
         status: {
           red: "var(--red)",
           "red-tint": "var(--red-tint)",
+          "red-strong": "var(--red-strong)",
           amber: "var(--amber)",
           "amber-tint": "var(--amber-tint)",
+        },
+        accent: {
+          info: "var(--info)",
+          "info-tint": "var(--info-tint)",
+          violet: "var(--violet)",
+          "violet-tint": "var(--violet-tint)",
+        },
+        sidebar: {
+          text: "var(--sidebar-text)",
+          "text-strong": "var(--sidebar-text-strong)",
+          muted: "var(--sidebar-muted)",
+          "active-bg": "var(--sidebar-active-bg)",
+          "active-text": "var(--sidebar-active-text)",
+          hover: "var(--sidebar-hover)",
+          divider: "var(--sidebar-divider)",
+        },
+        chart: {
+          1: "var(--chart-1)",
+          2: "var(--chart-2)",
+          3: "var(--chart-3)",
+          4: "var(--chart-4)",
+          5: "var(--chart-5)",
+          6: "var(--chart-6)",
         },
         ink: {
           900: "var(--ink-900)",
@@ -36,6 +66,7 @@ export default {
           bg: "var(--bg)",
           card: "var(--card)",
           border: "var(--border)",
+          scrim: "var(--scrim-overlay)",
         },
       },
       borderRadius: {

@@ -22,6 +22,10 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { Drawer } from "../../components/Drawer";
+import { WideModal } from "../../components/WideModal";
+import { getPlatformBranding } from "../../lib/brandingApi";
+import { ThemeEditor } from "../../theme/ThemeEditor";
+import { resolvePalette, sanitizeOverrides, type ThemeOverrides } from "../../theme/themeTokens";
 import { LocationFields } from "../../components/LocationFields";
 import { listBranches, type Branch } from "../../lib/branchesApi";
 import { inviteStaff, listRoles, type Role } from "../../lib/governanceApi";
@@ -43,7 +47,7 @@ const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_PRIMARY =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
+  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
 // Matches DRF's default PageNumberPagination (REST_FRAMEWORK.PAGE_SIZE in
 // config/settings/base.py) — the organizations endpoint is genuinely
@@ -294,8 +298,7 @@ type OrgFormState = {
   support_email: string;
   support_phone: string;
   website: string;
-  theme_primary: string;
-  theme_secondary: string;
+  theme_overrides: ThemeOverrides;
   org_admin: { email: string; first_name: string; last_name: string; phone: string };
 };
 
@@ -317,8 +320,7 @@ const EMPTY_FORM: OrgFormState = {
   support_email: "",
   support_phone: "",
   website: "",
-  theme_primary: "#006e51",
-  theme_secondary: "#00503a",
+  theme_overrides: {},
   org_admin: { email: "", first_name: "", last_name: "", phone: "" },
 };
 
@@ -341,8 +343,7 @@ function organizationToFormState(org: Organization): OrgFormState {
     support_email: org.support_email ?? "",
     support_phone: org.support_phone ?? "",
     website: org.website ?? "",
-    theme_primary: org.theme_overrides?.primary || "#006e51",
-    theme_secondary: org.theme_overrides?.secondary || "#00503a",
+    theme_overrides: sanitizeOverrides(org.theme_overrides, false),
     org_admin: { email: "", first_name: "", last_name: "", phone: "" },
   };
 }
@@ -441,6 +442,20 @@ function OrganizationDrawer({
     });
   }, [open, organization]);
 
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [platformTheme, setPlatformThemeBaseline] = useState<ThemeOverrides>({});
+  useEffect(() => {
+    if (!open) return;
+    // The platform palette is what every color this org doesn't override falls back to.
+    getPlatformBranding()
+      .then((b) => setPlatformThemeBaseline(sanitizeOverrides(b.theme_overrides, true)))
+      .catch(() => setPlatformThemeBaseline({}));
+  }, [open]);
+  const themeLight = resolvePalette("light", { ...platformTheme.light, ...form.theme_overrides.light });
+  const themeOverrideCount =
+    Object.keys(form.theme_overrides.light ?? {}).length +
+    Object.keys(form.theme_overrides.dark ?? {}).length;
+
   useEffect(() => {
     if (!open || isEdit || !accessToken) return;
     listSubscriptionPlans(accessToken)
@@ -491,15 +506,15 @@ function OrganizationDrawer({
           support_email: form.support_email,
           support_phone: form.support_phone,
           website: form.website,
-          theme_overrides: {
-            ...(form.theme_primary ? { primary: form.theme_primary } : {}),
-            ...(form.theme_secondary ? { secondary: form.theme_secondary } : {}),
-          },
+          theme_overrides: sanitizeOverrides(form.theme_overrides, false),
         };
         if (form.org_type === "HOSPITAL") payload.facility_type = form.facility_type;
         saved = await updateOrganization(accessToken, organization.id, payload);
       } else {
-        const payload: CreateOrganizationPayload = { ...form };
+        const payload: CreateOrganizationPayload = {
+          ...form,
+          theme_overrides: sanitizeOverrides(form.theme_overrides, false),
+        };
         if (form.org_type !== "HOSPITAL") delete payload.facility_type;
         saved = await createOrganization(accessToken, payload);
       }
@@ -570,7 +585,7 @@ function OrganizationDrawer({
                   type="button"
                   disabled={statusBusy}
                   onClick={() => handleSetStatus("ACTIVE")}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand-green px-3 py-1.5 text-xs font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   {activateLabel(organization.status)}
@@ -921,30 +936,59 @@ function OrganizationDrawer({
             <div>
               <span className="text-sm font-medium text-ink-700">App Theme</span>
               <p className="mb-2 mt-0.5 text-[11px] text-ink-400">
-                Applied throughout the org&rsquo;s dashboard, buttons, and sidebar after login. The
-                org&rsquo;s own Admin can also change this from Branch Settings. Status colors (risk
-                alerts, errors) are never affected.
+                Every color in the org&rsquo;s app after login, light and dark mode. Anything not
+                changed follows the platform theme; the org&rsquo;s own Admin can also edit this from
+                Branch Settings. Status colors are platform-wide only.
               </p>
-              <div className="flex flex-wrap gap-4">
-                <label className={LABEL_CLASS}>
-                  Theme Primary
-                  <input
-                    type="color"
-                    className="h-9 w-16 cursor-pointer rounded-sm border border-surface-border p-0.5"
-                    value={form.theme_primary}
-                    onChange={(e) => setField("theme_primary", e.target.value)}
-                  />
-                </label>
-                <label className={LABEL_CLASS}>
-                  Theme Secondary
-                  <input
-                    type="color"
-                    className="h-9 w-16 cursor-pointer rounded-sm border border-surface-border p-0.5"
-                    value={form.theme_secondary}
-                    onChange={(e) => setField("theme_secondary", e.target.value)}
-                  />
-                </label>
+              <div className="flex items-center gap-3 rounded-md border border-surface-border bg-surface-bg p-2.5">
+                <span className="flex overflow-hidden rounded-sm border border-surface-border">
+                  {[
+                    themeLight.primary,
+                    themeLight.primary_dark,
+                    themeLight.sidebar_top,
+                    themeLight.bg,
+                    themeLight.card,
+                    themeLight.ink_900,
+                  ].map((c, i) => (
+                    <span key={i} className="h-7 w-4" style={{ background: c }} />
+                  ))}
+                </span>
+                <span className="flex-1 text-[12px] text-ink-500">
+                  {themeOverrideCount
+                    ? `${themeOverrideCount} custom color${themeOverrideCount === 1 ? "" : "s"}`
+                    : "Using the platform theme"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setThemeEditorOpen(true)}
+                  className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-surface-bg"
+                >
+                  Customize theme
+                </button>
               </div>
+              <WideModal
+                open={themeEditorOpen}
+                title={`App theme${form.name ? ` — ${form.name}` : ""}`}
+                subtitle="Changes are saved with the organization when you save this drawer."
+                onClose={() => setThemeEditorOpen(false)}
+                footer={
+                  <button
+                    type="button"
+                    onClick={() => setThemeEditorOpen(false)}
+                    className={BUTTON_PRIMARY}
+                  >
+                    Done
+                  </button>
+                }
+              >
+                <ThemeEditor
+                  value={form.theme_overrides}
+                  onChange={(next) => setField("theme_overrides", next)}
+                  allowStatus={false}
+                  baseline={platformTheme}
+                  baselineLabel="platform theme"
+                />
+              </WideModal>
             </div>
             <label className={LABEL_CLASS}>
               Support Email
@@ -1429,7 +1473,7 @@ function Pager({
             aria-current={p === page ? "page" : undefined}
             className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
               p === page
-                ? "bg-brand-green text-white"
+                ? "bg-brand-green text-on-primary"
                 : "border border-surface-border text-ink-700 hover:bg-surface-bg"
             }`}
           >
@@ -1601,7 +1645,7 @@ export function OrganizationsPage() {
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
                 statusFilter === filter.value
-                  ? "bg-brand-green text-white"
+                  ? "bg-brand-green text-on-primary"
                   : "border border-surface-border text-ink-700 hover:bg-surface-bg"
               }`}
             >

@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { ThemeOverrides } from "../theme/themeTokens";
 
 // Mirrors apps.tenancy's PlatformBrandingView — the CITRAMAC-the-product
 // logo shown in every shell's sidebar and the generic (no-tenant-resolved)
@@ -7,7 +8,7 @@ import { apiRequest } from "./apiClient";
 
 export interface PlatformBranding {
   logo: string | null;
-  theme_overrides: { primary?: string; secondary?: string };
+  theme_overrides: ThemeOverrides;
   updated_at: string;
 }
 
@@ -25,9 +26,10 @@ export function uploadPlatformLogo(accessToken: string, file: File) {
   });
 }
 
-/** Platform-wide default primary/secondary accent — the baseline every user
- * sees (including Super Admin, who has no Organization to theme). An org's
- * own theme applies on top of this, not instead of it. */
+/** Platform-wide light/dark palette (every color token, including status
+ * colors) — the baseline every user sees, including Super Admin, who has no
+ * Organization to theme. An org's own theme applies on top of this, not
+ * instead of it. */
 export function updatePlatformTheme(
   accessToken: string,
   themeOverrides: PlatformBranding["theme_overrides"],

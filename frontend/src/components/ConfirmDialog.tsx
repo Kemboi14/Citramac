@@ -40,13 +40,13 @@ export function ConfirmDialog({
   if (!open) return null;
   const confirmClass =
     tone === "danger"
-      ? "bg-status-red text-white hover:opacity-90"
-      : "bg-brand-green text-white hover:bg-brand-green-dark";
+      ? "bg-status-red text-on-status hover:opacity-90"
+      : "bg-brand-green text-on-primary hover:bg-brand-green-dark";
 
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[100] bg-[rgba(14,30,26,0.42)] backdrop-blur-[1px]"
+        className="fixed inset-0 z-[100] bg-surface-scrim backdrop-blur-[1px]"
         onClick={busy ? undefined : onCancel}
       />
       <div className="fixed inset-0 z-[110] flex items-center justify-center p-5">

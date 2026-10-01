@@ -344,6 +344,50 @@ class PlatformBrandingApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
 
+    def test_super_admin_can_set_full_platform_theme_including_status_colors(self):
+        theme = {
+            "light": {"primary": "#1d5fa8", "danger": "#d10000", "on_status": "#ffffff"},
+            "dark": {"primary": "#6aa8ff", "warning": "#ffc266"},
+        }
+        response = self.client.patch(
+            reverse("platform-branding"),
+            {"theme_overrides": theme},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["theme_overrides"], theme)
+        # Public read, since the login screens are themed before sign-in.
+        self.assertEqual(
+            self.client.get(reverse("platform-branding")).data["theme_overrides"], theme
+        )
+
+    def test_platform_theme_rejects_unknown_tokens_modes_and_bad_hex(self):
+        for bad in (
+            {"light": {"not_a_token": "#123456"}},
+            {"sepia": {"primary": "#123456"}},
+            {"light": {"primary": "red"}},
+            {"light": {"primary": "#12345"}},
+            {"light": "#123456"},
+            ["#123456"],
+        ):
+            response = self.client.patch(
+                reverse("platform-branding"),
+                {"theme_overrides": bad},
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
+            self.assertEqual(response.status_code, 400, (bad, response.data))
+
+    def test_non_super_admin_cannot_change_platform_theme(self):
+        response = self.client.patch(
+            reverse("platform-branding"),
+            {"theme_overrides": {"light": {"primary": "#123456"}}},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.non_admin_access}",
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_rejects_a_logo_over_30mb(self):
         from apps.tenancy.views import LOGO_MAX_SIZE_BYTES
 
@@ -444,6 +488,61 @@ class OrganizationConsoleApiTests(APITestCase):
             self.assertEqual(subscription.billing_cycle, "MONTHLY")
             admin_user = User.objects.get(email="admin@branded-wellness.test")
             self.assertEqual(admin_user.phone, "+254711111111")
+
+    def test_create_organization_with_light_and_dark_theme(self):
+        payload = {
+            "name": "Themed Clinic",
+            "slug": "themed-clinic",
+            "org_type": "HOSPITAL",
+            "facility_type": "MENTAL_HEALTH_MHP",
+            "dha_facility_code": "MFL-77124",
+            "theme_overrides": {
+                "light": {"primary": "#7b2d8e", "sidebar_top": "#5a2168"},
+                "dark": {"primary": "#c58ad4"},
+            },
+            "org_admin": {
+                "email": "admin@themed-clinic.test",
+                "first_name": "Theo",
+                "last_name": "Med",
+            },
+        }
+        response = self.client.post(
+            reverse("platform-organizations"), payload, format="json", **self.auth
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["theme_overrides"], payload["theme_overrides"])
+
+    def test_super_admin_cannot_put_status_colors_on_an_organization(self):
+        """Status colors are platform-wide even when Super Admin edits one org."""
+        payload = {
+            "name": "Red Override Clinic",
+            "slug": "red-override-clinic",
+            "org_type": "HOSPITAL",
+            "facility_type": "MENTAL_HEALTH_MHP",
+            "dha_facility_code": "MFL-77125",
+            "theme_overrides": {"light": {"danger": "#00aa00"}},
+            "org_admin": {
+                "email": "admin@red-override.test",
+                "first_name": "Red",
+                "last_name": "Flag",
+            },
+        }
+        response = self.client.post(
+            reverse("platform-organizations"), payload, format="json", **self.auth
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Existing Clinic", slug="existing-clinic", facility_type="CLINIC"
+            )
+        response = self.client.patch(
+            reverse("platform-organization-detail", args=[org.id]),
+            {"theme_overrides": {"dark": {"warning": "#00aa00"}}},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400, response.data)
 
     def test_super_admin_can_upload_organization_logo(self):
         with platform_admin_context():
@@ -560,7 +659,37 @@ class OrganizationConsoleApiTests(APITestCase):
             **auth,
         )
         self.assertEqual(patch_response.status_code, 200, patch_response.data)
-        self.assertEqual(patch_response.data["theme_overrides"]["primary"], "#123456")
+        # The legacy flat {"primary"} shape is still accepted and normalized
+        # into the light palette.
+        self.assertEqual(
+            patch_response.data["theme_overrides"], {"light": {"primary": "#123456"}}
+        )
+
+        full_theme = {
+            "light": {"primary": "#1D5FA8", "sidebar_top": "#15457a", "card": "#ffffff"},
+            "dark": {"primary": "#6aa8ff", "bg": "#0b1220", "chart_3": "#9bb8e0"},
+        }
+        patch_response = self.client.patch(
+            reverse("platform-organization-theme", args=[org.id]),
+            {"theme_overrides": full_theme},
+            format="json",
+            **auth,
+        )
+        self.assertEqual(patch_response.status_code, 200, patch_response.data)
+        self.assertEqual(patch_response.data["theme_overrides"]["light"]["primary"], "#1d5fa8")
+        self.assertEqual(patch_response.data["theme_overrides"]["dark"]["bg"], "#0b1220")
+
+        # Status colors are platform-wide only — never per organization.
+        status_response = self.client.patch(
+            reverse("platform-organization-theme", args=[org.id]),
+            {"theme_overrides": {"light": {"danger": "#00ff00"}}},
+            format="json",
+            **auth,
+        )
+        self.assertEqual(status_response.status_code, 400, status_response.data)
+        with platform_admin_context():
+            org.refresh_from_db()
+        self.assertNotIn("danger", org.theme_overrides.get("light", {}))
 
     def test_org_admin_cannot_read_another_orgs_theme(self):
         from apps.accounts.models import Role

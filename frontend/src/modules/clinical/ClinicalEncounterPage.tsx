@@ -247,7 +247,7 @@ export function ClinicalEncounterPage() {
             type="button"
             onClick={orderLabTest}
             disabled={orderingLab}
-            className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
+            className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150"
           >
             {orderingLab ? "Ordering…" : "Order Lab Test (FBC)"}
           </button>

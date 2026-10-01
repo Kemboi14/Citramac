@@ -1,13 +1,13 @@
 import { apiRequest } from "./apiClient";
+import type { ThemeOverrides } from "../theme/themeTokens";
 
 // Mirrors apps.tenancy's OrganizationThemeSerializer — a narrow endpoint
-// over Organization.theme_overrides only (docs/03-DESIGN-SYSTEM.md §3.6).
+// over Organization.theme_overrides (docs/03-DESIGN-SYSTEM.md §3.6).
 
 export interface OrganizationTheme {
-  theme_overrides: {
-    primary?: string;
-    secondary?: string;
-  };
+  /** Light/dark palettes keyed by theme token (theme/themeTokens.ts) —
+   * never status colors, which are platform-wide only. */
+  theme_overrides: ThemeOverrides;
   logo_url: string;
 }
 

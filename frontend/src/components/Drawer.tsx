@@ -31,7 +31,7 @@ export function Drawer({
   return createPortal(
     <>
       <div
-        className={`fixed inset-0 z-[80] bg-[rgba(14,30,26,0.4)] backdrop-blur-[1px] transition-opacity duration-200 ${
+        className={`fixed inset-0 z-[80] bg-surface-scrim backdrop-blur-[1px] transition-opacity duration-200 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}

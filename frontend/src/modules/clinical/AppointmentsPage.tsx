@@ -136,7 +136,7 @@ export function AppointmentsPage() {
               type="button"
               onClick={() => setView(v)}
               className={`rounded-sm px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors duration-150 ${
-                view === v ? "bg-brand-green text-white" : "text-ink-700 hover:bg-surface-bg"
+                view === v ? "bg-brand-green text-on-primary" : "text-ink-700 hover:bg-surface-bg"
               }`}
             >
               {v}

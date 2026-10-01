@@ -20,8 +20,8 @@ export function PillRadio<T extends string>({
           className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150 ${
             value === opt.value
               ? opt.value === warnValue
-                ? "border-status-red bg-status-red text-white"
-                : "border-brand-green bg-brand-green text-white"
+                ? "border-status-red bg-status-red text-on-status"
+                : "border-brand-green bg-brand-green text-on-primary"
               : "border-surface-border bg-surface-card text-ink-700 hover:border-brand-green"
           }`}
         >

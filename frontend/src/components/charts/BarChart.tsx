@@ -8,7 +8,7 @@ export function BarChart({ data }: { data: { label: string; value: number }[] })
         <div key={d.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
           <div className="flex w-full flex-1 items-end justify-center">
             <div
-              className="w-full max-w-[26px] origin-bottom animate-grow-up rounded-t-[6px] rounded-b-[3px] bg-gradient-to-b from-[#16947a] to-brand-green transition-[filter] duration-150 hover:brightness-110"
+              className="w-full max-w-[26px] origin-bottom animate-grow-up rounded-t-[6px] rounded-b-[3px] bg-gradient-to-b from-chart-2 to-chart-1 transition-[filter] duration-150 hover:brightness-110"
               style={{
                 height: `${Math.max(4, (d.value / max) * 100)}%`,
                 animationDelay: `${i * 60}ms`,

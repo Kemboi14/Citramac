@@ -135,7 +135,7 @@ export function NotificationsPage() {
             }
             className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors duration-150 ${
               category === filter.value
-                ? "bg-brand-green text-white"
+                ? "bg-brand-green text-on-primary"
                 : "border border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
             }`}
           >

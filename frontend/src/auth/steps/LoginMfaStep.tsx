@@ -178,7 +178,7 @@ export function LoginMfaStep({
                 key={method.channel}
                 className={`flex items-center gap-[11px] rounded-md border px-3.5 py-3 text-xs ${
                   method.channel === activeChannel
-                    ? "border-brand-green bg-brand-green-tint-2 shadow-[0_0_0_2px_rgba(0,110,81,0.08)]"
+                    ? "border-brand-green bg-brand-green-tint-2 shadow-[0_0_0_2px_var(--green-tint)]"
                     : "border-surface-border"
                 }`}
               >

@@ -21,6 +21,7 @@ import {
   Mail,
   MessageSquare,
   Network,
+  Palette,
   Paperclip,
   Phone,
   Pill,
@@ -63,6 +64,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
       { label: "Data Lifecycle", to: "/super-admin/data-lifecycle", icon: Archive },
       { label: "Email Settings", to: "/super-admin/email-settings", icon: Mail },
       { label: "SMS Settings", to: "/super-admin/sms-settings", icon: MessageSquare },
+      { label: "Theme & Colors", to: "/super-admin/theme", icon: Palette },
     ],
   },
   {

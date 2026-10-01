@@ -7,6 +7,11 @@ import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
 import { getOrganizationTheme } from "../lib/themeApi";
+import {
+  applyCachedOrganizationTheme,
+  setOrganizationTheme,
+  setPlatformTheme,
+} from "../theme/runtimeTheme";
 import { useAuth } from "../auth/useAuth";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
@@ -93,42 +98,39 @@ export function AppShell({
     });
 
   useEffect(() => {
+    // Platform theme is the baseline for every user, including Super Admin
+    // (who has no organization to further theme); main.tsx already applied
+    // it at boot, this refreshes it alongside the sidebar logo.
     getPlatformBranding()
-      .then((b) => setLogoUrl(b.logo))
-      .catch(() => setLogoUrl(null));
+      .then((b) => {
+        setLogoUrl((current) => current ?? b.logo);
+        setPlatformTheme(b.theme_overrides);
+      })
+      .catch(() => {
+        // Best-effort only — keep the default mark and cached palette.
+      });
   }, []);
 
   useEffect(() => {
-    // Platform theme is the baseline for every user, including Super
-    // Admin (who has no organization to further theme). An org's own
-    // theme, if set, applies on top of it — sequential (not parallel) so
-    // the org override always wins regardless of which request resolves
-    // first over the network.
-    const root = document.documentElement.style;
-    const applyTheme = (overrides: { primary?: string; secondary?: string }) => {
-      if (overrides.primary) root.setProperty("--green", overrides.primary);
-      if (overrides.secondary) root.setProperty("--green-dark", overrides.secondary);
-    };
-
-    getPlatformBranding()
-      .then((b) => {
-        applyTheme(b.theme_overrides);
-        if (!accessToken || !claims?.organization_id) return;
-        return getOrganizationTheme(accessToken, claims.organization_id).then(
-          ({ theme_overrides, logo_url }) => {
-            applyTheme(theme_overrides);
-            // Org's own logo overrides the platform one in the sidebar, same
-            // "org wins over the platform baseline" rule as the colors above
-            // — this was already being fetched here but never applied, so
-            // every logged-in org member saw the generic platform mark
-            // regardless of what logo their org had set.
-            if (logo_url) setLogoUrl(logo_url);
-          },
-        );
+    // An org's own theme layers over the platform one (runtimeTheme.ts
+    // merges the two, so request order doesn't matter). The cached copy is
+    // painted first so members don't see the platform palette flash in.
+    const organizationId = claims?.organization_id;
+    if (!accessToken || !organizationId) return;
+    applyCachedOrganizationTheme(organizationId);
+    getOrganizationTheme(accessToken, organizationId)
+      .then(({ theme_overrides, logo_url }) => {
+        setOrganizationTheme(organizationId, theme_overrides);
+        // Org's own logo overrides the platform one in the sidebar, same
+        // "org wins over the platform baseline" rule as the colors.
+        if (logo_url) setLogoUrl(logo_url);
       })
       .catch(() => {
-        // Best-effort only — fall back to the default brand palette/logo.
+        // Best-effort only — the cached/platform palette stays in place.
       });
+    // Leaving the shell (logout, switching to an org-less account) drops
+    // the org layer so the login screen shows only the platform theme.
+    return () => setOrganizationTheme(null, null);
   }, [accessToken, claims?.organization_id]);
 
   useEffect(() => {
@@ -168,7 +170,7 @@ export function AppShell({
   return (
     <div className="flex min-h-screen w-full">
       <div
-        className={`fixed inset-0 z-30 bg-ink-900/40 transition-opacity duration-200 lg:hidden ${
+        className={`fixed inset-0 z-30 bg-surface-scrim transition-opacity duration-200 lg:hidden ${
           mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={closeMobile}
@@ -176,25 +178,25 @@ export function AppShell({
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-shrink-0 flex-col overflow-hidden text-[#eafaf4] transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-shrink-0 flex-col overflow-hidden text-sidebar-active-bg transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-300 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
-          backgroundImage: "linear-gradient(180deg, #00503a 0%, #003f2e 100%)",
+          backgroundImage: "linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%)",
           width: collapsed ? 76 : 248,
         }}
       >
         <div
-          className={`flex items-center gap-2.5 border-b border-white/10 py-5 ${collapsed ? "justify-center px-2" : "px-[18px]"}`}
+          className={`flex items-center gap-2.5 border-b border-sidebar-divider py-5 ${collapsed ? "justify-center px-2" : "px-[18px]"}`}
         >
           {logoUrl ? (
             <img
               src={logoUrl}
               alt={brandName}
-              className="h-8 w-8 flex-shrink-0 rounded-md bg-white object-contain p-0.5"
+              className="h-8 w-8 flex-shrink-0 rounded-md bg-sidebar-active-bg object-contain p-0.5"
             />
           ) : (
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-white text-xs font-bold text-brand-green-dark">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-sidebar-active-bg text-xs font-bold text-sidebar-active-text">
               CT
             </div>
           )}
@@ -204,7 +206,7 @@ export function AppShell({
             }`}
           >
             <div className="font-display text-base font-bold">{brandName}</div>
-            <div className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-[#9fd6c3]">
+            <div className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-sidebar-muted">
               {brandSub}
             </div>
           </div>
@@ -215,7 +217,7 @@ export function AppShell({
             <div key={group.label || "unlabeled"} className="mb-[18px]">
               {group.label && (
                 <div
-                  className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-[#7fbfa8] transition-[opacity,max-height] duration-200 ${
+                  className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-sidebar-muted transition-[opacity,max-height] duration-200 ${
                     collapsed ? "max-h-0 opacity-0" : "max-h-4 opacity-100"
                   }`}
                 >
@@ -229,13 +231,13 @@ export function AppShell({
                     <div
                       key={item.label}
                       title={collapsed ? item.label : undefined}
-                      className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-[#d6ede4] opacity-45 ${collapsed ? "justify-center" : ""}`}
+                      className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-sidebar-text opacity-45 ${collapsed ? "justify-center" : ""}`}
                     >
                       <Icon className="h-[17px] w-[17px] flex-shrink-0" />
                       {!collapsed && (
                         <>
                           {item.label}
-                          <span className="ml-auto rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-bold text-[#bcd9cd]">
+                          <span className="ml-auto rounded-full bg-sidebar-divider px-1.5 py-0.5 text-[9px] font-bold text-sidebar-muted">
                             Soon
                           </span>
                         </>
@@ -253,7 +255,7 @@ export function AppShell({
                         title={collapsed ? item.label : undefined}
                         onClick={() => !collapsed && toggleGroup(item.label)}
                         aria-expanded={isOpen}
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium text-[#d6ede4] transition-colors duration-150 hover:bg-white/[0.07] hover:text-white ${collapsed ? "justify-center" : ""}`}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium text-sidebar-text transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-text-strong ${collapsed ? "justify-center" : ""}`}
                       >
                         <Icon className="h-[17px] w-[17px] flex-shrink-0" />
                         {!collapsed && (
@@ -294,7 +296,7 @@ export function AppShell({
           ))}
         </nav>
 
-        <div ref={profileMenuRef} className="relative border-t border-white/10">
+        <div ref={profileMenuRef} className="relative border-t border-sidebar-divider">
           {profileMenuOpen && (
             <div className="absolute bottom-full left-2 right-2 mb-1.5 animate-scale-in overflow-hidden rounded-[10px] border border-surface-border bg-surface-card py-1.5 shadow-md">
               <Link
@@ -320,9 +322,9 @@ export function AppShell({
             onClick={() => setProfileMenuOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={profileMenuOpen}
-            className={`flex w-full items-center gap-2.5 py-3.5 transition-colors duration-150 hover:bg-white/[0.06] ${collapsed ? "justify-center px-2" : "px-4"}`}
+            className={`flex w-full items-center gap-2.5 py-3.5 transition-colors duration-150 hover:bg-sidebar-hover ${collapsed ? "justify-center px-2" : "px-4"}`}
           >
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/25 bg-brand-green text-xs font-bold text-white">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-sidebar-divider bg-brand-green text-xs font-bold text-on-primary">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -332,11 +334,11 @@ export function AppShell({
             {!collapsed && (
               <>
                 <div className="min-w-0 flex-1 overflow-hidden text-left leading-tight">
-                  <div className="truncate text-[12.5px] font-semibold text-white">{userName}</div>
-                  <div className="truncate text-[10.5px] text-[#8fc9b3]">{userRole}</div>
+                  <div className="truncate text-[12.5px] font-semibold text-sidebar-text-strong">{userName}</div>
+                  <div className="truncate text-[10.5px] text-sidebar-muted">{userRole}</div>
                 </div>
                 <ChevronDown
-                  className={`h-3.5 w-3.5 flex-shrink-0 text-[#8fc9b3] transition-transform duration-150 ${profileMenuOpen ? "rotate-180" : ""}`}
+                  className={`h-3.5 w-3.5 flex-shrink-0 text-sidebar-muted transition-transform duration-150 ${profileMenuOpen ? "rotate-180" : ""}`}
                 />
               </>
             )}
@@ -404,8 +406,8 @@ function ClinicalNavLeaf({
       className={({ isActive }) =>
         `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors duration-150 ${collapsed ? "justify-center" : ""} ${
           isActive
-            ? "bg-[#eafaf4] font-semibold text-brand-green-dark"
-            : "text-[#d6ede4] hover:bg-white/[0.07] hover:text-white"
+            ? "bg-sidebar-active-bg font-semibold text-sidebar-active-text"
+            : "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-strong"
         }`
       }
     >

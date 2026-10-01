@@ -23,7 +23,7 @@ const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
+  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const SECONDARY_BUTTON_CLASS =
   "rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
@@ -261,7 +261,7 @@ export function GlobalRolesPage() {
                 onClick={() => selectRole(role)}
                 className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
                   role.id === selectedRoleId
-                    ? "bg-brand-green text-white"
+                    ? "bg-brand-green text-on-primary"
                     : "border border-surface-border text-ink-700 hover:bg-surface-bg"
                 }`}
               >
@@ -269,7 +269,7 @@ export function GlobalRolesPage() {
                 {role.organization_name ? ` · ${role.organization_name}` : " · Platform"}
                 <span
                   className={`ml-1.5 text-xs ${
-                    role.id === selectedRoleId ? "text-white/80" : "text-ink-500"
+                    role.id === selectedRoleId ? "text-on-primary opacity-80" : "text-ink-500"
                   }`}
                 >
                   ({role.user_count})

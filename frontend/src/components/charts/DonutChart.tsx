@@ -1,4 +1,5 @@
-const PALETTE = ["#006e51", "#34a884", "#9bcdb9", "#b8790a", "#fe0000", "#5f736c"];
+// Theme tokens (tokens.css --chart-1..6), so charts follow the active theme.
+const PALETTE = [1, 2, 3, 4, 5, 6].map((n) => `var(--chart-${n})`);
 
 /** Conic-gradient donut chart with legend — citramac_SUPER-ADMIN.html `.donut`. */
 export function DonutChart({
