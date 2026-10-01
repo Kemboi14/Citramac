@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.functions import TruncMonth
+from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.exceptions import ValidationError
@@ -818,14 +819,21 @@ class MySubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not request.user.organization_id:
-            return Response(None)
         subscription = (
             Subscription.objects.select_related("plan")
             .filter(organization_id=request.user.organization_id)
             .first()
+            if request.user.organization_id
+            else None
         )
-        return Response(MySubscriptionSerializer(subscription).data if subscription else None)
+        if subscription is None:
+            # DRF's JSONRenderer renders `Response(None)` as an *empty* body,
+            # which a client can't tell apart from "{}" — the frontend read it
+            # as a subscription object and crashed the whole shell for Super
+            # Admins and for tenants with no subscription record. Send a
+            # literal JSON `null` so "no subscription" is unambiguous.
+            return JsonResponse(None, safe=False)
+        return Response(MySubscriptionSerializer(subscription).data)
 
 
 class PlatformDashboardStatsView(APIView):

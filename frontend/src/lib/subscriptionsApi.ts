@@ -62,7 +62,11 @@ export interface SubscriptionPolicy {
 }
 
 export function getMySubscription(accessToken: string) {
-  return apiRequest<MySubscription | null>("/platform/my-subscription/", { accessToken });
+  // apiRequest turns an empty body into `{}`; anything without a `status` is
+  // "no subscription", never a half-formed object the banner would crash on.
+  return apiRequest<MySubscription | null>("/platform/my-subscription/", { accessToken }).then(
+    (result) => (result && typeof result === "object" && "status" in result ? result : null),
+  );
 }
 
 export function getSubscriptionPolicy(accessToken: string) {

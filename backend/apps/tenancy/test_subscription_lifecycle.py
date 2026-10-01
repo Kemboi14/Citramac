@@ -181,7 +181,18 @@ class SubscriptionLifecycleTests(APITestCase):
         self.assertEqual(response.data["days_until_period_end"], 7)
         self.assertTrue(response.data["renewing_soon"])
         platform = self.client.get(reverse("my-subscription"), **self._auth(self.super_admin))
-        self.assertIsNone(platform.data)
+        self.assertEqual(platform.status_code, 200)
+        # A literal JSON null, never an empty body — an empty body is read as
+        # "{}" by the frontend and crashed every shell for platform staff.
+        self.assertEqual(platform.content, b"null")
+        self.assertEqual(platform["Content-Type"], "application/json")
+
+    def test_member_of_org_without_subscription_gets_json_null(self):
+        with platform_admin_context():
+            Subscription.objects.filter(organization=self.org).delete()
+        response = self.client.get(reverse("my-subscription"), **self._auth(self.clinician))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"null")
 
     def test_policy_is_super_admin_only(self):
         url = reverse("subscription-policy")

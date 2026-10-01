@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Menu, Search, UserRound } from "lucide-react";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import type { NavGroup, NavItem } from "./navConfig";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
@@ -79,6 +80,7 @@ export function AppShell({
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const { accessToken, claims, avatarUrl, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
   // sub-screens) — keyed by label, collapsed by default. See navConfig.tsx.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
@@ -365,9 +367,11 @@ export function AppShell({
 
         <main className="w-full flex-1 px-4 py-5 pb-14 sm:px-6 lg:px-8 lg:py-7">
           <div className="mx-auto w-full max-w-[1920px]">
-            <SubscriptionBanner />
-            <OfflineSyncBanner />
-            <Outlet />
+            <ErrorBoundary resetKey={location.pathname}>
+              <SubscriptionBanner />
+              <OfflineSyncBanner />
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
       </div>
