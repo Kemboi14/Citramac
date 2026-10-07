@@ -59,13 +59,33 @@ PATIENT_PATHS = {
     "mhp_program.UrineDrugScreen": "plan__patient",
     "mhp_program.ClinicalReview": "patient",
     "mhp_program.SupervisionRequest": "patient",
+    "care_pathway.EpisodeOfCare": "patient",
+    "care_pathway.EpisodeStatusHistory": "episode__patient",
+    "care_pathway.TriageEncounter": "patient",
+    "care_pathway.TriageAssessment": "triage_encounter__patient",
+    "care_pathway.TriageRecheck": "triage_encounter__patient",
+    "care_pathway.ClinicalAlert": "patient",
+    "care_pathway.CareTask": "patient",
+    "care_pathway.IntakeAssessment": "patient",
+    "care_pathway.OutcomeScore": "patient",
+    "care_pathway.CarePlan": "patient",
+    "care_pathway.CarePlanActivity": "care_plan__patient",
+    "care_pathway.InterventionRecord": "patient",
+    "care_pathway.ChargeItem": "patient",
 }
 
 # A client with any row in one of these is held to the mental health /
 # substance use retention period; any row in FINANCIAL_MODELS, to the
 # financial one. The period applied is the longest that applies.
 MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mhp_program.")} | {
-    "triage.MentalStatusExam"
+    "triage.MentalStatusExam",
+    "care_pathway.TriageAssessment",
+    "care_pathway.TriageRecheck",
+    "care_pathway.IntakeAssessment",
+    "care_pathway.OutcomeScore",
+    "care_pathway.CarePlan",
+    "care_pathway.CarePlanActivity",
+    "care_pathway.InterventionRecord",
 }
 
 FINANCIAL_MODELS = {
@@ -75,6 +95,7 @@ FINANCIAL_MODELS = {
     "insurance_claims.PreAuthorization",
     "insurance_claims.InsuranceClaim",
     "insurance_claims.Remittance",
+    "care_pathway.ChargeItem",
 }
 
 

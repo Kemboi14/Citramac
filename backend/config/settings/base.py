@@ -87,6 +87,8 @@ LOCAL_APPS = [
     "apps.offline_sync",
     "apps.security",
     "apps.retention",
+    "apps.care_pathway",
+    "apps.compliance",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -324,6 +326,13 @@ CELERY_BEAT_SCHEDULE = {
     # PAST_DUE/grace, then EXPIRED (read-only). 05:00 UTC = 08:00 EAT, so
     # reminders land at the start of the working day. See
     # apps/tenancy/subscription_lifecycle.py.
+    # Breach notification deadlines (48h facility / 48h Digital Health
+    # Agency / 72h ODPC) — checked every 30 minutes so a reminder lands well
+    # inside the window. See apps/compliance/tasks.py.
+    "remind-breach-notification-deadlines": {
+        "task": "apps.compliance.tasks.remind_breach_notification_deadlines",
+        "schedule": crontab(minute="*/30"),
+    },
     "process-subscription-lifecycle": {
         "task": "apps.tenancy.tasks.process_subscription_lifecycle",
         "schedule": crontab(hour=5, minute=0),

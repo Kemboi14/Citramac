@@ -21,6 +21,14 @@ class Encounter(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     encounter_type = models.CharField(max_length=100, blank=True)
+    # CLAUDE.md §4 — every encounter hangs off an EpisodeOfCare.
+    episode = models.ForeignKey(
+        "care_pathway.EpisodeOfCare",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="encounters",
+    )
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="OPEN")
     opened_at = models.DateTimeField(default=timezone.now)
     closed_at = models.DateTimeField(null=True, blank=True)

@@ -53,7 +53,7 @@ export function setSessionInvalidatedHandler(handler: SessionInvalidatedHandler 
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   accessToken?: string | null;
 }
@@ -132,4 +132,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   return data as T;
+}
+
+/** Authenticated file download (e.g. compliance evidence) — never a public
+ * media URL. Returns the file as a Blob held in memory only. */
+export async function apiDownload(path: string, accessToken: string): Promise<Blob> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    credentials: "include",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    let body: ApiErrorBody = {
+      error: { code: "DOWNLOAD_FAILED", message: "The file could not be downloaded." },
+    };
+    try {
+      const data = await response.json();
+      if (data?.error) body = data as ApiErrorBody;
+    } catch {
+      // Non-JSON error body — keep the generic message.
+    }
+    throw new ApiError(response.status, body);
+  }
+  return response.blob();
 }

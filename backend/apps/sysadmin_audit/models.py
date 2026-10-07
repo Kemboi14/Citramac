@@ -49,6 +49,8 @@ class AuditLogEntry(models.Model):
     ACTION_ARCHIVE = "ARCHIVE"
     ACTION_RESTORE = "RESTORE"
     ACTION_LEGAL_HOLD = "LEGAL_HOLD"
+    ACTION_SUPPORT_ACCESS = "SUPPORT_ACCESS"
+    ACTION_EXPORT = "EXPORT"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -62,6 +64,8 @@ class AuditLogEntry(models.Model):
         (ACTION_ARCHIVE, "Record Archived"),
         (ACTION_RESTORE, "Record Restored from Archive"),
         (ACTION_LEGAL_HOLD, "Legal Hold Changed"),
+        (ACTION_SUPPORT_ACCESS, "Platform Support Access (tenant-approved)"),
+        (ACTION_EXPORT, "Patient Record Exported (data subject request)"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

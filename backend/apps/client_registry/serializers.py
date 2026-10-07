@@ -74,7 +74,16 @@ class EmergencyContactSerializer(serializers.ModelSerializer):
 class AllergyRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = AllergyRecord
-        fields = ["id", "patient", "substance", "reaction", "severity", "noted_at"]
+        fields = [
+            "id",
+            "patient",
+            "substance",
+            "reaction",
+            "severity",
+            "noted_at",
+            "verification_status",
+            "source",
+        ]
         read_only_fields = ["patient"]
 
 
@@ -265,8 +274,20 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "archived_at",
             "archive_reason",
             "legal_hold",
+            "identity_status",
+            "identity_description",
+            "identity_confirmed_at",
+            "preferred_name",
+            "pronouns",
+            "estimated_age",
+            "id_document_type",
+            "id_document_number",
+            "preferred_language",
+            "interpreter",
+            "payer",
         ]
         read_only_fields = [
+            "identity_confirmed_at",
             "citramac_number",
             "registered_at",
             "registered_by",
@@ -274,6 +295,22 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "archive_reason",
             "legal_hold",
         ]
+
+    def validate(self, attrs):
+        # Name, sex and date of birth became optional at model level for the
+        # unidentified / unknown-identity registration tiers (docs/15 §1.4).
+        # An identified client created through this endpoint still needs them.
+        if self.instance is None:
+            identity = attrs.get("identity_status", Patient.IDENTITY_IDENTIFIED)
+            if identity == Patient.IDENTITY_IDENTIFIED:
+                missing = {
+                    field: "This field is required."
+                    for field in ("first_name", "last_name", "gender", "date_of_birth")
+                    if not attrs.get(field)
+                }
+                if missing:
+                    raise serializers.ValidationError(missing)
+        return attrs
 
     def validate_photo(self, value):
         if value and value.size > settings.AVATAR_MAX_SIZE_BYTES:

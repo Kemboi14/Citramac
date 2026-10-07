@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -880,3 +882,108 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         response = self.client.get(reverse("clinical-dashboard-summary"), **self.auth)
         self.assertTrue(response.data["fhir_status"]["configured"])
         self.assertEqual(response.data["fhir_status"]["status"], "SENT")
+
+
+class CaseloadTests(APITestCase):
+    """docs/15-CLINICAL-WORKSPACE-V3.md §1.12 — My Caseload (mapping M9)."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-caseload", facility_type="MENTAL_HEALTH_MHP"
+            )
+            self.clinician = User.objects.create_user(
+                email="clinician@org-caseload.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            self.colleague = User.objects.create_user(
+                email="colleague@org-caseload.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+        self.access, _ = issue_tokens(self.clinician)
+        self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
+
+    def _patient(self, first_name, **extra):
+        with platform_admin_context():
+            return Patient.objects.create(
+                organization=self.org,
+                first_name=first_name,
+                last_name="Test",
+                gender="FEMALE",
+                date_of_birth="1990-01-01",
+                **extra,
+            )
+
+    def test_caseload_lists_only_clients_assigned_to_the_user(self):
+        from apps.mhp_program.models import CareTeamMembership
+
+        mine_as_doctor = self._patient("Doctor", doctor=self.clinician)
+        mine_via_team = self._patient("Team")
+        self._patient("Colleague", doctor=self.colleague)
+        self._patient("Archived", doctor=self.clinician, archived_at=timezone.now())
+        with platform_admin_context():
+            CareTeamMembership.objects.create(
+                organization=self.org, patient=mine_via_team, user=self.clinician, role="THERAPIST"
+            )
+
+        response = self.client.get(reverse("clinical-caseload"), **self.auth)
+
+        self.assertEqual(response.status_code, 200)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertEqual(ids, {str(mine_as_doctor.id), str(mine_via_team.id)})
+
+    def test_caseload_row_reports_bed_diagnosis_and_next_appointment(self):
+        from apps.clinical_encounter.models import DiagnosisCode, Encounter
+        from apps.dha_interop.models import IcdCodeIndex
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        patient = self._patient("Inpatient", doctor=self.clinician)
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Ward A")
+            bed = Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="12", status="OCCUPIED"
+            )
+            Admission.objects.create(
+                organization=self.org, patient=patient, bed=bed, admission_type="VOLUNTARY"
+            )
+            encounter = Encounter.objects.create(organization=self.org, patient=patient)
+            icd = IcdCodeIndex.objects.create(code="TEST-1", description="Test condition")
+            DiagnosisCode.objects.create(
+                organization=self.org, encounter=encounter, icd11_code=icd, is_primary=True
+            )
+            Appointment.objects.create(
+                organization=self.org,
+                patient=patient,
+                scheduled_for=timezone.now() + timedelta(days=2),
+                appointment_type="Medication review",
+            )
+
+        response = self.client.get(reverse("clinical-caseload"), **self.auth)
+
+        row = response.data["results"][0]
+        self.assertEqual(row["care_setting"], "INPATIENT")
+        self.assertEqual((row["ward"], row["bed"]), ("Ward A", "12"))
+        self.assertEqual(row["diagnosis"], {"code": "TEST-1", "description": "Test condition"})
+        self.assertEqual(row["next_appointment"]["appointment_type"], "Medication review")
+
+
+class IdentifiedPatientValidationTests(APITestCase):
+    """Names became optional for the unidentified/unknown tiers (docs/15 §1.4);
+    the plain patients endpoint must still require them for identified clients."""
+
+    setUp = CaseloadTests.setUp
+
+    def test_identified_client_needs_name_sex_and_date_of_birth(self):
+        response = self.client.post(reverse("patient-list"), {}, format="json", **self.auth)
+        self.assertEqual(response.status_code, 400)
+
+    def test_unknown_identity_client_can_be_created_without_them(self):
+        response = self.client.post(
+            reverse("patient-list"), {"identity_status": "UNKNOWN"}, format="json", **self.auth
+        )
+        self.assertEqual(response.status_code, 201)

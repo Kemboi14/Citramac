@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Menu, Search, UserRound } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import type { NavGroup, NavItem } from "./navConfig";
+import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
@@ -13,6 +14,7 @@ import {
   setPlatformTheme,
 } from "../theme/runtimeTheme";
 import { useAuth } from "../auth/useAuth";
+import { useTheme } from "../theme/useTheme";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
 const DESKTOP_BREAKPOINT = 1024; // matches Tailwind's `lg`
@@ -60,6 +62,8 @@ export function AppShell({
   topbarRight,
   searchPlaceholder,
   profilePath,
+  variant = "default",
+  pageTitles,
 }: {
   brandName: string;
   brandSub: string;
@@ -72,6 +76,12 @@ export function AppShell({
   /** Portal-relative route to this shell's "My Profile" page — every
    * portal gets one so every user, any role, can set their own avatar. */
   profilePath: string;
+  /** "brand" — the clinical workspace's dark-green topbar carrying the current
+   * page title and a light/dark toggle (docs/15-CLINICAL-WORKSPACE-V3.md §1.1). */
+  variant?: "default" | "brand";
+  /** Topbar titles for routes whose title differs from their nav label, or
+   * that have no nav entry. Falls back to the nav label of the current route. */
+  pageTitles?: Record<string, string>;
 }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(readStoredCollapse);
   const isDesktop = useIsDesktop();
@@ -88,7 +98,21 @@ export function AppShell({
   const location = useLocation();
   // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
   // sub-screens) — keyed by label, collapsed by default. See navConfig.tsx.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    () =>
+      new Set(
+        navGroups.flatMap((group) =>
+          group.items.filter((item) => item.defaultOpen).map((item) => item.label),
+        ),
+      ),
+  );
+  const pageTitle =
+    resolvePageTitle(pageTitles, location.pathname) ??
+    navGroups
+      .flatMap((group) => group.items.flatMap((item) => [item, ...(item.children ?? [])]))
+      .find((item) => item.to === location.pathname)?.label ??
+    "";
+  const isBrand = variant === "brand";
   const toggleGroup = (label: string) =>
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -182,7 +206,8 @@ export function AppShell({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
-          backgroundImage: "linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%)",
+          backgroundImage:
+            "linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%)",
           width: collapsed ? 76 : 248,
         }}
       >
@@ -334,7 +359,9 @@ export function AppShell({
             {!collapsed && (
               <>
                 <div className="min-w-0 flex-1 overflow-hidden text-left leading-tight">
-                  <div className="truncate text-[12.5px] font-semibold text-sidebar-text-strong">{userName}</div>
+                  <div className="truncate text-[12.5px] font-semibold text-sidebar-text-strong">
+                    {userName}
+                  </div>
                   <div className="truncate text-[10.5px] text-sidebar-muted">{userRole}</div>
                 </div>
                 <ChevronDown
@@ -347,25 +374,55 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card px-4 py-3 sm:px-5 lg:px-7 lg:py-3.5">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label="Toggle sidebar"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors duration-150 hover:bg-surface-bg"
+        {isBrand ? (
+          <header
+            className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-sidebar-divider px-4 text-sidebar-text-strong"
+            style={{ backgroundColor: "var(--sidebar-top)" }}
           >
-            <Menu className="h-[18px] w-[18px]" />
-          </button>
-          <div className="relative hidden max-w-[420px] flex-1 sm:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
-            <input
-              type="text"
-              placeholder={searchPlaceholder}
-              className="w-full rounded-[10px] border border-surface-border bg-surface-bg py-2.5 pl-9 pr-3.5 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card"
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-3 sm:gap-4">{topbarRight}</div>
-        </header>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Toggle sidebar"
+              className={BRAND_TOPBAR_BUTTON}
+            >
+              <Menu className="h-[17px] w-[17px]" />
+            </button>
+            <div className="min-w-0 flex-1 truncate font-display text-sm font-semibold">
+              {pageTitle}
+            </div>
+            <div className="relative hidden w-60 max-w-[30vw] min-[481px]:block">
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                className="h-9 w-full rounded-lg border border-sidebar-divider bg-sidebar-hover px-3 text-[12.5px] text-sidebar-text-strong outline-none placeholder:text-sidebar-muted focus:border-sidebar-muted"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {topbarRight}
+              <ThemeToggleButton />
+            </div>
+          </header>
+        ) : (
+          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card px-4 py-3 sm:px-5 lg:px-7 lg:py-3.5">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Toggle sidebar"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors duration-150 hover:bg-surface-bg"
+            >
+              <Menu className="h-[18px] w-[18px]" />
+            </button>
+            <div className="relative hidden max-w-[420px] flex-1 sm:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
+              <input
+                type="text"
+                placeholder={searchPlaceholder}
+                className="w-full rounded-[10px] border border-surface-border bg-surface-bg py-2.5 pl-9 pr-3.5 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card"
+              />
+            </div>
+            <div className="ml-auto flex items-center gap-3 sm:gap-4">{topbarRight}</div>
+          </header>
+        )}
 
         <main className="w-full flex-1 px-4 py-5 pb-14 sm:px-6 lg:px-8 lg:py-7">
           <div className="mx-auto w-full max-w-[1920px]">
@@ -381,6 +438,41 @@ export function AppShell({
   );
 }
 
+/** Exact route first, then the longest "prefix/*" pattern (e.g. "/clinical/triage/*"). */
+function resolvePageTitle(titles: Record<string, string> | undefined, pathname: string) {
+  if (!titles) return undefined;
+  if (Object.prototype.hasOwnProperty.call(titles, pathname)) {
+    // eslint-disable-next-line security/detect-object-injection -- own-property lookup on a fixed map.
+    return titles[pathname];
+  }
+  const match = Object.keys(titles)
+    .filter((key) => key.endsWith("/*") && pathname.startsWith(key.slice(0, -1)))
+    .sort((a, b) => b.length - a.length)[0];
+  // eslint-disable-next-line security/detect-object-injection -- key comes from the map itself.
+  return match ? titles[match] : undefined;
+}
+
+/** Light/dark switch on the brand topbar. From "system" it flips whatever the
+ * OS is currently showing; the choice is stored by useTheme as before. */
+function ThemeToggleButton() {
+  const { preference, setPreference } = useTheme();
+  const isDark =
+    preference === "dark" ||
+    (preference === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  return (
+    <button
+      type="button"
+      onClick={() => setPreference(isDark ? "light" : "dark")}
+      aria-label="Toggle light/dark theme"
+      aria-pressed={isDark}
+      title="Toggle light/dark theme"
+      className={BRAND_TOPBAR_BUTTON}
+    >
+      {isDark ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
+    </button>
+  );
+}
+
 /** A single navigable leaf — either a top-level item or a nested child under an expandable group. */
 function ClinicalNavLeaf({
   item,
@@ -392,7 +484,11 @@ function ClinicalNavLeaf({
   onClick: () => void;
 }) {
   const Icon = item.icon;
+  const location = useLocation();
   if (!item.to) return null;
+  const alsoActive = (item.alsoActiveFor ?? []).some(
+    (prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
+  );
   return (
     <NavLink
       to={item.to}
@@ -400,12 +496,12 @@ function ClinicalNavLeaf({
       // never a section header that should stay lit while a nested child
       // screen (with its own nav entry, e.g. /clinical/ipd vs
       // /clinical/ipd/nursing) is open.
-      end
+      end={!item.matchPrefix}
       title={collapsed ? item.label : undefined}
       onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors duration-150 ${collapsed ? "justify-center" : ""} ${
-          isActive
+          isActive || alsoActive
             ? "bg-sidebar-active-bg font-semibold text-sidebar-active-text"
             : "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-strong"
         }`

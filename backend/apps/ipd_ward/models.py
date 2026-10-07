@@ -101,6 +101,20 @@ class Admission(TenantScopedModel):
     )
     admission_source = models.CharField(max_length=100, blank=True)
     priority = models.CharField(max_length=16, choices=PRIORITY_CHOICES, default="ROUTINE")
+    # docs/15-CLINICAL-WORKSPACE-V3.md §1.10 — triage-scale clinical priority
+    # and the EpisodeOfCare this inpatient Encounter (class IMP) sits inside.
+    clinical_priority = models.CharField(
+        max_length=8,
+        choices=[("RED", "RED"), ("ORANGE", "ORANGE"), ("YELLOW", "YELLOW"), ("GREEN", "GREEN")],
+        blank=True,
+    )
+    episode = models.ForeignKey(
+        "care_pathway.EpisodeOfCare",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="admissions",
+    )
 
     # Clinical reason for admission
     reason_for_admission = models.TextField(blank=True)

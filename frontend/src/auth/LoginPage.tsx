@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { MfaChannel, MfaDeliveryMethod, TenantBranding } from "../lib/authApi";
 import { useAuth } from "./useAuth";
+import { PublicDpoContact } from "./steps/AuthCard";
 import { LoginMfaStep } from "./steps/LoginMfaStep";
 import { TenantDiscoveryStep } from "./steps/TenantDiscoveryStep";
 import { TenantLoginStep } from "./steps/TenantLoginStep";
@@ -53,46 +54,55 @@ export function LoginPage() {
 
   const toast = sessionToast ?? routeToast;
 
-  switch (state.step) {
-    case "discovery":
-      return (
-        <TenantDiscoveryStep
-          toast={toast}
-          toastVariant={sessionToast ? "warning" : "success"}
-          onSuccess={(email, tenant) => setState({ step: "password", email, tenant })}
-        />
-      );
+  return (
+    <div className="relative">
+      {renderStep()}
+      <PublicDpoContact className="absolute inset-x-0 bottom-0 px-4 pb-1.5" />
+    </div>
+  );
 
-    case "password":
-      return (
-        <TenantLoginStep
-          tenant={state.tenant}
-          email={state.email}
-          onChangeEmail={() => setState({ step: "discovery" })}
-          login={login}
-          onSuccess={() => navigate("/", { replace: true })}
-          onRequiresOtp={({ otpToken, channel, deliveryMethods }) =>
-            setState({
-              step: "otp",
-              email: state.email,
-              tenant: state.tenant,
-              otpToken,
-              channel: channel as MfaChannel,
-              deliveryMethods: deliveryMethods as MfaDeliveryMethod[],
-            })
-          }
-        />
-      );
+  function renderStep() {
+    switch (state.step) {
+      case "discovery":
+        return (
+          <TenantDiscoveryStep
+            toast={toast}
+            toastVariant={sessionToast ? "warning" : "success"}
+            onSuccess={(email, tenant) => setState({ step: "password", email, tenant })}
+          />
+        );
 
-    case "otp":
-      return (
-        <LoginMfaStep
-          otpToken={state.otpToken}
-          channel={state.channel}
-          deliveryMethods={state.deliveryMethods}
-          verify={loginVerifyOtp}
-          onSuccess={() => navigate("/", { replace: true })}
-        />
-      );
+      case "password":
+        return (
+          <TenantLoginStep
+            tenant={state.tenant}
+            email={state.email}
+            onChangeEmail={() => setState({ step: "discovery" })}
+            login={login}
+            onSuccess={() => navigate("/", { replace: true })}
+            onRequiresOtp={({ otpToken, channel, deliveryMethods }) =>
+              setState({
+                step: "otp",
+                email: state.email,
+                tenant: state.tenant,
+                otpToken,
+                channel: channel as MfaChannel,
+                deliveryMethods: deliveryMethods as MfaDeliveryMethod[],
+              })
+            }
+          />
+        );
+
+      case "otp":
+        return (
+          <LoginMfaStep
+            otpToken={state.otpToken}
+            channel={state.channel}
+            deliveryMethods={state.deliveryMethods}
+            verify={loginVerifyOtp}
+            onSuccess={() => navigate("/", { replace: true })}
+          />
+        );
+    }
   }
 }

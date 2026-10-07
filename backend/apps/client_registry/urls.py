@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AppointmentViewSet,
     AttachmentViewSet,
+    CaseloadView,
     ClinicalDashboardSummaryView,
     ErasureRequestViewSet,
     PatientViewSet,
@@ -21,4 +22,5 @@ urlpatterns = router.urls + [
         ClinicalDashboardSummaryView.as_view(),
         name="clinical-dashboard-summary",
     ),
+    path("clinical/caseload/", CaseloadView.as_view(), name="clinical-caseload"),
 ]

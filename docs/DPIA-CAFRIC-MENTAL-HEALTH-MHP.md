@@ -140,3 +140,50 @@ Re-assess this DPIA on any of:
   the system to a third party materially changes the risk picture assessed
   here.
 - At minimum, annually.
+
+## 7. Review — 2026-10-07 (material change)
+
+Triggered by two material changes, per §6 and the CAFRIC legal opinion of
+2 October 2026 (§8: a DPIA must be reviewed on a material change to the
+processing, the categories of data, or the system's functionality).
+**Status: draft for DPO sign-off.**
+
+### 7.1 Changes to the processing
+
+| Change | New data processed | Where |
+|---|---|---|
+| Registration in three identity tiers (identified / unidentified / identity unknown) | Observed description or temporary alias, preferred name, pronouns, estimated age, ID document type and number, language, interpreter need, payer | `client_registry.Patient` |
+| Structured triage (safety screen A–N, re-checks) | Suicide/self-harm, risk to others, mental state, substance use, safeguarding, functional safety answers; vital signs; clinical alerts; disposition tasks | `care_pathway.TriageAssessment`, `TriageRecheck`, `ClinicalAlert`, `CareTask` |
+| Episode of care, intake, care plan, interventions, outcome scores | PHQ-9 / GAD-7 scores, formulation, care plan goals, intervention records | `care_pathway.*` |
+| Data-sharing consent against facility-approved wording | Consent decisions with a copy of the wording shown | `client_registry.ConsentRecord`, `care_pathway.ConsentTemplate` |
+| Billing of delivered services | Service, quantity, tariff amount per client | `care_pathway.ChargeItem` |
+| Compliance controls (this review) | Breach incidents, data subject requests, support access grants, tenant compliance evidence | `compliance.*` |
+
+### 7.2 New or changed risks and mitigations
+
+| Risk | Mitigation now in the system |
+|---|---|
+| Platform (processor) staff access tenant clinical data outside the tenant's instructions — legal opinion §6, DPA s.42(3) | Superuser API requests to every patient-data route are refused unless they carry a support access grant approved by that facility's Org Admin (max 72 h); with a grant, row-level security is narrowed to that one facility and every request is audit-logged (`SUPPORT_ACCESS`). Clinical models are removed from Django admin. |
+| Breach notification deadlines missed — opinion §10 | Breach incident register with separate tracks: facility (48 h, when the platform is processor), ODPC (72 h), Digital Health Agency (48 h), data subjects (without delay, high risk). Reminders every 30 minutes as a deadline approaches and once passed; an incident cannot be closed with a required notification outstanding. |
+| Data subject access / portability not met — opinion §11, DPA s.26/s.38, DHA s.36 | Data subject request register (access, portability, correction, objection, restriction) with identity verification and Org Admin approval; approved access/portability requests export the full record as an R4 FHIR bundle plus structured record; every export is audit-logged (`EXPORT`). |
+| Sensitive triage answers widen the mental-health record | Triage records are in the mental-health retention class; drafts are server-side only (no browser storage); every view of a client record and of a signed triage is audit-logged. |
+| Tenants onboarded without their own ODPC registration — opinion §4.3 | Tenant compliance profile: ODPC registration evidence verified by platform staff, data processing agreement version and date, acceptance of the platform's compliance warranty, tenant DPO contact; gaps listed for each facility. |
+
+### 7.3 Open item — hosting location (HIGH)
+
+The registry record for the production server address (161.97.166.42) is
+held by Contabo with country DE (Germany). Registry country is where the
+address block is allocated, not proof of the machine's location, but it
+indicates patient data may be hosted outside Kenya. The legal opinion (§9)
+notes Regulation 26 of the Data Protection (General) Regulations, 2021
+requires data processed for health care to Kenyan data subjects to be held
+on a server in Kenya, or at least one serving copy kept in Kenya, and that
+s.47 of the Digital Health Act, 2023 is narrower still. **Confirm the
+physical location of the server and its backups with the provider; if
+outside Kenya, a cross-border transfer assessment and a Kenyan serving copy
+are needed before live patient data is processed.**
+
+### 7.4 Residual risk
+
+Unchanged from §5 pending the hosting-location item in §7.3, which is
+assessed as high until resolved.

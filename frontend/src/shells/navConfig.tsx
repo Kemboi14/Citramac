@@ -7,7 +7,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   CreditCard,
-  Dumbbell,
   FileBarChart,
   FileClock,
   FileText,
@@ -16,19 +15,16 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
-  LifeBuoy,
-  LogOut,
   Mail,
   MessageSquare,
   Network,
   Palette,
   Paperclip,
-  Phone,
   Pill,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Stethoscope,
-  Syringe,
   Trash2,
   User,
   Users,
@@ -45,6 +41,12 @@ export interface NavItem {
   soon?: boolean;
   /** One level of nested, always-navigable sub-items (expandable accordion group). */
   children?: NavItem[];
+  /** An expandable group that starts open. */
+  defaultOpen?: boolean;
+  /** Stay highlighted on deeper routes too (e.g. /clinical/triage/:id). */
+  matchPrefix?: boolean;
+  /** Other route prefixes that should highlight this item. */
+  alsoActiveFor?: string[];
 }
 
 export interface NavGroup {
@@ -79,6 +81,15 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
       { label: "Security Alerts", to: "/super-admin/security-alerts", icon: AlertTriangle },
     ],
   },
+  {
+    label: "Data Protection",
+    items: [
+      { label: "Breach Incidents", to: "/super-admin/breach-incidents", icon: ShieldAlert },
+      { label: "Support Access", to: "/super-admin/support-access", icon: KeyRound },
+      { label: "Tenant Compliance", to: "/super-admin/tenant-compliance", icon: ClipboardCheck },
+      { label: "Platform DPO & Warranty", to: "/super-admin/platform-compliance", icon: Landmark },
+    ],
+  },
 ];
 
 // Matches mockups/citramac_ORG-admin.html — docs/03-DESIGN-SYSTEM.md §3.5.
@@ -93,178 +104,96 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
       { label: "Branch Settings", to: "/org-admin/branch-settings", icon: Settings },
       { label: "Roles & Permissions", to: "/org-admin/roles", icon: ShieldCheck },
       { label: "Subscription", to: "/org-admin/subscription", icon: CreditCard },
+      { label: "Service Tariff", to: "/org-admin/service-tariff", icon: Landmark },
+      { label: "Consent Wording", to: "/org-admin/consent-wording", icon: FileText },
     ],
   },
   {
     label: "Governance",
     items: [
       { label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 },
+      { label: "Data Protection", to: "/org-admin/data-protection", icon: ClipboardCheck },
+      { label: "Breach Incidents", to: "/org-admin/breach-incidents", icon: ShieldAlert },
+      { label: "Support Access", to: "/org-admin/support-access", icon: KeyRound },
       { label: "Data Retention & Archive", to: "/org-admin/data-retention", icon: Archive },
     ],
   },
 ];
 
-// Rebuilt against the second (2026-09) clinical-workspace mockup. See
-// /home/nick/.claude/plans/drifting-baking-falcon.md for the full mapping
-// table and rationale for every relocation/placeholder/deletion below —
-// this nav is not a 1:1 mirror of that mockup's raw nav-item list: Lab and
-// Pharmacy stay live/reachable (deviating from the mockup's disabled
-// placement) because they already work against the real backend, and MHP
-// Team is deleted entirely (matching the mockup, which has no nav slot for
-// it at all). Items marked `soon` are the mockup's genuinely disabled
-// leaves (Physical Exercise, Bills and Claims, Centre Operations); every
-// other new leaf below is enabled and either reuses an existing real
-// screen or renders <ModulePlaceholder> honestly — see each page's own
-// comment for which case it is.
+// docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — the approved 2026-10-07 mockup
+// (mockups/citramac_clinical_workspace.html), item for item and in order:
+// no section headings, Clinical and Psychotherapy open by default. The
+// screens the mockup has no slot for stay available under a collapsed
+// "Other clinical modules" group (owner's decision: they remain).
 export const CLINICAL_NAV: NavGroup[] = [
   {
-    label: "Workspace",
+    label: "",
     items: [
       { label: "Dashboard", to: "/clinical", icon: LayoutDashboard },
+      { label: "My Caseload", to: "/clinical/caseload", icon: Users },
       { label: "Appointments", to: "/clinical/appointments", icon: CalendarClock },
-    ],
-  },
-  {
-    label: "Clinical",
-    items: [
-      { label: "Client Registry", to: "/clinical/registry", icon: FileText },
-      { label: "Admission", to: "/clinical/ipd", icon: Building2 },
-      { label: "Client History", to: "/clinical/client-history", icon: ClipboardList },
       {
-        label: "Assessments",
-        icon: ClipboardCheck,
-        children: [
-          { label: "CORI", to: "/clinical/assessments/cori", icon: ClipboardCheck },
-          { label: "CRI", to: "/clinical/assessments/cri", icon: ClipboardCheck },
-          {
-            label: "Attached Assessments",
-            to: "/clinical/assessments/attached",
-            icon: Paperclip,
-          },
-          { label: "Others", to: "/clinical/assessments/others", icon: ClipboardCheck },
-        ],
-      },
-      {
-        label: "Psychiatry",
+        label: "Clinical",
         icon: Stethoscope,
+        defaultOpen: true,
         children: [
-          { label: "Initial Consultation", to: "/clinical/encounter", icon: FileText },
-          { label: "Psychiatric Review", to: "/clinical/encounter", icon: FileText },
-          { label: "MSE", to: "/clinical/triage", icon: Activity },
+          { label: "Registration", to: "/clinical/registration", icon: FileText },
+          { label: "Triage", to: "/clinical/triage", icon: Activity, matchPrefix: true },
           {
-            label: "Risk Assessment",
-            to: "/clinical/psychiatry/risk-assessment",
-            icon: AlertTriangle,
+            label: "Psychiatric",
+            to: "/clinical/psychiatry",
+            icon: Stethoscope,
+            alsoActiveFor: ["/clinical/clients"],
           },
-          { label: "Diagnosis", to: "/clinical/patient", icon: Stethoscope },
-          { label: "Medication Order(s)", to: "/clinical/pharmacy", icon: Pill },
-          { label: "Allergies", to: "/clinical/psychiatry/allergies", icon: Syringe },
-        ],
-      },
-      {
-        label: "Psychiatric Nursing",
-        icon: HeartPulse,
-        children: [
-          { label: "Clinical Review", to: "/clinical/review", icon: Stethoscope },
           {
-            label: "Medication Administration Record",
-            to: "/clinical/ipd/nursing",
-            icon: Pill,
-          },
-          { label: "General Observations", to: "/clinical/triage", icon: Activity },
-          { label: "MSE", to: "/clinical/triage", icon: Activity },
-          {
-            label: "Telephone and PRN Orders",
-            to: "/clinical/nursing/prn-orders",
-            icon: Phone,
+            label: "Inpatient",
+            to: "/clinical/inpatient",
+            icon: Building2,
+            matchPrefix: true,
           },
         ],
       },
       {
         label: "Psychotherapy",
-        icon: User,
+        icon: HeartPulse,
+        defaultOpen: true,
         children: [
-          { label: "Individual Psychotherapy", to: "/clinical/mhp/individual", icon: User },
-          { label: "Group Psychotherapy", to: "/clinical/mhp/group", icon: UsersRound },
-          { label: "Family Therapy", to: "/clinical/mhp/family", icon: Users },
           {
-            label: "Morning Meeting Observations",
-            to: "/clinical/psychotherapy/morning-meeting",
-            icon: ClipboardList,
+            label: "Individual Psychotherapy",
+            to: "/clinical/psychotherapy/individual",
+            icon: User,
           },
+          { label: "Family Psychotherapy", to: "/clinical/psychotherapy/family", icon: Users },
           {
-            label: "General Observations",
-            to: "/clinical/psychotherapy/general-observations",
-            icon: ClipboardList,
+            label: "Group Psychotherapy",
+            to: "/clinical/psychotherapy/group",
+            icon: UsersRound,
           },
         ],
       },
+      { label: "Documents", to: "/clinical/documents", icon: FileText, matchPrefix: true },
+      { label: "Billing", to: "/clinical/billing", icon: CreditCard },
+      { label: "Reports", to: "/clinical/reports", icon: FileBarChart },
       {
-        label: "Physical Exercise",
-        to: "/clinical/soon/physical-exercise",
-        icon: Dumbbell,
-        soon: true,
-      },
-      {
-        label: "Supervision",
-        icon: ShieldCheck,
+        label: "Other clinical modules",
+        icon: ClipboardList,
         children: [
+          { label: "Client Registry", to: "/clinical/registry", icon: FileText },
+          { label: "Client History", to: "/clinical/client-history", icon: ClipboardList },
+          { label: "Clinical Encounter (SOAP)", to: "/clinical/encounter", icon: Stethoscope },
+          { label: "Triage & MSE", to: "/clinical/triage-mse", icon: Activity },
+          { label: "Clinical Review", to: "/clinical/review", icon: ShieldCheck },
+          { label: "Admissions & Ward Workflow", to: "/clinical/ipd", icon: Building2 },
+          { label: "Nursing Care & MAR", to: "/clinical/ipd/nursing", icon: HeartPulse },
+          { label: "Laboratory (LIMS)", to: "/clinical/lims", icon: FlaskConical },
+          { label: "Pharmacy", to: "/clinical/pharmacy", icon: Pill },
+          { label: "Individual Sessions", to: "/clinical/mhp/individual", icon: User },
+          { label: "Family Sessions", to: "/clinical/mhp/family", icon: Users },
+          { label: "Group Sessions", to: "/clinical/mhp/group", icon: UsersRound },
           { label: "Supervision Requests", to: "/clinical/mhp/supervision", icon: ShieldCheck },
-          {
-            label: "Supervision Sessions",
-            to: "/clinical/supervision/sessions",
-            icon: ShieldCheck,
-          },
+          { label: "Attachments", to: "/clinical/attachments", icon: Paperclip },
+          { label: "NACADA Report", to: "/clinical/mhp/nacada", icon: FileBarChart },
         ],
-      },
-      { label: "Attachments", to: "/clinical/attachments", icon: Paperclip },
-      {
-        label: "Discharge",
-        icon: LogOut,
-        children: [
-          {
-            label: "Longitudinal View of all Care to date",
-            to: "/clinical/discharge/longitudinal-view",
-            icon: FileClock,
-          },
-          {
-            label: "Discharge Summary",
-            to: "/clinical/discharge/summary",
-            icon: FileText,
-          },
-          {
-            label: "Generate Medical Report",
-            to: "/clinical/discharge/medical-report",
-            icon: FileBarChart,
-          },
-        ],
-      },
-      { label: "Follow-up and After-care", to: "/clinical/followup", icon: LifeBuoy },
-      {
-        label: "Clinical Reports",
-        icon: FileBarChart,
-        children: [
-          { label: "NACADA", to: "/clinical/mhp/nacada", icon: FileBarChart },
-          { label: "MOH", to: "/clinical/reports/moh", icon: FileBarChart },
-          { label: "MOH - Discharge", to: "/clinical/reports/moh-discharge", icon: FileBarChart },
-          { label: "Others", to: "/clinical/reports/others", icon: FileBarChart },
-        ],
-      },
-      // Kept live and reachable per the plan's decision 1 — deviates from
-      // the mockup, which buries these (disabled) under Centre Operations.
-      { label: "Laboratory (LIMS)", to: "/clinical/lims", icon: FlaskConical },
-      { label: "Pharmacy", to: "/clinical/pharmacy", icon: Pill },
-    ],
-  },
-  {
-    label: "Coming Soon",
-    items: [
-      { label: "Bills and Claims", to: "/clinical/soon/billing", icon: CreditCard, soon: true },
-      {
-        label: "Centre Operations",
-        to: "/clinical/soon/centre-ops",
-        icon: Building2,
-        soon: true,
       },
     ],
   },

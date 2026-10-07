@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Check, Loader2 } from "lucide-react";
+import { getPublicDpo } from "../../lib/complianceApi";
 import { EyeIcon, EyeOffIcon, ShieldIcon } from "./icons";
 
 /** Shared card/form chrome for every auth-flow screen — design tokens per docs/03-DESIGN-SYSTEM.md. */
@@ -191,5 +192,34 @@ export function AuthButton({
         {successLabel}
       </span>
     </button>
+  );
+}
+
+/**
+ * The platform Data Protection Officer's public contact (CAFRIC legal
+ * opinion §5), loaded without a login. Shows only the parts that are set and
+ * renders nothing when none are, or when the lookup fails.
+ */
+export function PublicDpoContact({ className = "" }: { className?: string }) {
+  const [parts, setParts] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getPublicDpo()
+      .then((dpo) => {
+        if (cancelled) return;
+        setParts([dpo.dpo_name, dpo.dpo_email, dpo.dpo_phone].map((p) => p.trim()).filter(Boolean));
+      })
+      .catch(() => {
+        // Non-essential on the login screen — omit the line rather than block sign-in.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (parts.length === 0) return null;
+  return (
+    <p className={`text-center text-[11px] text-ink-500 ${className}`}>
+      Data Protection Officer: {parts.join(" · ")}
+    </p>
   );
 }

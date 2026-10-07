@@ -124,6 +124,8 @@ class BiopsychosocialAssessmentRestrictedSerializer(serializers.ModelSerializer)
 
 
 class PsychotherapySessionSerializer(serializers.ModelSerializer):
+    therapist_name = serializers.SerializerMethodField()
+
     class Meta:
         model = PsychotherapySession
         fields = [
@@ -131,6 +133,7 @@ class PsychotherapySessionSerializer(serializers.ModelSerializer):
             "patient",
             "session_type",
             "therapist",
+            "therapist_name",
             "session_date",
             "duration_minutes",
             "modality",
@@ -141,6 +144,12 @@ class PsychotherapySessionSerializer(serializers.ModelSerializer):
             "extra",
         ]
         read_only_fields = ["therapist"]
+
+    def get_therapist_name(self, obj):
+        user = obj.therapist
+        if not user:
+            return ""
+        return f"{user.first_name} {user.last_name}".strip() or user.email
 
 
 class PsychotherapySessionRestrictedSerializer(serializers.ModelSerializer):

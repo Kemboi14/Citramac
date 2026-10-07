@@ -18,6 +18,9 @@ class VitalSigns(TenantScopedModel):
     respiratory_rate = models.PositiveSmallIntegerField(null=True, blank=True)
     temperature_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     spo2 = models.PositiveSmallIntegerField(null=True, blank=True)
+    blood_glucose_mmol = models.DecimalField(
+        "Blood glucose (mmol/L)", max_digits=4, decimal_places=1, null=True, blank=True
+    )
 
     height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
     weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)

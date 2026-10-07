@@ -7,6 +7,28 @@ export interface Paginated<T> {
   results: T[];
 }
 
+// The API pages at 25 rows (DRF PageNumberPagination). Screens that need the
+// whole set — every bed, every current admission — walk the pages.
+async function fetchAllPages<T>(accessToken: string, path: string): Promise<T[]> {
+  const separator = path.includes("?") ? "&" : "?";
+  const rows: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const data = await apiRequest<Paginated<T>>(`${path}${separator}page=${page}`, {
+      accessToken,
+    });
+    rows.push(...data.results);
+    if (data.results.length === 0 || rows.length >= data.count) return rows;
+  }
+}
+
+export function listAllWards(accessToken: string) {
+  return fetchAllPages<Ward>(accessToken, "/ipd/wards/");
+}
+
+export function listAllBeds(accessToken: string, wardId?: string) {
+  return fetchAllPages<Bed>(accessToken, `/ipd/beds/${wardId ? `?ward=${wardId}` : ""}`);
+}
+
 export interface Ward {
   id: string;
   name: string;
@@ -71,6 +93,8 @@ export type ObservationLevel = "ROUTINE" | "ENHANCED" | "CLOSE" | "CONTINUOUS";
 export type ConsentStatus = "" | "PENDING" | "OBTAINED" | "DECLINED";
 export type NokNotification = "NOT_NOTIFIED" | "NOTIFIED" | "NOT_APPLICABLE" | "UNABLE_TO_REACH";
 
+export type ClinicalPriority = "" | "RED" | "ORANGE" | "YELLOW" | "GREEN";
+
 export interface Admission {
   id: string;
   patient: string;
@@ -114,17 +138,33 @@ export interface Admission {
   next_of_kin_notification: NokNotification;
   next_of_kin_notes: string;
   handover_note: string;
+  /** Triage-scale priority recorded on admission (docs/15 §1.10); "" when not set. */
+  clinical_priority: ClinicalPriority;
+  /** EpisodeOfCare the admission sits inside — set by the server. */
+  episode: string | null;
+  consultant_name: string;
+  patient_citramac_number: string;
 }
 
 export function listAdmissions(
   accessToken: string,
-  params?: { admissionType?: AdmissionType; patient?: string },
+  params?: { admissionType?: AdmissionType; patient?: string; status?: string },
 ) {
   const query = new URLSearchParams();
   if (params?.admissionType) query.set("admission_type", params.admissionType);
   if (params?.patient) query.set("patient", params.patient);
+  if (params?.status) query.set("status", params.status);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiRequest<Paginated<Admission>>(`/ipd/admissions/${suffix}`, { accessToken });
+}
+
+/** Every admission currently holding a bed (status ADMITTED or TRANSFERRED). */
+export async function listCurrentAdmissions(accessToken: string) {
+  const [admitted, transferred] = await Promise.all([
+    fetchAllPages<Admission>(accessToken, "/ipd/admissions/?status=ADMITTED"),
+    fetchAllPages<Admission>(accessToken, "/ipd/admissions/?status=TRANSFERRED"),
+  ]);
+  return [...admitted, ...transferred].sort((a, b) => b.admitted_at.localeCompare(a.admitted_at));
 }
 
 export function admitPatient(
@@ -138,18 +178,38 @@ export function admitPatient(
   });
 }
 
+/** PATCH an admission — e.g. the legal / consent fields from the Client Record. */
+export function updateAdmission(
+  accessToken: string,
+  admissionId: string,
+  payload: Partial<Admission>,
+) {
+  return apiRequest<Admission>(`/ipd/admissions/${admissionId}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
 export interface EligiblePatient {
   id: string;
   first_name: string;
   last_name: string;
+  middle_other_names?: string;
   uhid_number: string;
+  citramac_number?: string;
   gender: string;
   date_of_birth: string;
   age: number;
 }
 
-export function listEligibleAdmissionPatients(accessToken: string) {
-  return apiRequest<EligiblePatient[]>("/ipd/admissions/eligible-patients/", { accessToken });
+/** `all: true` lists every registered, non-admitted client (the v3 admission form,
+ * docs/15 §1.10); without it, only Inpatient-category clients. */
+export function listEligibleAdmissionPatients(accessToken: string, options?: { all?: boolean }) {
+  return apiRequest<EligiblePatient[]>(
+    `/ipd/admissions/eligible-patients/${options?.all ? "?all=true" : ""}`,
+    { accessToken },
+  );
 }
 
 export function getAdmissionFhirBundle(accessToken: string, admissionId: string) {
@@ -223,6 +283,8 @@ export interface NursingNote {
   id: string;
   admission: string;
   author: string | null;
+  /** Author's display name; "" when not recorded. */
+  author_name: string;
   shift: "DAY" | "NIGHT";
   note: string;
   recorded_at: string;

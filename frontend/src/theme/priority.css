@@ -1,0 +1,43 @@
+/*
+ * Triage priority colours — docs/15-CLINICAL-WORKSPACE-V3.md (mockup --emergency,
+ * --urgent, --triage-yellow, --routine). Clinical-safety semantics: deliberately
+ * outside the organisation theme editor so a tenant palette can't restyle RED.
+ */
+:root {
+  --pri-red: #b42318;
+  --pri-red-tint: #fde8e6;
+  --pri-red-solid: #c8281e;
+  --pri-orange: #b54708;
+  --pri-orange-tint: #fff0e5;
+  --pri-orange-solid: #d9570f;
+  --pri-yellow: #8a6100;
+  --pri-yellow-tint: #fff6cc;
+  --pri-yellow-solid: #a15c00;
+  --pri-green: #18794e;
+  --pri-green-tint: #e8f5ed;
+  --pri-green-solid: #127a4b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pri-red: #f07169;
+    --pri-red-tint: #3c2422;
+    --pri-orange: #f0a257;
+    --pri-orange-tint: #3d3022;
+    --pri-yellow: #dfc267;
+    --pri-yellow-tint: #39341f;
+    --pri-green: #67c990;
+    --pri-green-tint: #1b3829;
+  }
+}
+
+:root[data-theme="dark"] {
+  --pri-red: #f07169;
+  --pri-red-tint: #3c2422;
+  --pri-orange: #f0a257;
+  --pri-orange-tint: #3d3022;
+  --pri-yellow: #dfc267;
+  --pri-yellow-tint: #39341f;
+  --pri-green: #67c990;
+  --pri-green-tint: #1b3829;
+}

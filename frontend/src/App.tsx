@@ -31,10 +31,82 @@ const NotificationsPage = lazyNamed(
   "NotificationsPage",
 );
 
-const ClinicalDashboardPage = lazyNamed(
-  () => import("./modules/clinical/ClinicalDashboardPage"),
-  "ClinicalDashboardPage",
+// docs/15-CLINICAL-WORKSPACE-V3.md — the approved 2026-10-07 clinical workspace.
+const DashboardPage = lazyNamed(() => import("./modules/care/DashboardPage"), "DashboardPage");
+const RegistrationPage = lazyNamed(
+  () => import("./modules/care/RegistrationPage"),
+  "RegistrationPage",
 );
+const TriageWorklistPage = lazyNamed(
+  () => import("./modules/care/TriageWorklistPage"),
+  "TriageWorklistPage",
+);
+const TriageEncounterPage = lazyNamed(
+  () => import("./modules/care/TriageEncounterPage"),
+  "TriageEncounterPage",
+);
+const PsychiatryQueuePage = lazyNamed(
+  () => import("./modules/care/PsychiatryQueuePage"),
+  "PsychiatryQueuePage",
+);
+const ClientRecordPage = lazyNamed(
+  () => import("./modules/care/ClientRecordPage"),
+  "ClientRecordPage",
+);
+const InpatientAdmissionsPage = lazyNamed(
+  () => import("./modules/care/InpatientAdmissionsPage"),
+  "InpatientAdmissionsPage",
+);
+const WardBoardPage = lazyNamed(() => import("./modules/care/WardBoardPage"), "WardBoardPage");
+const OutpatientCarePage = lazyNamed(
+  () => import("./modules/care/OutpatientCarePage"),
+  "OutpatientCarePage",
+);
+const DocumentsPage = lazyNamed(() => import("./modules/care/DocumentsPage"), "DocumentsPage");
+const SignedTriageDocumentPage = lazyNamed(
+  () => import("./modules/care/SignedTriageDocumentPage"),
+  "SignedTriageDocumentPage",
+);
+const BillingPage = lazyNamed(() => import("./modules/care/BillingPage"), "BillingPage");
+const ReportsPage = lazyNamed(() => import("./modules/care/ReportsPage"), "ReportsPage");
+// docs/16-DATA-PROTECTION-COMPLIANCE.md — legal opinion of 2 October 2026.
+const BreachIncidentsPage = lazyNamed(
+  () => import("./modules/org-admin/BreachIncidentsPage"),
+  "BreachIncidentsPage",
+);
+const SupportAccessPage = lazyNamed(
+  () => import("./modules/org-admin/SupportAccessPage"),
+  "SupportAccessPage",
+);
+const DataProtectionPage = lazyNamed(
+  () => import("./modules/org-admin/DataProtectionPage"),
+  "DataProtectionPage",
+);
+const PlatformBreachIncidentsPage = lazyNamed(
+  () => import("./modules/super-admin/BreachIncidentsPage"),
+  "PlatformBreachIncidentsPage",
+);
+const PlatformSupportAccessPage = lazyNamed(
+  () => import("./modules/super-admin/SupportAccessPage"),
+  "PlatformSupportAccessPage",
+);
+const TenantCompliancePage = lazyNamed(
+  () => import("./modules/super-admin/TenantCompliancePage"),
+  "TenantCompliancePage",
+);
+const PlatformCompliancePage = lazyNamed(
+  () => import("./modules/super-admin/PlatformCompliancePage"),
+  "PlatformCompliancePage",
+);
+const ConsentWordingPage = lazyNamed(
+  () => import("./modules/org-admin/ConsentWordingPage"),
+  "ConsentWordingPage",
+);
+const ServiceTariffPage = lazyNamed(
+  () => import("./modules/org-admin/ServiceTariffPage"),
+  "ServiceTariffPage",
+);
+const CaseloadPage = lazyNamed(() => import("./modules/clinical/CaseloadPage"), "CaseloadPage");
 const ClientRegistryPage = lazyNamed(
   () => import("./modules/clinical/ClientRegistryPage"),
   "ClientRegistryPage",
@@ -216,6 +288,10 @@ function App() {
             <Route path="tenant-security" element={<TenantSecurityPage />} />
             <Route path="security-audit-logs" element={<SecurityAuditLogsPage />} />
             <Route path="security-alerts" element={<SecurityAlertsPage />} />
+            <Route path="breach-incidents" element={<PlatformBreachIncidentsPage />} />
+            <Route path="support-access" element={<PlatformSupportAccessPage />} />
+            <Route path="tenant-compliance" element={<TenantCompliancePage />} />
+            <Route path="platform-compliance" element={<PlatformCompliancePage />} />
             <Route path="profile" element={<MyProfilePage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
@@ -233,6 +309,11 @@ function App() {
             <Route path="data-requests" element={<ErasureRequestsPage />} />
             <Route path="data-retention" element={<DataRetentionPage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
+            <Route path="service-tariff" element={<ServiceTariffPage />} />
+            <Route path="consent-wording" element={<ConsentWordingPage />} />
+            <Route path="breach-incidents" element={<BreachIncidentsPage />} />
+            <Route path="support-access" element={<SupportAccessPage />} />
+            <Route path="data-protection" element={<DataProtectionPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
         </Route>
@@ -240,14 +321,39 @@ function App() {
         {/* Everyone else authenticated (Doctor, Nurse, Therapist, etc.) — the frontline Clinical Workspace. */}
         <Route element={<ProtectedRoute />}>
           <Route path="/clinical" element={<ClinicalWorkspaceShell />}>
-            <Route index element={<ClinicalDashboardPage />} />
+            <Route index element={<DashboardPage />} />
+            <Route path="caseload" element={<CaseloadPage />} />
+            <Route path="registration" element={<RegistrationPage />} />
+            <Route path="triage" element={<TriageWorklistPage />} />
+            <Route path="triage/:triageId" element={<TriageEncounterPage />} />
+            <Route path="psychiatry" element={<PsychiatryQueuePage />} />
+            <Route path="clients/:patientId" element={<Navigate to="intake" replace />} />
+            <Route path="clients/:patientId/:view" element={<ClientRecordPage />} />
+            <Route path="inpatient" element={<InpatientAdmissionsPage />} />
+            <Route path="inpatient/ward" element={<WardBoardPage />} />
+            <Route
+              path="psychotherapy/individual"
+              element={<OutpatientCarePage key="individual" kind="individual" />}
+            />
+            <Route
+              path="psychotherapy/family"
+              element={<OutpatientCarePage key="family" kind="family" />}
+            />
+            <Route
+              path="psychotherapy/group"
+              element={<OutpatientCarePage key="group" kind="group" />}
+            />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="documents/:assessmentId" element={<SignedTriageDocumentPage />} />
+            <Route path="billing" element={<BillingPage />} />
+            <Route path="reports" element={<ReportsPage />} />
             <Route path="registry" element={<ClientRegistryPage />} />
             <Route path="patient" element={<PatientWorkspacePage />} />
             <Route path="attachments" element={<AttachmentsPage />} />
             <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="client-history" element={<ClientHistoryPage />} />
             <Route path="ipd/nursing" element={<NursingCarePage />} />
-            <Route path="triage" element={<TriageMsePage />} />
+            <Route path="triage-mse" element={<TriageMsePage />} />
             <Route path="review" element={<ClinicalReviewPage />} />
             <Route path="encounter" element={<ClinicalEncounterPage />} />
             <Route path="lims" element={<LimsPage />} />

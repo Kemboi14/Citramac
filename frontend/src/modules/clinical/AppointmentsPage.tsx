@@ -1,394 +1,430 @@
-import { useEffect, useState } from "react";
-import { CalendarClock, Mail } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
-import { usePatientContext } from "../../clinical/usePatientContext";
+import { MetricTile } from "../../components/MetricTile";
 import { ApiError } from "../../lib/apiClient";
-import { SaveButton } from "../../components/SaveButton";
-import { WeekCalendar } from "../../components/WeekCalendar";
 import {
   createAppointment,
   listAppointments,
   updateAppointment,
   type Appointment,
-  type AppointmentMode,
   type AppointmentStatus,
 } from "../../lib/appointmentsApi";
+import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
+import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
 
-const FIELD_CLASS =
-  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
-const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
+// Appointment types exactly as the approved mockup lists them
+// (docs/15-CLINICAL-WORKSPACE-V3.md §1.13). Stored as Appointment.appointment_type text, as
+// before. Administrative, not a clinical code; moves to a served ValueSet with the rest (doc C2).
+const APPOINTMENT_TYPES = [
+  "Psychiatry review",
+  "Individual psychotherapy",
+  "Family psychotherapy",
+  "Group psychotherapy",
+  "Medication review",
+  "Outpatient follow-up",
+];
 
-const FILTERS = ["Today", "Upcoming", "Past", "Cancelled", "All"] as const;
-type Filter = (typeof FILTERS)[number];
-type ViewMode = "Week" | "Agenda";
+const STATUS_LABEL: Record<AppointmentStatus, string> = {
+  SCHEDULED: "Confirmed",
+  CHECKED_IN: "Checked in",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  NO_SHOW: "No show",
+};
 
 const STATUS_TINT: Record<AppointmentStatus, string> = {
-  SCHEDULED: "bg-status-amber-tint text-status-amber",
+  SCHEDULED: "bg-brand-green-tint text-brand-green",
   CHECKED_IN: "bg-brand-green-tint text-brand-green-dark",
-  COMPLETED: "bg-brand-green-tint text-brand-green-dark",
+  COMPLETED: "bg-surface-bg text-ink-700",
   CANCELLED: "bg-status-red-tint text-status-red",
   NO_SHOW: "bg-status-red-tint text-status-red",
 };
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+const FIELD_CLASS =
+  "w-full rounded-lg border border-surface-border bg-surface-bg px-2.5 py-2 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card";
+const LABEL_CLASS =
+  "flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500";
+const TH =
+  "border-b border-surface-border bg-surface-bg px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500";
+const TD = "border-b border-surface-border px-3.5 py-2.5 align-top text-[13px] text-ink-900";
+const CARD = "rounded-lg border border-surface-border bg-surface-card shadow-sm";
+const CARD_HEADER =
+  "border-b border-surface-border px-[18px] py-3.5 text-[13px] font-bold text-ink-900";
+const GHOST_SM =
+  "rounded-[9px] border border-surface-border bg-surface-card px-2.5 py-1 text-[11px] font-semibold transition-colors duration-150 hover:bg-surface-bg";
+
+function localDateIso(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function startOfWeek(date: Date) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  d.setHours(0, 0, 0, 0);
-  return d;
+function fullName(row: { first_name: string; last_name: string; email?: string }) {
+  return `${row.first_name} ${row.last_name}`.trim() || row.email || "Unnamed";
 }
 
 /**
- * Appointments Calendar — rebuilt against the second (2026-09) clinical-
- * workspace mockup: a real week-grid is now the default view
- * (`WeekCalendar.tsx`); the original filtered flat list isn't deleted, it
- * becomes the "Agenda" toggle mode, which several clinicians may still
- * prefer for scanning a long list quickly.
+ * Appointments — docs/15-CLINICAL-WORKSPACE-V3.md §1.13. Lists today onward.
  *
- * Every SCHEDULED appointment with a patient contact email gets a real
- * reminder email (apps.client_registry.tasks.send_appointment_reminders,
- * a Celery beat job every 15 minutes) once it falls inside
- * APPOINTMENT_REMINDER_HOURS_BEFORE (24h by default) of its time — the
- * detail sidebar's "Reminder sent/pending" pill reflects the backend's
- * own `reminder_sent_at` field, it isn't a frontend-only indicator.
+ * Two deliberate departures from the mockup, both to keep real data honest:
+ * - Client is a registry search, not a drop-down of every client. The registry is paginated
+ *   and can hold thousands of records.
+ * - Provider is picked from the care-team roster, because Appointment.provider is a user
+ *   account, not a typed name.
+ *
+ * Check in and Cancel stay as row actions. They were live on the previous screen, and
+ * removing them would take away a working step.
  */
 export function AppointmentsPage() {
   const { accessToken } = useAuth();
-  const { selected } = usePatientContext();
+  const navigate = useNavigate();
+  const today = localDateIso(new Date());
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [view, setView] = useState<ViewMode>("Week");
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const [filter, setFilter] = useState<Filter>("Upcoming");
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [roster, setRoster] = useState<MhpTeamRosterRow[]>([]);
 
-  const [scheduledFor, setScheduledFor] = useState("");
-  const [duration, setDuration] = useState(30);
-  const [location, setLocation] = useState("");
-  const [mode, setMode] = useState<AppointmentMode>("IN_PERSON");
+  const [clientQuery, setClientQuery] = useState("");
+  const [clientResults, setClientResults] = useState<PatientListRow[]>([]);
+  const [client, setClient] = useState<PatientListRow | null>(null);
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState("");
   const [appointmentType, setAppointmentType] = useState("");
+  const [provider, setProvider] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const refresh = () => {
     if (!accessToken) return;
-    listAppointments(accessToken)
-      .then((data) => setAppointments(data.results))
-      .catch(() => setError("Couldn't load appointments."));
+    listAppointments(accessToken, { from: today })
+      .then((data) => {
+        setAppointments(data.results);
+        setLoadError(null);
+      })
+      .catch((err) =>
+        setLoadError(err instanceof ApiError ? err.message : "Couldn't load appointments."),
+      )
+      .finally(() => setIsLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` only depends on accessToken/today.
   useEffect(refresh, [accessToken]);
 
-  const book = async () => {
-    if (!accessToken || !selected || !scheduledFor) return;
-    setError(null);
-    try {
-      await createAppointment(accessToken, {
-        patient: selected.patientId,
-        scheduled_for: new Date(scheduledFor).toISOString(),
-        duration_minutes: duration,
-        location,
-        mode,
-        appointment_type: appointmentType,
-      });
-      setScheduledFor("");
-      setAppointmentType("");
-      setLocation("");
-      refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't book the appointment.");
-      throw err;
-    }
-  };
+  useEffect(() => {
+    if (!accessToken) return;
+    getMhpTeamRoster(accessToken)
+      .then(setRoster)
+      .catch(() => setRoster([]));
+  }, [accessToken]);
+
+  useEffect(() => {
+    const query = clientQuery.trim();
+    if (!accessToken || client || query.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      listPatients(accessToken, { q: query })
+        .then((data) => !cancelled && setClientResults(data.results.slice(0, 6)))
+        .catch(() => !cancelled && setClientResults([]));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [accessToken, clientQuery, client]);
+
+  // Stale results are hidden rather than cleared in the effect above.
+  const shownClientResults = client || clientQuery.trim().length < 2 ? [] : clientResults;
+
+  const sorted = [...appointments].sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for));
+  const scheduled = sorted.filter((a) => a.status !== "CANCELLED");
+  const todayCount = scheduled.filter(
+    (a) => localDateIso(new Date(a.scheduled_for)) === today,
+  ).length;
+  const clientsScheduled = new Set(scheduled.map((a) => a.patient)).size;
+
+  const query = search.trim().toLowerCase();
+  const visible = sorted.filter(
+    (a) =>
+      !query ||
+      [a.patient_name, a.appointment_type, a.provider_name, STATUS_LABEL[a.status]]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+  );
 
   const setStatus = async (appointment: Appointment, status: AppointmentStatus) => {
     if (!accessToken) return;
-    await updateAppointment(accessToken, appointment.id, { status });
-    setSelectedAppointment((prev) => (prev?.id === appointment.id ? { ...prev, status } : prev));
-    refresh();
+    try {
+      await updateAppointment(accessToken, appointment.id, { status });
+      refresh();
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : "Couldn't update the appointment.");
+    }
   };
 
-  const today = todayIso();
-  const filtered = appointments.filter((appointment) => {
-    const date = appointment.scheduled_for.slice(0, 10);
-    if (filter === "Today") return date === today;
-    if (filter === "Upcoming") return date >= today && appointment.status !== "CANCELLED";
-    if (filter === "Past") return date < today;
-    if (filter === "Cancelled") return appointment.status === "CANCELLED";
-    return true;
-  });
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!accessToken) return;
+    if (!client) {
+      setFormError("Select a client from the search results.");
+      return;
+    }
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      await createAppointment(accessToken, {
+        patient: client.id,
+        scheduled_for: new Date(`${date}T${time}`).toISOString(),
+        appointment_type: appointmentType,
+        provider: provider || null,
+      });
+      setClient(null);
+      setClientQuery("");
+      setTime("");
+      setAppointmentType("");
+      setProvider("");
+      refresh();
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : "Couldn't add the appointment.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex animate-fade-in flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-            Appointments
-          </div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Appointments Calendar</h1>
+          <h1 className="font-display text-xl font-semibold text-ink-900">Appointments</h1>
+          <p className="mt-0.5 text-[12.5px] text-ink-500">
+            Review upcoming visits and schedule client appointments
+          </p>
         </div>
-        <div className="flex rounded-md border border-surface-border bg-surface-card p-0.5">
-          {(["Week", "Agenda"] as ViewMode[]).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`rounded-sm px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors duration-150 ${
-                view === v ? "bg-brand-green text-on-primary" : "text-ink-700 hover:bg-surface-bg"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/clinical/caseload")}
+          className="rounded-[9px] border border-surface-border bg-surface-card px-4 py-2 text-[13px] font-semibold text-ink-900 transition-colors duration-150 hover:bg-surface-bg"
+        >
+          My Caseload
+        </button>
       </div>
 
-      {selected && (
-        <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
-            Book for {selected.patientName}
-          </h2>
-          <div className="flex flex-wrap items-end gap-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricTile value={scheduled.length} label="Scheduled Appointments" />
+        <MetricTile value={todayCount} label="Today" />
+        <MetricTile value={clientsScheduled} label="Clients Scheduled" />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <section className={CARD}>
+          <div className={CARD_HEADER}>Upcoming Schedule</div>
+          <div className="p-[18px]">
             <label className={LABEL_CLASS}>
-              Date &amp; time
+              Search appointments
               <input
-                type="datetime-local"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search client, type, provider, or status..."
                 className={FIELD_CLASS}
-                value={scheduledFor}
-                onChange={(e) => setScheduledFor(e.target.value)}
               />
             </label>
+          </div>
+          {loadError && (
+            <p className="mx-[18px] mb-4 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {loadError}
+            </p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] border-collapse">
+              <thead>
+                <tr>
+                  <th className={TH}>Date &amp; Time</th>
+                  <th className={TH}>Client</th>
+                  <th className={TH}>Appointment</th>
+                  <th className={TH}>Provider</th>
+                  <th className={TH}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={5} className={`${TD} text-center text-ink-500`}>
+                      Loading…
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && visible.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className={`${TD} py-6 text-center text-ink-500`}>
+                      {sorted.length === 0
+                        ? "No upcoming appointments."
+                        : "No appointments match this search."}
+                    </td>
+                  </tr>
+                )}
+                {visible.map((a) => {
+                  const when = new Date(a.scheduled_for);
+                  return (
+                    <tr key={a.id} className="hover:bg-surface-bg">
+                      <td className={TD}>
+                        <strong>{when.toLocaleDateString()}</strong>
+                        <br />
+                        <span className="text-[11px] text-ink-500">
+                          {when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </td>
+                      <td className={TD}>{a.patient_name}</td>
+                      <td className={TD}>{a.appointment_type || "Appointment"}</td>
+                      <td className={TD}>{a.provider_name || "Not assigned"}</td>
+                      <td className={TD}>
+                        <span
+                          className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium ${STATUS_TINT[a.status]}`}
+                        >
+                          {STATUS_LABEL[a.status]}
+                        </span>
+                        {a.status === "SCHEDULED" && (
+                          <div className="mt-1.5 flex gap-1">
+                            <button
+                              type="button"
+                              className={`${GHOST_SM} text-ink-900`}
+                              onClick={() => setStatus(a, "CHECKED_IN")}
+                            >
+                              Check in
+                            </button>
+                            <button
+                              type="button"
+                              className={`${GHOST_SM} text-status-red`}
+                              onClick={() => setStatus(a, "CANCELLED")}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className={CARD}>
+          <div className={CARD_HEADER}>Schedule an Appointment</div>
+          <form onSubmit={submit} className="flex flex-col gap-3 p-[18px]">
+            <div className="relative">
+              <label className={LABEL_CLASS}>
+                Client
+                <input
+                  type="search"
+                  value={
+                    client
+                      ? `${fullName(client)} · ${client.citramac_number || client.uhid_number}`
+                      : clientQuery
+                  }
+                  onChange={(e) => {
+                    setClient(null);
+                    setClientQuery(e.target.value);
+                  }}
+                  placeholder="Search by name, UHID or CITRAMAC ID"
+                  autoComplete="off"
+                  required
+                  className={FIELD_CLASS}
+                />
+              </label>
+              {shownClientResults.length > 0 && (
+                <div className="absolute left-0 right-0 z-10 mt-1 overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-md">
+                  {shownClientResults.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => {
+                        setClient(row);
+                        setClientResults([]);
+                      }}
+                      className="block w-full border-b border-surface-border px-3 py-2 text-left text-[12.5px] text-ink-900 last:border-b-0 hover:bg-surface-bg"
+                    >
+                      <strong>{fullName(row)}</strong>
+                      <span className="ml-2 text-[11px] text-ink-500">
+                        {row.citramac_number || row.uhid_number}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className={LABEL_CLASS}>
+                Date
+                <input
+                  type="date"
+                  min={today}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className={FIELD_CLASS}
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Time
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  required
+                  className={FIELD_CLASS}
+                />
+              </label>
+            </div>
             <label className={LABEL_CLASS}>
-              Duration (min)
-              <input
-                type="number"
-                min={5}
-                step={5}
-                className={`${FIELD_CLASS} w-24`}
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-              />
-            </label>
-            <label className={LABEL_CLASS}>
-              Mode
+              Appointment type
               <select
+                value={appointmentType}
+                onChange={(e) => setAppointmentType(e.target.value)}
+                required
                 className={FIELD_CLASS}
-                value={mode}
-                onChange={(e) => setMode(e.target.value as AppointmentMode)}
               >
-                <option value="IN_PERSON">In person</option>
-                <option value="PHONE">Phone</option>
-                <option value="VIDEO">Video</option>
+                <option value="">Select appointment type</option>
+                {APPOINTMENT_TYPES.map((type) => (
+                  <option key={type}>{type}</option>
+                ))}
               </select>
             </label>
             <label className={LABEL_CLASS}>
-              Location
-              <input
+              Provider
+              <select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
                 className={FIELD_CLASS}
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Consultation room 2"
-              />
+              >
+                <option value="">Select clinician or therapist</option>
+                {roster.map((member) => (
+                  <option key={member.user_id} value={member.user_id}>
+                    {fullName(member)}
+                  </option>
+                ))}
+              </select>
             </label>
-            <label className={`${LABEL_CLASS} flex-1 min-w-[200px]`}>
-              Type
-              <input
-                className={FIELD_CLASS}
-                value={appointmentType}
-                onChange={(e) => setAppointmentType(e.target.value)}
-                placeholder="Psychiatric review"
-              />
-            </label>
-            <SaveButton onSave={book} disabled={!scheduledFor}>
-              Book appointment
-            </SaveButton>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
-      )}
-
-      {view === "Week" ? (
-        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-          <div className="min-w-0">
-            <WeekCalendar
-              weekStart={weekStart}
-              onWeekChange={setWeekStart}
-              appointments={appointments}
-              onSelectAppointment={setSelectedAppointment}
-            />
-          </div>
-          <aside className="rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
-            {!selectedAppointment && (
-              <p className="text-[12.5px] text-ink-500">
-                Select an appointment on the grid to view its details.
+            {formError && (
+              <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                {formError}
               </p>
             )}
-            {selectedAppointment && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <div className="font-display text-[14px] font-semibold text-ink-900">
-                    {selectedAppointment.appointment_type || "Appointment"}
-                  </div>
-                  <p className="mt-0.5 text-[12px] text-ink-500">
-                    {selectedAppointment.patient_name}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-md border border-surface-border p-2">
-                    <span className="text-ink-400">Date</span>
-                    <div className="font-semibold text-ink-900">
-                      {new Date(selectedAppointment.scheduled_for).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-surface-border p-2">
-                    <span className="text-ink-400">Time</span>
-                    <div className="font-semibold text-ink-900">
-                      {new Date(selectedAppointment.scheduled_for).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}{" "}
-                      ({selectedAppointment.duration_minutes} min)
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-surface-border p-2">
-                    <span className="text-ink-400">Mode</span>
-                    <div className="font-semibold text-ink-900">
-                      {selectedAppointment.mode.replace("_", " ")}
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-surface-border p-2">
-                    <span className="text-ink-400">Location</span>
-                    <div className="font-semibold text-ink-900">
-                      {selectedAppointment.location || "—"}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold ${STATUS_TINT[selectedAppointment.status]}`}
-                  >
-                    {selectedAppointment.status.replace(/_/g, " ")}
-                  </span>
-                  {selectedAppointment.status === "SCHEDULED" && (
-                    <span
-                      className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                        selectedAppointment.reminder_sent_at
-                          ? "bg-brand-green-tint text-brand-green-dark"
-                          : "bg-surface-bg text-ink-500"
-                      }`}
-                      title={
-                        selectedAppointment.reminder_sent_at
-                          ? `Reminder emailed ${new Date(selectedAppointment.reminder_sent_at).toLocaleString()}`
-                          : "No reminder email sent yet"
-                      }
-                    >
-                      <Mail className="h-3 w-3" />
-                      {selectedAppointment.reminder_sent_at ? "Reminder sent" : "Reminder pending"}
-                    </span>
-                  )}
-                </div>
-                {selectedAppointment.status === "SCHEDULED" && (
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="flex-1 rounded-sm border border-surface-border px-2 py-1.5 text-[11px] font-semibold text-ink-700 hover:bg-brand-green-tint-2"
-                      onClick={() => setStatus(selectedAppointment, "CHECKED_IN")}
-                    >
-                      Check in
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 rounded-sm border border-surface-border px-2 py-1.5 text-[11px] font-semibold text-status-red hover:bg-status-red-tint"
-                      onClick={() => setStatus(selectedAppointment, "CANCELLED")}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </aside>
-        </div>
-      ) : (
-        <>
-          <div className="flex gap-1 border-b border-surface-border">
-            {FILTERS.map((option) => (
+            <div>
               <button
-                key={option}
-                type="button"
-                onClick={() => setFilter(option)}
-                className={`border-b-2 px-3 py-2 text-[11px] font-bold transition-colors duration-150 ${
-                  filter === option
-                    ? "border-brand-green text-brand-green-dark"
-                    : "border-transparent text-ink-500 hover:text-brand-green-dark"
-                }`}
+                type="submit"
+                disabled={isSaving}
+                className="rounded-[9px] bg-brand-green px-4 py-2 text-[13px] font-semibold text-on-primary transition-colors duration-150 hover:bg-brand-green-dark disabled:opacity-60"
               >
-                {option}
+                {isSaving ? "Adding…" : "Add Appointment"}
               </button>
-            ))}
-          </div>
-
-          <div
-            key={filter}
-            className="animate-fade-in rounded-lg border border-surface-border bg-surface-card shadow-sm"
-          >
-            {filtered.length === 0 && (
-              <p className="p-6 text-center text-sm text-ink-500">No appointments in this view.</p>
-            )}
-            {filtered.map((appointment) => (
-              <div
-                key={appointment.id}
-                className="flex items-center gap-3 border-t border-surface-bg p-4 transition-colors duration-150 first:border-t-0 hover:bg-brand-green-tint-2"
-              >
-                <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-brand-green-tint text-brand-green">
-                  <CalendarClock className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-ink-900">
-                    {appointment.patient_name} · {appointment.appointment_type || "Appointment"}
-                  </div>
-                  <p className="mt-0.5 text-xs text-ink-500">
-                    {new Date(appointment.scheduled_for).toLocaleString([], {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}{" "}
-                    ({appointment.duration_minutes} min) ·{" "}
-                    {appointment.location || "No location set"}
-                  </p>
-                </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${STATUS_TINT[appointment.status]}`}
-                >
-                  {appointment.status.replace(/_/g, " ")}
-                </span>
-                {appointment.status === "SCHEDULED" && (
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="rounded-sm border border-surface-border px-2 py-1 text-[11px] font-semibold text-ink-700 hover:bg-brand-green-tint-2"
-                      onClick={() => setStatus(appointment, "CHECKED_IN")}
-                    >
-                      Check in
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-sm border border-surface-border px-2 py-1 text-[11px] font-semibold text-status-red hover:bg-status-red-tint"
-                      onClick={() => setStatus(appointment, "CANCELLED")}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+            </div>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

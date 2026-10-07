@@ -466,3 +466,112 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
             )
         erasure_request = execute_erasure(erasure_request, override_retention_conflict=override)
         return Response(ErasureRequestSerializer(erasure_request).data)
+
+
+class CaseloadView(APIView):
+    """
+    "My Caseload" — docs/15-CLINICAL-WORKSPACE-V3.md §1.12 / mapping M9 (a
+    read view over stored data). A client is on the signed-in user's caseload
+    when the user is their registered doctor, holds a care-team membership for
+    them, or is the consultant on their current admission. Archived clients
+    are left out. `priority` is the latest signed triage priority, or "" when
+    the client has not been triaged.
+    """
+
+    def get(self, request):
+        from apps.clinical_encounter.models import DiagnosisCode
+        from apps.ipd_ward.models import Admission
+        from apps.mhp_program.models import CareTeamMembership
+
+        user = request.user
+        current_admission_statuses = ("ADMITTED", "TRANSFERRED")
+        care_team_patient_ids = CareTeamMembership.objects.filter(user=user).values("patient_id")
+        consultant_patient_ids = Admission.objects.filter(
+            consultant=user, status__in=current_admission_statuses
+        ).values("patient_id")
+        patients = list(
+            Patient.objects.filter(archived_at__isnull=True)
+            .filter(
+                models.Q(doctor=user)
+                | models.Q(id__in=care_team_patient_ids)
+                | models.Q(id__in=consultant_patient_ids)
+            )
+            .distinct()
+            .order_by("last_name", "first_name")
+        )
+        patient_ids = [p.id for p in patients]
+
+        admissions = {}
+        for admission in (
+            Admission.objects.filter(
+                patient_id__in=patient_ids, status__in=current_admission_statuses
+            )
+            .select_related("bed__ward")
+            .order_by("admitted_at")
+        ):
+            admissions[admission.patient_id] = admission
+
+        diagnoses = {}
+        for diagnosis in (
+            DiagnosisCode.objects.filter(encounter__patient_id__in=patient_ids, status="ACTIVE")
+            .select_related("icd11_code", "encounter")
+            .order_by("is_primary", "noted_at")
+        ):
+            # Ordered so the primary, most recent active diagnosis is written last and wins.
+            diagnoses[diagnosis.encounter.patient_id] = diagnosis
+
+        # Latest signed triage priority per client (care_pathway, doc 15 §1.12).
+        from apps.care_pathway.models import TriageEncounter
+
+        priorities = {}
+        for patient_id, priority in (
+            TriageEncounter.objects.filter(patient_id__in=patient_ids, triage_version__gt=0)
+            .order_by("last_triaged_at")
+            .values_list("patient_id", "priority")
+        ):
+            priorities[patient_id] = priority
+
+        next_appointments = {}
+        for appointment in Appointment.objects.filter(
+            patient_id__in=patient_ids,
+            scheduled_for__gte=timezone.now(),
+            status="SCHEDULED",
+        ).order_by("-scheduled_for"):
+            # Descending so the earliest upcoming appointment is written last and wins.
+            next_appointments[appointment.patient_id] = appointment
+
+        rows = []
+        for patient in patients:
+            admission = admissions.get(patient.id)
+            diagnosis = diagnoses.get(patient.id)
+            appointment = next_appointments.get(patient.id)
+            rows.append(
+                {
+                    "id": str(patient.id),
+                    "name": patient.get_full_name(),
+                    "citramac_number": patient.citramac_number,
+                    "uhid_number": patient.uhid_number,
+                    "care_setting": "INPATIENT" if admission else "OUTPATIENT",
+                    "ward": admission.bed.ward.name if admission else None,
+                    "bed": admission.bed.bed_number if admission else None,
+                    "status": admission.get_status_display() if admission else "Active",
+                    "priority": priorities.get(patient.id, ""),
+                    "diagnosis": (
+                        {
+                            "code": diagnosis.icd11_code_id,
+                            "description": diagnosis.icd11_code.description,
+                        }
+                        if diagnosis
+                        else None
+                    ),
+                    "next_appointment": (
+                        {
+                            "scheduled_for": appointment.scheduled_for.isoformat(),
+                            "appointment_type": appointment.appointment_type,
+                        }
+                        if appointment
+                        else None
+                    ),
+                }
+            )
+        return Response({"results": rows})

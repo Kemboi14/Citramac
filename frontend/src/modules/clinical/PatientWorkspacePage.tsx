@@ -400,7 +400,7 @@ export function PatientWorkspacePage() {
           <section className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
             <h2 className="mb-3 font-display text-base font-semibold text-ink-900">Quick links</h2>
             <div className="flex flex-col gap-2 text-sm">
-              <Link className="text-brand-green hover:underline" to="/clinical/triage">
+              <Link className="text-brand-green hover:underline" to="/clinical/triage-mse">
                 Triage &amp; MSE
               </Link>
               <Link className="text-brand-green hover:underline" to="/clinical/review">

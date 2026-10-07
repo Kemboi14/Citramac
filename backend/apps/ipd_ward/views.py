@@ -98,11 +98,49 @@ class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        from apps.care_pathway.models import BillingService, ChargeItem
+        from apps.care_pathway.services import get_or_open_episode
+        from apps.clinical_encounter.models import Encounter
+
+        patient = serializer.validated_data["patient"]
+        user = self.request.user
+        # The admission is an Encounter (class IMP) inside the client's
+        # EpisodeOfCare — CLAUDE.md §4, docs/15-CLINICAL-WORKSPACE-V3.md §1.10.
+        episode = get_or_open_episode(patient, user)
+        admitted_at = serializer.validated_data.get("admitted_at") or timezone.now()
+        encounter = serializer.validated_data.get("encounter") or Encounter.objects.create(
+            organization=user.organization,
+            patient=patient,
+            episode=episode,
+            opened_by=user,
+            encounter_type="INPATIENT",
+            status="IN_PROGRESS",
+            opened_at=admitted_at,
+        )
         admission = serializer.save(
-            organization=self.request.user.organization, admitted_by=self.request.user
+            organization=user.organization,
+            admitted_by=user,
+            episode=episode,
+            encounter=encounter,
         )
         admission.bed.status = "OCCUPIED"
         admission.bed.save(update_fields=["status"])
+        if episode.status in ("planned", "waitlist"):
+            episode.transition("active", user=user, at=admitted_at)
+        # The admission is a documented delivered service; priced from the
+        # facility tariff, or recorded unpriced when no rate is configured.
+        service = BillingService.objects.filter(name="Admission", active=True).first()
+        if service:
+            ChargeItem.objects.create(
+                organization=user.organization,
+                patient=patient,
+                episode=episode,
+                service=service,
+                quantity=1,
+                unit_price=service.rate,
+                delivered_at=admitted_at,
+                created_by=user,
+            )
 
     @action(detail=False, methods=["get"], url_path="eligible-patients")
     def eligible_patients(self, request):
@@ -114,13 +152,17 @@ class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         from apps.client_registry.models import Patient
         from apps.client_registry.serializers import PatientListSerializer
 
-        admitted_patient_ids = Admission.objects.filter(status="ADMITTED").values_list(
-            "patient_id", flat=True
-        )
+        admitted_patient_ids = Admission.objects.filter(
+            status__in=("ADMITTED", "TRANSFERRED")
+        ).values_list("patient_id", flat=True)
         # An archived record can't be admitted into until it is restored.
-        patients = Patient.objects.filter(
-            patient_category="INPATIENT", archived_at__isnull=True
-        ).exclude(id__in=admitted_patient_ids)
+        patients = Patient.objects.filter(archived_at__isnull=True).exclude(
+            id__in=admitted_patient_ids
+        )
+        # `?all=true` — the v3 admission form (docs/15 §1.10) admits any
+        # registered client; the older screen keeps the Inpatient-category pool.
+        if request.query_params.get("all") != "true":
+            patients = patients.filter(patient_category="INPATIENT")
         return Response(PatientListSerializer(patients, many=True).data)
 
     @action(detail=True, methods=["get"])

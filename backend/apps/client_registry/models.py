@@ -7,7 +7,51 @@ from apps.tenancy.models import Branch, TenantScopedModel
 class Patient(TenantScopedModel):
     """docs/06-DATA-MODEL.md §6.2 — Module 1."""
 
-    GENDER_CHOICES = [("MALE", "Male"), ("FEMALE", "Female"), ("OTHER", "Other")]
+    GENDER_CHOICES = [
+        ("MALE", "Male"),
+        ("FEMALE", "Female"),
+        ("OTHER", "Intersex / other"),
+        ("NOT_STATED", "Not stated"),
+    ]
+    # docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — the three registration tiers.
+    IDENTITY_IDENTIFIED = "IDENTIFIED"
+    IDENTITY_UNIDENTIFIED = "UNIDENTIFIED"
+    IDENTITY_UNKNOWN = "UNKNOWN"
+    IDENTITY_STATUS_CHOICES = [
+        (IDENTITY_IDENTIFIED, "Identified"),
+        (IDENTITY_UNIDENTIFIED, "Unidentified — provisional record"),
+        (IDENTITY_UNKNOWN, "Unknown — minimum details only"),
+    ]
+    PRONOUN_CHOICES = [
+        ("SHE_HER", "she/her"),
+        ("HE_HIM", "he/him"),
+        ("THEY_THEM", "they/them"),
+        ("NOT_SAID", "Prefer not to say"),
+        ("OTHER", "Other"),
+    ]
+    ID_DOCUMENT_CHOICES = [
+        ("NATIONAL_ID", "National ID"),
+        ("PASSPORT", "Passport (foreign national)"),
+        ("REFUGEE_ID", "Refugee / asylum-seeker ID"),
+        ("ALIEN_ID", "Alien ID"),
+        ("BIRTH_CERTIFICATE", "Birth certificate (minor)"),
+        ("NONE", "None / unknown"),
+    ]
+    INTERPRETER_CHOICES = [
+        ("NO", "No"),
+        ("KISWAHILI", "Yes — Kiswahili"),
+        ("OTHER_LOCAL", "Yes — other local language"),
+        ("SIGN", "Yes — sign language"),
+    ]
+    PAYER_CHOICES = [
+        ("SHA", "SHA"),
+        ("SHA_PRIVATE", "SHA + private insurer"),
+        ("PRIVATE", "Private insurance"),
+        ("EMPLOYER", "Employer scheme"),
+        ("SELF_PAY", "Self-pay"),
+        ("WAIVER", "Waiver / charity"),
+        ("UNKNOWN", "Unknown"),
+    ]
     MARITAL_STATUS_CHOICES = [
         ("SINGLE", "Single"),
         ("MARRIED", "Married"),
@@ -37,15 +81,32 @@ class Patient(TenantScopedModel):
     # mirroring `unique_uhid_per_org`'s existing pattern.
     citramac_number = models.CharField(max_length=32, blank=True)
 
-    first_name = models.CharField(max_length=150)
-    last_name = models.CharField(max_length=150)
+    # Blank only for unidentified / unknown-identity arrivals (identity_status).
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
     middle_other_names = models.CharField(max_length=150, blank=True)
     # Client profile picture — shown in the registry table, the patient
     # header, and the registration/detail modals. Optional; falls back to
     # initials everywhere in the UI when unset.
     photo = models.ImageField(upload_to="avatars/patients/%Y/%m/", null=True, blank=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
-    date_of_birth = models.DateField()
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    estimated_age = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    identity_status = models.CharField(
+        max_length=16, choices=IDENTITY_STATUS_CHOICES, default=IDENTITY_IDENTIFIED
+    )
+    identity_description = models.CharField(
+        "Observed description / temporary alias", max_length=255, blank=True
+    )
+    identity_confirmed_at = models.DateTimeField(null=True, blank=True)
+    preferred_name = models.CharField(max_length=150, blank=True)
+    pronouns = models.CharField(max_length=10, choices=PRONOUN_CHOICES, blank=True)
+    id_document_type = models.CharField(max_length=20, choices=ID_DOCUMENT_CHOICES, blank=True)
+    id_document_number = models.CharField(max_length=64, blank=True)
+    preferred_language = models.CharField(max_length=64, blank=True)
+    interpreter = models.CharField(max_length=12, choices=INTERPRETER_CHOICES, blank=True)
+    payer = models.CharField(max_length=12, choices=PAYER_CHOICES, blank=True)
     marital_status = models.CharField(max_length=10, choices=MARITAL_STATUS_CHOICES, blank=True)
     nationality = models.CharField(max_length=100, blank=True)
     occupation = models.CharField(max_length=150, blank=True)
@@ -155,6 +216,8 @@ class Patient(TenantScopedModel):
 
     @property
     def age_years(self):
+        if self.date_of_birth is None:
+            return self.estimated_age
         today = timezone.localdate()
         years = today.year - self.date_of_birth.year
         if (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day):
@@ -162,9 +225,14 @@ class Patient(TenantScopedModel):
         return years
 
     def get_full_name(self):
-        return f"{self.first_name} {self.middle_other_names} {self.last_name}".replace(
+        name = f"{self.first_name} {self.middle_other_names} {self.last_name}".replace(
             "  ", " "
         ).strip()
+        if name:
+            return name
+        if self.identity_status == self.IDENTITY_UNIDENTIFIED:
+            return f"Unidentified person ({self.citramac_number or self.id})"
+        return f"Unknown person ({self.citramac_number or self.id})"
 
 
 class EmergencyContact(TenantScopedModel):
@@ -182,11 +250,31 @@ class EmergencyContact(TenantScopedModel):
 
 
 class AllergyRecord(TenantScopedModel):
+    # FHIR AllergyIntolerance.verificationStatus — a client-reported allergy at
+    # registration stays unconfirmed until a clinician confirms it (doc 15 §1.4).
+    VERIFICATION_CHOICES = [
+        ("UNCONFIRMED", "Unconfirmed (client-reported)"),
+        ("CONFIRMED", "Confirmed"),
+        ("REFUTED", "Refuted"),
+    ]
+    SOURCE_CHOICES = [
+        ("REGISTRATION", "Registration"),
+        ("TRIAGE", "Triage"),
+        ("CLINICIAN", "Clinician"),
+    ]
+
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="allergy_records")
     substance = models.CharField(max_length=255)
     reaction = models.CharField(max_length=255, blank=True)
     severity = models.CharField(max_length=32, blank=True)
     noted_at = models.DateTimeField(default=timezone.now)
+    verification_status = models.CharField(
+        max_length=12, choices=VERIFICATION_CHOICES, default="CONFIRMED"
+    )
+    source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default="CLINICIAN")
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     def __str__(self):
         return self.substance

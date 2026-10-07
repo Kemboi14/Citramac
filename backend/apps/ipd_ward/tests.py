@@ -42,7 +42,11 @@ class IpdWardTests(APITestCase):
     def test_admission_marks_bed_occupied(self):
         response = self.client.post(
             reverse("ipd-admission-list"),
-            {"patient": str(self.patient.id), "bed": str(self.bed_a.id)},
+            {
+                "patient": str(self.patient.id),
+                "bed": str(self.bed_a.id),
+                "consent_status": "OBTAINED",
+            },
             format="json",
             **self.auth,
         )
@@ -102,7 +106,50 @@ class IpdWardTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.ward.id))
 
-    def test_involuntary_admission_requires_no_extra_fields_but_stores_legal_status(self):
+    def test_involuntary_admission_requires_its_legal_basis(self):
+        """Owner decision 2026-10-07 (docs/15 §4): the legal order is captured at admission."""
+        response = self.client.post(
+            reverse("ipd-admission-list"),
+            {
+                "patient": str(self.patient.id),
+                "bed": str(self.bed_a.id),
+                "admission_type": "INVOLUNTARY",
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_legal_basis_can_be_updated_but_not_blanked(self):
+        with platform_admin_context():
+            admission = Admission.objects.create(
+                organization=self.org,
+                patient=self.patient,
+                bed=self.bed_a,
+                admitted_by=self.nurse,
+                admission_type="INVOLUNTARY",
+                legal_status="Order",
+                legal_order_reference="MHA-1",
+                authorizing_professional="Dr. A",
+            )
+        url = reverse("ipd-admission-detail", args=[admission.id])
+        renewed = self.client.patch(
+            url, {"legal_review_due_date": "2026-11-01"}, format="json", **self.auth
+        )
+        self.assertEqual(renewed.status_code, 200, renewed.data)
+        blanked = self.client.patch(url, {"legal_order_reference": ""}, format="json", **self.auth)
+        self.assertEqual(blanked.status_code, 400)
+
+    def test_voluntary_admission_requires_consent_status(self):
+        response = self.client.post(
+            reverse("ipd-admission-list"),
+            {"patient": str(self.patient.id), "bed": str(self.bed_a.id)},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_involuntary_admission_stores_legal_status(self):
         """Mental Health Act (Cap. 248) legal-status fields round-trip on admission."""
         response = self.client.post(
             reverse("ipd-admission-list"),
@@ -112,6 +159,8 @@ class IpdWardTests(APITestCase):
                 "admission_type": "INVOLUNTARY",
                 "legal_status": "Involuntary admission order",
                 "legal_order_reference": "MHA-2026-014",
+                "legal_order_date": "2026-09-01",
+                "authorizing_professional": "Dr. A. Mwangi",
                 "legal_review_due_date": "2026-09-10",
                 "risk_self_harm": True,
                 "observation_level": "ENHANCED",

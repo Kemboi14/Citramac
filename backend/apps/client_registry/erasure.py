@@ -31,6 +31,9 @@ PII_FIELDS = [
     "occupation",
     "insurer_details",
     "referral_source",
+    "preferred_name",
+    "identity_description",
+    "id_document_number",
 ]
 ERASED_PLACEHOLDER = "[ERASED]"
 
@@ -98,7 +101,9 @@ def execute_erasure(erasure_request, override_retention_conflict=False):
     anonymized["last_name"] = ERASED_PLACEHOLDER
     # Exact date of birth is a strong quasi-identifier; the year alone keeps
     # age-banded clinical reporting meaningful.
-    anonymized["date_of_birth"] = date(patient.date_of_birth.year, 1, 1)
+    anonymized["date_of_birth"] = (
+        date(patient.date_of_birth.year, 1, 1) if patient.date_of_birth else None
+    )
     anonymized["photo"] = None
     if patient.photo:
         patient.photo.delete(save=False)

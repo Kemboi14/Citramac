@@ -24,7 +24,11 @@ class BedSerializer(serializers.ModelSerializer):
     def get_occupant_name(self, obj):
         if obj.status != "OCCUPIED":
             return None
-        admission = obj.admissions.filter(status="ADMITTED").order_by("-admitted_at").first()
+        admission = (
+            obj.admissions.filter(status__in=("ADMITTED", "TRANSFERRED"))
+            .order_by("-admitted_at")
+            .first()
+        )
         return admission.patient.get_full_name() if admission else None
 
 
@@ -79,8 +83,72 @@ class AdmissionSerializer(serializers.ModelSerializer):
             "next_of_kin_notification",
             "next_of_kin_notes",
             "handover_note",
+            "clinical_priority",
+            "episode",
+            "consultant_name",
+            "patient_citramac_number",
         ]
-        read_only_fields = ["admitted_by", "admitted_at", "status", "discharged_at"]
+        # admitted_at is writable: the admission form records the admission date
+        # (docs/15-CLINICAL-WORKSPACE-V3.md §1.10); it defaults to now.
+        read_only_fields = ["admitted_by", "status", "discharged_at", "episode"]
+
+    consultant_name = serializers.SerializerMethodField()
+    patient_citramac_number = serializers.CharField(
+        source="patient.citramac_number", read_only=True
+    )
+
+    # Owner decision 2026-10-07 (docs/15 §4): the legal basis of an admission is
+    # captured when the admission is created. Later updates (a renewed review
+    # date, consent changing) are allowed, may not blank a required field, and
+    # every change is kept with before/after values by the write-audit signal
+    # (apps.sysadmin_audit.signals).
+    INVOLUNTARY_REQUIRED = (
+        "legal_status",
+        "legal_order_reference",
+        "legal_order_date",
+        "authorizing_professional",
+    )
+
+    def validate(self, attrs):
+        if self.instance is not None:
+            merged = {
+                field: attrs.get(field, getattr(self.instance, field))
+                for field in ("admission_type", "consent_status", *self.INVOLUNTARY_REQUIRED)
+            }
+            if merged["admission_type"] == "INVOLUNTARY":
+                blanked = {
+                    field: "Required for an involuntary admission."
+                    for field in self.INVOLUNTARY_REQUIRED
+                    if field in attrs and not attrs[field]
+                }
+                if blanked:
+                    raise serializers.ValidationError(blanked)
+            elif "consent_status" in attrs and not attrs["consent_status"]:
+                raise serializers.ValidationError(
+                    {"consent_status": "Record the consent status for a voluntary admission."}
+                )
+            return attrs
+        if self.instance is None:
+            admission_type = attrs.get("admission_type", "VOLUNTARY")
+            if admission_type == "INVOLUNTARY":
+                missing = {
+                    field: "Required for an involuntary admission."
+                    for field in self.INVOLUNTARY_REQUIRED
+                    if not attrs.get(field)
+                }
+                if missing:
+                    raise serializers.ValidationError(missing)
+            elif not attrs.get("consent_status"):
+                raise serializers.ValidationError(
+                    {"consent_status": "Record the consent status for a voluntary admission."}
+                )
+        return attrs
+
+    def get_consultant_name(self, obj):
+        if not obj.consultant_id:
+            return ""
+        user = obj.consultant
+        return f"{user.first_name} {user.last_name}".strip() or user.email
 
     def get_patient_name(self, obj):
         return obj.patient.get_full_name() if obj.patient_id else ""
@@ -106,7 +174,15 @@ class MedicationAdministrationSerializer(serializers.ModelSerializer):
 
 
 class NursingNoteSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+
     class Meta:
         model = NursingNote
-        fields = ["id", "admission", "author", "shift", "note", "recorded_at"]
+        fields = ["id", "admission", "author", "author_name", "shift", "note", "recorded_at"]
         read_only_fields = ["author", "recorded_at"]
+
+    def get_author_name(self, obj):
+        user = obj.author
+        if not user:
+            return ""
+        return f"{user.first_name} {user.last_name}".strip() or user.email

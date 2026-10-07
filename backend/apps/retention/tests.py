@@ -33,6 +33,7 @@ CLINICAL_APPS = {
     "mhp_program",
     "billing",
     "insurance_claims",
+    "care_pathway",
 }
 
 
@@ -160,8 +161,12 @@ class NeverHardDeleteTests(RetentionFixtureMixin, APITestCase):
                 self.recent_patient.delete()
 
     def test_django_admin_cannot_delete_clinical_records(self):
-        model_admin = admin.site._registry[Patient]
-        self.assertFalse(model_admin.has_delete_permission(request=None))
+        # apps.compliance removes clinical models from the admin entirely
+        # (platform staff reach them only through a tenant-approved grant);
+        # if one is ever registered again, deletion must still be refused.
+        model_admin = admin.site._registry.get(Patient)
+        if model_admin is not None:
+            self.assertFalse(model_admin.has_delete_permission(request=None))
 
 
 class ArchiveGuardTests(RetentionFixtureMixin, APITestCase):

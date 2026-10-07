@@ -40,6 +40,7 @@ urlpatterns = [
     path("api/v1/", include("apps.sysadmin_audit.urls")),
     path("api/v1/", include("apps.security.urls")),
     path("api/v1/", include("apps.client_registry.urls")),
+    path("api/v1/", include("apps.care_pathway.urls")),
     path("api/v1/", include("apps.dha_interop.urls")),
     path("api/v1/", include("apps.clinical_encounter.urls")),
     path("api/v1/", include("apps.mhp_program.urls")),
@@ -51,6 +52,7 @@ urlpatterns = [
     path("api/v1/", include("apps.offline_sync.urls")),
     path("api/v1/notifications/", include("apps.notifications.urls")),
     path("api/v1/retention/", include("apps.retention.urls")),
+    path("api/v1/compliance/", include("apps.compliance.urls")),
 ]
 
 if settings.DEBUG:

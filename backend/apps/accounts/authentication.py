@@ -104,11 +104,24 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                     )
         if result is not None:
             user, _token = result
-            set_tenant_context(
-                organization_id=user.organization_id,
-                is_platform_admin=bool(user.is_superuser),
-            )
+            # Platform staff reach a facility's clinical records only through a
+            # grant that facility approved — and then only that facility's
+            # records, never platform-wide (apps.compliance.support_access).
+            from apps.compliance.support_access import enforce_for_platform_staff
+
+            support_org = enforce_for_platform_staff(request, user)
+            if support_org is not None:
+                set_tenant_context(organization_id=support_org, is_platform_admin=False)
+            else:
+                set_tenant_context(
+                    organization_id=user.organization_id,
+                    is_platform_admin=bool(user.is_superuser),
+                )
             set_audit_actor(user)
+            if support_org is not None:
+                from apps.compliance.support_access import record_support_request
+
+                record_support_request(request, user, support_org)
         return result
 
     def get_user(self, validated_token):

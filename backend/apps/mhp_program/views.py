@@ -167,6 +167,9 @@ class PsychotherapySessionViewSet(
         session_type = self.request.query_params.get("session_type")
         if session_type:
             queryset = queryset.filter(session_type=session_type)
+        patient = self.request.query_params.get("patient")
+        if patient:
+            queryset = queryset.filter(patient_id=patient)
         return queryset
 
     def perform_create(self, serializer):
