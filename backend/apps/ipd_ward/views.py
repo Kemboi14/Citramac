@@ -175,20 +175,17 @@ class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def discharge(self, request, pk=None):
-        """Discharge planning — auto-compiled summary text supplied by the caller."""
-        admission = self.get_object()
-        admission.status = "DISCHARGED"
-        admission.discharged_at = timezone.now()
-        admission.discharge_summary = request.data.get(
-            "discharge_summary", admission.discharge_summary
+        """Retired. A discharge is a signed, versioned clinical record, recorded in
+        Discharge planning (`POST /care/admissions/<id>/discharge/sign/`) — never as
+        free text copied onto the admission, which could be overwritten later."""
+        from rest_framework.exceptions import ValidationError
+
+        raise ValidationError(
+            {
+                "detail": "Discharge is recorded in Discharge planning, where it is signed "
+                "and kept as a versioned record. Open Discharge planning for this client."
+            }
         )
-        admission.follow_up_date = request.data.get("follow_up_date", admission.follow_up_date)
-        admission.save(
-            update_fields=["status", "discharged_at", "discharge_summary", "follow_up_date"]
-        )
-        admission.bed.status = "AVAILABLE"
-        admission.bed.save(update_fields=["status"])
-        return Response(AdmissionSerializer(admission).data)
 
     @action(detail=True, methods=["post"])
     def transfer(self, request, pk=None):

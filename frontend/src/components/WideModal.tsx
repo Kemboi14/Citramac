@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useDialogA11y } from "./useDialogA11y";
 
 /**
  * Centered, wide modal for multi-section forms with a live summary sidebar
@@ -25,6 +26,7 @@ export function WideModal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const dialogRef = useDialogA11y(open, onClose);
   if (!open) return null;
   return createPortal(
     <>
@@ -33,10 +35,18 @@ export function WideModal({
         onClick={onClose}
       />
       <div className="fixed inset-0 z-[90] flex items-center justify-center p-5">
-        <div className="flex max-h-[90vh] w-full max-w-[1120px] animate-scale-in flex-col overflow-hidden rounded-[14px] bg-surface-card shadow-md">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wide-modal-title"
+          className="flex max-h-[90vh] w-full max-w-[1120px] animate-scale-in flex-col overflow-hidden rounded-[14px] bg-surface-card shadow-md"
+        >
           <div className="flex items-start justify-between gap-4 border-b border-surface-border px-6 py-5">
             <div>
-              <div className="font-display text-lg font-bold text-ink-900">{title}</div>
+              <div id="wide-modal-title" className="font-display text-lg font-bold text-ink-900">
+                {title}
+              </div>
               {subtitle && <p className="mt-1 text-[12.5px] text-ink-500">{subtitle}</p>}
             </div>
             <button

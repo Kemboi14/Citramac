@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { createEncounter } from "../lib/clinicalApi";
 import { usePatientContext } from "./usePatientContext";
@@ -7,24 +6,21 @@ import { usePatientContext } from "./usePatientContext";
 /**
  * Every clinical tab (Triage/MSE, Clinical Encounter, MHP sessions) needs an
  * open Encounter for the selected patient — docs/06-DATA-MODEL.md §6.3's
- * "umbrella object every clinical touchpoint attaches to". Redirects to the
- * Client Registry if no patient is selected; otherwise reuses the
- * encounter already in PatientContext or opens a new one.
+ * "umbrella object every clinical touchpoint attaches to". Reuses the
+ * encounter already in PatientContext or opens a new one. With no client
+ * selected it does nothing and reports `hasClient: false`, so the screen can
+ * show a client picker instead of sending the user elsewhere.
  */
 export function useEnsureEncounter() {
   const { accessToken } = useAuth();
   const { selected, setEncounter } = usePatientContext();
-  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   // A ref, not state — this only guards against double-firing the create
   // call (e.g. React StrictMode's double-invoke); it doesn't need a re-render.
   const isCreatingRef = useRef(false);
 
   useEffect(() => {
-    if (!selected) {
-      navigate("/clinical/registry", { replace: true });
-      return;
-    }
+    if (!selected) return;
     if (selected.encounterId || !accessToken || isCreatingRef.current) return;
 
     isCreatingRef.current = true;
@@ -38,6 +34,7 @@ export function useEnsureEncounter() {
   }, [selected?.patientId, selected?.encounterId]);
 
   return {
+    hasClient: selected !== null,
     encounterId: selected?.encounterId ?? null,
     patientName: selected?.patientName ?? "",
     error,

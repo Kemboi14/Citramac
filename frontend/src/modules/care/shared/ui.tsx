@@ -68,18 +68,36 @@ export function Field({
   htmlFor,
   children,
   className = "",
+  error,
+  hint,
 }: {
   label: ReactNode;
   htmlFor?: string;
   children: ReactNode;
   className?: string;
+  /** Inline validation message for this field. */
+  error?: string;
+  /** Short helper text shown under the control. */
+  hint?: ReactNode;
 }) {
+  const messageId = htmlFor ? `${htmlFor}-message` : undefined;
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
       <label htmlFor={htmlFor} className={FIELD_LABEL}>
         {label}
       </label>
       {children}
+      {error ? (
+        <p id={messageId} role="alert" className="text-[12px] font-medium text-priority-red">
+          {error}
+        </p>
+      ) : (
+        hint && (
+          <p id={messageId} className="text-[12px] text-ink-500">
+            {hint}
+          </p>
+        )
+      )}
     </div>
   );
 }

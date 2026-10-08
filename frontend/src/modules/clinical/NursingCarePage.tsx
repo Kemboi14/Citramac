@@ -14,6 +14,9 @@ import {
   type MedicationAdministration,
   type NursingNote,
 } from "../../lib/ipdApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -92,15 +95,7 @@ export function NursingCarePage() {
   }, [accessToken, selected]);
 
   if (!selected) {
-    return (
-      <p className="text-ink-500">
-        Select a client from the{" "}
-        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
-          Client Registry
-        </Link>{" "}
-        first.
-      </p>
-    );
+    return <ClientPicker action="record medication administration for" />;
   }
 
   if (!admission) {
@@ -155,14 +150,12 @@ export function NursingCarePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Psychiatric Nursing
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          Nursing Care — {selected.patientName}
-        </h1>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Pharmacy & medication"
+        title={"Medication administration"}
+        subtitle={selected.patientName}
+      />
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">

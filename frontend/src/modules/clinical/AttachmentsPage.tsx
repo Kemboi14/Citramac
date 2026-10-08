@@ -9,6 +9,7 @@ import {
   type AttachmentCategory,
   type AttachmentInsights,
 } from "../../lib/attachmentsApi";
+import { PageHeader } from "../care/shared/ui";
 
 const CATEGORY_LABEL: Record<AttachmentCategory, string> = {
   IDENTITY: "Identity Documents",
@@ -47,12 +48,7 @@ export function AttachmentsPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Module 1 · Document Management
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">Attachments</h1>
-      </div>
+      <PageHeader eyebrow="Documents" title={"Attachments"} />
 
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
         <StatCard icon={Paperclip} value={insights?.total ?? "—"} label="Total documents" />

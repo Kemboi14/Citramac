@@ -88,10 +88,22 @@ All three tiers share one shell pattern — a fixed sidebar + scrollable content
 **Org Admin** (`citramac_ORG-admin.html`)
 - Section "Facility": Org Dashboard, Ward & Bed Management, Staff / MHP Team, Branch Settings, Roles & Permissions
 
-**Clinical Workspace** (`citramac_clinical_workspace.html`)
-- Section "Core Clinical (DHA)": Client Registry, Attachments, Triage & MSE, Clinical Review, Clinical Encounter, Laboratory (LIMS) *[Soon]*, Pharmacy *[Soon]*, Inpatient & Ward *[Soon]*
-- Section "MHP Program": Individual Psychotherapy, Family Therapy, Group Psychotherapy, Supervision Requests *[Soon]*, NACADA NDO Report, MHP Team *[Soon]*
-- Footer: About *[Soon]*
+**Clinical Workspace** (`citramac_clinical_workspace.html`, updated 2026-10-08; see
+docs/15-CLINICAL-WORKSPACE-V3.md §1.1)
+- Dashboard, My Caseload
+- Clinical (open): Registration, Triage, Psychiatric, Supervision requests
+- Psychotherapy (open): Individual, Family, Group
+- Inpatient & residential: Admissions, Ward board, Discharge planning
+- Pharmacy & medication: Medication orders & review, Medication administration
+- Laboratory: Laboratory records
+- Appointments & follow-up: Appointments, Follow-up
+- Referrals: Referral worklist, Referral documents
+- Reports & analytics: Operational overview, NACADA report
+- Documents, Billing
+- Groups other than Clinical and Psychotherapy start collapsed and open for the active route.
+
+**Org Admin Governance** also carries the **Audit Log** (Org Admin and Auditor only). An Auditor
+has no portal of its own: it lands on the Org Admin shell showing only the Audit Log.
 
 This matches the reference AppSheet screenshot (`Client Registration` list view with columns: First Name, Last Name, Middle/Other Names, UHID Number, Gender, Date Of Birth, Age, DOA, Doctors Name, Allergy Status, Nationality, Marital Status — replicate this exact column set for the Client Registry table, grouped by patient category e.g. "Inpatient").
 

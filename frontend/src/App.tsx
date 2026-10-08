@@ -63,6 +63,11 @@ const OutpatientCarePage = lazyNamed(
   "OutpatientCarePage",
 );
 const DocumentsPage = lazyNamed(() => import("./modules/care/DocumentsPage"), "DocumentsPage");
+const DischargePlanningPage = lazyNamed(
+  () => import("./modules/care/DischargePlanningPage"),
+  "DischargePlanningPage",
+);
+const FollowUpPage = lazyNamed(() => import("./modules/care/FollowUpPage"), "FollowUpPage");
 const SignedTriageDocumentPage = lazyNamed(
   () => import("./modules/care/SignedTriageDocumentPage"),
   "SignedTriageDocumentPage",
@@ -97,6 +102,10 @@ const TenantCompliancePage = lazyNamed(
 const PlatformCompliancePage = lazyNamed(
   () => import("./modules/super-admin/PlatformCompliancePage"),
   "PlatformCompliancePage",
+);
+const OrgAuditLogPage = lazyNamed(
+  () => import("./modules/org-admin/AuditLogPage"),
+  "OrgAuditLogPage",
 );
 const ConsentWordingPage = lazyNamed(
   () => import("./modules/org-admin/ConsentWordingPage"),
@@ -297,24 +306,27 @@ function App() {
           </Route>
         </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={["Org Admin"]} />}>
+        <Route element={<ProtectedRoute allowedRoles={["Org Admin", "Auditor"]} />}>
           <Route path="/org-admin" element={<OrgAdminShell />}>
-            <Route index element={<OrgDashboardPage />} />
-            <Route path="wards" element={<WardBedManagementPage />} />
-            <Route path="branches" element={<BranchesAndDepartmentsPage />} />
-            <Route path="staff" element={<StaffTeamPage />} />
-            <Route path="branch-settings" element={<BranchSettingsPage />} />
-            <Route path="roles" element={<OrgRolesPermissionsPage />} />
-            <Route path="profile" element={<MyProfilePage />} />
-            <Route path="data-requests" element={<ErasureRequestsPage />} />
-            <Route path="data-retention" element={<DataRetentionPage />} />
-            <Route path="subscription" element={<SubscriptionPage />} />
-            <Route path="service-tariff" element={<ServiceTariffPage />} />
-            <Route path="consent-wording" element={<ConsentWordingPage />} />
-            <Route path="breach-incidents" element={<BreachIncidentsPage />} />
-            <Route path="support-access" element={<SupportAccessPage />} />
-            <Route path="data-protection" element={<DataProtectionPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="audit-log" element={<OrgAuditLogPage />} />
+            <Route element={<ProtectedRoute allowedRoles={["Org Admin"]} />}>
+              <Route index element={<OrgDashboardPage />} />
+              <Route path="wards" element={<WardBedManagementPage />} />
+              <Route path="branches" element={<BranchesAndDepartmentsPage />} />
+              <Route path="staff" element={<StaffTeamPage />} />
+              <Route path="branch-settings" element={<BranchSettingsPage />} />
+              <Route path="roles" element={<OrgRolesPermissionsPage />} />
+              <Route path="profile" element={<MyProfilePage />} />
+              <Route path="data-requests" element={<ErasureRequestsPage />} />
+              <Route path="data-retention" element={<DataRetentionPage />} />
+              <Route path="subscription" element={<SubscriptionPage />} />
+              <Route path="service-tariff" element={<ServiceTariffPage />} />
+              <Route path="consent-wording" element={<ConsentWordingPage />} />
+              <Route path="breach-incidents" element={<BreachIncidentsPage />} />
+              <Route path="support-access" element={<SupportAccessPage />} />
+              <Route path="data-protection" element={<DataProtectionPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+            </Route>
           </Route>
         </Route>
 
@@ -344,6 +356,15 @@ function App() {
               element={<OutpatientCarePage key="group" kind="group" />}
             />
             <Route path="documents" element={<DocumentsPage />} />
+            <Route path="referrals" element={<PsychiatryQueuePage />} />
+            <Route path="referrals/documents" element={<DocumentsPage />} />
+            <Route path="discharge" element={<DischargePlanningPage />} />
+            <Route path="follow-up" element={<FollowUpPage />} />
+            <Route path="followup" element={<Navigate to="/clinical/follow-up" replace />} />
+            <Route
+              path="discharge/summary"
+              element={<Navigate to="/clinical/discharge" replace />}
+            />
             <Route path="documents/:assessmentId" element={<SignedTriageDocumentPage />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="reports" element={<ReportsPage />} />
@@ -483,32 +504,12 @@ function App() {
               }
             />
             <Route
-              path="discharge/summary"
-              element={
-                <ModulePlaceholder
-                  eyebrow="Discharge"
-                  title="Discharge Summary"
-                  description="Structured discharge summary document."
-                />
-              }
-            />
-            <Route
               path="discharge/medical-report"
               element={
                 <ModulePlaceholder
                   eyebrow="Discharge"
                   title="Generate Medical Report"
                   description="Generate a formatted medical report for external use."
-                />
-              }
-            />
-            <Route
-              path="followup"
-              element={
-                <ModulePlaceholder
-                  eyebrow="Clinical"
-                  title="Follow-up and After-care"
-                  description="Post-discharge follow-up and after-care tracking."
                 />
               }
             />

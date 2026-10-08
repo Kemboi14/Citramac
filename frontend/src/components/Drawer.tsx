@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useDialogA11y } from "./useDialogA11y";
 
 /**
  * Slide-in side panel — citramac_SUPER-ADMIN.html `.drawer` / `.overlay`.
@@ -28,6 +29,7 @@ export function Drawer({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const panelRef = useDialogA11y<HTMLElement>(open, onClose);
   return createPortal(
     <>
       <div
@@ -37,14 +39,22 @@ export function Drawer({
         onClick={onClose}
       />
       <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drawer-title"
+        // A closed drawer stays mounted for its slide animation; `inert` keeps
+        // its controls out of the tab order and away from screen readers.
+        inert={!open}
         className={`fixed right-0 top-0 z-[90] flex h-screen w-full max-w-[92vw] flex-col bg-surface-card shadow-md transition-transform duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] sm:max-w-[460px] ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
-        aria-hidden={!open}
       >
         <div className="flex items-center justify-between border-b border-surface-border px-6 py-5">
           <div>
-            <div className="font-display text-[17px] font-bold text-ink-900">{title}</div>
+            <div id="drawer-title" className="font-display text-[17px] font-bold text-ink-900">
+              {title}
+            </div>
             {subtitle && <div className="mt-0.5 text-xs text-ink-500">{subtitle}</div>}
           </div>
           <button

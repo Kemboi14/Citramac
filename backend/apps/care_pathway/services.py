@@ -5,25 +5,30 @@ inside a transaction.
 """
 
 import re
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 
 from apps.client_registry.models import AllergyRecord, Appointment, EmergencyContact, Patient
-from apps.clinical_encounter.models import DiagnosisCode, Encounter
+from apps.clinical_encounter.models import DiagnosisCode, Encounter, PrescriptionItem
+from apps.dha_interop.models import NationalDrugIndex
 from apps.ipd_ward.models import Admission, MedicationAdministration
 from apps.triage.models import VitalSigns
 
 from . import triage_rules
 from .models import (
     PRIORITY_ORDER,
+    BillingService,
     CarePlan,
     CareTask,
     ChargeItem,
     ClinicalAlert,
+    DischargeMedicationLine,
+    DischargeSummary,
     EpisodeOfCare,
     EpisodeStatusHistory,
     IntakeAssessment,
@@ -1084,12 +1089,24 @@ def client_timeline(patient):
             }
         )
         if adm.discharged_at:
+            # Disposition only: the narrative is confidential to the care team
+            # and the timeline is visible more widely.
+            signed = (
+                DischargeSummary.objects.filter(admission=adm, status="COMPLETED")
+                .order_by("-version")
+                .first()
+            )
+            detail = "Discharge recorded"
+            if signed:
+                detail = concept_labels().get(
+                    ("discharge-disposition", signed.disposition), "Discharge signed"
+                )
             events.append(
                 {
                     "at": adm.discharged_at,
                     "kind": "discharge",
                     "title": "Discharged",
-                    "detail": adm.discharge_summary[:140] or "Discharge recorded",
+                    "detail": detail,
                 }
             )
     for intake in IntakeAssessment.objects.filter(patient=patient).select_related("author"):
@@ -1210,19 +1227,21 @@ def recent_activity(limit=4):
                 "detail": f"Priority: {a.final_priority}, {setting}",
             }
         )
-    for adm in (
-        Admission.objects.filter(discharged_at__isnull=False)
-        .select_related("patient")
-        .order_by("-discharged_at")[:limit]
+    for summary in (
+        DischargeSummary.objects.filter(status="COMPLETED", signed_at__isnull=False)
+        .select_related("patient", "follow_up_appointment")
+        .order_by("-signed_at")[:limit]
     ):
         follow = (
-            f"follow-up {adm.follow_up_date:%Y-%m-%d}" if adm.follow_up_date else "no follow-up set"
+            f"follow-up {summary.follow_up_appointment.scheduled_for:%Y-%m-%d}"
+            if summary.follow_up_appointment_id
+            else "no follow-up booked"
         )
         events.append(
             {
-                "at": adm.discharged_at,
-                "title": f"Discharge summary signed — {adm.patient.get_full_name()}",
-                "detail": f"Episode closed, {follow}",
+                "at": summary.signed_at,
+                "title": f"Discharge summary signed — {summary.patient.get_full_name()}",
+                "detail": f"Version {summary.version}, {follow}",
             }
         )
     for mar in (
@@ -1246,3 +1265,600 @@ def recent_activity(limit=4):
     for event in events:
         event["at"] = event["at"].isoformat()
     return events
+
+
+# ── Follow-up (docs/17-DISCHARGE-AND-FOLLOW-UP.md) ──
+
+FOLLOW_UP_BUCKETS = ("upcoming", "overdue", "missed", "unbooked")
+MISSED_WINDOW_DAYS = 90
+UNBOOKED_WINDOW_DAYS = 30
+
+
+class StateConflict(APIException):
+    """409 — the record is not in a state that allows the request."""
+
+    status_code = 409
+    default_detail = "This record is not in a state that allows that."
+    default_code = "conflict"
+
+
+def _valid_codes(valueset_id):
+    return set(
+        LocalConcept.objects.filter(valueset_id=valueset_id, active=True).values_list(
+            "code", flat=True
+        )
+    )
+
+
+def book_follow_up(user, patient, data, *, episode=None, admission=None, origin="MANUAL"):
+    """Book a follow-up appointment. Idempotent on `client_request_id`: a retried
+    request returns the appointment already created instead of double-booking."""
+    request_id = str(data.get("client_request_id") or "").strip()
+    if request_id:
+        existing = Appointment.objects.filter(client_request_id=request_id).first()
+        if existing:
+            if existing.patient_id != patient.id:
+                raise StateConflict("That request id was already used for a different client.")
+            return existing
+    reason = data.get("reason") or ""
+    if reason not in _valid_codes("follow-up-reason"):
+        raise ValidationError({"reason": "Choose a follow-up reason from the list."})
+    scheduled_for = data.get("scheduled_for")
+    if not scheduled_for:
+        raise ValidationError({"scheduled_for": "Choose a date and time."})
+    if isinstance(scheduled_for, str):
+        from django.utils.dateparse import parse_datetime
+
+        parsed = parse_datetime(scheduled_for)
+        if parsed is None:
+            raise ValidationError({"scheduled_for": "Enter a valid date and time."})
+        scheduled_for = parsed
+    if timezone.is_naive(scheduled_for):
+        scheduled_for = timezone.make_aware(scheduled_for)
+    provider = None
+    if data.get("provider"):
+        from apps.accounts.models import User
+
+        provider = User.objects.filter(pk=data["provider"]).first()
+        if provider is None:
+            raise ValidationError({"provider": "That clinician was not found."})
+    mode = data.get("mode") or "IN_PERSON"
+    if mode not in dict(Appointment.MODE_CHOICES):
+        raise ValidationError({"mode": "Choose in person, phone or video."})
+    if episode is None:
+        episode = open_episode_for(patient)
+    label = concept_labels().get(("follow-up-reason", reason), reason)
+    return Appointment.objects.create(
+        organization_id=user.organization_id,
+        patient=patient,
+        provider=provider,
+        scheduled_for=scheduled_for,
+        duration_minutes=int(data.get("duration_minutes") or 30),
+        location=data.get("location") or "",
+        mode=mode,
+        appointment_type=label,
+        notes=data.get("notes") or "",
+        episode=episode,
+        admission=admission,
+        reason=reason,
+        origin=origin,
+        booked_by=user,
+        client_request_id=request_id,
+    )
+
+
+def _patient_ref(patient):
+    return {
+        "patient_id": str(patient.id),
+        "patient_name": patient.get_full_name(),
+        "citramac_number": patient.citramac_number,
+    }
+
+
+def _follow_up_row(appointment, labels):
+    return {
+        "kind": "appointment",
+        "id": str(appointment.id),
+        **_patient_ref(appointment.patient),
+        "scheduled_for": appointment.scheduled_for.isoformat(),
+        "reason": appointment.reason,
+        "reason_label": labels.get(("follow-up-reason", appointment.reason), appointment.reason),
+        "status": appointment.status,
+        "provider_name": appointment.provider.get_full_name() if appointment.provider_id else "",
+        "origin": appointment.origin,
+        "admission_id": str(appointment.admission_id) if appointment.admission_id else None,
+        "episode_id": str(appointment.episode_id) if appointment.episode_id else None,
+    }
+
+
+def _unbooked_discharges(now):
+    """Recently discharged clients with no live appointment on or after discharge."""
+    later = Appointment.objects.filter(
+        patient=OuterRef("patient"), scheduled_for__gte=OuterRef("discharged_at")
+    ).exclude(status="CANCELLED")
+    linked = Appointment.objects.filter(admission=OuterRef("pk")).exclude(status="CANCELLED")
+    admissions = list(
+        Admission.objects.filter(
+            status="DISCHARGED",
+            discharged_at__isnull=False,
+            discharged_at__gte=now - timedelta(days=UNBOOKED_WINDOW_DAYS),
+        )
+        .annotate(has_later=Exists(later), has_linked=Exists(linked))
+        .filter(has_later=False, has_linked=False)
+        .select_related("patient")
+        .order_by("discharged_at")
+    )
+    # No follow-up is expected after a death.
+    deceased = set(
+        DischargeSummary.objects.filter(
+            admission__in=admissions, status="COMPLETED", disposition="DECEASED"
+        ).values_list("admission_id", flat=True)
+    )
+    return [a for a in admissions if a.id not in deceased]
+
+
+def follow_up_overview(bucket="upcoming", now=None):
+    """Counts for every bucket plus the rows of the requested one. A follow-up is
+    an appointment with a reason, or one booked from a discharge / the care plan."""
+    now = now or timezone.now()
+    follow_ups = Appointment.objects.filter(
+        Q(origin__in=("DISCHARGE", "CARE_PLAN")) | ~Q(reason="")
+    ).select_related("patient", "provider")
+    querysets = {
+        "upcoming": follow_ups.filter(status="SCHEDULED", scheduled_for__gte=now).order_by(
+            "scheduled_for"
+        ),
+        "overdue": follow_ups.filter(status="SCHEDULED", scheduled_for__lt=now).order_by(
+            "scheduled_for"
+        ),
+        "missed": follow_ups.filter(
+            status="NO_SHOW",
+            scheduled_for__gte=now - timedelta(days=MISSED_WINDOW_DAYS),
+        ).order_by("-scheduled_for"),
+    }
+    unbooked = _unbooked_discharges(now)
+    counts = {name: queryset.count() for name, queryset in querysets.items()}
+    counts["unbooked"] = len(unbooked)
+    labels = concept_labels()
+    if bucket == "unbooked":
+        results = [
+            {
+                "kind": "unbooked",
+                "id": str(adm.id),
+                **_patient_ref(adm.patient),
+                "discharged_at": adm.discharged_at.isoformat(),
+                "days_since_discharge": (now - adm.discharged_at).days,
+                "admission_id": str(adm.id),
+                "episode_id": str(adm.episode_id) if adm.episode_id else None,
+            }
+            for adm in unbooked
+        ]
+    else:
+        results = [_follow_up_row(a, labels) for a in querysets[bucket][:200]]
+    return {"bucket": bucket, "counts": counts, "results": results}
+
+
+# ── Discharge planning (docs/17-DISCHARGE-AND-FOLLOW-UP.md) ──
+
+DISCHARGE_NARRATIVE_FIELDS = ("clinical_status", "treatment_summary", "legal_status_at_discharge")
+
+
+def latest_discharge(admission):
+    return DischargeSummary.objects.filter(admission=admission).order_by("-version").first()
+
+
+def _role_label(user):
+    if user.is_superuser:
+        return "Super Admin"
+    return ", ".join(sorted(user.roles.values_list("name", flat=True)))
+
+
+def can_view_discharge_in_full(user, admission, summary=None):
+    """Discharge content is psychiatric: full access for the care team, Org Admin,
+    the admitting consultant and whoever wrote or signed this summary."""
+    from apps.mhp_program.permissions import has_full_mhp_access
+
+    if has_full_mhp_access(user, admission.patient):
+        return True
+    if admission.consultant_id == user.id:
+        return True
+    return bool(summary and user.id in (summary.author_id, summary.signed_by_id))
+
+
+def discharge_context(admission):
+    """What the discharge form pre-fills from the existing record."""
+    diagnoses, medications = [], []
+    if admission.encounter_id:
+        diagnoses = [
+            {
+                "id": str(d.id),
+                "code": d.icd11_code_id,
+                "description": d.icd11_code.description,
+                "is_primary": d.is_primary,
+            }
+            for d in DiagnosisCode.objects.filter(encounter_id=admission.encounter_id)
+            .select_related("icd11_code")
+            .order_by("-is_primary", "-noted_at")
+        ]
+        latest_mar = {}
+        for mar in MedicationAdministration.objects.filter(
+            admission=admission, prescription_item__isnull=False
+        ).order_by("scheduled_time"):
+            latest_mar[mar.prescription_item_id] = mar.status
+        medications = [
+            {
+                "prescription_item": str(item.id),
+                "drug": item.drug_id,
+                "drug_name": item.drug.generic_name,
+                "dose": item.dose,
+                "route": item.route,
+                "frequency": item.frequency,
+                "duration": item.duration,
+                "last_mar_status": latest_mar.get(item.id, ""),
+            }
+            for item in PrescriptionItem.objects.filter(
+                prescription__encounter_id=admission.encounter_id
+            ).select_related("drug")
+        ]
+    return {
+        "diagnoses": diagnoses,
+        "medications": medications,
+        "involuntary": admission.admission_type == "INVOLUNTARY",
+        "legal_status": admission.legal_status,
+        "legal_order_reference": admission.legal_order_reference,
+    }
+
+
+def serialize_discharge(summary, full):
+    labels = concept_labels()
+    data = {
+        "id": str(summary.id),
+        "admission_id": str(summary.admission_id),
+        "version": summary.version,
+        "supersedes": str(summary.supersedes_id) if summary.supersedes_id else None,
+        "status": summary.status,
+        "disposition": summary.disposition,
+        "disposition_label": labels.get(("discharge-disposition", summary.disposition), ""),
+        "discharged_at": summary.discharged_at.isoformat() if summary.discharged_at else None,
+        "signed_at": summary.signed_at.isoformat() if summary.signed_at else None,
+        "signed_by_name": user_display(summary.signed_by),
+        "signed_role": summary.signed_role,
+        "draft_saved_at": summary.draft_saved_at.isoformat() if summary.draft_saved_at else None,
+        "restricted": not full,
+    }
+    if not full:
+        return data
+    follow_up = summary.follow_up_appointment
+    data.update(
+        {
+            "destination": summary.destination,
+            "clinical_status": summary.clinical_status,
+            "treatment_summary": summary.treatment_summary,
+            "legal_status_at_discharge": summary.legal_status_at_discharge,
+            "education": summary.education,
+            "diagnoses": [
+                {
+                    "id": str(d.id),
+                    "code": d.icd11_code_id,
+                    "description": d.icd11_code.description,
+                    "is_primary": d.is_primary,
+                }
+                for d in summary.diagnoses.select_related("icd11_code")
+            ],
+            "medications": [
+                {
+                    "prescription_item": (
+                        str(m.prescription_item_id) if m.prescription_item_id else None
+                    ),
+                    "drug": m.drug_id,
+                    "drug_name": m.drug.generic_name,
+                    "dose": m.dose,
+                    "route": m.route,
+                    "frequency": m.frequency,
+                    "duration": m.duration,
+                    "action": m.action,
+                    "action_label": labels.get(("discharge-medication-action", m.action), m.action),
+                    "note": m.note,
+                }
+                for m in summary.medications.select_related("drug")
+            ],
+            "follow_up": (
+                {
+                    "id": str(follow_up.id),
+                    "scheduled_for": follow_up.scheduled_for.isoformat(),
+                    "reason": follow_up.reason,
+                    "reason_label": labels.get(("follow-up-reason", follow_up.reason), ""),
+                    "status": follow_up.status,
+                }
+                if follow_up
+                else None
+            ),
+        }
+    )
+    return data
+
+
+def discharge_worklist():
+    """Current inpatients (with their draft state) and clients discharged in the
+    last 30 days (with their signed summary)."""
+    now = timezone.now()
+    current = []
+    for adm in (
+        Admission.objects.filter(status__in=CURRENT_ADMISSION_STATUSES)
+        .select_related("patient", "bed__ward")
+        .order_by("admitted_at")
+    ):
+        draft = latest_discharge(adm)
+        current.append(
+            {
+                "admission_id": str(adm.id),
+                **_patient_ref(adm.patient),
+                "bed_label": f"{adm.bed.ward.name} · Bed {adm.bed.bed_number}",
+                "admission_type": adm.admission_type,
+                "admitted_at": adm.admitted_at.isoformat(),
+                "days_in": (now - adm.admitted_at).days,
+                "state": "DRAFT" if draft else "NOT_STARTED",
+                "draft_saved_at": (
+                    draft.draft_saved_at.isoformat() if draft and draft.draft_saved_at else None
+                ),
+            }
+        )
+    labels = concept_labels()
+    recent = []
+    for adm in (
+        Admission.objects.filter(
+            status="DISCHARGED",
+            discharged_at__gte=now - timedelta(days=UNBOOKED_WINDOW_DAYS),
+        )
+        .select_related("patient", "bed__ward")
+        .order_by("-discharged_at")
+    ):
+        latest = latest_discharge(adm)
+        recent.append(
+            {
+                "admission_id": str(adm.id),
+                **_patient_ref(adm.patient),
+                "bed_label": f"{adm.bed.ward.name} · Bed {adm.bed.bed_number}",
+                "discharged_at": adm.discharged_at.isoformat(),
+                "summary_id": str(latest.id) if latest else None,
+                "version": latest.version if latest else None,
+                "status": latest.status if latest else "LEGACY",
+                "disposition_label": (
+                    labels.get(("discharge-disposition", latest.disposition), "") if latest else ""
+                ),
+            }
+        )
+    return {"current": current, "recent": recent}
+
+
+def _check_codes(data):
+    """Reject codes that are not in the served value sets."""
+    errors = {}
+    disposition = data.get("disposition")
+    if disposition and disposition not in _valid_codes("discharge-disposition"):
+        errors["disposition"] = "Choose a disposition from the list."
+    bad_education = set(data.get("education") or []) - _valid_codes("discharge-education")
+    if bad_education:
+        errors["education"] = "Unknown education item."
+    actions = _valid_codes("discharge-medication-action")
+    for index, line in enumerate(data.get("medications") or []):
+        if line.get("action") not in actions:
+            errors[f"medications.{index}.action"] = "Choose continue, stop, change or new."
+    if errors:
+        raise ValidationError(errors)
+
+
+def _apply_discharge_fields(summary, admission, data):
+    from django.utils.dateparse import parse_datetime
+
+    for field in ("destination", *DISCHARGE_NARRATIVE_FIELDS):
+        if field in data:
+            setattr(summary, field, str(data[field] or "").strip())
+    if "disposition" in data:
+        summary.disposition = data["disposition"] or ""
+    if "education" in data:
+        summary.education = list(data["education"] or [])
+    if data.get("discharged_at"):
+        moment = data["discharged_at"]
+        if isinstance(moment, str):
+            moment = parse_datetime(moment)
+        if moment is None:
+            raise ValidationError({"discharged_at": "Enter a valid date and time."})
+        if timezone.is_naive(moment):
+            moment = timezone.make_aware(moment)
+        if moment < admission.admitted_at:
+            raise ValidationError({"discharged_at": "Discharge cannot be before admission."})
+        summary.discharged_at = moment
+    summary.draft_saved_at = timezone.now()
+    summary.save()
+    if "diagnoses" in data:
+        ids = list(data["diagnoses"] or [])
+        diagnoses = list(
+            DiagnosisCode.objects.filter(pk__in=ids, encounter_id=admission.encounter_id)
+        )
+        if len(diagnoses) != len(set(ids)):
+            raise ValidationError(
+                {"diagnoses": "Diagnoses must be ones recorded on this admission's encounter."}
+            )
+        summary.diagnoses.set(diagnoses)
+    if "medications" in data:
+        summary.medications.all().delete()
+        for line in data["medications"] or []:
+            drug = NationalDrugIndex.objects.filter(pk=line.get("drug")).first()
+            if drug is None:
+                raise ValidationError({"medications": "A medication line names an unknown drug."})
+            DischargeMedicationLine.objects.create(
+                organization_id=summary.organization_id,
+                summary=summary,
+                prescription_item_id=line.get("prescription_item") or None,
+                drug=drug,
+                dose=line.get("dose") or "",
+                route=line.get("route") or "",
+                frequency=line.get("frequency") or "",
+                duration=line.get("duration") or "",
+                action=line["action"],
+                note=line.get("note") or "",
+            )
+
+
+def _open_draft(admission, user):
+    """The draft being edited, started from scratch for a current admission only."""
+    draft = DischargeSummary.objects.filter(admission=admission, status="IN_PROGRESS").first()
+    if draft:
+        return draft
+    if admission.status not in CURRENT_ADMISSION_STATUSES:
+        raise StateConflict(
+            "This client is already discharged. Amend the signed summary to correct it."
+        )
+    previous = latest_discharge(admission)
+    return DischargeSummary.objects.create(
+        organization_id=admission.organization_id,
+        admission=admission,
+        patient=admission.patient,
+        episode=admission.episode,
+        encounter=admission.encounter,
+        version=(previous.version + 1) if previous else 1,
+        author=user,
+    )
+
+
+def save_discharge_draft(admission, user, data):
+    with transaction.atomic():
+        admission = Admission.objects.select_for_update().get(pk=admission.pk)
+        _check_codes(data)
+        summary = _open_draft(admission, user)
+        if summary.author_id is None:
+            summary.author = user
+        _apply_discharge_fields(summary, admission, data)
+        return summary
+
+
+def amend_discharge(summary, user):
+    """Start a new version of a signed summary. The signed row is never edited."""
+    with transaction.atomic():
+        admission = Admission.objects.select_for_update().get(pk=summary.admission_id)
+        latest = latest_discharge(admission)
+        if summary.status != "COMPLETED":
+            raise StateConflict("Only a signed discharge summary can be amended.")
+        if latest.id != summary.id:
+            raise StateConflict("A newer version already exists; amend that one instead.")
+        draft = DischargeSummary.objects.create(
+            organization_id=summary.organization_id,
+            admission=admission,
+            patient=summary.patient,
+            episode=summary.episode,
+            encounter=summary.encounter,
+            version=summary.version + 1,
+            supersedes=summary,
+            disposition=summary.disposition,
+            destination=summary.destination,
+            discharged_at=summary.discharged_at,
+            clinical_status=summary.clinical_status,
+            treatment_summary=summary.treatment_summary,
+            legal_status_at_discharge=summary.legal_status_at_discharge,
+            education=summary.education,
+            follow_up_appointment=summary.follow_up_appointment,
+            author=user,
+            draft_saved_at=timezone.now(),
+        )
+        draft.diagnoses.set(summary.diagnoses.all())
+        for line in summary.medications.all():
+            DischargeMedicationLine.objects.create(
+                organization_id=summary.organization_id,
+                summary=draft,
+                prescription_item=line.prescription_item,
+                drug=line.drug,
+                dose=line.dose,
+                route=line.route,
+                frequency=line.frequency,
+                duration=line.duration,
+                action=line.action,
+                note=line.note,
+            )
+        return draft
+
+
+def sign_discharge(admission, user, data=None):
+    """Sign the discharge and, for the first signed version, discharge the client:
+    admission closed, bed freed, encounter closed, charge recorded and any
+    follow-up booked — all in one transaction. The episode is left open: outpatient
+    follow-up normally continues inside it, and closing it is a separate step."""
+    data = data or {}
+    follow_up = data.get("follow_up")
+    with transaction.atomic():
+        admission = (
+            Admission.objects.select_for_update(of=("self",))
+            .select_related("patient", "bed", "encounter")
+            .get(pk=admission.pk)
+        )
+        _check_codes(data)
+        draft = DischargeSummary.objects.filter(admission=admission, status="IN_PROGRESS").first()
+        amending = bool(draft and draft.supersedes_id)
+        if draft is None and admission.status not in CURRENT_ADMISSION_STATUSES:
+            raise StateConflict("This client is already discharged. Amend the signed summary.")
+        if not amending and admission.status not in CURRENT_ADMISSION_STATUSES:
+            raise StateConflict("This client is already discharged.")
+        summary = draft or _open_draft(admission, user)
+        _apply_discharge_fields(summary, admission, data)
+
+        problems = {}
+        if not summary.disposition:
+            problems["disposition"] = "Choose a discharge disposition."
+        if not summary.clinical_status.strip():
+            problems["clinical_status"] = "Describe the clinical status at discharge."
+        if not summary.treatment_summary.strip():
+            problems["treatment_summary"] = "Summarise the treatment given."
+        if (
+            admission.admission_type == "INVOLUNTARY"
+            and not summary.legal_status_at_discharge.strip()
+        ):
+            problems["legal_status_at_discharge"] = (
+                "State what became of the legal order before discharging an involuntary admission."
+            )
+        if problems:
+            raise ValidationError(problems)
+
+        now = timezone.now()
+        discharged_at = summary.discharged_at or now
+        summary.discharged_at = discharged_at
+        summary.status = "COMPLETED"
+        summary.signed_at = now
+        summary.signed_by = user
+        summary.signed_role = _role_label(user)
+        summary.author = summary.author or user
+
+        if follow_up:
+            appointment = book_follow_up(
+                user,
+                admission.patient,
+                follow_up,
+                episode=admission.episode,
+                admission=admission,
+                origin="DISCHARGE",
+            )
+            summary.follow_up_appointment = appointment
+        summary.save()
+
+        if not amending:
+            admission.status = "DISCHARGED"
+            admission.discharged_at = discharged_at
+            admission.save(update_fields=["status", "discharged_at", "updated_at"])
+            admission.bed.status = "AVAILABLE"
+            admission.bed.save(update_fields=["status"])
+            if admission.encounter_id:
+                Encounter.objects.filter(pk=admission.encounter_id).update(
+                    status="CLOSED", closed_at=discharged_at
+                )
+            service = BillingService.objects.filter(name="Discharge", active=True).first()
+            if service:
+                ChargeItem.objects.create(
+                    organization_id=admission.organization_id,
+                    patient=admission.patient,
+                    episode=admission.episode,
+                    service=service,
+                    quantity=1,
+                    unit_price=service.rate,
+                    delivered_at=discharged_at,
+                    created_by=user,
+                )
+        return summary

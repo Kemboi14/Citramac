@@ -19,6 +19,7 @@ FHIR R4 mapping (doc 15 §3, confirmed by the project owner 2026-10-07):
 | CarePlan / CarePlanActivity | CarePlan / CarePlan.activity + Goal |
 | InterventionRecord | Procedure (performed intervention) |
 | BillingService / ChargeItem | ChargeItemDefinition / ChargeItem |
+| DischargeSummary (+ lines) | Composition (discharge summary) in a document Bundle — docs/17 |
 | LocalValueSet / LocalConcept | ValueSet / CodeSystem (served, CLAUDE.md §4) |
 """
 
@@ -556,3 +557,132 @@ class ConsentTemplate(TenantScopedModel):
                 name="unique_consent_template_version",
             )
         ]
+
+
+class DischargeSummary(SignedRecordMixin, TenantScopedModel):
+    """Signed discharge record for one inpatient admission (docs/17).
+
+    FHIR: Composition (discharge summary) in a document Bundle with the IMP
+    Encounter (`hospitalization.dischargeDisposition`, `period.end`), coded
+    Conditions, MedicationRequests and a Provenance. It hangs off the
+    admission's Encounter inside the client's EpisodeOfCare and puts no
+    clinical content on the episode (CLAUDE.md §4).
+
+    A signed row is immutable (SignedRecordMixin). A correction is a new
+    version whose `supersedes` points at the row it replaces; the original is
+    never edited, so the record that was relied on stays recoverable.
+    """
+
+    STATUS_CHOICES = [("IN_PROGRESS", "In progress"), ("COMPLETED", "Signed")]
+
+    admission = models.ForeignKey(
+        "ipd_ward.Admission", on_delete=models.PROTECT, related_name="discharge_summaries"
+    )
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="discharge_summaries"
+    )
+    episode = models.ForeignKey(
+        EpisodeOfCare, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    encounter = models.ForeignKey(
+        Encounter, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    version = models.PositiveIntegerField(default=1)
+    supersedes = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="amended_by"
+    )
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="IN_PROGRESS")
+
+    # Value-set code from `discharge-disposition`.
+    disposition = models.CharField(max_length=32, blank=True)
+    destination = models.CharField(max_length=255, blank=True)
+    discharged_at = models.DateTimeField(null=True, blank=True)
+    clinical_status = models.TextField(blank=True)
+    treatment_summary = models.TextField(blank=True)
+    # Required when the admission was involuntary: what became of the legal order.
+    legal_status_at_discharge = models.TextField(blank=True)
+    # Coded: ICD-11 diagnoses already recorded on the admission's Encounter.
+    diagnoses = models.ManyToManyField(
+        "clinical_encounter.DiagnosisCode", blank=True, related_name="+"
+    )
+    # Codes from `discharge-education`.
+    education = models.JSONField(default=list, blank=True)
+    follow_up_appointment = models.ForeignKey(
+        "client_registry.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    author = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    draft_saved_at = models.DateTimeField(null=True, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Authority (CLAUDE.md §3.4: "on whose authority"): the signer's role at the
+    # moment of signing, kept because roles can change later.
+    signed_role = models.CharField(max_length=100, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-version"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "version"], name="unique_discharge_version_per_admission"
+            )
+        ]
+
+    def __str__(self):
+        return f"Discharge v{self.version} ({self.get_status_display()}) — {self.patient}"
+
+
+class DischargeMedicationLine(TenantScopedModel):
+    """One line of the discharge medication reconciliation. FHIR MedicationRequest.
+
+    `PrescriptionItem` has no status, so what continues, stops, changes or is
+    new at discharge is recorded here. Lines of a signed summary are frozen.
+    """
+
+    summary = models.ForeignKey(
+        DischargeSummary, on_delete=models.PROTECT, related_name="medications"
+    )
+    prescription_item = models.ForeignKey(
+        "clinical_encounter.PrescriptionItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    drug = models.ForeignKey(
+        "dha_interop.NationalDrugIndex", on_delete=models.PROTECT, related_name="+"
+    )
+    dose = models.CharField(max_length=100, blank=True)
+    route = models.CharField(max_length=100, blank=True)
+    frequency = models.CharField(max_length=100, blank=True)
+    duration = models.CharField(max_length=100, blank=True)
+    # Code from `discharge-medication-action`.
+    action = models.CharField(max_length=16)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["created_at"]
+
+    def _summary_is_signed(self):
+        return DischargeSummary.all_objects.filter(pk=self.summary_id, status="COMPLETED").exists()
+
+    def save(self, *args, **kwargs):
+        if self._summary_is_signed():
+            raise PermissionError(
+                "This discharge summary is signed; its medication lines are frozen."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self._summary_is_signed():
+            raise PermissionError(
+                "This discharge summary is signed; its medication lines are frozen."
+            )
+        return super().delete(*args, **kwargs)

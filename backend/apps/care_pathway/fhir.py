@@ -12,14 +12,22 @@ No LOINC codes are emitted for vital signs or instruments until verified.
 """
 
 import json
+from html import escape
 
 from fhir.resources.R4B.annotation import Annotation
 from fhir.resources.R4B.bundle import Bundle, BundleEntry
 from fhir.resources.R4B.codeableconcept import CodeableConcept
 from fhir.resources.R4B.coding import Coding
-from fhir.resources.R4B.encounter import Encounter
+from fhir.resources.R4B.composition import (
+    Composition,
+    CompositionAttester,
+    CompositionRelatesTo,
+    CompositionSection,
+)
+from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
 from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 from fhir.resources.R4B.flag import Flag
+from fhir.resources.R4B.narrative import Narrative
 from fhir.resources.R4B.period import Period
 from fhir.resources.R4B.provenance import Provenance, ProvenanceAgent
 from fhir.resources.R4B.questionnaireresponse import (
@@ -31,7 +39,13 @@ from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
 from fhir.resources.R4B.task import Task
 
-from apps.dha_interop.fhir_mapper import _urn, build_patient_resource
+from apps.dha_interop.fhir_mapper import (
+    _urn,
+    build_condition_resource,
+    build_encounter_resource,
+    build_medication_request_resource,
+    build_patient_resource,
+)
 
 _ENCOUNTER_STATUS = {
     "AWAITING": "arrived",
@@ -197,4 +211,179 @@ def build_triage_bundle(triage_encounter):
         type="collection",
         entry=[BundleEntry(fullUrl=url, resource=resource) for url, resource in resources],
     )
+    return json.loads(bundle.json())
+
+
+def _narrative(text):
+    return Narrative(
+        status="additional", div=f'<div xmlns="http://www.w3.org/1999/xhtml">{escape(text)}</div>'
+    )
+
+
+def _discharge_med_request(line, patient_ref, summary):
+    from .services import concept_labels
+
+    resource = build_medication_request_resource(line, patient_ref)
+    # CONTINUE / CHANGE / NEW are live orders after discharge; STOP is not.
+    resource.status = "stopped" if line.action == "STOP" else "active"
+    resource.category = [
+        _local(
+            "discharge-medication-action",
+            line.action,
+            concept_labels().get(("discharge-medication-action", line.action)),
+        )
+    ]
+    resource.authoredOn = summary.signed_at.isoformat()
+    if line.note:
+        resource.note = [Annotation(text=line.note)]
+    return resource
+
+
+def build_discharge_bundle(summary):
+    """FHIR document Bundle for one SIGNED discharge summary (docs/17).
+
+    Composition (discharge summary) + Patient + EpisodeOfCare + the IMP Encounter
+    (`hospitalization.dischargeDisposition`, `period.end`) + coded Conditions +
+    discharge MedicationRequests + Provenance. An amendment's Composition
+    `relatesTo` (replaces) the version it supersedes; the original is untouched.
+
+    VERIFY: Composition.type needs the LOINC discharge-summary document code
+    (loinc.org) — carried as text only until confirmed; 57133-1 is the *referral
+    note* code and must not be reused. VERIFY: national IG / profile and the
+    disposition code system; the disposition is a local code until then.
+    """
+    from .services import concept_labels
+
+    admission = summary.admission
+    patient = summary.patient
+    labels = concept_labels()
+    patient_ref = _urn("Patient", patient.id)
+    encounter_ref = _urn("Encounter", admission.id)
+    composition_ref = _urn("Composition", summary.id)
+    resources = [(patient_ref, build_patient_resource(patient))]
+
+    episode = summary.episode
+    episode_ref = None
+    if episode:
+        episode_ref = _urn("EpisodeOfCare", episode.id)
+        resources.append(
+            (
+                episode_ref,
+                EpisodeOfCare(
+                    id=str(episode.id),
+                    status=episode.status,
+                    statusHistory=[
+                        EpisodeOfCareStatusHistory(
+                            status=h.status,
+                            period=Period(
+                                start=h.period_start.isoformat(),
+                                end=h.period_end.isoformat() if h.period_end else None,
+                            ),
+                        )
+                        for h in episode.status_history.all()
+                    ]
+                    or None,
+                    patient=Reference(reference=patient_ref),
+                    period=Period(start=episode.period_start.isoformat()),
+                ),
+            )
+        )
+
+    encounter = build_encounter_resource(admission, patient_ref)
+    encounter.status = "finished"
+    encounter.period = Period(
+        start=admission.admitted_at.isoformat(), end=summary.discharged_at.isoformat()
+    )
+    encounter.hospitalization = EncounterHospitalization(
+        dischargeDisposition=_local(
+            "discharge-disposition",
+            summary.disposition,
+            labels.get(("discharge-disposition", summary.disposition)),
+        )
+    )
+    if episode_ref:
+        encounter.episodeOfCare = [Reference(reference=episode_ref)]
+    resources.append((encounter_ref, encounter))
+
+    diagnosis_refs = []
+    for diagnosis in summary.diagnoses.select_related("icd11_code"):
+        ref = _urn("Condition", diagnosis.id)
+        condition = build_condition_resource(diagnosis, patient_ref)
+        condition.encounter = Reference(reference=encounter_ref)
+        resources.append((ref, condition))
+        diagnosis_refs.append(Reference(reference=ref))
+
+    medication_refs = []
+    for line in summary.medications.select_related("drug"):
+        ref = _urn("MedicationRequest", line.id)
+        resources.append((ref, _discharge_med_request(line, patient_ref, summary)))
+        medication_refs.append(Reference(reference=ref))
+
+    sections = [
+        CompositionSection(
+            title="Clinical status at discharge", text=_narrative(summary.clinical_status)
+        ),
+        CompositionSection(title="Treatment summary", text=_narrative(summary.treatment_summary)),
+    ]
+    if summary.legal_status_at_discharge:
+        sections.append(
+            CompositionSection(
+                title="Legal status at discharge",
+                text=_narrative(summary.legal_status_at_discharge),
+            )
+        )
+    if diagnosis_refs:
+        sections.append(CompositionSection(title="Diagnoses", entry=diagnosis_refs))
+    if medication_refs:
+        sections.append(CompositionSection(title="Discharge medications", entry=medication_refs))
+    if summary.education:
+        sections.append(
+            CompositionSection(
+                title="Education provided",
+                text=_narrative(
+                    "; ".join(labels.get(("discharge-education", c), c) for c in summary.education)
+                ),
+            )
+        )
+
+    author = _actor(summary.signed_by)
+    composition = Composition(
+        id=str(summary.id),
+        status="amended" if summary.supersedes_id else "final",
+        type=CodeableConcept(text="Discharge summary"),
+        subject=Reference(reference=patient_ref),
+        encounter=Reference(reference=encounter_ref),
+        date=summary.signed_at.isoformat(),
+        author=[author],
+        title=f"Discharge summary (version {summary.version})",
+        attester=[
+            CompositionAttester(mode="legal", time=summary.signed_at.isoformat(), party=author)
+        ],
+        relatesTo=(
+            [
+                CompositionRelatesTo(
+                    code="replaces",
+                    targetReference=Reference(reference=_urn("Composition", summary.supersedes_id)),
+                )
+            ]
+            if summary.supersedes_id
+            else None
+        ),
+        section=sections,
+    )
+    provenance = Provenance(
+        id=f"prov-{summary.id}",
+        target=[Reference(reference=composition_ref)],
+        recorded=summary.signed_at.isoformat(),
+        agent=[
+            ProvenanceAgent(
+                who=author,
+                role=[CodeableConcept(text=summary.signed_role)] if summary.signed_role else None,
+            )
+        ],
+    )
+    entries = [BundleEntry(fullUrl=composition_ref, resource=composition)]
+    entries += [BundleEntry(fullUrl=url, resource=resource) for url, resource in resources]
+    entries.append(BundleEntry(fullUrl=_urn("Provenance", summary.id), resource=provenance))
+    bundle = Bundle(type="document", entry=entries)
     return json.loads(bundle.json())

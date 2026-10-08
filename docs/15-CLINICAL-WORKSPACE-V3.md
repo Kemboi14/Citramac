@@ -20,21 +20,60 @@ Build status per screen is tracked in §4.
 
 ### 1.1 Shell
 
-**Sidebar** (260px, green gradient `#00503a → #003f2e`; collapses to a 68px icon rail).
+**Sidebar** (248px expanded, 76px icon rail; green gradient `#00503a → #003f2e`). Replaced on
+2026-10-08 by the grouped navigation of the updated mockup (`Updated_Citramac_system.html`, now
+`mockups/citramac_clinical_workspace.html`); the 2026-10-07 flat list and its "Other clinical
+modules" group are gone.
 
-- Brand block: square icon "C", wordmark **CITRAMAC**, sub-label **HMIS v2.0**.
-- Nav, in this exact order:
-  1. Dashboard
-  2. My Caseload
-  3. Appointments
-  4. **Clinical** (expandable group, open by default): Registration · Triage · Psychiatric · Inpatient
-  5. **Psychotherapy** (expandable group, open by default): Individual Psychotherapy · Family
-     Psychotherapy · Group Psychotherapy
-  6. Documents
-  7. Billing
-  8. Reports
+- Brand block: square icon, wordmark **CITRAMAC**, sub-label **HMIS v2.0**.
+- Nav, in this exact order. Groups marked ▾ start open; every other group starts collapsed and
+  **opens itself when the current route is inside it** (a group the user collapsed by hand stays
+  collapsed until they navigate to another screen in it):
+  1. Dashboard — `/clinical`
+  2. My Caseload — `/clinical/caseload`
+  3. **Clinical** ▾: Registration · Triage · Psychiatric · Supervision requests
+  4. **Psychotherapy** ▾: Individual · Family · Group Psychotherapy
+  5. **Inpatient & residential**: Admissions · Ward board · Discharge planning
+  6. **Pharmacy & medication**: Medication orders & review · Medication administration
+  7. **Laboratory**: Laboratory records
+  8. **Appointments & follow-up**: Appointments · Follow-up
+  9. **Referrals**: Referral worklist · Referral documents
+  10. **Reports & analytics**: Operational overview · NACADA report
+  11. Documents
+  12. Billing
+- Owner decisions, 2026-10-08: NACADA report sits under Reports & analytics and Supervision
+  requests under Clinical (both kept); Referral worklist / Referral documents reuse the Psychiatric
+  queue and Documents screens on their own routes (`/clinical/referrals`,
+  `/clinical/referrals/documents`) so two nav items never light up at once; count badges seen in a
+  screenshot are not part of the mockup and are not built.
+- **Audit log is not in this sidebar.** It is an Org Admin and Auditor screen on the Org Admin side
+  (`/org-admin/audit-log`, Governance). Clinicians never see it and the API refuses them. See
+  docs/17.
 - Footer: avatar initials, user name, role (e.g. "J. Njoroge, RN / Triage Nurse").
-- Rail mode hides labels, section labels, badges, group labels, chevrons and sub-menus.
+- Rail mode hides labels, section labels, group labels, chevrons and sub-menus.
+
+**Workspace behaviour (added 2026-10-08)**
+
+- *Client search*: the topbar search finds clients by name, phone, ID or CITRAMAC number (debounced;
+  Up/Down, Enter, Esc) and opens the client's record. Ctrl+K (⌘K) focuses it from any screen. Results
+  show names, numbers and dates of birth only. The Org Admin and Super Admin topbar search boxes are
+  still plain, non-working inputs.
+- *Selected client*: screens that work on one client (pharmacy, medication administration,
+  laboratory, supervision, clinical review, encounter, client history, admission) show a client
+  picker when none is chosen — they no longer redirect to the Client Registry — and the safety
+  banner with a "Change client" link once one is. The selection is held **in memory only**
+  (CLAUDE.md §5; it used to be kept in `sessionStorage`); a reload or sign-out forgets it.
+- *Keyboard and focus*: a "Skip to main content" link; dialogs, drawers and the mobile sidebar move
+  focus in, keep Tab inside, close on Esc and return focus; a closed off-canvas sidebar is inert.
+  In the icon rail, clicking a group expands the sidebar. The sidebar scrolls the current item into
+  view and shows a soft edge where more items lie above or below.
+- *Forms*: the discharge form autosaves to the server and warns before the tab closes while a change
+  is unsaved; server validation appears beside the field it concerns.
+- *Lists*: triage worklist, psychiatry queue, caseload, documents, discharge and follow-up lists can
+  be filtered and sorted by column; they show skeleton rows while loading and a purposeful empty
+  state. The dashboard shows what needs attention (RED / ORANGE clients, triage due, overdue
+  follow-ups, discharges with no follow-up), when it was last updated, and a Refresh button.
+- Breadcrumbs on the client record, triage encounter and discharge screens.
 
 **Topbar** (56px, dark green `--hdr`, white text, sticky).
 
@@ -43,10 +82,12 @@ Build status per screen is tracked in §4.
   light/dark theme toggle.
 - Search hidden below 480px.
 
-**Page titles by page**: Dashboard · My Caseload · Appointments · Client registry (Registration) ·
-Triage & Queue (worklist) / Triage encounter (open encounter) · Psychiatry Workspace · Inpatient
-Admissions · Outpatient Care (all three psychotherapy items) · Clinical Documents · Billing ·
-Reports & Analytics · Client Record.
+**Page titles by page**: Dashboard · My Caseload · Appointments · Follow-up · Client registry
+(Registration) · Triage & Queue (worklist) / Triage encounter (open encounter) · Psychiatry
+Workspace · Inpatient Admissions · Ward Board · Discharge Planning · Outpatient Care (all three
+psychotherapy items) · Medication Orders & Review · Medication Administration · Laboratory Records ·
+Referral Worklist · Referral Documents · Clinical Documents · Billing · Reports & Analytics · NACADA
+Report · Supervision Requests · Client Record.
 
 **Triage focus mode**: when a triage encounter is open, the shell locks to viewport height and the
 content area scrolls on its own.
@@ -626,26 +667,16 @@ They are **not** treated as approved layouts until the owner says so.
 - **Outcomes**: PHQ-9 and GAD-7 trends; care plan review.
 - **Follow-up**: the client's appointment schedule.
 
-### 1.18 Existing screens with no place in the new navigation
+### 1.18 Existing screens and where they sit now (updated 2026-10-08)
 
-The new nav has no slot for these, which are live today:
+Homed in the grouped navigation: Nursing / MAR (Medication administration), Laboratory (LIMS),
+Pharmacy (Medication orders & review), Supervision (Supervision requests), Clinical Reports
+(NACADA report), Discharge (Discharge planning, built — docs/17) and Follow-up (built — docs/17).
 
-- Client Registry list
-- Client History
-- Assessments
-- Clinical Encounter (SOAP)
-- Triage & MSE (old)
-- Clinical Review
-- Nursing / MAR
-- Laboratory (LIMS)
-- Pharmacy
-- Supervision
-- Attachments
-- Discharge
-- Follow-up
-- Clinical Reports (NACADA / MOH)
-
-Their routes stay reachable by URL until the owner decides where each one belongs (see §4).
+No longer in the sidebar, still reachable by URL, nothing deleted: Client Registry list,
+Client History, Assessments, Clinical Encounter (SOAP), Triage & MSE (old), Clinical Review,
+Attachments, MHP session screens, and the old Admissions & Ward Workflow screen (`/clinical/ipd`,
+whose free-text discharge box was replaced by a link to Discharge planning).
 
 ---
 
@@ -773,7 +804,7 @@ served value sets, triage rules, FHIR triage bundle) and frontend `src/modules/c
 
 | Screen | Route | Notes |
 |---|---|---|
-| Shell (sidebar, topbar title, theme toggle) | — | Sidebar exactly as the mockup; older screens under a collapsed "Other clinical modules" group |
+| Shell (sidebar, topbar title, theme toggle) | — | Grouped sidebar exactly as the 2026-10-08 mockup; active group opens itself |
 | Dashboard | `/clinical` | All counts live; trend lines computed (new this week / new today) |
 | My Caseload | `/clinical/caseload` | Priority column and RED / ORANGE tile from the latest signed triage |
 | Appointments | `/clinical/appointments` | Check in / Cancel kept as row actions |
@@ -786,6 +817,10 @@ served value sets, triage rules, FHIR triage bundle) and frontend `src/modules/c
 | Documents + signed triage view | `/clinical/documents`, `/clinical/documents/:id` | |
 | Billing (+ Journey billing stage) | `/clinical/billing` | Rates from the facility tariff (`/org-admin/service-tariff`); unpriced services excluded with a notice |
 | Reports | `/clinical/reports` | |
+| Discharge planning | `/clinical/discharge` | Signed, versioned discharge (docs/17); replaces the free-text discharge |
+| Follow-up | `/clinical/follow-up` | Upcoming, overdue, missed and "discharged, no follow-up booked" (docs/17) |
+| Referral worklist / documents | `/clinical/referrals`, `/clinical/referrals/documents` | Reuse the Psychiatric queue and Documents screens |
+| Audit log | `/org-admin/audit-log` | Org Admin and Auditor only; values never shown (docs/17) |
 
 **Owner decisions recorded 2026-10-07**
 

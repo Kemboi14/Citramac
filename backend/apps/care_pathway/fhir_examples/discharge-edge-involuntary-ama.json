@@ -1,0 +1,253 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:27260a96-3150-4f52-a2ea-93d7e72884e0",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "27260a96-3150-4f52-a2ea-93d7e72884e0",
+        "status": "final",
+        "type": {
+          "text": "Discharge summary"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:ea517c5e-fb39-4a90-8c15-d2fa93f0e91a"
+        },
+        "date": "2026-10-08T10:28:09.239540Z",
+        "author": [
+          {
+            "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+            "display": "Wanjiru Kariuki"
+          }
+        ],
+        "title": "Discharge summary (version 1)",
+        "attester": [
+          {
+            "mode": "legal",
+            "time": "2026-10-08T10:28:09.239540Z",
+            "party": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ],
+        "section": [
+          {
+            "title": "Clinical status at discharge",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Declined to stay; capacity assessed and judged present; no immediate risk identified.</div>"
+            }
+          },
+          {
+            "title": "Treatment summary",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Alcohol withdrawal managed for four days. Olanzapine stopped at the client&#x27;s request.</div>"
+            }
+          },
+          {
+            "title": "Legal status at discharge",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Order MHA-2026-0147 reviewed by the consultant and revoked before the client left.</div>"
+            }
+          },
+          {
+            "title": "Diagnoses",
+            "entry": [
+              {
+                "reference": "urn:citramac:condition:c80a6aa9-7164-4938-8630-92f390f08a74"
+              }
+            ]
+          },
+          {
+            "title": "Discharge medications",
+            "entry": [
+              {
+                "reference": "urn:citramac:medicationrequest:1f571ce9-17b3-43ef-9751-5c6cd44c8473"
+              }
+            ]
+          },
+          {
+            "title": "Education provided",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Crisis plan reviewed; Warning signs discussed</div>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "e545d8ec-8201-4b4e-ae24-359e327a91c1",
+        "name": [
+          {
+            "family": "Otieno",
+            "given": [
+              "Daniel"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1989-11-02"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:297757a8-f2cc-4d2d-8233-1122ce9e5d68",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "297757a8-f2cc-4d2d-8233-1122ce9e5d68",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-08T10:28:08.891782Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+        },
+        "period": {
+          "start": "2026-10-08T10:28:08.891782Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:ea517c5e-fb39-4a90-8c15-d2fa93f0e91a",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "ea517c5e-fb39-4a90-8c15-d2fa93f0e91a",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:297757a8-f2cc-4d2d-8233-1122ce9e5d68"
+          }
+        ],
+        "period": {
+          "start": "2026-10-08T10:28:08.966011Z",
+          "end": "2026-10-08T10:28:09.239540Z"
+        },
+        "hospitalization": {
+          "dischargeDisposition": {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:discharge-disposition",
+                "code": "AMA",
+                "display": "Left against medical advice"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:condition:c80a6aa9-7164-4938-8630-92f390f08a74",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "c80a6aa9-7164-4938-8630-92f390f08a74",
+        "code": {
+          "coding": [
+            {
+              "system": "http://id.who.int/icd/release/11/mms",
+              "code": "6C40.2",
+              "display": "Alcohol dependence"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:ea517c5e-fb39-4a90-8c15-d2fa93f0e91a"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:medicationrequest:1f571ce9-17b3-43ef-9751-5c6cd44c8473",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "1f571ce9-17b3-43ef-9751-5c6cd44c8473",
+        "status": "stopped",
+        "intent": "order",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:discharge-medication-action",
+                "code": "STOP",
+                "display": "Stop"
+              }
+            ]
+          }
+        ],
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:national-drug-index",
+              "code": "DRUG-OLZ10",
+              "display": "Olanzapine"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+        },
+        "authoredOn": "2026-10-08T10:28:09.239540Z",
+        "note": [
+          {
+            "text": "Stopped at client's request"
+          }
+        ],
+        "dosageInstruction": [
+          {
+            "text": "10 mg Oral Twice daily"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:27260a96-3150-4f52-a2ea-93d7e72884e0",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-27260a96-3150-4f52-a2ea-93d7e72884e0",
+        "target": [
+          {
+            "reference": "urn:citramac:composition:27260a96-3150-4f52-a2ea-93d7e72884e0"
+          }
+        ],
+        "recorded": "2026-10-08T10:28:09.239540Z",
+        "agent": [
+          {
+            "role": [
+              {
+                "text": "Org Admin"
+              }
+            ],
+            "who": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

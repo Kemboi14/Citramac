@@ -2,7 +2,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { useDialogA11y } from "../components/useDialogA11y";
+import { usePatientContext } from "../clinical/usePatientContext";
 import type { NavGroup, NavItem } from "./navConfig";
+import { groupContainsActive, itemMatches } from "./navMatch";
 import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
@@ -64,6 +67,7 @@ export function AppShell({
   profilePath,
   variant = "default",
   pageTitles,
+  searchSlot,
 }: {
   brandName: string;
   brandSub: string;
@@ -82,6 +86,8 @@ export function AppShell({
   /** Topbar titles for routes whose title differs from their nav label, or
    * that have no nav entry. Falls back to the nav label of the current route. */
   pageTitles?: Record<string, string>;
+  /** Replaces the topbar's plain search box (brand variant), e.g. with a working client search. */
+  searchSlot?: ReactNode;
 }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(readStoredCollapse);
   const isDesktop = useIsDesktop();
@@ -94,6 +100,7 @@ export function AppShell({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const { accessToken, claims, avatarUrl, logout } = useAuth();
+  const { clear: forgetSelectedClient } = usePatientContext();
   const navigate = useNavigate();
   const location = useLocation();
   // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
@@ -102,7 +109,9 @@ export function AppShell({
     () =>
       new Set(
         navGroups.flatMap((group) =>
-          group.items.filter((item) => item.defaultOpen).map((item) => item.label),
+          group.items
+            .filter((item) => item.defaultOpen || groupContainsActive(item, location.pathname))
+            .map((item) => item.label),
         ),
       ),
   );
@@ -120,6 +129,24 @@ export function AppShell({
       else next.add(label);
       return next;
     });
+
+  // Open the group that holds the screen being navigated to. Only ever adds
+  // groups, so a group the user collapsed by hand stays collapsed until they go
+  // somewhere else inside it. Done while rendering (React's "adjust state when a
+  // prop changes" pattern) rather than in an effect, so the right group is open
+  // on the very first paint of the new route.
+  const [seenPath, setSeenPath] = useState(location.pathname);
+  if (seenPath !== location.pathname) {
+    setSeenPath(location.pathname);
+    const active = navGroups.flatMap((group) =>
+      group.items
+        .filter((item) => groupContainsActive(item, location.pathname))
+        .map((item) => item.label),
+    );
+    if (active.some((label) => !expandedGroups.has(label))) {
+      setExpandedGroups(new Set([...expandedGroups, ...active]));
+    }
+  }
 
   useEffect(() => {
     // Platform theme is the baseline for every user, including Super Admin
@@ -175,6 +202,22 @@ export function AppShell({
   };
 
   const closeMobile = () => setMobileOpen(false);
+  // Below the desktop breakpoint the sidebar is a modal drawer: focus moves in,
+  // Tab stays in, Esc closes it. On desktop it is plain page chrome.
+  const drawerOpen = mobileOpen && !isDesktop;
+  const asideRef = useDialogA11y<HTMLElement>(drawerOpen, closeMobile);
+  const { navRef, topRef, bottomRef, edges: navEdges } = useScrollEdges();
+  // Clicking a group while the sidebar is an icon rail expands it first —
+  // otherwise the click would do nothing and the group's pages stay unreachable.
+  const openGroupFromRail = (label: string) => {
+    setDesktopCollapsed(false);
+    setExpandedGroups((prev) => new Set(prev).add(label));
+  };
+  const focusMain = () => {
+    const main = document.getElementById("main-content");
+    main?.focus();
+    main?.scrollIntoView?.({ block: "start" });
+  };
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -187,12 +230,24 @@ export function AppShell({
 
   const handleLogout = async () => {
     setProfileMenuOpen(false);
+    // The next person to sign in on this tab must not inherit the open client.
+    forgetSelectedClient();
     await logout();
     navigate("/login", { replace: true });
   };
 
   return (
     <div className="flex min-h-screen w-full">
+      <a
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          focusMain();
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] focus:rounded-md focus:bg-surface-card focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink-900 focus:shadow-md"
+      >
+        Skip to main content
+      </a>
       <div
         className={`fixed inset-0 z-30 bg-surface-scrim transition-opacity duration-200 lg:hidden ${
           mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
@@ -202,6 +257,12 @@ export function AppShell({
       />
 
       <aside
+        ref={asideRef}
+        aria-label="Main navigation"
+        role={drawerOpen ? "dialog" : undefined}
+        aria-modal={drawerOpen || undefined}
+        // Off-canvas on mobile: keep its links out of the tab order until opened.
+        inert={!isDesktop && !mobileOpen}
         className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-shrink-0 flex-col overflow-hidden text-sidebar-active-bg transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-300 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -237,89 +298,109 @@ export function AppShell({
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3.5">
-          {navGroups.map((group) => (
-            <div key={group.label || "unlabeled"} className="mb-[18px]">
-              {group.label && (
-                <div
-                  className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-sidebar-muted transition-[opacity,max-height] duration-200 ${
-                    collapsed ? "max-h-0 opacity-0" : "max-h-4 opacity-100"
-                  }`}
-                >
-                  {group.label}
-                </div>
-              )}
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                if (item.soon) {
-                  return (
-                    <div
-                      key={item.label}
-                      title={collapsed ? item.label : undefined}
-                      className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-sidebar-text opacity-45 ${collapsed ? "justify-center" : ""}`}
-                    >
-                      <Icon className="h-[17px] w-[17px] flex-shrink-0" />
-                      {!collapsed && (
-                        <>
-                          {item.label}
-                          <span className="ml-auto rounded-full bg-sidebar-divider px-1.5 py-0.5 text-[9px] font-bold text-sidebar-muted">
-                            Soon
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (item.children?.length) {
-                  const isOpen = expandedGroups.has(item.label);
-                  return (
-                    <div key={item.label} className="mb-0.5">
-                      <button
-                        type="button"
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* Soft edges that say "there is more above / below" when the list scrolls. */}
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-black/30 to-transparent transition-opacity duration-150 ${navEdges.top ? "opacity-100" : "opacity-0"}`}
+          />
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-black/30 to-transparent transition-opacity duration-150 ${navEdges.bottom ? "opacity-100" : "opacity-0"}`}
+          />
+          <nav
+            ref={navRef}
+            aria-label="Primary"
+            className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3.5"
+          >
+            <div ref={topRef} aria-hidden="true" className="h-px" />
+            {navGroups.map((group) => (
+              <div key={group.label || "unlabeled"} className="mb-[18px]">
+                {group.label && (
+                  <div
+                    className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-sidebar-muted transition-[opacity,max-height] duration-200 ${
+                      collapsed ? "max-h-0 opacity-0" : "max-h-4 opacity-100"
+                    }`}
+                  >
+                    {group.label}
+                  </div>
+                )}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  if (item.soon) {
+                    return (
+                      <div
+                        key={item.label}
                         title={collapsed ? item.label : undefined}
-                        onClick={() => !collapsed && toggleGroup(item.label)}
-                        aria-expanded={isOpen}
-                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium text-sidebar-text transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-text-strong ${collapsed ? "justify-center" : ""}`}
+                        className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-sidebar-text opacity-45 ${collapsed ? "justify-center" : ""}`}
                       >
                         <Icon className="h-[17px] w-[17px] flex-shrink-0" />
                         {!collapsed && (
                           <>
-                            <span className="flex-1">{item.label}</span>
-                            <ChevronDown
-                              className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
-                            />
+                            {item.label}
+                            <span className="ml-auto rounded-full bg-sidebar-divider px-1.5 py-0.5 text-[9px] font-bold text-sidebar-muted">
+                              Soon
+                            </span>
                           </>
                         )}
-                      </button>
-                      {!collapsed && isOpen && (
-                        <div className="mt-0.5 flex flex-col gap-0.5 pl-[17px]">
-                          {item.children.map((child) => (
-                            <ClinicalNavLeaf
-                              key={child.label}
-                              item={child}
-                              collapsed={false}
-                              onClick={closeMobile}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
+                      </div>
+                    );
+                  }
 
-                return (
-                  <ClinicalNavLeaf
-                    key={item.label}
-                    item={item}
-                    collapsed={collapsed}
-                    onClick={closeMobile}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </nav>
+                  if (item.children?.length) {
+                    const isOpen = expandedGroups.has(item.label);
+                    const holdsActive = groupContainsActive(item, location.pathname);
+                    return (
+                      <div key={item.label} className="mb-0.5">
+                        <button
+                          type="button"
+                          title={collapsed ? item.label : undefined}
+                          onClick={() =>
+                            collapsed ? openGroupFromRail(item.label) : toggleGroup(item.label)
+                          }
+                          aria-expanded={isOpen}
+                          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-text-strong ${holdsActive ? "font-semibold text-sidebar-text-strong" : "text-sidebar-text"} ${collapsed ? "justify-center" : ""}`}
+                        >
+                          <Icon className="h-[17px] w-[17px] flex-shrink-0" />
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1">{item.label}</span>
+                              <ChevronDown
+                                className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+                              />
+                            </>
+                          )}
+                        </button>
+                        {!collapsed && isOpen && (
+                          <div className="mt-0.5 flex flex-col gap-0.5 pl-[17px]">
+                            {item.children.map((child) => (
+                              <ClinicalNavLeaf
+                                key={child.label}
+                                item={child}
+                                collapsed={false}
+                                onClick={closeMobile}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ClinicalNavLeaf
+                      key={item.label}
+                      item={item}
+                      collapsed={collapsed}
+                      onClick={closeMobile}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+            <div ref={bottomRef} aria-hidden="true" className="h-px" />
+          </nav>
+        </div>
 
         <div ref={profileMenuRef} className="relative border-t border-sidebar-divider">
           {profileMenuOpen && (
@@ -390,12 +471,15 @@ export function AppShell({
             <div className="min-w-0 flex-1 truncate font-display text-sm font-semibold">
               {pageTitle}
             </div>
-            <div className="relative hidden w-60 max-w-[30vw] min-[481px]:block">
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                className="h-9 w-full rounded-lg border border-sidebar-divider bg-sidebar-hover px-3 text-[12.5px] text-sidebar-text-strong outline-none placeholder:text-sidebar-muted focus:border-sidebar-muted"
-              />
+            <div className="relative hidden w-72 max-w-[34vw] min-[481px]:block">
+              {searchSlot ?? (
+                <input
+                  type="text"
+                  aria-label={searchPlaceholder}
+                  placeholder={searchPlaceholder}
+                  className="h-9 w-full rounded-lg border border-sidebar-divider bg-sidebar-hover px-3 text-[12.5px] text-sidebar-text-strong outline-none placeholder:text-sidebar-muted focus:border-sidebar-muted"
+                />
+              )}
             </div>
             <div className="flex items-center gap-2">
               {topbarRight}
@@ -416,6 +500,7 @@ export function AppShell({
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
               <input
                 type="text"
+                aria-label={searchPlaceholder}
                 placeholder={searchPlaceholder}
                 className="w-full rounded-[10px] border border-surface-border bg-surface-bg py-2.5 pl-9 pr-3.5 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card"
               />
@@ -424,7 +509,11 @@ export function AppShell({
           </header>
         )}
 
-        <main className="w-full flex-1 px-4 py-5 pb-14 sm:px-6 lg:px-8 lg:py-7">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="w-full flex-1 px-4 py-5 pb-14 outline-none sm:px-6 lg:px-8 lg:py-7"
+        >
           <div className="mx-auto w-full max-w-[1920px]">
             <ErrorBoundary resetKey={location.pathname}>
               <SubscriptionBanner />
@@ -436,6 +525,40 @@ export function AppShell({
       </div>
     </div>
   );
+}
+
+/**
+ * Whether the nav list has more content above / below the visible part, using
+ * two sentinel elements inside the scroll container (no scroll listeners).
+ */
+function useScrollEdges() {
+  const navRef = useRef<HTMLElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+  useEffect(() => {
+    const root = navRef.current;
+    const top = topRef.current;
+    const bottom = bottomRef.current;
+    if (!root || !top || !bottom || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setEdges((prev) => {
+          let next = prev;
+          for (const entry of entries) {
+            if (entry.target === top) next = { ...next, top: !entry.isIntersecting };
+            if (entry.target === bottom) next = { ...next, bottom: !entry.isIntersecting };
+          }
+          return next;
+        });
+      },
+      { root, threshold: 0 },
+    );
+    observer.observe(top);
+    observer.observe(bottom);
+    return () => observer.disconnect();
+  }, []);
+  return { navRef, topRef, bottomRef, edges };
 }
 
 /** Exact route first, then the longest "prefix/*" pattern (e.g. "/clinical/triage/*"). */
@@ -485,12 +608,16 @@ function ClinicalNavLeaf({
 }) {
   const Icon = item.icon;
   const location = useLocation();
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  const alsoActive = itemMatches(item, location.pathname);
+  // Keep the current screen visible when the sidebar list is long enough to scroll.
+  useEffect(() => {
+    if (alsoActive) linkRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [alsoActive]);
   if (!item.to) return null;
-  const alsoActive = (item.alsoActiveFor ?? []).some(
-    (prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
-  );
   return (
     <NavLink
+      ref={linkRef}
       to={item.to}
       // Exact match only — every entry here is its own distinct screen,
       // never a section header that should stay lit while a nested child

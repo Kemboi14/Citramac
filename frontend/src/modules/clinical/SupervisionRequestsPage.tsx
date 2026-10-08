@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
@@ -10,6 +9,9 @@ import {
   scheduleSupervisionRequest,
   type SupervisionRequest,
 } from "../../lib/mhpExtrasApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -50,15 +52,7 @@ export function SupervisionRequestsPage() {
   }, [accessToken]);
 
   if (!selected) {
-    return (
-      <p className="text-ink-500">
-        Select a client from the{" "}
-        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
-          Client Registry
-        </Link>{" "}
-        first.
-      </p>
-    );
+    return <ClientPicker action="raise a supervision request for" />;
   }
 
   const submit = async (event: React.FormEvent) => {
@@ -105,14 +99,12 @@ export function SupervisionRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          MHP Program · Clinical Review &amp; Supervision
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          Supervision Requests — {selected.patientName}
-        </h1>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Clinical"
+        title={"Supervision requests"}
+        subtitle={selected.patientName}
+      />
 
       <form
         onSubmit={submit}

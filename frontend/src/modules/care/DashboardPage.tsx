@@ -3,8 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getCareDashboard, type CareDashboard } from "../../lib/carePathwayApi";
-import { Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
-import { BTN, TABLE, TD, TH } from "./shared/styles";
+import { EmptyState } from "../../components/EmptyState";
+import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
+import { formatTime } from "./shared/format";
+import { Callout, Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
+import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.3 — mockup dashboard(). Every number is
 // served by GET /care/dashboard/; nothing here is demo text.
@@ -153,6 +156,8 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<CareDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
     (isCancelled: () => boolean) => {
@@ -161,12 +166,14 @@ export function DashboardPage() {
         .then((result) => {
           if (isCancelled()) return;
           setData(result);
+          setUpdatedAt(new Date());
           setError(null);
         })
         .catch((err) => {
           if (isCancelled()) return;
           setError(err instanceof ApiError ? err.message : "Couldn't load the dashboard.");
-        });
+        })
+        .finally(() => setRefreshing(false));
     },
     [accessToken],
   );
@@ -184,15 +191,61 @@ export function DashboardPage() {
 
   const n = (value: number | undefined) => (data ? String(value ?? 0) : "—");
 
+  // What needs a person's attention right now, most urgent first, each with a way in.
+  const attention = data
+    ? [
+        {
+          count: data.red_orange,
+          text: (c: number) =>
+            `${c} RED / ORANGE ${c === 1 ? "client" : "clients"} need priority attention`,
+          to: "/clinical/psychiatry",
+        },
+        {
+          count: data.triage_due,
+          text: (c: number) => `${c} triage ${c === 1 ? "item is" : "items are"} due`,
+          to: "/clinical/triage",
+        },
+        {
+          count: data.follow_ups_overdue,
+          text: (c: number) =>
+            `${c} follow-up ${c === 1 ? "appointment is" : "appointments are"} overdue`,
+          to: "/clinical/follow-up?bucket=overdue",
+        },
+        {
+          count: data.discharged_without_follow_up,
+          text: (c: number) =>
+            `${c} discharged ${c === 1 ? "client has" : "clients have"} no follow-up booked`,
+          to: "/clinical/follow-up?bucket=unbooked",
+        },
+      ].filter((item) => item.count > 0)
+    : [];
+
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Dashboard"
-        subtitle={`System overview — ${TODAY_LABEL()}`}
+        subtitle={`System overview — ${TODAY_LABEL()}${updatedAt ? ` · Updated ${formatTime(updatedAt.toISOString())}` : ""}`}
         actions={
-          <button type="button" className={BTN} onClick={() => navigate("/clinical/registration")}>
-            + New Registration
-          </button>
+          <>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              disabled={refreshing}
+              onClick={() => {
+                setRefreshing(true);
+                load(() => false);
+              }}
+            >
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+            <button
+              type="button"
+              className={BTN}
+              onClick={() => navigate("/clinical/registration")}
+            >
+              + New Registration
+            </button>
+          </>
         }
       />
 
@@ -200,6 +253,29 @@ export function DashboardPage() {
         <div className="mb-4">
           <ErrorNote>{error}</ErrorNote>
         </div>
+      )}
+
+      {data && (
+        <section className="mb-6" aria-label="Needs attention">
+          {attention.length > 0 ? (
+            <Callout tone="warning" role="status">
+              <div className="mb-1.5 text-[13px] font-bold">Needs attention</div>
+              <ul className="flex flex-col gap-1">
+                {attention.map((item) => (
+                  <li key={item.to}>
+                    <Link className="font-semibold underline hover:no-underline" to={item.to}>
+                      {item.text(item.count)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Callout>
+          ) : (
+            <Callout tone="success" role="status">
+              Nothing is waiting on you right now.
+            </Callout>
+          )}
+        </section>
       )}
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -269,6 +345,16 @@ export function DashboardPage() {
             onClick={() => navigate("/clinical/appointments")}
           />
           <QuickTile
+            icon={ICONS.appointments}
+            title="Follow-up"
+            detail="Overdue and unbooked follow-ups"
+            count={`${data ? data.follow_ups_overdue + data.discharged_without_follow_up : "—"} to action`}
+            attention={
+              (data?.follow_ups_overdue ?? 0) + (data?.discharged_without_follow_up ?? 0) > 0
+            }
+            onClick={() => navigate("/clinical/follow-up")}
+          />
+          <QuickTile
             icon={ICONS.inpatient}
             title="Inpatient admissions"
             detail="Current stays and bed allocation"
@@ -329,9 +415,15 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card title="Recent Activity">
           {!data ? (
-            <p className="text-[13px] text-ink-500">{error ? "—" : "Loading activity…"}</p>
+            error ? (
+              <p className="text-[13px] text-ink-500">—</p>
+            ) : (
+              <PanelSkeleton lines={4} />
+            )
           ) : data.recent_activity.length === 0 ? (
-            <p className="text-[13px] text-ink-500">No recent activity has been recorded yet.</p>
+            <EmptyState title="No recent activity">
+              Registrations, triage, admissions and discharges appear here as they happen.
+            </EmptyState>
           ) : (
             <Timeline
               items={data.recent_activity.map((item, index) => ({
@@ -374,14 +466,20 @@ export function DashboardPage() {
                     </td>
                   </tr>
                 ))
+              ) : !data ? (
+                error ? (
+                  <tr>
+                    <td colSpan={3} className={`${TD} text-center text-ink-500`}>
+                      —
+                    </td>
+                  </tr>
+                ) : (
+                  <TableSkeletonRows columns={3} rows={3} />
+                )
               ) : (
                 <tr>
-                  <td colSpan={3} className={`${TD} !p-6 text-center !text-ink-500`}>
-                    {!data
-                      ? error
-                        ? "—"
-                        : "Loading arrivals…"
-                      : "No arrivals or re-checks are currently due."}
+                  <td colSpan={3}>
+                    <EmptyState title="No arrivals or re-checks are due" />
                   </td>
                 </tr>
               )}

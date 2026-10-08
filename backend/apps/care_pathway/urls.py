@@ -145,4 +145,26 @@ urlpatterns = [
         views.TriageThresholdsView.as_view(),
         name="care-triage-thresholds",
     ),
+    path("care/follow-ups/", views.FollowUpsView.as_view(), name="care-follow-ups"),
+    path("care/discharges/", views.DischargeWorklistView.as_view(), name="care-discharges"),
+    path(
+        "care/admissions/<uuid:pk>/discharge/",
+        views.AdmissionDischargeView.as_view(),
+        name="care-admission-discharge",
+    ),
+    path(
+        "care/admissions/<uuid:pk>/discharge/sign/",
+        views.AdmissionDischargeSignView.as_view(),
+        name="care-admission-discharge-sign",
+    ),
+    path(
+        "care/discharges/<uuid:pk>/amend/",
+        views.DischargeAmendView.as_view(),
+        name="care-discharge-amend",
+    ),
+    path(
+        "care/discharges/<uuid:pk>/fhir/",
+        views.DischargeFhirView.as_view(),
+        name="care-discharge-fhir",
+    ),
 ]

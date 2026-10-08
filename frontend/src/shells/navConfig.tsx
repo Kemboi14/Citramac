@@ -2,11 +2,15 @@ import {
   Activity,
   AlertTriangle,
   Archive,
+  BarChart3,
+  BedDouble,
   Building2,
+  CalendarCheck,
   CalendarClock,
   ClipboardCheck,
   ClipboardList,
   CreditCard,
+  DoorOpen,
   FileBarChart,
   FileClock,
   FileText,
@@ -15,13 +19,14 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  ListChecks,
   Mail,
   MessageSquare,
   Network,
   Palette,
-  Paperclip,
   Pill,
   Settings,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   Stethoscope,
@@ -111,6 +116,7 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
   {
     label: "Governance",
     items: [
+      { label: "Audit Log", to: "/org-admin/audit-log", icon: ClipboardList },
       { label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 },
       { label: "Data Protection", to: "/org-admin/data-protection", icon: ClipboardCheck },
       { label: "Breach Incidents", to: "/org-admin/breach-incidents", icon: ShieldAlert },
@@ -120,18 +126,29 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
   },
 ];
 
-// docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — the approved 2026-10-07 mockup
-// (mockups/citramac_clinical_workspace.html), item for item and in order:
-// no section headings, Clinical and Psychotherapy open by default. The
-// screens the mockup has no slot for stay available under a collapsed
-// "Other clinical modules" group (owner's decision: they remain).
+// The Auditor role has no portal of its own: it gets the Org Admin shell with
+// the audit log as its only screen.
+export const AUDITOR_NAV: NavGroup[] = [
+  {
+    label: "Governance",
+    items: [{ label: "Audit Log", to: "/org-admin/audit-log", icon: ClipboardList }],
+  },
+];
+
+// docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — the owner-approved grouped clinical
+// sidebar (mockups/citramac_clinical_workspace.html), item for item and in
+// order. Clinical and Psychotherapy start open; every other group starts
+// collapsed and opens itself when the current route is inside it. Screens the
+// mockup has no slot for (Client Registry, Client History, SOAP, Triage & MSE,
+// Clinical Review, Attachments, MHP sessions) are no longer in the sidebar but
+// keep their routes. The Audit log is deliberately absent here: it is an Org
+// Admin / Auditor screen (ORG_ADMIN_NAV).
 export const CLINICAL_NAV: NavGroup[] = [
   {
     label: "",
     items: [
       { label: "Dashboard", to: "/clinical", icon: LayoutDashboard },
       { label: "My Caseload", to: "/clinical/caseload", icon: Users },
-      { label: "Appointments", to: "/clinical/appointments", icon: CalendarClock },
       {
         label: "Clinical",
         icon: Stethoscope,
@@ -146,10 +163,9 @@ export const CLINICAL_NAV: NavGroup[] = [
             alsoActiveFor: ["/clinical/clients"],
           },
           {
-            label: "Inpatient",
-            to: "/clinical/inpatient",
-            icon: Building2,
-            matchPrefix: true,
+            label: "Supervision requests",
+            to: "/clinical/mhp/supervision",
+            icon: ShieldCheck,
           },
         ],
       },
@@ -171,30 +187,62 @@ export const CLINICAL_NAV: NavGroup[] = [
           },
         ],
       },
-      { label: "Documents", to: "/clinical/documents", icon: FileText, matchPrefix: true },
-      { label: "Billing", to: "/clinical/billing", icon: CreditCard },
-      { label: "Reports", to: "/clinical/reports", icon: FileBarChart },
       {
-        label: "Other clinical modules",
-        icon: ClipboardList,
+        label: "Inpatient & residential",
+        icon: BedDouble,
         children: [
-          { label: "Client Registry", to: "/clinical/registry", icon: FileText },
-          { label: "Client History", to: "/clinical/client-history", icon: ClipboardList },
-          { label: "Clinical Encounter (SOAP)", to: "/clinical/encounter", icon: Stethoscope },
-          { label: "Triage & MSE", to: "/clinical/triage-mse", icon: Activity },
-          { label: "Clinical Review", to: "/clinical/review", icon: ShieldCheck },
-          { label: "Admissions & Ward Workflow", to: "/clinical/ipd", icon: Building2 },
-          { label: "Nursing Care & MAR", to: "/clinical/ipd/nursing", icon: HeartPulse },
-          { label: "Laboratory (LIMS)", to: "/clinical/lims", icon: FlaskConical },
-          { label: "Pharmacy", to: "/clinical/pharmacy", icon: Pill },
-          { label: "Individual Sessions", to: "/clinical/mhp/individual", icon: User },
-          { label: "Family Sessions", to: "/clinical/mhp/family", icon: Users },
-          { label: "Group Sessions", to: "/clinical/mhp/group", icon: UsersRound },
-          { label: "Supervision Requests", to: "/clinical/mhp/supervision", icon: ShieldCheck },
-          { label: "Attachments", to: "/clinical/attachments", icon: Paperclip },
-          { label: "NACADA Report", to: "/clinical/mhp/nacada", icon: FileBarChart },
+          { label: "Admissions", to: "/clinical/inpatient", icon: Building2 },
+          { label: "Ward board", to: "/clinical/inpatient/ward", icon: BedDouble },
+          { label: "Discharge planning", to: "/clinical/discharge", icon: DoorOpen },
         ],
       },
+      {
+        label: "Pharmacy & medication",
+        icon: Pill,
+        children: [
+          { label: "Medication orders & review", to: "/clinical/pharmacy", icon: Pill },
+          {
+            label: "Medication administration",
+            to: "/clinical/ipd/nursing",
+            icon: ClipboardCheck,
+          },
+        ],
+      },
+      {
+        label: "Laboratory",
+        icon: FlaskConical,
+        children: [{ label: "Laboratory records", to: "/clinical/lims", icon: FlaskConical }],
+      },
+      {
+        label: "Appointments & follow-up",
+        icon: CalendarClock,
+        children: [
+          { label: "Appointments", to: "/clinical/appointments", icon: CalendarClock },
+          { label: "Follow-up", to: "/clinical/follow-up", icon: CalendarCheck },
+        ],
+      },
+      {
+        label: "Referrals",
+        icon: Share2,
+        children: [
+          { label: "Referral worklist", to: "/clinical/referrals", icon: ListChecks },
+          {
+            label: "Referral documents",
+            to: "/clinical/referrals/documents",
+            icon: FileText,
+          },
+        ],
+      },
+      {
+        label: "Reports & analytics",
+        icon: BarChart3,
+        children: [
+          { label: "Operational overview", to: "/clinical/reports", icon: FileBarChart },
+          { label: "NACADA report", to: "/clinical/mhp/nacada", icon: FileBarChart },
+        ],
+      },
+      { label: "Documents", to: "/clinical/documents", icon: FileText, matchPrefix: true },
+      { label: "Billing", to: "/clinical/billing", icon: CreditCard },
     ],
   },
 ];

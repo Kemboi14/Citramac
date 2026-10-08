@@ -1,6 +1,6 @@
 import { useAuth } from "../auth/useAuth";
 import { AppShell } from "./AppShell";
-import { ORG_ADMIN_NAV } from "./navConfig";
+import { AUDITOR_NAV, ORG_ADMIN_NAV } from "./navConfig";
 import { OrgBranchPill } from "./OrgBranchPill";
 import { TopbarActions } from "./TopbarActions";
 import { initialsAndLabel } from "./userDisplay";
@@ -9,17 +9,19 @@ import { initialsAndLabel } from "./userDisplay";
 export function OrgAdminShell() {
   const { claims } = useAuth();
   const { initials, name } = initialsAndLabel(claims);
+  // An Auditor reaches this shell for the audit log only (roleRouting.ts).
+  const isAuditor = claims?.role === "Auditor";
 
   return (
     <AppShell
       brandName="CITRAMAC"
-      brandSub="Org Admin"
-      navGroups={ORG_ADMIN_NAV}
+      brandSub={isAuditor ? "Auditor" : "Org Admin"}
+      navGroups={isAuditor ? AUDITOR_NAV : ORG_ADMIN_NAV}
       userInitials={initials}
       userName={name}
-      userRole="Org Admin"
+      userRole={isAuditor ? "Auditor" : "Org Admin"}
       searchPlaceholder="Search clients, staff, wards…"
-      profilePath="/org-admin/profile"
+      profilePath={isAuditor ? "/org-admin/audit-log" : "/org-admin/profile"}
       topbarRight={
         <TopbarActions pill={<OrgBranchPill />} notificationsPath="/org-admin/notifications" />
       }

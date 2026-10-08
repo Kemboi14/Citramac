@@ -12,7 +12,12 @@ export type AuditAction =
   | "LOGIN"
   | "LOGIN_FAILED"
   | "LOGOUT"
-  | "DISCOVERY_FAILED";
+  | "DISCOVERY_FAILED"
+  | "ARCHIVE"
+  | "RESTORE"
+  | "LEGAL_HOLD"
+  | "SUPPORT_ACCESS"
+  | "EXPORT";
 
 export interface AuditLogEntry {
   id: string;
@@ -25,7 +30,8 @@ export interface AuditLogEntry {
   action: AuditAction;
   model: string;
   object_id: string;
-  field_diff: Record<string, { old: unknown; new: unknown }>;
+  /** Names of the fields that changed. The old/new values are never sent — they can hold clinical text. */
+  changed_fields: string[];
   timestamp: string;
   source_ip: string | null;
   request_id: string;
@@ -43,6 +49,9 @@ export interface AuditLogParams {
   action?: AuditAction;
   model?: string;
   q?: string;
+  /** Inclusive day filters, YYYY-MM-DD. */
+  from?: string;
+  to?: string;
   page?: number;
 }
 

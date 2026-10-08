@@ -90,7 +90,17 @@ class AdmissionSerializer(serializers.ModelSerializer):
         ]
         # admitted_at is writable: the admission form records the admission date
         # (docs/15-CLINICAL-WORKSPACE-V3.md §1.10); it defaults to now.
-        read_only_fields = ["admitted_by", "status", "discharged_at", "episode"]
+        # The legacy discharge_summary / follow_up_date columns are frozen: a
+        # discharge is now a signed DischargeSummary (apps.care_pathway), and
+        # leaving these writable would let signed content be bypassed by PATCH.
+        read_only_fields = [
+            "admitted_by",
+            "status",
+            "discharged_at",
+            "episode",
+            "discharge_summary",
+            "follow_up_date",
+        ]
 
     consultant_name = serializers.SerializerMethodField()
     patient_citramac_number = serializers.CharField(

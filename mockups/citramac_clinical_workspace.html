@@ -224,6 +224,7 @@ input, select, textarea { font-family: inherit; }
   transition: transform .15s;
 }
 .nav-group-trigger[aria-expanded="true"] .nav-chevron { transform: rotate(180deg); }
+.nav-group-trigger[aria-expanded="true"] .nav-chevron-right { transform: rotate(90deg); }
 .nav-submenu { padding: 2px 0 4px; }
 .nav-submenu[hidden] { display: none; }
 .nav-submenu .nav-item {
@@ -445,6 +446,78 @@ input, select, textarea { font-family: inherit; }
 @media (max-width: 640px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
+
+/* ── Psychiatric interventions ── */
+.psychiatric-interventions { margin-top: 20px; }
+.intervention-eyebrow { color: var(--brand); font-size: 11px; font-weight: 700; letter-spacing: .35px; }
+.intervention-lede { max-width: 640px; margin: 4px 0 18px; color: var(--muted); font-size: 12.5px; }
+.intervention-section-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin: 20px 0 8px; }
+.intervention-section-head b { color: var(--muted); font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
+.intervention-section-head .intervention-hint { margin-left: 8px; color: var(--faint); font-size: 12px; }
+.intervention-actions-table { overflow-x: auto; }
+.intervention-actions-table .data-table { min-width: 600px; }
+.intervention-actions-table td { vertical-align: middle; }
+.intervention-action-meta { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.intervention-scope { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.intervention-scope button { border: 0; border-radius: 7px; background: transparent; color: var(--muted); padding: 5px 9px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.intervention-scope button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.intervention-list { padding: 0; }
+.intervention-list .grp { padding: 9px 16px 5px; font-size: 10px; }
+.intervention-module { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--line-2); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.intervention-module:last-child { border-bottom: 0; }
+.intervention-module:hover { background: var(--surface-2); }
+.intervention-module-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 9px; background: var(--surface-3); color: var(--brand); font-weight: 700; }
+.intervention-module-copy { min-width: 0; flex: 1; }
+.intervention-module-title { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-weight: 700; }
+.intervention-module-meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
+.intervention-recommended { color: var(--brand); background: var(--priority-bg); border-radius: 20px; padding: 2px 7px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+.intervention-delivered { color: var(--brand); background: var(--priority-bg); border: 0; border-radius: 20px; padding: 4px 9px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.intervention-empty { color: var(--muted); padding: 16px; font-size: 12px; }
+.intervention-record-overlay { position: fixed; inset: 0; z-index: 400; display: flex; justify-content: center; overflow: auto; background: var(--ground); }
+.intervention-record-overlay[hidden] { display: none; }
+.intervention-drawer { display: flex; flex-direction: column; width: 100%; min-height: 100%; background: var(--surface); }
+.intervention-drawer-head { display: flex; align-items: center; gap: 12px; padding: 18px clamp(18px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+.intervention-drawer-head h2 { font-size: 18px; }
+.intervention-drawer-head p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.intervention-context .ctx { margin: 0 0 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.intervention-context .ctx summary { display: flex; align-items: center; gap: 8px; min-height: 38px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .35px; text-transform: uppercase; cursor: pointer; }
+.intervention-context .ctx summary span { color: var(--faint); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.intervention-context .cr { display: grid; grid-template-columns: 82px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-2); font-size: 12px; }
+.intervention-context .cr .k { color: var(--muted); font-weight: 600; }
+.intervention-drawer-head .intervention-module-icon { width: 42px; height: 42px; }
+.intervention-drawer-head .intervention-module-copy { padding-top: 1px; }
+.intervention-drawer-head .intervention-module-title h2 { font-size: 15px; }
+.intervention-drawer-head .intervention-module-title { gap: 8px; }
+.intervention-drawer-head .intervention-module-meta { margin-top: 3px; }
+.intervention-drawer-close { margin-left: auto; min-width: 36px; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 24px; cursor: pointer; }
+.intervention-drawer-close:hover { background: var(--surface-2); }
+.intervention-drawer-tabs { display: flex; gap: 2px; padding: 0 clamp(18px, 4vw, 48px); border-bottom: 1px solid var(--line); }
+.intervention-drawer-tabs button { min-height: 40px; padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.intervention-drawer-tabs button[aria-selected="true"] { border-bottom-color: var(--brand); color: var(--brand); }
+.intervention-drawer-secondary { flex: 1; overflow: auto; padding: 24px clamp(18px, 4vw, 48px); }
+.intervention-drawer-secondary[hidden] { display: none; }
+.intervention-drawer-secondary .card { margin-bottom: 12px; }
+.intervention-drawer-secondary .card-body { font-size: 13px; }
+.intervention-form { width: min(100%, 1120px); flex: 1; align-self: center; overflow-y: auto; padding: 24px clamp(18px, 4vw, 48px) 32px; }
+.intervention-context { margin-bottom: 14px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 12px; }
+.intervention-context p + p { margin-top: 4px; }
+.intervention-form .field { margin-top: 12px; }
+.intervention-form .field textarea { resize: vertical; }
+.intervention-form details.more { margin: 14px 0 4px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.intervention-form details.more summary { display: flex; align-items: center; min-height: 28px; color: var(--brand); font-size: 12px; font-weight: 600; cursor: pointer; }
+.intervention-form details.more .g { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.intervention-form .chk { display: flex; align-items: center; gap: 8px; margin-top: 28px; color: var(--muted); font-size: 12px; }
+.intervention-form .chk input { width: auto; min-height: 0; }
+.intervention-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.intervention-chips button { min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
+.intervention-chips button[aria-pressed="true"] { border-color: var(--brand); background: var(--priority-bg); color: var(--brand); font-weight: 600; }
+.intervention-option-select { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.intervention-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.intervention-form-actions { position: sticky; bottom: -32px; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px calc(-1 * clamp(18px, 4vw, 48px)) -32px; padding: 12px clamp(18px, 4vw, 48px); border-top: 1px solid var(--line); background: var(--surface); }
+.intervention-live { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+.intervention-live:empty { display: none; }
+.intervention-live.error { color: var(--emergency); }
+@media (max-width: 520px) { .intervention-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 /* ── Stat Cards ── */
 .stat-card {
@@ -1767,7 +1840,6 @@ input, select, textarea { font-family: inherit; }
   gap: 10px;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--brand);
   border-radius: 8px;
   padding: 12px 14px;
   margin-top: 16px;
@@ -1785,8 +1857,7 @@ input, select, textarea { font-family: inherit; }
 .callout b { color: var(--ink); }
 .callout.alert-success {
   background: var(--priority-bg);
-  border-color: var(--brand);
-  border-left-color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 24%, var(--line));
   color: var(--accent);
 }
 #triage-sign-status[hidden] { display: none; }
@@ -2153,11 +2224,7 @@ input, select, textarea { font-family: inherit; }
 .triage-encounter-main { min-width: 0; }
 .triage-encounter-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin: 2px 0 14px; }
 .triage-encounter-heading .page-title { margin: 0; }
-.triage-live-summary { margin: 0 0 14px; border-left: 4px solid var(--urgent); }
-.triage-live-summary[data-priority="RED"] { border-left-color: var(--emergency); }
-.triage-live-summary[data-priority="ORANGE"] { border-left-color: var(--urgent); }
-.triage-live-summary[data-priority="YELLOW"] { border-left-color: var(--triage-yellow); }
-.triage-live-summary[data-priority="GREEN"] { border-left-color: var(--routine); }
+.triage-live-summary { margin: 0 0 14px; }
 .triage-live-summary-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; font-weight: 700; }
 .triage-live-summary p { color: var(--muted); font-size: 12px; }
 .triage-context-presenting { white-space: pre-wrap; }
@@ -2181,6 +2248,93 @@ input, select, textarea { font-family: inherit; }
   .triage-context-block { border-right: 0; }
   .triage-context-block + .triage-context-block { border-top: 1px solid var(--line-2); }
 }
+
+/* ── Outcome trends ── */
+.outcome-panel { display: grid; gap: 16px; }
+.outcome-section { min-width: 0; overflow: hidden; }
+.outcome-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+.outcome-section-title { font-size: 14px; font-weight: 700; }
+.outcome-section-subtitle { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.outcome-overview-grid { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(260px,.85fr); gap: 14px; }
+.outcome-overview-card,.outcome-guidance-card { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.outcome-overview-card { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; padding: 22px; }
+.outcome-overview-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.outcome-overview-label { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .045em; text-transform: uppercase; }
+.outcome-overview-card h2 { margin-top: 4px; font-size: 19px; }
+.outcome-overview-copy { max-width: 62ch; margin-top: 7px; color: var(--muted); font-size: 12.5px; }
+.outcome-overview-count { flex: none; min-width: 76px; text-align: right; }
+.outcome-overview-count strong { display: block; color: var(--ink); font-family: Lexend,sans-serif; font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.outcome-overview-count span { color: var(--muted); font-size: 11px; }
+.outcome-overview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.outcome-guidance-card { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 20px; background: var(--surface-2); }
+.outcome-guidance-card h3 { font-size: 14px; }
+.outcome-guidance-card p { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.outcome-guidance-card .outcome-guidance-latest { margin-top: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.outcome-guidance-latest strong { color: var(--ink-2); font-weight: 650; }
+.outcome-dashboard-card-head .outcome-section-subtitle { display: block; margin: 3px 0 0; }
+.outcome-dashboard-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 12px; }
+.outcome-metric-card { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.outcome-metric-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.outcome-metric-top h3 { font-size: 13px; }
+.outcome-metric-date { color: var(--muted); font-size: 11px; }
+.outcome-metric-score { display: flex; align-items: baseline; gap: 5px; margin-top: 16px; }
+.outcome-metric-score strong { color: var(--ink); font-family: Lexend,sans-serif; font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+.outcome-metric-score span { color: var(--muted); font-size: 12px; }
+.outcome-metric-band { margin-top: 8px; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+.outcome-metric-empty { margin-top: 17px; color: var(--faint); font-size: 20px; }
+.outcome-dashboard-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.outcome-dashboard-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line-2); }
+.outcome-dashboard-card-head h2 { font-size: 14px; }
+.outcome-chart-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,390px),1fr)); gap: 14px; padding: 16px; }
+.outcome-chart-card { --outcome-accent:var(--brand); min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; padding:16px; background:var(--surface); }
+.outcome-chart-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.outcome-chart-top h3 { font-size:14px; }
+.outcome-latest { display:flex; align-items:baseline; gap:7px; margin-top:15px; }
+.outcome-latest-label { color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.outcome-latest-score { color:var(--ink); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:30px; font-weight:700; letter-spacing:-.05em; line-height:1; }
+.outcome-latest-scale { color:var(--faint); font-size:12px; }
+.outcome-baseline { margin-top:9px; color:var(--muted); font-size:11.5px; }
+.outcome-baseline strong { color:var(--ink-2); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.outcome-svg-wrap { margin-top:13px; border:1px solid var(--line-2); border-radius:8px; padding:10px 8px 4px; background:var(--surface-2); }
+.outcome-svg-heading { display:flex; justify-content:space-between; gap:8px; margin:0 4px 2px; color:var(--muted); font-size:10px; font-weight:650; letter-spacing:.045em; text-transform:uppercase; }
+.outcome-svg { display:block; width:100%; height:auto; min-height:146px; overflow:visible; color:var(--outcome-accent); }
+.outcome-svg .grid-line { stroke:var(--line-2); stroke-width:1; }
+.outcome-svg .axis-label { fill:var(--faint); font:10px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.outcome-svg .trend-area { fill:var(--outcome-accent); opacity:.1; }
+.outcome-svg .trend-line { fill:none; stroke:var(--outcome-accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+.outcome-svg .trend-point { fill:var(--surface); stroke:var(--outcome-accent); stroke-width:2.5; }
+.outcome-svg .trend-point.latest { fill:var(--outcome-accent); stroke:var(--surface); stroke-width:3; }
+.outcome-svg .point-label { fill:var(--ink); font:650 10px ui-monospace,SFMono-Regular,Menlo,monospace; }
+.outcome-chart-empty { display:grid; min-height:140px; place-items:center; padding:20px; text-align:center; color:var(--muted); font-size:12px; }
+.outcome-band { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; border-top:1px solid var(--line-2); padding-top:10px; font-size:11.5px; }
+.outcome-band strong { color:var(--ink-2); font-weight:650; }
+.outcome-provider { color:var(--muted); text-align:right; }
+.outcome-note { margin:0 16px 16px; color:var(--muted); font-size:11.5px; }
+.outcome-form { padding:16px 18px; }
+.outcome-form-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }
+.outcome-form-grid .field { min-width:0; }
+.outcome-form-grid .outcome-note-field { grid-column:1/-1; }
+.outcome-form-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:14px; }
+.outcome-status { min-height:20px; color:var(--routine); font-size:12px; }
+.outcome-status[data-state="error"] { color:var(--emergency); }
+.outcome-status:empty { display:none; }
+.outcome-table-wrap { overflow-x:auto; padding:0 16px 16px; }
+.outcome-table { width:100%; border-collapse:collapse; font-size:12px; }
+.outcome-table th { background:var(--surface-2); color:var(--muted); font-size:10px; letter-spacing:.04em; text-align:left; text-transform:uppercase; }
+.outcome-table th,.outcome-table td { padding:10px 12px; border-bottom:1px solid var(--line-2); vertical-align:top; }
+.outcome-table tbody tr:last-child td { border-bottom:0; }
+.outcome-measure-form-note { margin:0 18px 16px; }
+.outcome-latest-table-wrap { overflow-x: auto; }
+.outcome-latest-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.outcome-latest-table th { padding: 9px 12px; background: var(--surface-2); color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.outcome-latest-table td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.outcome-latest-table tr:last-child td { border-bottom: 0; }
+.outcome-latest-table .score { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.outcome-dashboard-empty { padding: 24px 18px; color: var(--muted); font-size: 12px; }
+@media(max-width:760px){.outcome-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.outcome-overview-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.outcome-chart-grid{grid-template-columns:minmax(0,1fr);padding:12px}.outcome-section-head{align-items:flex-start;flex-direction:column}.outcome-form-grid{grid-template-columns:minmax(0,1fr)}.outcome-form-grid .outcome-note-field{grid-column:auto}.outcome-note{margin-right:12px;margin-left:12px}.outcome-band{align-items:flex-start;flex-direction:column}.outcome-provider{text-align:left}.outcome-overview-card{padding:18px}.outcome-overview-main{gap:10px}.outcome-overview-count{min-width:58px}.outcome-overview-count strong{font-size:28px}.outcome-latest-table th,.outcome-latest-table td{padding:9px 10px}}
+
 </style>
 </head>
 <body>
@@ -2201,16 +2355,12 @@ input, select, textarea { font-family: inherit; }
       <span class="nav-label">Dashboard</span>
     </button>
     <button class="nav-item" data-nav-id="caseload" onclick="showPage('caseload')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="7" r="3.5"/><path d="M20 19v-1a4 4 0 0 0-3-3.87"/><path d="M18 4.5a3.5 3.5 0 0 1 0 6.8"/></svg></span>
       <span class="nav-label">My Caseload</span>
-    </button>
-    <button class="nav-item" data-nav-id="appointments" onclick="showPage('appointments')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
-      <span class="nav-label">Appointments</span>
     </button>
     <div class="nav-group">
       <button class="nav-item nav-group-trigger" type="button" aria-expanded="true" aria-controls="clinical-submenu" onclick="toggleNavGroup('clinical-submenu', this)">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/></svg></span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8a2 2 0 0 1 2 2v14l-4-3-4 3-4-3-4 3V5a2 2 0 0 1 2-2Z"/><path d="M9 9h6M12 6v6"/></svg></span>
         <span class="nav-label nav-group-label">Clinical</span>
         <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
@@ -2218,13 +2368,12 @@ input, select, textarea { font-family: inherit; }
         <button class="nav-item" data-nav-id="registration" onclick="showPage('frontdesk', 'registration')"><span class="nav-label">Registration</span></button>
         <button class="nav-item" data-nav-id="triage" onclick="showTriageWorklist()"><span class="nav-label">Triage</span></button>
         <button class="nav-item" data-nav-id="psychiatric" onclick="showPage('psychiatry', 'psychiatric')"><span class="nav-label">Psychiatric</span></button>
-        <button class="nav-item" data-nav-id="inpatient" onclick="showPage('inpatient')"><span class="nav-label">Inpatient</span></button>
       </div>
     </div>
 
     <div class="nav-group">
       <button class="nav-item nav-group-trigger" type="button" aria-expanded="true" aria-controls="psychotherapy-submenu" onclick="toggleNavGroup('psychotherapy-submenu', this)">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10h-7a3 3 0 0 1-3-3V2z"/><path d="M19.1 4.9A10 10 0 0 0 12 2v7a3 3 0 0 1 3 3h7a10 10 0 0 0-2.9-7.1z"/></svg></span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h-3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-4 3v-3Z"/><path d="M9 9.5c.7-.7 1.5-1 2.5-1s1.8.3 2.5 1"/><path d="M9 13h.01M15 13h.01"/></svg></span>
         <span class="nav-label nav-group-label">Psychotherapy</span>
         <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
@@ -2235,19 +2384,80 @@ input, select, textarea { font-family: inherit; }
       </div>
     </div>
 
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="inpatient-menu" onclick="toggleNavGroup('inpatient-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14"/><path d="M3 15h18M7 11h3v4H7zM14 8h4v3h-4zM7 20v-2m10 2v-2"/></svg></span>
+        <span class="nav-label nav-group-label">Inpatient &amp; residential</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="inpatient-menu" hidden>
+        <button class="nav-item" data-nav-id="inpatient" onclick="showPage('inpatient')"><span class="nav-label">Admissions</span></button>
+        <button class="nav-item" data-nav-id="ward" onclick="showPage('ward')"><span class="nav-label">Ward board</span></button>
+        <button class="nav-item" data-nav-id="discharge" onclick="showPage('discharge')"><span class="nav-label">Discharge planning</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="pharmacy-menu" onclick="toggleNavGroup('pharmacy-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 3.5 10 10a5 5 0 0 1-7.1 7.1l-10-10a5 5 0 0 1 7.1-7.1Z"/><path d="m8 16 8-8"/></svg></span>
+        <span class="nav-label nav-group-label">Pharmacy &amp; medication</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="pharmacy-menu" hidden>
+        <button class="nav-item" data-nav-id="medications" onclick="showPage('medications')"><span class="nav-label">Medication orders &amp; review</span></button>
+        <button class="nav-item" data-nav-id="nursing" onclick="showPage('nursing')"><span class="nav-label">Medication administration</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="laboratory-menu" onclick="toggleNavGroup('laboratory-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.5 9.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/><path d="M8 15h8M10 12h4"/></svg></span>
+        <span class="nav-label nav-group-label">Laboratory</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="laboratory-menu" hidden>
+        <button class="nav-item" data-nav-id="laboratory" onclick="showPage('documents', 'laboratory')"><span class="nav-label">Laboratory records</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="appointments-menu" onclick="toggleNavGroup('appointments-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8 14h3v3H8z"/></svg></span>
+        <span class="nav-label nav-group-label">Appointments &amp; follow-up</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="appointments-menu" hidden>
+        <button class="nav-item" data-nav-id="appointments" onclick="showPage('appointments')"><span class="nav-label">Appointments</span></button>
+        <button class="nav-item" data-nav-id="followup" onclick="showPage('followup')"><span class="nav-label">Follow-up</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="referrals-menu" onclick="toggleNavGroup('referrals-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 14h8m-4-4 4 4-4 4"/></svg></span>
+        <span class="nav-label nav-group-label">Referrals</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="referrals-menu" hidden>
+        <button class="nav-item" data-nav-id="psychiatric" onclick="showPage('psychiatry', 'psychiatric')"><span class="nav-label">Referral worklist</span></button>
+        <button class="nav-item" data-nav-id="documents" onclick="showPage('documents')"><span class="nav-label">Referral documents</span></button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <button class="nav-item nav-group-trigger" type="button" aria-expanded="false" aria-controls="reports-menu" onclick="toggleNavGroup('reports-menu', this)">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6"/><path d="M10 18V10"/><path d="M16 18V4"/><path d="M22 18v-8"/><path d="M2 18h20"/></svg></span>
+        <span class="nav-label nav-group-label">Reports &amp; analytics</span>
+        <svg class="nav-chevron nav-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      <div class="nav-submenu" id="reports-menu" hidden>
+        <button class="nav-item" data-nav-id="reports" onclick="showPage('reports')"><span class="nav-label">Operational overview</span></button>
+      </div>
+    </div>
+
     <button class="nav-item" data-nav-id="documents" onclick="showPage('documents')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 11v6m-3-3h6"/></svg></span>
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M9 13h6M9 17h6"/></svg></span>
       <span class="nav-label">Documents</span>
     </button>
     <button class="nav-item" data-nav-id="billing" onclick="showPage('billing')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 8h10M7 12h3m3 0h4m-10 4h3m3 0h4M8 2v4m8-4v4"/></svg></span>
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M15 16h1"/></svg></span>
       <span class="nav-label">Billing</span>
     </button>
-    <button class="nav-item" data-nav-id="reports" onclick="showPage('reports')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 6-7"/><path d="M17 7h4v4"/></svg></span>
-      <span class="nav-label">Reports</span>
-    </button>
-
     <div class="nav-user">
       <div class="nav-user-avatar">JN</div>
       <div class="nav-user-info">
@@ -2354,7 +2564,14 @@ let currentTriageEncounterId = null;
 let currentRecordView = 'journey';
 const TIER1_STORAGE_KEY = "citramac-tier1-registrations";
 const TRIAGE_ENCOUNTER_STORAGE_KEY = "citramac-triage-encounters";
+const INTERVENTION_STORAGE_KEY = "citramac-intervention-records";
+const OUTCOME_SCORE_STORAGE_KEY = "citramac-outcome-measures";
 let registrationStorageIssue = "";
+let outcomeScoreRecords = [];
+let outcomeStorageIssue = "";
+let outcomeView = "charts";
+let outcomeStatus = "";
+let outcomeStatusState = "";
 
 CLIENTS.push({
   id:"ER-000931", citramacId:"CIT-ER-000931", name:"Unidentified", age:"Unknown", sex:"Unknown",
@@ -2492,6 +2709,7 @@ function showPage(page, navId = page) {
   window.scrollTo(0, 0);
   if (page === 'triage') initTriage();
   if (page === 'frontdesk') initRegistrationForm();
+  if (page === 'outcomes') initOutcomes();
 }
 
 function showTriageWorklist() {
@@ -5098,6 +5316,452 @@ function careplan() {
 }
 
 // ═══════════ PAGE: INTERVENTIONS ═══════════
+const INTERVENTION_ACTIONS = [
+  { id: 'psychiatry', name: 'Psychiatric review', module: 'Psychiatry', status: 'Completed', goal: 'Initial psychiatric assessment following admission' },
+  { id: 'withdrawal', name: 'Detox / withdrawal management', module: 'Withdrawal Management', status: 'Active', goal: 'Safe management of the documented alcohol withdrawal' },
+  { id: 'safety', name: 'Safety plan / enhanced observation', module: 'Observation & Safety', status: 'Active', goal: 'Mitigate the documented suicide risk' },
+  { id: 'psychotherapy', name: 'Psychological therapy', module: 'Psychotherapy', status: 'Scheduled', goal: 'CBT sessions 2× weekly' },
+  { id: 'medication', name: 'Medication management', module: 'Psychiatric Nursing / MAR', status: 'Active', goal: 'Review the recorded Olanzapine and Fluoxetine regimen' },
+  { id: 'followup', name: 'Follow-up / outpatient care', module: 'Follow-up & After-care', status: 'Planned', goal: 'Outpatient psychiatry review within 7 days of discharge' }
+];
+
+const INTERVENTION_MODULES = [
+  { id: 'emergency', group: 'Assess', name: 'Emergency Care', rateService: 'Emergency Care', actionId: '', options: ['Stabilisation review', 'De-escalation support', 'SBAR handover', 'Transfer coordination'], signal: client => /acute psychosis|risk to others/i.test([...(client.flags || []), ...(client.alerts || [])].join(' ')), reason: 'An acute psychosis or risk-to-others flag is recorded' },
+  { id: 'observation', group: 'Assess', name: 'Observation & Safety', actionId: 'safety', options: ['Observation level & reason', 'Observation review', 'Step-down review'], signal: client => /suicid|self-harm|violence|aggression|safeguard/i.test([...(client.alerts || []), ...(client.flags || [])].join(' ')), reason: 'A safety-related alert or flag is recorded' },
+  { id: 'blood-work', group: 'Assess', name: 'Blood Work', rateService: 'Blood Work', actionId: '', options: ['Order-set review', 'Organic work-up coordination', 'Drug-level monitoring coordination'], signal: client => MEDICATIONS.some(item => item.client === client.name && /lithium|valproate|clozapine/i.test(item.name)), reason: 'A medicine requiring drug-level monitoring is listed' },
+  { id: 'medical-review', group: 'Assess', name: 'Medical Review', rateService: 'Medical Review', actionId: 'withdrawal', options: ['Physical health review', 'Abnormal observation review', 'Medical clearance', 'Transfer decision'], signal: client => /withdrawal|detox|severe intoxication|abnormal vital/i.test([client.diagnosis, ...(client.alerts || []), ...(client.flags || [])].join(' ')), reason: 'Withdrawal, severe intoxication, or abnormal observations are documented' },
+  { id: 'appointments', group: 'Assess', name: 'Appointments', rateService: 'Appointments', actionId: 'followup', options: ['Psychiatry review appointment', 'Outpatient follow-up'], signal: client => Boolean(client.nextAppt), reason: 'A next appointment is recorded' },
+  { id: 'psychiatry', group: 'Treat', name: 'Psychiatry', rateService: 'Psychiatry', actionId: 'psychiatry', options: ['Initial consultation', 'Psychiatric review', 'Risk formulation', 'Medication review'], signal: client => Boolean(client.diagnosis), reason: 'A diagnosis is recorded in this client record' },
+  { id: 'admission', group: 'Treat', name: 'Admission', rateService: 'Admission', actionId: '', options: ['Admission review', 'Ward coordination', 'Rights-information follow-up'], signal: client => client.type === 'inpatient', reason: 'The client record indicates inpatient care' },
+  { id: 'withdrawal', group: 'Treat', name: 'Withdrawal Management (Detox)', rateService: 'Withdrawal Management (Detox)', actionId: 'withdrawal', options: ['Withdrawal assessment', 'Withdrawal monitoring', 'Review of withdrawal plan', 'Medical escalation'], signal: client => /withdrawal|detox|alcohol|opioid/i.test([client.diagnosis, ...(client.alerts || []), ...(client.flags || [])].join(' ')), reason: 'Diagnosis, alert, or flag references substance use or withdrawal' },
+  { id: 'opioid-therapy', group: 'Treat', name: 'Opioid Agonist Therapy', rateService: 'Opioid Agonist Therapy', actionId: '', options: ['Methadone review', 'Buprenorphine review', 'Naloxone / overdose-risk education'], signal: client => /opioid/i.test([client.diagnosis, ...(client.alerts || []), ...(client.flags || [])].join(' ')), reason: 'Opioid use or withdrawal is documented' },
+  { id: 'nursing', group: 'Treat', name: 'Psychiatric Nursing', rateService: 'Psychiatric Nursing', actionId: 'medication', options: ['Medication Administration Record (MAR)', 'PRN effectiveness review', 'Physical-care chart review', 'SBAR shift handover'], signal: client => client.type === 'inpatient', reason: 'The client record indicates inpatient care' },
+  { id: 'restrictive-practice', group: 'Treat', name: 'Restrictive Practice', actionId: 'safety', options: ['De-escalation attempted', 'Authorisation review', 'Monitoring and safety checks', 'Patient debrief'], signal: () => false, reason: '' },
+  { id: 'psychotherapy', group: 'Treat', name: 'Psychotherapy', rateService: 'Psychotherapy', actionId: 'psychotherapy', options: ['CBT session', 'Individual therapy', 'Group therapy', 'Family therapy', 'Psychoeducation'], signal: (client, actions) => actions.some(action => action.id === 'psychotherapy') || client.type === 'outpatient' || /depress|anxiety|panic|bipolar/i.test(client.diagnosis || ''), reason: 'Psychological therapy is in the care plan or a relevant diagnosis is recorded' },
+  { id: 'psychosocial', group: 'Support', name: 'Psychosocial Support', rateService: 'Psychosocial Support', actionId: '', options: ['Social-work coordination', 'Peer support', 'Family psychoeducation', 'Case management'], signal: () => false, reason: '' },
+  { id: 'nutrition', group: 'Support', name: 'Nutrition & Fitness', rateService: 'Nutrition & Fitness', actionId: '', options: ['Nutrition assessment coordination', 'Fitness-programme referral'], signal: () => false, reason: '' },
+  { id: 'attachments', group: 'Support', name: 'Attachments', actionId: '', options: ['Attach clinical document', 'Attach referral / correspondence'], signal: () => false, reason: '' },
+  { id: 'discharge', group: 'Close-out', name: 'Discharge', rateService: 'Discharge', actionId: 'followup', options: ['Discharge planning', 'Discharge summary', 'Counter-referral coordination'], signal: client => client.type === 'inpatient', reason: 'The client record indicates inpatient care' },
+  { id: 'followup', group: 'Close-out', name: 'Follow-up & After-care', rateService: 'Follow-up & After-care', actionId: 'followup', options: ['Outpatient psychiatry follow-up', 'Missed-appointment follow-up', 'Care-plan review'], signal: (client, actions) => actions.some(action => action.id === 'followup') || Boolean(client.nextAppt), reason: 'Follow-up is in the care plan or an appointment is recorded' }
+];
+
+let interventionRecords = [];
+let interventionStorageIssue = '';
+let interventionScope = 'plan';
+let interventionReturnFocus = null;
+let interventionDrawerTab = 'Record';
+let interventionOpenModuleId = '';
+
+function loadInterventionRecords() {
+  try {
+    const saved = localStorage.getItem(INTERVENTION_STORAGE_KEY);
+    const records = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(records) || records.some(record =>
+      !record || typeof record.id !== 'string' || typeof record.clientId !== 'string' ||
+      typeof record.actionId !== 'string' || typeof record.moduleId !== 'string' ||
+      typeof record.note !== 'string' || typeof record.at !== 'string'
+    )) {
+      throw new Error('Saved intervention data has an invalid format.');
+    }
+    return records;
+  } catch (error) {
+    interventionStorageIssue = 'Saved intervention entries could not be loaded. No records were changed.';
+    console.error('Unable to restore intervention records.', error);
+    return null;
+  }
+}
+
+function interventionHistoryFor(client) {
+  return interventionRecords
+    .filter(record => record.clientId === client.id)
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+function interventionActionsFor(client) {
+  if (client.id === 'MRN-20418') return INTERVENTION_ACTIONS;
+  const cues = [client.diagnosis, ...(client.alerts || []), ...(client.flags || [])].join(' ');
+  return INTERVENTION_ACTIONS.filter(action => {
+    if (action.id === 'psychiatry') return Boolean(client.diagnosis);
+    if (action.id === 'withdrawal') return /withdrawal|detox|alcohol|opioid/i.test(cues);
+    if (action.id === 'safety') return /suicid|self-harm|violence|aggression|safeguard/i.test(cues);
+    if (action.id === 'medication') return MEDICATIONS.some(item => item.client === client.name);
+    if (action.id === 'psychotherapy') return client.type === 'outpatient' || /depress|anxiety|panic|bipolar/i.test(client.diagnosis || '');
+    if (action.id === 'followup') return client.type === 'inpatient' || Boolean(client.nextAppt);
+    return false;
+  }).map(action => ({
+    ...action,
+    status: 'Suggested',
+    goal: 'Suggested from the diagnosis, alerts, or medication list in this client record.'
+  }));
+}
+
+function interventionDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Date not recorded' : date.toLocaleString();
+}
+
+function interventionModuleRecommended(module, client, actions = interventionActionsFor(client)) {
+  return module.signal(client, actions);
+}
+
+function interventionRateText(module) {
+  if (!module.rateService) return 'Not separately priced in Billing';
+  const rate = PSYCHIATRY_BILLING_RATES[module.rateService];
+  return Number.isFinite(rate) ? `KES ${rate.toLocaleString()} · rate configured in Billing` : 'No rate configured in Billing';
+}
+
+function renderInterventionModules(client) {
+  const host = document.getElementById('intervention-module-list');
+  if (!host) return;
+  const actions = interventionActionsFor(client);
+  const modules = INTERVENTION_MODULES.filter(module => interventionScope === 'all' ||
+    interventionModuleRecommended(module, client, actions) ||
+    actions.some(action => action.id === module.actionId)
+  );
+  const sortedModules = modules.slice().sort((a, b) =>
+    [...new Set(INTERVENTION_MODULES.map(module => module.group))].indexOf(a.group) -
+      [...new Set(INTERVENTION_MODULES.map(module => module.group))].indexOf(b.group) ||
+    Number(interventionModuleRecommended(b, client, actions)) - Number(interventionModuleRecommended(a, client, actions)) ||
+    INTERVENTION_MODULES.indexOf(a) - INTERVENTION_MODULES.indexOf(b)
+  );
+  let activeGroup = '';
+  host.innerHTML = sortedModules.map(module => {
+    const action = actions.find(item => item.id === module.actionId);
+    const recommended = interventionModuleRecommended(module, client, actions);
+    const reason = recommended ? module.reason : (action ? `Linked to ${action.name}` : interventionRateText(module));
+    const heading = module.group !== activeGroup
+      ? (activeGroup = module.group, `<div class="grp">${escapeHTML(module.group)}</div>`)
+      : '';
+    const delivered = interventionHistoryFor(client)
+      .filter(record => record.moduleId === module.id)
+      .reduce((total, record) => total + (Number(record.qty) || 1), 0);
+    return `${heading}<button class="intervention-module" type="button" data-intervention-module="${escapeHTML(module.id)}" aria-label="Record ${escapeHTML(module.name)}">
+      <span class="intervention-module-icon" aria-hidden="true">${escapeHTML(module.name.slice(0, 1))}</span>
+      <span class="intervention-module-copy"><span class="intervention-module-title">${escapeHTML(module.name)}${recommended ? '<span class="intervention-recommended">Recommended</span>' : ''}</span><span class="intervention-module-meta">${escapeHTML(recommended ? interventionRateText(module) : reason)}</span></span>
+      ${delivered ? `<span class="intervention-delivered">${delivered} delivered</span>` : ''}
+      <span aria-hidden="true" style="color:var(--faint);font-size:18px">›</span>
+    </button>`;
+  }).join('');
+  document.getElementById('intervention-plan-count').textContent = String(modules.length);
+  document.getElementById('intervention-all-count').textContent = String(INTERVENTION_MODULES.length);
+}
+
+function renderInterventionData(client) {
+  const history = interventionHistoryFor(client);
+  const actionsHost = document.getElementById('intervention-actions');
+  if (!actionsHost) return;
+  const actions = interventionActionsFor(client);
+  actionsHost.innerHTML = actions.map(action => {
+    const records = history.filter(record => record.actionId === action.id);
+    const count = records.reduce((total, record) => total + (Number(record.qty) || 1), 0);
+    const latest = records[0];
+    const priority = ['RED', 'ORANGE', 'YELLOW', 'GREEN'].includes(client.priority) ? client.priority : '';
+    return `<tr><td><strong>${escapeHTML(action.name)}</strong></td><td>${priority ? `<span class="pill pri-${priority}"><span class="dot"></span>${priority}</span>` : '<span class="tag">Not recorded</span>'}</td><td><span class="tag">${escapeHTML(action.status)}</span>${latest ? `<div class="intervention-action-meta">${escapeHTML(latest.by || 'Provider not recorded')} · ${escapeHTML(interventionDate(latest.at))}</div>` : ''}</td><td style="text-align:right">${count}</td></tr>`;
+  }).join('');
+}
+
+function openInterventionDrawer(moduleId) {
+  const client = currentClient || CLIENTS[0];
+  const module = INTERVENTION_MODULES.find(item => item.id === moduleId) || INTERVENTION_MODULES[0];
+  const overlay = document.getElementById('intervention-overlay');
+  const form = document.getElementById('intervention-form');
+  const actionSelect = document.getElementById('intervention-action');
+  const typeSelect = document.getElementById('intervention-type');
+  const context = document.getElementById('intervention-context');
+  if (!overlay || !form || !actionSelect || !typeSelect || !context) return;
+
+  interventionReturnFocus = document.activeElement;
+  interventionOpenModuleId = module.id;
+  interventionDrawerTab = 'Record';
+  const activeActions = interventionActionsFor(client);
+  document.getElementById('intervention-drawer-title').textContent = module.name;
+  document.getElementById('intervention-drawer-icon').textContent = module.name.slice(0, 1);
+  const recommended = interventionModuleRecommended(module, client, activeActions);
+  document.getElementById('intervention-drawer-recommended').hidden = !recommended;
+  document.getElementById('intervention-drawer-subtitle').textContent = interventionModuleRecommended(module, client)
+    ? `Suggested from the existing client record · ${module.reason}`
+    : 'Record care delivered and link it to a plan action when appropriate.';
+  document.getElementById('intervention-drawer-rate').textContent = interventionRateText(module);
+  document.getElementById('intervention-billing-note').textContent = module.rateService && PSYCHIATRY_BILLING_RATES[module.rateService]
+    ? `KES ${PSYCHIATRY_BILLING_RATES[module.rateService].toLocaleString()} rate configured in Billing`
+    : interventionRateText(module);
+  const currentMeds = MEDICATIONS.filter(item => item.client === client.name);
+  context.innerHTML = `<details class="ctx" open><summary>Clinical context <span>carried forward · confirm, don’t re-enter</span></summary>
+    <div class="cr"><span class="k">Client</span><span class="v">${escapeHTML(client.name)} · ${escapeHTML(client.id)}</span></div>
+    <div class="cr"><span class="k">Diagnosis</span><span class="v">${escapeHTML(client.diagnosis || 'Not recorded')}</span></div>
+    <div class="cr"><span class="k">Allergies</span><span class="v">${escapeHTML(client.allergies || 'Not recorded')}</span></div>
+    <div class="cr"><span class="k">Active alerts</span><span class="v">${escapeHTML((client.alerts || []).join(', ') || 'None recorded')}</span></div>
+    <div class="cr"><span class="k">Current medicines</span><span class="v">${escapeHTML(currentMeds.map(item => `${item.name} ${item.dose} ${item.freq}`).join('; ') || 'No medication entries found')}</span></div>
+    <div class="cr"><span class="k">Care-plan goals</span><span class="v">${escapeHTML(activeActions.map(action => action.name).join('; ') || 'No linked action recorded')}</span></div>
+    </details>`;
+  document.getElementById('intervention-form-live').textContent = '';
+  document.getElementById('intervention-form-live').classList.remove('error');
+  actionSelect.innerHTML = '<option value="">Not linked to a care-plan action</option>' + interventionActionsFor(client).map(action =>
+    `<option value="${escapeHTML(action.id)}">${escapeHTML(action.name)}</option>`
+  ).join('');
+  actionSelect.value = activeActions.some(action => action.id === module.actionId) ? module.actionId : '';
+  typeSelect.innerHTML = module.options.map(option => `<option value="${escapeHTML(option)}">${escapeHTML(option)}</option>`).join('');
+  document.getElementById('intervention-chips').innerHTML = module.options.map((option, index) =>
+    `<button type="button" data-intervention-choice="${escapeHTML(option)}" aria-pressed="${index === 0}">${escapeHTML(option)}</button>`
+  ).join('');
+  typeSelect.value = module.options[0] || '';
+  document.getElementById('intervention-note').value = '';
+  document.getElementById('intervention-quantity').value = '1';
+  document.getElementById('intervention-response').value = '';
+  document.getElementById('intervention-outcome').value = '';
+  document.getElementById('intervention-next').value = '';
+  document.getElementById('intervention-live').textContent = interventionStorageIssue;
+  document.getElementById('intervention-live').classList.toggle('error', Boolean(interventionStorageIssue));
+  const formStatus = document.getElementById('intervention-form-live');
+  formStatus.textContent = interventionStorageIssue;
+  formStatus.classList.toggle('error', Boolean(interventionStorageIssue));
+  document.getElementById('intervention-save').disabled = Boolean(interventionStorageIssue);
+  renderInterventionDrawerTab();
+  overlay.hidden = false;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('intervention-drawer-close').focus();
+}
+
+function renderInterventionDrawerTab() {
+  const client = currentClient || CLIENTS[0];
+  const module = INTERVENTION_MODULES.find(item => item.id === interventionOpenModuleId);
+  const recordPanel = document.getElementById('intervention-record-panel');
+  const secondaryPanel = document.getElementById('intervention-secondary-panel');
+  if (!module || !recordPanel || !secondaryPanel) return;
+
+  document.querySelectorAll('[data-intervention-tab]').forEach(button =>
+    button.setAttribute('aria-selected', String(button.dataset.interventionTab === interventionDrawerTab))
+  );
+  const showingRecord = interventionDrawerTab === 'Record';
+  recordPanel.hidden = !showingRecord;
+  secondaryPanel.hidden = showingRecord;
+  recordPanel.querySelectorAll('input, select, textarea, button').forEach(control => {
+    if (control.id !== 'intervention-save') control.disabled = !showingRecord;
+  });
+  document.getElementById('intervention-save').disabled = !showingRecord || Boolean(interventionStorageIssue);
+  if (showingRecord) return;
+
+  if (interventionDrawerTab === 'History') {
+    const records = interventionHistoryFor(client).filter(record => record.moduleId === module.id);
+    secondaryPanel.innerHTML = records.length
+      ? `<div class="card"><div class="card-header">Recorded ${escapeHTML(module.name)} activity</div><div class="card-body">${records.map(record => `<div class="timeline-item"><div class="timeline-title">${escapeHTML(record.intervention || module.name)} <span class="tag">${escapeHTML(interventionDate(record.at))}</span></div><div class="timeline-desc">${escapeHTML(record.note)}${record.response ? `<br>Response: ${escapeHTML(record.response)}` : ''}${record.outcome ? `<br>Outcome: ${escapeHTML(record.outcome)}` : ''}${record.next ? `<br>Next: ${escapeHTML(record.next)}` : ''}<br><span style="color:var(--muted)">${escapeHTML(record.by || 'Provider not recorded')}</span></div></div>`).join('')}</div></div>`
+      : `<p class="intervention-live">No ${escapeHTML(module.name.toLowerCase())} entries are recorded for ${escapeHTML(client.name)}.</p>`;
+    return;
+  }
+
+  const action = interventionActionsFor(client).find(item => item.id === module.actionId);
+  const recommended = interventionModuleRecommended(module, client);
+  secondaryPanel.innerHTML = `<div class="card"><div class="card-header">About this Psychiatry module</div><div class="card-body">
+    <p>${recommended ? escapeHTML(module.reason) : 'No matching diagnosis, alert, or medication entry was found in this client record.'}</p>
+    <p style="margin-top:10px"><strong>Care-plan link:</strong> ${escapeHTML(action?.name || 'No matching action in the current care plan; an entry can be saved without a link.')}</p>
+    ${action ? `<p style="margin-top:6px"><strong>Plan focus:</strong> ${escapeHTML(action.goal)}</p>` : ''}
+    <p style="margin-top:10px"><strong>Record types:</strong> ${module.options.map(option => escapeHTML(option)).join(', ')}</p>
+    <p style="margin-top:10px;color:var(--muted)">This is a documentation aid. It does not replace clinical assessment or create a billing event.</p>
+  </div></div>`;
+}
+
+function closeInterventionDrawer() {
+  const overlay = document.getElementById('intervention-overlay');
+  if (!overlay || overlay.hidden) return;
+  overlay.hidden = true;
+  document.body.style.overflow = '';
+  interventionReturnFocus?.focus();
+  interventionReturnFocus = null;
+}
+
+function initInterventions() {
+  const client = currentClient || CLIENTS[0];
+  interventionScope = 'plan';
+  interventionStorageIssue = '';
+  const loadedRecords = loadInterventionRecords();
+  interventionRecords = loadedRecords || [];
+  const live = document.getElementById('intervention-live');
+  if (live && interventionStorageIssue) {
+    live.textContent = interventionStorageIssue;
+    live.classList.add('error');
+  }
+  renderInterventionData(client);
+  renderInterventionModules(client);
+
+  document.querySelectorAll('[data-intervention-scope]').forEach(button => {
+    button.addEventListener('click', () => {
+      interventionScope = button.dataset.interventionScope;
+      document.querySelectorAll('[data-intervention-scope]').forEach(item =>
+        item.setAttribute('aria-pressed', String(item === button))
+      );
+      renderInterventionModules(client);
+    });
+  });
+  document.getElementById('intervention-module-list')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-intervention-module]');
+    if (button) openInterventionDrawer(button.dataset.interventionModule);
+  });
+  document.getElementById('intervention-open-record')?.addEventListener('click', () => openInterventionDrawer('psychiatry'));
+  document.getElementById('intervention-drawer-tabs')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-intervention-tab]');
+    if (!button) return;
+    interventionDrawerTab = button.dataset.interventionTab;
+    renderInterventionDrawerTab();
+  });
+  document.getElementById('intervention-chips')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-intervention-choice]');
+    if (!button) return;
+    document.querySelectorAll('#intervention-chips [data-intervention-choice]').forEach(choice =>
+      choice.setAttribute('aria-pressed', String(choice === button))
+    );
+    document.getElementById('intervention-type').value = button.dataset.interventionChoice;
+  });
+
+  const overlay = document.getElementById('intervention-overlay');
+  document.getElementById('intervention-drawer-close')?.addEventListener('click', closeInterventionDrawer);
+  overlay?.addEventListener('click', event => {
+    if (event.target === overlay) closeInterventionDrawer();
+  });
+  overlay?.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !overlay.hidden) {
+      closeInterventionDrawer();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')];
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    if (event.shiftKey && document.activeElement === focusable[0]) {
+      event.preventDefault();
+      focusable[focusable.length - 1].focus();
+    } else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+      event.preventDefault();
+      focusable[0].focus();
+    }
+  });
+
+  document.getElementById('intervention-form')?.addEventListener('submit', event => {
+    event.preventDefault();
+    if (interventionDrawerTab !== 'Record') return;
+    const note = document.getElementById('intervention-note').value.trim();
+    const module = INTERVENTION_MODULES.find(item =>
+      item.options.includes(document.getElementById('intervention-type').value)
+    );
+    const quantity = Number(document.getElementById('intervention-quantity').value);
+    if (!note || !module || !Number.isInteger(quantity) || quantity < 1) {
+      const status = document.getElementById('intervention-form-live');
+      status.textContent = 'Enter a clinical note and a quantity of at least 1.';
+      status.classList.add('error');
+      return;
+    }
+    const record = {
+      id: `INT-${Date.now()}`,
+      clientId: client.id,
+      actionId: document.getElementById('intervention-action').value,
+      moduleId: module.id,
+      moduleName: module.name,
+      intervention: document.getElementById('intervention-type').value,
+      qty: quantity,
+      note,
+      response: document.getElementById('intervention-response').value.trim(),
+      outcome: document.getElementById('intervention-outcome').value.trim(),
+      next: document.getElementById('intervention-next').value.trim(),
+      completesAction: document.getElementById('intervention-complete').checked,
+      at: new Date().toISOString(),
+      by: 'J. Njoroge, RN'
+    };
+    const nextRecords = [...interventionRecords, record];
+    try {
+      localStorage.setItem(INTERVENTION_STORAGE_KEY, JSON.stringify(nextRecords));
+    } catch (error) {
+      console.error('Unable to save intervention record.', error);
+      const status = document.getElementById('intervention-form-live');
+      status.textContent = 'This intervention could not be saved in this browser. No record was added.';
+      status.classList.add('error');
+      return;
+    }
+    interventionRecords = nextRecords;
+    closeInterventionDrawer();
+    renderInterventionData(client);
+    renderInterventionModules(client);
+    const status = document.getElementById('intervention-live');
+    status.textContent = `Intervention recorded for ${client.name}.`;
+    status.classList.remove('error');
+  });
+}
+
+function psychiatricInterventionWorkspace(c) {
+  return `
+    <section class="psychiatric-interventions" aria-labelledby="psychiatric-interventions-title">
+    <div class="intervention-eyebrow">What did the team actually do?</div>
+    <div class="page-header" style="margin:0">
+      <div>
+        <h2 class="page-title" id="psychiatric-interventions-title">Interventions</h2>
+        <p class="intervention-lede">Record care delivered in response to the care plan. Client context carries forward; confirm it before recording. Review charges in Billing.</p>
+      </div>
+    </div>
+
+    <p class="intervention-live" id="intervention-live" role="status" aria-live="polite"></p>
+
+    <div class="intervention-section-head"><div><b>Care-plan actions</b><span class="intervention-hint">what the plan asked for</span></div></div>
+    <div class="card intervention-actions-table">
+        <table class="data-table">
+          <thead><tr><th>Action</th><th>Priority</th><th>Status</th><th style="text-align:right">Records</th></tr></thead>
+          <tbody id="intervention-actions"></tbody>
+        </table>
+    </div>
+
+    <div class="intervention-section-head">
+      <div><b>Clinical modules</b></div>
+      <div class="intervention-scope" role="group" aria-label="Filter clinical modules">
+        <button type="button" data-intervention-scope="plan" aria-pressed="true">For this plan · <span id="intervention-plan-count">0</span></button>
+        <button type="button" data-intervention-scope="all" aria-pressed="false">All modules · <span id="intervention-all-count">0</span></button>
+    </div>
+    </div>
+    <div class="card intervention-list" id="intervention-module-list"></div>
+
+    <div class="intervention-record-overlay" id="intervention-overlay" hidden>
+      <section class="intervention-drawer" role="dialog" aria-modal="true" aria-labelledby="intervention-drawer-title">
+        <div class="intervention-drawer-head">
+          <span class="intervention-module-icon" id="intervention-drawer-icon" aria-hidden="true"></span>
+          <div class="intervention-module-copy">
+            <div class="intervention-module-title"><h2 id="intervention-drawer-title">Record intervention</h2><span class="intervention-recommended" id="intervention-drawer-recommended" hidden>Recommended</span></div>
+            <p id="intervention-drawer-subtitle"></p>
+            <div class="intervention-module-meta" id="intervention-drawer-rate"></div>
+          </div>
+          <button class="intervention-drawer-close" id="intervention-drawer-close" type="button" aria-label="Close record form">×</button>
+        </div>
+        <nav class="intervention-drawer-tabs" id="intervention-drawer-tabs" role="tablist" aria-label="Intervention details">
+          <button type="button" role="tab" data-intervention-tab="Record" aria-selected="true">Record</button>
+          <button type="button" role="tab" data-intervention-tab="History" aria-selected="false">History</button>
+          <button type="button" role="tab" data-intervention-tab="Info" aria-selected="false">Info</button>
+        </nav>
+        <form class="intervention-form" id="intervention-form">
+          <p class="intervention-live" id="intervention-form-live" role="status" aria-live="polite"></p>
+          <div id="intervention-record-panel">
+            <div class="intervention-context" id="intervention-context"></div>
+            <div class="field"><label for="intervention-action">Linked care-plan action</label><select id="intervention-action"></select></div>
+            <div class="field"><label>Intervention</label><div class="intervention-chips" id="intervention-chips"></div><select class="intervention-option-select" id="intervention-type" aria-label="Intervention type"></select></div>
+            <div class="intervention-form-grid">
+              <div class="field"><label for="intervention-note">What was done</label><textarea id="intervention-note" rows="2" required placeholder="Brief clinical note"></textarea></div>
+              <div class="field"><label for="intervention-quantity">Quantity</label><input id="intervention-quantity" type="number" min="1" step="1" value="1" required></div>
+            </div>
+            <details class="more"><summary>Add response and next steps</summary><div class="g">
+              <div class="field"><label for="intervention-response">Client response</label><input id="intervention-response" type="text"></div>
+              <div class="field"><label for="intervention-outcome">Outcome / progress</label><input id="intervention-outcome" type="text"></div>
+              <div class="field"><label for="intervention-next">Next action</label><input id="intervention-next" type="text"></div>
+              <label class="chk"><input id="intervention-complete" type="checkbox"> This completes the linked action</label>
+            </div></details>
+            <div class="intervention-form-actions">
+              <span style="font-size:11px;color:var(--muted)" id="intervention-billing-note"></span>
+              <button class="btn" id="intervention-save" type="submit">Record delivery</button>
+            </div>
+          </div>
+          <div class="intervention-drawer-secondary" id="intervention-secondary-panel" hidden></div>
+        </form>
+      </section>
+    </div>
+    </section>
+  `;
+}
+
 function interventions() {
   const c = currentClient || CLIENTS[0];
   return `
@@ -5298,6 +5962,7 @@ function psychiatry(showQueueOnly = false) {
         </div>
       </div>
     </div>
+
   `;
 }
 
@@ -5737,8 +6402,302 @@ function discharge() {
 }
 
 // ═══════════ PAGE: OUTCOMES ═══════════
+const OUTCOME_MEASURES = {
+  phq9: { label: "PHQ-9", max: 27, higherIsWorse: true },
+  gad7: { label: "GAD-7", max: 21, higherIsWorse: true }
+};
+
+function validOutcomeDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function loadOutcomeScores() {
+  outcomeStorageIssue = "";
+  try {
+    const saved = localStorage.getItem(OUTCOME_SCORE_STORAGE_KEY);
+    const records = saved ? JSON.parse(saved) : [];
+    if (!Array.isArray(records) || records.some(record =>
+      !record || typeof record.id !== "string" || typeof record.clientId !== "string" ||
+      !Object.hasOwn(OUTCOME_MEASURES, record.measure) ||
+      !Number.isInteger(record.score) || record.score < 0 ||
+      record.score > OUTCOME_MEASURES[record.measure].max ||
+      !validOutcomeDate(record.date) || typeof record.recordedAt !== "string" ||
+      typeof record.provider !== "string" || typeof record.note !== "string"
+    )) {
+      throw new Error("Saved outcome data has an invalid format.");
+    }
+    outcomeScoreRecords = records;
+  } catch (error) {
+    outcomeStorageIssue = "Outcome measures could not be loaded. Existing saved data was left unchanged.";
+    outcomeStatus = outcomeStorageIssue;
+    outcomeStatusState = "error";
+    console.error("Unable to restore outcome measures.", error);
+  }
+}
+
+function saveOutcomeScores(records) {
+  try {
+    localStorage.setItem(OUTCOME_SCORE_STORAGE_KEY, JSON.stringify(records));
+    return true;
+  } catch (error) {
+    console.error("Unable to save outcome measure.", error);
+    outcomeStatus = "This score could not be saved in this browser. No record was added.";
+    outcomeStatusState = "error";
+    return false;
+  }
+}
+
+function outcomeScoresFor(clientId, measure) {
+  return outcomeScoreRecords
+    .filter(record => record.clientId === clientId && (!measure || record.measure === measure))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.recordedAt.localeCompare(b.recordedAt));
+}
+
+function outcomeBand(measure, score) {
+  if (measure === "phq9") {
+    if (score < 5) return "Minimal";
+    if (score < 10) return "Mild";
+    if (score < 15) return "Moderate";
+    if (score < 20) return "Moderately severe";
+    return "Severe";
+  }
+  if (score < 5) return "Minimal";
+  if (score < 10) return "Mild";
+  if (score < 15) return "Moderate";
+  return "Severe";
+}
+
+function outcomeScoreDate(value) {
+  if (!validOutcomeDate(value)) return "Date not recorded";
+  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+    year: "numeric", month: "short", day: "numeric"
+  });
+}
+
+function outcomeTrend(records, measure) {
+  if (records.length < 2) return { label: "Baseline only", direction: "neutral" };
+  const first = records[0].score;
+  const latest = records[records.length - 1].score;
+  const change = latest - first;
+  if (!change) return { label: "No change", direction: "neutral" };
+  const improved = OUTCOME_MEASURES[measure].higherIsWorse ? change < 0 : change > 0;
+  return {
+    label: `${improved ? "Improved" : "Worsened"} ${Math.abs(change)} point${Math.abs(change) === 1 ? "" : "s"}`,
+    direction: improved ? "better" : "worse"
+  };
+}
+
+function outcomeChartSVG(records, measure) {
+  const definition = OUTCOME_MEASURES[measure];
+  if (!records.length) {
+    return '<div class="outcome-chart-empty">No scores recorded yet. Add a completed measure below to start this client’s trend.</div>';
+  }
+  const width = 440, height = 174, left = 36, right = 13, top = 14, bottomPad = 32;
+  const plotWidth = width - left - right, plotHeight = height - top - bottomPad;
+  const bottom = top + plotHeight;
+  const scores = records.map(record => record.score);
+  const x = scores.map((_, index) => scores.length === 1
+    ? left + plotWidth / 2
+    : left + index * plotWidth / (scores.length - 1));
+  const y = scores.map(score => top + (1 - score / definition.max) * plotHeight);
+  const grid = [0, .25, .5, .75, 1].map(fraction => {
+    const value = Math.round(definition.max * fraction);
+    const lineY = top + (1 - fraction) * plotHeight;
+    return `<line class="grid-line" x1="${left}" x2="${width - right}" y1="${lineY}" y2="${lineY}"/><text class="axis-label" x="${left - 7}" y="${lineY + 3.5}" text-anchor="end">${value}</text>`;
+  }).join("");
+  const path = x.map((position, index) =>
+    `${index ? "L" : "M"}${position.toFixed(1)},${y[index].toFixed(1)}`
+  ).join(" ");
+  const area = scores.length > 1
+    ? `<path class="trend-area" d="${path} L${x[x.length - 1].toFixed(1)},${bottom} L${x[0].toFixed(1)},${bottom} Z"/>`
+    : "";
+  const points = records.map((record, index) => {
+    const details = `${outcomeScoreDate(record.date)} · ${record.score}/${definition.max} · ${outcomeBand(measure, record.score)}${record.provider ? ` · ${record.provider}` : ""}${record.note ? ` · ${record.note}` : ""}`;
+    return `<circle class="trend-point${index === records.length - 1 ? " latest" : ""}" cx="${x[index].toFixed(1)}" cy="${y[index].toFixed(1)}" r="${index === records.length - 1 ? 5 : 4}"><title>${escapeHTML(details)}</title></circle>`;
+  }).join("");
+  const labels = scores.length === 1
+    ? `<text class="point-label" x="${x[0]}" y="${y[0] - 10}" text-anchor="middle">${scores[0]}</text>`
+    : `<text class="point-label" x="${x[0] + 5}" y="${y[0] - 9}" text-anchor="start">${scores[0]}</text><text class="point-label" x="${x[x.length - 1] - 5}" y="${y[y.length - 1] - 9}" text-anchor="end">${scores[scores.length - 1]}</text>`;
+  const dates = records.map(record => outcomeScoreDate(record.date));
+  const dateLabels = dates.length === 1
+    ? `<text class="axis-label" x="${x[0]}" y="${height - 7}" text-anchor="middle">${escapeHTML(dates[0])}</text>`
+    : `<text class="axis-label" x="${left}" y="${height - 7}" text-anchor="start">${escapeHTML(dates[0])}</text><text class="axis-label" x="${width - right}" y="${height - 7}" text-anchor="end">${escapeHTML(dates[dates.length - 1])}</text>`;
+  const description = `${definition.label}, score scale 0 to ${definition.max}. ${records.map(record => `${outcomeScoreDate(record.date)}: ${record.score}`).join("; ")}.`;
+  return `<svg class="outcome-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(description)}"><title>${definition.label} score trend</title><desc>${escapeHTML(description)}</desc>${grid}${area}${scores.length > 1 ? `<path class="trend-line" d="${path}"/>` : ""}${points}${labels}${dateLabels}</svg>`;
+}
+
+function outcomeMeasureCard(clientId, measure) {
+  const definition = OUTCOME_MEASURES[measure];
+  const records = outcomeScoresFor(clientId, measure);
+  const baseline = records[0];
+  const latest = records[records.length - 1];
+  return `<article class="outcome-chart-card">
+    <div class="outcome-chart-top"><h3>${definition.label}</h3></div>
+    ${latest ? `<div class="outcome-latest"><span class="outcome-latest-label">Latest</span><strong class="outcome-latest-score">${latest.score}</strong><span class="outcome-latest-scale">/ ${definition.max}</span></div>
+      <div class="outcome-baseline">Baseline <strong>${baseline.score}</strong> · ${escapeHTML(outcomeScoreDate(baseline.date))}</div>`
+      : `<div class="outcome-baseline">Scale: 0–${definition.max}${measure === "phq9" ? " · lower scores indicate fewer symptoms" : " · lower scores indicate fewer symptoms"}</div>`}
+    <div class="outcome-svg-wrap"><div class="outcome-svg-heading"><span>Score trend</span><span>Scale 0–${definition.max}</span></div>${outcomeChartSVG(records, measure)}</div>
+    ${latest ? `<div class="outcome-band"><strong>${escapeHTML(outcomeBand(measure, latest.score))} · ${escapeHTML(outcomeScoreDate(latest.date))}</strong><span class="outcome-provider">${escapeHTML(latest.provider || "Provider not recorded")}</span></div>` : ""}
+  </article>`;
+}
+
+function outcomeMeasureSummary(clientId, measure) {
+  const definition = OUTCOME_MEASURES[measure];
+  const records = outcomeScoresFor(clientId, measure);
+  const latest = records[records.length - 1];
+  return `<article class="outcome-metric-card">
+    <div class="outcome-metric-top"><h3>${definition.label}</h3><span class="outcome-metric-date">${latest ? `Latest · ${escapeHTML(outcomeScoreDate(latest.date))}` : "No baseline recorded"}</span></div>
+    ${latest
+      ? `<div class="outcome-metric-score"><strong>${latest.score}</strong><span>/ ${definition.max}</span></div><div class="outcome-metric-band">${escapeHTML(outcomeBand(measure, latest.score))}</div>`
+      : '<div class="outcome-metric-empty">—</div>'}
+  </article>`;
+}
+
+function outcomeLatestScores(clientId) {
+  const records = outcomeScoresFor(clientId).slice().reverse().slice(0, 5);
+  if (!records.length) return '<div class="outcome-dashboard-empty">No completed outcome measures are recorded for this client yet.</div>';
+  return `<div class="outcome-latest-table-wrap"><table class="outcome-latest-table">
+    <thead><tr><th>Date</th><th>Measure</th><th>Score</th><th>Severity band</th><th>Provider</th></tr></thead>
+    <tbody>${records.map(record => `<tr><td>${escapeHTML(outcomeScoreDate(record.date))}</td><td><strong>${OUTCOME_MEASURES[record.measure].label}</strong></td><td class="score">${record.score} / ${OUTCOME_MEASURES[record.measure].max}</td><td>${escapeHTML(outcomeBand(record.measure, record.score))}</td><td>${escapeHTML(record.provider || "Not recorded")}</td></tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+function outcomeHistoryTable(clientId) {
+  const records = outcomeScoresFor(clientId).slice().reverse();
+  if (!records.length) return '<div class="record-empty-state" style="margin:16px;">No outcome measures recorded for this client yet.</div>';
+  return `<div class="outcome-table-wrap"><table class="outcome-table"><thead><tr><th>Measure</th><th>Date</th><th class="num">Score</th><th>Band</th><th>Provider</th><th>Note</th></tr></thead><tbody>${records.map(record => `<tr><td><strong>${OUTCOME_MEASURES[record.measure].label}</strong></td><td>${escapeHTML(outcomeScoreDate(record.date))}</td><td class="num">${record.score} / ${OUTCOME_MEASURES[record.measure].max}</td><td>${escapeHTML(outcomeBand(record.measure, record.score))}</td><td>${escapeHTML(record.provider || "Not recorded")}</td><td>${escapeHTML(record.note || "—")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function outcomeWorkspace(client) {
+  const records = outcomeScoresFor(client.id);
+  const latest = records[records.length - 1];
+  const today = new Date();
+  const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const allMeasures = Object.keys(OUTCOME_MEASURES).map(key => `<option value="${key}">${OUTCOME_MEASURES[key].label}</option>`).join("");
+  return `<div class="outcome-panel" id="outcome-panel" data-client-id="${escapeHTML(client.id)}">
+    <section class="outcome-overview-grid" aria-label="Outcome overview">
+      <div class="outcome-overview-card">
+        <div class="outcome-overview-main">
+          <div><span class="outcome-overview-label">Outcome measures</span><h2>Clinical progress</h2>
+            <p class="outcome-overview-copy">Review scores from completed PHQ-9 and GAD-7 assessments for ${escapeHTML(client.name)}. Scores are recorded as entered and are not inferred.</p>
+          </div>
+          <div class="outcome-overview-count"><strong>${records.length}</strong><span>assessment${records.length === 1 ? "" : "s"} recorded</span></div>
+        </div>
+        <div class="outcome-overview-actions"><button class="btn" type="button" data-outcome-scroll="outcome-record">Record a measure</button><button class="btn ghost sm" type="button" data-outcome-history>View score history</button></div>
+      </div>
+      <aside class="outcome-guidance-card">
+        <div><span class="outcome-overview-label">Clinical use</span><h3>Use completed assessments</h3><p>Enter the result from an appropriate completed measure. Review scores alongside the client’s clinical presentation and care plan.</p></div>
+        ${latest ? `<p class="outcome-guidance-latest"><strong>Most recent:</strong> ${OUTCOME_MEASURES[latest.measure].label} · ${latest.score}/${OUTCOME_MEASURES[latest.measure].max} · ${escapeHTML(outcomeScoreDate(latest.date))}</p>` : '<p class="outcome-guidance-latest">No completed measure has been recorded yet.</p>'}
+      </aside>
+    </section>
+    <section class="outcome-dashboard-metrics" aria-label="Latest scores by measure">${Object.keys(OUTCOME_MEASURES).map(key => outcomeMeasureSummary(client.id, key)).join("")}</section>
+    <section class="outcome-dashboard-card" aria-labelledby="outcome-latest-title">
+      <div class="outcome-dashboard-card-head"><h2 id="outcome-latest-title">Latest scores</h2><button class="btn ghost sm" type="button" data-outcome-history>View all</button></div>
+      ${outcomeLatestScores(client.id)}
+    </section>
+    <section class="outcome-dashboard-card" id="outcome-trends" aria-labelledby="outcome-chart-title">
+      <div class="outcome-dashboard-card-head"><div><h2 id="outcome-chart-title">Score trends</h2><span class="outcome-section-subtitle">Baseline and repeat assessment results</span></div><button class="btn ghost sm" type="button" data-outcome-view>${outcomeView === "charts" ? "View as table" : "View as charts"}</button></div>
+      ${outcomeView === "charts" ? `<div class="outcome-chart-grid">${Object.keys(OUTCOME_MEASURES).map(key => outcomeMeasureCard(client.id, key)).join("")}</div><p class="outcome-note">Scores show recorded results only. Lower scores indicate fewer symptoms; change is descriptive and does not replace clinical interpretation.</p>` : outcomeHistoryTable(client.id)}
+    </section>
+    <section class="card outcome-section" id="outcome-record" aria-labelledby="outcome-record-title">
+      <div class="outcome-section-head"><div><h2 class="outcome-section-title" id="outcome-record-title">Record a measure <span class="outcome-section-subtitle">enter the result from a completed assessment</span></h2></div></div>
+      <form class="outcome-form" id="outcome-form">
+        <div class="outcome-form-grid">
+          <div class="field"><label for="outcome-measure">Measure</label><select id="outcome-measure" name="measure" required>${allMeasures}</select></div>
+          <div class="field"><label for="outcome-score">Score</label><input id="outcome-score" name="score" type="number" min="0" max="27" step="1" required inputmode="numeric" placeholder="0–27"></div>
+          <div class="field"><label for="outcome-date">Assessment date</label><input id="outcome-date" name="date" type="date" value="${localToday}" required></div>
+          <div class="field"><label for="outcome-provider">Provider <span class="hint">(optional)</span></label><input id="outcome-provider" name="provider" maxlength="100" autocomplete="name" placeholder="Name"></div>
+          <div class="field outcome-note-field"><label for="outcome-note">Clinical note <span class="hint">(optional)</span></label><input id="outcome-note" name="note" maxlength="400" placeholder="Brief context for this measure"></div>
+        </div>
+        <div class="outcome-form-actions"><p class="outcome-status" id="outcome-status" role="status" aria-live="polite" data-state="${escapeHTML(outcomeStatusState)}">${escapeHTML(outcomeStatus || outcomeStorageIssue)}</p><button class="btn" type="submit" ${outcomeStorageIssue ? "disabled" : ""}>Record score</button></div>
+      </form>
+      <div class="callout outcome-measure-form-note"><span><b>Clinical use:</b> Enter a score from a completed, appropriate version of the measure. The chart does not calculate or infer scores.</span></div>
+    </section>
+  </div>`;
+}
+
+function initOutcomes() {
+  const panel = document.getElementById("outcome-panel");
+  if (!panel) return;
+  panel.addEventListener("change", event => {
+    if (event.target.id !== "outcome-measure") return;
+    const scoreInput = panel.querySelector("#outcome-score");
+    const max = OUTCOME_MEASURES[event.target.value].max;
+    scoreInput.max = String(max);
+    scoreInput.placeholder = `0–${max}`;
+    scoreInput.setCustomValidity(Number(scoreInput.value) > max ? `Enter a score from 0 to ${max}.` : "");
+  });
+  panel.addEventListener("input", event => {
+    if (event.target.id !== "outcome-score") return;
+    const max = OUTCOME_MEASURES[panel.querySelector("#outcome-measure").value].max;
+    event.target.setCustomValidity(Number(event.target.value) > max ? `Enter a score from 0 to ${max}.` : "");
+  });
+  panel.addEventListener("click", event => {
+    if (event.target.closest("[data-outcome-scroll]")) {
+      document.getElementById("outcome-record")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      panel.querySelector("#outcome-measure")?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.target.closest("[data-outcome-history]")) {
+      outcomeView = "table";
+      panel.innerHTML = outcomeWorkspace(currentClient || CLIENTS[0]).replace(/^<div[^>]*>|<\/div>$/g, "");
+      document.getElementById("outcome-trends")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (event.target.closest("[data-outcome-view]")) {
+      outcomeView = outcomeView === "charts" ? "table" : "charts";
+      panel.innerHTML = outcomeWorkspace(currentClient || CLIENTS[0]).replace(/^<div[^>]*>|<\/div>$/g, "");
+    }
+  });
+  panel.addEventListener("submit", event => {
+    if (event.target.id !== "outcome-form") return;
+    event.preventDefault();
+    const form = event.target;
+    const measure = form.elements.measure.value;
+    const definition = OUTCOME_MEASURES[measure];
+    const score = Number(form.elements.score.value);
+    const date = form.elements.date.value;
+    if (!definition || !Number.isInteger(score) || score < 0 || score > definition.max || !validOutcomeDate(date)) {
+      outcomeStatus = "Enter a whole-number score within the selected measure’s range and a valid assessment date.";
+      outcomeStatusState = "error";
+      renderOutcomesPanel();
+      return;
+    }
+    const client = currentClient || CLIENTS[0];
+    const record = {
+      id: `OUT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      clientId: client.id,
+      measure,
+      score,
+      date,
+      provider: form.elements.provider.value.trim(),
+      note: form.elements.note.value.trim(),
+      recordedAt: new Date().toISOString()
+    };
+    const nextRecords = [...outcomeScoreRecords, record];
+    if (!saveOutcomeScores(nextRecords)) {
+      renderOutcomesPanel();
+      return;
+    }
+    outcomeScoreRecords = nextRecords;
+    outcomeStatus = `${definition.label} score recorded for ${client.name}.`;
+    outcomeStatusState = "success";
+    renderOutcomesPanel();
+  });
+}
+
+function renderOutcomesPanel() {
+  const panel = document.getElementById("outcome-panel");
+  if (panel) panel.innerHTML = outcomeWorkspace(currentClient || CLIENTS[0]).replace(/^<div[^>]*>|<\/div>$/g, "");
+}
+
 function outcomes() {
   const c = currentClient || CLIENTS[0];
+  loadOutcomeScores();
+  outcomeStatus = outcomeStorageIssue;
+  outcomeStatusState = outcomeStorageIssue ? "error" : "";
   return `
     <div class="page-header">
       <div>
@@ -5751,26 +6710,12 @@ function outcomes() {
 
     ${clientNav('outcomes')}
 
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-header">Outcome Monitoring</div>
-        <div class="card-body">
-          <div class="field">
-            <label>PHQ-9 Trend</label>
-            <div class="record-empty-state">No PHQ-9 outcome scores recorded for this client yet.</div>
-          </div>
-          <div class="field" style="margin-top: 16px;">
-            <label>GAD-7 Trend</label>
-            <div class="record-empty-state">No GAD-7 outcome scores recorded for this client yet.</div>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">Care Plan Review</div>
-        <div class="card-body">
-          <p class="record-empty-state">Review progress against the client's documented care plan as outcomes are recorded.</p>
-          <button class="btn ghost sm" type="button" onclick="openJourneyStage('careplan')">Review Care Plan</button>
-        </div>
+    <div id="outcome-workspace">${outcomeWorkspace(c)}</div>
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-header">Care Plan Review</div>
+      <div class="card-body">
+        <p class="record-empty-state">Review progress against the client's documented care plan alongside these outcome measures.</p>
+        <button class="btn ghost sm" type="button" onclick="openJourneyStage('careplan')">Review Care Plan</button>
       </div>
     </div>
   `;

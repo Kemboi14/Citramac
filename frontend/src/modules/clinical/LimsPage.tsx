@@ -16,6 +16,9 @@ import {
   type LabSpecimen,
   type LoincCode,
 } from "../../lib/limsApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -146,14 +149,12 @@ export function LimsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Module 4 · Laboratory Information Management
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          LIMS{selected ? ` — ${selected.patientName}` : ""}
-        </h1>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Laboratory"
+        title={"Laboratory records"}
+        subtitle={selected ? selected.patientName : undefined}
+      />
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
@@ -192,7 +193,7 @@ export function LimsPage() {
       </div>
 
       {!selected ? (
-        <p className="text-ink-500">Select a client from the Client Registry to order a test.</p>
+        <ClientPicker action="order a test for" />
       ) : (
         <>
           <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">

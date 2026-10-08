@@ -14,6 +14,9 @@ import {
   type Icd11Code,
 } from "../../lib/clinicalApi";
 import { createInvoice, recordPayment } from "../../lib/billingApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -23,7 +26,7 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 export function ClinicalEncounterPage() {
   const { accessToken } = useAuth();
   const { selected } = usePatientContext();
-  const { encounterId, patientName, error: encounterError } = useEnsureEncounter();
+  const { hasClient, encounterId, patientName, error: encounterError } = useEnsureEncounter();
   const { submitOrQueue } = useOfflineSync(accessToken);
 
   const [orderError, setOrderError] = useState<string | null>(null);
@@ -43,7 +46,8 @@ export function ClinicalEncounterPage() {
   const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
 
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
-  if (!encounterId) return <p className="text-ink-500">Loading…</p>;
+  if (!hasClient) return <ClientPicker action="record an encounter for" />;
+  if (!encounterId) return <p className="text-ink-500">Opening an encounter for this client…</p>;
 
   const submitSoap = async () => {
     if (!accessToken) return;
@@ -134,14 +138,8 @@ export function ClinicalEncounterPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Module 3 · Clinical Encounter &amp; Consultation (EHR)
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          Clinical Encounter — {patientName}
-        </h1>
-      </div>
+      <ClientContext />
+      <PageHeader eyebrow="Clinical" title={"Clinical Encounter"} subtitle={patientName} />
 
       <form
         onSubmit={(e) => e.preventDefault()}

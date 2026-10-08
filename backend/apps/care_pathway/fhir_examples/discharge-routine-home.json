@@ -1,0 +1,241 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:bed20317-326b-4cce-9ff1-fa58e2bd1e73",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "bed20317-326b-4cce-9ff1-fa58e2bd1e73",
+        "status": "final",
+        "type": {
+          "text": "Discharge summary"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:215c43fe-6dc9-4eb3-908a-7ba226834850"
+        },
+        "date": "2026-10-08T10:28:07.921940Z",
+        "author": [
+          {
+            "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+            "display": "Wanjiru Kariuki"
+          }
+        ],
+        "title": "Discharge summary (version 1)",
+        "attester": [
+          {
+            "mode": "legal",
+            "time": "2026-10-08T10:28:07.921940Z",
+            "party": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ],
+        "section": [
+          {
+            "title": "Clinical status at discharge",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Mood improved, no suicidal ideation, good insight.</div>"
+            }
+          },
+          {
+            "title": "Treatment summary",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Fluoxetine started and titrated to 20 mg; attended daily group therapy and weekly individual CBT.</div>"
+            }
+          },
+          {
+            "title": "Diagnoses",
+            "entry": [
+              {
+                "reference": "urn:citramac:condition:bb003b47-a25a-4766-b4d8-fb9f9d2aed2c"
+              }
+            ]
+          },
+          {
+            "title": "Discharge medications",
+            "entry": [
+              {
+                "reference": "urn:citramac:medicationrequest:3b66e06d-437e-4b44-aef9-874177d00ac6"
+              }
+            ]
+          },
+          {
+            "title": "Education provided",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Medication adherence education provided; Crisis plan reviewed; Warning signs discussed</div>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "48eca813-2bd3-421d-865b-4f6eccf40b82",
+        "name": [
+          {
+            "family": "Mwangi",
+            "given": [
+              "Faith"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1997-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:0945028e-a59e-4dcf-a9ef-77b669c3e4be",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "0945028e-a59e-4dcf-a9ef-77b669c3e4be",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-08T10:28:07.392167Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82"
+        },
+        "period": {
+          "start": "2026-10-08T10:28:07.392167Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:215c43fe-6dc9-4eb3-908a-7ba226834850",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "215c43fe-6dc9-4eb3-908a-7ba226834850",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:0945028e-a59e-4dcf-a9ef-77b669c3e4be"
+          }
+        ],
+        "period": {
+          "start": "2026-10-08T10:28:07.496822Z",
+          "end": "2026-10-08T10:28:07.921940Z"
+        },
+        "hospitalization": {
+          "dischargeDisposition": {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:discharge-disposition",
+                "code": "HOME",
+                "display": "Home / community care"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:condition:bb003b47-a25a-4766-b4d8-fb9f9d2aed2c",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "bb003b47-a25a-4766-b4d8-fb9f9d2aed2c",
+        "code": {
+          "coding": [
+            {
+              "system": "http://id.who.int/icd/release/11/mms",
+              "code": "6A70",
+              "display": "Single episode depressive disorder"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:215c43fe-6dc9-4eb3-908a-7ba226834850"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:medicationrequest:3b66e06d-437e-4b44-aef9-874177d00ac6",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "3b66e06d-437e-4b44-aef9-874177d00ac6",
+        "status": "active",
+        "intent": "order",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:discharge-medication-action",
+                "code": "CONTINUE",
+                "display": "Continue"
+              }
+            ]
+          }
+        ],
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:national-drug-index",
+              "code": "DRUG-FLX20",
+              "display": "Fluoxetine"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:48eca813-2bd3-421d-865b-4f6eccf40b82"
+        },
+        "authoredOn": "2026-10-08T10:28:07.921940Z",
+        "dosageInstruction": [
+          {
+            "text": "20 mg Oral Once daily"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:bed20317-326b-4cce-9ff1-fa58e2bd1e73",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-bed20317-326b-4cce-9ff1-fa58e2bd1e73",
+        "target": [
+          {
+            "reference": "urn:citramac:composition:bed20317-326b-4cce-9ff1-fa58e2bd1e73"
+          }
+        ],
+        "recorded": "2026-10-08T10:28:07.921940Z",
+        "agent": [
+          {
+            "role": [
+              {
+                "text": "Org Admin"
+              }
+            ],
+            "who": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

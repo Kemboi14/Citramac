@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
@@ -13,6 +12,9 @@ import {
   type ClientHistoryRestricted,
   type RiskLevel,
 } from "../../lib/clientHistoryApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -230,32 +232,22 @@ export function ClientHistoryPage() {
   };
 
   if (!selected) {
-    return (
-      <p className="text-ink-500">
-        Select a client from the{" "}
-        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
-          Client Registry
-        </Link>{" "}
-        first.
-      </p>
-    );
+    return <ClientPicker action="record history for" />;
   }
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-            Clinical documentation
-          </div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">
-            Client History — {selected.patientName}
-          </h1>
-        </div>
-        <button type="button" className={BUTTON_CLASS} onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Close form" : "+ New Intake"}
-        </button>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Clinical"
+        title="Client history"
+        subtitle={selected.patientName}
+        actions={
+          <button type="button" className={BUTTON_CLASS} onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Close form" : "+ New Intake"}
+          </button>
+        }
+      />
 
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>

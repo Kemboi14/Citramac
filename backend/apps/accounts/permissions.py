@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
@@ -21,6 +22,27 @@ class IsOrgAdmin(BasePermission):
 
     def has_permission(self, request, view):
         return bool(request.user and _has_org_admin_role(request.user))
+
+
+class IsAuditLogReader(BasePermission):
+    """
+    Who may open the audit trail: Super Admin, or an Org Admin / Auditor
+    belonging to an organization. Roles are checked server-side from
+    `user.roles` (the JWT `role` claim is only the first role of a multi-role
+    user and is for UI routing, not authorization). A user with no
+    organization is refused so a scoped query can never fall through to
+    platform-level rows.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_superuser:
+            return True
+        if user.organization_id is None:
+            return False
+        return user.roles.filter(Q(name__iexact="Org Admin") | Q(name__iexact="Auditor")).exists()
 
 
 class IsPlatformSuperAdminOrOrgAdmin(BasePermission):

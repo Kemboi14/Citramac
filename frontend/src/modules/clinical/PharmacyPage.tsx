@@ -11,6 +11,9 @@ import {
   type DrugIndexEntry,
   type Store,
 } from "../../lib/pharmacyApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -25,7 +28,7 @@ const BUTTON_CLASS =
  */
 export function PharmacyPage() {
   const { accessToken } = useAuth();
-  const { encounterId, patientName, error: encounterError } = useEnsureEncounter();
+  const { hasClient, encounterId, patientName, error: encounterError } = useEnsureEncounter();
 
   const [drugQuery, setDrugQuery] = useState("");
   const [drugMatches, setDrugMatches] = useState<DrugIndexEntry[]>([]);
@@ -58,7 +61,8 @@ export function PharmacyPage() {
   }, [accessToken]);
 
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
-  if (!encounterId) return <p className="text-ink-500">Loading…</p>;
+  if (!hasClient) return <ClientPicker action="prescribe or dispense for" />;
+  if (!encounterId) return <p className="text-ink-500">Opening an encounter for this client…</p>;
 
   const runDrugSearch = async () => {
     if (!accessToken || !drugQuery.trim()) return;
@@ -108,12 +112,12 @@ export function PharmacyPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Module 6 · Pharmacy
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">Pharmacy — {patientName}</h1>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Pharmacy & medication"
+        title={"Medication orders & review"}
+        subtitle={patientName}
+      />
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">1. Prescribe</h2>

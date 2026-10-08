@@ -338,9 +338,46 @@ class Appointment(TenantScopedModel):
     # AppointmentViewSet.perform_update) so a rescheduled appointment gets a
     # fresh reminder for its new time.
     reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    # Follow-up context (docs/17-DISCHARGE-AND-FOLLOW-UP.md). The episode is the
+    # clinical spine (CLAUDE.md §4); `reason` is a code from the served
+    # `follow-up-reason` value set. Manual appointments leave these blank.
+    ORIGIN_CHOICES = [
+        ("MANUAL", "Booked manually"),
+        ("DISCHARGE", "Booked at discharge"),
+        ("CARE_PLAN", "Booked from the care plan"),
+    ]
+    episode = models.ForeignKey(
+        "care_pathway.EpisodeOfCare",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="appointments",
+    )
+    admission = models.ForeignKey(
+        "ipd_ward.Admission",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="follow_up_appointments",
+    )
+    reason = models.CharField(max_length=64, blank=True)
+    origin = models.CharField(max_length=16, choices=ORIGIN_CHOICES, default="MANUAL")
+    booked_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Stable business identifier so a retried booking never double-books
+    # (CLAUDE.md "fail safely": idempotent writes).
+    client_request_id = models.CharField(max_length=64, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["scheduled_for"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "client_request_id"],
+                condition=~models.Q(client_request_id=""),
+                name="unique_appointment_client_request",
+            )
+        ]
 
     def __str__(self):
         return f"{self.patient} @ {self.scheduled_for:%Y-%m-%d %H:%M}"

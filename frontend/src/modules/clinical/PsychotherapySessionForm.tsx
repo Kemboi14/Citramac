@@ -5,6 +5,7 @@ import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
 import { createPsychotherapySession } from "../../lib/clinicalApi";
+import { ClientPicker } from "../../clinical/ClientPicker";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -43,7 +44,7 @@ export function PsychotherapySessionForm({
   const [error, setError] = useState<string | null>(null);
 
   if (encounterError) return <p className="text-status-red">{encounterError}</p>;
-  if (!selected) return <p className="text-ink-500">Loading…</p>;
+  if (!selected) return <ClientPicker action="record a session for" />;
 
   const handleSubmit = async () => {
     if (!accessToken) return;

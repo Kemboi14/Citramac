@@ -9,7 +9,6 @@ import { listAttachments, uploadAttachment, type Attachment } from "../../lib/at
 import { listStaff, type Staff } from "../../lib/governanceApi";
 import {
   admitPatient,
-  dischargeAdmission,
   getAdmissionFhirBundle,
   listAdmissions,
   listBeds,
@@ -23,6 +22,9 @@ import {
   type ObservationLevel,
   type Ward,
 } from "../../lib/ipdApi";
+import { PageHeader } from "../care/shared/ui";
+import { ClientPicker } from "../../clinical/ClientPicker";
+import { ClientContext } from "../../clinical/ClientContext";
 
 const FIELD_CLASS =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -185,7 +187,6 @@ export function IpdPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [admissionAttachments, setAdmissionAttachments] = useState<Attachment[]>([]);
-  const [dischargeSummary, setDischargeSummary] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [fhirPreview, setFhirPreview] = useState<string | null>(null);
@@ -231,15 +232,7 @@ export function IpdPage() {
   }, [accessToken, activeAdmission?.id]);
 
   if (!selected) {
-    return (
-      <p className="text-ink-500">
-        Select a client from the{" "}
-        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
-          Client Registry
-        </Link>{" "}
-        first.
-      </p>
-    );
+    return <ClientPicker action="admit or manage" />;
   }
 
   const availableBeds = beds.filter(
@@ -314,18 +307,6 @@ export function IpdPage() {
     }
   };
 
-  const discharge = async () => {
-    if (!accessToken || !activeAdmission) return;
-    setError(null);
-    try {
-      await dischargeAdmission(accessToken, activeAdmission.id, dischargeSummary);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't discharge the patient.");
-      throw err;
-    }
-  };
-
   const transfer = async (newBedId: string) => {
     if (!accessToken || !activeAdmission) return;
     setError(null);
@@ -373,23 +354,21 @@ export function IpdPage() {
 
   return (
     <div className="flex flex-col gap-5 animate-fade-in">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-brand-green">
-            Inpatient Admission
-          </div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">
-            {activeAdmission ? "Admission" : "New Admission"} — {selected.patientName}
-          </h1>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowBedBoard((v) => !v)}
-          className="rounded-md border border-surface-border bg-surface-card px-3 py-2 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg"
-        >
-          {showBedBoard ? "Hide bed board" : "Show bed board"}
-        </button>
-      </div>
+      <ClientContext />
+      <PageHeader
+        eyebrow="Inpatient & residential"
+        title={activeAdmission ? "Admission" : "New admission"}
+        subtitle={selected.patientName}
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowBedBoard((v) => !v)}
+            className="rounded-md border border-surface-border bg-surface-card px-3 py-2 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg"
+          >
+            {showBedBoard ? "Hide bed board" : "Show bed board"}
+          </button>
+        }
+      />
 
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
@@ -902,18 +881,13 @@ export function IpdPage() {
             </label>
           </div>
 
-          <div className="mt-4 flex items-end gap-3">
-            <label className={`${LABEL_CLASS} flex-1`}>
-              Discharge summary
-              <textarea
-                className={FIELD_CLASS}
-                rows={2}
-                value={dischargeSummary}
-                onChange={(e) => setDischargeSummary(e.target.value)}
-              />
-            </label>
-            <SaveButton onSave={discharge}>Discharge</SaveButton>
-          </div>
+          <p className="mt-4 text-[12.5px] text-ink-700">
+            Discharge is recorded as a signed record in{" "}
+            <Link className="font-semibold text-brand-green underline" to="/clinical/discharge">
+              Discharge planning
+            </Link>
+            .
+          </p>
 
           <div className="mt-5 border-t border-surface-border pt-4">
             <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-500">

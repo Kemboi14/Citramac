@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
+import { useDialogA11y } from "./useDialogA11y";
 
 /**
  * Small centered confirmation dialog for consequential one-click actions
@@ -37,6 +38,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const dialogRef = useDialogA11y(open, busy ? undefined : onCancel);
   if (!open) return null;
   const confirmClass =
     tone === "danger"
@@ -51,6 +53,7 @@ export function ConfirmDialog({
       />
       <div className="fixed inset-0 z-[110] flex items-center justify-center p-5">
         <div
+          ref={dialogRef}
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"

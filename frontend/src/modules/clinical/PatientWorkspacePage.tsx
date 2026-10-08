@@ -33,6 +33,7 @@ import {
 import { getPatientRetentionStatus, type PatientRetentionStatus } from "../../lib/retentionApi";
 import { ClientHistoryPage } from "./ClientHistoryPage";
 import { PatientDetailsModal } from "./PatientDetailsModal";
+import { ClientPicker } from "../../clinical/ClientPicker";
 
 const TABS = [
   "Overview",
@@ -155,15 +156,7 @@ export function PatientWorkspacePage() {
   }, [accessToken, selectedPatientId]);
 
   if (!selected) {
-    return (
-      <p className="text-ink-500">
-        Select a client from the{" "}
-        <Link to="/clinical/registry" className="font-semibold text-brand-green hover:underline">
-          Client Registry
-        </Link>{" "}
-        first.
-      </p>
-    );
+    return <ClientPicker action="open" />;
   }
 
   const ensureEncounterId = async (): Promise<string> => {

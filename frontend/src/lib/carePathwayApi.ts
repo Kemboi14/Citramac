@@ -852,6 +852,8 @@ export interface CareDashboard {
   psychiatry_queued: number;
   caseload_count: number;
   appointments_today: number;
+  follow_ups_overdue: number;
+  discharged_without_follow_up: number;
   recent_activity: { at: string; title: string; detail: string }[];
   triage_arrivals: WorklistRow[];
   generated_at: string;

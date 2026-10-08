@@ -8,6 +8,10 @@ import { getCaseload, type CaseloadRow } from "../../lib/caseloadApi";
 import { initialsAndLabel } from "../../shells/userDisplay";
 import { clientRecordPath } from "../care/shared/recordRoutes";
 import { PriorityPill } from "../care/shared/ui";
+import { EmptyState } from "../../components/EmptyState";
+import { TableSkeletonRows } from "../../components/Skeleton";
+import { SortHeader } from "../care/shared/TableControls";
+import { useTableControls } from "../care/shared/useTableControls";
 
 const FIELD_CLASS =
   "w-full rounded-lg border border-surface-border bg-surface-bg px-2.5 py-2 text-[13px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green focus:bg-surface-card";
@@ -30,6 +34,26 @@ function nextAppointment(row: CaseloadRow) {
   });
 }
 
+const PRIORITY_RANK: Record<string, number> = { RED: 0, ORANGE: 1, YELLOW: 2, GREEN: 3 };
+const SORTS = {
+  client: (row: CaseloadRow) => row.name,
+  priority: (row: CaseloadRow) => PRIORITY_RANK[row.priority] ?? 9,
+  setting: (row: CaseloadRow) => careSetting(row),
+  next: (row: CaseloadRow) =>
+    row.next_appointment ? new Date(row.next_appointment.scheduled_for).getTime() : null,
+};
+const searchText = (row: CaseloadRow) =>
+  [
+    row.name,
+    row.citramac_number,
+    row.uhid_number,
+    row.diagnosis?.code,
+    row.diagnosis?.description,
+    row.status,
+    row.priority,
+    careSetting(row),
+  ].join(" ");
+
 /**
  * My Caseload — docs/15-CLINICAL-WORKSPACE-V3.md §1.12 (mapping M9). Priority is
  * the client's latest signed triage priority; "Pending triage" when none.
@@ -41,7 +65,6 @@ export function CaseloadPage() {
   const [rows, setRows] = useState<CaseloadRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -59,24 +82,8 @@ export function CaseloadPage() {
     };
   }, [accessToken]);
 
-  const query = search.trim().toLowerCase();
-  const visible = rows.filter(
-    (row) =>
-      !query ||
-      [
-        row.name,
-        row.citramac_number,
-        row.uhid_number,
-        row.diagnosis?.code,
-        row.diagnosis?.description,
-        row.status,
-        row.priority,
-        careSetting(row),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query),
-  );
+  const controls = useTableControls(isLoading ? null : rows, { sorts: SORTS, searchText });
+  const visible = controls.rows;
   const inpatients = rows.filter((row) => row.care_setting === "INPATIENT").length;
   const redOrange = rows.filter(
     (row) => row.priority === "RED" || row.priority === "ORANGE",
@@ -124,8 +131,8 @@ export function CaseloadPage() {
             Search your caseload
             <input
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={controls.filter}
+              onChange={(e) => controls.setFilter(e.target.value)}
               placeholder="Search by name, ID, diagnosis, or status..."
               className={FIELD_CLASS}
             />
@@ -140,29 +147,35 @@ export function CaseloadPage() {
           <table className="w-full min-w-[860px] border-collapse">
             <thead>
               <tr>
-                <th className={TH}>Client</th>
+                <SortHeader controls={controls} sortKey="client">
+                  Client
+                </SortHeader>
                 <th className={TH}>Diagnosis</th>
-                <th className={TH}>Care Setting</th>
-                <th className={TH}>Priority</th>
+                <SortHeader controls={controls} sortKey="setting">
+                  Care Setting
+                </SortHeader>
+                <SortHeader controls={controls} sortKey="priority">
+                  Priority
+                </SortHeader>
                 <th className={TH}>Status</th>
-                <th className={TH}>Next Appointment</th>
+                <SortHeader controls={controls} sortKey="next">
+                  Next Appointment
+                </SortHeader>
                 <th className={TH}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={7} className={`${TD} text-center text-ink-500`}>
-                    Loading…
-                  </td>
-                </tr>
-              )}
+              {isLoading && <TableSkeletonRows columns={7} />}
               {!isLoading && visible.length === 0 && (
                 <tr>
-                  <td colSpan={7} className={`${TD} py-6 text-center text-ink-500`}>
-                    {rows.length === 0
-                      ? "No clients are assigned to you yet."
-                      : "No clients match this search."}
+                  <td colSpan={7}>
+                    <EmptyState
+                      title={rows.length === 0 ? "No clients assigned yet" : "No clients match"}
+                    >
+                      {rows.length === 0
+                        ? "Clients appear here once you are on their care team."
+                        : "Try a different search, or clear it to see everyone."}
+                    </EmptyState>
                   </td>
                 </tr>
               )}

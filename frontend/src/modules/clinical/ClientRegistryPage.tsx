@@ -12,6 +12,7 @@ import {
 import { PatientRegistrationModal } from "./PatientRegistrationModal";
 import { PatientDetailsModal } from "./PatientDetailsModal";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
+import { PageHeader } from "../care/shared/ui";
 
 const ALLERGY_BADGE: Record<string, string> = {
   ACTIVE_ALLERGIES: "bg-status-red-tint text-status-red",
@@ -228,25 +229,21 @@ export function ClientRegistryPage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-            FHIR-aligned patient identity and access
-          </div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Client Registry</h1>
-          <p className="mt-1 text-[12.5px] text-ink-500">
-            Register, find and safely manage clients across every care pathway.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowRegister(true)}
-          className="flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-colors duration-150 hover:bg-brand-green-dark"
-        >
-          <Plus className="h-4 w-4" />
-          Register client
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Records"
+        title="Client registry"
+        subtitle="Register, find and safely manage clients across every care pathway."
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowRegister(true)}
+            className="flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-colors duration-150 hover:bg-brand-green-dark"
+          >
+            <Plus className="h-4 w-4" />
+            Register client
+          </button>
+        }
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative">

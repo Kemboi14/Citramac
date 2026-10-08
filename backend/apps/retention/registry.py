@@ -72,6 +72,8 @@ PATIENT_PATHS = {
     "care_pathway.CarePlanActivity": "care_plan__patient",
     "care_pathway.InterventionRecord": "patient",
     "care_pathway.ChargeItem": "patient",
+    "care_pathway.DischargeSummary": "patient",
+    "care_pathway.DischargeMedicationLine": "summary__patient",
 }
 
 # A client with any row in one of these is held to the mental health /
@@ -86,6 +88,8 @@ MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mh
     "care_pathway.CarePlan",
     "care_pathway.CarePlanActivity",
     "care_pathway.InterventionRecord",
+    "care_pathway.DischargeSummary",
+    "care_pathway.DischargeMedicationLine",
 }
 
 FINANCIAL_MODELS = {

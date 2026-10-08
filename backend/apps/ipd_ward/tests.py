@@ -55,7 +55,9 @@ class IpdWardTests(APITestCase):
             self.bed_a.refresh_from_db()
         self.assertEqual(self.bed_a.status, "OCCUPIED")
 
-    def test_discharge_frees_the_bed(self):
+    def test_legacy_discharge_endpoint_is_retired_and_changes_nothing(self):
+        # Discharge is a signed record made in Discharge planning
+        # (apps.care_pathway); the old free-text endpoint must not bypass it.
         with platform_admin_context():
             self.bed_a.status = "OCCUPIED"
             self.bed_a.save(update_fields=["status"])
@@ -68,11 +70,30 @@ class IpdWardTests(APITestCase):
             format="json",
             **self.auth,
         )
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response.data["status"], "DISCHARGED")
+        self.assertEqual(response.status_code, 400)
         with platform_admin_context():
             self.bed_a.refresh_from_db()
-        self.assertEqual(self.bed_a.status, "AVAILABLE")
+            admission.refresh_from_db()
+        self.assertEqual(self.bed_a.status, "OCCUPIED")
+        self.assertEqual(admission.status, "ADMITTED")
+        self.assertEqual(admission.discharge_summary, "")
+
+    def test_discharge_fields_cannot_be_written_through_patch(self):
+        with platform_admin_context():
+            admission = Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed_a, admitted_by=self.nurse
+            )
+        response = self.client.patch(
+            reverse("ipd-admission-detail", args=[admission.id]),
+            {"discharge_summary": "edited in place", "follow_up_date": "2030-01-01"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        with platform_admin_context():
+            admission.refresh_from_db()
+        self.assertEqual(admission.discharge_summary, "")
+        self.assertIsNone(admission.follow_up_date)
 
     def test_transfer_moves_occupancy_between_beds(self):
         with platform_admin_context():

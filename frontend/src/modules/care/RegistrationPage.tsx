@@ -125,11 +125,13 @@ function RegField({
   label,
   className = "",
   children,
+  error,
 }: {
   id: string;
   label: ReactNode;
   className?: string;
   children: ReactNode;
+  error?: string | null;
 }) {
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
@@ -137,6 +139,11 @@ function RegField({
         {label}
       </label>
       {children}
+      {error && (
+        <p role="alert" className="text-[11px] font-medium text-priority-red">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -158,6 +165,8 @@ export function RegistrationPage() {
   // server dedupes; a new one is issued after success, Clear or a new selection.
   const [requestId, setRequestId] = useState(() => newRequestId());
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [query, setQuery] = useState("");
@@ -288,17 +297,19 @@ export function RegistrationPage() {
     const fullName = form.fullName.trim();
     const description = form.description.trim();
     if ((identified || resolving) && !fullName) {
-      setFeedback(resolving ? "Enter the client’s full name." : NAME_REQUIRED);
+      setNameError(resolving ? "Enter the client’s full name." : NAME_REQUIRED);
       nameRef.current?.focus();
       return;
     }
     if (!resolving && mode === "UNIDENTIFIED" && !description) {
-      setFeedback(DESCRIPTION_REQUIRED);
+      setDescriptionError(DESCRIPTION_REQUIRED);
       descriptionRef.current?.focus();
       return;
     }
     if (!formRef.current?.reportValidity()) return;
     setFeedback(null);
+    setNameError(null);
+    setDescriptionError(null);
     setSubmitting(true);
     try {
       if (resolving && resolveId) {
@@ -502,6 +513,7 @@ export function RegistrationPage() {
             {(identified || resolving) && (
               <RegField
                 id="reg-full-name"
+                error={nameError}
                 label={
                   <>
                     Full name <span className={REQUIRED_MARK}>REQUIRED</span>
@@ -515,14 +527,19 @@ export function RegistrationPage() {
                   autoComplete="name"
                   required
                   className={REG_INPUT}
+                  aria-invalid={nameError ? true : undefined}
                   value={form.fullName}
-                  onChange={(e) => set("fullName")(e.target.value)}
+                  onChange={(e) => {
+                    setNameError(null);
+                    set("fullName")(e.target.value);
+                  }}
                 />
               </RegField>
             )}
             {!identified && !resolving && (
               <RegField
                 id="reg-description"
+                error={descriptionError}
                 label={
                   <>
                     Observed description / temporary alias
@@ -546,8 +563,12 @@ export function RegistrationPage() {
                       : "Optional observations to help identify the person later"
                   }
                   className={REG_INPUT}
+                  aria-invalid={descriptionError ? true : undefined}
                   value={form.description}
-                  onChange={(e) => set("description")(e.target.value)}
+                  onChange={(e) => {
+                    setDescriptionError(null);
+                    set("description")(e.target.value);
+                  }}
                 />
               </RegField>
             )}

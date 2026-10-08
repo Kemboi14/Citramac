@@ -4,6 +4,10 @@ import { useAuth } from "../../auth/useAuth";
 import { getTriageWorklist, type WorklistRow } from "../../lib/carePathwayApi";
 import { formatDateTime, formatTime } from "./shared/format";
 import { BTN_GHOST, BTN_SM, TABLE, TD, TH } from "./shared/styles";
+import { EmptyState } from "../../components/EmptyState";
+import { TableSkeletonRows } from "../../components/Skeleton";
+import { SortHeader, TableFilter } from "./shared/TableControls";
+import { useTableControls } from "./shared/useTableControls";
 import { Card, ErrorNote, PageHeader, Tag } from "./shared/ui";
 import { errorText } from "./triage/helpers";
 
@@ -21,11 +25,22 @@ function sortRows(rows: WorklistRow[]) {
   return [...rows].sort((a, b) => Number(b.is_overdue) - Number(a.is_overdue) || due(a) - due(b));
 }
 
+const SORTS = {
+  client: (row: WorklistRow) => row.name || "",
+  status: (row: WorklistRow) => `${row.setting} ${row.status_label}`,
+  due: (row: WorklistRow) => new Date(row.due_at).getTime() || null,
+};
+const searchText = (row: WorklistRow) =>
+  [row.name, row.mrn, row.citramac_number, row.status_label, row.setting].join(" ");
+
 export function TriageWorklistPage() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState<WorklistRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  // Starts in the server's order (overdue first, then due time); headers re-sort.
+  const controls = useTableControls(rows, { sorts: SORTS, searchText });
 
   const load = useCallback(
     (isCancelled: () => boolean) => {
@@ -34,6 +49,7 @@ export function TriageWorklistPage() {
         .then((data) => {
           if (isCancelled()) return;
           setRows(sortRows(data.results));
+          setUpdatedAt(new Date());
           setError(null);
         })
         .catch((err) => {
@@ -69,7 +85,11 @@ export function TriageWorklistPage() {
         subtitle={
           <>
             <p>{count}</p>
-            <p>Overdue first, then due time. Priority is assigned after triage.</p>
+            <p>
+              Overdue first, then due time. Priority is assigned after triage.
+              {updatedAt &&
+                ` Updated ${formatTime(updatedAt.toISOString())}, refreshes every minute.`}
+            </p>
           </>
         }
       />
@@ -84,27 +104,45 @@ export function TriageWorklistPage() {
         bodyClassName="overflow-x-auto"
         className="overflow-hidden"
       >
+        <TableFilter
+          controls={controls}
+          label="Filter the triage list"
+          placeholder="Filter by name or number…"
+        />
         <table className={`${TABLE} min-w-[780px]`} aria-label="Triage awaiting and re-checks due">
           <thead>
             <tr>
-              <th className={TH}>Client</th>
-              <th className={TH}>Setting / status</th>
+              <SortHeader controls={controls} sortKey="client">
+                Client
+              </SortHeader>
+              <SortHeader controls={controls} sortKey="status">
+                Setting / status
+              </SortHeader>
               <th className={TH}>Detail</th>
-              <th className={TH}>Due</th>
+              <SortHeader controls={controls} sortKey="due">
+                Due
+              </SortHeader>
               <th className={TH}>
                 <span className="sr-only">Open encounter</span>
               </th>
             </tr>
           </thead>
           <tbody>
-            {rows && items.length === 0 && (
+            {!rows && <TableSkeletonRows columns={5} />}
+            {rows && controls.rows.length === 0 && (
               <tr>
-                <td colSpan={5} className={`${TD} !p-6 text-center !text-ink-500`}>
-                  No arrivals or re-checks are currently due.
+                <td colSpan={5}>
+                  <EmptyState
+                    title={items.length === 0 ? "Nothing is waiting" : "No one matches that filter"}
+                  >
+                    {items.length === 0
+                      ? "No arrivals or re-checks are currently due."
+                      : "Clear the filter to see the whole list."}
+                  </EmptyState>
                 </td>
               </tr>
             )}
-            {items.map((row) => {
+            {controls.rows.map((row) => {
               const recheck = row.status === "RECHECK_DUE";
               const cell = `${TD} leading-[1.45] ${row.is_overdue ? "bg-priority-red-tint" : ""}`;
               return (

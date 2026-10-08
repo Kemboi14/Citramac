@@ -14,6 +14,7 @@ import { EncounterContext } from "./triage/EncounterContext";
 import { QuickRecheck } from "./triage/QuickRecheck";
 import { TriageForm } from "./triage/TriageForm";
 import { errorText } from "./triage/helpers";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.6 / §1.7 — /clinical/triage/:triageId.
 // A "Re-check due" encounter opens the quick re-check; anything else opens the
@@ -79,6 +80,12 @@ export function TriageEncounterPage() {
   if (detail.status === "RECHECK_DUE") {
     return (
       <div className="mx-auto max-w-[1600px]">
+        <Breadcrumbs
+          items={[
+            { label: "Triage", to: "/clinical/triage" },
+            { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
+          ]}
+        />
         <SafetyBanner banner={banner} error={bannerError} />
         <EncounterContext detail={detail} banner={banner} />
         <PageHeader

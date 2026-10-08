@@ -27,6 +27,7 @@ from .models import (
     CareTask,
     ClinicalAlert,
     ConsentTemplate,
+    DischargeSummary,
     EpisodeOfCare,
     IntakeAssessment,
     LocalValueSet,
@@ -825,6 +826,7 @@ class DashboardView(APIView):
         beds_available = Bed.objects.filter(status="AVAILABLE").count()
         worklist = services.triage_worklist()
         caseload = CaseloadView().get(request).data["results"]
+        follow_ups = services.follow_up_overview("upcoming", now)["counts"]
         return Response(
             {
                 "total_clients": total,
@@ -842,6 +844,8 @@ class DashboardView(APIView):
                 "appointments_today": Appointment.objects.filter(scheduled_for__date=today)
                 .exclude(status="CANCELLED")
                 .count(),
+                "follow_ups_overdue": follow_ups["overdue"],
+                "discharged_without_follow_up": follow_ups["unbooked"],
                 "recent_activity": services.recent_activity(),
                 "triage_arrivals": [_worklist_row(i) for i in worklist[:5]],
                 "generated_at": _iso(now),
@@ -1050,3 +1054,169 @@ class TriageThresholdsView(APIView):
                 "triage_target_minutes": triage_rules.TRIAGE_TARGET_MINUTES,
             }
         )
+
+
+# ── Follow-up (docs/17-DISCHARGE-AND-FOLLOW-UP.md) ──
+
+
+def _uuid_or_404(value):
+    import uuid
+
+    from django.http import Http404
+
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise Http404 from exc
+
+
+class FollowUpsView(APIView):
+    """GET care/follow-ups/?bucket=upcoming|overdue|missed|unbooked; POST books one."""
+
+    def get(self, request):
+        bucket = request.query_params.get("bucket", "upcoming")
+        if bucket not in services.FOLLOW_UP_BUCKETS:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                {"bucket": f"Use one of {', '.join(services.FOLLOW_UP_BUCKETS)}."}
+            )
+        return Response(services.follow_up_overview(bucket))
+
+    def post(self, request):
+        admission = None
+        origin = "MANUAL"
+        if request.data.get("admission"):
+            admission = get_object_or_404(
+                Admission.objects.select_related("patient", "episode"),
+                pk=_uuid_or_404(request.data["admission"]),
+            )
+            patient = admission.patient
+            origin = "DISCHARGE"
+        else:
+            patient = _patient(_uuid_or_404(request.data.get("patient")))
+        appointment = services.book_follow_up(
+            request.user,
+            patient,
+            request.data,
+            episode=admission.episode if admission else None,
+            admission=admission,
+            origin=origin,
+        )
+        return Response(
+            services._follow_up_row(appointment, services.concept_labels()),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ── Discharge planning (docs/17-DISCHARGE-AND-FOLLOW-UP.md) ──
+
+
+def _admission(pk):
+    return get_object_or_404(
+        Admission.objects.select_related(
+            "patient", "bed__ward", "encounter", "episode", "consultant"
+        ),
+        pk=pk,
+    )
+
+
+def _require_full_access(user, admission, summary=None):
+    if not services.can_view_discharge_in_full(user, admission, summary):
+        raise PermissionDenied(
+            "Discharge content is confidential to the care team. Ask the care team or an Org Admin."
+        )
+
+
+def _discharge_payload(user, admission):
+    latest = services.latest_discharge(admission)
+    full = services.can_view_discharge_in_full(user, admission, latest)
+    if latest and full:
+        log_view(latest)
+    return {
+        "admission": {
+            "id": str(admission.id),
+            "patient_id": str(admission.patient_id),
+            "patient_name": admission.patient.get_full_name(),
+            "citramac_number": admission.patient.citramac_number,
+            "bed_label": f"{admission.bed.ward.name} · Bed {admission.bed.bed_number}",
+            "admission_type": admission.admission_type,
+            "admitted_at": admission.admitted_at.isoformat(),
+            "status": admission.status,
+            "discharged_at": _iso(admission.discharged_at),
+            "consultant_name": user_display(admission.consultant),
+            "legacy_summary": admission.discharge_summary if full else "",
+        },
+        "restricted": not full,
+        "summary": services.serialize_discharge(latest, full) if latest else None,
+        "context": services.discharge_context(admission) if full else None,
+        "versions": [
+            {
+                "id": str(v.id),
+                "version": v.version,
+                "status": v.status,
+                "signed_at": _iso(v.signed_at),
+                "signed_by_name": user_display(v.signed_by),
+            }
+            for v in DischargeSummary.objects.filter(admission=admission).order_by("-version")
+        ],
+    }
+
+
+class DischargeWorklistView(APIView):
+    """GET care/discharges/ — current inpatients and the last 30 days of discharges."""
+
+    def get(self, request):
+        return Response(services.discharge_worklist())
+
+
+class AdmissionDischargeView(APIView):
+    """GET the discharge form's data; PUT saves the draft."""
+
+    def get(self, request, pk):
+        return Response(_discharge_payload(request.user, _admission(pk)))
+
+    def put(self, request, pk):
+        admission = _admission(pk)
+        _require_full_access(request.user, admission, services.latest_discharge(admission))
+        services.save_discharge_draft(admission, request.user, request.data)
+        return Response(_discharge_payload(request.user, admission))
+
+
+class AdmissionDischargeSignView(APIView):
+    """POST — sign the discharge and discharge the client (or sign an amendment)."""
+
+    def post(self, request, pk):
+        admission = _admission(pk)
+        _require_full_access(request.user, admission, services.latest_discharge(admission))
+        services.sign_discharge(admission, request.user, request.data)
+        return Response(_discharge_payload(request.user, _admission(pk)))
+
+
+class DischargeAmendView(APIView):
+    """POST care/discharges/<id>/amend/ — start a new version of a signed summary."""
+
+    def post(self, request, pk):
+        summary = get_object_or_404(DischargeSummary.objects.select_related("admission"), pk=pk)
+        admission = _admission(summary.admission_id)
+        _require_full_access(request.user, admission, summary)
+        services.amend_discharge(summary, request.user)
+        return Response(_discharge_payload(request.user, admission), status=status.HTTP_201_CREATED)
+
+
+class DischargeFhirView(APIView):
+    """GET care/discharges/<id>/fhir/ — the signed summary as a FHIR document Bundle."""
+
+    def get(self, request, pk):
+        from .fhir import build_discharge_bundle
+
+        summary = get_object_or_404(
+            DischargeSummary.objects.select_related("admission__patient"), pk=pk
+        )
+        _require_full_access(request.user, summary.admission, summary)
+        if summary.status != "COMPLETED":
+            from .services import StateConflict
+
+            raise StateConflict("Only a signed discharge summary can be exported.")
+        log_view(summary)
+        return Response(build_discharge_bundle(summary))

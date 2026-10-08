@@ -1,0 +1,158 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:2ccbb752-cdb8-490c-866e-9296cfac76ed",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "2ccbb752-cdb8-490c-866e-9296cfac76ed",
+        "status": "final",
+        "type": {
+          "text": "Discharge summary"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:744a4a5c-bc5d-453e-b44a-e9dd11859072"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:fdc978a8-d395-4fc2-affe-1324c46eae51"
+        },
+        "date": "2026-10-08T10:28:11.628910Z",
+        "author": [
+          {
+            "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+            "display": "Wanjiru Kariuki"
+          }
+        ],
+        "title": "Discharge summary (version 1)",
+        "attester": [
+          {
+            "mode": "legal",
+            "time": "2026-10-08T10:28:11.628910Z",
+            "party": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ],
+        "section": [
+          {
+            "title": "Clinical status at discharge",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Transferred for a medical complaint; mental state stable.</div>"
+            }
+          },
+          {
+            "title": "Treatment summary",
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Brief admission for observation; no psychotropic medicine started.</div>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:744a4a5c-bc5d-453e-b44a-e9dd11859072",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "744a4a5c-bc5d-453e-b44a-e9dd11859072",
+        "name": [
+          {
+            "family": "Mwangi",
+            "given": [
+              "Samuel"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1974-04-18"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:bbf35a2f-055e-4027-a9f2-d872bfca5b58",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "bbf35a2f-055e-4027-a9f2-d872bfca5b58",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-08T10:28:11.372971Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:744a4a5c-bc5d-453e-b44a-e9dd11859072"
+        },
+        "period": {
+          "start": "2026-10-08T10:28:11.372971Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:fdc978a8-d395-4fc2-affe-1324c46eae51",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "fdc978a8-d395-4fc2-affe-1324c46eae51",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:744a4a5c-bc5d-453e-b44a-e9dd11859072"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:bbf35a2f-055e-4027-a9f2-d872bfca5b58"
+          }
+        ],
+        "period": {
+          "start": "2026-10-08T10:28:11.442276Z",
+          "end": "2026-10-08T10:28:11.628910Z"
+        },
+        "hospitalization": {
+          "dischargeDisposition": {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:discharge-disposition",
+                "code": "TRANSFER",
+                "display": "Transfer to another facility"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:2ccbb752-cdb8-490c-866e-9296cfac76ed",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-2ccbb752-cdb8-490c-866e-9296cfac76ed",
+        "target": [
+          {
+            "reference": "urn:citramac:composition:2ccbb752-cdb8-490c-866e-9296cfac76ed"
+          }
+        ],
+        "recorded": "2026-10-08T10:28:11.628910Z",
+        "agent": [
+          {
+            "role": [
+              {
+                "text": "Org Admin"
+              }
+            ],
+            "who": {
+              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
+              "display": "Wanjiru Kariuki"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

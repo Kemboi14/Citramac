@@ -1,7 +1,11 @@
-from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+from django.utils.dateparse import parse_date
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsAuditLogReader
+
+from .audit import log_audit_log_view
 from .models import AuditLogEntry
 from .serializers import AuditLogEntrySerializer
 
@@ -28,7 +32,7 @@ class AuditLogListView(APIView):
     page explicitly instead.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuditLogReader]
 
     def get(self, request):
         from apps.accounts.models import User
@@ -52,11 +56,26 @@ class AuditLogListView(APIView):
             queryset = queryset.filter(model__icontains=model_filter)
         q = params.get("q")
         if q:
-            from django.db.models import Q
-
             queryset = queryset.filter(
                 Q(model__icontains=q) | Q(object_id__icontains=q) | Q(actor_role__icontains=q)
             )
+
+        for param, lookup in (("from", "timestamp__date__gte"), ("to", "timestamp__date__lte")):
+            raw = params.get(param)
+            if not raw:
+                continue
+            day = parse_date(raw)
+            if day is None:
+                return Response(
+                    {
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": f"'{param}' must be YYYY-MM-DD.",
+                        }
+                    },
+                    status=400,
+                )
+            queryset = queryset.filter(**{lookup: day})
 
         try:
             page = max(int(params.get("page", 1)), 1)
@@ -78,5 +97,14 @@ class AuditLogListView(APIView):
         for row, entry in zip(rows, results, strict=True):
             entry["actor_name"] = actors.get(str(row.actor_user_id), "System")
             entry["organization_name"] = orgs.get(str(row.organization_id), "")
+
+        # Who opened the trail, and with what filters, is itself audited. Written
+        # after the page was read so the entry never lists itself.
+        applied = {
+            key: params.get(key)
+            for key in ("category", "action", "model", "q", "from", "to")
+            if params.get(key)
+        }
+        log_audit_log_view(user.organization_id, applied, page)
 
         return Response({"count": total, "page": page, "page_size": PAGE_SIZE, "results": results})

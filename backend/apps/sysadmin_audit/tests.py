@@ -2,7 +2,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
@@ -30,7 +30,8 @@ class SecurityHeadersTests(TestCase):
 
 class AuditLogApiTests(APITestCase):
     """docs/09-SECURITY-COMPLIANCE.md §9.4 — Super Admin sees every
-    organization's trail, Org Admin only their own."""
+    organization's trail; Org Admin and Auditor only their own organization's;
+    nobody else (clinicians included) can open it."""
 
     def setUp(self):
         self.addCleanup(clear_tenant_context)
@@ -42,47 +43,102 @@ class AuditLogApiTests(APITestCase):
                 name="Org B", slug="audit-org-b", facility_type="CLINIC"
             )
             AuditLogEntry.objects.create(
-                organization_id=self.org_a.id, action=AuditLogEntry.ACTION_LOGIN
+                organization_id=self.org_a.id,
+                action=AuditLogEntry.ACTION_LOGIN,
             )
             AuditLogEntry.objects.create(
                 organization_id=self.org_b.id, action=AuditLogEntry.ACTION_LOGIN_FAILED
             )
-            self.super_admin = User.objects.create_superuser(
-                email="root@platform.test", password="Password123!"
-            )
-            self.org_a_user = User.objects.create_user(
-                email="staff@org-a.test",
-                password="Password123!",
-                organization=self.org_a,
-                is_active=True,
-            )
-        self.super_access, _ = issue_tokens(self.super_admin)
-        self.org_a_access, _ = issue_tokens(self.org_a_user)
-
-    def test_super_admin_sees_cross_tenant_entries(self):
-        response = self.client.get(
-            reverse("audit-log-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
-        )
-        self.assertGreaterEqual(response.data["count"], 2)
-
-    def test_org_scoped_user_sees_only_their_org(self):
-        response = self.client.get(
-            reverse("audit-log-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}"
-        )
-        org_ids = {row["organization_id"] for row in response.data["results"]}
-        self.assertEqual(org_ids, {str(self.org_a.id)})
-
-    def test_security_category_filters_to_security_relevant_actions(self):
-        with platform_admin_context():
             AuditLogEntry.objects.create(
                 organization_id=self.org_a.id,
                 action=AuditLogEntry.ACTION_UPDATE,
-                model="tenancy.branch",
+                model="mhp_program.psychotherapysession",
+                object_id="1",
+                field_diff={"session_notes": {"old": "SECRET-OLD", "new": "SECRET-NEW"}},
             )
-        response = self.client.get(
-            reverse("audit-log-list") + "?category=security",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
+            self.super_admin = User.objects.create_superuser(
+                email="root@platform.test", password="Password123!"
+            )
+            self.org_admin = self._user("admin@org-a.test", self.org_a, "Org Admin")
+            self.auditor = self._user("auditor@org-a.test", self.org_a, "Auditor")
+            self.clinician = self._user("staff@org-a.test", self.org_a, None)
+            self.other_org_admin = self._user("admin@org-b.test", self.org_b, "Org Admin")
+        self.url = reverse("audit-log-list")
+
+    @staticmethod
+    def _user(email, organization, role_name):
+        user = User.objects.create_user(
+            email=email, password="Password123!", organization=organization, is_active=True
         )
+        if role_name:
+            user.roles.add(Role.objects.get(name=role_name, organization__isnull=True))
+        return user
+
+    def _get(self, user, query=""):
+        access, _ = issue_tokens(user)
+        return self.client.get(self.url + query, HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def test_super_admin_sees_cross_tenant_entries(self):
+        response = self._get(self.super_admin)
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["count"], 3)
+
+    def test_clinician_without_audit_role_is_refused(self):
+        self.assertEqual(self._get(self.clinician).status_code, 403)
+
+    def test_org_admin_sees_only_their_org(self):
+        response = self._get(self.org_admin)
+        self.assertEqual(response.status_code, 200)
+        org_ids = {row["organization_id"] for row in response.data["results"]}
+        self.assertEqual(org_ids, {str(self.org_a.id)})
+
+    def test_auditor_sees_only_their_org(self):
+        response = self._get(self.auditor)
+        self.assertEqual(response.status_code, 200)
+        org_ids = {row["organization_id"] for row in response.data["results"]}
+        self.assertEqual(org_ids, {str(self.org_a.id)})
+
+    def test_org_admin_never_sees_another_orgs_rows(self):
+        response = self._get(self.other_org_admin)
+        org_ids = {row["organization_id"] for row in response.data["results"]}
+        self.assertEqual(org_ids, {str(self.org_b.id)})
+
+    def test_field_values_are_never_returned(self):
+        for user in (self.super_admin, self.org_admin, self.auditor):
+            response = self._get(user)
+            self.assertNotIn("SECRET", str(response.data))
+            self.assertTrue(all("field_diff" not in row for row in response.data["results"]))
+        update = next(
+            row
+            for row in self._get(self.org_admin).data["results"]
+            if row["model"] == "mhp_program.psychotherapysession"
+        )
+        self.assertEqual(update["changed_fields"], ["session_notes"])
+
+    def test_reading_the_log_is_itself_audited(self):
+        before = AuditLogEntry.objects.filter(model="sysadmin_audit.auditlogentry").count()
+        response = self._get(self.org_admin, "?action=UPDATE&q=psycho")
+        self.assertEqual(response.status_code, 200)
+        entry = AuditLogEntry.objects.filter(model="sysadmin_audit.auditlogentry").latest(
+            "timestamp"
+        )
+        self.assertEqual(
+            AuditLogEntry.objects.filter(model="sysadmin_audit.auditlogentry").count(),
+            before + 1,
+        )
+        self.assertEqual(entry.action, AuditLogEntry.ACTION_VIEW)
+        self.assertEqual(entry.actor_user_id, self.org_admin.id)
+        self.assertEqual(entry.organization_id, self.org_a.id)
+        self.assertEqual(entry.field_diff["filters"], {"action": "UPDATE", "q": "psycho"})
+        self.assertNotIn("SECRET", str(entry.field_diff))
+
+    def test_date_filter_and_bad_date(self):
+        future = self._get(self.org_admin, "?from=2999-01-01")
+        self.assertEqual(future.data["count"], 0)
+        self.assertEqual(self._get(self.org_admin, "?from=not-a-date").status_code, 400)
+
+    def test_security_category_filters_to_security_relevant_actions(self):
+        response = self._get(self.org_admin, "?category=security")
         actions = {row["action"] for row in response.data["results"]}
         self.assertTrue(actions.issubset({"LOGIN", "LOGIN_FAILED", "ERASURE"}))
 

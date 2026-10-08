@@ -17,6 +17,7 @@ import { OutcomesStage } from "./record/OutcomesStage";
 import { SnapshotView } from "./record/SnapshotView";
 import { TimelineView } from "./record/TimelineView";
 import type { RecordViewProps } from "./record/types";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 const VIEWS = new Set<string>([
   "snapshot",
@@ -102,6 +103,16 @@ export function ClientRecordPage() {
 
   return (
     <div>
+      <Breadcrumbs
+        items={[
+          { label: "My Caseload", to: "/clinical/caseload" },
+          {
+            label: loadedBanner
+              ? loadedBanner.name.trim() || "Temporary client (unnamed)"
+              : "Client",
+          },
+        ]}
+      />
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} />
       {body}

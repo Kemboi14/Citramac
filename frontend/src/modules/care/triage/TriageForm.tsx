@@ -16,6 +16,7 @@ import {
   type TriageEncounterDetail,
   type TriageEvaluation,
 } from "../../../lib/carePathwayApi";
+import { Breadcrumbs } from "../shared/Breadcrumbs";
 import { SafetyBanner, type BannerOverrides } from "../shared/SafetyBanner";
 import { formatDateTime, formatTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, GROUP_LABEL, INPUT, TABLE, TD, TH } from "../shared/styles";
@@ -616,6 +617,12 @@ export function TriageForm({
 
   return (
     <div className="mx-auto max-w-[1600px]">
+      <Breadcrumbs
+        items={[
+          { label: "Triage", to: "/clinical/triage" },
+          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
+        ]}
+      />
       <SafetyBanner banner={banner} error={bannerError} overrides={overrides} />
       <EncounterContext detail={detail} banner={banner} />
 

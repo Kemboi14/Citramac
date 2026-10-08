@@ -218,14 +218,6 @@ export function getAdmissionFhirBundle(accessToken: string, admissionId: string)
   });
 }
 
-export function dischargeAdmission(accessToken: string, admissionId: string, summary: string) {
-  return apiRequest<Admission>(`/ipd/admissions/${admissionId}/discharge/`, {
-    method: "POST",
-    body: { discharge_summary: summary },
-    accessToken,
-  });
-}
-
 export function transferAdmission(accessToken: string, admissionId: string, newBedId: string) {
   return apiRequest<Admission>(`/ipd/admissions/${admissionId}/transfer/`, {
     method: "POST",

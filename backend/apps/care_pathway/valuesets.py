@@ -435,6 +435,46 @@ VALUESETS = {
         "Admission Type",
         [("VOLUNTARY", "Voluntary"), ("INVOLUNTARY", "Involuntary")],
     ),
+    # ── Discharge planning and follow-up (docs/17-DISCHARGE-AND-FOLLOW-UP.md) ──
+    # Local concepts only. VERIFY: the national IG's discharge-disposition code
+    # system, and map these to it when it is supplied — no standard code is
+    # asserted here.
+    "discharge-disposition": (
+        "Discharge disposition",
+        [
+            ("HOME", "Home / community care"),
+            ("TRANSFER", "Transfer to another facility"),
+            ("AMA", "Left against medical advice"),
+            ("ABSCONDED", "Absconded"),
+            ("DECEASED", "Deceased"),
+        ],
+    ),
+    "discharge-medication-action": (
+        "Discharge medication action",
+        [("CONTINUE", "Continue"), ("STOP", "Stop"), ("CHANGE", "Change"), ("NEW", "New")],
+    ),
+    # The mockup's "Patient Education" checklist (docs/15 §1.17), verbatim.
+    "discharge-education": (
+        "Discharge education",
+        [
+            ("MED_ADHERENCE", "Medication adherence education provided"),
+            ("CRISIS_PLAN", "Crisis plan reviewed"),
+            ("WARNING_SIGNS", "Warning signs discussed"),
+            ("FOLLOW_UP_ARRANGED", "Follow-up appointment scheduled"),
+        ],
+    ),
+    "follow-up-reason": (
+        "Follow-up reason",
+        [
+            ("POST_DISCHARGE", "Post-discharge review"),
+            ("MEDICATION_REVIEW", "Medication review"),
+            ("THERAPY", "Psychotherapy continuation"),
+            ("AFTERCARE", "After-care / relapse prevention"),
+            ("CARE_PLAN_REVIEW", "Care-plan review"),
+            ("OUTREACH", "Missed-appointment outreach"),
+            ("OTHER", "Other"),
+        ],
+    ),
 }
 
 # Facility service list from the mockup's billing module (§1.15). Names only:

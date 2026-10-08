@@ -39,7 +39,7 @@ def _name(user):
 
 
 def _fhir_bundle(patient):
-    from apps.care_pathway.fhir import build_triage_bundle
+    from apps.care_pathway.fhir import build_discharge_bundle, build_triage_bundle
     from apps.clinical_encounter.models import DiagnosisCode, PrescriptionItem
 
     patient_ref = _urn("Patient", patient.id)
@@ -76,11 +76,23 @@ def _fhir_bundle(patient):
             if entry["fullUrl"] not in seen:
                 seen.add(entry["fullUrl"])
                 payload["entry"].append(entry)
+    # Signed discharge summaries (Composition, Encounter, Conditions, medications,
+    # Provenance), merged the same way; every version is kept.
+    from apps.care_pathway.models import DischargeSummary
+
+    for summary in DischargeSummary.objects.filter(patient=patient, status="COMPLETED").order_by(
+        "admission_id", "version"
+    ):
+        for entry in build_discharge_bundle(summary)["entry"]:
+            if entry["fullUrl"] not in seen:
+                seen.add(entry["fullUrl"])
+                payload["entry"].append(entry)
     return payload
 
 
 def _record(patient):
     from apps.care_pathway.models import (
+        DischargeSummary,
         EpisodeOfCare,
         IntakeAssessment,
         InterventionRecord,
@@ -249,6 +261,35 @@ def _record(patient):
                 "discharge_summary": a.discharge_summary,
             }
             for a in Admission.objects.filter(patient=patient)
+        ],
+        "discharge_summaries": [
+            {
+                "version": d.version,
+                "signed_at": _iso(d.signed_at),
+                "signed_by": _name(d.signed_by),
+                "signed_role": d.signed_role,
+                "disposition": d.disposition,
+                "discharged_at": _iso(d.discharged_at),
+                "destination": d.destination,
+                "clinical_status": d.clinical_status,
+                "treatment_summary": d.treatment_summary,
+                "legal_status_at_discharge": d.legal_status_at_discharge,
+                "diagnoses": [x.icd11_code_id for x in d.diagnoses.all()],
+                "medications": [
+                    {
+                        "drug": m.drug.generic_name,
+                        "dose": m.dose,
+                        "route": m.route,
+                        "frequency": m.frequency,
+                        "duration": m.duration,
+                        "action": m.action,
+                    }
+                    for m in d.medications.select_related("drug")
+                ],
+            }
+            for d in DischargeSummary.objects.filter(patient=patient, status="COMPLETED")
+            .select_related("signed_by")
+            .order_by("admission_id", "version")
         ],
         "intake_assessments": [
             {

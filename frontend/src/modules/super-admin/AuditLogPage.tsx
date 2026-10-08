@@ -24,6 +24,11 @@ const ACTION_OPTIONS: { value: AuditAction | ""; label: string }[] = [
   { value: "LOGIN_FAILED", label: "Login Failed" },
   { value: "LOGOUT", label: "Logout" },
   { value: "DISCOVERY_FAILED", label: "Tenant Discovery Failed" },
+  { value: "ARCHIVE", label: "Archive" },
+  { value: "RESTORE", label: "Restore" },
+  { value: "LEGAL_HOLD", label: "Legal Hold" },
+  { value: "SUPPORT_ACCESS", label: "Support Access" },
+  { value: "EXPORT", label: "Export" },
 ];
 
 const ACTION_TINT: Record<AuditAction, string> = {
@@ -36,6 +41,11 @@ const ACTION_TINT: Record<AuditAction, string> = {
   VIEW: "bg-surface-bg text-ink-500",
   LOGOUT: "bg-surface-bg text-ink-500",
   DISCOVERY_FAILED: "bg-status-amber-tint text-status-amber",
+  ARCHIVE: "bg-status-amber-tint text-status-amber",
+  RESTORE: "bg-brand-green-tint text-brand-green-dark",
+  LEGAL_HOLD: "bg-status-amber-tint text-status-amber",
+  SUPPORT_ACCESS: "bg-status-red-tint text-status-red",
+  EXPORT: "bg-status-amber-tint text-status-amber",
 };
 
 function ActionBadge({ action }: { action: AuditAction }) {
