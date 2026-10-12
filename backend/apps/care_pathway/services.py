@@ -163,7 +163,9 @@ def _record_allergies(patient, items, user, source, verification):
 def register_arrival(user, data):
     """Create or update the client, then open a NEW triage encounter — it never
     reopens an earlier one (doc 15 §1.4). Idempotent on `client_request_id`."""
-    from apps.client_registry.views import _generate_citramac_number
+    from apps.client_registry import identity as identity_service
+    from apps.client_registry.consent import capture_consent
+    from apps.client_registry.models import ConsentRecord, PatientIdentifier
 
     request_id = (data.get("client_request_id") or "").strip()
     if not request_id:
@@ -199,12 +201,57 @@ def register_arrival(user, data):
             raise ValidationError({"patient_id": "Client not found."})
 
     now = timezone.now()
+    document_kind = identity_service.DOCUMENT_KIND.get(data.get("id_document_type"))
+    claimed = {}
+    if document_kind and data.get("id_document_number"):
+        claimed[document_kind] = data["id_document_number"].strip()
+    for key, kind in (
+        ("unhcr_number", PatientIdentifier.KIND_UNHCR),
+        ("sha_member_number", PatientIdentifier.KIND_SHA),
+        ("client_registry_id", PatientIdentifier.KIND_CLIENT_REGISTRY),
+    ):
+        if (data.get(key) or "").strip():
+            claimed[kind] = data[key].strip()
+
     if patient is None:
+        # An identifier that already belongs to someone is a duplicate, not a
+        # new person: block, and point at the existing record.
+        exact = identity_service.find_duplicates(user.organization_id, identifiers=claimed)
+        if exact:
+            raise ValidationError(
+                {
+                    "duplicate_of": str(exact[0]["patient"].pk),
+                    "identifier": f"{exact[0]['reason']}: this person is already registered. "
+                    "Search for them and use the existing record.",
+                }
+            )
+        if identity == Patient.IDENTITY_IDENTIFIED and not data.get("confirm_new_record"):
+            probable = identity_service.find_duplicates(
+                user.organization_id,
+                last_name=_split_name(full_name)[2],
+                date_of_birth=data.get("date_of_birth") or None,
+                gender=data.get("sex") or "",
+                phone=data.get("phone") or "",
+            )
+            if probable:
+                raise ValidationError(
+                    {
+                        "probable_duplicates": [
+                            f"{item['patient'].get_full_name()} "
+                            f"({item['patient'].citramac_number}) — {item['reason']}"
+                            for item in probable
+                        ],
+                        "probable_message": "A client with the same date of birth and sex matches. "
+                        "Open them, or confirm this is a different person.",
+                    }
+                )
         patient = Patient(
             organization=user.organization,
             registered_by=user,
             registered_at=now,
-            citramac_number=_generate_citramac_number(user.organization),
+            citramac_number=identity_service.generate_citramac_number(
+                user.organization, temporary=identity != Patient.IDENTITY_IDENTIFIED
+            ),
             identity_status=identity,
         )
 
@@ -246,6 +293,37 @@ def register_arrival(user, data):
     if allergy_status in ("NONE", "ACTIVE_ALLERGIES"):
         patient.allergy_status = allergy_status
     patient.save()
+    identity_service.sync_identifiers(patient)
+    for kind, value in claimed.items():
+        identity_service.record_identifier(patient, kind, value)
+
+    consent = data.get("hie_consent") or {}
+    if consent:
+        if not (data.get("consent_text_version") and data.get("consent_text_snapshot")):
+            raise ValidationError(
+                {"consent_text_version": "The consent wording shown to the client is required."}
+            )
+        for key, consent_type in (
+            ("general", "DATA_SHARING_HIE"),
+            ("mental_health", "MENTAL_HEALTH_HIE"),
+            ("substance_use", "SUBSTANCE_USE_HIE"),
+            ("family", "FAMILY_INVOLVEMENT"),
+        ):
+            decision = consent.get(key)
+            if not decision or decision == "NOT_ASKED":
+                continue
+            if decision not in dict(ConsentRecord.DECISION_CHOICES):
+                raise ValidationError({"hie_consent": f"Unknown decision for {key}."})
+            capture_consent(
+                patient,
+                user,
+                decision == "YES",
+                data["consent_text_version"],
+                data["consent_text_snapshot"],
+                consent_type=consent_type,
+                decision=decision,
+                purpose=data.get("consent_purpose") or "",
+            )
 
     if allergy_status == "ACTIVE_ALLERGIES":
         _record_allergies(
@@ -256,13 +334,18 @@ def register_arrival(user, data):
             "UNCONFIRMED",
         )
 
-    next_of_kin = (data.get("next_of_kin") or "").strip()
+    next_of_kin = (data.get("next_of_kin_name") or data.get("next_of_kin") or "").strip()
     if next_of_kin and (patient.next_of_kin is None or patient.next_of_kin.name != next_of_kin):
         contact = EmergencyContact.objects.create(
             organization_id=patient.organization_id,
             patient=patient,
             name=next_of_kin,
-            relationship="Next of kin / emergency contact",
+            relationship=(data.get("next_of_kin_relationship") or "").strip()
+            or "Next of kin / emergency contact",
+            phone=(data.get("next_of_kin_phone") or "").strip(),
+            is_guardian=bool(data.get("next_of_kin_is_guardian")),
+            guardian_legal_status=(data.get("guardian_legal_status") or "").strip(),
+            may_be_informed=bool(data.get("next_of_kin_may_be_informed")),
         )
         patient.next_of_kin = contact
         patient.save(update_fields=["next_of_kin", "updated_at"])
@@ -279,6 +362,12 @@ def register_arrival(user, data):
         opened_at=now,
     )
     visit_number = TriageEncounter.objects.filter(patient=patient).count() + 1
+    # Queue the demographics for the HIE once this transaction commits. This is
+    # durable and idempotent (key patient:<id>); it never blocks registration
+    # and is withheld entirely unless the client explicitly consented.
+    from apps.dha_interop.hie_client import enqueue_patient
+
+    transaction.on_commit(lambda: enqueue_patient(patient))
     return TriageEncounter.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -296,11 +385,41 @@ def register_arrival(user, data):
 
 @transaction.atomic
 def resolve_identity(user, patient, data):
-    """Confirm a temporary record's identity in place (doc 15 §1.4). Unlike a
-    registration submit, this does not open a new triage encounter."""
+    """Confirm a temporary record's identity (doc 15 §1.4). Unlike a
+    registration submit, this does not open a new triage encounter.
+
+    If the document number already belongs to a permanent record the person is
+    already registered: with `merge_into_patient_id` set (and matching) the
+    temporary record is merged into it; without, the request is refused and
+    names that record. Otherwise the temporary record is upgraded in place and
+    keeps its emergency number as a superseded identifier."""
+    from apps.client_registry import identity as identity_service
+    from apps.client_registry.models import PatientIdentifier
+
     full_name = (data.get("full_name") or "").strip()
     if not full_name:
         raise ValidationError({"full_name": "Enter the client’s full name."})
+
+    document_kind = identity_service.DOCUMENT_KIND.get(data.get("id_document_type"))
+    claimed = {}
+    if document_kind and data.get("id_document_number"):
+        claimed[document_kind] = data["id_document_number"].strip()
+    duplicates = identity_service.find_duplicates(
+        patient.organization_id, identifiers=claimed, exclude_patient_id=patient.pk
+    )
+    if duplicates:
+        target = duplicates[0]["patient"]
+        if str(data.get("merge_into_patient_id") or "") != str(target.pk):
+            raise ValidationError(
+                {
+                    "duplicate_of": str(target.pk),
+                    "identifier": f"{duplicates[0]['reason']}: {target.get_full_name()} is already "
+                    "registered. Merge this temporary record into theirs to keep one history.",
+                }
+            )
+        identity_service.merge_patients(user, patient, target)
+        return target
+
     patient.first_name, patient.middle_other_names, patient.last_name = _split_name(full_name)
     patient.identity_status = Patient.IDENTITY_IDENTIFIED
     patient.identity_confirmed_at = timezone.now()
@@ -313,7 +432,14 @@ def resolve_identity(user, patient, data):
     ):
         if data.get(key):
             setattr(patient, field, data[key])
+    if claimed.get(PatientIdentifier.KIND_NATIONAL_ID):
+        patient.national_id = claimed[PatientIdentifier.KIND_NATIONAL_ID]
+    if claimed.get(PatientIdentifier.KIND_PASSPORT):
+        patient.passport_number = claimed[PatientIdentifier.KIND_PASSPORT]
     patient.save()
+    identity_service.sync_identifiers(patient)
+    for kind, value in claimed.items():
+        identity_service.record_identifier(patient, kind, value)
     return patient
 
 
@@ -1014,6 +1140,55 @@ def episode_summary(patient):
     }
 
 
+def _clinical_timeline_events(patient):
+    """Scores, plans, risk decisions, notes, capacity, withdrawal and restrictive
+    practice — read from the one store, so the timeline can never disagree with it."""
+    from . import instruments
+    from .models import (
+        AssessmentAttempt,
+        CapacityAssessment,
+        CarePlanVersion,
+        CosignRequest,
+        MdtReview,
+        OutcomeScore,
+        ProgressNote,
+        RestrictivePracticeEpisode,
+        RiskProposal,
+        VisitConsent,
+    )
+
+    out = []
+    for sc in OutcomeScore.objects.filter(patient=patient):
+        spec = instruments.INSTRUMENTS.get(sc.instrument)
+        out.append({"at": sc.recorded_at, "kind": "score",
+                    "title": f"{spec['name'] if spec else sc.instrument}: {sc.score}",
+                    "detail": f"{instruments.band_for(sc.instrument, sc.score) if spec else ''} — {user_display(sc.recorded_by)}"})
+    for at in AssessmentAttempt.objects.filter(patient=patient):
+        out.append({"at": at.recorded_at, "kind": "score", "title": f"{at.instrument} could not be scored",
+                    "detail": at.get_reason_display()})
+    for n in ProgressNote.objects.filter(patient=patient, status="SIGNED"):
+        out.append({"at": n.signed_at, "kind": "note", "title": f"Progress note — {n.note_type}",
+                    "detail": f"{(n.text or '')[:140]} — {user_display(n.author)}"})
+    for p in RiskProposal.objects.filter(patient=patient).exclude(status="PROPOSED"):
+        out.append({"at": p.decided_at, "kind": "risk", "title": f"Risk finding {p.get_status_display().lower()}",
+                    "detail": f"{p.source}: {p.row} — {p.option}. {p.reason}".strip()})
+    for c in CapacityAssessment.objects.filter(patient=patient):
+        out.append({"at": c.assessed_at, "kind": "consent", "title": f"Capacity: {c.outcome}",
+                    "detail": f"{c.decision} — {user_display(c.assessed_by)}"})
+    for v in VisitConsent.objects.filter(patient=patient):
+        out.append({"at": v.recorded_at, "kind": "consent", "title": f"Visit consent ({v.get_party_display()})", "detail": v.scope})
+    for v in CarePlanVersion.objects.filter(care_plan__patient=patient):
+        out.append({"at": v.created_at, "kind": "plan", "title": f"Care plan version {v.version} signed", "detail": ""})
+    for m in MdtReview.objects.filter(patient=patient, held_at__isnull=False):
+        out.append({"at": m.held_at, "kind": "plan", "title": "MDT review held", "detail": m.outcome[:140]})
+    for r in CosignRequest.objects.filter(patient=patient, decided_at__isnull=False):
+        out.append({"at": r.decided_at, "kind": "plan", "title": f"Co-sign {r.status.lower()}", "detail": r.what})
+    for ep in RestrictivePracticeEpisode.objects.filter(patient=patient):
+        out.append({"at": ep.start_at, "kind": "risk", "title": f"{ep.get_kind_display()} recorded",
+                    "detail": "Ended" if ep.end_at else "Ongoing"})
+    return out
+
+
 def client_timeline(patient):
     events = [
         {
@@ -1109,13 +1284,16 @@ def client_timeline(patient):
                     "detail": detail,
                 }
             )
-    for intake in IntakeAssessment.objects.filter(patient=patient).select_related("author"):
+    for intake in IntakeAssessment.objects.filter(
+        patient=patient, status="SIGNED"
+    ).select_related("author", "signed_by"):
         events.append(
             {
-                "at": intake.created_at,
+                "at": intake.signed_at or intake.created_at,
                 "kind": "intake",
-                "title": "Intake & clinical assessment saved",
-                "detail": user_display(intake.author),
+                "title": f"Intake v{intake.version} signed"
+                + ("" if intake.completeness in ("", "COMPLETE") else f" ({intake.get_completeness_display()})"),
+                "detail": user_display(intake.signed_by or intake.author),
             }
         )
     for record in InterventionRecord.objects.filter(patient=patient).select_related("provider"):
@@ -1193,6 +1371,7 @@ def client_timeline(patient):
                 "detail": f"{alert.label} — {user_display(alert.resolved_by)}",
             }
         )
+    events.extend(_clinical_timeline_events(patient))
     events = [e for e in events if e["at"]]
     events.sort(key=lambda e: e["at"], reverse=True)
     for event in events:
@@ -1536,6 +1715,7 @@ def serialize_discharge(summary, full):
             "treatment_summary": summary.treatment_summary,
             "legal_status_at_discharge": summary.legal_status_at_discharge,
             "education": summary.education,
+            "readiness": summary.readiness,
             "diagnoses": [
                 {
                     "id": str(d.id),
@@ -1648,6 +1828,31 @@ def _check_codes(data):
         raise ValidationError(errors)
 
 
+def discharge_readiness(admission, summary, follow_up_given=False):
+    """What still blocks a planned discharge. Each item is a plain sentence for the
+    clinician; nothing here invents contact details or clinical content."""
+    from . import intake, withdrawal
+
+    r = summary.readiness or {}
+    patient = admission.patient
+    unmet = []
+    if not r.get("meds_reconciled"):
+        unmet.append("Medicines reconciled with the client")
+    row = intake.current_draft(patient) or intake.latest_signed(patient)
+    if row and "suicide" in intake.risk_rows_active(row.sections):
+        if not patient.safety_plans.filter(signed_at__isnull=False).exists():
+            unmet.append("Safety plan signed (self-harm risk is active)")
+    if not (follow_up_given or summary.follow_up_appointment_id or str(r.get("no_follow_up_reason", "")).strip()):
+        unmet.append("Follow-up contact booked — or the reason none is needed")
+    if r.get("counter_referral") not in ("SENT", "NO_REFERRER"):
+        unmet.append("Counter-referral sent, or recorded as ‘no referring service’")
+    if withdrawal.is_opioid(patient) and r.get("naloxone") not in ("OFFERED", "DECLINED"):
+        unmet.append("Naloxone offered (opioid use) — record whether it was accepted or declined")
+    if not r.get("teach_back"):
+        unmet.append("Teach-back done: crisis plan, warning signs and reduced tolerance explained")
+    return unmet
+
+
 def _apply_discharge_fields(summary, admission, data):
     from django.utils.dateparse import parse_datetime
 
@@ -1658,6 +1863,8 @@ def _apply_discharge_fields(summary, admission, data):
         summary.disposition = data["disposition"] or ""
     if "education" in data:
         summary.education = list(data["education"] or [])
+    if "readiness" in data:
+        summary.readiness = {**(summary.readiness or {}), **dict(data["readiness"] or {})}
     if data.get("discharged_at"):
         moment = data["discharged_at"]
         if isinstance(moment, str):
@@ -1815,6 +2022,10 @@ def sign_discharge(admission, user, data=None):
             problems["legal_status_at_discharge"] = (
                 "State what became of the legal order before discharging an involuntary admission."
             )
+        if summary.disposition == "HOME":
+            unmet = discharge_readiness(admission, summary, bool(follow_up))
+            if unmet:
+                problems["readiness"] = unmet
         if problems:
             raise ValidationError(problems)
 

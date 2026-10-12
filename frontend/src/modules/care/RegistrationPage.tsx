@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
+  checkRegistrationDuplicates,
   getClientBanner,
   registerArrival,
   resolveIdentity,
   searchRegistrations,
   type ClientBanner,
+  type ConsentDecision,
+  type DuplicateMatch,
   type IdentityStatus,
   type RegistrationPayload,
   type RegistrationRow,
@@ -51,6 +54,37 @@ const DESCRIPTION_REQUIRED =
 const OFFLINE =
   "Couldn't reach the server, so nothing was saved. Check your connection and submit again — a retry will not create a duplicate record.";
 
+// Wording shown to the client before they decide. VERIFY: legal/DPO approval of
+// this text is required before go-live; the snapshot stored with every decision
+// is exactly this string (docs/09 §9.5), so changing it must bump the version.
+const CONSENT_TEXT_VERSION = "registration-hie-v1-draft";
+const CONSENT_TEXT = [
+  "We would like to share your health information with the national Health Information Exchange so other clinicians involved in your care can see it.",
+  "You can say yes, no, or share only within this facility, and you can choose separately for mental-health and substance-use information.",
+  "You can change your mind at any time. Saying no will never stop you getting care.",
+].join(" ");
+
+const CONSENT_FIELDS: { key: keyof ConsentForm; label: string }[] = [
+  { key: "general", label: "Share my general health information on the national HIE" },
+  { key: "mental_health", label: "Share my mental-health information on the HIE" },
+  { key: "substance_use", label: "Share my substance-use information on the HIE" },
+  { key: "family", label: "Family / next of kin may be told about my care" },
+];
+
+interface ConsentForm {
+  general: ConsentDecision;
+  mental_health: ConsentDecision;
+  substance_use: ConsentDecision;
+  family: ConsentDecision;
+}
+
+const EMPTY_CONSENT: ConsentForm = {
+  general: "NOT_ASKED",
+  mental_health: "NOT_ASKED",
+  substance_use: "NOT_ASKED",
+  family: "NOT_ASKED",
+};
+
 interface RegForm {
   fullName: string;
   description: string;
@@ -61,9 +95,16 @@ interface RegForm {
   sex: string;
   phone: string;
   nextOfKin: string;
+  nokPhone: string;
+  nokRelationship: string;
+  nokGuardian: boolean;
+  guardianStatus: string;
+  nokMayInform: boolean;
   address: string;
   idType: string;
   documentNumber: string;
+  unhcrNumber: string;
+  shaMemberNumber: string;
   referral: string;
   language: string;
   interpreter: string;
@@ -83,9 +124,16 @@ const EMPTY_FORM: RegForm = {
   sex: "",
   phone: "",
   nextOfKin: "",
+  nokPhone: "",
+  nokRelationship: "",
+  nokGuardian: false,
+  guardianStatus: "",
+  nokMayInform: false,
   address: "",
   idType: "",
   documentNumber: "",
+  unhcrNumber: "",
+  shaMemberNumber: "",
   referral: "",
   language: "English",
   interpreter: "",
@@ -106,9 +154,17 @@ function formFromRow(row: RegistrationRow): RegForm {
     sex: row.sex || "",
     phone: row.phone || "",
     nextOfKin: row.next_of_kin || "",
+    nokPhone: "",
+    nokRelationship: "",
+    nokGuardian: false,
+    guardianStatus: "",
+    nokMayInform: false,
     address: row.address || "",
     idType: row.id_document_type || "",
     documentNumber: row.id_document_number || "",
+    unhcrNumber: row.identifiers?.find((i) => i.kind === "UNHCR" && !i.superseded)?.value || "",
+    shaMemberNumber:
+      row.identifiers?.find((i) => i.kind === "SHA_MEMBER" && !i.superseded)?.value || "",
     referral: "",
     language: row.preferred_language || "English",
     interpreter: row.interpreter || "",
@@ -175,6 +231,14 @@ export function RegistrationPage() {
   const searchTimer = useRef<number | undefined>(undefined);
   const searchSeq = useRef(0);
 
+  const [consent, setConsent] = useState<ConsentForm>(EMPTY_CONSENT);
+  // Duplicate handling: exact matches block; probable ones need an explicit
+  // "different person" confirmation. `mergeTarget` is set when resolving an
+  // identity onto an already-registered client.
+  const [dupMatches, setDupMatches] = useState<DuplicateMatch[] | null>(null);
+  const [confirmedNew, setConfirmedNew] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<{ id: string; label: string } | null>(null);
+
   const [resolveTarget, setResolveTarget] = useState<ClientBanner | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
 
@@ -236,6 +300,9 @@ export function RegistrationPage() {
     setSelected(null);
     setSelectedLabel(false);
     setForm(EMPTY_FORM);
+    setConsent(EMPTY_CONSENT);
+    setDupMatches(null);
+    setConfirmedNew(false);
     setMode("IDENTIFIED");
     setFeedback(null);
     setRequestId(newRequestId());
@@ -320,10 +387,33 @@ export function RegistrationPage() {
           phone: form.phone.trim() || undefined,
           id_document_type: form.idType || undefined,
           id_document_number: form.documentNumber.trim() || undefined,
+          merge_into_patient_id: mergeTarget?.id,
         });
         navigate("/clinical/triage");
         return;
       }
+
+      // Search-before-create is enforced, not just offered: an identifier that
+      // already belongs to someone blocks registration, and a probable match
+      // must be explicitly dismissed.
+      if (!selected && identified && !confirmedNew) {
+        const { matches } = await checkRegistrationDuplicates(accessToken, {
+          full_name: fullName,
+          date_of_birth: form.dob || undefined,
+          sex: form.sex || undefined,
+          phone: form.phone.trim() || undefined,
+          id_document_type: form.idType || undefined,
+          id_document_number: form.documentNumber.trim() || undefined,
+          unhcr_number: form.unhcrNumber.trim() || undefined,
+          sha_member_number: form.shaMemberNumber.trim() || undefined,
+        });
+        if (matches.length) {
+          setDupMatches(matches);
+          setSubmitting(false);
+          return;
+        }
+      }
+      const decided = Object.entries(consent).some(([, value]) => value !== "NOT_ASKED");
       const payload: RegistrationPayload = {
         client_request_id: requestId,
         patient_id: selected?.id,
@@ -336,10 +426,23 @@ export function RegistrationPage() {
         estimated_age: form.estimatedAge ? Number(form.estimatedAge) : null,
         sex: form.sex || undefined,
         phone: form.phone.trim() || undefined,
-        next_of_kin: form.nextOfKin.trim() || undefined,
+        next_of_kin_name: form.nextOfKin.trim() || undefined,
+        next_of_kin_phone: form.nokPhone.trim() || undefined,
+        next_of_kin_relationship:
+          vs.options("next-of-kin-relationship").find((o) => o.code === form.nokRelationship)
+            ?.display || undefined,
+        next_of_kin_is_guardian: form.nokGuardian || undefined,
+        guardian_legal_status: form.nokGuardian ? form.guardianStatus.trim() || undefined : undefined,
+        next_of_kin_may_be_informed: form.nokMayInform || undefined,
         address: form.address.trim() || undefined,
         id_document_type: form.idType || undefined,
         id_document_number: form.documentNumber.trim() || undefined,
+        unhcr_number: form.unhcrNumber.trim() || undefined,
+        sha_member_number: form.shaMemberNumber.trim() || undefined,
+        hie_consent: decided ? consent : undefined,
+        consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
+        consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
+        confirm_new_record: confirmedNew || undefined,
         referral_source: form.referral.trim() || undefined,
         preferred_language: form.language.trim() || undefined,
         interpreter: interpreter || undefined,
@@ -352,10 +455,23 @@ export function RegistrationPage() {
       setRequestId(newRequestId());
       navigate("/clinical/triage");
     } catch (err) {
-      setFeedback(errorText(err, OFFLINE));
+      const duplicateOf = (err as { fields?: Record<string, unknown> })?.fields?.duplicate_of;
+      if (resolving && Array.isArray(duplicateOf) && duplicateOf[0]) {
+        setMergeTarget({ id: String(duplicateOf[0]), label: errorText(err, "") });
+        setFeedback(
+          `${errorText(err, "")} Submit again to merge this temporary record into the existing client.`,
+        );
+      } else {
+        setFeedback(errorText(err, OFFLINE));
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function chooseExistingClient(match: DuplicateMatch) {
+    setDupMatches(null);
+    selectClient(match.client);
   }
 
   const submitText = resolving
@@ -640,7 +756,7 @@ export function RegistrationPage() {
             </RegField>
             {!resolving && (
               <>
-                <RegField id="reg-nok" label="Next of kin / emergency contact — name & phone">
+                <RegField id="reg-nok" label="Next of kin / emergency contact — name">
                   <input
                     id="reg-nok"
                     type="text"
@@ -649,6 +765,53 @@ export function RegistrationPage() {
                     onChange={(e) => set("nextOfKin")(e.target.value)}
                   />
                 </RegField>
+                <RegField id="reg-nok-phone" label="Next of kin — phone">
+                  <input
+                    id="reg-nok-phone"
+                    type="tel"
+                    className={REG_INPUT}
+                    value={form.nokPhone}
+                    onChange={(e) => set("nokPhone")(e.target.value)}
+                  />
+                </RegField>
+                <RegField id="reg-nok-relationship" label="Next of kin — relationship">
+                  <SelectChoices
+                    id="reg-nok-relationship"
+                    options={vs.options("next-of-kin-relationship")}
+                    placeholder="— select —"
+                    value={form.nokRelationship}
+                    onChange={set("nokRelationship")}
+                  />
+                </RegField>
+                <div className="flex min-w-0 flex-col justify-end gap-1.5 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.nokGuardian}
+                      onChange={(e) => setForm((p) => ({ ...p, nokGuardian: e.target.checked }))}
+                    />
+                    This person is the client’s legal guardian
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.nokMayInform}
+                      onChange={(e) => setForm((p) => ({ ...p, nokMayInform: e.target.checked }))}
+                    />
+                    Client agrees this person may be told about their care
+                  </label>
+                </div>
+                {form.nokGuardian && (
+                  <RegField id="reg-guardian-status" label="Guardian legal status / authority">
+                    <input
+                      id="reg-guardian-status"
+                      type="text"
+                      className={REG_INPUT}
+                      value={form.guardianStatus}
+                      onChange={(e) => set("guardianStatus")(e.target.value)}
+                    />
+                  </RegField>
+                )}
                 <RegField id="reg-address" label="Address / location">
                   <input
                     id="reg-address"
@@ -681,6 +844,24 @@ export function RegistrationPage() {
             </RegField>
             {!resolving && (
               <>
+                <RegField id="reg-unhcr" label="UNHCR number (refugees / asylum-seekers)">
+                  <input
+                    id="reg-unhcr"
+                    type="text"
+                    className={REG_INPUT}
+                    value={form.unhcrNumber}
+                    onChange={(e) => set("unhcrNumber")(e.target.value)}
+                  />
+                </RegField>
+                <RegField id="reg-sha-member" label="SHA member number (if known)">
+                  <input
+                    id="reg-sha-member"
+                    type="text"
+                    className={REG_INPUT}
+                    value={form.shaMemberNumber}
+                    onChange={(e) => set("shaMemberNumber")(e.target.value)}
+                  />
+                </RegField>
                 <RegField id="reg-referral" label="Referral source">
                   <input
                     id="reg-referral"
@@ -739,6 +920,29 @@ export function RegistrationPage() {
                     onChange={set("payer")}
                   />
                 </RegField>
+                <fieldset className="min-w-0 rounded-sm border border-surface-border bg-surface-bg p-2.5 min-[561px]:col-span-2 min-[901px]:col-span-3">
+                  <legend className="px-1 text-[10.5px] font-semibold uppercase text-ink-500">
+                    Privacy &amp; sharing — explain, then record the client’s choice
+                  </legend>
+                  <p className="mb-2 text-xs text-ink-500">{CONSENT_TEXT}</p>
+                  <div className="grid gap-2 min-[701px]:grid-cols-2">
+                    {CONSENT_FIELDS.map(({ key, label }) => (
+                      <RegField key={key} id={`reg-consent-${key}`} label={label}>
+                        <SelectChoices
+                          id={`reg-consent-${key}`}
+                          options={vs.options("hie-consent-decision")}
+                          value={consent[key]}
+                          onChange={(value) =>
+                            setConsent((prev) => ({ ...prev, [key]: value as ConsentDecision }))
+                          }
+                        />
+                      </RegField>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-ink-500">
+                    Until the client explicitly says yes, nothing is sent to the HIE.
+                  </p>
+                </fieldset>
                 <RegField
                   id="reg-reason"
                   label="Reason for attending (in the client’s words)"
@@ -757,6 +961,47 @@ export function RegistrationPage() {
             )}
           </div>
 
+          {dupMatches && (
+            <div role="alert" className="mt-3">
+              <Callout>
+                <div className="w-full">
+                  <strong>
+                    {dupMatches.some((m) => m.match === "exact")
+                      ? "This person is already registered."
+                      : "Possible existing client."}
+                  </strong>
+                  <ul className="mt-1.5 space-y-1">
+                    {dupMatches.map((m) => (
+                      <li key={m.client.id} className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {m.client.name} · {m.client.citramac_number} — {m.reason}
+                        </span>
+                        <button
+                          type="button"
+                          className={BTN_SM}
+                          onClick={() => chooseExistingClient(m)}
+                        >
+                          Use this record
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {!dupMatches.some((m) => m.match === "exact") && (
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} mt-2`}
+                      onClick={() => {
+                        setConfirmedNew(true);
+                        setDupMatches(null);
+                      }}
+                    >
+                      This is a different person — continue
+                    </button>
+                  )}
+                </div>
+              </Callout>
+            </div>
+          )}
           <div role="alert" aria-live="polite" className={feedback ? "mt-3" : ""}>
             {feedback && <Callout>{feedback}</Callout>}
           </div>

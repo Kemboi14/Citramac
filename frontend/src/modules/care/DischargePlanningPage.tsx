@@ -14,6 +14,7 @@ import {
   signDischarge,
   type CurrentInpatientRow,
   type DischargeInput,
+  type DischargeReadiness,
   type DischargePayload,
   type DischargeSummary,
   type DischargeWorklist,
@@ -299,6 +300,7 @@ interface FormState {
   treatmentSummary: string;
   legalStatus: string;
   education: string[];
+  readiness: DischargeReadiness;
   diagnoses: string[];
   medications: MedicationState[];
   followUpOn: boolean;
@@ -327,6 +329,7 @@ function initialForm(payload: DischargePayload): FormState {
       treatmentSummary: summary.treatment_summary ?? "",
       legalStatus: summary.legal_status_at_discharge ?? "",
       education: summary.education ?? [],
+      readiness: summary.readiness ?? {},
       diagnoses: (summary.diagnoses ?? []).map((d) => d.id),
       medications: (summary.medications ?? []).map((m) => ({
         prescription_item: m.prescription_item,
@@ -352,6 +355,7 @@ function initialForm(payload: DischargePayload): FormState {
     treatmentSummary: "",
     legalStatus: "",
     education: [],
+    readiness: {},
     diagnoses: (context?.diagnoses ?? []).map((d) => d.id),
     medications: (context?.medications ?? []).map((m) => ({
       prescription_item: m.prescription_item,
@@ -644,6 +648,7 @@ function draftInput(form: FormState): DischargeInput {
     treatment_summary: form.treatmentSummary,
     legal_status_at_discharge: form.legalStatus,
     education: form.education,
+    readiness: form.readiness,
     diagnoses: form.diagnoses,
     medications: form.medications.map((m) => ({
       prescription_item: m.prescription_item,
@@ -1029,6 +1034,42 @@ function DischargeForm({
           onChange={(codes) => set("education", codes)}
           columns={2}
         />
+      </Card>
+
+      <Card title="Discharge readiness (planned discharge home)">
+        <div className="flex flex-col gap-2 text-[13px]">
+          {(
+            [
+              ["meds_reconciled", "Medicines reconciled with the client"],
+              ["teach_back", "Teach-back done: crisis plan, warning signs and reduced tolerance explained"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2">
+              <input type="checkbox" checked={!!form.readiness[key]} onChange={(e) => set("readiness", { ...form.readiness, [key]: e.target.checked })} />
+              {label}
+            </label>
+          ))}
+          <label className="flex items-center gap-2">
+            Counter-referral
+            <select className={INPUT} value={form.readiness.counter_referral ?? ""} onChange={(e) => set("readiness", { ...form.readiness, counter_referral: e.target.value })}>
+              <option value="">Choose…</option>
+              <option value="SENT">Sent to the referring service</option>
+              <option value="NO_REFERRER">No referring service</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            Naloxone (opioid use)
+            <select className={INPUT} value={form.readiness.naloxone ?? ""} onChange={(e) => set("readiness", { ...form.readiness, naloxone: e.target.value })}>
+              <option value="">Not applicable / choose…</option>
+              <option value="OFFERED">Offered and accepted</option>
+              <option value="DECLINED">Offered and declined</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            No follow-up needed because
+            <input className={INPUT} value={form.readiness.no_follow_up_reason ?? ""} onChange={(e) => set("readiness", { ...form.readiness, no_follow_up_reason: e.target.value })} />
+          </label>
+        </div>
       </Card>
 
       {!amending && (

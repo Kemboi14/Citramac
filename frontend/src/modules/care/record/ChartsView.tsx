@@ -4,7 +4,9 @@ import {
   getTriageThresholds,
   type VitalRow,
 } from "../../../lib/carePathwayApi";
-import { Card, ErrorNote } from "../shared/ui";
+import { formatDateTime } from "../shared/format";
+import { TABLE, TD, TH } from "../shared/styles";
+import { Card, ErrorNote, Tag } from "../shared/ui";
 import { LineChart, type ChartPoint, type ChartThreshold } from "./LineChart";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
@@ -80,6 +82,7 @@ export function ChartsView({ patientId }: RecordViewProps) {
   return (
     <div className="flex flex-col gap-4">
       <ErrorNote>{vitals.error ?? scores.error}</ErrorNote>
+      <EwsCard rows={rows} loading={loadingVitals} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Heart rate">
           {loadingVitals ? (
@@ -230,5 +233,75 @@ export function ChartsView({ patientId }: RecordViewProps) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Early warning score per observation set, with the escalation prompt for the
+ * latest. An unmeasured parameter is never scored as normal. */
+function EwsCard({ rows, loading }: { rows: VitalRow[]; loading: boolean }) {
+  const scored = rows.filter((r) => r.ews);
+  const latest = scored.at(-1)?.ews;
+  const tone = latest?.response.tone;
+  return (
+    <Card
+      title="Early warning score"
+      aside={latest?.approval === "illustrative" ? <Tag tone="warn">Illustrative thresholds — clinical approval pending</Tag> : undefined}
+    >
+      {loading ? (
+        <p className="py-6 text-center text-[13px] text-ink-500">Loading…</p>
+      ) : !latest ? (
+        <p className="py-4 text-[13px] text-ink-500">No observations recorded for this client yet.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div
+            role="status"
+            className={`rounded-lg border px-3 py-2 text-[13px] font-semibold ${
+              tone === "bad"
+                ? "border-priority-red bg-priority-red-tint text-priority-red"
+                : tone === "warn"
+                  ? "border-priority-orange bg-priority-orange-tint text-priority-orange"
+                  : "border-brand-green bg-brand-green-tint text-brand-green-dark"
+            }`}
+          >
+            {latest.label} — {latest.response.text}
+          </div>
+          <LineChart
+            compact
+            title="Early warning score"
+            domain={[0, 20]}
+            series={[
+              {
+                label: "EWS",
+                colorClass: "text-chart-1",
+                points: scored
+                  .filter((r) => r.ews!.measured > 0)
+                  .map((r) => ({ at: r.recorded_at, value: r.ews!.score })),
+              },
+            ]}
+            emptyText="No scored observation sets yet."
+          />
+          <div className="overflow-x-auto">
+            <table className={TABLE}>
+              <thead>
+                <tr>
+                  <th className={TH}>Recorded</th>
+                  <th className={TH}>Score</th>
+                  <th className={TH}>Measured</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...scored].reverse().slice(0, 8).map((r) => (
+                  <tr key={r.id}>
+                    <td className={TD}>{formatDateTime(r.recorded_at)}</td>
+                    <td className={TD}>{r.ews!.label}</td>
+                    <td className={TD}>{r.ews!.measured}/{r.ews!.total_parameters}{r.ews!.single_parameter_3 ? " · a parameter scores 3" : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

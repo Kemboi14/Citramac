@@ -24,6 +24,7 @@ import { Callout, Card, ErrorNote, Field, SelectChoices, Tag } from "../shared/u
 import { useValueSets } from "../shared/useValueSets";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
+import { CapacityConsentCard } from "./CapacityConsent";
 
 type AdmissionRow = ClientLegal["admissions"][number];
 
@@ -65,6 +66,7 @@ export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
     <div className="flex flex-col gap-4">
       <ErrorNote>{error}</ErrorNote>
       <ConsentCard patientId={patientId} legal={data} onSaved={refresh} />
+      <CapacityConsentCard patientId={patientId} />
       <SubjectRequestsCard patientId={patientId} />
       <Card title="Admission legal status">
         {data.admissions.length > 0 ? (

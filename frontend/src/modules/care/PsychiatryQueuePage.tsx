@@ -132,6 +132,11 @@ export function PsychiatryQueuePage() {
                       <td className={TD}>{row.presenting_concern || "Not recorded"}</td>
                       <td className={`${TD} whitespace-nowrap`}>
                         {formatDateTime(row.signed_at)}
+                        {row.wait_minutes !== null && (
+                          <Tag tone={row.over_target ? "risk" : "neutral"}>
+                            {row.over_target ? `Over target (${row.target_minutes} min) · ` : ""}waiting {row.wait_minutes} min
+                          </Tag>
+                        )}
                         <br />
                         <span className="text-[11px] text-ink-500">
                           {row.signed_by || "Clinician not recorded"}

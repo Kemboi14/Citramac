@@ -1,0 +1,143 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610CAFR-014"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "National ID"
+            },
+            "system": "https://example.org/VERIFY/national-id",
+            "value": "27730415"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Kamau",
+            "given": [
+              "Amina",
+              "Wanjiku"
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+254712345678",
+            "use": "mobile"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1992-03-14",
+        "address": [
+          {
+            "text": "Kileleshwa, Nairobi",
+            "district": "Nairobi"
+          }
+        ],
+        "contact": [
+          {
+            "relationship": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                    "code": "N",
+                    "display": "Next-of-Kin"
+                  }
+                ],
+                "text": "Sister"
+              }
+            ],
+            "name": {
+              "text": "Joan Kamau"
+            },
+            "telecom": [
+              {
+                "system": "phone",
+                "value": "+254722000000"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Consent",
+        "id": "c1111111-1111-4111-8111-111111111111",
+        "status": "active",
+        "scope": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+              "code": "patient-privacy"
+            }
+          ]
+        },
+        "category": [
+          {
+            "text": "Data Sharing via National HIE"
+          }
+        ],
+        "patient": {
+          "reference": "Patient/11111111-1111-4111-8111-111111111111"
+        },
+        "dateTime": "2026-10-12T08:41:00+03:00",
+        "performer": [
+          {
+            "reference": "Patient/11111111-1111-4111-8111-111111111111"
+          }
+        ],
+        "provision": {
+          "type": "permit"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-11111111",
+        "target": [
+          {
+            "reference": "Patient/11111111-1111-4111-8111-111111111111"
+          }
+        ],
+        "recorded": "2026-10-12T08:41:00+03:00",
+        "agent": [
+          {
+            "type": {
+              "text": "author"
+            },
+            "who": {
+              "display": "J. Njoroge, RN"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

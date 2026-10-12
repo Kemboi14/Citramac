@@ -31,7 +31,7 @@ type Status = CarePlanActivity["status"];
  * Documented actions with goals and status, suggested actions from the
  * client's active alerts, and the system recommendation.
  */
-export function CarePlanStage({ patientId }: RecordViewProps) {
+export function DocumentedActions({ patientId }: RecordViewProps) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const formId = useId();
@@ -115,8 +115,8 @@ export function CarePlanStage({ patientId }: RecordViewProps) {
   return (
     <div>
       <PageHeader
-        title="Care Plan"
-        subtitle="Converts clinical findings into trackable actions — the plan that drives interventions"
+        title="Documented actions"
+        subtitle="Actions with goals and status — suggested from active alerts"
         actions={
           <>
             <button

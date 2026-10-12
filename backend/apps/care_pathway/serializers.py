@@ -6,6 +6,7 @@ from .models import (
     CarePlanActivity,
     CareTask,
     IntakeAssessment,
+    MedicationHistoryEntry,
     InterventionRecord,
     OutcomeScore,
 )
@@ -48,9 +49,16 @@ class IntakeAssessmentSerializer(serializers.ModelSerializer):
     mse_affect = serializers.CharField(required=False, allow_blank=True)
 
     def to_representation(self, instance):
+        from . import intake_schema
+        from .intake import can_view_restricted
+
         data = super().to_representation(instance)
         for field, mse_field in MSE_FIELDS.items():
             data[field] = getattr(instance.mse, mse_field) if instance.mse_id else ""
+        request = self.context.get("request")
+        data["sections"] = intake_schema.strip_restricted(
+            instance.sections, can_view_restricted(getattr(request, "user", None))
+        )
         return data
 
     class Meta:
@@ -75,10 +83,30 @@ class IntakeAssessmentSerializer(serializers.ModelSerializer):
             "formulation",
             "clinical_decision",
             "care_needs",
+            "version",
+            "status",
+            "completeness",
+            "section_state",
+            "current_section",
+            "signed_at",
+            "outstanding",
             "author_name",
             "created_at",
         ]
-        read_only_fields = ["patient", "episode", "encounter", "mse", "created_at"]
+        read_only_fields = [
+            "patient",
+            "episode",
+            "encounter",
+            "mse",
+            "created_at",
+            "version",
+            "status",
+            "completeness",
+            "section_state",
+            "current_section",
+            "signed_at",
+            "outstanding",
+        ]
 
     def validate_gad7_score(self, value):
         if value is not None and value > 21:
@@ -97,7 +125,18 @@ class IntakeAssessmentSerializer(serializers.ModelSerializer):
 class OutcomeScoreSerializer(serializers.ModelSerializer):
     class Meta:
         model = OutcomeScore
-        fields = ["id", "instrument", "score", "recorded_at", "source_intake"]
+        fields = [
+            "id",
+            "instrument",
+            "score",
+            "items",
+            "flags",
+            "positive",
+            "context",
+            "note",
+            "recorded_at",
+            "source_intake",
+        ]
 
 
 class CarePlanActivitySerializer(serializers.ModelSerializer):
@@ -108,7 +147,13 @@ class CarePlanActivitySerializer(serializers.ModelSerializer):
 
 
 class CarePlanSerializer(serializers.ModelSerializer):
-    activities = CarePlanActivitySerializer(many=True, read_only=True)
+    activities = serializers.SerializerMethodField()
+
+    def get_activities(self, plan):
+        # Declined recommendations stay on record but are not live plan actions.
+        return CarePlanActivitySerializer(
+            plan.activities.exclude(decision="DECLINED"), many=True
+        ).data
     care_coordinator_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -177,3 +222,22 @@ class BillingServiceSerializer(serializers.ModelSerializer):
         model = BillingService
         fields = ["id", "name", "rate", "active"]
         read_only_fields = ["name"]
+
+
+class MedicationHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicationHistoryEntry
+        fields = [
+            "id",
+            "name",
+            "drug_code",
+            "dose",
+            "frequency",
+            "route",
+            "status",
+            "reason",
+            "source",
+            "started_on",
+            "recorded_at",
+        ]
+        read_only_fields = ["recorded_at"]

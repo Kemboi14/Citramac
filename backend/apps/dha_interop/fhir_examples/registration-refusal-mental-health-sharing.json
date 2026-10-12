@@ -1,0 +1,74 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "44444444-4444-4444-8444-444444444444",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610CAFR-021"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Otieno",
+            "given": [
+              "David"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1998-06-02"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Consent",
+        "id": "c4444444-4444-4444-8444-444444444444",
+        "status": "active",
+        "scope": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+              "code": "patient-privacy"
+            }
+          ]
+        },
+        "category": [
+          {
+            "text": "Sharing mental-health information on the HIE \u2014 restricted to the treating facility"
+          }
+        ],
+        "patient": {
+          "reference": "Patient/44444444-4444-4444-8444-444444444444"
+        },
+        "dateTime": "2026-10-12T09:02:00+03:00",
+        "performer": [
+          {
+            "reference": "Patient/44444444-4444-4444-8444-444444444444"
+          }
+        ],
+        "provision": {
+          "type": "deny"
+        }
+      }
+    }
+  ]
+}

@@ -118,6 +118,12 @@ class DischargeFixture(APITestCase):
             "treatment_summary": "Fluoxetine started and titrated; attended group therapy.",
             "diagnoses": [str(self.diagnosis.id)],
             "education": ["MED_ADHERENCE", "CRISIS_PLAN"],
+            "readiness": {
+                "meds_reconciled": True,
+                "counter_referral": "NO_REFERRER",
+                "teach_back": True,
+                "no_follow_up_reason": "Follow-up arranged separately in test",
+            },
             "medications": [
                 {
                     "prescription_item": str(self.item.id),
@@ -590,3 +596,39 @@ class FollowUpTests(DischargeFixture):
         data = self.client.get(reverse("care-dashboard"), **self.auth).data
         self.assertEqual(data["follow_ups_overdue"], 1)
         self.assertEqual(data["discharged_without_follow_up"], 1)
+
+
+class DischargeReadinessTests(DischargeFixture):
+    def test_planned_discharge_is_blocked_until_the_checklist_is_met_and_lists_each_gap(self):
+        admission = self.admission
+        response = self.sign(admission, readiness={"meds_reconciled": False, "counter_referral": "", "teach_back": False})
+        self.assertEqual(response.status_code, 400)
+        gaps = " | ".join(response.data["readiness"])
+        for expected in ("Medicines reconciled", "Counter-referral", "Teach-back"):
+            self.assertIn(expected, gaps)
+        self.assertEqual(self.sign(admission).status_code, 200)
+
+    def test_opioid_use_requires_a_naloxone_answer(self):
+        from . import intake
+
+        admission = self.admission
+        with platform_admin_context():
+            draft = intake.open_draft(self.patient, self.doctor)
+            draft.sections = {**draft.sections, "subs": {"kind": "Opioids"}}
+            draft.save()
+        blocked = self.sign(admission)
+        self.assertTrue(any("Naloxone" in g for g in blocked.data["readiness"]))
+        ok = self.sign(admission, readiness={**self.payload()["readiness"], "naloxone": "DECLINED"})
+        self.assertEqual(ok.status_code, 200)
+
+
+class WardBoardRowTests(DischargeFixture):
+    def test_board_row_for_a_current_inpatient(self):
+        from . import attention
+
+        with platform_admin_context():
+            rows = attention.ward_board()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["patient_id"], str(self.patient.pk))
+        self.assertEqual(rows[0]["day"], 1)
+        self.assertIn("legal_status", rows[0])

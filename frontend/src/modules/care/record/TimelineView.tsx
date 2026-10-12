@@ -5,6 +5,7 @@ import { INPUT } from "../shared/styles";
 import { Card, ErrorNote, Timeline } from "../shared/ui";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
+import { ProgressNotes } from "./ProgressNotes";
 
 /** Filter chips → the timeline `kind`s each one shows. */
 const FILTERS = [
@@ -13,7 +14,10 @@ const FILTERS = [
   { key: "vitals", label: "Vitals", kinds: ["vitals"] },
   { key: "alerts", label: "Alerts", kinds: ["alert"] },
   { key: "admissions", label: "Admissions", kinds: ["admission", "discharge"] },
-  { key: "notes", label: "Clinical notes", kinds: ["intake", "intervention", "diagnosis"] },
+  { key: "notes", label: "Clinical notes", kinds: ["intake", "intervention", "diagnosis", "note"] },
+  { key: "scores", label: "Scores", kinds: ["score"] },
+  { key: "plans", label: "Plans", kinds: ["plan"] },
+  { key: "risk", label: "Risk", kinds: ["risk"] },
   { key: "appointments", label: "Appointments", kinds: ["appointment"] },
   { key: "episode", label: "Episode", kinds: ["episode"] },
   { key: "consent", label: "Consent", kinds: ["consent"] },
@@ -59,6 +63,8 @@ export function TimelineView({ patientId }: RecordViewProps) {
   }
 
   return (
+    <div className="flex flex-col gap-4">
+    <ProgressNotes patientId={patientId} />
     <Card
       title="Timeline"
       aside={
@@ -135,5 +141,6 @@ export function TimelineView({ patientId }: RecordViewProps) {
         )
       )}
     </Card>
+    </div>
   );
 }

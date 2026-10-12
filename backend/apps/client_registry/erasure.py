@@ -14,7 +14,14 @@ from django.utils import timezone
 from apps.sysadmin_audit.audit import write_entry
 from apps.sysadmin_audit.models import AuditLogEntry
 
-from .models import Attachment, EmergencyContact, ErasureRequest, InsuranceCoverage, Patient
+from .models import (
+    Attachment,
+    EmergencyContact,
+    ErasureRequest,
+    InsuranceCoverage,
+    Patient,
+    PatientIdentifier,
+)
 
 PII_FIELDS = [
     "first_name",
@@ -39,7 +46,13 @@ ERASED_PLACEHOLDER = "[ERASED]"
 
 # Kept deliberately: `citramac_number` is the internal pseudonymous key that
 # links the remaining clinical rows together, and carries no personal data.
-EMERGENCY_CONTACT_PII = {"name": ERASED_PLACEHOLDER, "phone": "", "email": "", "address": ""}
+EMERGENCY_CONTACT_PII = {
+    "name": ERASED_PLACEHOLDER,
+    "phone": "",
+    "email": "",
+    "address": "",
+    "guardian_legal_status": "",
+}
 INSURANCE_PII = {"policy_number": "", "corporate_account": ""}
 
 
@@ -111,6 +124,11 @@ def execute_erasure(erasure_request, override_retention_conflict=False):
 
     contacts = EmergencyContact.all_objects.filter(patient=patient).update(**EMERGENCY_CONTACT_PII)
     coverages = InsuranceCoverage.all_objects.filter(patient=patient).update(**INSURANCE_PII)
+    # Identifier values are personal data. The rows stay (so the record's
+    # shape is intact) but their values are blanked and they are superseded.
+    identifiers = PatientIdentifier.all_objects.filter(patient=patient).update(
+        value=ERASED_PLACEHOLDER, superseded_at=timezone.now(), verified_by_source=""
+    )
 
     # Identity documents (ID/passport scans) are personal data, not clinical
     # record: their files are removed. Every other attachment is part of the
@@ -138,6 +156,7 @@ def execute_erasure(erasure_request, override_retention_conflict=False):
             "fields_erased": PII_FIELDS + ["date_of_birth (reduced to year)", "photo"],
             "emergency_contacts_erased": contacts,
             "insurance_coverages_erased": coverages,
+            "identifiers_erased": identifiers,
             "identity_documents_removed": len(identity_documents),
             "note": "prior values are not retained in the audit trail",
         },

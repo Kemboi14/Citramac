@@ -159,6 +159,14 @@ class Patient(TenantScopedModel):
         related_name="+",
     )
 
+    # Temporary → permanent merge (CLAUDE.md §4: identifiers are sliced, never
+    # overwritten). The surviving record keeps every clinical row; the merged
+    # record stays addressable and maps to FHIR `Patient.link` (replaced-by).
+    merged_into = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="merged_from"
+    )
+    merged_at = models.DateTimeField(null=True, blank=True)
+
     # Archive state — apps.retention. An archived client record is kept in
     # full, never deleted: it drops out of default registry lists and the
     # whole chart becomes read-only (apps.retention.guards) until restored.
@@ -189,6 +197,8 @@ class Patient(TenantScopedModel):
             "legal_hold_reason",
             "legal_hold_set_at",
             "legal_hold_set_by",
+            "merged_into",
+            "merged_at",
             "updated_at",
         }
     )
@@ -244,9 +254,87 @@ class EmergencyContact(TenantScopedModel):
     phone = models.CharField(max_length=32, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    # Registration (HIE needs): guardian status and whether the client has
+    # agreed family may be involved in their care. Maps to FHIR RelatedPerson.
+    is_guardian = models.BooleanField(default=False)
+    guardian_legal_status = models.CharField(max_length=100, blank=True)
+    may_be_informed = models.BooleanField(
+        default=False, help_text="Client agreed this person may be told about their care."
+    )
 
     def __str__(self):
         return f"{self.name} ({self.relationship})"
+
+
+class PatientIdentifier(TenantScopedModel):
+    """
+    One row per identifier a person carries — CLAUDE.md §4 "Identifiers are
+    sliced, never overwritten". The FHIR `system` URI is *not* stored here: it
+    is resolved from `settings.FHIR_IDENTIFIER_SYSTEMS` so a national system
+    URI is configuration that can be set once the regulator's IG supplies it,
+    never a value invented in code.
+    """
+
+    KIND_UHID = "UHID"
+    KIND_CITRAMAC = "CITRAMAC"
+    KIND_NATIONAL_ID = "NATIONAL_ID"
+    KIND_PASSPORT = "PASSPORT"
+    KIND_REFUGEE = "REFUGEE_ID"
+    KIND_UNHCR = "UNHCR"
+    KIND_ALIEN = "ALIEN_ID"
+    KIND_BIRTH_CERT = "BIRTH_CERTIFICATE"
+    KIND_IPRS = "IPRS_UPI"
+    KIND_SHA = "SHA_MEMBER"
+    KIND_CLIENT_REGISTRY = "CLIENT_REGISTRY_ID"
+    KIND_TEMPORARY = "TEMPORARY"
+    KIND_CHOICES = [
+        (KIND_UHID, "UHID (facility)"),
+        (KIND_CITRAMAC, "CITRAMAC number"),
+        (KIND_NATIONAL_ID, "National ID"),
+        (KIND_PASSPORT, "Passport"),
+        (KIND_REFUGEE, "Refugee / asylum-seeker ID"),
+        (KIND_UNHCR, "UNHCR number"),
+        (KIND_ALIEN, "Alien ID"),
+        (KIND_BIRTH_CERT, "Birth certificate"),
+        (KIND_IPRS, "IPRS unique personal identifier"),
+        (KIND_SHA, "SHA member number"),
+        (KIND_CLIENT_REGISTRY, "National Client Registry ID"),
+        (KIND_TEMPORARY, "Temporary (emergency) ID"),
+    ]
+    # Identifiers that must not belong to two people in one organisation.
+    UNIQUE_KINDS = (
+        KIND_NATIONAL_ID,
+        KIND_PASSPORT,
+        KIND_REFUGEE,
+        KIND_UNHCR,
+        KIND_ALIEN,
+        KIND_BIRTH_CERT,
+        KIND_IPRS,
+        KIND_SHA,
+        KIND_CLIENT_REGISTRY,
+    )
+
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="identifiers")
+    kind = models.CharField(max_length=24, choices=KIND_CHOICES)
+    value = models.CharField(max_length=64)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by_source = models.CharField(
+        max_length=100, blank=True, help_text="Registry that verified it, e.g. IPRS (VERIFY)."
+    )
+    # An identifier replaced by a merge or correction is kept, flagged, never removed.
+    superseded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "kind", "value"],
+                name="unique_active_identifier_per_org_kind",
+                condition=models.Q(superseded_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.kind}: {self.value}"
 
 
 class AllergyRecord(TenantScopedModel):
@@ -338,6 +426,10 @@ class Appointment(TenantScopedModel):
     # AppointmentViewSet.perform_update) so a rescheduled appointment gets a
     # fresh reminder for its new time.
     reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    # Missed-appointment handling: coded reason (served value set `missed-appointment-reason`)
+    # and when someone re-contacted the client.
+    missed_reason = models.CharField(max_length=30, blank=True)
+    dna_actioned_at = models.DateTimeField(null=True, blank=True)
     # Follow-up context (docs/17-DISCHARGE-AND-FOLLOW-UP.md). The episode is the
     # clinical spine (CLAUDE.md §4); `reason` is a code from the served
     # `follow-up-reason` value set. Manual appointments leave these blank.
@@ -450,13 +542,29 @@ class ConsentRecord(TenantScopedModel):
     that it was later revoked and re-granted.
     """
 
-    CONSENT_TYPE_CHOICES = [("DATA_SHARING_HIE", "Data Sharing via National HIE")]
+    CONSENT_TYPE_CHOICES = [
+        ("DATA_SHARING_HIE", "Data Sharing via National HIE"),
+        ("MENTAL_HEALTH_HIE", "Sharing mental-health information on the HIE"),
+        ("SUBSTANCE_USE_HIE", "Sharing substance-use information on the HIE"),
+        ("FAMILY_INVOLVEMENT", "Involving family / next of kin in care"),
+    ]
+    DECISION_CHOICES = [
+        ("NOT_ASKED", "Not yet asked"),
+        ("YES", "Yes"),
+        ("NO", "No"),
+        ("RESTRICTED", "Restricted to the treating facility"),
+    ]
 
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="consent_records")
     consent_type = models.CharField(
         max_length=32, choices=CONSENT_TYPE_CHOICES, default="DATA_SHARING_HIE"
     )
     granted = models.BooleanField()
+    # `granted` stays the simple yes/no read by existing code; `decision` keeps
+    # the nuance (restricted, not asked) and is the source of truth for new code.
+    decision = models.CharField(max_length=12, choices=DECISION_CHOICES, default="YES")
+    purpose = models.CharField(max_length=255, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
     consent_text_version = models.CharField(max_length=32)
     consent_text_snapshot = models.TextField()
     captured_by = models.ForeignKey(

@@ -8,6 +8,8 @@ import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
 import { formatTime } from "./shared/format";
 import { Callout, Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
+import { DecisionInbox } from "./DecisionInbox";
+import { MyTasks } from "./MyTasks";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.3 — mockup dashboard(). Every number is
 // served by GET /care/dashboard/; nothing here is demo text.
@@ -277,6 +279,11 @@ export function DashboardPage() {
           )}
         </section>
       )}
+
+      <div className="mb-6">
+        <DecisionInbox />
+        <MyTasks />
+      </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

@@ -16,6 +16,7 @@ import { useValueSets } from "../shared/useValueSets";
 import { scoreSeverity, severityTone, SCORE_SEVERITY_BANDS, type Instrument } from "./severity";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
+import { AttentionCard, EpisodeOutcomeCard } from "./AttentionCards";
 
 const EMPTY = "text-[13px] text-ink-500";
 
@@ -51,7 +52,9 @@ export function SnapshotView({ patientId, onRecordChanged }: RecordViewProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <AttentionCard patientId={patientId} onChanged={onRecordChanged} />
       <EpisodeCard episode={data.episode} />
+      <EpisodeOutcomeCard patientId={patientId} onChanged={onRecordChanged} />
       <AlertsCard
         alerts={data.alerts}
         onResolved={() => {

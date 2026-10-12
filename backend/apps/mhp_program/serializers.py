@@ -151,6 +151,15 @@ class PsychotherapySessionSerializer(serializers.ModelSerializer):
             return ""
         return f"{user.first_name} {user.last_name}".strip() or user.email
 
+    def to_representation(self, instance):
+        # Process notes are for treating clinicians only (care_pathway.therapy).
+        from apps.care_pathway import therapy
+
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["extra"] = therapy.visible_extra(data.get("extra"), getattr(request, "user", None))
+        return data
+
 
 class PsychotherapySessionRestrictedSerializer(serializers.ModelSerializer):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.7 — existence only, no content."""

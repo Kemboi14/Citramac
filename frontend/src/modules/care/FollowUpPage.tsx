@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
-import { updateAppointment } from "../../lib/appointmentsApi";
-import { searchRegistrations, type RegistrationRow } from "../../lib/carePathwayApi";
+import { markAppointmentMissed, markRecontacted, searchRegistrations, type RegistrationRow } from "../../lib/carePathwayApi";
 import {
   bookFollowUp,
   getFollowUps,
@@ -84,12 +83,12 @@ export function FollowUpPage() {
     void load();
   }, [load]);
 
-  const markNoShow = async (row: FollowUpAppointmentRow) => {
+  const markNoShow = async (row: FollowUpAppointmentRow, reason: string) => {
     if (!accessToken) return;
     setBusyId(row.id);
     setError(null);
     try {
-      await updateAppointment(accessToken, row.id, { status: "NO_SHOW" });
+      await markAppointmentMissed(accessToken, row.id, reason);
       setNotice(`${row.patient_name} marked as a no-show.`);
       await load();
     } catch (err) {
@@ -238,13 +237,16 @@ function AppointmentTable({
   empty: string;
   showNoShow: boolean;
   busyId: string | null;
-  onNoShow: (row: FollowUpAppointmentRow) => void;
+  onNoShow: (row: FollowUpAppointmentRow, reason: string) => void;
   onBookAgain: (row: FollowUpAppointmentRow) => void;
 }) {
   const controls = useTableControls(rows, {
     sorts: APPOINTMENT_SORTS,
     searchText: appointmentSearch,
   });
+  const valueSets = useValueSets();
+  const { accessToken: token } = useAuth();
+  const [recontacted, setRecontacted] = useState<Set<string>>(new Set());
   return (
     <>
       <TableFilter
@@ -301,13 +303,33 @@ function AppointmentTable({
                     <td className={TD}>
                       <div className="flex flex-wrap gap-2">
                         {showNoShow && (
+                          <select
+                            className={`${INPUT} !w-auto !py-1 text-xs`}
+                            aria-label={`Mark ${row.patient_name} as missed — reason`}
+                            disabled={busyId === row.id}
+                            value=""
+                            onChange={(e) => e.target.value && onNoShow(row, e.target.value)}
+                          >
+                            <option value="">Mark missed — why?</option>
+                            {valueSets.options("missed-appointment-reason").map((o) => (
+                              <option key={o.code} value={o.code}>
+                                {o.display}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {!showNoShow && !recontacted.has(row.id) && (
                           <button
                             type="button"
                             className={`${BTN_GHOST} ${BTN_SM}`}
-                            disabled={busyId === row.id}
-                            onClick={() => onNoShow(row)}
+                            onClick={() =>
+                              token &&
+                              void markRecontacted(token, row.id).then(() =>
+                                setRecontacted((prev) => new Set(prev).add(row.id)),
+                              )
+                            }
                           >
-                            Mark no-show
+                            Client re-contacted
                           </button>
                         )}
                         <button

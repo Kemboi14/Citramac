@@ -124,9 +124,11 @@ class FhirMapperAndHieClientTests(APITestCase):
     def test_transmit_referral_sends_when_endpoint_configured(self):
         from unittest.mock import Mock, patch
 
-        fake_response = Mock(status_code=200)
-        fake_response.raise_for_status.return_value = None
-        with patch("apps.dha_interop.hie_client.requests.post", return_value=fake_response) as post:
+        fake_response = Mock(status_code=200, ok=True)
+        fake_response.json.return_value = {}
+        with patch(
+            "apps.dha_interop.hie_client.requests.request", return_value=fake_response
+        ) as post:
             with self.settings(HIE_ENDPOINT_URL="https://hie.example.test/fhir/Bundle"):
                 with platform_admin_context():
                     bundle = build_referral_bundle(self.referral)

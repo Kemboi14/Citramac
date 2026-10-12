@@ -14,6 +14,7 @@ import { useValueSets } from "../shared/useValueSets";
 import { orderedActivities } from "./activities";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
+import { ModulesPanel } from "./modules/ModulesPanel";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 function localNow() {
@@ -147,6 +148,8 @@ export function InterventionsStage({ patientId }: RecordViewProps) {
           </Callout>
         )}
       </div>
+
+      <ModulesPanel patientId={patientId} />
 
       {showForm && (
         <Card title="New Intervention" className="mb-4">

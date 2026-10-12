@@ -283,6 +283,11 @@ CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 # task honestly no-ops (SKIPPED_NOT_CONFIGURED) until its source URL setting
 # is set, so enabling beat here is safe even with no live source configured.
 CELERY_BEAT_SCHEDULE = {
+    # Durable HIE outbox (CLAUDE.md §4): deliver queued / retry-due resources.
+    "drain-hie-outbox": {
+        "task": "apps.dha_interop.tasks.drain_hie_outbox",
+        "schedule": crontab(minute="*/5"),
+    },
     "sync-icd11-nightly": {
         "task": "apps.dha_interop.tasks.sync_icd11",
         "schedule": crontab(hour=2, minute=0),
@@ -414,6 +419,106 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # when these are unset; set them (and flip SHA_GATEWAY_MODE) only once a real
 # facility certificate and sandbox/production endpoint are provisioned.
 HIE_ENDPOINT_URL = env("HIE_ENDPOINT_URL", default="")
+# Per-interaction paths under HIE_ENDPOINT_URL. VERIFY: the national IG / DHA
+# onboarding pack defines these; none is assumed. Empty = interaction disabled.
+HIE_PATIENT_PATH = env("HIE_PATIENT_PATH", default="")
+HIE_BUNDLE_PATH = env("HIE_BUNDLE_PATH", default="")
+# FHIR Identifier.system per identifier kind (apps.client_registry.PatientIdentifier).
+# VERIFY: NATIONAL_ID, PASSPORT, REFUGEE_ID, UNHCR, ALIEN_ID, BIRTH_CERTIFICATE,
+# IPRS_UPI, SHA_MEMBER and CLIENT_REGISTRY_ID system URIs must come from the
+# regulator's implementation guide — they are deliberately empty, and an
+# identifier with no configured system is left out of outbound FHIR (and the
+# omission is logged) rather than sent under an invented URI.
+# CITRAMAC / TEMPORARY / UHID are our own namespaces: set FHIR_LOCAL_SYSTEM_BASE
+# to a URI the organisation controls (project owner decision). UHID is made
+# per-organisation as <base>/uhid/<org-slug>.
+FHIR_LOCAL_SYSTEM_BASE = env("FHIR_LOCAL_SYSTEM_BASE", default="")
+FHIR_NATIONAL_IDENTIFIER_SYSTEMS = {
+    kind: env(f"FHIR_SYSTEM_{kind}", default="")
+    for kind in (
+        "NATIONAL_ID",
+        "PASSPORT",
+        "REFUGEE_ID",
+        "UNHCR",
+        "ALIEN_ID",
+        "BIRTH_CERTIFICATE",
+        "IPRS_UPI",
+        "SHA_MEMBER",
+        "CLIENT_REGISTRY_ID",
+    )
+}
+# Roles that may read restricted intake content (trauma detail). Everyone
+# else — front desk, billing, org admin, auditors — never receives it.
+INTAKE_RESTRICTED_VIEW_ROLES = env.list(
+    "INTAKE_RESTRICTED_VIEW_ROLES",
+    default=[
+        "Psychiatrist",
+        "Doctor",
+        "Nurse",
+        "Ward Nurse",
+        "Clinical Psychologist/Therapist",
+        "Therapist",
+    ],
+)
+# Roles whose members may co-sign (senior review). The requester can never be
+# the decider.
+COSIGN_ROLES = env.list("COSIGN_ROLES", default=["Psychiatrist"])
+# Interventions — VERIFY every value against the facility's own policy; these
+# are the owner's mockup defaults, labelled illustrative there.
+# Continuous-observation maximum minutes per observer before rotation.
+OBS_MAX_CONTINUOUS_MINUTES = env.int("OBS_MAX_CONTINUOUS_MINUTES", default=120)
+# Timed monitoring checks after a restrictive-practice episode: minutes after
+# the start, by kind. Empty list = no automatic checks scheduled.
+RESTRICTIVE_CHECK_MINUTES = {
+    "RAPID_TRANQUILLISATION": [15, 30, 45, 60],
+    "RESTRAINT": [15, 30],
+    "SECLUSION": [120, 240, 360, 480],
+}
+# Seclusion duration (minutes) that triggers an independent senior review.
+SECLUSION_MAX_MINUTES = env.int("SECLUSION_MAX_MINUTES", default=480)
+# Days after which a repeat PHQ-9 / GAD-7 is flagged as due. VERIFY: clinical
+# policy — unset flags none.
+MEASURE_REPEAT_DAYS = None
+
+# Statutory forms offered in the record: [{"key", "title", "signer_roles": [...]}].
+# VERIFY: form numbers, titles and who may sign come from the regulator — unset
+# offers no forms.
+LEGAL_FORM_CATALOGUE = []
+
+# Lab order sets and the write-back of results into the intake physical baseline
+# need LOINC codes that must come from the facility/terminology server.
+LAB_ORDER_SETS = {}
+INTAKE_LAB_WRITEBACK = {}  # {"<LOINC code>": "qtc" | "egfr" | "tsh"}
+
+# Minutes a client may wait after triage before a clinician sees them, by priority
+# colour, e.g. {"RED": 0, "ORANGE": 15}. VERIFY: facility policy — unset shows no
+# "over target" flag (a wait is still shown).
+SEEN_BY_CLINICIAN_TARGET_MINUTES = {}
+
+# Follow-up schedule generated when an episode closes as a planned discharge, e.g.
+# [{"reason": "POST_DISCHARGE", "after_hours": 72, "mode": "PHONE"}]. VERIFY: the
+# facility's own protocol decides the steps and intervals — unset generates none.
+FOLLOW_UP_SCHEDULE = []
+
+# Withdrawal-chart protocol. VERIFY: the facility's own withdrawal protocol
+# defines these — they are deliberately UNSET (None), and unset means the chart
+# is scored and banded but no threshold banner or due-time is generated.
+#   prn_threshold      score at/above which the protocol calls for a PRN dose
+#   severe_threshold   score at/above which urgent medical review is requested
+#   rescore_minutes_high / _low   re-score interval at/above vs below prn_threshold
+WITHDRAWAL_PROTOCOL = {
+    code: {
+        "prn_threshold": None,
+        "severe_threshold": None,
+        "rescore_minutes_high": None,
+        "rescore_minutes_low": None,
+    }
+    for code in ("CIWA", "COWS")
+}
+# Confidentiality code applied to psychiatric / substance-use content
+# (meta.security). VERIFY against the DS4P IG and the national IG; "R"
+# (restricted) from HL7 v3-Confidentiality is a placeholder until then.
+FHIR_PSYCH_CONFIDENTIALITY_CODE = env("FHIR_PSYCH_CONFIDENTIALITY_CODE", default="R")
 HIE_MTLS_CLIENT_CERT = env("HIE_MTLS_CLIENT_CERT", default="")
 HIE_MTLS_CLIENT_KEY = env("HIE_MTLS_CLIENT_KEY", default="")
 

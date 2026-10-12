@@ -9,9 +9,11 @@ from apps.retention.mixins import NoHardDeleteMixin
 
 from .consent import capture_consent
 from .erasure import execute_erasure
+from .identity import generate_citramac_number
 from .models import (
     Appointment,
     Attachment,
+    ConsentRecord,
     ErasureRequest,
     Patient,
 )
@@ -38,9 +40,7 @@ def _is_compliance_officer(user):
 
 
 def _generate_citramac_number(organization):
-    prefix = f"{timezone.now():%Y%m}{organization.slug[:4].upper()}"
-    count_this_month = Patient.objects.filter(citramac_number__startswith=prefix).count()
-    return f"{prefix}-{count_this_month + 1:03d}"
+    return generate_citramac_number(organization)
 
 
 class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
@@ -174,6 +174,21 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         patient = self.get_object()
         if request.method == "POST":
             granted = request.data.get("granted")
+            decision = request.data.get("decision")
+            consent_type = request.data.get("consent_type") or "DATA_SHARING_HIE"
+            if decision is not None:
+                if decision not in dict(ConsentRecord.DECISION_CHOICES):
+                    return Response(
+                        {"error": {"code": "INVALID_DECISION", "message": "Unknown decision."}},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if consent_type not in dict(ConsentRecord.CONSENT_TYPE_CHOICES):
+                    return Response(
+                        {"error": {"code": "INVALID_TYPE", "message": "Unknown consent type."}},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # `granted` is derived: only an explicit YES is a grant.
+                granted = decision == "YES"
             consent_text_version = request.data.get("consent_text_version")
             consent_text_snapshot = request.data.get("consent_text_snapshot")
             if granted is None or not consent_text_version or not consent_text_snapshot:
@@ -190,7 +205,15 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             record = capture_consent(
-                patient, request.user, granted, consent_text_version, consent_text_snapshot
+                patient,
+                request.user,
+                granted,
+                consent_text_version,
+                consent_text_snapshot,
+                consent_type=consent_type,
+                decision=decision,
+                purpose=request.data.get("purpose") or "",
+                valid_until=request.data.get("valid_until") or None,
             )
             return Response(ConsentRecordSerializer(record).data, status=status.HTTP_201_CREATED)
         return Response(ConsentRecordSerializer(patient.consent_records.all(), many=True).data)

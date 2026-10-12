@@ -15,6 +15,7 @@ import {
   type Ward,
 } from "../../lib/ipdApi";
 import { formatDateTime } from "./shared/format";
+import { WardBoardTable } from "./WardBoardTable";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 import { Callout, Card, ErrorNote, PageHeader } from "./shared/ui";
@@ -132,6 +133,7 @@ export function WardBoardPage() {
           </>
         }
       />
+      <WardBoardTable />
 
       <ErrorNote>{error}</ErrorNote>
 

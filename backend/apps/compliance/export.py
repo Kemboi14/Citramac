@@ -300,6 +300,11 @@ def _record(patient):
                 "risk_level": i.get_risk_level_display() if i.risk_level else "",
                 "formulation": i.formulation,
                 "clinical_decision": i.clinical_decision,
+                "version": i.version,
+                "status": i.status,
+                "completeness": i.completeness,
+                # The client's own record: every section, restricted ones included.
+                "sections": i.sections,
             }
             for i in IntakeAssessment.objects.filter(patient=patient).select_related("author")
         ],

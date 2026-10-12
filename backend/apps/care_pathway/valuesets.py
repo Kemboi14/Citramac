@@ -17,6 +17,38 @@ NO_YES_UNCERTAIN = [("no", "No"), ("yes", "Yes"), ("uncertain", "Uncertain")]
 YES_NO_UNCERTAIN = [("yes", "Yes"), ("no", "No"), ("uncertain", "Uncertain")]
 
 VALUESETS = {
+    "missed-appointment-reason": (
+        "Reason for a missed appointment",
+        [("TRANSPORT", "Transport"), ("COST", "Cost"), ("FELT_BETTER", "Felt better"),
+         ("UNWELL", "Unwell"), ("FORGOT", "Forgot"), ("UNREACHABLE", "Could not be reached"),
+         ("OTHER", "Other")],
+    ),
+    "therapy-modality": (
+        "Therapy modality",
+        [("CBT", "Cognitive behavioural therapy"), ("MI", "Motivational interviewing"),
+         ("TF_CBT", "Trauma-focused therapy"), ("SUPPORTIVE", "Supportive counselling"),
+         ("FAMILY", "Family therapy"), ("GROUP", "Group therapy"), ("OTHER", "Other")],
+    ),
+    "oat-medicine": (
+        "Opioid agonist medicine",
+        [("METHADONE", "Methadone"), ("BUPRENORPHINE", "Buprenorphine"), ("OTHER", "Other")],
+    ),
+    "capacity-decision": (
+        "Decision the capacity assessment is for",
+        [("ADMISSION", "Admission / inpatient treatment"), ("MEDICATION", "Medication"),
+         ("INFO_SHARING", "Sharing information with family"), ("FAMILY_INVOLVEMENT", "Family involvement in care"),
+         ("WITHDRAWAL_MGMT", "Withdrawal management"), ("OTHER", "Other (specify)")],
+    ),
+    "note-type": (
+        "Progress note type",
+        [("PROGRESS", "Progress note"), ("WARD_ROUND", "Ward round"), ("PHONE", "Telephone contact"),
+         ("FAMILY", "Family contact"), ("MDT", "MDT review"), ("NURSING_SHIFT", "Nursing shift note")],
+    ),
+    "episode-outcome": (
+        "How the episode ended",
+        [("PLANNED", "Discharged — planned"), ("LEFT_EARLY", "Left before planned discharge"),
+         ("TRANSFERRED", "Transferred"), ("LOST", "Lost to follow-up"), ("DECEASED", "Deceased")],
+    ),
     # ── Registration (§1.4) ──
     "pronouns": (
         "Pronouns",
@@ -63,6 +95,28 @@ VALUESETS = {
             ("UNKNOWN", "Not asked / unknown"),
             ("NONE", "Client reports none"),
             ("ACTIVE_ALLERGIES", "Client reports an allergy"),
+        ],
+    ),
+    "hie-consent-decision": (
+        "Consent decision",
+        [
+            ("NOT_ASKED", "Not yet asked"),
+            ("YES", "Yes"),
+            ("NO", "No"),
+            ("RESTRICTED", "Restricted to the treating facility"),
+        ],
+    ),
+    "next-of-kin-relationship": (
+        "Relationship to the client",
+        [
+            ("PARENT", "Parent"),
+            ("SPOUSE_PARTNER", "Spouse / partner"),
+            ("CHILD", "Child"),
+            ("SIBLING", "Sibling"),
+            ("OTHER_RELATIVE", "Other relative"),
+            ("FRIEND", "Friend"),
+            ("GUARDIAN", "Legal guardian"),
+            ("OTHER", "Other"),
         ],
     ),
     "payer": (

@@ -7,7 +7,7 @@ import { SafetyBanner } from "./shared/SafetyBanner";
 import { Callout } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { BillingStage } from "./record/BillingStage";
-import { CarePlanStage } from "./record/CarePlanStage";
+import { CarePlanStage } from "./record/plan/CarePlanWorkspace";
 import { ChartsView } from "./record/ChartsView";
 import { FollowUpStage } from "./record/FollowUpStage";
 import { IntakeStage } from "./record/IntakeStage";

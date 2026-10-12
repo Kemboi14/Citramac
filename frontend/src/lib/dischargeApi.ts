@@ -99,6 +99,7 @@ export interface DischargeSummary {
   treatment_summary?: string;
   legal_status_at_discharge?: string;
   education?: string[];
+  readiness?: DischargeReadiness;
   diagnoses?: DischargeDiagnosis[];
   medications?: DischargeMedicationLine[];
   follow_up?: DischargeFollowUp | null;
@@ -145,6 +146,14 @@ export interface DischargeFollowUpInput {
   client_request_id: string;
 }
 
+export interface DischargeReadiness {
+  meds_reconciled?: boolean;
+  counter_referral?: string;
+  naloxone?: string;
+  teach_back?: boolean;
+  no_follow_up_reason?: string;
+}
+
 export interface DischargeInput {
   disposition: string;
   destination: string;
@@ -153,6 +162,7 @@ export interface DischargeInput {
   treatment_summary: string;
   legal_status_at_discharge: string;
   education: string[];
+  readiness?: DischargeReadiness;
   diagnoses: string[];
   medications: {
     prescription_item: string | null;

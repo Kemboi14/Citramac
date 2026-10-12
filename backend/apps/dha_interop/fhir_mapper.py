@@ -9,6 +9,7 @@ instruction.
 """
 
 import json
+import logging
 
 from fhir.resources.R4B.annotation import Annotation
 from fhir.resources.R4B.bundle import Bundle, BundleEntry
@@ -27,6 +28,10 @@ from fhir.resources.R4B.patient import Patient as FhirPatient
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
 
+from .fhir_patient import build_patient_resource as _build_patient
+
+logger = logging.getLogger(__name__)
+
 _GENDER_MAP = {"MALE": "male", "FEMALE": "female", "OTHER": "other"}
 
 
@@ -36,22 +41,12 @@ def _urn(resource_type, internal_id):
 
 
 def build_patient_resource(patient):
-    fhir_id = str(patient.id)
-    name = HumanName(family=patient.last_name, given=[patient.first_name])
-    identifiers = []
-    if patient.national_id:
-        identifiers.append(Identifier(system="urn:citramac:national-id", value=patient.national_id))
-    if patient.citramac_number:
-        identifiers.append(
-            Identifier(system="urn:citramac:citramac-number", value=patient.citramac_number)
-        )
-    return FhirPatient(
-        id=fhir_id,
-        identifier=identifiers or None,
-        name=[name],
-        gender=_GENDER_MAP.get(patient.gender, "unknown"),
-        birthDate=patient.date_of_birth,
-    )
+    """Patient with sliced identifiers — see fhir_patient. Identifiers with no
+    configured `system` are withheld and logged, never sent under an invented URI."""
+    resource, omitted = _build_patient(patient)
+    for reason in omitted:
+        logger.warning("Patient %s: identifier withheld from FHIR — %s", patient.id, reason)
+    return resource
 
 
 def build_condition_resource(diagnosis, patient_ref):

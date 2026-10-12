@@ -102,6 +102,8 @@ class FhirResourceCache(models.Model):
         ("CACHED", "Cached (not yet transmitted)"),
         ("SENT", "Sent"),
         ("RECEIVED", "Received"),
+        ("RETRY", "Failed temporarily — will retry"),
+        ("REJECTED", "Rejected by the HIE — needs correction"),
         ("FAILED", "Failed"),
     ]
 
@@ -114,11 +116,30 @@ class FhirResourceCache(models.Model):
     related_object_id = models.UUIDField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="CACHED")
     transmission_detail = models.TextField(blank=True)
+    # Outbox behaviour (CLAUDE.md §4 "Fail safely"). `idempotency_key` is the
+    # stable business identifier that makes enqueue and retry safe;
+    # `retry_safe` is true only when a repeat send cannot create a duplicate
+    # (an update-as-create PUT by id) — otherwise a timeout is never retried blind.
+    idempotency_key = models.CharField(max_length=200, blank=True)
+    retry_safe = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    http_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    # OperationOutcome issues, as [{severity, code, expression, diagnostics}],
+    # so whoever can fix the data sees which field to correct.
+    issues = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization_id", "idempotency_key"],
+                name="unique_fhir_outbox_idempotency_key",
+                condition=~models.Q(idempotency_key=""),
+            ),
+        ]
 
     def __str__(self):
         timestamp = self.created_at.strftime("%Y-%m-%d %H:%M")

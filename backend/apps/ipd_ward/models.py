@@ -184,6 +184,7 @@ class MedicationAdministration(TenantScopedModel):
         ("ADMINISTERED", "Administered"),
         ("MISSED", "Missed"),
         ("REFUSED", "Refused"),
+        ("WITHHELD", "Withheld"),
     ]
 
     admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="mar_entries")
@@ -197,6 +198,16 @@ class MedicationAdministration(TenantScopedModel):
     )
     administered_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # PRN and controlled-drug documentation. The witness's name is recorded;
+    # no controlled-drug register number is generated here — that belongs to the
+    # facility's own register (VERIFY).
+    is_prn = models.BooleanField(default=False)
+    prn_indication = models.CharField(max_length=255, blank=True)
+    controlled_drug = models.BooleanField(default=False)
+    witness_name = models.CharField(max_length=150, blank=True)
+    own_supply = models.BooleanField(default=False)
+    effect = models.CharField(max_length=400, blank=True)
+    effect_recorded_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"MAR entry for {self.admission} @ {self.scheduled_time}"

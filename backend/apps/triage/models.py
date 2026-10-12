@@ -22,6 +22,17 @@ class VitalSigns(TenantScopedModel):
         "Blood glucose (mmol/L)", max_digits=4, decimal_places=1, null=True, blank=True
     )
 
+    # Early-warning inputs (consciousness on the ACVPU scale; supplemental oxygen).
+    CONSCIOUSNESS_CHOICES = [
+        ("A", "Alert"),
+        ("C", "New confusion"),
+        ("V", "Responds to voice"),
+        ("P", "Responds to pain"),
+        ("U", "Unresponsive"),
+    ]
+    consciousness = models.CharField(max_length=1, choices=CONSCIOUSNESS_CHOICES, blank=True)
+    supplemental_o2 = models.BooleanField(null=True, blank=True)
+
     height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
     weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
     bmi = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True, editable=False)
@@ -74,6 +85,14 @@ class MentalStatusExam(TenantScopedModel):
     insight = models.TextField(blank=True)
     judgment = models.TextField(blank=True)
     plan = models.TextField(blank=True)
+    # Added for the full intake MSE (mockup v4 MSE_DOMAINS) — same store, more domains.
+    rapport = models.TextField(blank=True)
+    psychomotor = models.TextField(blank=True)
+    orientation = models.TextField(blank=True)
+    attention = models.TextField(blank=True)
+    impulse_control = models.TextField(blank=True)
+    reliability = models.TextField(blank=True)
+    summary = models.TextField(blank=True)
 
     risk_assessment = models.JSONField(
         default=dict,
