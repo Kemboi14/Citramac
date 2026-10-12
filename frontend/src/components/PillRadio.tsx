@@ -11,13 +11,13 @@ export function PillRadio<T extends string>({
   warnValue?: T;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150 ${
+          className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors duration-150 ${
             value === opt.value
               ? opt.value === warnValue
                 ? "border-status-red bg-status-red text-on-status"

@@ -9,10 +9,134 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--ink-900);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Global interaction polish. Lives in @layer base so any Tailwind utility on
+ * an element still wins; it only supplies the defaults pages were missing.
+ */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--green) 28%, transparent);
+  }
+
+  /* Keyboard focus: a visible ring on every control. Many inputs are
+     `outline-none` and only changed border colour, which is nearly invisible. */
+  :where(a, button, summary, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  :where(input, select, textarea):not([type="checkbox"], [type="radio"]):focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
+  }
+
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  :where(input, select, textarea)::placeholder {
+    color: var(--ink-400);
+  }
+
+  :where(input, select, textarea):disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  :where(input, select, textarea)[aria-invalid="true"] {
+    border-color: var(--red);
+  }
+
+  :where(textarea) {
+    line-height: 1.5;
+  }
+
+  :where(button:not(:disabled), [role="button"]) {
+    cursor: pointer;
+  }
+
+  :where(button):disabled {
+    cursor: not-allowed;
+  }
+
+  :where(button, a, input, select, textarea) {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  /* Numbers in tables and KPI tiles line up in columns. */
+  :where(table) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(tbody tr:not(:last-child)) {
+    border-bottom-color: var(--border);
+  }
+}
+
+/* Slim, theme-aware scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-300) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ink-300);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-400);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

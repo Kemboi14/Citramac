@@ -51,7 +51,7 @@ export function ConfirmDialog({
         className="fixed inset-0 z-[100] bg-surface-scrim backdrop-blur-[1px]"
         onClick={busy ? undefined : onCancel}
       />
-      <div className="fixed inset-0 z-[110] flex items-center justify-center p-5">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
         <div
           ref={dialogRef}
           role="alertdialog"
@@ -68,12 +68,12 @@ export function ConfirmDialog({
               onClick={onCancel}
               disabled={busy}
               aria-label="Close"
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card disabled:opacity-60"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors hover:bg-surface-bg disabled:opacity-60"
             >
               <X className="h-[15px] w-[15px]" />
             </button>
           </div>
-          <div className="flex flex-col gap-3 px-6 py-5 text-sm text-ink-700">
+          <div className="flex flex-col gap-3 px-6 py-6 text-sm leading-relaxed text-ink-700">
             {children}
             {error && (
               <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
@@ -81,7 +81,7 @@ export function ConfirmDialog({
               </p>
             )}
           </div>
-          <div className="flex justify-end gap-2.5 border-t border-surface-border px-6 py-4">
+          <div className="flex justify-end gap-3 border-t border-surface-border px-6 py-4">
             <button
               type="button"
               onClick={onCancel}

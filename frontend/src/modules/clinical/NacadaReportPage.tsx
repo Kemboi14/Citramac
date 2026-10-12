@@ -124,7 +124,7 @@ export function NacadaReportPage() {
                   {r.status}
                 </span>
               </div>
-              <pre className="mt-2 overflow-x-auto rounded-sm bg-ink-50 p-2 text-xs text-ink-700">
+              <pre className="mt-2 overflow-x-auto rounded-sm bg-surface-bg p-2 text-xs text-ink-700">
                 {JSON.stringify(r.summary_data, null, 2)}
               </pre>
               {r.status === "DRAFT" && (

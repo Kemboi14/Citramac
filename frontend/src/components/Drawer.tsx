@@ -50,8 +50,8 @@ export function Drawer({
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-surface-border px-6 py-5">
-          <div>
+        <div className="flex items-center justify-between border-b border-surface-border gap-3 px-6 py-5">
+          <div className="min-w-0">
             <div id="drawer-title" className="font-display text-[17px] font-bold text-ink-900">
               {title}
             </div>
@@ -61,14 +61,14 @@ export function Drawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors hover:bg-surface-bg"
           >
             <X className="h-[15px] w-[15px]" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-[22px]">{children}</div>
+        <div className="flex-1 overflow-y-auto px-6 py-6">{children}</div>
         {footer && (
-          <div className="flex gap-2.5 border-t border-surface-border px-6 py-4">{footer}</div>
+          <div className="flex gap-3 border-t border-surface-border px-6 py-4">{footer}</div>
         )}
       </aside>
     </>,

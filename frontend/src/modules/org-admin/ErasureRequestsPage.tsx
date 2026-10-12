@@ -156,7 +156,7 @@ export function ErasureRequestsPage() {
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-surface-border bg-ink-50 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
             <tr>
               <th className="px-4 py-3">Client</th>
               <th className="px-4 py-3">Status</th>

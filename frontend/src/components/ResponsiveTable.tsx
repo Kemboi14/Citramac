@@ -57,10 +57,10 @@ export function ResponsiveTable<T>({
     <>
       <div className="hidden overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm md:block">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-surface-border bg-ink-50 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
             <tr>
               {columns.map((col) => (
-                <th key={col.key} className="px-4 py-3">
+                <th key={col.key} scope="col" className="whitespace-nowrap px-4 py-3.5">
                   {col.header}
                 </th>
               ))}
@@ -74,7 +74,7 @@ export function ResponsiveTable<T>({
                 className={`border-b border-surface-border last:border-0 ${onRowClick ? "cursor-pointer transition-colors duration-150 hover:bg-brand-green-tint-2" : ""}`}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={col.className ?? "px-4 py-3 text-ink-700"}>
+                  <td key={col.key} className={col.className ?? "px-4 py-3.5 text-ink-700"}>
                     {col.cell(row)}
                   </td>
                 ))}
@@ -82,7 +82,7 @@ export function ResponsiveTable<T>({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-[13px] text-ink-500">
                   {emptyMessage}
                 </td>
               </tr>
@@ -91,12 +91,12 @@ export function ResponsiveTable<T>({
         </table>
       </div>
 
-      <div className="space-y-2.5 md:hidden">
+      <div className="space-y-3 md:hidden">
         {rows.map((row) => (
           <div
             key={rowKey(row)}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`rounded-md border border-surface-border bg-surface-card p-3.5 shadow-sm ${onRowClick ? "cursor-pointer" : ""}`}
+            className={`rounded-md border border-surface-border bg-surface-card p-4 shadow-sm ${onRowClick ? "cursor-pointer transition-colors active:bg-brand-green-tint-2" : ""}`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -112,7 +112,7 @@ export function ResponsiveTable<T>({
               {badgeCol && <div className="flex-shrink-0">{badgeCol.cell(row)}</div>}
             </div>
             {bodyCols.length > 0 && (
-              <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
                 {bodyCols.map((col) => (
                   <div key={col.key}>
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
@@ -130,7 +130,7 @@ export function ResponsiveTable<T>({
             )}
           </div>
         ))}
-        {rows.length === 0 && <p className="text-center text-sm text-ink-500">{emptyMessage}</p>}
+        {rows.length === 0 && <p className="py-8 text-center text-[13px] text-ink-500">{emptyMessage}</p>}
       </div>
     </>
   );

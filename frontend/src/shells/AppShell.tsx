@@ -487,7 +487,7 @@ export function AppShell({
             </div>
           </header>
         ) : (
-          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card px-4 py-3 sm:px-5 lg:px-7 lg:py-3.5">
+          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 py-3 backdrop-blur sm:px-5 lg:px-7 lg:py-3.5">
             <button
               type="button"
               onClick={toggleSidebar}
@@ -512,7 +512,7 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="w-full flex-1 px-4 py-5 pb-14 outline-none sm:px-6 lg:px-8 lg:py-7"
+          className="w-full flex-1 px-4 py-5 pb-16 outline-none sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-16"
         >
           <div className="mx-auto w-full max-w-[1920px]">
             <ErrorBoundary resetKey={location.pathname}>

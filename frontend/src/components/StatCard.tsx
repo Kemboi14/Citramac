@@ -27,7 +27,7 @@ export function StatCard({
   trend?: { label: string; direction: "up" | "down" | "neutral" };
 }) {
   return (
-    <div className="animate-fade-in rounded-lg border border-surface-border bg-surface-card p-[18px] pb-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="animate-fade-in rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center justify-between">
         <div
           // eslint-disable-next-line security/detect-object-injection -- `tone` is `keyof typeof ICON_TONE`, a compile-time-checked prop union, never user input.
@@ -43,8 +43,8 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="mt-3.5 font-display text-[28px] font-bold text-ink-900">{value}</div>
-      <div className="mt-0.5 text-[12.5px] font-medium text-ink-500">{label}</div>
+      <div className="mt-4 font-display text-[28px] font-bold leading-none text-ink-900">{value}</div>
+      <div className="mt-1.5 text-[12.5px] font-medium text-ink-500">{label}</div>
     </div>
   );
 }

@@ -11,10 +11,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5 px-6 py-8 text-center">
-      <div className="text-[13px] font-semibold text-ink-900">{title}</div>
-      {children && <p className="max-w-md text-[12.5px] text-ink-500">{children}</p>}
-      {action && <div className="mt-2">{action}</div>}
+    <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+      <div className="text-sm font-semibold text-ink-900">{title}</div>
+      {children && <p className="max-w-md text-[13px] leading-relaxed text-ink-500">{children}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
