@@ -28,7 +28,19 @@ variable "frontend_url" {
   default = "https://demo.citramac.com"
 }
 
+# The backend's runtime connection — must be the restricted citramac_app
+# role (NOSUPERUSER NOBYPASSRLS). Postgres never applies Row-Level Security
+# to a superuser, so pointing this at the bootstrap `citramac` role silently
+# disables tenant isolation.
 variable "database_url" {
+  type      = string
+  sensitive = true
+}
+
+# The bootstrap `citramac` (table owner) connection, used only to run
+# `manage.py migrate` — DDL needs ownership, which citramac_app lacks.
+# Without it in the Secret, migrations against existing tables fail.
+variable "migration_database_url" {
   type      = string
   sensitive = true
 }

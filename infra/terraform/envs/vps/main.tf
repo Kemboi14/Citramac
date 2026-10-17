@@ -114,22 +114,23 @@ resource "kubernetes_secret" "backend" {
   type = "Opaque"
 
   data = {
-    DJANGO_SECRET_KEY    = var.django_secret_key
-    FIELD_ENCRYPTION_KEY = var.field_encryption_key
-    DJANGO_ALLOWED_HOSTS = var.django_allowed_hosts
-    CORS_ALLOWED_ORIGINS = var.cors_allowed_origins
-    FRONTEND_URL         = var.frontend_url
-    DATABASE_URL         = var.database_url
-    REDIS_URL            = var.redis_url
-    POSTGRES_DB          = var.postgres_db
-    POSTGRES_USER        = var.postgres_user
-    POSTGRES_PASSWORD    = var.postgres_password
-    EMAIL_HOST           = var.email_host
-    EMAIL_PORT           = var.email_port
-    EMAIL_HOST_USER      = var.email_host_user
-    EMAIL_HOST_PASSWORD  = var.email_host_password
-    EMAIL_USE_TLS        = var.email_use_tls
-    EMAIL_USE_SSL        = var.email_use_ssl
-    DEFAULT_FROM_EMAIL   = var.default_from_email
+    DJANGO_SECRET_KEY      = var.django_secret_key
+    FIELD_ENCRYPTION_KEY   = var.field_encryption_key
+    DJANGO_ALLOWED_HOSTS   = var.django_allowed_hosts
+    CORS_ALLOWED_ORIGINS   = var.cors_allowed_origins
+    FRONTEND_URL           = var.frontend_url
+    DATABASE_URL           = var.database_url
+    MIGRATION_DATABASE_URL = var.migration_database_url
+    REDIS_URL              = var.redis_url
+    POSTGRES_DB            = var.postgres_db
+    POSTGRES_USER          = var.postgres_user
+    POSTGRES_PASSWORD      = var.postgres_password
+    EMAIL_HOST             = var.email_host
+    EMAIL_PORT             = var.email_port
+    EMAIL_HOST_USER        = var.email_host_user
+    EMAIL_HOST_PASSWORD    = var.email_host_password
+    EMAIL_USE_TLS          = var.email_use_tls
+    EMAIL_USE_SSL          = var.email_use_ssl
+    DEFAULT_FROM_EMAIL     = var.default_from_email
   }
 }

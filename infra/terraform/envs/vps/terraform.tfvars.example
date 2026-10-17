@@ -5,7 +5,9 @@
 
 django_secret_key    = "change-me" # pragma: allowlist secret
 field_encryption_key = "change-me" # pragma: allowlist secret
-database_url         = "postgres://citramac:change-me@postgres:5432/citramac" # pragma: allowlist secret
+# Runtime: the RLS-bound citramac_app role. Migrations: the bootstrap owner.
+database_url           = "postgres://citramac_app:change-me@postgres:5432/citramac" # pragma: allowlist secret
+migration_database_url = "postgres://citramac:change-me@postgres:5432/citramac"     # pragma: allowlist secret
 postgres_password    = "change-me" # pragma: allowlist secret
 
 # Leaving email_host empty keeps the honest console-backend fallback
