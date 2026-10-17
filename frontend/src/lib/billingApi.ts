@@ -32,10 +32,11 @@ export function recordPayment(
   invoiceId: string,
   amount: string,
   method: string,
+  reference = "",
 ) {
   return apiRequest<Invoice>(`/billing/invoices/${invoiceId}/payments/`, {
     method: "POST",
-    body: { amount, method, reference: "" },
+    body: { amount, method, reference },
     accessToken,
   });
 }

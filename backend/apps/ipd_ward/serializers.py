@@ -119,7 +119,20 @@ class AdmissionSerializer(serializers.ModelSerializer):
         "authorizing_professional",
     )
 
+    # Master prompt §7A: once an admission is linked to the episode's LegalStatus,
+    # that object is the single store — its category and the legacy legal fields
+    # change only through the legal-status workflow (signed forms + decision).
+    LEGAL_STATUS_OWNED = ("admission_type", *INVOLUNTARY_REQUIRED, "legal_review_due_date", "legal_rationale")
+
     def validate(self, attrs):
+        if self.instance is not None and self.instance.legal_status_record_id:
+            owned = {
+                field: "Set by the client's legal admission status — use Legal & consent."
+                for field in self.LEGAL_STATUS_OWNED
+                if field in attrs and attrs[field] != getattr(self.instance, field)
+            }
+            if owned:
+                raise serializers.ValidationError(owned)
         if self.instance is not None:
             merged = {
                 field: attrs.get(field, getattr(self.instance, field))

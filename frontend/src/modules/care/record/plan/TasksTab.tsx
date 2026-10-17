@@ -15,6 +15,13 @@ import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles"
 import { Card, ErrorNote, Tag } from "../../shared/ui";
 import { useRecordData } from "../useRecordData";
 
+const MDT_LABELS = {
+  notes: "Decisions",
+  attendees: "Attendees",
+  outcome: "Outcome",
+  dissent: "Dissent / differing views (if any)",
+} as const;
+
 /** Tasks under each signed action (owner role, due time) and MDT reviews. */
 export function TasksTab({
   patientId,
@@ -31,7 +38,7 @@ export function TasksTab({
   const mdt = useRecordData(patientId, version, (token) => listMdt(token, patientId), "Couldn't load MDT reviews.");
   const [day, setDay] = useState("");
   const [recording, setRecording] = useState<string | null>(null);
-  const [form, setForm] = useState({ notes: "", attendees: "", outcome: "", next_review: "" });
+  const [form, setForm] = useState({ notes: "", attendees: "", outcome: "", dissent: "", next_review: "" });
   const live = ws.actions.filter((a) => a.decision && a.decision !== "DECLINED");
 
   async function toggle(task: PlanAction["tasks"][number], done: boolean) {
@@ -77,12 +84,17 @@ export function TasksTab({
                 <Tag tone={r.held_at ? "brand" : "warn"}>{r.held_at ? "held" : "scheduled"}</Tag>
               </div>
               {r.held_at ? (
-                <p className="mt-1 text-ink-900">{r.notes}{r.outcome ? ` — outcome: ${r.outcome}` : ""}</p>
+                <>
+                  <p className="mt-1 text-ink-900">{r.notes}{r.outcome ? ` — outcome: ${r.outcome}` : ""}</p>
+                  {r.attendees && <p className="text-[12px] text-ink-500">{r.attendees}</p>}
+                  {r.dissent && <p className="text-[12px] text-ink-900"><strong>Dissent:</strong> {r.dissent}</p>}
+                </>
               ) : recording === r.id ? (
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {(["notes", "attendees", "outcome"] as const).map((k) => (
+                  {(["notes", "attendees", "outcome", "dissent"] as const).map((k) => (
                     <label key={k} className={`flex flex-col gap-1 ${k === "notes" ? "sm:col-span-2" : ""}`}>
-                      <span className={FIELD_LABEL}>{k}</span>
+                      {/* eslint-disable-next-line security/detect-object-injection -- `k` is a typed union. */}
+                      <span className={FIELD_LABEL}>{MDT_LABELS[k]}</span>
                       <input className={INPUT} value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />
                     </label>
                   ))}

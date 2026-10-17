@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/v1/notifications/", include("apps.notifications.urls")),
     path("api/v1/retention/", include("apps.retention.urls")),
     path("api/v1/compliance/", include("apps.compliance.urls")),
+    path("api/v1/documents/", include("apps.documents.urls")),
 ]
 
 if settings.DEBUG:

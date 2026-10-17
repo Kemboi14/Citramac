@@ -105,6 +105,14 @@ class BranchAdmin(admin.ModelAdmin):
     search_fields = ["name", "organization__name", "mfl_code"]
     list_filter = ["facility_level", "is_active", "mhp_registration_status"]
     exclude = ["sha_api_credentials_encrypted"]
+    # Changed only through the API (BranchSerializer), which appends every
+    # change to BranchIdentifierChange — an admin edit would bypass that.
+    readonly_fields = [
+        "kmpdc_registration_number",
+        "facility_license_number",
+        "facility_license_valid_until",
+        "sha_fr_code",
+    ]
 
 
 @admin.register(SubscriptionPlan)

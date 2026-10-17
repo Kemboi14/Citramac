@@ -2,7 +2,7 @@ from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.dha_interop.models import ShaTransactionLog
@@ -27,6 +27,8 @@ class InsuranceClaimsTests(APITestCase):
                 organization=self.org,
                 is_active=True,
             )
+            # Writes are finance-only (apps.billing.permissions).
+            self.clinician.roles.add(Role.objects.get(name="Billing Clerk", organization=None))
             self.patient = Patient.objects.create(
                 organization=self.org,
                 first_name="Faith",
@@ -61,23 +63,30 @@ class InsuranceClaimsTests(APITestCase):
         self.assertEqual(log.status, "PENDING")
         self.assertIn("Phase 6 stub", log.response_payload["detail"])
 
-    def test_e_claim_submit_to_sha_is_logged(self):
+    def test_e_claim_submit_to_sha_refuses_an_unreviewed_claim(self):
+        """No submission path skips the finance review: a claim with no lines
+        from documented care is refused and nothing reaches the gateway."""
         create_response = self.client.post(
             reverse("e-claim-list"),
             {"patient": str(self.patient.id), "total_claimed_amount": "5000.00"},
             format="json",
             **self.auth,
         )
+        self.assertEqual(create_response.status_code, 201, create_response.data)
+        self.assertEqual(create_response.data["total_claimed_amount"], "0.00")
         claim_id = create_response.data["id"]
 
         submit_response = self.client.post(
-            reverse("e-claim-submit-to-sha", args=[claim_id]), **self.auth
+            reverse("e-claim-submit-to-sha", args=[claim_id]),
+            {"lines_checked": True},
+            format="json",
+            **self.auth,
         )
-        self.assertEqual(submit_response.status_code, 200, submit_response.data)
-        self.assertEqual(submit_response.data["status"], "SUBMITTED")
+        self.assertEqual(submit_response.status_code, 400, submit_response.data)
+        self.assertIn("Finance review is incomplete", submit_response.data["error"]["message"])
 
         with platform_admin_context():
-            self.assertTrue(
+            self.assertFalse(
                 ShaTransactionLog.objects.filter(
                     organization_id=self.org.id, transaction_type="E_CLAIM"
                 ).exists()

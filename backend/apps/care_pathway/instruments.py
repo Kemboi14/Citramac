@@ -49,6 +49,11 @@ FREQUENCY_OPTIONS = [
     (3, "Nearly every day"),
 ]
 YES_NO_POINTS = [(0, "No"), (1, "Yes")]
+YES_NO_CODES = [("YES", "Yes"), ("NO", "No")]
+# MDQ part 1 is recorded item by item from the completed paper / licensed form.
+# VERIFY: the 13 questions' wording must come from a validated copy of the MDQ
+# (and a validated Kiswahili version) — it is not reproduced from memory here.
+MDQ_PART1_ITEMS = [f"Part 1, question {n} — answer as recorded on the completed form" for n in range(1, 14)]
 PAWSS_ITEMS = [
     "Intoxicated / drunk within the last 30 days",
     "Ever had treatment for alcohol use (rehabilitation / alcoholism treatment)",
@@ -145,17 +150,45 @@ INSTRUMENTS = {
         "bands": [(9, "Below threshold"), (12, "Possible depression"),
                   (30, "Probable depression — clinical review")],
         "higher_is_worse": True, "threshold": 13, "approval": "illustrative",
+        # Item 10 (self-harm) is asked for alongside the total: any non-zero answer
+        # raises a risk proposal (mockup recordScore).
+        "supplementary": [
+            {"key": "item10", "text": "Item 10 — thoughts of harming yourself (0–3)",
+             "options": [(0, "0"), (1, "1"), (2, "2"), (3, "3")]},
+        ],
+        "safety_detail": "item10",
     },
     "MDQ": {
-        "name": "MDQ", "title": "MDQ — bipolar / manic symptoms", "kind": "total", "max": 13,
-        "bands": [(13, "Interpret with the screen’s own positive criteria")],
-        "higher_is_worse": True, "approval": "illustrative", "has_positive_flag": True,
+        "name": "MDQ", "title": "MDQ — bipolar / manic symptoms", "kind": "items", "max": 13,
+        "items": [{"text": t, "options": YES_NO_POINTS} for t in MDQ_PART1_ITEMS],
+        "bands": [(13, "Interpret with the positive-screen rule")],
+        "higher_is_worse": True, "approval": "illustrative",
+        "supplementary": [
+            {"key": "co_occurrence", "text": "Several of these happened during the same period?",
+             "options": YES_NO_CODES},
+            {"key": "impairment", "text": "Level of problem caused",
+             "options": [("NONE", "No problem"), ("MINOR", "Minor"), ("MODERATE", "Moderate"),
+                         ("SERIOUS", "Serious")]},
+        ],
+        # The published positive-screen rule as stated in the owner's mockup (MEAS.mdq):
+        # ≥ 7 'yes' in part 1, several in the same period, moderate or serious problem.
+        "positive_rule": lambda total, detail: (
+            total >= 7 and detail["co_occurrence"] == "YES"
+            and detail["impairment"] in ("MODERATE", "SERIOUS")
+        ),
     },
     "PAWSS": {
         "name": "PAWSS", "title": "PAWSS — alcohol withdrawal-risk predictor", "kind": "items",
         "max": 10, "items": [{"text": t, "options": YES_NO_POINTS} for t in PAWSS_ITEMS],
         "bands": [(3, "Lower risk"), (10, "High risk of complicated withdrawal")],
         "higher_is_worse": True, "threshold": 4, "approval": "illustrative",
+        # Threshold question first (mockup measureForm): 'No' ends the screen at 0.
+        "supplementary": [
+            {"key": "threshold",
+             "text": "Threshold: any alcohol in the last 30 days, or a positive blood alcohol level on arrival?",
+             "options": YES_NO_CODES},
+        ],
+        "gate": ("threshold", "NO"),
     },
     "AUDITC": {
         "name": "AUDIT-C", "title": "AUDIT-C — alcohol use screen", "kind": "items", "max": 12,
@@ -239,15 +272,58 @@ def validate_total(code, total):
     return total
 
 
-def result_flags(code, items):
+def validate_detail(code, detail):
+    """The supplementary answers, each one of its listed options. Raises ValueError."""
+    spec = INSTRUMENTS[code]
+    questions = spec.get("supplementary", [])
+    if not questions:
+        return {}
+    if not isinstance(detail, dict):
+        raise ValueError(f"{spec['name']}: answer the additional questions.")
+    cleaned = {}
+    for question in questions:
+        value = detail.get(question["key"])
+        if isinstance(value, bool) or value not in {v for v, _label in question["options"]}:
+            raise ValueError(f"{spec['name']}: answer “{question['text']}”.")
+        cleaned[question["key"]] = value
+    return cleaned
+
+
+def items_skipped(code, detail):
+    """True when a gate question ends the screen before the items (PAWSS threshold 'No')."""
+    gate = INSTRUMENTS[code].get("gate")
+    return bool(gate) and detail.get(gate[0]) == gate[1]
+
+
+def positive_for(code, total, detail):
+    rule = INSTRUMENTS[code].get("positive_rule")
+    return rule(total, detail) if rule else None
+
+
+def safety_positive(code, items, detail):
+    """The instrument's self-harm item is answered above zero (PHQ-9 item 9, EPDS item 10)."""
+    spec = INSTRUMENTS[code]
+    index = spec.get("safety_item")
+    if index is not None and items and items[index] > 0:
+        return True
+    key = spec.get("safety_detail")
+    return bool(key) and isinstance((detail or {}).get(key), int) and detail[key] > 0
+
+
+def result_flags(code, items, detail=None):
     """Findings the clinician must see (never auto-actioned)."""
     spec = INSTRUMENTS[code]
     flags = []
-    index = spec.get("safety_item")
-    if index is not None and items and items[index] > 0:
+    if not safety_positive(code, items, detail):
+        return flags
+    if spec.get("safety_item") is not None:
         flags.append(
             "Item 9 (thoughts of being better off dead or self-harm) is positive — "
             "review risk before the client leaves."
+        )
+    else:
+        flags.append(
+            "Item 10 (thoughts of harming yourself) is positive — review risk before the client leaves."
         )
     return flags
 
@@ -296,6 +372,13 @@ def served():
             "approval": spec["approval"],
             "experimental": bool(spec.get("experimental")),
             "hasPositiveFlag": bool(spec.get("has_positive_flag")),
+            "positiveRule": bool(spec.get("positive_rule")),
+            "supplementary": [
+                {"key": q["key"], "text": q["text"],
+                 "options": [{"value": v, "label": label} for v, label in q["options"]]}
+                for q in spec.get("supplementary", [])
+            ],
+            "gate": {"key": spec["gate"][0], "value": spec["gate"][1]} if spec.get("gate") else None,
             "withdrawal": bool(spec.get("withdrawal")),
         }
         for code, spec in INSTRUMENTS.items()

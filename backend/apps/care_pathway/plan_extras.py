@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from .models import CosignRequest, MdtReview, SafetyPlan
+from .models import CosignRequest, MdtReview, NursingCarePlanEntry, SafetyPlan
 
 SAFETY_FIELDS = [
     "warning_signs", "coping", "self_talk", "places_people_distract", "people_to_ask",
@@ -92,12 +92,55 @@ def record_mdt(review, user, data):
     review.attendees = data.get("attendees", "")
     review.notes = data["notes"]
     review.outcome = data.get("outcome", "")
+    review.dissent = str(data.get("dissent", "") or "").strip()
     review.next_review = data.get("next_review") or None
     review.recorded_by = user
     review.save()
     if review.next_review:
         schedule_mdt(review.care_plan, user, review.next_review)
     return review
+
+
+# ── nursing care plan ──
+
+
+def add_nursing_problem(plan, user, data):
+    problem = str(data.get("problem", "")).strip()
+    goal = str(data.get("goal", "")).strip()
+    if not problem or not goal:
+        raise ValidationError({"problem": "Problem and goal are required."})
+    activity = None
+    if data.get("action_key"):
+        activity = plan.activities.exclude(decision="DECLINED").filter(action_key=data["action_key"]).first()
+        if activity is None:
+            raise ValidationError({"action_key": "Link to an action that is in the plan."})
+    entry = NursingCarePlanEntry.objects.create(
+        organization_id=plan.organization_id,
+        care_plan=plan,
+        patient=plan.patient,
+        activity=activity,
+        problem=problem[:300],
+        goal=goal[:300],
+        interventions=str(data.get("interventions", "")).strip(),
+        recorded_by=user,
+    )
+    if str(data.get("evaluation", "")).strip():
+        evaluate_nursing_problem(entry, user, data)
+    return entry
+
+
+def evaluate_nursing_problem(entry, user, data):
+    """Append an evaluation — earlier ones stay, with who wrote them and when."""
+    text = str(data.get("evaluation", "")).strip()
+    if not text:
+        raise ValidationError({"evaluation": "Write the evaluation."})
+    entry.evaluations = [
+        *entry.evaluations,
+        {"text": text, "by": user.get_full_name() or str(user), "by_id": str(user.pk),
+         "at": timezone.now().isoformat()},
+    ]
+    entry.save(update_fields=["evaluations", "updated_at"])
+    return entry
 
 
 # ── co-signature ──

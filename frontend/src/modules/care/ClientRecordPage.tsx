@@ -18,6 +18,7 @@ import { SnapshotView } from "./record/SnapshotView";
 import { TimelineView } from "./record/TimelineView";
 import type { RecordViewProps } from "./record/types";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
+import { GroupRecordEntries } from "./groupProgramme/GroupRecordEntries";
 
 const VIEWS = new Set<string>([
   "snapshot",
@@ -115,6 +116,7 @@ export function ClientRecordPage() {
       />
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} />
+      {loadedBanner && <GroupRecordEntries patientId={patientId} />}
       {body}
     </div>
   );

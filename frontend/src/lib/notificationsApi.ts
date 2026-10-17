@@ -1,7 +1,12 @@
 import { apiRequest } from "./apiClient";
 import type { Paginated } from "./organizationsApi";
 
-export type NotificationCategory = "RISK_ALERT" | "SYSTEM" | "SUBSCRIPTION" | "RETENTION";
+export type NotificationCategory =
+  | "RISK_ALERT"
+  | "SYSTEM"
+  | "SUBSCRIPTION"
+  | "RETENTION"
+  | "FACILITY_LICENCE";
 export type NotificationSeverity = "INFO" | "WARNING" | "CRITICAL";
 
 export interface Notification {

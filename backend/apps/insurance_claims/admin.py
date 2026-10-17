@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import InsuranceClaim, PreAuthorization, Remittance
+from .models import InsuranceClaim, PreAuthorization, Remittance, ServicePayerCode
 
 
 @admin.register(PreAuthorization)
@@ -18,3 +18,9 @@ class InsuranceClaimAdmin(admin.ModelAdmin):
 @admin.register(Remittance)
 class RemittanceAdmin(admin.ModelAdmin):
     list_display = ["claim", "amount_paid", "remittance_date"]
+
+
+@admin.register(ServicePayerCode)
+class ServicePayerCodeAdmin(admin.ModelAdmin):
+    list_display = ["service", "payer", "payer_code", "requires_preauth", "active"]
+    list_filter = ["payer", "organization"]

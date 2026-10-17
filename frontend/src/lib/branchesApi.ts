@@ -5,6 +5,18 @@ import type { Paginated } from "./organizationsApi";
 // "Branches" + citramac_ORG-admin.html "Branch Settings".
 
 export type MhpRegistrationStatus = "OPEN" | "WAITLIST" | "CLOSED";
+export type LicenseStatus = "MISSING" | "VALID" | "EXPIRING" | "EXPIRED";
+
+/** One append-only entry of a branch's registration-identifier history. */
+export interface BranchIdentifierChange {
+  id: string;
+  field: string;
+  field_label: string;
+  previous_value: string;
+  new_value: string;
+  changed_by_email: string;
+  created_at: string;
+}
 
 export interface Branch {
   id: string;
@@ -19,6 +31,17 @@ export interface Branch {
   sub_county: string;
   gps_coordinates: string;
   mfl_code: string;
+  kmpdc_registration_number: string;
+  facility_license_number: string;
+  /** ISO date; the licence is renewed every year. */
+  facility_license_valid_until: string | null;
+  sha_fr_code: string;
+  is_registered_health_provider: boolean;
+  /** Required identifiers this branch is still missing (fields predating the requirement). */
+  missing_identifiers: ("kmpdc_registration_number" | "sha_fr_code")[];
+  license_status: LicenseStatus;
+  license_days_remaining: number | null;
+  identifier_history: BranchIdentifierChange[];
   phone: string;
   email: string;
   outpatient_capacity_per_day: number | null;
@@ -37,6 +60,8 @@ export interface ListBranchesParams {
   county?: string;
   facility_level?: string;
   mhp_registration_status?: string;
+  license_status?: LicenseStatus;
+  missing_identifiers?: "true";
 }
 
 export function listBranches(accessToken: string, params: ListBranchesParams = {}) {
@@ -58,6 +83,11 @@ export interface CreateBranchPayload {
   county?: string;
   sub_county?: string;
   mfl_code?: string;
+  kmpdc_registration_number?: string;
+  facility_license_number?: string;
+  facility_license_valid_until?: string | null;
+  sha_fr_code?: string;
+  sha_claims_enabled?: boolean;
   outpatient_capacity_per_day?: number;
   mhp_registration_status?: MhpRegistrationStatus;
   is_active?: boolean;

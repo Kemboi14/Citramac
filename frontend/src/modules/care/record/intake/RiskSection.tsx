@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { IntakeRiskRow, IntakeSectionSpec } from "../../../../lib/carePathwayApi";
 import { BTN, BTN_GHOST, BTN_SM, GROUP_LABEL } from "../../shared/styles";
 import { Callout, Tag } from "../../shared/ui";
@@ -10,6 +11,10 @@ interface Carried {
   version?: number;
   by?: string;
   confirmed?: boolean;
+  /** The clinician found this triage finding no longer present; it stays in the trail. */
+  not_present?: boolean;
+  resolved_by?: string;
+  resolved_at?: string;
 }
 
 const asRows = (v: unknown): Record<string, string[]> =>
@@ -27,6 +32,7 @@ export function RiskSection({
   vs,
   onChange,
   onPatch,
+  triggers,
 }: {
   spec: IntakeSectionSpec;
   riskRows: IntakeRiskRow[];
@@ -34,21 +40,32 @@ export function RiskSection({
   vs: ValueSetsApi;
   onChange: (key: string, value: unknown) => void;
   onPatch: (patch: Record<string, unknown>) => void;
+  /** "Triggered:" tool chips (mockup `triggerHint`), shown after the actions. */
+  triggers?: ReactNode;
 }) {
   const rows = asRows(values.rows);
   const carried = asCarried(values.carried);
   const open = Object.entries(carried).filter(([, c]) => !c.confirmed);
   const label = (rowKey: string) => riskRows.find((r) => r.key === rowKey)?.label ?? rowKey;
   const signedAt = typeof values.formulation_signed_at === "string" ? values.formulation_signed_at : "";
+  const signedBy = typeof values.formulation_signed_by === "string" ? values.formulation_signed_by : "";
 
   const setRow = (row: IntakeRiskRow, option: string, on: boolean) => {
     const current = rows[row.key] ?? [];
     let next: string[];
+    // "None identified" excludes the current (active) options only — "Past history"
+    // can stand beside it (it is linked from Section 4, INT-04-07/08).
     if (!on) next = current.filter((o) => o !== option);
-    else if (row.single || row.none.includes(option)) next = [option];
-    else next = [...current.filter((o) => !row.none.includes(o)), option];
+    else if (row.single) next = [option];
+    else if (row.none.includes(option)) next = [...current.filter((o) => !row.active.includes(o) && !row.none.includes(o)), option];
+    else next = [...current.filter((o) => !row.none.includes(o) || !row.active.includes(option)), option];
+    // A carried triage finding that is no longer present is resolved, not erased —
+    // the server stamps who resolved it and when.
+    const carriedKey = `${row.key}:${option}`;
     const nextCarried = { ...carried };
-    if (!on) delete nextCarried[`${row.key}:${option}`];
+    if (!on && nextCarried[carriedKey] && !nextCarried[carriedKey].confirmed) {
+      nextCarried[carriedKey] = { ...nextCarried[carriedKey], confirmed: true, not_present: true };
+    }
     onPatch({
       rows: { ...rows, [row.key]: next },
       carried: nextCarried,
@@ -94,7 +111,11 @@ export function RiskSection({
                     triage{c.version ? ` v${c.version}` : ""}
                     {c.by ? ` · ${c.by}` : ""}
                   </span>
-                  {c.confirmed ? (
+                  {c.not_present ? (
+                    <Tag>
+                      not present now{c.resolved_by ? ` · ${c.resolved_by}` : ""} — kept in the trail
+                    </Tag>
+                  ) : c.confirmed ? (
                     <Tag>confirmed ✓</Tag>
                   ) : (
                     <>
@@ -161,6 +182,7 @@ export function RiskSection({
 
       <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange}
         skip={["static", "dynamic", "protective", "change_72h", "summary", "plan", "review_by", "concern_level"]} />
+      {triggers}
 
       <div>
         <div className={GROUP_LABEL}>
@@ -171,7 +193,10 @@ export function RiskSection({
         </div>
         <div className="mb-2">
           {signedAt ? (
-            <Tag tone="brand">Signed {new Date(signedAt).toLocaleString()}</Tag>
+            <Tag tone="brand">
+              Signed {new Date(signedAt).toLocaleString()}
+              {signedBy ? ` · ${signedBy}` : ""}
+            </Tag>
           ) : (
             <Tag tone="warn">Draft — unsigned{anyActive ? " · required: an active risk is recorded" : ""}</Tag>
           )}
@@ -192,7 +217,8 @@ export function RiskSection({
           className={`${BTN} ${BTN_SM} mt-3`}
           disabled={!formulationReady}
           title={formulationReady ? "" : "Complete static, dynamic, protective, next 24–72 h and the summary first"}
-          onClick={() => onPatch({ formulation_signed_at: new Date().toISOString() })}
+          // A truthy value asks the server to sign; it records the signer and time itself.
+          onClick={() => onPatch({ formulation_signed_at: "sign" })}
         >
           {signedAt ? "Re-sign formulation" : "Sign risk formulation"}
         </button>

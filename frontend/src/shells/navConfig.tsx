@@ -237,6 +237,7 @@ export const CLINICAL_NAV: NavGroup[] = [
         label: "Reports & analytics",
         icon: BarChart3,
         children: [
+          { label: "Clinical Report", to: "/clinical/reports/clinical", icon: FileBarChart },
           { label: "Operational overview", to: "/clinical/reports", icon: FileBarChart },
           { label: "NACADA report", to: "/clinical/mhp/nacada", icon: FileBarChart },
         ],

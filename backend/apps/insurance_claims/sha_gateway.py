@@ -90,28 +90,58 @@ def _log(organization_id, transaction_type, request_payload):
 
 def submit_pre_authorization(pre_auth):
     """docs/08-DHA-SHA-INTEGRATION.md §8.3.2."""
-    return _log(
-        pre_auth.organization_id,
-        "PRE_AUTHORIZATION",
-        {
-            "patient_id": str(pre_auth.patient_id),
-            "clinical_notes": pre_auth.clinical_notes,
-            "diagnostic_evidence": pre_auth.diagnostic_evidence,
-        },
-    )
+    payload = {
+        "patient_id": str(pre_auth.patient_id),
+        "clinical_notes": pre_auth.clinical_notes,
+        "diagnostic_evidence": pre_auth.diagnostic_evidence,
+    }
+    if pre_auth.service_id:
+        # Per-claim-line request: the service and its configured payer code
+        # only — no clinical narrative (minimum necessary).
+        line = pre_auth.claim_lines.first()
+        payload["service"] = pre_auth.service.name
+        payload["payer_code"] = line.payer_code if line else ""
+        payload["quantity"] = line.quantity if line else None
+    return _log(pre_auth.organization_id, "PRE_AUTHORIZATION", payload)
 
 
-def submit_e_claim(claim):
-    """docs/08-DHA-SHA-INTEGRATION.md §8.3.3."""
-    return _log(
-        claim.organization_id,
-        "E_CLAIM",
-        {
-            "patient_id": str(claim.patient_id),
-            "diagnoses": claim.diagnoses_snapshot,
-            "total_claimed_amount": str(claim.total_claimed_amount),
-        },
-    )
+def submit_e_claim(claim, facility_branch=None):
+    """docs/08-DHA-SHA-INTEGRATION.md §8.3.3. `facility_branch` is the branch
+    the care was delivered at; its SHA FR code identifies the facility."""
+    from .models import ATTACHMENT_EXCLUDED_CATEGORIES
+
+    payload = {
+        "patient_id": str(claim.patient_id),
+        "diagnoses": claim.diagnoses_snapshot,
+        "total_claimed_amount": str(claim.total_claimed_amount),
+    }
+    if facility_branch is not None:
+        # VERIFY: the element name SHA's e-claim specification uses for the
+        # facility FR code — this payload shape is the stub's own.
+        payload["facility_fr_code"] = facility_branch.sha_fr_code
+    lines = list(claim.lines.all())
+    if lines:
+        payload["claim_number"] = claim.claim_number
+        payload["lines"] = [
+            {
+                "service": line.service_name,
+                "payer_code": line.payer_code,
+                "quantity": line.quantity,
+                "unit_price": str(line.unit_price),
+                "pre_authorization": (
+                    line.pre_authorization.approval_reference if line.pre_authorization else ""
+                ),
+            }
+            for line in lines
+        ]
+        # Re-filtered here even though the model and serializer refuse them:
+        # restricted categories must never leave the system.
+        payload["attachments"] = [
+            a.category
+            for a in claim.attachments.all()
+            if a.category not in ATTACHMENT_EXCLUDED_CATEGORIES
+        ]
+    return _log(claim.organization_id, "E_CLAIM", payload)
 
 
 def verify_member(organization_id, national_id_or_upi):

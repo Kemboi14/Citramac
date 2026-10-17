@@ -89,6 +89,7 @@ LOCAL_APPS = [
     "apps.retention",
     "apps.care_pathway",
     "apps.compliance",
+    "apps.documents",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -194,6 +195,12 @@ PASSWORD_HASHERS = [
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
+# Wall-clock zone of the facilities (deployment configuration, not a clinical
+# code): naive facility times — a group session's date + start time, MAR dose
+# slots, "today" — are read in this zone and stored as UTC instants. See
+# apps/care_pathway/facility_time.py. The current deployment serves Kenyan
+# facilities; a deployment elsewhere sets FACILITY_TIME_ZONE in its env.
+FACILITY_TIME_ZONE = env("FACILITY_TIME_ZONE", default="Africa/Nairobi")
 USE_I18N = True
 USE_TZ = True
 
@@ -342,6 +349,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.tenancy.tasks.process_subscription_lifecycle",
         "schedule": crontab(hour=5, minute=0),
     },
+    # Branch facility licence renewal reminders to Org Admins, at each of
+    # FACILITY_LICENSE_REMINDER_DAYS before expiry and once it has expired.
+    # See apps/tenancy/facility_licence.py.
+    "remind-facility-licence-renewals": {
+        "task": "apps.tenancy.tasks.remind_facility_licence_renewals",
+        "schedule": crontab(hour=5, minute=10),
+    },
     # Records retention scan — proposes archive batches for Org Admin
     # approval and sends coming-due notices; never archives on its own.
     # Weekly, Monday 01:00 UTC. See apps/retention/services.py.
@@ -355,10 +369,24 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.notifications.tasks.retry_pending_deliveries",
         "schedule": crontab(minute="*/10"),
     },
+    # Legal admission status (master prompt LGL-WF-03): review-due / expiry
+    # alerts and notice-period risk prompts. See apps/care_pathway/tasks.py.
+    "sweep-legal-statuses": {
+        "task": "apps.care_pathway.tasks.sweep_legal_statuses",
+        "schedule": crontab(minute=5),
+    },
 }
 
 # How far ahead of an appointment its one reminder email goes out.
 APPOINTMENT_REMINDER_HOURS_BEFORE = env.int("APPOINTMENT_REMINDER_HOURS_BEFORE", default=24)
+
+# Configuration: days before a branch's facility licence expires
+# (Branch.facility_license_valid_until) that its Org Admins are reminded; 0 is
+# the expiry day itself. The largest value is also the window in which a
+# licence shows as "expiring". Comma-separated in the environment.
+FACILITY_LICENSE_REMINDER_DAYS = env.list(
+    "FACILITY_LICENSE_REMINDER_DAYS", cast=int, default=[60, 30, 7, 0]
+)
 
 # ── Cache (rate limiting for the auth flow, docs/05-AUTHENTICATION-FLOW.md §5.5) ──
 CACHES = {
@@ -460,9 +488,45 @@ INTAKE_RESTRICTED_VIEW_ROLES = env.list(
         "Therapist",
     ],
 )
+# Psychotherapy session note dictation (master prompt X-12). The browser Web
+# Speech API sends audio to the browser vendor's speech service in most
+# browsers, so it stays off until the organisation's data-protection review
+# approves that processing — VERIFY before enabling. Off = typing only.
+PSYCHOTHERAPY_DICTATION_ENABLED = env.bool("PSYCHOTHERAPY_DICTATION_ENABLED", default=False)
 # Roles whose members may co-sign (senior review). The requester can never be
 # the decider.
 COSIGN_ROLES = env.list("COSIGN_ROLES", default=["Psychiatrist"])
+# Roles that may place medication orders and acknowledge abnormal lab results.
+# VERIFY: the facility's prescribing policy (e.g. whether clinical officers
+# prescribe) — a role missing here can still request a psychiatrist review.
+PRESCRIBER_ROLES = env.list("PRESCRIBER_ROLES", default=["Psychiatrist", "Doctor"])
+# Document generation (master prompt §6 DOC-GOV-02, X-02): role groups the
+# document catalogue's authorization profiles refer to. PRESCRIBERS is always
+# PRESCRIBER_ROLES above. VERIFY each group against the facility's policy —
+# which staff are "credentialed" to authorize which documents.
+DOC_ROLE_GROUPS = {
+    "CLINICAL_STAFF": env.list("DOC_CLINICAL_STAFF_ROLES", default=[
+        "Psychiatrist", "Doctor", "Nurse", "Ward Nurse", "Clinical Psychologist/Therapist",
+        "Therapist", "Clinical Supervisor", "Supervisor",
+    ]),
+    "CREDENTIALED": env.list("DOC_CREDENTIALED_ROLES", default=[
+        "Psychiatrist", "Doctor", "Clinical Psychologist/Therapist", "Therapist",
+        "Clinical Supervisor",
+    ]),
+    "MEDICAL": env.list("DOC_MEDICAL_ROLES", default=["Psychiatrist", "Doctor"]),
+    "SENIOR": env.list("DOC_SENIOR_ROLES", default=["Psychiatrist", "Clinical Supervisor"]),
+    "NURSING": env.list("DOC_NURSING_ROLES", default=["Nurse", "Ward Nurse"]),
+    "RELEASE_OFFICERS": env.list("DOC_RELEASE_ROLES", default=["Records Officer"]),
+    "ADMIN_STAFF": env.list("DOC_ADMIN_ROLES", default=["Front Desk", "Records Officer"]),
+    "BILLING": env.list("DOC_BILLING_ROLES", default=["Billing Clerk", "Cashier/Billing Clerk"]),
+}
+# DOC-CI-07: investigations per medication, {"<national drug index code>":
+# ["<LOINC code>", ...]}. Facility configuration only — no monitoring schedule
+# ships in code (CLAUDE.md §6). Empty = the clinician selects the tests.
+DOC_MEDICATION_MONITORING = env.json("DOC_MEDICATION_MONITORING", default={})
+# Roles that may create/submit payer claims, request pre-authorisation, issue
+# invoices and record payments. Everyone else sees the client's billing read-only.
+FINANCE_ROLES = env.list("FINANCE_ROLES", default=["Billing Clerk", "Cashier/Billing Clerk"])
 # Interventions — VERIFY every value against the facility's own policy; these
 # are the owner's mockup defaults, labelled illustrative there.
 # Continuous-observation maximum minutes per observer before rotation.
@@ -484,6 +548,13 @@ MEASURE_REPEAT_DAYS = None
 # VERIFY: form numbers, titles and who may sign come from the regulator — unset
 # offers no forms.
 LEGAL_FORM_CATALOGUE = []
+
+# Legal admission status (master prompt §7A): the versioned jurisdiction config
+# in apps/care_pathway/jurisdiction_config/<name>.json — statutory wording is
+# rendered from it verbatim. LEGAL_STATUS_OVERRIDES may override operational
+# values only (e.g. {"reviewLeadDays": 21, "requiredRecommendations": 2}).
+LEGAL_JURISDICTION_CONFIG = env("LEGAL_JURISDICTION_CONFIG", default="KE-MHA-FORMS-1")
+LEGAL_STATUS_OVERRIDES = {}
 
 # Lab order sets and the write-back of results into the intake physical baseline
 # need LOINC codes that must come from the facility/terminology server.

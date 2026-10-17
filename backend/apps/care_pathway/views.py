@@ -19,9 +19,9 @@ from apps.ipd_ward.models import Admission, Bed
 from apps.sysadmin_audit.audit import log_view
 from apps.triage.models import MentalStatusExam, VitalSigns
 
-from . import ews, instruments, tools
+from . import ews, facility_time, instruments, tools
 from . import intake as intake_service
-from . import intake_schema, services, triage_rules
+from . import intake_schema, services, triage_rules, triage_v4
 from .models import (
     PRIORITY_ORDER,
     BillingService,
@@ -242,12 +242,21 @@ def _worklist_row(item):
         "status_label": EFFECTIVE_STATUS_LABELS[item["status"]],
         "due_at": _iso(item["due_at"]),
         "is_overdue": item["is_overdue"],
+        "recheck_overdue": item.get("recheck_overdue", False),
         "wait_minutes": item["wait_minutes"],
         "visit_number": te.visit_number,
         "triage_version": te.triage_version,
         "last_triaged_at": _iso(te.last_triaged_at),
         "priority": te.priority,
     }
+
+
+def _evaluate(answers, labels):
+    """v4 answer sets (`"schema": "v4"`) use the v4 rule set; anything else is
+    v3-shaped and keeps the v3 rules (triage_rules.py)."""
+    if triage_v4.is_v4(answers):
+        return triage_v4.evaluate(answers, labels)
+    return triage_rules.evaluate(answers, labels)
 
 
 class TriageWorklistView(APIView):
@@ -311,6 +320,12 @@ class TriageEncounterView(APIView):
         signed = te.assessments.filter(status="COMPLETED").first()
         labels = services.concept_labels()
         answers = draft.answers if draft else {}
+        editable = te.status in (TriageEncounter.STATUS_AWAITING, TriageEncounter.STATUS_IN_TRIAGE)
+        # New and in-progress triages use the v4 rule set; a signed record keeps the
+        # rule set it was signed under (the screen reads its stored result).
+        v4 = editable or triage_v4.is_v4(signed.answers if signed else answers)
+        if v4:
+            answers = {**triage_v4.DEFAULT_ANSWERS, **answers, "schema": triage_v4.SCHEMA}
         return Response(
             {
                 "id": str(te.id),
@@ -332,10 +347,11 @@ class TriageEncounterView(APIView):
                 "triage_started_at": _iso(te.triage_started_at),
                 "clinician": user_display(request.user),
                 "tenant_location": request.user.organization.name,
-                "defaults": triage_rules.DEFAULT_ANSWERS,
+                "defaults": triage_v4.DEFAULT_ANSWERS if v4 else triage_rules.DEFAULT_ANSWERS,
+                "schema": triage_v4.SCHEMA if v4 else "v3",
                 "draft": _assessment_payload(draft),
                 "signed": _assessment_payload(signed),
-                "evaluation": triage_rules.evaluate(answers, labels),
+                "evaluation": _evaluate(answers, labels),
                 "tasks": CareTaskSerializer(te.tasks.all(), many=True).data,
                 "recheck_draft": _recheck_payload(services.current_recheck_draft(te)),
                 "rechecks": [_recheck_payload(r) for r in te.rechecks.filter(status="COMPLETED")],
@@ -357,7 +373,7 @@ class TriageDraftView(APIView):
         return Response(
             {
                 "draft_saved_at": _iso(draft.draft_saved_at),
-                "evaluation": triage_rules.evaluate(answers, services.concept_labels()),
+                "evaluation": _evaluate(answers, services.concept_labels()),
             }
         )
 
@@ -365,9 +381,7 @@ class TriageDraftView(APIView):
 class TriageEvaluateView(APIView):
     def post(self, request, pk):
         _triage(pk)
-        return Response(
-            triage_rules.evaluate(request.data.get("answers") or {}, services.concept_labels())
-        )
+        return Response(_evaluate(request.data.get("answers") or {}, services.concept_labels()))
 
 
 class TriageSignView(APIView):
@@ -467,8 +481,8 @@ class PsychiatryQueueView(APIView):
         rows = []
         for te in services.psychiatry_queue():
             waited = (
-                int((now - te.last_triaged_at).total_seconds() // 60)
-                if te.last_triaged_at and not te.psychiatry_review_started_at
+                int((now - te.arrival_at).total_seconds() // 60)
+                if not te.psychiatry_review_started_at
                 else None
             )
             target = targets.get(te.priority)
@@ -853,41 +867,42 @@ class ClientMedicationHistoryView(APIView):
 
 
 def _allergy_payload(patient):
-    return {
-        "status": patient.allergy_status,
-        "records": [
-            {
-                "id": str(a.id),
-                "substance": a.substance,
-                "reaction": a.reaction,
-                "severity": a.severity,
-                "verification_status": a.verification_status,
-                "source": a.source,
-                "noted_at": a.noted_at,
-            }
-            for a in patient.allergy_records.exclude(verification_status="REFUTED")
-        ],
-    }
+    from . import allergies
+
+    return allergies.payload(patient)
 
 
 class ClientAllergyView(APIView):
-    """Allergy status + records for the intake section; one store (AllergyRecord)."""
+    """Allergy status + records for the intake section; one store (AllergyRecord).
+    GET the record; POST adds a reaction; PUT sets status / source of information,
+    or `confirm: true` for "Confirm — unchanged" (INT-06)."""
 
     def get(self, request, patient_id):
         return Response(_allergy_payload(_patient(patient_id)))
 
+    def post(self, request, patient_id):
+        from . import allergies
+
+        return Response(
+            allergies.add_record(_patient(patient_id), request.user, request.data),
+            status=status.HTTP_201_CREATED,
+        )
+
     def put(self, request, patient_id):
-        patient = _patient(patient_id)
-        new_status = request.data.get("status")
-        if new_status not in dict(Patient.ALLERGY_STATUS_CHOICES):
-            raise ValidationError({"status": "Unknown allergy status."})
-        patient.allergy_status = new_status
-        patient.save(update_fields=["allergy_status", "updated_at"])
-        return Response(_allergy_payload(patient))
+        from . import allergies
+
+        return Response(allergies.update_status(_patient(patient_id), request.user, request.data))
 
 
 class AllergyVerifyView(APIView):
-    """A clinician confirms (or refutes) a client-reported allergy."""
+    """A clinician confirms (or refutes) a client-reported allergy; PATCH edits a
+    record's type / severity / reaction or resolves / refutes it (never deletes)."""
+
+    def patch(self, request, pk):
+        from . import allergies
+
+        record = get_object_or_404(AllergyRecord, pk=pk)
+        return Response(allergies.update_record(record, request.user, request.data))
 
     def post(self, request, pk):
         record = get_object_or_404(AllergyRecord, pk=pk)
@@ -959,6 +974,9 @@ class ClientAssessmentsView(APIView):
             positive=data.get("positive"),
             context=data.get("context") or "",
             note=data.get("note") or "",
+            detail=data.get("detail"),
+            timepoint=data.get("timepoint") or "",
+            assessed_at=data.get("assessed_at") or None,
         )
         return Response(OutcomeScoreSerializer(score).data, status=status.HTTP_201_CREATED)
 
@@ -970,7 +988,11 @@ class ClientWithdrawalView(APIView):
         from . import withdrawal
 
         patient = _patient(patient_id)
-        return Response({"scales": withdrawal.overview(patient), "recommended": withdrawal.recommended_scale(patient)})
+        return Response({
+            "scales": withdrawal.overview(patient),
+            "recommended": withdrawal.recommended_scale(patient),
+            "substance": withdrawal.substance_display(patient),
+        })
 
     def post(self, request, patient_id):
         from . import withdrawal
@@ -1035,10 +1057,12 @@ class ClientInterventionsView(APIView):
         patient = _patient(patient_id)
         serializer = InterventionRecordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        activity = serializer.validated_data["activity"]
-        if activity.care_plan.patient_id != patient.id:
+        activity = serializer.validated_data.get("activity")
+        if activity and activity.care_plan.patient_id != patient.id:
             raise PermissionDenied("That care plan action belongs to a different client.")
-        record = services.record_intervention(request.user, activity, serializer.validated_data)
+        record = services.record_intervention(
+            request.user, patient, serializer.validated_data, activity=activity
+        )
         return Response(InterventionRecordSerializer(record).data, status=status.HTTP_201_CREATED)
 
 
@@ -1096,8 +1120,11 @@ class DashboardView(APIView):
     def get(self, request):
         from apps.client_registry.views import CaseloadView
 
+        from . import group_programme
+
         now = timezone.now()
-        today = timezone.localdate()
+        today = facility_time.local_date(now)
+        today_bounds = facility_time.day_bounds(today)
         week_start = today - timedelta(days=today.weekday())
         patients = Patient.objects.filter(archived_at__isnull=True)
         admitted_ids = set(
@@ -1114,22 +1141,29 @@ class DashboardView(APIView):
         return Response(
             {
                 "total_clients": total,
-                "new_this_week": patients.filter(registered_at__date__gte=week_start).count(),
+                "new_this_week": patients.filter(
+                    registered_at__gte=facility_time.combine_local(week_start)
+                ).count(),
                 "inpatients": inpatients,
                 "beds_available": beds_available,
                 "outpatients": total - inpatients,
-                "outpatients_new_today": patients.filter(registered_at__date=today)
+                "outpatients_new_today": patients.filter(
+                    registered_at__gte=today_bounds[0], registered_at__lt=today_bounds[1]
+                )
                 .exclude(id__in=admitted_ids)
                 .count(),
                 "red_orange": _red_orange_count(),
                 "triage_due": len(worklist),
                 "psychiatry_queued": len(services.psychiatry_queue()),
                 "caseload_count": len(caseload),
-                "appointments_today": Appointment.objects.filter(scheduled_for__date=today)
+                "appointments_today": Appointment.objects.filter(
+                    scheduled_for__gte=today_bounds[0], scheduled_for__lt=today_bounds[1]
+                )
                 .exclude(status="CANCELLED")
                 .count(),
                 "follow_ups_overdue": follow_ups["overdue"],
                 "discharged_without_follow_up": follow_ups["unbooked"],
+                **group_programme.dashboard_counts(),
                 "recent_activity": services.recent_activity(),
                 "triage_arrivals": [_worklist_row(i) for i in worklist[:5]],
                 "generated_at": _iso(now),
@@ -1198,7 +1232,7 @@ class OutpatientsView(APIView):
 
 class ReportsView(APIView):
     def get(self, request):
-        today = timezone.localdate()
+        today_bounds = facility_time.day_bounds(facility_time.local_date())
         worklist = services.triage_worklist()
         signed = list(
             TriageEncounter.objects.filter(triage_version__gt=0).values_list("priority", flat=True)
@@ -1217,7 +1251,9 @@ class ReportsView(APIView):
                 ).count(),
                 "occupied_beds": beds.filter(status="OCCUPIED").count(),
                 "total_beds": beds.count(),
-                "appointments_today": Appointment.objects.filter(scheduled_for__date=today)
+                "appointments_today": Appointment.objects.filter(
+                    scheduled_for__gte=today_bounds[0], scheduled_for__lt=today_bounds[1]
+                )
                 .exclude(status="CANCELLED")
                 .count(),
                 "priority_distribution": [
@@ -1653,15 +1689,9 @@ class ClientNewEpisodeView(APIView):
 
 class ClientTherapyView(APIView):
     def get(self, request, patient_id):
-        from .models import TherapyEpisode
+        from . import therapy
 
-        rows = TherapyEpisode.objects.filter(patient=_patient(patient_id))
-        return Response({"results": [
-            {"id": str(e.pk), "modality": e.modality, "planned_sessions": e.planned_sessions,
-             "frequency": e.frequency, "trauma_phase": e.trauma_phase,
-             "confidentiality_agreed": bool(e.confidentiality_agreed_at),
-             "consent_to_record": e.consent_to_record, "under_supervision": e.under_supervision,
-             "ended": bool(e.ended_at)} for e in rows]})
+        return Response(therapy.overview(_patient(patient_id), request.user))
 
     def post(self, request, patient_id):
         from . import therapy
@@ -1685,19 +1715,6 @@ class ClientTherapySessionView(APIView):
 
         s = therapy.record_session(_patient(patient_id), request.user, request.data.get("episode"), request.data)
         return Response({"id": str(s.pk)}, status=status.HTTP_201_CREATED)
-
-
-class GroupTherapySessionView(APIView):
-    """One call, one separate row per attendee — never a shared note."""
-
-    def post(self, request):
-        from . import therapy
-
-        attendees = request.data.get("attendees") or []
-        if not attendees:
-            raise ValidationError({"attendees": "Add at least one attendee."})
-        rows = therapy.record_group_session(request.user, "", attendees, request.data)
-        return Response({"sessions": [str(r.pk) for r in rows]}, status=status.HTTP_201_CREATED)
 
 
 class ClientOatView(APIView):
@@ -1762,7 +1779,7 @@ class ClientLabsView(APIView):
     def get(self, request, patient_id):
         from . import labs
 
-        return Response(labs.lab_overview(_patient(patient_id)))
+        return Response(labs.lab_overview(_patient(patient_id), request.user))
 
     def post(self, request, patient_id):
         from . import labs

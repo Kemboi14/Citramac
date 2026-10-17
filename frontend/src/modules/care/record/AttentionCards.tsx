@@ -137,6 +137,9 @@ export function EpisodeOutcomeCard({ patientId, onChanged }: { patientId: string
     <Card title="Episode outcome" className="lg:col-span-2">
       <ErrorNote>{error}</ErrorNote>
       {message && <p className="mb-2 text-[13px] text-brand-green">{message}</p>}
+      {outcome === "PLANNED" && (
+        <p className="mb-2 text-[12px] text-ink-500">A planned discharge needs the discharge checklist complete (Outcomes → Discharge).</p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <select className={INPUT} aria-label="How the episode ended" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
           <option value="">How did this episode end?</option>
@@ -144,7 +147,14 @@ export function EpisodeOutcomeCard({ patientId, onChanged }: { patientId: string
             <option key={o.code} value={o.code}>{o.display}</option>
           ))}
         </select>
-        {outcome === "TRANSFERRED" && <input className={INPUT} placeholder="Transferred to" value={destination} onChange={(e) => setDestination(e.target.value)} />}
+        {outcome && (
+          <select className={INPUT} aria-label="Destination" value={destination} onChange={(e) => setDestination(e.target.value)}>
+            <option value="">{outcome === "TRANSFERRED" ? "Destination (required)" : "Destination"}</option>
+            {vs.options("episode-destination").map((o) => (
+              <option key={o.code} value={o.code}>{o.display}</option>
+            ))}
+          </select>
+        )}
         {outcome && outcome !== "PLANNED" && <input className={INPUT} placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />}
         <button type="button" className={`${BTN} ${BTN_SM}`} disabled={!outcome} onClick={() => void close()}>Close episode</button>
         <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => void reopen()}>Start new episode</button>

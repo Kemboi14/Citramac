@@ -347,11 +347,20 @@ export function SignedTriageDocumentPage() {
             </thead>
             <tbody>
               {record.findings.length > 0 ? (
-                record.findings.map(([finding, status, source], index) => (
+                record.findings.map(([finding, status, source, at, by], index) => (
                   <tr key={`${finding}-${index}`}>
                     <td className={TD}>{finding}</td>
                     <td className={TD}>{status}</td>
-                    <td className={TD}>{source}</td>
+                    <td className={TD}>
+                      {source}
+                      {/* v4 rows carry time and recorder (AT-20). */}
+                      {at && (
+                        <span className="block text-[11px] text-ink-500">
+                          {formatDateTime(at)}
+                          {by ? ` · ${by}` : ""}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))
               ) : (

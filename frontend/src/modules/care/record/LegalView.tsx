@@ -25,6 +25,7 @@ import { useValueSets } from "../shared/useValueSets";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { CapacityConsentCard } from "./CapacityConsent";
+import { LegalAdmissionStatus } from "./legal/LegalAdmissionStatus";
 
 type AdmissionRow = ClientLegal["admissions"][number];
 
@@ -65,6 +66,7 @@ export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
   return (
     <div className="flex flex-col gap-4">
       <ErrorNote>{error}</ErrorNote>
+      <LegalAdmissionStatus patientId={patientId} onChanged={refresh} />
       <ConsentCard patientId={patientId} legal={data} onSaved={refresh} />
       <CapacityConsentCard patientId={patientId} />
       <SubjectRequestsCard patientId={patientId} />

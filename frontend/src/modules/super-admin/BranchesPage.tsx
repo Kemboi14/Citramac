@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   BedDouble,
   Building2,
   LayoutGrid,
@@ -16,6 +17,7 @@ import {
   listBranches,
   updateBranch,
   type Branch,
+  type LicenseStatus,
   type MhpRegistrationStatus,
 } from "../../lib/branchesApi";
 import {
@@ -24,12 +26,28 @@ import {
   updateDepartment,
   type Department,
 } from "../../lib/departmentsApi";
-import { listOrganizations, type Organization } from "../../lib/organizationsApi";
+import { listOrganizations, type OrgType, type Organization } from "../../lib/organizationsApi";
 import { StatCard } from "../../components/StatCard";
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { LocationFields } from "../../components/LocationFields";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
+import {
+  BranchIdentifierFields,
+  BranchIdentifierHistory,
+  LicenseStatusBadge,
+} from "../../components/BranchIdentifierFields";
+import {
+  EMPTY_IDENTIFIERS,
+  identifierFieldErrors,
+  identifierPayload,
+  identifiersFromBranch,
+  type BranchIdentifierValues,
+} from "../../lib/branchIdentifiers";
+
+// Mirrors apps.tenancy.models.HEALTH_PROVIDER_ORG_TYPES — their branches
+// must carry a KMPDC registration number (enforced server-side).
+const HEALTH_PROVIDER_ORG_TYPES: OrgType[] = ["HOSPITAL", "INDIVIDUAL"];
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -70,7 +88,7 @@ function statusToggle(active: boolean, busy: boolean, onToggle: () => void) {
   );
 }
 
-type StatusFilter = "all" | "active" | "mhp" | "inactive";
+type StatusFilter = "all" | "active" | "mhp" | "inactive" | "missing";
 type Tab = "branches" | "departments";
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
@@ -78,6 +96,14 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: "Active", value: "active" },
   { label: "MHP-Registered", value: "mhp" },
   { label: "Inactive", value: "inactive" },
+  { label: "Details missing", value: "missing" },
+];
+
+const LICENSE_FILTERS: { label: string; value: LicenseStatus | "" }[] = [
+  { label: "Any licence", value: "" },
+  { label: "Licence expiring", value: "EXPIRING" },
+  { label: "Licence expired", value: "EXPIRED" },
+  { label: "No licence", value: "MISSING" },
 ];
 
 interface NewBranchState {
@@ -92,6 +118,7 @@ interface NewBranchState {
   outpatient_capacity_per_day: string;
   mhp_open: boolean;
   is_active: boolean;
+  identifiers: BranchIdentifierValues;
 }
 
 const EMPTY_NEW_BRANCH: NewBranchState = {
@@ -106,6 +133,7 @@ const EMPTY_NEW_BRANCH: NewBranchState = {
   outpatient_capacity_per_day: "",
   mhp_open: false,
   is_active: true,
+  identifiers: EMPTY_IDENTIFIERS,
 };
 
 interface NewDepartmentState {
@@ -125,6 +153,7 @@ const EMPTY_NEW_DEPARTMENT: NewDepartmentState = {
 };
 
 const branchFormId = "branch-form";
+const editBranchFormId = "branch-registration-form";
 const deptFormId = "department-form";
 
 /** The Drawer's Save button lives in its `footer`, outside the `<form>`
@@ -162,6 +191,8 @@ export function BranchesPage() {
   const [count, setCount] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [licenseFilter, setLicenseFilter] = useState<LicenseStatus | "">("");
+  const [licenseCounts, setLicenseCounts] = useState({ expiring: 0, expired: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -176,22 +207,36 @@ export function BranchesPage() {
   const updateNewBranch = (patch: Partial<NewBranchState>) =>
     setNewBranch((prev) => ({ ...prev, ...patch }));
 
+  const [newBranchErrors, setNewBranchErrors] = useState<
+    ReturnType<typeof identifierFieldErrors>
+  >({});
+
+  const [editing, setEditing] = useState<Branch | null>(null);
+  const [editValues, setEditValues] = useState<BranchIdentifierValues>(EMPTY_IDENTIFIERS);
+  const [editErrors, setEditErrors] = useState<ReturnType<typeof identifierFieldErrors>>({});
+  const [editError, setEditError] = useState<string | null>(null);
+
   const [showDeptForm, setShowDeptForm] = useState(false);
   const [deptFormError, setDeptFormError] = useState<string | null>(null);
   const [newDept, setNewDept] = useState<NewDepartmentState>(EMPTY_NEW_DEPARTMENT);
 
-  const refresh = async () => {
+  const refresh = async (license: LicenseStatus | "" = licenseFilter) => {
     if (!accessToken) return;
     setLoading(true);
     setError(null);
     try {
-      const [branchRes, deptRes] = await Promise.all([
-        listBranches(accessToken),
+      // Licence status is filtered server-side so a branch beyond the first
+      // page still shows up when looking for expiring/expired licences.
+      const [branchRes, deptRes, expiringRes, expiredRes] = await Promise.all([
+        listBranches(accessToken, { license_status: license || undefined }),
         listDepartments(accessToken),
+        listBranches(accessToken, { license_status: "EXPIRING" }),
+        listBranches(accessToken, { license_status: "EXPIRED" }),
       ]);
       setBranches(branchRes.results);
       setCount(branchRes.count);
       setDepartments(deptRes.results);
+      setLicenseCounts({ expiring: expiringRes.count, expired: expiredRes.count });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load branches.");
     } finally {
@@ -214,15 +259,22 @@ export function BranchesPage() {
     const q = search.trim().toLowerCase();
     return branches.filter((b) => {
       if (q) {
-        const haystack = `${b.name} ${b.organization_name} ${b.mfl_code}`.toLowerCase();
+        const haystack =
+          `${b.name} ${b.organization_name} ${b.mfl_code} ${b.kmpdc_registration_number} ${b.sha_fr_code}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (statusFilter === "active") return b.is_active;
       if (statusFilter === "inactive") return !b.is_active;
       if (statusFilter === "mhp") return b.mhp_registration_status === "OPEN";
+      if (statusFilter === "missing") return b.missing_identifiers.length > 0;
       return true;
     });
   }, [branches, search, statusFilter]);
+
+  const changeLicenseFilter = (value: LicenseStatus | "") => {
+    setLicenseFilter(value);
+    void refresh(value);
+  };
 
   const filteredDepartments = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -237,8 +289,11 @@ export function BranchesPage() {
     });
   }, [departments, search, statusFilter]);
 
+  const newBranchOrgType = organizations.find((o) => o.id === newBranch.organization)?.org_type;
+
   const openBranchForm = () => {
     setBranchFormError(null);
+    setNewBranchErrors({});
     setNewBranch(EMPTY_NEW_BRANCH);
     setShowBranchForm(true);
   };
@@ -250,8 +305,10 @@ export function BranchesPage() {
       throw new Error("validation");
     }
     setBranchFormError(null);
+    setNewBranchErrors({});
     try {
       const created = await createBranch(accessToken, {
+        ...identifierPayload(newBranch.identifiers),
         organization: newBranch.organization,
         name: newBranch.name,
         mfl_code: newBranch.mfl_code || undefined,
@@ -271,7 +328,35 @@ export function BranchesPage() {
       setShowBranchForm(false);
       setNewBranch(EMPTY_NEW_BRANCH);
     } catch (err) {
+      setNewBranchErrors(identifierFieldErrors(err));
       setBranchFormError(err instanceof ApiError ? err.message : "Couldn't create the branch.");
+      throw err;
+    }
+  };
+
+  const openEdit = (branch: Branch) => {
+    setEditing(branch);
+    setEditValues(identifiersFromBranch(branch));
+    setEditErrors({});
+    setEditError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!accessToken || !editing) return;
+    if (reportFormInvalid(editBranchFormId)) {
+      setEditError("Please fill in the required fields highlighted above.");
+      throw new Error("validation");
+    }
+    setEditError(null);
+    setEditErrors({});
+    try {
+      const updated = await updateBranch(accessToken, editing.id, identifierPayload(editValues));
+      setBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      setEditing(null);
+      void refresh();
+    } catch (err) {
+      setEditErrors(identifierFieldErrors(err));
+      setEditError(err instanceof ApiError ? err.message : "Couldn't save the registration details.");
       throw err;
     }
   };
@@ -360,6 +445,31 @@ export function BranchesPage() {
       className: "px-4 py-3 font-mono text-xs text-ink-700",
       cell: (b) => b.mfl_code || "—",
     },
+    {
+      key: "kmpdc",
+      header: "KMPDC Reg.",
+      className: "px-4 py-3 font-mono text-xs text-ink-700",
+      cell: (b) =>
+        b.kmpdc_registration_number ||
+        (b.missing_identifiers.includes("kmpdc_registration_number") ? (
+          <span className="font-sans font-semibold text-status-red">Missing</span>
+        ) : (
+          "—"
+        )),
+    },
+    {
+      key: "fr",
+      header: "SHA FR Code",
+      className: "px-4 py-3 font-mono text-xs text-ink-700",
+      cell: (b) =>
+        b.sha_fr_code ||
+        (b.missing_identifiers.includes("sha_fr_code") ? (
+          <span className="font-sans font-semibold text-status-red">Missing</span>
+        ) : (
+          "—"
+        )),
+    },
+    { key: "licence", header: "Licence", cell: (b) => <LicenseStatusBadge branch={b} /> },
     { key: "level", header: "Level", cell: (b) => facilityLevelShort(b.facility_level) },
     { key: "wards", header: "Wards", cell: (b) => b.ward_count },
     { key: "beds", header: "Beds", cell: (b) => b.bed_count },
@@ -378,6 +488,20 @@ export function BranchesPage() {
       header: "Status",
       cardBadge: true,
       cell: (b) => statusToggle(b.is_active, busyId === b.id, () => toggleBranchActive(b)),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "px-4 py-3 text-right",
+      cell: (b) => (
+        <button
+          type="button"
+          onClick={() => openEdit(b)}
+          className="whitespace-nowrap text-[12.5px] font-semibold text-brand-green hover:underline"
+        >
+          Edit registration
+        </button>
+      ),
     },
   ];
 
@@ -419,6 +543,30 @@ export function BranchesPage() {
         <StatCard icon={Building2} value={totalWards} label="Wards Registered" />
         <StatCard icon={BedDouble} value={totalBeds} label="Beds Across Platform" />
       </div>
+
+      {(licenseCounts.expiring > 0 || licenseCounts.expired > 0) && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-status-amber/40 bg-status-amber-tint px-4 py-3 text-sm text-ink-900"
+        >
+          <AlertTriangle size={18} className="shrink-0 text-status-amber" />
+          <span>
+            <span className="font-semibold">{licenseCounts.expired}</span> branch licence
+            {licenseCounts.expired === 1 ? "" : "s"} expired ·{" "}
+            <span className="font-semibold">{licenseCounts.expiring}</span> expiring soon
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setTab("branches");
+              changeLicenseFilter(licenseCounts.expired > 0 ? "EXPIRED" : "EXPIRING");
+            }}
+            className="text-[12.5px] font-semibold text-brand-green hover:underline"
+          >
+            Show them
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded-md border border-surface-border bg-surface-card p-1">
@@ -476,6 +624,20 @@ export function BranchesPage() {
             </button>
           ))}
         </div>
+        {tab === "branches" && (
+          <select
+            className={FIELD_CLASS}
+            value={licenseFilter}
+            onChange={(e) => changeLicenseFilter(e.target.value as LicenseStatus | "")}
+            aria-label="Filter by licence status"
+          >
+            {LICENSE_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <Drawer
@@ -554,6 +716,22 @@ export function BranchesPage() {
                   placeholder="e.g. MFL-14238-B2"
                 />
               </label>
+              <BranchIdentifierFields
+                values={newBranch.identifiers}
+                onChange={(patch) =>
+                  setNewBranch((prev) => ({
+                    ...prev,
+                    identifiers: { ...prev.identifiers, ...patch },
+                  }))
+                }
+                kmpdcRequired={
+                  newBranchOrgType ? HEALTH_PROVIDER_ORG_TYPES.includes(newBranchOrgType) : undefined
+                }
+                shaClaimsEnabled={false}
+                errors={newBranchErrors}
+                labelClassName={LABEL_CLASS}
+                fieldClassName={FIELD_CLASS}
+              />
               <label className={LABEL_CLASS}>
                 Address
                 <input
@@ -650,6 +828,54 @@ export function BranchesPage() {
             </p>
           )}
         </form>
+      </Drawer>
+
+      <Drawer
+        open={editing !== null}
+        title="Branch Registration"
+        subtitle={editing ? `${editing.name} · ${editing.organization_name}` : undefined}
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
+              onClick={() => setEditing(null)}
+            >
+              Cancel
+            </button>
+            <SaveButton onSave={saveEdit} className="flex-1">
+              Save Changes
+            </SaveButton>
+          </>
+        }
+      >
+        {editing && (
+          <form
+            id={editBranchFormId}
+            onSubmit={(e) => e.preventDefault()}
+            className="flex flex-col gap-4"
+          >
+            <div>
+              <LicenseStatusBadge branch={editing} />
+            </div>
+            <BranchIdentifierFields
+              values={editValues}
+              onChange={(patch) => setEditValues((prev) => ({ ...prev, ...patch }))}
+              kmpdcRequired={editing.is_registered_health_provider}
+              shaClaimsEnabled={editing.sha_claims_enabled}
+              errors={editErrors}
+              labelClassName={LABEL_CLASS}
+              fieldClassName={FIELD_CLASS}
+            />
+            <BranchIdentifierHistory branch={editing} />
+            {editError && (
+              <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                {editError}
+              </p>
+            )}
+          </form>
+        )}
       </Drawer>
 
       <Drawer

@@ -9,6 +9,9 @@ export interface Paginated<T> {
 }
 
 export type DiagnosisStatus = "ACTIVE" | "HISTORICAL" | "RESOLVED";
+/** Diagnostic certainty — `intake-dx-status` codes → Condition.verificationStatus.
+ * Blank on diagnoses recorded before it existed. */
+export type DiagnosisVerification = "" | "PROVISIONAL" | "DIFFERENTIAL" | "CONFIRMED" | "RULED_OUT";
 
 export interface Diagnosis {
   id: string;
@@ -19,6 +22,7 @@ export interface Diagnosis {
   is_primary: boolean;
   noted_at: string;
   status: DiagnosisStatus;
+  verification_status: DiagnosisVerification;
   clinical_notes: string;
   diagnostic_criteria_met: string;
 }

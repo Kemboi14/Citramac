@@ -11,6 +11,7 @@ import {
   type FollowUpOverview,
   type FollowUpUnbookedRow,
 } from "../../lib/dischargeApi";
+import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { formatDateTime, newRequestId } from "./shared/format";
@@ -50,7 +51,7 @@ const UNBOOKED_SORTS = {
 const unbookedSearch = (row: FollowUpUnbookedRow) =>
   [row.patient_name, row.citramac_number].join(" ");
 
-interface BookingTarget {
+export interface BookingTarget {
   patientId?: string;
   admissionId?: string;
   name: string;
@@ -440,7 +441,8 @@ function UnbookedTable({
   );
 }
 
-function BookingForm({
+/** Book a follow-up — also used inside the client record (Follow-up stage). */
+export function BookingForm({
   target,
   onCancel,
   onBooked,
@@ -460,10 +462,19 @@ function BookingForm({
   const [reason, setReason] = useState(target.defaultReason);
   const [mode, setMode] = useState("IN_PERSON");
   const [notes, setNotes] = useState("");
+  const [provider, setProvider] = useState("");
+  const [roster, setRoster] = useState<MhpTeamRosterRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Stable for this form: a retry after a network error never double-books.
   const requestId = useRef(newRequestId());
+
+  useEffect(() => {
+    if (!accessToken) return;
+    getMhpTeamRoster(accessToken)
+      .then(setRoster)
+      .catch(() => setRoster([]));
+  }, [accessToken]);
 
   const findClient = async () => {
     if (!accessToken || query.trim().length < 2) return;
@@ -497,6 +508,7 @@ function BookingForm({
         reason,
         mode,
         notes,
+        provider: provider || undefined,
         client_request_id: requestId.current,
       });
       await onBooked(`Follow-up booked for ${client?.name || target.name}.`);
@@ -601,6 +613,16 @@ function BookingForm({
             </select>
           </Field>
         </div>
+        <Field label="With (optional)" htmlFor="fu-provider">
+          <select id="fu-provider" className={INPUT} value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <option value="">Not assigned</option>
+            {roster.map((member) => (
+              <option key={member.user_id} value={member.user_id}>
+                {[member.first_name, member.last_name].filter(Boolean).join(" ") || member.email}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Notes (optional)" htmlFor="fu-notes">
           <input
             id="fu-notes"

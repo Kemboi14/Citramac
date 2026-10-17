@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from apps.retention.mixins import NoHardDeleteMixin
 
 from .models import CostCenter, Invoice, InvoiceLine
+from .permissions import IsFinanceOrReadOnly
 from .serializers import CostCenterSerializer, InvoiceSerializer, PaymentSerializer
 
 
@@ -14,6 +15,7 @@ class InvoiceViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.11 — Module 10."""
 
     serializer_class = InvoiceSerializer
+    permission_classes = [IsFinanceOrReadOnly]
 
     def get_queryset(self):
         return Invoice.objects.select_related("patient").order_by("-created_at")

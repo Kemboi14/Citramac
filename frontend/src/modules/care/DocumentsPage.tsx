@@ -10,6 +10,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
+import { DocumentCatalogueBrowser, GeneratedDocumentsCard } from "./documents/DocumentCatalogueBrowser";
 import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.14 — mockup documents().
@@ -51,8 +52,13 @@ export function DocumentsPage() {
       <PageHeader
         eyebrow="Clinical records"
         title="Documents"
-        subtitle="Signed clinical documents linked to client records"
+        subtitle="Generate, review, sign and release documents; signed clinical documents linked to client records"
       />
+
+      <div className="mb-4 flex flex-col gap-4">
+        <DocumentCatalogueBrowser />
+        <GeneratedDocumentsCard />
+      </div>
 
       {error && (
         <div className="mb-4">

@@ -132,6 +132,13 @@ class Patient(TenantScopedModel):
     allergy_status = models.CharField(
         max_length=20, choices=ALLERGY_STATUS_CHOICES, default="UNKNOWN"
     )
+    # INT-06 / DATA-04: where the allergy record as a whole came from (a code of the
+    # served `allergy-info-source` value set) and the last "Confirm — unchanged".
+    allergy_info_source = models.CharField(max_length=48, blank=True)
+    allergy_confirmed_at = models.DateTimeField(null=True, blank=True)
+    allergy_confirmed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     doctor = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -261,6 +268,11 @@ class EmergencyContact(TenantScopedModel):
     may_be_informed = models.BooleanField(
         default=False, help_text="Client agreed this person may be told about their care."
     )
+    # Statutory applicant details (master prompt LGL-I-B-02/05): the person's
+    # own National ID/Passport number — masked in the UI except for authorised
+    # roles (LGL-DOC-06) — and free-text detail beside the coded relationship.
+    id_number = models.CharField(max_length=64, blank=True)
+    relationship_detail = models.CharField(max_length=150, blank=True)
 
     def __str__(self):
         return f"{self.name} ({self.relationship})"
@@ -338,6 +350,29 @@ class PatientIdentifier(TenantScopedModel):
 
 
 class AllergyRecord(TenantScopedModel):
+    """One FHIR R4 AllergyIntolerance (INT-06, DATA-04).
+
+    - `allergy_type` → AllergyIntolerance.type: ALLERGY = `allergy`, INTOLERANCE =
+      `intolerance`. ADR (adverse drug reaction) has no code of its own in that
+      required binding and is NOT mapped to an extension here. VERIFY: how the
+      national IG represents an ADR (an intolerance with a category, a
+      `reaction` manifestation, or an IG extension) before it is exported.
+      Prescribing hard-stops only on ALLERGY; intolerance / ADR warn.
+    - `clinical_status` → AllergyIntolerance.clinicalStatus (active | resolved).
+    - `verification_status` → AllergyIntolerance.verificationStatus; "refuted" is
+      how a record is removed — records are never deleted.
+    - `severity` → a code of the served `allergy-severity` value set. MILD /
+      MODERATE / SEVERE map to reaction.severity; ANAPHYLAXIS is a manifestation,
+      not a severity — VERIFY its SNOMED CT code with the terminology server
+      before export; UNKNOWN maps to no severity.
+    """
+
+    TYPE_CHOICES = [
+        ("ALLERGY", "Allergy"),
+        ("INTOLERANCE", "Intolerance"),
+        ("ADR", "Adverse drug reaction (ADR)"),
+    ]
+    CLINICAL_STATUS_CHOICES = [("ACTIVE", "Active"), ("RESOLVED", "Resolved")]
     # FHIR AllergyIntolerance.verificationStatus — a client-reported allergy at
     # registration stays unconfirmed until a clinician confirms it (doc 15 §1.4).
     VERIFICATION_CHOICES = [
@@ -360,6 +395,11 @@ class AllergyRecord(TenantScopedModel):
         max_length=12, choices=VERIFICATION_CHOICES, default="CONFIRMED"
     )
     source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default="CLINICIAN")
+    # Existing records default to ALLERGY: they were all treated as hard stops before.
+    allergy_type = models.CharField(max_length=12, choices=TYPE_CHOICES, default="ALLERGY")
+    clinical_status = models.CharField(
+        max_length=10, choices=CLINICAL_STATUS_CHOICES, default="ACTIVE"
+    )
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -547,6 +587,11 @@ class ConsentRecord(TenantScopedModel):
         ("MENTAL_HEALTH_HIE", "Sharing mental-health information on the HIE"),
         ("SUBSTANCE_USE_HIE", "Sharing substance-use information on the HIE"),
         ("FAMILY_INVOLVEMENT", "Involving family / next of kin in care"),
+        # Release authorizations checked by apps.documents before any external
+        # release (DOC-CI-06 / DOC-GOV-04). Same store, same FHIR Consent.
+        ("EMPLOYER_COMMUNICATION", "Communicating with the client's employer"),
+        ("SCHOOL_COMMUNICATION", "Communicating with the client's school / university"),
+        ("RELEASE_OF_INFORMATION", "Releasing health information to a named third party"),
     ]
     DECISION_CHOICES = [
         ("NOT_ASKED", "Not yet asked"),
@@ -571,6 +616,12 @@ class ConsentRecord(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     captured_at = models.DateTimeField(default=timezone.now)
+    # Release authorizations only (FHIR Consent.provision.actor / .class):
+    # who may receive the information (blank = any recipient of this consent
+    # type) and which data classes it covers (apps.documents.catalogue
+    # DATA_CLASSES). An empty scope authorizes no optional class.
+    recipient = models.CharField(max_length=255, blank=True)
+    disclosure_scope = models.JSONField(default=list, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-captured_at"]

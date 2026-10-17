@@ -27,6 +27,13 @@ PUBLIC_EMAIL_DOMAINS = frozenset(
 )
 
 
+# Tenant verticals whose branches are registered health facilities (KMPDC) —
+# a hospital/healthcare provider, or an individual practitioner's practice.
+# Schools, universities and corporates run wellness services under another
+# registration and aren't held to the facility identifiers.
+HEALTH_PROVIDER_ORG_TYPES = frozenset({"HOSPITAL", "INDIVIDUAL"})
+
+
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -278,6 +285,11 @@ class Organization(TimestampedModel):
         self.save(update_fields=["email_domains"])
 
     @property
+    def is_registered_health_provider(self):
+        """Whether this tenant's branches are KMPDC-registered health facilities."""
+        return self.org_type in HEALTH_PROVIDER_ORG_TYPES
+
+    @property
     def has_email_configured(self):
         return bool(self.email_host)
 
@@ -432,6 +444,10 @@ class Branch(TenantScopedModel):
         ("WAITLIST", "Waitlist Only"),
         ("CLOSED", "Closed"),
     ]
+    LICENSE_MISSING = "MISSING"
+    LICENSE_VALID = "VALID"
+    LICENSE_EXPIRING = "EXPIRING"
+    LICENSE_EXPIRED = "EXPIRED"
 
     name = models.CharField(max_length=255)
     facility_level = models.CharField(max_length=2, choices=FACILITY_LEVEL_CHOICES)
@@ -453,6 +469,22 @@ class Branch(TenantScopedModel):
     # top-level registration; a branch's MFL code identifies that specific
     # physical facility on the Master Facility List.
     mfl_code = models.CharField(max_length=64, blank=True)
+    # Registered-health-provider identifiers, one set per branch (each branch
+    # is its own registered facility). Blank at the DB level so branches that
+    # predate them still load; BranchSerializer requires the KMPDC number for
+    # a health provider's branch and the FR code for an SHA-contracted one,
+    # and missing_identifiers flags any gap. Every change is appended to
+    # BranchIdentifierChange — never overwritten silently.
+    kmpdc_registration_number = models.CharField(
+        max_length=64, blank=True, help_text="KMPDC facility registration number."
+    )
+    # Renewed every year; licence_status / the daily reminder job
+    # (apps.tenancy.facility_licence) key off facility_license_valid_until.
+    facility_license_number = models.CharField(max_length=64, blank=True)
+    facility_license_valid_until = models.DateField(null=True, blank=True)
+    sha_fr_code = models.CharField(
+        max_length=64, blank=True, help_text="SHA facility (FR) code — required for SHA claims."
+    )
     phone = models.CharField(max_length=32, blank=True)
     email = models.EmailField(blank=True)
     outpatient_capacity_per_day = models.PositiveIntegerField(null=True, blank=True)
@@ -474,8 +506,82 @@ class Branch(TenantScopedModel):
     def has_sha_credentials(self):
         return bool(self.sha_api_credentials_encrypted)
 
+    @property
+    def missing_identifiers(self):
+        """Required identifiers this branch doesn't have yet (legacy rows)."""
+        missing = []
+        if self.organization.is_registered_health_provider and not self.kmpdc_registration_number:
+            missing.append("kmpdc_registration_number")
+        if self.sha_claims_enabled and not self.sha_fr_code:
+            missing.append("sha_fr_code")
+        return missing
+
+    @property
+    def license_days_remaining(self):
+        from django.utils import timezone
+
+        if self.facility_license_valid_until is None:
+            return None
+        return (self.facility_license_valid_until - timezone.localdate()).days
+
+    @property
+    def license_status(self):
+        """MISSING, VALID, EXPIRING (inside the first reminder lead time) or EXPIRED."""
+        from django.conf import settings
+
+        days = self.license_days_remaining
+        if days is None:
+            return self.LICENSE_MISSING
+        if days < 0:
+            return self.LICENSE_EXPIRED
+        if days <= max(settings.FACILITY_LICENSE_REMINDER_DAYS, default=0):
+            return self.LICENSE_EXPIRING
+        return self.LICENSE_VALID
+
     def __str__(self):
         return f"{self.name} ({self.organization_id})"
+
+
+class BranchIdentifierChange(TenantScopedModel):
+    """
+    Append-only history of a branch's registration identifiers — the
+    previous and new value every time one changes (a licence renewal is a
+    change to facility_license_number and/or facility_license_valid_until).
+    Written by BranchSerializer; never updated or deleted (also enforced by
+    a database trigger, migration 0017_branch_identifier_change_rls).
+    """
+
+    FIELD_CHOICES = [
+        ("kmpdc_registration_number", "KMPDC registration number"),
+        ("facility_license_number", "Facility licence number"),
+        ("facility_license_valid_until", "Licence valid until"),
+        ("sha_fr_code", "SHA FR code"),
+    ]
+    TRACKED_FIELDS = tuple(name for name, _ in FIELD_CHOICES)
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="identifier_changes")
+    field = models.CharField(max_length=40, choices=FIELD_CHOICES)
+    previous_value = models.CharField(max_length=64, blank=True)
+    new_value = models.CharField(max_length=64, blank=True)
+    # PROTECT, not SET_NULL: the append-only trigger refuses the UPDATE a
+    # SET_NULL would issue, and who made a change is part of the record.
+    changed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise PermissionError("Branch identifier history is append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Branch identifier history is append-only.")
+
+    def __str__(self):
+        return f"{self.branch_id}: {self.field} {self.previous_value!r} -> {self.new_value!r}"
 
 
 class Department(TenantScopedModel):

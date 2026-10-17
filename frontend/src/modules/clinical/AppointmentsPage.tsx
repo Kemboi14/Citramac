@@ -54,6 +54,15 @@ const CARD_HEADER =
 const GHOST_SM =
   "rounded-[9px] border border-surface-border bg-surface-card px-2.5 py-1 text-[11px] font-semibold transition-colors duration-150 hover:bg-surface-bg";
 
+/** Minutes from one "HH:MM" time to another on the same day. */
+function minutesBetween(start: string, end: string) {
+  const toMinutes = (value: string) => {
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  return toMinutes(end) - toMinutes(start);
+}
+
 function localDateIso(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -91,6 +100,8 @@ export function AppointmentsPage() {
   const [client, setClient] = useState<PatientListRow | null>(null);
   const [date, setDate] = useState(today);
   const [time, setTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [location, setLocation] = useState("");
   const [appointmentType, setAppointmentType] = useState("");
   const [provider, setProvider] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -171,6 +182,11 @@ export function AppointmentsPage() {
       setFormError("Select a client from the search results.");
       return;
     }
+    const durationMinutes = endTime ? minutesBetween(time, endTime) : null;
+    if (durationMinutes !== null && durationMinutes <= 0) {
+      setFormError("End time must be after the start time.");
+      return;
+    }
     setIsSaving(true);
     setFormError(null);
     try {
@@ -179,10 +195,14 @@ export function AppointmentsPage() {
         scheduled_for: new Date(`${date}T${time}`).toISOString(),
         appointment_type: appointmentType,
         provider: provider || null,
+        location: location.trim(),
+        ...(durationMinutes !== null && { duration_minutes: durationMinutes }),
       });
       setClient(null);
       setClientQuery("");
       setTime("");
+      setEndTime("");
+      setLocation("");
       setAppointmentType("");
       setProvider("");
       refresh();
@@ -408,6 +428,28 @@ export function AppointmentsPage() {
                 ))}
               </select>
             </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className={LABEL_CLASS}>
+                End time
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className={FIELD_CLASS}
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Location
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Room or setting"
+                  maxLength={150}
+                  className={FIELD_CLASS}
+                />
+              </label>
+            </div>
             {formError && (
               <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
                 {formError}

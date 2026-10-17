@@ -614,7 +614,7 @@ class DischargeReadinessTests(DischargeFixture):
         admission = self.admission
         with platform_admin_context():
             draft = intake.open_draft(self.patient, self.doctor)
-            draft.sections = {**draft.sections, "subs": {"kind": "Opioids"}}
+            draft.sections = {**draft.sections, "subs": {"kind": "OPIOIDS"}}
             draft.save()
         blocked = self.sign(admission)
         self.assertTrue(any("Naloxone" in g for g in blocked.data["readiness"]))

@@ -68,6 +68,14 @@ const DischargePlanningPage = lazyNamed(
   "DischargePlanningPage",
 );
 const FollowUpPage = lazyNamed(() => import("./modules/care/FollowUpPage"), "FollowUpPage");
+const NewDocumentPage = lazyNamed(
+  () => import("./modules/care/documents/NewDocumentPage"),
+  "NewDocumentPage",
+);
+const GeneratedDocumentPage = lazyNamed(
+  () => import("./modules/care/documents/GeneratedDocumentPage"),
+  "GeneratedDocumentPage",
+);
 const SignedTriageDocumentPage = lazyNamed(
   () => import("./modules/care/SignedTriageDocumentPage"),
   "SignedTriageDocumentPage",
@@ -156,6 +164,10 @@ const FamilyTherapyPage = lazyNamed(
 const GroupPsychotherapyPage = lazyNamed(
   () => import("./modules/clinical/GroupPsychotherapyPage"),
   "GroupPsychotherapyPage",
+);
+const GroupProgrammePage = lazyNamed(
+  () => import("./modules/care/groupProgramme/GroupProgrammePage"),
+  "GroupProgrammePage",
 );
 const LimsPage = lazyNamed(() => import("./modules/clinical/LimsPage"), "LimsPage");
 const PharmacyPage = lazyNamed(() => import("./modules/clinical/PharmacyPage"), "PharmacyPage");
@@ -351,10 +363,7 @@ function App() {
               path="psychotherapy/family"
               element={<OutpatientCarePage key="family" kind="family" />}
             />
-            <Route
-              path="psychotherapy/group"
-              element={<OutpatientCarePage key="group" kind="group" />}
-            />
+            <Route path="psychotherapy/group" element={<GroupProgrammePage />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="referrals" element={<PsychiatryQueuePage />} />
             <Route path="referrals/documents" element={<DocumentsPage />} />
@@ -365,9 +374,12 @@ function App() {
               path="discharge/summary"
               element={<Navigate to="/clinical/discharge" replace />}
             />
+            <Route path="documents/new/:templateId" element={<NewDocumentPage />} />
+            <Route path="documents/generated/:id" element={<GeneratedDocumentPage />} />
             <Route path="documents/:assessmentId" element={<SignedTriageDocumentPage />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/clinical" element={<ReportsPage />} />
             <Route path="registry" element={<ClientRegistryPage />} />
             <Route path="patient" element={<PatientWorkspacePage />} />
             <Route path="attachments" element={<AttachmentsPage />} />

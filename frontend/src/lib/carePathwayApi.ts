@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { LegalBanner } from "./legalStatusApi";
 
 // Mirrors backend/apps/care_pathway (views.py) — docs/15-CLINICAL-WORKSPACE-V3.md.
 // Every clinical screen of the approved 2026-10-07 mockup reads/writes here.
@@ -185,6 +186,8 @@ export interface WorklistRow {
   status_label: string;
   due_at: string;
   is_overdue: boolean;
+  /** v4: a re-check past due for a RED / ORANGE client ("Re-triage OVERDUE"). */
+  recheck_overdue?: boolean;
   wait_minutes: number;
   visit_number: number;
   triage_version: number;
@@ -201,8 +204,8 @@ export function getTriageWorklist(accessToken: string) {
 /** Answers keyed by stable item code (see backend triage_rules.DEFAULT_ANSWERS). */
 export type TriageAnswers = Record<string, string | string[]>;
 
-/** [finding/alert, current status, source] */
-export type FindingRow = [string, string, string];
+/** [finding/alert, current status, source] — v4 signed rows add [time, recorded by] (AT-20). */
+export type FindingRow = [string, string, string, string?, string?];
 
 export interface TriageEvaluation {
   rules_version: string;
@@ -246,6 +249,9 @@ export interface CareTask {
   status: "INITIATED" | "PENDING" | "COMPLETED";
   created_at: string;
   created_by_name: string;
+  /** Triage v4 timed tasks (TRIAGE_CALLBACK, PEP_EC_DECISION, DUTY_TO_PROTECT). */
+  focus_type?: string;
+  due_at?: string | null;
 }
 
 export type ObservationStatus = "NOT_REPEATED" | "MEASURED" | "NOT_MEASURED";
@@ -287,6 +293,8 @@ export interface TriageEncounterDetail {
   clinician: string;
   tenant_location: string;
   defaults: TriageAnswers;
+  /** "v4" for new / in-progress triages; "v3" for a record signed under the v3 rules. */
+  schema?: "v3" | "v4";
   draft: TriageAssessmentRecord | null;
   signed: TriageAssessmentRecord | null;
   evaluation: TriageEvaluation;
@@ -474,6 +482,8 @@ export interface ClientBanner {
   alerts: { id: string; code: string; label: string }[];
   clinician: string;
   team: string;
+  /** BAN-10 / LGL-DATA-01 — legal admission status + notice countdown (master prompt §7A). */
+  legal_status?: LegalBanner | null;
   episode_id: string | null;
   latest_triage_encounter_id: string | null;
   latest_signed_triage_encounter_id: string | null;
@@ -538,7 +548,11 @@ export interface OutcomeScore {
   items?: number[];
   flags?: string[];
   positive?: boolean | null;
+  /** Supplementary answers (EPDS item 10, MDQ co-occurrence / impairment, PAWSS threshold). */
+  detail?: Record<string, string | number>;
   context?: string;
+  /** `assessment-timepoint` code. */
+  timepoint?: string;
   note?: string;
   recorded_at: string;
   source_intake: string | null;
@@ -783,6 +797,12 @@ export interface InstrumentDef {
   approval: "approved" | "illustrative";
   experimental: boolean;
   hasPositiveFlag: boolean;
+  /** Positive / negative is derived on the server from the published rule (MDQ). */
+  positiveRule?: boolean;
+  /** Questions answered alongside the items or total; each is required. */
+  supplementary?: { key: string; text: string; options: { value: string | number; label: string }[] }[];
+  /** A supplementary answer that ends the screen before the items (PAWSS threshold 'No'). */
+  gate?: { key: string; value: string | number } | null;
   withdrawal?: boolean;
 }
 
@@ -831,6 +851,10 @@ export function recordAssessment(
     positive?: boolean;
     context?: string;
     note?: string;
+    detail?: Record<string, string | number>;
+    timepoint?: string;
+    /** When the assessment was done, if earlier than now (ISO date-time). */
+    assessed_at?: string;
   },
 ) {
   return apiRequest<OutcomeScore>(`/care/clients/${patientId}/assessments/`, {
@@ -849,10 +873,17 @@ export interface WithdrawalScale {
   nextDueAt: string | null;
   overdue: boolean;
   lastAttempt: { reason: string; at: string } | null;
+  /** Facility protocol thresholds (settings.WITHDRAWAL_PROTOCOL) — null when unset. */
+  prnThreshold: number | null;
+  severeThreshold: number | null;
+  /** Scored totals, oldest first, for the serial chart. */
+  series: { score: number; at: string }[];
+  /** Latest scores and unable-to-score attempts, newest first. */
+  history: { at: string; score: number | null; band: string; unable: string; by: string }[];
 }
 
 export function getWithdrawal(accessToken: string, patientId: string) {
-  return apiRequest<{ scales: WithdrawalScale[]; recommended: string | null }>(`/care/clients/${patientId}/withdrawal/`, { accessToken });
+  return apiRequest<{ scales: WithdrawalScale[]; recommended: string | null; substance: string }>(`/care/clients/${patientId}/withdrawal/`, { accessToken });
 }
 
 export function recordUnableToScore(accessToken: string, patientId: string, instrument: string, reason: string) {
@@ -927,21 +958,36 @@ export function updateCarePlanActivity(
   });
 }
 
+export interface InterventionCorrection {
+  at: string;
+  by: string;
+  reason: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
 export interface InterventionRecord {
   id: string;
-  activity: string;
+  activity: string | null;
+  module: string;
   activity_title: string;
   activity_goal: string;
   performed_at: string;
   provider: string | null;
   provider_name: string;
   intervention: string;
+  note: string;
   response: string;
+  outcome: string;
   next_action: string;
+  completes_activity: boolean;
   billable: boolean;
   billing_service: string | null;
   billing_service_name: string | null;
   quantity: number;
+  voided_at: string | null;
+  void_reason: string;
+  corrections: InterventionCorrection[];
 }
 
 export function listInterventions(accessToken: string, patientId: string) {
@@ -951,18 +997,21 @@ export function listInterventions(accessToken: string, patientId: string) {
   );
 }
 
+/** A delivery recorded from an Interventions module. Billing follows the
+ * module's tariff line server-side — the client never picks a service. */
 export function recordIntervention(
   accessToken: string,
   patientId: string,
   payload: {
-    activity: string;
+    module: string;
+    activity: string | null;
     intervention: string;
+    note: string;
+    quantity: number;
     response?: string;
+    outcome?: string;
     next_action?: string;
-    performed_at?: string;
-    billable?: boolean;
-    billing_service?: string | null;
-    quantity?: number;
+    completes_activity?: boolean;
   },
 ) {
   return apiRequest<InterventionRecord>(`/care/clients/${patientId}/interventions/`, {
@@ -970,6 +1019,73 @@ export function recordIntervention(
     body: payload,
     accessToken,
   });
+}
+
+/** Correct a delivery recorded in error: it stays on record, marked corrected,
+ * and leaves billing and delivered totals. */
+export function voidIntervention(accessToken: string, id: string, reason: string) {
+  return apiRequest<InterventionRecord>(`/care/interventions/${id}/void/`, {
+    method: "POST",
+    body: { reason },
+    accessToken,
+  });
+}
+
+export type InterventionGroup = "Assess" | "Treat" | "Support" | "Close-out";
+
+export interface InterventionAction {
+  id: string;
+  title: string;
+  goal: string;
+  modules: string[];
+  status: CarePlanActivity["status"];
+  status_display: string;
+  priority: PriorityOrBlank;
+  records: number;
+  latest_by: string;
+  latest_at: string | null;
+}
+
+export interface InterventionModule {
+  code: string;
+  name: string;
+  group: InterventionGroup;
+  options: string[];
+  recommended: boolean;
+  reason: string;
+  action_id: string | null;
+  /** Tariff line this module charges against; null when not separately priced. */
+  billing_service: string | null;
+  /** The facility has that tariff line set up, so a delivery creates a charge. */
+  billable: boolean;
+  /** Facility rate; null when none is configured — never assumed. */
+  rate: string | null;
+  /** Set when the module's own workflow raises the charge (e.g. "signing the discharge"). */
+  charged_by: string;
+  delivered: number;
+}
+
+export interface InterventionContext {
+  client: string;
+  diagnoses: string[];
+  allergies: string;
+  alerts: string[];
+  medicines: string[];
+  goals: string[];
+}
+
+export interface InterventionWorkspace {
+  has_plan: boolean;
+  actions: InterventionAction[];
+  modules: InterventionModule[];
+  context: InterventionContext;
+}
+
+export function getInterventionWorkspace(accessToken: string, patientId: string) {
+  return apiRequest<InterventionWorkspace>(
+    `/care/clients/${patientId}/interventions/workspace/`,
+    { accessToken },
+  );
 }
 
 // ── Billing ──
@@ -1046,6 +1162,8 @@ export interface CareDashboard {
   appointments_today: number;
   follow_ups_overdue: number;
   discharged_without_follow_up: number;
+  group_session_count: number;
+  group_follow_up_open: number;
   recent_activity: { at: string; title: string; detail: string }[];
   triage_arrivals: WorklistRow[];
   generated_at: string;
@@ -1101,6 +1219,8 @@ export interface IntakeField {
   restricted?: boolean;
   group?: string;
   highlight?: string[];
+  /** Shown (and kept) only while another field of the section holds one of these codes. */
+  show_when?: { field: string; in: string[] };
 }
 
 export interface IntakeSectionSpec {
@@ -1109,8 +1229,10 @@ export interface IntakeSectionSpec {
   title: string;
   core: boolean;
   required?: boolean;
-  kind?: "risk" | "meds" | "allergy" | "mse" | "formulation" | "tools" | "close";
+  kind?: "risk" | "meds" | "allergy" | "mse" | "formulation" | "tools" | "close" | "substances";
   fields: IntakeField[];
+  /** Per-substance card fields (Section 8). */
+  cardFields?: IntakeField[];
 }
 
 export interface IntakeRiskRow {
@@ -1127,7 +1249,7 @@ export interface IntakeSchema {
   sections: IntakeSectionSpec[];
   required: string[];
   riskRows: IntakeRiskRow[];
-  mseDomains: { key: string; label: string; valueset: string | null }[];
+  mseDomains: { key: string; label: string; valueset: string | null; required?: boolean }[];
   mseNormal: Record<string, string>;
   sectionStates: string[];
 }
@@ -1227,17 +1349,30 @@ export function retireMedicationHistory(accessToken: string, entryId: string) {
   });
 }
 
+export type AllergyType = "ALLERGY" | "INTOLERANCE" | "ADR";
+
+export interface IntakeAllergyRecord {
+  id: string;
+  substance: string;
+  reaction: string;
+  /** `allergy-type` code — only ALLERGY hard-stops prescribing (INT-06). */
+  allergy_type: AllergyType;
+  /** `allergy-severity` code (older rows may hold free text). */
+  severity: string;
+  clinical_status: "ACTIVE" | "RESOLVED";
+  verification_status: "UNCONFIRMED" | "CONFIRMED" | "REFUTED";
+  source: string;
+  noted_at: string;
+  recorded_by: string;
+}
+
 export interface IntakeAllergy {
   status: "NONE" | "ACTIVE_ALLERGIES" | "UNKNOWN";
-  records: {
-    id: string;
-    substance: string;
-    reaction: string;
-    severity: string;
-    verification_status: "UNCONFIRMED" | "CONFIRMED" | "REFUTED";
-    source: string;
-    noted_at: string;
-  }[];
+  /** `allergy-info-source` code for the record as a whole. */
+  info_source: string;
+  confirmed_at: string | null;
+  confirmed_by: string;
+  records: IntakeAllergyRecord[];
 }
 
 export function getIntakeAllergy(accessToken: string, patientId: string) {
@@ -1249,9 +1384,45 @@ export function setIntakeAllergyStatus(
   patientId: string,
   status: IntakeAllergy["status"],
 ) {
+  return updateIntakeAllergy(accessToken, patientId, { status });
+}
+
+/** Status, source of information, or `confirm: true` ("Confirm — unchanged"). */
+export function updateIntakeAllergy(
+  accessToken: string,
+  patientId: string,
+  body: { status?: IntakeAllergy["status"]; info_source?: string; confirm?: boolean },
+) {
   return apiRequest<IntakeAllergy>(`/care/clients/${patientId}/allergy/`, {
     method: "PUT",
-    body: { status },
+    body,
+    accessToken,
+  });
+}
+
+export function addIntakeAllergy(
+  accessToken: string,
+  patientId: string,
+  body: { substance: string; reaction?: string; allergy_type: AllergyType; severity?: string },
+) {
+  return apiRequest<IntakeAllergy>(`/care/clients/${patientId}/allergy/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
+/** Edit a reaction, or resolve / refute it — records are never deleted. */
+export function updateAllergyRecord(
+  accessToken: string,
+  recordId: string,
+  body: Partial<Pick<IntakeAllergyRecord, "substance" | "reaction" | "allergy_type" | "severity">> & {
+    status?: "ACTIVE" | "RESOLVED" | "REFUTED";
+  },
+) {
+  return apiRequest<IntakeAllergy>(`/care/allergies/${recordId}/verify/`, {
+    method: "PATCH",
+    body,
     accessToken,
   });
 }
@@ -1294,7 +1465,29 @@ export interface PlanAction {
   why: string[];
   status: string;
   due_at: string | null;
+  bulk_accepted: boolean;
   tasks: PlanTask[];
+}
+
+/** A goal in the client's own words (FHIR Goal), linked to an action and a 5P heading. */
+export interface PlanGoal {
+  goal: string;
+  action_key: string;
+  formulation: string;
+  owner: string;
+  review_date: string;
+  source: string;
+}
+
+export interface CarriedScore {
+  instrument: string;
+  name: string;
+  score: number;
+  max: number;
+  band: string;
+  at: string;
+  timepoint: string;
+  approval: "approved" | "illustrative";
 }
 
 export interface PlanWorkspace {
@@ -1307,15 +1500,34 @@ export interface PlanWorkspace {
   recommendations: { key: string; name: string; priority: PlanPriority; why: string[]; decided: boolean }[];
   actions: PlanAction[];
   details: {
-    client_agreement: "" | "AGREES" | "PARTIAL" | "DISAGREES" | "UNABLE";
-    disagreements: { part?: string; words?: string }[];
+    /** A code of the served `care-plan-agreement` value set. */
+    client_agreement: string;
+    disagreements: { part: string; words: string }[];
     what_matters: string;
     rationale: string;
     senior_reviewer: string;
     contact_72h_at: string | null;
     follow_up_clinician: string;
     means_counselling_done: boolean;
+    goal_items: PlanGoal[];
+    crisis_plan: string;
+    family_involvement: string;
+    advance_statement: string;
+    naloxone_teaching: boolean;
+    oat_offer: string;
   };
+  client_ack: { at: string; language: "en" | "sw"; recorded_by: string } | null;
+  other_actions: { key: string; name: string }[];
+  carried_scores: CarriedScore[];
+  intake: {
+    state: "complete" | "partial" | "unsigned" | "none";
+    reason_incomplete: string;
+    what_matters: string;
+    goals: string;
+  };
+  is_opioid: boolean;
+  /** The client's current family-involvement consent decision (ConsentRecord). */
+  family_consent: "NOT_ASKED" | "YES" | "NO" | "RESTRICTED";
   outstanding: string[];
   conflicts: string[];
   needs_safety_plan: boolean;
@@ -1421,6 +1633,7 @@ export interface MdtReviewRow {
   attendees: string;
   notes: string;
   outcome: string;
+  dissent: string;
   next_review: string | null;
 }
 
@@ -1439,7 +1652,7 @@ export function scheduleMdt(accessToken: string, patientId: string, scheduledFor
 export function recordMdt(
   accessToken: string,
   reviewId: string,
-  body: { notes: string; attendees?: string; outcome?: string; next_review?: string },
+  body: { notes: string; attendees?: string; outcome?: string; dissent?: string; next_review?: string },
 ) {
   return apiRequest<MdtReviewRow>(`/care/mdt/${reviewId}/record/`, { method: "POST", body, accessToken });
 }
@@ -1556,6 +1769,8 @@ export const checkPrescribing = (t: string, id: string, drug: string) =>
 
 export interface MarEntry {
   id: string;
+  /** The prescription item (order) this dose belongs to, "" for an unlinked row. */
+  order: string;
   drug: string;
   dose: string;
   scheduled_time: string;
@@ -1570,18 +1785,81 @@ export interface MarEntry {
   effect: string;
   administered_at: string | null;
   by: string;
+  prn_max_override_reason: string;
+}
+export interface MedicationOrder {
+  id: string;
+  drug_code: string;
+  drug: string;
+  dose: string;
+  route: string;
+  frequency: string;
+  is_prn: boolean;
+  prn_max_per_24h: number | null;
+  indication: string;
+  controlled_drug: boolean;
+  findings: { level: "HARD" | "WARN"; text: string }[];
+  allergy_override_reason: string;
+  prescribed_by: string;
+  prescribed_at: string;
+}
+export interface MarOrder extends MedicationOrder {
+  /** Today's dose times; `entry` is null until the dose is charted. */
+  slots: { time: string; entry: string | null; state: MarEntry["state"] }[];
+  /** PRN only: doses given in the last 24 h, and whether the written maximum is reached. */
+  given_24h: number | null;
+  at_max: boolean;
 }
 export interface MarState {
   admission: string | null;
+  orders: MarOrder[];
   entries: MarEntry[];
   pending_effects: MarEntry[];
+}
+export interface DoseDocumentation {
+  outcome: "ADMINISTERED" | "REFUSED" | "WITHHELD";
+  notes?: string;
+  prn_indication?: string;
+  witness_name?: string;
+  own_supply?: boolean;
+  override_reason?: string;
 }
 export const getMar = (t: string, id: string) => apiRequest<MarState>(`/care/clients/${id}/mar/`, { accessToken: t });
 export const administerDose = (
   t: string,
   entryId: string,
-  body: { outcome: "ADMINISTERED" | "REFUSED" | "WITHHELD"; notes?: string; prn_indication?: string; witness_name?: string; own_supply?: boolean },
+  body: DoseDocumentation,
 ) => apiRequest<MarState>(`/care/mar/${entryId}/administer/`, { method: "POST", body, accessToken: t });
+/** A dose against an order — at one of today's dose times (`slot`), or unscheduled when `slot` is blank. */
+export const administerOrder = (t: string, patientId: string, orderId: string, body: DoseDocumentation & { slot?: string }) =>
+  apiRequest<MarState>(`/care/clients/${patientId}/mar/orders/${orderId}/administer/`, { method: "POST", body, accessToken: t });
+
+export interface PrescribingState {
+  allergy_status: string;
+  allergy_text: string;
+  /** Allergy status unknown — no order may be placed. */
+  locked: boolean;
+  can_prescribe: boolean;
+  is_senior: boolean;
+  frequencies: string[];
+  orders: MedicationOrder[];
+}
+export interface OrderPayload {
+  drug: string;
+  dose: string;
+  route: string;
+  frequency: string;
+  is_prn: boolean;
+  prn_max_per_24h?: number;
+  indication: string;
+  controlled_drug: boolean;
+  acknowledged_warnings: boolean;
+  override_reason?: string;
+}
+export const getPrescribing = (t: string, id: string) =>
+  apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, { accessToken: t });
+export const placeOrder = (t: string, id: string, body: OrderPayload) =>
+  apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, { method: "POST", body, accessToken: t });
 export const recordPrnEffect = (t: string, entryId: string, effect: string) =>
   apiRequest<MarState>(`/care/mar/${entryId}/effect/`, { method: "POST", body: { effect }, accessToken: t });
 
@@ -1599,16 +1877,21 @@ export interface RestrictiveEpisode {
   staff_debrief_held: boolean;
   senior_review_due: boolean;
   recorded_by: string;
+  /** Co-signature request raised because the authoriser is not a senior clinician. */
+  cosign_status: CosignRow["status"] | null;
   checks: { id: string; label: string; due_at: string; done_at: string | null; done_by: string }[];
 }
 export const listRestrictive = (t: string, id: string) =>
-  apiRequest<{ results: RestrictiveEpisode[]; de_escalation_options: string[] }>(`/care/clients/${id}/restrictive-practice/`, { accessToken: t });
+  apiRequest<{ results: RestrictiveEpisode[]; de_escalation_options: string[]; authorisers: { id: string; name: string; senior: boolean }[] }>(
+    `/care/clients/${id}/restrictive-practice/`,
+    { accessToken: t },
+  );
 export const recordRestrictive = (t: string, id: string, body: Record<string, unknown>) =>
   apiRequest<RestrictiveEpisode>(`/care/clients/${id}/restrictive-practice/`, { method: "POST", body, accessToken: t });
 export const completeRestrictiveCheck = (t: string, checkId: string) =>
   apiRequest<RestrictiveEpisode>(`/care/restrictive-checks/${checkId}/done/`, { method: "POST", accessToken: t });
-export const endRestrictive = (t: string, id: string) =>
-  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/end/`, { method: "POST", accessToken: t });
+export const endRestrictive = (t: string, id: string, endAt?: string) =>
+  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/end/`, { method: "POST", body: endAt ? { end_at: endAt } : {}, accessToken: t });
 export const debriefRestrictive = (t: string, id: string) =>
   apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/debrief/`, { method: "POST", accessToken: t });
 
@@ -1665,25 +1948,46 @@ export const startNewEpisode = (t: string, id: string, presenting = "") =>
   apiRequest<{ episode: string }>(`/care/clients/${id}/new-episode/`, { method: "POST", body: { presenting }, accessToken: t });
 
 // ── therapy, OAT, labs, legal forms, module recommendations, missed appointments ──
+export interface TherapySessionRow {
+  id: string; n: number; at: string; by: string; notes: string; homework: string; activity: string;
+  measure: { score_id: string; instrument: string; name: string; total: number } | null;
+  has_process_notes: boolean;
+  /** Present only for roles that may see restricted content. */
+  process_notes?: string;
+  /** The structured psychotherapy note (psychotherapyNoteApi), when written through it. */
+  note_id: string | null;
+}
 export interface TherapyEpisodeRow {
   id: string; modality: string; planned_sessions: number | null; frequency: string; trauma_phase: number | null;
   confidentiality_agreed: boolean; consent_to_record: boolean; under_supervision: boolean; ended: boolean;
+  activity: string; activity_title: string; sessions: TherapySessionRow[];
+}
+export interface TherapyState {
+  results: TherapyEpisodeRow[];
+  link_options: { id: string; title: string; goal: string }[];
+  can_view_process_notes: boolean;
 }
 export interface OatState {
   enrolments: { id: string; medicine: string; clinic: string; status: string; prescribed_dose: string; supervised_dispensing: boolean; status_reason: string }[];
   naloxone: { id: string; outcome: string; quantity: number | null; training_given: boolean; at: string }[];
 }
 export interface LabsState {
-  orders: { id: string; code: string; name: string; status: string; ordered_at: string }[];
-  results: { id: string; code: string; name: string; value: string; unit: string; reference_range: string; abnormal: boolean; recorded_at: string; acknowledged: boolean }[];
+  orders: { id: string; code: string; name: string; status: string; ordered_at: string; ordered_by: string }[];
+  results: {
+    id: string; order: string; code: string; name: string; value: string; unit: string; reference_range: string;
+    abnormal: boolean; critical: boolean; interpretation: string; recorded_at: string; ordered_at: string; ordered_by: string;
+    acknowledged: boolean; acknowledged_by: string; acknowledged_at: string | null;
+  }[];
   order_sets: Record<string, string[]>;
+  /** Abnormal-result acknowledgement is for prescribers only. */
+  can_acknowledge: boolean;
 }
 export interface LegalFormsState {
   catalogue: { key: string; title: string }[];
   results: { id: string; form_key: string; status: string; signed_at: string | null; signed_by: string }[];
 }
 const post = (t: string, path: string, body: unknown = {}) => apiRequest<Record<string, unknown>>(path, { method: "POST", body, accessToken: t });
-export const getTherapy = (t: string, id: string) => apiRequest<{ results: TherapyEpisodeRow[] }>(`/care/clients/${id}/therapy/`, { accessToken: t });
+export const getTherapy = (t: string, id: string) => apiRequest<TherapyState>(`/care/clients/${id}/therapy/`, { accessToken: t });
 export const startTherapy = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/therapy/`, body);
 export const agreeConfidentiality = (t: string, episodeId: string) => post(t, `/care/therapy/${episodeId}/confidentiality/`);
 export const recordTherapySession = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/therapy/sessions/`, body);
@@ -1694,6 +1998,11 @@ export const recordNaloxone = (t: string, id: string, body: Record<string, unkno
 export const getLabs = (t: string, id: string) => apiRequest<LabsState>(`/care/clients/${id}/labs/`, { accessToken: t });
 export const orderLabs = (t: string, id: string, codes: string[]) => post(t, `/care/clients/${id}/labs/`, { codes });
 export const acknowledgeLab = (t: string, resultId: string, note = "") => post(t, `/care/labs/results/${resultId}/acknowledge/`, { note });
+export const enterLabResult = (
+  t: string,
+  orderId: string,
+  body: { value: string; interpretation: "NORMAL" | "ABNORMAL" | "CRITICAL"; unit?: string; reference_range?: string },
+) => apiRequest<LabsState>(`/care/labs/orders/${orderId}/result/`, { method: "POST", body, accessToken: t });
 export const getLegalForms = (t: string, id: string) => apiRequest<LegalFormsState>(`/care/clients/${id}/legal-forms/`, { accessToken: t });
 export const prepareLegalForm = (t: string, id: string, formKey: string) => post(t, `/care/clients/${id}/legal-forms/`, { form_key: formKey });
 export const signLegalForm = (t: string, formId: string) => post(t, `/care/legal-forms/${formId}/sign/`);

@@ -86,6 +86,8 @@ class AllergyRecordSerializer(serializers.ModelSerializer):
             "noted_at",
             "verification_status",
             "source",
+            "allergy_type",
+            "clinical_status",
         ]
         read_only_fields = ["patient"]
 

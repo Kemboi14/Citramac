@@ -152,7 +152,19 @@ class Admission(TenantScopedModel):
     capacity_assessed = models.BooleanField(null=True, blank=True)
     consent_notes = models.TextField(blank=True)
 
-    # Involuntary path — Mental Health Act (Cap. 248) legal status.
+    # Legal admission status (master prompt §7A): the episode's LegalStatus is
+    # the single store. When linked, `admission_type` mirrors its category and
+    # the legacy free-text legal fields below are read-only (kept for
+    # admissions recorded before the module existed).
+    legal_status_record = models.ForeignKey(
+        "care_pathway.LegalStatus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="admissions",
+    )
+
+    # Involuntary path — Mental Health Act (Cap. 248) legal status (legacy).
     legal_status = models.CharField(max_length=150, blank=True)
     legal_order_reference = models.CharField(max_length=100, blank=True)
     legal_order_date = models.DateField(null=True, blank=True)
@@ -208,6 +220,8 @@ class MedicationAdministration(TenantScopedModel):
     own_supply = models.BooleanField(default=False)
     effect = models.CharField(max_length=400, blank=True)
     effect_recorded_at = models.DateTimeField(null=True, blank=True)
+    # Why a PRN dose was given although the order's maximum per 24 h had been reached.
+    prn_max_override_reason = models.CharField(max_length=400, blank=True)
 
     def __str__(self):
         return f"MAR entry for {self.admission} @ {self.scheduled_time}"

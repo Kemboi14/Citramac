@@ -1,0 +1,183 @@
+{
+  "jurisdiction": "KE",
+  "version": "KE-MHA-FORMS-1",
+  "provenance": "Statutory wording as supplied by the project owner from the CAfRIC paper forms (docs/CITRAMAC_MASTER_PROMPT.md §7A). Rendered verbatim; never edited in code. ASSUMPTION OQ-12: the voluntary form cites the 1989 Act and may predate the Mental Health (Amendment) Act, 2022 — Kenyan legal counsel must confirm current sections, terminology and notice period before go-live. A text marked verbatim=false was supplied as a description of the printed wording, not a quotation: VERIFY it against the paper form.",
+  "statutes": {
+    "MHA_1989_S10_1": {"act": "The Mental Health Act 1989 (No. 10 of 1989)", "section": "10(1)", "versionLabel": "as printed on the CAfRIC Application for Voluntary Admission"},
+    "MHA_1989_S10_3": {"act": "The Mental Health Act 1989 (No. 10 of 1989)", "section": "10(3)", "versionLabel": "as printed on the CAfRIC Application for Voluntary Admission"},
+    "MHA_CAP_248": {"act": "Mental Health Act (Cap 248)", "section": "", "versionLabel": "as printed on the CAfRIC Involuntary Admission Form"},
+    "MHAA_2022_S2": {"act": "Mental Health (Amendment) Act, 2022", "section": "2", "versionLabel": "as printed on the CAfRIC Recommendation for Involuntary Treatment Form"},
+    "MHAA_2022_S18": {"act": "Mental Health (Amendment) Act, 2022", "section": "18", "versionLabel": "as printed on the CAfRIC Recommendation for Involuntary Treatment Form"},
+    "MHAA_2022_S19": {"act": "Mental Health (Amendment) Act, 2022", "section": "19", "versionLabel": "as printed on the CAfRIC Recommendation for Involuntary Treatment Form"}
+  },
+  "statutoryBasis": {
+    "VOLUNTARY": ["MHA_1989_S10_1", "MHA_1989_S10_3"],
+    "INVOLUNTARY": ["MHA_CAP_248", "MHAA_2022_S2", "MHAA_2022_S18", "MHAA_2022_S19"]
+  },
+  "operational": {
+    "voluntaryNoticePeriodHours": 72,
+    "involuntaryMaxDurationMonths": 6,
+    "requiredRecommendations": 1,
+    "reviewLeadDays": 14,
+    "minorAgeYears": 18,
+    "notes": {
+      "voluntaryNoticePeriodHours": "From the Section 10(3) text as printed (seventy-two-hour notice).",
+      "involuntaryMaxDurationMonths": "From Declaration 5 as printed (a period not exceeding six months).",
+      "requiredRecommendations": "ASSUMPTION OQ-22: the printed form has one practitioner; default 1.",
+      "reviewLeadDays": "ASSUMPTION: operational lead time for the expiry-review Task and LEGAL_STATUS_EXPIRING alert, not a statutory value. Tenant-configurable via settings.LEGAL_STATUS_OVERRIDES.",
+      "minorAgeYears": "ASSUMPTION OQ-15: self-application blocked under this age and routed to the guardian consent workflow."
+    }
+  },
+  "forms": {
+    "DOC-LEG-STAT-VOL-KE": {
+      "title": "APPLICATION FOR VOLUNTARY ADMISSION",
+      "statuteLine": "THE MENTAL HEALTH ACT 1989 (NO. 10 OF 1989, SECTION 10 (1))",
+      "explanatoryText": {"text": "Every person who wants inpatient treatment signs this form to show that admission is at their own will or request.", "verbatim": false},
+      "noticeHeading": {"text": "Section 10(3)", "verbatim": true},
+      "noticeText": {"text": "Any person received as a voluntary patient under this section may leave the mental hospital upon giving to the person in charge a seventy-two-hour notice in writing of his/her intention to leave.", "verbatim": true},
+      "noticePurpose": {"text": "to avoid any misconception at later stages", "verbatim": true},
+      "noticeAcknowledgement": {"text": "I have read, or had read to me, the Section 10(3) notice above.", "verbatim": false, "note": "ASSUMPTION LGL-V-02: the acknowledgement checkbox is not on the paper form."},
+      "declaration": {"text": "I {fullName} of {address} desire voluntarily to submit myself for treatment as an inpatient at {facilityName} and agree to conform to all existing and future rules and regulations for the conduct of the hospital.", "verbatim": false, "note": "Assembled from LGL-V-03 and LGL-V-04 as supplied; VERIFY punctuation and wording against the paper form."},
+      "labels": {
+        "applicantSignature": "Signature of the Applicant",
+        "applicantSignatureDate": "Date signed (added — OQ-14)",
+        "officialUse": "FOR OFFICIAL USE ONLY",
+        "admitted": "Admitted",
+        "rejected": "Rejected",
+        "admittingOfficerName": "Name of the Admitting Officer",
+        "admittingOfficerSignature": "Admitting Officer Signature",
+        "date": "Date"
+      }
+    },
+    "DOC-LEG-STAT-INV-APP-KE": {
+      "title": "INVOLUNTARY ADMISSION FORM",
+      "statuteLine": "Republic Of Kenya Mental Health Act (Cap 248)",
+      "parts": {
+        "A": "Part A — Details of the Client",
+        "B": "Part B — Details of the Applicant",
+        "D": "Declaration by Applicant",
+        "O": "FOR OFFICIAL USE ONLY"
+      },
+      "labels": {
+        "clientFullName": "Full Name",
+        "clientIdNumber": "National ID/Passport No",
+        "clientGender": "Gender",
+        "genderMale": "Male",
+        "genderFemale": "Female",
+        "genderOther": "Other (specify)",
+        "clientIs": "Client is",
+        "otherDescribe": "Other (Describe)",
+        "applicantFullName": "Full Name",
+        "applicantIdNumber": "National ID/Passport No",
+        "applicantAddress": "Address",
+        "applicantPhone": "Phone Number",
+        "applicantRelationship": "Relationship to Client",
+        "applicantSignature": "Applicant's Signature",
+        "date": "Date",
+        "admitted": "Admitted",
+        "rejected": "Rejected",
+        "admittingOfficerName": "Name of the Admitting Officer",
+        "admittingOfficerSignature": "Signature of Admitting Officer",
+        "decisionDateTime": "Decision date/time (added — OQ-14)"
+      },
+      "assertions": [
+        {"code": "DANGER_TO_SELF", "text": "A danger to self", "evidence": "danger_to_self"},
+        {"code": "DANGER_TO_OTHERS", "text": "A danger to others", "evidence": "danger_to_others"},
+        {"code": "UNABLE_SELF_CARE", "text": "Unable to care for self", "evidence": "unable_self_care"},
+        {"code": "INCAPABLE_RATIONAL_DECISIONS", "text": "Incapable of making rational decisions regarding treatment", "evidence": "incapable_decisions"},
+        {"code": "OTHER", "text": "Other (Describe)", "evidence": null}
+      ],
+      "declaration": {"text": "I, the undersigned, declare that the information provided above is true and accurate to the best of my knowledge and belief. I hereby apply for the involuntary admission of {clientName} (the above-named client) under the provisions of the Mental Health Act (Cap 248).", "verbatim": true}
+    },
+    "DOC-LEG-STAT-INV-REC-KE": {
+      "title": "RECOMMENDATION FOR INVOLUNTARY TREATMENT FORM",
+      "statuteLine": "",
+      "statuteLineNote": "VERIFY: the printed header line of this form was not supplied; nothing is rendered until it is.",
+      "intro": {"text": "I, {practitionerName}", "verbatim": true},
+      "declarations": [
+        {"number": 1, "text": "I am a registered medical practitioner approved by the Medical Regulatory Body for the purpose of making recommendations under the Mental Health (Amendment) Act, 2022", "verbatim": true},
+        {"number": 2, "text": "I examined the said {clientName} on the {day} day of {month}, 20{yy}", "verbatim": true},
+        {"number": 3, "text": "", "verbatim": true, "grounds": [
+          {"code": "a", "text": "the said {clientName} is suffering from a mental illness as defined under Section 2 of the Mental Health (Amendment) Act, 2022", "verbatim": true},
+          {"code": "b", "text": "the individual is incapable of expressing willingness or unwillingness to receive treatment as per Section 18", "verbatim": true},
+          {"code": "c", "text": "the individual is likely to benefit from involuntary admission as per Section 19", "verbatim": true}
+        ]},
+        {"number": 4, "lead": "further declare", "text": "the said {clientName} is suffering from a mental illness (Section 2); is likely to benefit from involuntary admission (Section 19); is incapable of making informed decisions regarding their treatment (Section 18)", "verbatim": true, "note": "OQ-19: restates Declaration 3 with different Section 18 wording; both rendered as printed, never merged."},
+        {"number": 5, "text": "it is expedient for the recovery of the said {clientName} that {pronoun} should be received in a mental health facility for a period not exceeding six months, in accordance with the Mental Health Act", "verbatim": true, "note": "OQ-20: printed 'he/she' is replaced by the client's recorded pronoun, else 'they'."}
+      ],
+      "labels": {
+        "signature": "Signature",
+        "qualifications": "Medical Qualifications",
+        "registration": "Registration No. (verified)",
+        "date": "Date",
+        "admitted": "Admitted",
+        "rejected": "Rejected",
+        "decisionMirror": "As recorded by the admitting officer (read-only — OQ-21)",
+        "groundNarrative": "Clinical grounds (added — OQ-18)"
+      }
+    },
+    "LGL-NOTICE-KE": {
+      "title": "WRITTEN NOTICE OF INTENTION TO LEAVE",
+      "statuteLine": "",
+      "statuteLineNote": "ASSUMPTION LGL-V-WF-1: no paper form for the written notice was supplied, so no header line is rendered; the record carries the client's own written notice (uploaded scan or e-signed statement) and quotes the Section 10(3) text of DOC-LEG-STAT-VOL-KE.",
+      "labels": {
+        "givenAt": "Notice given",
+        "givenTo": "Received by (person in charge)",
+        "earliestDeparture": "Earliest departure",
+        "clientStatement": "Client's written notice",
+        "signature": "Signature of the client"
+      }
+    }
+  },
+  "rights": {
+    "formStatement": {"text": "safeguards the rights of persons experiencing mental illness", "verbatim": true},
+    "text": "",
+    "status": "NOT_CONFIGURED",
+    "notConfiguredLabel": "Rights text not configured — VERIFY with legal counsel",
+    "taskLabel": "Patient informed of rights and legal status"
+  },
+  "privacy": {
+    "maskIdentityNumbers": true,
+    "unmaskPermission": "clinical.identity_numbers.unmask",
+    "logUnmaskedViews": true,
+    "note": "ASSUMPTION OQ-24: masking and access logging pending counsel's confirmation of Kenyan data-protection obligations."
+  },
+  "documentTemplates": [
+    {
+      "documentId": "DOC-LEG-STAT-VOL-KE",
+      "category": "LEG",
+      "trigger": "Client asks to be admitted as an inpatient of their own will (LGL-V); also required to convert an involuntary admission to voluntary (LGL-WF-04).",
+      "autoPopulated": ["client full name and address (client record)", "facility name (facility profile)", "admitting officer name (login)", "dates (system clock)"],
+      "userEntered": ["Section 10(3) acknowledgement", "applicant signature (e-signature or wet-signature scan)", "official-use decision and rejection reason"],
+      "conditionalRules": ["age under 18 → self-application blocked, guardian consent workflow (OQ-15)", "active consciousness/orientation/intoxication/MSE finding → capacity confirmation required before signing (LGL-V-11)", "rejected → reason required"],
+      "disclosureRules": ["statutory high-risk output: release only after consent/authorisation check and a disclosure record (DOC-CI-06, DOC-GOV-06)", "identity numbers masked except authorised roles (LGL-DOC-06)"],
+      "authorization": {"generate": "treating clinician", "sign": "client or guardian (RelatedPerson)", "decide": "ADMITTING_OFFICER permission", "review": "mandatory human review (DOC-GOV-07)"},
+      "outputs": ["print/PDF reproducing the paper layout"],
+      "filingAudit": ["stored on the episode's LegalStatus", "signed versions immutable; amendments with reason", "every transition in LegalStatusEvent and the platform audit log"]
+    },
+    {
+      "documentId": "DOC-LEG-STAT-INV-APP-KE",
+      "category": "LEG",
+      "trigger": "A relative or other applicant applies for the client's involuntary admission (LGL-I).",
+      "autoPopulated": ["client full name, ID number and gender (client record)", "applicant details (RelatedPerson / next of kin)", "admitting officer name (login)", "dates (system clock)"],
+      "userEntered": ["applicant's assertions (THIRD_PARTY_REPORT)", "Other description", "applicant signature", "official-use decision and rejection reason"],
+      "conditionalRules": ["Other ticked → description required", "ADMITTED only after the required number of signed recommendations (OQ-17, OQ-22)", "rejected → reason required"],
+      "disclosureRules": ["statutory high-risk output: release only after consent/authorisation check and a disclosure record (DOC-CI-06, DOC-GOV-06)", "identity numbers masked except authorised roles (LGL-DOC-06)"],
+      "authorization": {"generate": "treating clinician", "sign": "applicant (RelatedPerson)", "decide": "ADMITTING_OFFICER permission", "review": "mandatory human review (DOC-GOV-07)"},
+      "outputs": ["print/PDF reproducing the paper layout"],
+      "filingAudit": ["stored on the episode's LegalStatus", "signed versions immutable; amendments with reason", "every transition in LegalStatusEvent and the platform audit log"]
+    },
+    {
+      "documentId": "DOC-LEG-STAT-INV-REC-KE",
+      "category": "LEG",
+      "trigger": "A credentialed medical practitioner recommends involuntary treatment after examining the client (LGL-R).",
+      "autoPopulated": ["practitioner name, qualifications, verified registration (practitioner profile)", "client name and pronoun (client record)", "decision mirror (LegalStatus)", "dates (system clock)"],
+      "userEntered": ["examination date and linked encounter", "three individually affirmed grounds", "clinical grounds narrative per ground (OQ-18)", "signature"],
+      "conditionalRules": ["only practitioners with a verified registration and the MHA_RECOMMENDATION_APPROVED flag may sign", "examination date not in the future"],
+      "disclosureRules": ["statutory high-risk output: release only after consent/authorisation check and a disclosure record (DOC-CI-06, DOC-GOV-06)"],
+      "authorization": {"generate": "credentialed practitioner", "sign": "credentialed practitioner only", "decide": "not on this form — read-only mirror (OQ-21)", "review": "mandatory human review (DOC-GOV-07)"},
+      "outputs": ["print/PDF reproducing the paper layout"],
+      "filingAudit": ["stored on the episode's LegalStatus", "signed versions immutable; amendments with reason", "every transition in LegalStatusEvent and the platform audit log"]
+    }
+  ]
+}

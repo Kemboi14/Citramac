@@ -19,7 +19,6 @@ from .models import (
 )
 
 # ── risk proposals ──
-MSE_SIGNALS = {"Suicidal": ("suicide", "Thoughts"), "Homicidal": ("violence", "Thoughts")}
 
 
 def _propose(patient, source, source_key, row, option):
@@ -32,17 +31,21 @@ def _propose(patient, source, source_key, row, option):
 
 
 def propose_from_score(patient, score):
+    """A positive self-harm item (PHQ-9 item 9, EPDS item 10) is proposed for the
+    risk register, never written to it silently."""
     spec = instruments.INSTRUMENTS[score.instrument]
-    index = spec.get("safety_item")
-    if index is not None and score.items and score.items[index] > 0:
+    if instruments.safety_positive(score.instrument, score.items, score.detail):
         return _propose(patient, f"{spec['name']} self-harm item", f"score:{score.pk}", "suicide", "Thoughts")
     return None
 
 
-def propose_from_mse(patient, mse):
-    for label, (row, option) in MSE_SIGNALS.items():
-        if label in (mse.thought_content or ""):
-            _propose(patient, f"MSE thought content: {label.lower()}", f"mse:{mse.pk}:{label}", row, option)
+def propose_from_mse(patient, mse, section=None):
+    """INT-16: structured thought content "Suicidal" / "Homicidal" raises a risk
+    proposal (never a silent write); a legacy record is read from its stored text."""
+    from . import mental_state
+
+    for label, row, option in mental_state.risk_signals(section, mse.thought_content):
+        _propose(patient, f"MSE thought content: {label.lower()}", f"mse:{mse.pk}:{label}", row, option)
 
 
 @transaction.atomic
@@ -179,6 +182,72 @@ def sign_note(note, user):
 
 
 # ── episode outcome ──
+# Checklist answers an episode keeps on its care plan (same keys and values as
+# the inpatient DischargeSummary.readiness).
+READINESS_ANSWERS = {
+    "meds_reconciled": (True, False),
+    "counter_referral": ("SENT", "NO_REFERRER", ""),
+    "naloxone": ("OFFERED", "DECLINED", ""),
+    "teach_back": (True, False),
+}
+
+
+def episode_discharge_checklist(patient, episode=None):
+    """The planned-discharge checklist for the open episode (mockup v4 ~5911).
+    When the episode's inpatient stay was discharged with a signed summary, its
+    answers are used; otherwise the answers kept on the episode's care plan."""
+    from django.conf import settings
+
+    from apps.client_registry.models import Appointment
+    from apps.ipd_ward.models import Admission
+
+    from . import care_plan
+    from .models import CarePlan, DischargeSummary
+
+    episode = episode or services.open_episode_for(patient)
+    if episode is None:
+        return None
+    signed = (
+        DischargeSummary.objects.filter(episode=episode, status="COMPLETED").order_by("-version").first()
+    )
+    plan = CarePlan.objects.filter(episode=episode).first()
+    answers = signed.readiness if signed else (plan.discharge_readiness if plan else {})
+    booked = bool(
+        (signed and signed.follow_up_appointment_id)
+        or Appointment.objects.filter(
+            patient=patient, status="SCHEDULED", scheduled_for__gte=timezone.now()
+        ).exists()
+        # The facility's schedule books the follow-up when the episode closes.
+        or getattr(settings, "FOLLOW_UP_SCHEDULE", None)
+    )
+    items = services.readiness_checklist(
+        patient, answers, booked, needs_safety_plan=bool(plan and care_plan.needs_safety_plan(plan))
+    )
+    if Admission.objects.filter(patient=patient, status="ADMITTED").exists():
+        items.insert(0, {
+            "key": "inpatient",
+            "label": "Inpatient stay discharged through its signed discharge summary",
+            "ok": False,
+        })
+    return {"source": "inpatient" if signed else "episode", "answers": answers or {}, "items": items}
+
+
+def save_discharge_answers(patient, user, data):
+    plan = services.get_or_create_care_plan(patient, user)
+    answers = dict(plan.discharge_readiness or {})
+    for key, allowed in READINESS_ANSWERS.items():
+        if key in data:
+            if data[key] not in allowed:
+                raise ValidationError({key: "Choose one of the listed answers."})
+            answers[key] = data[key]
+    if "no_follow_up_reason" in data:
+        answers["no_follow_up_reason"] = str(data["no_follow_up_reason"] or "").strip()[:400]
+    plan.discharge_readiness = answers
+    plan.updated_by = user
+    plan.save(update_fields=["discharge_readiness", "updated_by", "updated_at"])
+    return episode_discharge_checklist(patient)
+
+
 @transaction.atomic
 def close_episode(patient, user, outcome, destination="", reason=""):
     if outcome not in dict(EpisodeOutcome.OUTCOME_CHOICES):
@@ -188,8 +257,18 @@ def close_episode(patient, user, outcome, destination="", reason=""):
         raise ValidationError({"detail": "There is no open episode to close."})
     if outcome != "PLANNED" and not reason.strip():
         raise ValidationError({"reason": "Give the reason when the episode did not end as a planned discharge."})
+    if destination and destination not in services._valid_codes("episode-destination"):
+        raise ValidationError({"destination": "Choose the destination from the list."})
     if outcome == "TRANSFERRED" and not destination.strip():
         raise ValidationError({"destination": "Say where the client was transferred to."})
+    if outcome == "PLANNED":
+        unmet = [i["label"] for i in episode_discharge_checklist(patient, episode)["items"] if not i["ok"]]
+        if unmet:
+            raise ValidationError({
+                "checklist": unmet,
+                "outcome": "Complete the discharge checklist before recording a planned discharge "
+                           "— or choose another outcome.",
+            })
     record = EpisodeOutcome.objects.create(
         organization_id=patient.organization_id, episode=episode, patient=patient, outcome=outcome,
         destination=destination.strip(), reason=reason.strip(), recorded_by=user,
@@ -250,3 +329,98 @@ def action_missed(appointment, user):
     appointment.dna_actioned_at = timezone.now()
     appointment.save(update_fields=["dna_actioned_at", "updated_at"])
     return appointment
+
+
+# ── follow-up in the client record (same appointments as the follow-up worklist) ──
+DUE_STATUSES = ("SCHEDULED", "CHECKED_IN")
+
+
+def client_follow_ups(patient, now=None):
+    """This client's follow-ups with Due / Overdue / Completed / Missed counts,
+    the next one due, and whether a missed one needs same-day escalation."""
+    from django.db.models import Q
+
+    from apps.client_registry.models import Appointment
+
+    from . import attention
+
+    now = now or timezone.now()
+    rows = list(
+        Appointment.objects.filter(patient=patient)
+        .filter(Q(origin__in=("DISCHARGE", "CARE_PLAN")) | ~Q(reason=""))
+        .select_related("patient", "provider")
+        .order_by("scheduled_for")
+    )
+    contacts = {
+        n.appointment_id: n
+        for n in ProgressNote.objects.filter(appointment__in=rows, status="SIGNED").select_related("author")
+    }
+    risky = any(a["severity"] == "high" for a in attention.active_alerts(patient))
+    labels = services.concept_labels()
+    items = []
+    for appt in rows:
+        row = services._follow_up_row(appt, labels)
+        note = contacts.get(appt.id)
+        row.update({
+            "overdue": appt.status in DUE_STATUSES and appt.scheduled_for < now,
+            "notes": appt.notes,
+            "missed_reason": appt.missed_reason,
+            "missed_reason_label": labels.get(("missed-appointment-reason", appt.missed_reason), appt.missed_reason),
+            "dna_actioned_at": appt.dna_actioned_at.isoformat() if appt.dna_actioned_at else None,
+            "escalate": appt.status == "NO_SHOW" and not appt.dna_actioned_at and risky,
+            "contact_note": (
+                {"text": note.text, "by": note.author.get_full_name() if note.author else "",
+                 "at": note.signed_at.isoformat() if note.signed_at else None}
+                if note else None
+            ),
+        })
+        items.append(row)
+    due = [r for r in items if r["status"] in DUE_STATUSES]
+    return {
+        "counts": {
+            "due": len(due),
+            "overdue": sum(1 for r in due if r["overdue"]),
+            "completed": sum(1 for r in items if r["status"] == "COMPLETED"),
+            "missed": sum(1 for r in items if r["status"] == "NO_SHOW"),
+        },
+        "next_due": due[0] if due else None,
+        "active_risk": risky,
+        "results": items,
+    }
+
+
+@transaction.atomic
+def complete_follow_up(appointment, user, note):
+    """Done — with the contact recorded as a signed follow-up note on the episode."""
+    note = (note or "").strip()
+    if len(note) < 3:
+        raise ValidationError({"note": "Add a brief note of the contact."})
+    if appointment.status not in DUE_STATUSES:
+        raise ValidationError({"detail": "Only a follow-up that is due can be marked done."})
+    ProgressNote.objects.create(
+        organization_id=appointment.organization_id, patient=appointment.patient,
+        episode=appointment.episode or services.open_episode_for(appointment.patient),
+        note_type="FOLLOW_UP", text=note, status="SIGNED", author=user, signed_at=timezone.now(),
+        appointment=appointment,
+    )
+    appointment.status = "COMPLETED"
+    appointment.save(update_fields=["status", "updated_at"])
+    return appointment
+
+
+@transaction.atomic
+def rebook_missed(appointment, user, data):
+    """"Contacted & rebooked": the missed appointment is actioned and an outreach
+    follow-up is booked on the same episode (idempotent on client_request_id)."""
+    if appointment.status != "NO_SHOW" or appointment.dna_actioned_at:
+        raise ValidationError({"detail": "Only a missed follow-up that is not yet actioned can be rebooked."})
+    action_missed(appointment, user)
+    return services.book_follow_up(
+        user, appointment.patient,
+        {"reason": "OUTREACH", "scheduled_for": data.get("scheduled_for"),
+         "provider": str(appointment.provider_id) if appointment.provider_id else None,
+         "mode": data.get("mode") or appointment.mode,
+         "notes": f"Rebooked after the missed appointment of {appointment.scheduled_for:%Y-%m-%d}",
+         "client_request_id": data.get("client_request_id") or ""},
+        episode=appointment.episode, origin=appointment.origin,
+    )

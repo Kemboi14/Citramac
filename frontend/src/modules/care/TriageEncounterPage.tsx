@@ -13,6 +13,7 @@ import { useClientBanner } from "./shared/useClientBanner";
 import { EncounterContext } from "./triage/EncounterContext";
 import { QuickRecheck } from "./triage/QuickRecheck";
 import { TriageForm } from "./triage/TriageForm";
+import { TriageFormV4 } from "./triage/TriageFormV4";
 import { errorText } from "./triage/helpers";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 
@@ -110,6 +111,20 @@ export function TriageEncounterPage() {
           }}
         />
       </div>
+    );
+  }
+
+  // New and in-progress triages use the v4 model; a record signed under the v3
+  // rules is shown on the v3 form exactly as it was signed.
+  if (detail.schema !== "v3") {
+    return (
+      <TriageFormV4
+        key={`${detail.id}:${formKey}`}
+        detail={detail}
+        banner={banner}
+        bannerError={bannerError}
+        onSigned={() => setReloadKey((k) => k + 1)}
+      />
     );
   }
 

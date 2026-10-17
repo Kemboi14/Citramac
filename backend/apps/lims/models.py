@@ -66,6 +66,11 @@ class LabResult(TenantScopedModel):
     unit = models.CharField(max_length=50, blank=True)
     reference_range = models.CharField(max_length=100, blank=True)
     is_abnormal = models.BooleanField(default=False)
+    # Normal / abnormal / critical as flagged on the report (is_abnormal stays the
+    # yes/no). Blank for results recorded before this existed. VERIFY: mapping to
+    # R4 Observation.interpretation (HL7 ObservationInterpretation) codes.
+    INTERPRETATION_CHOICES = [("NORMAL", "Normal"), ("ABNORMAL", "Abnormal"), ("CRITICAL", "Critical")]
+    interpretation = models.CharField(max_length=10, choices=INTERPRETATION_CHOICES, blank=True)
 
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

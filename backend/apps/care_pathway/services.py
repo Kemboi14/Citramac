@@ -19,7 +19,7 @@ from apps.dha_interop.models import NationalDrugIndex
 from apps.ipd_ward.models import Admission, MedicationAdministration
 from apps.triage.models import VitalSigns
 
-from . import triage_rules
+from . import facility_time, triage_rules
 from .models import (
     PRIORITY_ORDER,
     BillingService,
@@ -487,7 +487,10 @@ def save_triage_draft(triage_encounter, user, answers):
     return draft
 
 
-def _record_vitals(encounter, user, *, bp=None, systolic=None, diastolic=None, **values):
+def _record_vitals(
+    encounter, user, *, bp=None, systolic=None, diastolic=None, consciousness="",
+    supplemental_o2=None, **values
+):
     if bp:
         systolic, diastolic = triage_rules.parse_blood_pressure(bp)
     fields = {
@@ -500,6 +503,11 @@ def _record_vitals(encounter, user, *, bp=None, systolic=None, diastolic=None, *
         "blood_glucose_mmol": triage_rules._number(values.get("glucose"), Decimal),
     }
     fields = {key: value for key, value in fields.items() if value is not None}
+    # Re-check (v4): ACVPU and supplemental oxygen complete the early-warning score.
+    if consciousness in ("A", "C", "V", "P", "U"):
+        fields["consciousness"] = consciousness
+    if supplemental_o2 is not None and fields:
+        fields["supplemental_o2"] = supplemental_o2
     if not fields:
         return None
     return VitalSigns.objects.create(
@@ -513,6 +521,14 @@ def _record_vitals(encounter, user, *, bp=None, systolic=None, diastolic=None, *
 @transaction.atomic
 def sign_triage(triage_encounter, user, payload):
     answers = payload.get("answers") or {}
+    from . import triage_v4
+
+    if triage_v4.is_v4(answers):
+        # New triages use the v4 rule set (triage_v4.py); a v3-shaped answer set
+        # is still signed by the v3 rules below.
+        from .triage_sign_v4 import sign_triage_v4
+
+        return sign_triage_v4(triage_encounter, user, payload)
     merged = {**triage_rules.DEFAULT_ANSWERS, **answers}
     missing_keys = [key for key, _ in triage_rules.CORE_SCREENS if not merged.get(key)]
     missing = [name for key, name in triage_rules.CORE_SCREENS if key in missing_keys]
@@ -603,6 +619,12 @@ def sign_triage(triage_encounter, user, payload):
         glucose=answers.get("h_glucose"),
     )
 
+    apply_triage_allergies(patient, answers, user)
+    return assessment
+
+
+def apply_triage_allergies(patient, answers, user):
+    """TRI-A-06: triage confirms or updates the one central allergy record."""
     allergy_status = answers.get("a_allergy_status")
     if allergy_status == "none":
         patient.allergy_status = "NONE"
@@ -616,7 +638,6 @@ def sign_triage(triage_encounter, user, payload):
     elif allergy_status == "unknown":
         patient.allergy_status = "UNKNOWN"
         patient.save(update_fields=["allergy_status", "updated_at"])
-    return assessment
 
 
 def request_full_retriage(triage_encounter):
@@ -672,6 +693,7 @@ def sign_recheck(triage_encounter, user, data):
             if entry.get("value") in (None, ""):
                 raise ValidationError({key: "Enter the measured value, or change its status."})
             measured[key] = entry["value"]
+    _check_recheck_ranges(measured)
     recheck = save_recheck_draft(triage_encounter, user, data)
     now = timezone.now()
     recheck.status = "COMPLETED"
@@ -689,6 +711,10 @@ def sign_recheck(triage_encounter, user, data):
             for long, short in RECHECK_VITAL_KEYS.items()
             if measured.get(long) is not None
         },
+        consciousness=measured.get("consciousness") or "",
+        supplemental_o2=(
+            measured["supplementalO2"] == "supplemental" if measured.get("supplementalO2") else None
+        ),
     )
     triage_encounter.status = TriageEncounter.STATUS_RECHECK_COMPLETED
     triage_encounter.next_recheck_at = triage_rules.recheck_due_after(
@@ -696,6 +722,38 @@ def sign_recheck(triage_encounter, user, data):
     )
     triage_encounter.save(update_fields=["status", "next_recheck_at", "updated_at"])
     return recheck
+
+
+RECHECK_RANGE_FIELDS = {
+    "heartRate": "heart_rate",
+    "bloodPressureSystolic": "systolic_bp",
+    "bloodPressureDiastolic": "diastolic_bp",
+    "respiratoryRate": "respiratory_rate",
+    "temperature": "temperature_c",
+    "oxygenSaturation": "spo2",
+    "bloodGlucose": "blood_glucose_mmol",
+}
+
+
+def _check_recheck_ranges(measured):
+    """Impossible values are refused (interventions.VITAL_RANGES hard limits —
+    the same ranges as the v4 triage screen); ACVPU must be a scored code."""
+    from .interventions import VITAL_RANGES
+
+    for key, field in RECHECK_RANGE_FIELDS.items():
+        if measured.get(key) in (None, ""):
+            continue
+        label, unit, hmin, hmax, _smin, _smax = VITAL_RANGES[field]
+        try:
+            number = float(measured[key])
+        except (TypeError, ValueError):
+            raise ValidationError({key: f"{label}: enter a number only."}) from None
+        if not hmin <= number <= hmax:
+            raise ValidationError({key: f"{label}: not a possible value — check ({hmin:g}–{hmax:g} {unit})."})
+    if measured.get("consciousness") not in (None, "", "A", "C", "V", "P", "U"):
+        raise ValidationError({"consciousness": "Use A, C, V, P or U."})
+    if measured.get("supplementalO2") not in (None, "", "room_air", "supplemental"):
+        raise ValidationError({"supplementalO2": "Unknown oxygen value."})
 
 
 # ── Psychiatry (doc 15 §1.8) ──
@@ -761,7 +819,7 @@ def psychiatry_queue():
         latest.values(),
         key=lambda te: (
             PRIORITY_ORDER.get(te.priority, 9),
-            -(te.last_triaged_at.timestamp() if te.last_triaged_at else 0),
+            te.arrival_at,  # longest wait first within a priority (v4 mockup queue order)
         ),
     )
 
@@ -791,12 +849,16 @@ def triage_worklist():
         status = te.effective_status
         is_recheck = status == "RECHECK_DUE"
         due = te.next_recheck_at if is_recheck else te.due_at
+        # v4 mockup: a re-check past its time for an Emergency / Urgent client is
+        # "Re-triage OVERDUE"; for Priority / Routine it is simply due.
+        recheck_overdue = is_recheck and te.priority in ("RED", "ORANGE")
         items.append(
             {
                 "te": te,
                 "status": status,
                 "due_at": due,
-                "is_overdue": (not is_recheck) and due < now,
+                "recheck_overdue": recheck_overdue,
+                "is_overdue": ((not is_recheck) and due < now) or recheck_overdue,
                 "wait_minutes": max(0, int((now - te.arrival_at).total_seconds() // 60)),
             }
         )
@@ -828,7 +890,7 @@ def allergy_banner(patient):
     if patient.allergy_status == "ACTIVE_ALLERGIES":
         records = AllergyRecord.objects.filter(patient=patient).exclude(
             verification_status="REFUTED"
-        )
+        ).exclude(clinical_status="RESOLVED")
         return {
             "state": "known",
             "items": [
@@ -836,12 +898,19 @@ def allergy_banner(patient):
                     "substance": r.substance,
                     "reaction": r.reaction,
                     "verification_status": r.verification_status,
+                    "allergy_type": r.allergy_type,
                 }
                 for r in records
                 if r.substance != "Client reports an allergy"
             ],
         }
     return {"state": "unknown", "items": []}
+
+
+def _legal_banner(patient):
+    from . import legal_status
+
+    return legal_status.banner_summary(patient)
 
 
 def banner_for(patient):
@@ -882,6 +951,8 @@ def banner_for(patient):
         ],
         "clinician": user_display(clinician) or "Unassigned",
         "team": team,
+        # BAN-10 / LGL-DATA-01 — legal admission status + notice countdown.
+        "legal_status": _legal_banner(patient),
         "episode_id": str(episode.id) if episode else None,
         "latest_triage_encounter_id": str(latest_te.id) if latest_te else None,
         "latest_signed_triage_encounter_id": str(signed.id) if signed else None,
@@ -969,25 +1040,38 @@ def care_plan_suggestions(patient, plan):
 
 
 @transaction.atomic
-def record_intervention(user, activity, data):
+def record_intervention(user, patient, data, activity=None):
+    """Record care delivered. Linking to a care-plan activity is optional; when
+    `completes_activity` is set the linked activity is marked done."""
+    episode = activity.care_plan.episode if activity else current_or_latest_episode(patient)
     record = InterventionRecord.objects.create(
-        organization_id=activity.organization_id,
-        patient=activity.care_plan.patient,
+        organization_id=patient.organization_id,
+        patient=patient,
         activity=activity,
+        module=data.get("module", ""),
         performed_at=data.get("performed_at") or timezone.now(),
         provider=data.get("provider") or user,
         intervention=data["intervention"],
+        note=data.get("note", ""),
         response=data.get("response", ""),
+        outcome=data.get("outcome", ""),
         next_action=data.get("next_action", ""),
+        completes_activity=bool(data.get("completes_activity")),
         billable=bool(data.get("billable")),
         billing_service=data.get("billing_service"),
         quantity=data.get("quantity") or 1,
     )
+    if activity:
+        # v4 mockup: delivery moves the action Planned → Active, or Completed when ticked.
+        new_status = "COMPLETED" if record.completes_activity else "ACTIVE"
+        if activity.status != "COMPLETED" and activity.status != new_status:
+            activity.status = new_status
+            activity.save(update_fields=["status", "updated_at"])
     if record.billable and record.billing_service:
         ChargeItem.objects.create(
             organization_id=record.organization_id,
-            patient=record.patient,
-            episode=activity.care_plan.episode,
+            patient=patient,
+            episode=episode,
             service=record.billing_service,
             quantity=record.quantity,
             unit_price=record.billing_service.rate,
@@ -998,6 +1082,25 @@ def record_intervention(user, activity, data):
     return record
 
 
+@transaction.atomic
+def void_intervention(user, record, reason, after=None):
+    """Void a record (e.g. group attendance corrected away from Present). The
+    record and its charge stay in the database; billing ignores voided charges."""
+    if record.voided_at:
+        return record
+    now = timezone.now()
+    record.voided_at = now
+    record.void_reason = reason
+    record.corrections = [
+        *record.corrections,
+        {"at": now.isoformat(), "by": user_display(user), "reason": reason,
+         "before": {"voided": False}, "after": after or {"voided": True}},
+    ]
+    record.save(update_fields=["voided_at", "void_reason", "corrections", "updated_at"])
+    ChargeItem.objects.filter(intervention=record, voided_at__isnull=True).update(voided_at=now)
+    return record
+
+
 def billing_overview(patient=None):
     """Billing events with claim/payment allocation, exactly as doc 15 §1.15:
     claim value is allocated oldest-first up to the submitted claim total;
@@ -1005,7 +1108,11 @@ def billing_overview(patient=None):
     from apps.billing.models import Payment
     from apps.insurance_claims.models import InsuranceClaim
 
-    charges = ChargeItem.objects.select_related("service", "patient").order_by("delivered_at")
+    charges = (
+        ChargeItem.objects.filter(voided_at__isnull=True)
+        .select_related("service", "patient")
+        .order_by("delivered_at")
+    )
     if patient is not None:
         charges = charges.filter(patient=patient)
     unpriced = sorted({c.service.name for c in charges if c.unit_price is None})
@@ -1018,8 +1125,21 @@ def billing_overview(patient=None):
     events = []
     for patient_id, patient_charges in by_patient.items():
         client = patient_charges[0].patient
-        claims = InsuranceClaim.objects.filter(patient_id=patient_id).exclude(status="DRAFT")
-        claim_budget = sum((c.total_claimed_amount for c in claims), Decimal("0"))
+        # A submitted claim's lines claim their own charges; a rejected claim
+        # claims nothing. Older claims without lines are allocated oldest-first.
+        claims = InsuranceClaim.objects.filter(patient_id=patient_id).exclude(
+            status__in=["DRAFT", "REJECTED"]
+        )
+        line_claimed = {}
+        claim_budget = Decimal("0")
+        for c in claims.prefetch_related("lines"):
+            lines = list(c.lines.all())
+            if not lines:
+                claim_budget += c.total_claimed_amount
+            for line in lines:
+                line_claimed[line.charge_item_id] = (
+                    line_claimed.get(line.charge_item_id, Decimal("0")) + line.amount
+                )
         payment_budget = sum(
             (p.amount for p in Payment.objects.filter(invoice__patient_id=patient_id)),
             Decimal("0"),
@@ -1027,8 +1147,10 @@ def billing_overview(patient=None):
         rows = []
         for charge in patient_charges:
             amount = charge.unit_price * charge.quantity
-            claimed = min(amount, claim_budget)
-            claim_budget -= claimed
+            claimed = min(amount, line_claimed.get(charge.id, Decimal("0")))
+            from_budget = min(amount - claimed, claim_budget)
+            claim_budget -= from_budget
+            claimed += from_budget
             rows.append(
                 {
                     "charge": charge,
@@ -1435,7 +1557,7 @@ def recent_activity(limit=4):
             {
                 "at": mar.administered_at,
                 "title": f"Medication administered — {mar.admission.patient.get_full_name()}",
-                "detail": f"{drug}{mar.scheduled_time:%H:%M} dose",
+                "detail": f"{drug}{facility_time.local_format(mar.scheduled_time, '%H:%M')} dose",
             }
         )
     events = [e for e in events if e["at"]]
@@ -1492,8 +1614,7 @@ def book_follow_up(user, patient, data, *, episode=None, admission=None, origin=
         if parsed is None:
             raise ValidationError({"scheduled_for": "Enter a valid date and time."})
         scheduled_for = parsed
-    if timezone.is_naive(scheduled_for):
-        scheduled_for = timezone.make_aware(scheduled_for)
+    scheduled_for = facility_time.make_local_aware(scheduled_for)
     provider = None
     if data.get("provider"):
         from apps.accounts.models import User
@@ -1828,29 +1949,47 @@ def _check_codes(data):
         raise ValidationError(errors)
 
 
-def discharge_readiness(admission, summary, follow_up_given=False):
-    """What still blocks a planned discharge. Each item is a plain sentence for the
-    clinician; nothing here invents contact details or clinical content."""
+def readiness_checklist(patient, answers, follow_up_booked, needs_safety_plan=False):
+    """The planned-discharge checklist — [{key, label, ok}] — shared by the
+    inpatient discharge summary and an episode's planned discharge, so both are
+    gated by the same items. Each label is a plain sentence for the clinician;
+    nothing here invents contact details or clinical content."""
     from . import intake, withdrawal
 
-    r = summary.readiness or {}
-    patient = admission.patient
-    unmet = []
-    if not r.get("meds_reconciled"):
-        unmet.append("Medicines reconciled with the client")
+    r = answers or {}
     row = intake.current_draft(patient) or intake.latest_signed(patient)
-    if row and "suicide" in intake.risk_rows_active(row.sections):
-        if not patient.safety_plans.filter(signed_at__isnull=False).exists():
-            unmet.append("Safety plan signed (self-harm risk is active)")
-    if not (follow_up_given or summary.follow_up_appointment_id or str(r.get("no_follow_up_reason", "")).strip()):
-        unmet.append("Follow-up contact booked — or the reason none is needed")
-    if r.get("counter_referral") not in ("SENT", "NO_REFERRER"):
-        unmet.append("Counter-referral sent, or recorded as ‘no referring service’")
-    if withdrawal.is_opioid(patient) and r.get("naloxone") not in ("OFFERED", "DECLINED"):
-        unmet.append("Naloxone offered (opioid use) — record whether it was accepted or declined")
-    if not r.get("teach_back"):
-        unmet.append("Teach-back done: crisis plan, warning signs and reduced tolerance explained")
-    return unmet
+    self_harm = bool(row and "suicide" in intake.risk_rows_active(row.sections))
+    items = [("meds", "Medicines reconciled with the client", bool(r.get("meds_reconciled")))]
+    if self_harm or needs_safety_plan:
+        label = "Safety plan signed (self-harm risk is active)" if self_harm else "Safety plan signed"
+        items.append(("safety", label, patient.safety_plans.filter(signed_at__isnull=False).exists()))
+    items.append((
+        "follow_up", "Follow-up contact booked — or the reason none is needed",
+        bool(follow_up_booked or str(r.get("no_follow_up_reason", "")).strip()),
+    ))
+    items.append((
+        "counter_referral", "Counter-referral sent, or recorded as ‘no referring service’",
+        r.get("counter_referral") in ("SENT", "NO_REFERRER"),
+    ))
+    if withdrawal.is_opioid(patient):
+        items.append((
+            "naloxone", "Naloxone offered (opioid use) — record whether it was accepted or declined",
+            r.get("naloxone") in ("OFFERED", "DECLINED"),
+        ))
+    items.append((
+        "teach_back", "Teach-back done: crisis plan, warning signs and reduced tolerance explained",
+        bool(r.get("teach_back")),
+    ))
+    return [{"key": key, "label": label, "ok": ok} for key, label, ok in items]
+
+
+def discharge_readiness(admission, summary, follow_up_given=False):
+    """What still blocks a planned inpatient discharge (labels of unmet items)."""
+    checklist = readiness_checklist(
+        admission.patient, summary.readiness,
+        bool(follow_up_given or summary.follow_up_appointment_id),
+    )
+    return [item["label"] for item in checklist if not item["ok"]]
 
 
 def _apply_discharge_fields(summary, admission, data):
@@ -1871,8 +2010,7 @@ def _apply_discharge_fields(summary, admission, data):
             moment = parse_datetime(moment)
         if moment is None:
             raise ValidationError({"discharged_at": "Enter a valid date and time."})
-        if timezone.is_naive(moment):
-            moment = timezone.make_aware(moment)
+        moment = facility_time.make_local_aware(moment)
         if moment < admission.admitted_at:
             raise ValidationError({"discharged_at": "Discharge cannot be before admission."})
         summary.discharged_at = moment

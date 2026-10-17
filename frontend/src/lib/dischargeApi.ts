@@ -265,6 +265,8 @@ export interface BookFollowUpInput {
   reason: string;
   mode?: string;
   notes?: string;
+  /** The clinician the follow-up is with (a user id). */
+  provider?: string;
   client_request_id: string;
 }
 

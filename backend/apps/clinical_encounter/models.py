@@ -71,12 +71,31 @@ class DiagnosisCode(TenantScopedModel):
     """
 
     STATUS_CHOICES = [("ACTIVE", "Active"), ("HISTORICAL", "Historical"), ("RESOLVED", "Resolved")]
+    # Diagnostic certainty, separate from the clinical status above. Codes are those
+    # of the served `intake-dx-status` value set; each maps to an R4
+    # Condition.verificationStatus code (FHIR_VERIFICATION). Rows recorded before
+    # this field existed stay blank — their certainty was never stated.
+    VERIFICATION_CHOICES = [
+        ("PROVISIONAL", "Provisional"),
+        ("DIFFERENTIAL", "Differential"),
+        ("CONFIRMED", "Confirmed"),
+        ("RULED_OUT", "Ruled out"),
+    ]
+    FHIR_VERIFICATION = {
+        "PROVISIONAL": "provisional",
+        "DIFFERENTIAL": "differential",
+        "CONFIRMED": "confirmed",
+        "RULED_OUT": "refuted",
+    }
 
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="diagnoses")
     icd11_code = models.ForeignKey(IcdCodeIndex, on_delete=models.PROTECT, related_name="+")
     is_primary = models.BooleanField(default=False)
     noted_at = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="ACTIVE")
+    verification_status = models.CharField(
+        max_length=16, choices=VERIFICATION_CHOICES, blank=True, default="PROVISIONAL"
+    )
     clinical_notes = models.TextField(blank=True)
     diagnostic_criteria_met = models.TextField(blank=True)
 
@@ -146,6 +165,19 @@ class PrescriptionItem(TenantScopedModel):
     allergy_check_passed = models.BooleanField(default=True)
     interaction_check_passed = models.BooleanField(default=True)
     pediatric_dose_flag = models.BooleanField(default=False)
+
+    # As-needed orders (R4 Dosage.asNeededBoolean / maxDosePerPeriod). The maximum
+    # is what the prescriber wrote; nothing here suggests one.
+    is_prn = models.BooleanField(default=False)
+    prn_max_per_24h = models.PositiveSmallIntegerField(null=True, blank=True)
+    indication = models.CharField(max_length=255, blank=True)
+    # Set by the prescriber at order time so the MAR asks for a witness.
+    # VERIFY: derive from the national controlled-drug schedule once it is mirrored.
+    controlled_drug = models.BooleanField(default=False)
+    # What the pre-order check found and the prescriber acknowledged, and the
+    # reason when a true-allergy hard stop was overridden (with its co-sign request).
+    check_findings = models.JSONField(default=list, blank=True)
+    allergy_override_reason = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.drug.generic_name} {self.dose}"

@@ -20,14 +20,8 @@ from rest_framework.exceptions import ValidationError
 from apps.triage.models import MentalStatusExam
 
 from . import intake_schema as schema
+from . import mental_state
 from .models import IntakeAssessment, MedicationHistoryEntry, OutcomeScore, TriageAssessment
-
-MSE_FIELDS = [key for key, _label, _opts in schema.MSE_DOMAINS] + [
-    "orientation",
-    "attention",
-    "reliability",
-    "summary",
-]
 
 
 def can_view_restricted(user):
@@ -67,6 +61,23 @@ def _latest_signed_triage(patient):
     )
 
 
+# Triage safeguarding codes → intake risk-register (row, option), following the v4 mockup's
+# triageRiskItems(). ASSUMPTION: domestic violence and threat/coercion are recorded as "Abuse";
+# "other" is not mapped (the clinician sees it in the carried triage summary).
+SAFEGUARDING_FLAG_ITEMS = {
+    "abuse": ("safeguarding", "Abuse"),
+    "domestic_violence": ("safeguarding", "Abuse"),
+    "threat_coercion": ("safeguarding", "Abuse"),
+    "neglect": ("safeguarding", "Neglect"),
+    "sexual_violence": ("safeguarding", "Sexual violence/exploitation"),
+    "child_safeguarding": ("safeguarding", "Child concern"),
+    "vulnerable_adult": ("safeguarding", "Elder/vulnerable adult concern"),
+    "financial_exploitation": ("neglect", "Exploitation/vulnerability concern"),
+    "unsafe_environment": ("neglect", "Exploitation/vulnerability concern"),
+}
+TELEPHONE_MEDICAL_FLAGS = {"seizure", "loss_consciousness", "serious_injury"}
+
+
 def triage_risk_items(answers):
     """[(row, option)] the triage answers imply — each starts unconfirmed."""
     items = []
@@ -74,6 +85,23 @@ def triage_risk_items(answers):
     def add(row, option):
         if (row, option) not in items:
             items.append((row, option))
+
+    if answers.get("schema") == "v4":
+        return _triage_v4_risk_items(answers, add, items)
+    if answers.get("b_present") == "no":
+        # Telephone / third-party screen: only what the informant reported.
+        reported = set(answers.get("k_flags") or [])
+        if "suicide_concern" in reported:
+            add("suicide", "Thoughts")
+        if "recent_attempt" in reported:
+            add("suicide", "Recent attempt/self-harm")
+        if "access_to_means" in reported:
+            add("suicide", "Access to means")
+        if "risk_to_other" in reported:
+            add("violence", "Threats")
+        if reported & TELEPHONE_MEDICAL_FLAGS:
+            add("medical", "Concern identified")
+        return items
 
     if answers.get("d_suicidal") == "yes":
         add("suicide", "Thoughts")
@@ -91,10 +119,78 @@ def triage_risk_items(answers):
         add("violence", "Recent violence")
     if answers.get("e_means") == "yes":
         add("violence", "Access to means")
-    if answers.get("i_flags") or answers.get("i_safe") == "no":
-        add("safeguarding", "Abuse" if "abuse" in (answers.get("i_flags") or []) else "Neglect")
+    for flag in answers.get("i_flags") or []:
+        if flag in SAFEGUARDING_FLAG_ITEMS:
+            add(*SAFEGUARDING_FLAG_ITEMS[flag])
+    if answers.get("i_safe") == "no":
+        add("neglect", "Exploitation/vulnerability concern")
     if answers.get("j_concern") == "yes":
         add("neglect", "Difficulty with self-care")
+    if answers.get("h_concern") == "yes" or [f for f in answers.get("h_flags") or [] if f != "other"]:
+        add("medical", "Concern identified")
+    return items
+
+
+V4_MEDICAL_FLAGS = {
+    "altered_consciousness", "head_injury", "seizure", "catatonia", "nms_serotonin",
+    "major_medical", "lithium_toxicity", "clozapine",
+}
+
+
+def _triage_v4_risk_items(answers, add, items):
+    """v4 triage answers (triage_v4.py) → risk-register items, following the v4
+    mockup's triageRiskItems() line for line."""
+    if answers.get("b_present") == "no":
+        suicide = answers.get("r_suicide")
+        if suicide == "talked":
+            add("suicide", "Thoughts")
+        if suicide == "recent_attempt":
+            add("suicide", "Recent attempt/self-harm")
+        if answers.get("r_means") == "yes":
+            add("suicide", "Access to means")
+        if answers.get("r_harm_others") == "threatened":
+            add("violence", "Threats")
+        if answers.get("r_harm_others") == "attempted":
+            add("violence", "Recent violence")
+        if set(answers.get("r_medical") or []) & {
+            "seizures", "loss_consciousness", "serious_injury", "acute_medical"
+        }:
+            add("medical", "Concern identified")
+        return items
+    suic = answers.get("suic") or "none"
+    if suic in ("passive", "active", "plan", "intent"):
+        add("suicide", "Thoughts")
+    if suic in ("plan", "intent"):
+        add("suicide", "Plan")
+    if suic == "intent":
+        add("suicide", "Intent")
+    if (answers.get("selfharm") or "none") != "none":
+        add("suicide", "Recent attempt/self-harm")
+    flags = set(answers.get("flags") or [])
+    if flags & {"recent_attempt", "overdose"}:
+        add("suicide", "Recent attempt/self-harm")
+    if "lethal_means" in flags:
+        add("suicide", "Access to means")
+    if "threatening_others" in flags:
+        add("violence", "Threats")
+    if "homicidal_named" in flags:
+        add("violence", "Thoughts")
+        add("violence", "Intent")
+    if "postpartum" in flags:
+        add("violence", "Thoughts")
+        add("safeguarding", "Child concern")
+    if "leaving_care" in flags:
+        add("absconding", "Possible")
+    if "self_care" in flags:
+        add("neglect", "Difficulty with self-care")
+    if "safeguarding" in flags or answers.get("feel_safe") == "no":
+        add("neglect", "Exploitation/vulnerability concern")
+    if "gbv_72h" in flags:
+        add("safeguarding", "Sexual violence/exploitation")
+    if "child_protection" in flags:
+        add("safeguarding", "Child concern")
+    if flags & V4_MEDICAL_FLAGS:
+        add("medical", "Concern identified")
     return items
 
 
@@ -170,6 +266,59 @@ def _validate_payload(sections, section_state):
             raise ValidationError({"section_state": f"Unknown section “{key}”."})
         if value not in schema.SECTION_STATES:
             raise ValidationError({"section_state": f"Unknown state “{value}”."})
+    if "mse" in (sections or {}):
+        _validate_mse(sections["mse"])
+    if "substances" in (sections or {}).get("subs", {}):
+        _validate_substances(sections["subs"]["substances"])
+
+
+def _validate_substances(cards):
+    """INT-08-01: one card per substance, each a code of `intake-substance-rows`."""
+    from .models import LocalConcept
+
+    if not isinstance(cards, list) or not all(isinstance(c, dict) for c in cards):
+        raise ValidationError({"subs": "Substance cards must be a list."})
+    picked = [str(c.get("substance") or "") for c in cards]
+    if len(set(picked)) != len(picked):
+        raise ValidationError({"subs": "Each substance has one card."})
+    known = set(
+        LocalConcept.objects.filter(valueset_id="intake-substance-rows").values_list("code", flat=True)
+    )
+    unknown = [code for code in picked if code not in known]
+    if unknown:
+        raise ValidationError({"subs": f"Unknown substance(s): {', '.join(unknown) or 'blank'}."})
+
+
+def _validate_mse(mse):
+    """Structured MSE findings must be codes of the domain's served value set (INT-16)."""
+    from .models import LocalConcept
+
+    wanted = []
+    findings = mse.get("findings")
+    if findings is not None:
+        if not isinstance(findings, dict):
+            raise ValidationError({"mse": "MSE findings must be an object of domain → codes."})
+        coded = {key for key, _label, opts in schema.MSE_DOMAINS if opts}
+        for domain, picked in findings.items():
+            if domain not in coded:
+                raise ValidationError({"mse": f"Unknown MSE domain “{domain}”."})
+            if not isinstance(picked, list) or not all(isinstance(c, str) for c in picked):
+                raise ValidationError({"mse": f"MSE {domain}: send a list of codes."})
+            wanted += [(mental_state.valueset_for(domain), c) for c in picked]
+    for field, _sphere in mental_state.ORIENTATION_SPHERES:
+        if mse.get(field):
+            wanted.append(("intake-orientation", mse[field]))
+    if not wanted:
+        return
+    # Retired concepts still validate: a draft may carry a code retired since it was picked.
+    known = set(
+        LocalConcept.objects.filter(valueset_id__in={vs for vs, _c in wanted}).values_list(
+            "valueset_id", "code"
+        )
+    )
+    unknown = [code for vs, code in wanted if (vs, code) not in known]
+    if unknown:
+        raise ValidationError({"mse": f"Unknown MSE code(s): {', '.join(unknown)}."})
 
 
 @transaction.atomic
@@ -179,9 +328,20 @@ def save_draft(draft, user, data):
     sections = data.get("sections") or {}
     section_state = data.get("section_state") or {}
     _validate_payload(sections, section_state)
+    for key, value in section_state.items():
+        # A required section cannot be set aside (a state stored before this rule is left as it is).
+        if value == "Not applicable" and key in schema.REQUIRED_SECTIONS and draft.section_state.get(key) != value:
+            raise ValidationError({"section_state": f"Section “{key}” is required — it cannot be set aside."})
+    previous_risk = copy.deepcopy(draft.sections.get("risk", {}))
+    sign_formulation = _pop_formulation_signature(sections.get("risk"), previous_risk)
     merged = copy.deepcopy(draft.sections)
     for key, payload in sections.items():
         merged.setdefault(key, {}).update(payload)
+    if sign_formulation is not None:
+        _apply_formulation_signature(merged.setdefault("risk", {}), user, sign_formulation)
+    _stamp_resolved_carried(merged.get("risk", {}), previous_risk, user)
+    _link_past_history(merged)
+    _drop_hidden(merged)
     draft.sections = merged
     state = dict(draft.section_state)
     state.update(section_state)
@@ -194,8 +354,104 @@ def save_draft(draft, user, data):
     return draft
 
 
+FORMULATION_REQUIRED = ["static", "dynamic", "protective", "change_72h", "summary"]
+
+
+def _pop_formulation_signature(risk_payload, previous_risk):
+    """The client may only *request* a signature (truthy) or clear it (falsy);
+    the signer and time are always set by the server (CLAUDE.md §4 provenance).
+    Returns None when the payload leaves the signature as it is — including an
+    autosave echoing back the stored signature time."""
+    if not isinstance(risk_payload, dict):
+        return None
+    risk_payload.pop("formulation_signed_by", None)
+    if "formulation_signed_at" not in risk_payload:
+        return None
+    requested = risk_payload.pop("formulation_signed_at")
+    if requested and requested == previous_risk.get("formulation_signed_at"):
+        return None
+    return bool(requested)
+
+
+def _apply_formulation_signature(risk, user, sign):
+    if not sign:
+        risk["formulation_signed_at"] = ""
+        risk["formulation_signed_by"] = ""
+        return
+    if any(not str(risk.get(key, "")).strip() for key in FORMULATION_REQUIRED):
+        raise ValidationError(
+            {"risk": "Complete static, dynamic, protective, next 24–72 h and the summary before signing."}
+        )
+    risk["formulation_signed_at"] = timezone.now().isoformat()
+    risk["formulation_signed_by"] = _user_name(user)
+
+
+def _stamp_resolved_carried(risk, previous_risk, user):
+    """Carried triage findings marked 'not present now' keep who resolved them and when.
+    The first stamp is kept; later autosaves can't change it."""
+    previous = previous_risk.get("carried") or {}
+    for key, entry in (risk.get("carried") or {}).items():
+        if not entry.get("not_present"):
+            entry.pop("resolved_at", None)
+            entry.pop("resolved_by", None)
+            continue
+        earlier = previous.get(key) or {}
+        if earlier.get("not_present") and earlier.get("resolved_at"):
+            entry["resolved_at"] = earlier["resolved_at"]
+            entry["resolved_by"] = earlier.get("resolved_by", "")
+        else:
+            entry["resolved_at"] = timezone.now().isoformat()
+            entry["resolved_by"] = _user_name(user)
+
+
+def _drop_hidden(sections):
+    """A field shown only for certain answers is not kept once hidden (X-08), e.g.
+    harm-reduction prompts after injecting is changed to "No"."""
+    for spec in schema.SECTIONS:
+        values = sections.get(spec["key"])
+        if not values:
+            continue
+        for field in spec["fields"]:
+            rule = field.get("show_when")
+            if rule and field["key"] in values and values.get(rule["field"]) not in rule["in"]:
+                del values[field["key"]]
+
+
+# INT-04-07 / 04-08: a past attempt or past violence is linked to the risk history
+# object (Section 3 "Past history"), not kept as separate text.
+PAST_HISTORY_LINKS = {"past_attempts": "suicide", "past_violence": "violence"}
+PAST_HISTORY = "Past history"
+
+
+def _link_past_history(sections):
+    """Section 4 'Yes' puts "Past history" on the risk row; 'None' takes it off again,
+    but only when this link put it there (a clinician's own tick stays)."""
+    history = sections.get("mh", {})
+    risk = sections.get("risk", {})
+    linked = risk.get("linked") or {}
+    for field, row in PAST_HISTORY_LINKS.items():
+        key = f"{row}:{PAST_HISTORY}"
+        chosen = (risk.get("rows") or {}).get(row) or []
+        if history.get(field) == schema._code("Yes"):
+            if PAST_HISTORY not in chosen:
+                rows = sections.setdefault("risk", risk).setdefault("rows", {})
+                rows[row] = [*chosen, PAST_HISTORY]
+                linked[key] = {"from": f"mh.{field}"}
+                risk["linked"] = linked
+        elif key in linked:
+            risk["rows"][row] = [o for o in chosen if o != PAST_HISTORY]
+            del linked[key]
+
+
+def _user_name(user):
+    return user.get_full_name() or user.get_username()
+
+
 def _sync_mse(draft, user):
-    values = {k: (draft.sections.get("mse", {}).get(k) or "") for k in MSE_FIELDS}
+    """Write the intake MSE into the one MSE store as readable text; the
+    structured findings stay in the intake section (INT-16)."""
+    section = draft.sections.get("mse", {})
+    values = mental_state.exam_text(section)
     if not any(values.values()):
         return
     if draft.mse_id:
@@ -212,7 +468,7 @@ def _sync_mse(draft, user):
         )
     from . import records
 
-    records.propose_from_mse(draft.patient, draft.mse)
+    records.propose_from_mse(draft.patient, draft.mse, section)
 
 
 def _mirror_legacy_columns(draft):
@@ -256,8 +512,7 @@ def outstanding_items(draft):
     if risk_rows_active(s) and not risk.get("formulation_signed_at"):
         missing.append("Section 3 Sign the structured risk formulation")
     elif risk_rows_active(s):
-        required = ["static", "dynamic", "protective", "change_72h", "summary"]
-        if any(not str(risk.get(k, "")).strip() for k in required):
+        if any(not str(risk.get(k, "")).strip() for k in FORMULATION_REQUIRED):
             missing.append("Section 3 Complete the structured risk formulation")
     meds = s.get("meds", {})
     has_meds = MedicationHistoryEntry.objects.filter(
@@ -270,7 +525,7 @@ def outstanding_items(draft):
     elif patient.allergy_records.filter(verification_status="UNCONFIRMED").exists():
         missing.append("Section 6 Confirm the client-reported allergy record")
     mse = s.get("mse", {})
-    if not (str(mse.get("mood", "")).strip() and str(mse.get("thought_content", "")).strip()):
+    if not (mental_state.recorded(mse, "mood") and mental_state.recorded(mse, "thought_content")):
         missing.append("Section 16 MSE — at least mood and thought content")
     from apps.clinical_encounter.models import DiagnosisCode
 
@@ -278,7 +533,9 @@ def outstanding_items(draft):
 
     # A diagnosis is always an ICD-11 coded record (CLAUDE.md §5: no coded
     # clinical concept as free text); the Diagnosis tab writes it.
-    if not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE").exists():
+    if not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE").exclude(
+        verification_status="RULED_OUT"
+    ).exists():
         missing.append("Section 19 At least one coded working diagnosis (provisional is fine)")
     undecided = tools.recommended_undecided(patient)
     if undecided:

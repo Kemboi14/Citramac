@@ -352,6 +352,21 @@ class CareTask(TenantScopedModel):
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # FHIR Task.priority / executionPeriod.end / focus / owner — optional; set by
+    # workflows that schedule a task (e.g. legal status reviews, LGL-WF-03).
+    priority = models.CharField(
+        max_length=8, blank=True, choices=[("routine", "Routine"), ("urgent", "Urgent"), ("asap", "ASAP")]
+    )
+    due_at = models.DateTimeField(null=True, blank=True)
+    assignee = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    focus_type = models.CharField(max_length=40, blank=True)
+    focus_id = models.CharField(max_length=64, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]
@@ -499,7 +514,12 @@ class OutcomeScore(TenantScopedModel):
     # Findings the clinician had to see at recording (e.g. PHQ-9 item 9 positive).
     flags = models.JSONField(default=list, blank=True)
     positive = models.BooleanField(null=True, blank=True)
+    # Answers that are not summed items: EPDS item 10, MDQ co-occurrence and
+    # impairment, the PAWSS threshold question (instruments.SUPPLEMENTARY).
+    detail = models.JSONField(default=dict, blank=True)
     context = models.CharField(max_length=24, blank=True)
+    # Baseline / repeat / … — a code of the served `assessment-timepoint` value set.
+    timepoint = models.CharField(max_length=16, blank=True)
     note = models.CharField(max_length=400, blank=True)
     recorded_at = models.DateTimeField(default=timezone.now)
     source_intake = models.ForeignKey(
@@ -583,14 +603,9 @@ class CarePlan(TenantScopedModel):
     confirmed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    AGREEMENT_CHOICES = [
-        ("", "Not recorded"),
-        ("AGREES", "Client agrees with the plan"),
-        ("PARTIAL", "Client agrees with part of the plan"),
-        ("DISAGREES", "Client disagrees"),
-        ("UNABLE", "Client unable to take part now"),
-    ]
-    client_agreement = models.CharField(max_length=10, choices=AGREEMENT_CHOICES, blank=True)
+    # A code of the served `care-plan-agreement` value set.
+    client_agreement = models.CharField(max_length=10, blank=True)
+    # [{"part": <care-plan-disagreement-part code>, "words": the client's own words}]
     disagreements = models.JSONField(default=list, blank=True)
     what_matters = models.TextField(blank=True)
     rationale = models.TextField(blank=True)
@@ -600,6 +615,28 @@ class CarePlan(TenantScopedModel):
     contact_72h_at = models.DateTimeField(null=True, blank=True)
     follow_up_clinician = models.CharField(max_length=150, blank=True)
     means_counselling_done = models.BooleanField(default=False)
+
+    # ── With the client (mockup v4). Goals are the client's own words, each
+    # optionally linked to a plan action and a 5P formulation heading:
+    # [{"goal", "action_key", "formulation" (<formulation-5p code>), "owner",
+    #   "review_date" (YYYY-MM-DD), "source"}]. FHIR: Goal, referenced from CarePlan.goal.
+    goal_items = models.JSONField(default=list, blank=True)
+    crisis_plan = models.TextField(blank=True)
+    family_involvement = models.TextField(blank=True)
+    advance_statement = models.TextField(blank=True)
+    # Opioid safety: naloxone and overdose-risk teaching planned for discharge, and
+    # whether opioid agonist therapy was offered (served `oat-offer` code).
+    naloxone_teaching = models.BooleanField(default=False)
+    oat_offer = models.CharField(max_length=24, blank=True)
+    # The client read the plan on this device and acknowledged it (co-production view).
+    client_ack_at = models.DateTimeField(null=True, blank=True)
+    client_ack_language = models.CharField(max_length=2, blank=True)
+    client_ack_recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Planned-discharge checklist answers for an episode that ends without an
+    # inpatient discharge summary (same keys as DischargeSummary.readiness).
+    discharge_readiness = models.JSONField(default=dict, blank=True)
 
 
 class CarePlanVersion(TenantScopedModel):
@@ -656,6 +693,9 @@ class CarePlanActivity(TenantScopedModel):
     reason = models.TextField(blank=True)  # lowering the priority, or declining
     why = models.JSONField(default=list, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
+    # Accepted with "Accept the N remaining" — the signer must confirm they
+    # reviewed each one before the plan can be signed (RULE-05).
+    bulk_accepted = models.BooleanField(default=False)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]
@@ -720,6 +760,9 @@ class MdtReview(TenantScopedModel):
     attendees = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     outcome = models.TextField(blank=True)
+    # Differing views recorded as they were voiced — a decision is not unanimous
+    # just because only the decision was written down.
+    dissent = models.TextField(blank=True)
     next_review = models.DateField(null=True, blank=True)
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -727,6 +770,32 @@ class MdtReview(TenantScopedModel):
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["scheduled_for"]
+
+
+class NursingCarePlanEntry(TenantScopedModel):
+    """One nursing problem: problem → goal → interventions → evaluation, linked to
+    the MDT plan action it serves. Written once; each evaluation is appended with
+    who wrote it and when, and the problem and goal are never rewritten.
+    FHIR: CarePlan (category nursing) with a Goal and activity, part of the
+    episode's CarePlan."""
+
+    care_plan = models.ForeignKey(CarePlan, on_delete=models.PROTECT, related_name="nursing_entries")
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
+    activity = models.ForeignKey(
+        CarePlanActivity, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    problem = models.CharField(max_length=300)
+    goal = models.CharField(max_length=300)
+    interventions = models.TextField(blank=True)
+    # [{"text", "by" (user display), "by_id", "at" (ISO time)}], oldest first.
+    evaluations = models.JSONField(default=list, blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["recorded_at"]
 
 
 class CosignRequest(TenantScopedModel):
@@ -783,24 +852,41 @@ class BillingService(TenantScopedModel):
 
 
 class InterventionRecord(TenantScopedModel):
-    """Intervention Engine record (doc 15 §1.17). A billable one creates a ChargeItem."""
+    """Care delivered, recorded from an Interventions module (v4 mockup drawer).
+    FHIR Procedure (`activity` → basedOn the CarePlan activity, when linked).
+    A billable record creates a ChargeItem. Records are never deleted: a
+    correction voids the record and keeps the before/after in `corrections`."""
 
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="interventions")
+    # Optional: the v4 drawer allows "Not linked to a care-plan action".
     activity = models.ForeignKey(
-        CarePlanActivity, on_delete=models.PROTECT, related_name="interventions"
+        CarePlanActivity,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="interventions",
     )
+    # Code from the `intervention-module` LocalValueSet (e.g. "group_psychotherapy").
+    module = models.CharField(max_length=40, blank=True)
     performed_at = models.DateTimeField(default=timezone.now)
     provider = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     intervention = models.CharField(max_length=255)
+    note = models.TextField(blank=True)  # "What was done"
     response = models.TextField(blank=True)
+    outcome = models.TextField(blank=True)
     next_action = models.CharField(max_length=255, blank=True)
+    completes_activity = models.BooleanField(default=False)
     billable = models.BooleanField(default=False)
     billing_service = models.ForeignKey(
         BillingService, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     quantity = models.PositiveSmallIntegerField(default=1)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+    # [{at, by, reason, before, after}] — append-only correction trail.
+    corrections = models.JSONField(default=list, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-performed_at"]
@@ -828,6 +914,8 @@ class ChargeItem(TenantScopedModel):
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # Set when the source intervention is voided; voided charges are not billed.
+    voided_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-delivered_at"]
@@ -838,7 +926,15 @@ class ConsentTemplate(TenantScopedModel):
     text is set by the facility, never written by the system; each change is a
     new version, and every ConsentRecord snapshots the exact wording shown."""
 
-    CONSENT_TYPE_CHOICES = [("DATA_SHARING_HIE", "Data sharing (health information exchange)")]
+    CONSENT_TYPE_CHOICES = [
+        ("DATA_SHARING_HIE", "Data sharing (health information exchange)"),
+        # Release authorizations the documents module checks (DOC-CI-06). With
+        # an active template the authorization snapshots the facility's own
+        # wording; without one it stays a structured-scope record.
+        ("EMPLOYER_COMMUNICATION", "Communicating with the client's employer"),
+        ("SCHOOL_COMMUNICATION", "Communicating with the client's school / university"),
+        ("RELEASE_OF_INFORMATION", "Releasing health information to a named third party"),
+    ]
 
     consent_type = models.CharField(max_length=32, choices=CONSENT_TYPE_CHOICES)
     version = models.CharField(max_length=32)
@@ -1178,6 +1274,10 @@ class ProgressNote(TenantScopedModel):
     amends = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="addenda")
     author = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
     signed_at = models.DateTimeField(null=True, blank=True)
+    # The follow-up appointment this note records the contact for, if any.
+    appointment = models.ForeignKey(
+        "client_registry.Appointment", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]
@@ -1285,3 +1385,139 @@ class LegalForm(TenantScopedModel):
     signed_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     signed_at = models.DateTimeField(null=True, blank=True)
     cosign_request = models.ForeignKey("CosignRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+
+# ── Group programme (v4 mockup "Group Psychotherapy" workspace) ──
+
+
+class GroupProgrammeCategory(TenantScopedModel):
+    """A session category the organisation runs (mockup "Category configuration").
+    `code` is stable once created: modifying a category changes its display only,
+    so sessions already recorded keep pointing at the same category."""
+
+    code = models.SlugField(max_length=64)
+    display = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["order", "display"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "code"], name="unique_group_category_code_per_org"
+            )
+        ]
+
+    def __str__(self):
+        return self.display
+
+
+class GroupSession(TenantScopedModel):
+    """One confirmed group session: the shared facts only. FHIR Appointment (the
+    session) with the cohort as a FHIR Group. Each attendee's record is a separate
+    GroupSessionEntry — nothing client-specific is ever stored here (CLAUDE.md §4,
+    per-subject separation of multi-party sessions)."""
+
+    category = models.ForeignKey(
+        GroupProgrammeCategory, on_delete=models.PROTECT, related_name="sessions"
+    )
+    # The approved name typed when the "Other approved programme" category is chosen.
+    category_other = models.CharField(max_length=100, blank=True)
+    topic = models.CharField(max_length=160)
+    session_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    facilitator = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Only for a facilitator who has no user account in the staff directory.
+    facilitator_name = models.CharField(max_length=120, blank=True)
+    documented_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    location = models.CharField(max_length=120)
+    # The shared intervention only — never client-specific observations.
+    description = models.TextField()
+    appointment = models.ForeignKey(
+        "client_registry.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Idempotent confirm: a retried request returns the session already saved.
+    client_request_id = models.UUIDField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(default=timezone.now)
+    # [{at, by, reason, before, after}] — append-only correction trail.
+    audit = models.JSONField(default=list, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-session_date", "-start_time"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_time__gt=models.F("start_time")),
+                name="group_session_ends_after_start",
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "client_request_id"],
+                name="unique_group_session_request_per_org",
+            ),
+        ]
+
+
+class GroupSessionEntry(TenantScopedModel):
+    """One client's own record of a group session. FHIR Encounter: subject is this
+    client, `appointment` → the shared session, `episodeOfCare` → the client's
+    open episode. The observation is visible only on this client's record.
+
+    `attendance` is a code from the served `group-attendance` value set (local
+    code system). VERIFY: its mapping to the R4 participation-status binding
+    (Appointment.participant.status) once the national IG names one.
+    A risk disclosure always carries an observation and a follow-up task (FHIR Task)."""
+
+    session = models.ForeignKey(GroupSession, on_delete=models.PROTECT, related_name="entries")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="group_session_entries"
+    )
+    episode = models.ForeignKey(EpisodeOfCare, on_delete=models.PROTECT, related_name="+")
+    attendance = models.CharField(max_length=16)
+    observation = models.TextField(blank=True)
+    risk_disclosure = models.BooleanField(default=False)
+    follow_up_task = models.ForeignKey(
+        CareTask, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    intervention_record = models.OneToOneField(
+        InterventionRecord,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="group_session_entry",
+    )
+    version = models.PositiveIntegerField(default=1)
+    # [{at, by, reason, before, after}] — append-only correction trail.
+    audit = models.JSONField(default=list, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session", "patient"], name="unique_group_entry_per_client"
+            )
+        ]
+
+
+# ── Psychotherapy Session note (master prompt §7) — defined in its own module ──
+from .psychotherapy_models import (  # noqa: E402,F401
+    ClinicalLexiconTerm,
+    PsychotherapyNote,
+    PsychotherapyNoteAmendment,
+    TherapyModel,
+)
+
+# ── Legal admission status (master prompt §7A, LGL-*) — defined in its own module ──
+from .legal_models import (  # noqa: E402,F401
+    DischargeNotice,
+    LegalDocument,
+    LegalStatus,
+    LegalStatusEvent,
+)

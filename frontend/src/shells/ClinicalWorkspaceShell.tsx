@@ -8,6 +8,8 @@ import { initialsAndLabel } from "./userDisplay";
 
 // Topbar titles where the mockup's title differs from the nav label
 // (docs/15-CLINICAL-WORKSPACE-V3.md §1.1).
+const FOCUS_ROUTES = ["/clinical/psychotherapy/group"];
+
 const PAGE_TITLES: Record<string, string> = {
   "/clinical/registration": "Client registry",
   "/clinical/triage": "Triage & Queue",
@@ -16,6 +18,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/clinical/clients/*": "Client Record",
   "/clinical/inpatient": "Inpatient Admissions",
   "/clinical/inpatient/ward": "Ward Board",
+  "/clinical/psychotherapy/group": "Group Psychotherapy",
   "/clinical/psychotherapy/*": "Outpatient Care",
   "/clinical/documents": "Clinical Documents",
   "/clinical/documents/*": "Signed Triage Assessment",
@@ -58,6 +61,7 @@ export function ClinicalWorkspaceShell() {
       profilePath="/clinical/profile"
       variant="brand"
       pageTitles={PAGE_TITLES}
+      focusRoutes={FOCUS_ROUTES}
       topbarRight={
         <TopbarActions
           pill={<OrgBranchPill />}

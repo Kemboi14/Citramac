@@ -18,6 +18,7 @@ const CATEGORY_FILTERS: { value: NotificationCategory | ""; label: string }[] = 
   { value: "RISK_ALERT", label: "Risk alerts" },
   { value: "SUBSCRIPTION", label: "Subscription" },
   { value: "RETENTION", label: "Records retention" },
+  { value: "FACILITY_LICENCE", label: "Facility licence" },
   { value: "SYSTEM", label: "System" },
 ];
 

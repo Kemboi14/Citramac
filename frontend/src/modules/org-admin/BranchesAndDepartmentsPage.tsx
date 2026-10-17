@@ -6,6 +6,19 @@ import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 import { LocationFields } from "../../components/LocationFields";
+import {
+  BranchIdentifierBanner,
+  BranchIdentifierFields,
+  BranchIdentifierHistory,
+  LicenseStatusBadge,
+} from "../../components/BranchIdentifierFields";
+import {
+  EMPTY_IDENTIFIERS,
+  identifierFieldErrors,
+  identifierPayload,
+  identifiersFromBranch,
+  type BranchIdentifierValues,
+} from "../../lib/branchIdentifiers";
 import { createBranch, listBranches, updateBranch, type Branch } from "../../lib/branchesApi";
 import {
   createDepartment,
@@ -107,6 +120,12 @@ export function BranchesAndDepartmentsPage() {
   // same-tick updates.
   const updateBranchForm = (patch: Partial<BranchFormState>) =>
     setBranchForm((prev) => ({ ...prev, ...patch }));
+  const [identifiers, setIdentifiers] = useState<BranchIdentifierValues>(EMPTY_IDENTIFIERS);
+  const [identifierErrors, setIdentifierErrors] = useState<
+    ReturnType<typeof identifierFieldErrors>
+  >({});
+  const updateIdentifiers = (patch: Partial<BranchIdentifierValues>) =>
+    setIdentifiers((prev) => ({ ...prev, ...patch }));
 
   const [deptDrawer, setDeptDrawer] = useState<{ open: boolean; department: Department | null }>({
     open: false,
@@ -139,6 +158,8 @@ export function BranchesAndDepartmentsPage() {
 
   const openNewBranch = () => {
     setBranchForm(EMPTY_BRANCH_FORM);
+    setIdentifiers(EMPTY_IDENTIFIERS);
+    setIdentifierErrors({});
     setBranchFormError(null);
     setBranchDrawer({ open: true, branch: null });
   };
@@ -154,6 +175,8 @@ export function BranchesAndDepartmentsPage() {
       phone: branch.phone,
       email: branch.email,
     });
+    setIdentifiers(identifiersFromBranch(branch));
+    setIdentifierErrors({});
     setBranchFormError(null);
     setBranchDrawer({ open: true, branch });
   };
@@ -165,16 +188,19 @@ export function BranchesAndDepartmentsPage() {
       throw new Error("validation");
     }
     setBranchFormError(null);
+    setIdentifierErrors({});
+    const payload = { ...branchForm, ...identifierPayload(identifiers) };
     try {
       if (branchDrawer.branch) {
-        const updated = await updateBranch(accessToken, branchDrawer.branch.id, branchForm);
+        const updated = await updateBranch(accessToken, branchDrawer.branch.id, payload);
         setBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       } else {
-        const created = await createBranch(accessToken, branchForm);
+        const created = await createBranch(accessToken, payload);
         setBranches((prev) => [...prev, created]);
       }
       setBranchDrawer({ open: false, branch: null });
     } catch (err) {
+      setIdentifierErrors(identifierFieldErrors(err));
       setBranchFormError(err instanceof ApiError ? err.message : "Couldn't save this branch.");
       throw err;
     }
@@ -262,8 +288,16 @@ export function BranchesAndDepartmentsPage() {
         <div>
           <div className="font-medium text-ink-900">{b.name}</div>
           <div className="text-xs text-ink-500">{b.mfl_code || "No MFL code yet"}</div>
+          {b.missing_identifiers.length > 0 && (
+            <div className="text-xs font-semibold text-status-red">Registration details missing</div>
+          )}
         </div>
       ),
+    },
+    {
+      key: "licence",
+      header: "Licence",
+      cell: (b) => <LicenseStatusBadge branch={b} />,
     },
     {
       key: "level",
@@ -380,6 +414,7 @@ export function BranchesAndDepartmentsPage() {
 
       {!loading && (
         <>
+          <BranchIdentifierBanner branches={branches} />
           <section className={CARD_CLASS}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 font-display text-base font-semibold text-ink-900">
@@ -489,6 +524,24 @@ export function BranchesAndDepartmentsPage() {
             onCountyChange={(v) => updateBranchForm({ county: v })}
             onSubCountyChange={(v) => updateBranchForm({ sub_county: v })}
           />
+          <div>
+            <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">
+              Registration &amp; Licensing
+            </h3>
+            <BranchIdentifierFields
+              values={identifiers}
+              onChange={updateIdentifiers}
+              kmpdcRequired={
+                branchDrawer.branch?.is_registered_health_provider ??
+                branches[0]?.is_registered_health_provider
+              }
+              shaClaimsEnabled={branchDrawer.branch?.sha_claims_enabled ?? false}
+              errors={identifierErrors}
+              labelClassName={LABEL_CLASS}
+              fieldClassName={FIELD_CLASS}
+            />
+          </div>
+          {branchDrawer.branch && <BranchIdentifierHistory branch={branchDrawer.branch} />}
           <div className="flex flex-wrap gap-4">
             <label className={`${LABEL_CLASS} flex-1`}>
               Phone

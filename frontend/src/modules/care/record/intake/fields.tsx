@@ -21,6 +21,9 @@ export function FieldControl({
   vs,
   onChange,
   carriedFrom,
+  pills = false,
+  labelPrefix,
+  wideClass = "sm:col-span-2",
 }: {
   idPrefix: string;
   field: IntakeField;
@@ -29,6 +32,12 @@ export function FieldControl({
   onChange: (value: unknown) => void;
   /** Where a pre-filled value came from (Registration / Triage), shown as a chip. */
   carriedFrom?: string;
+  /** Render a multi-choice field as toggle pills (mockup `chips`). */
+  pills?: boolean;
+  /** Prefixed to the label, e.g. "Alcohol — Amount / pattern". */
+  labelPrefix?: string;
+  /** Column span of a full-width field in its grid. */
+  wideClass?: string;
 }) {
   const id = `${idPrefix}-${field.key}`;
   const wide = field.full || field.type === "multi" || field.type === "textarea";
@@ -59,6 +68,18 @@ export function FieldControl({
       break;
     case "multi": {
       const options = vs.options(field.valueset ?? "");
+      if (pills) {
+        control = (
+          <PillChoices
+            labelledBy={`${id}-label`}
+            options={options}
+            highlight={field.highlight ?? []}
+            value={list(value)}
+            onChange={onChange}
+          />
+        );
+        break;
+      }
       control = (
         <CheckChoices
           options={options}
@@ -100,9 +121,10 @@ export function FieldControl({
       );
   }
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${wide ? "sm:col-span-2" : ""}`}>
+    <div className={`flex min-w-0 flex-col gap-1 ${wide ? wideClass : ""}`}>
       {field.type !== "check" && (
-        <label htmlFor={id} className={FIELD_LABEL}>
+        <label id={`${id}-label`} htmlFor={id} className={FIELD_LABEL}>
+          {labelPrefix ? `${labelPrefix} — ` : ""}
           {field.label}
           {field.required && <span className="ml-1 text-priority-red">*</span>}
           {field.restricted && (
@@ -117,6 +139,53 @@ export function FieldControl({
         <p className="text-[11px] text-brand-green">✓ Pre-filled from {carriedFrom} — confirm or update</p>
       )}
       {field.hint && <p className="text-[11px] text-ink-500">{field.hint}</p>}
+    </div>
+  );
+}
+
+/** Toggle pills for a multi-choice field (mockup `.chipc`): chosen pills turn
+ * green, or red for a highlighted (clinically significant) code. Each pill is
+ * a real checkbox, so state is never conveyed by colour alone. */
+function PillChoices({
+  labelledBy,
+  options,
+  highlight,
+  value,
+  onChange,
+}: {
+  labelledBy: string;
+  options: { code: string; display: string }[];
+  highlight: string[];
+  value: string[];
+  onChange: (codes: string[]) => void;
+}) {
+  return (
+    <div role="group" aria-labelledby={labelledBy} className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const on = value.includes(option.code);
+        const hi = highlight.includes(option.code);
+        const tone = on
+          ? hi
+            ? "border-priority-red bg-priority-red-tint text-priority-red"
+            : "border-brand-green bg-brand-green-tint text-brand-green-dark"
+          : "border-surface-border bg-surface-bg text-ink-900";
+        return (
+          <label
+            key={option.code}
+            className={`inline-flex min-h-[34px] cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors ${tone}`}
+          >
+            <input
+              type="checkbox"
+              className="h-[15px] w-[15px]"
+              checked={on}
+              onChange={(e) =>
+                onChange(e.target.checked ? [...value, option.code] : value.filter((c) => c !== option.code))
+              }
+            />
+            {option.display}
+          </label>
+        );
+      })}
     </div>
   );
 }

@@ -114,6 +114,25 @@ export function QuickRecheck({
   const [distress, setDistress] = useState(draft?.distress_behaviour || "LOW");
   const [cards, setCards] = useState<Cards>(() => initialCards(draft?.observations));
   const [note, setNote] = useState(draft?.note ?? "");
+  const savedObs = new Map(Object.entries(draft?.observations ?? {}));
+  const [acvpu, setAcvpu] = useState(savedObs.get("consciousness")?.value ?? "");
+  const [oxygen, setOxygen] = useState(savedObs.get("supplementalO2")?.value ?? "");
+  const initialExtra: RecheckObservations = {
+    ...(acvpu ? { consciousness: { value: acvpu, status: "MEASURED" as const } } : {}),
+    ...(oxygen ? { supplementalO2: { value: oxygen, status: "MEASURED" as const } } : {}),
+  };
+  const ewsExtra = useRef<RecheckObservations>(initialExtra);
+
+  function setEwsExtra(key: "consciousness" | "supplementalO2", value: string) {
+    const next = { ...ewsExtra.current };
+    if (value) next[key] = { value, status: "MEASURED" };
+    else delete next[key];
+    ewsExtra.current = next;
+    const observations = { ...latest.current.observations };
+    delete observations[key];
+    latest.current = { ...latest.current, observations };
+    scheduleSave({});
+  }
   const [draftStatus, setDraftStatus] = useState(
     draft?.draft_saved_at ? `Draft saved ${formatTime(draft.draft_saved_at)}` : "Draft not saved",
   );
@@ -124,7 +143,7 @@ export function QuickRecheck({
   const latest = useRef<RecheckPayload>({
     change_since_last_check: change,
     distress_behaviour: distress,
-    observations: toObservations(cards),
+    observations: { ...toObservations(cards), ...initialExtra },
     note,
   });
   const timer = useRef<number | undefined>(undefined);
@@ -140,6 +159,8 @@ export function QuickRecheck({
 
   function scheduleSave(patch: Partial<RecheckPayload>) {
     latest.current = { ...latest.current, ...patch };
+    // v4: ACVPU and oxygen ride along with the repeat observations so the EWS is complete.
+    latest.current.observations = { ...latest.current.observations, ...ewsExtra.current };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(saveNow, 500);
   }
@@ -254,6 +275,36 @@ export function QuickRecheck({
                 onChange={(value) => {
                   setChange(value);
                   scheduleSave({ change_since_last_check: value });
+                }}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="recheck-acvpu" className={RC_LABEL}>
+                Consciousness (ACVPU) — blank means not assessed
+              </label>
+              <SelectChoices
+                id="recheck-acvpu"
+                options={vs.options("triage-v4-acvpu").filter((o) => "ACVPU".includes(o.code) && o.code.length === 1)}
+                placeholder="— not recorded —"
+                value={acvpu}
+                onChange={(value) => {
+                  setAcvpu(value);
+                  setEwsExtra("consciousness", value);
+                }}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="recheck-o2" className={RC_LABEL}>
+                Oxygen
+              </label>
+              <SelectChoices
+                id="recheck-o2"
+                options={vs.options("triage-v4-oxygen")}
+                placeholder="— not recorded —"
+                value={oxygen}
+                onChange={(value) => {
+                  setOxygen(value);
+                  setEwsExtra("supplementalO2", value);
                 }}
               />
             </div>

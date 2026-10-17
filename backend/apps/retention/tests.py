@@ -34,6 +34,7 @@ CLINICAL_APPS = {
     "billing",
     "insurance_claims",
     "care_pathway",
+    "documents",
 }
 
 

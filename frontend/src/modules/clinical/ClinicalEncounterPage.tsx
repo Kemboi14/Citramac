@@ -34,6 +34,7 @@ export function ClinicalEncounterPage() {
   const [orderingLab, setOrderingLab] = useState(false);
   const [paying, setPaying] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [upfront, setUpfront] = useState({ amount: "", method: "CASH", reference: "" });
 
   const [soap, setSoap] = useState({ subjective: "", objective: "", assessment: "", plan: "" });
   const [savedNote, setSavedNote] = useState<{ id: string; is_locked: boolean } | null>(null);
@@ -118,19 +119,30 @@ export function ClinicalEncounterPage() {
 
   const payAndClearBilling = async () => {
     if (!accessToken || !selected) return;
+    const amount = Number(upfront.amount);
+    if (!upfront.amount || !Number.isFinite(amount) || amount <= 0) {
+      setOrderError("Enter the amount received.");
+      return;
+    }
+    if (upfront.method === "MPESA" && !upfront.reference.trim()) {
+      setOrderError("Enter the M-Pesa transaction code.");
+      return;
+    }
+    setOrderError(null);
     setPaying(true);
     try {
+      const value = amount.toFixed(2);
       const invoice = await createInvoice(
         accessToken,
         selected.patientId,
         encounterId!,
-        "Upfront consultation fee",
-        "1000.00",
+        "Upfront payment",
+        value,
       );
-      await recordPayment(accessToken, invoice.id, "1000.00", "CASH");
+      await recordPayment(accessToken, invoice.id, value, upfront.method, upfront.reference.trim());
       setPaid(true);
-    } catch {
-      setOrderError("Couldn't record payment.");
+    } catch (err) {
+      setOrderError(err instanceof ApiError ? err.message : "Couldn't record payment.");
     } finally {
       setPaying(false);
     }
@@ -250,18 +262,50 @@ export function ClinicalEncounterPage() {
             {orderingLab ? "Ordering…" : "Order Lab Test (FBC)"}
           </button>
           {!paid && (
-            <button
-              type="button"
-              onClick={payAndClearBilling}
-              disabled={paying}
-              className="rounded-md border border-surface-border bg-surface-card px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
-            >
-              {paying ? "Recording…" : "Record KES 1,000 Cash Payment"}
-            </button>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className={LABEL_CLASS}>
+                Amount received (KES)
+                <input
+                  className={`${FIELD_CLASS} w-36`}
+                  inputMode="decimal"
+                  value={upfront.amount}
+                  onChange={(e) => setUpfront((u) => ({ ...u, amount: e.target.value }))}
+                />
+              </label>
+              <label className={LABEL_CLASS}>
+                Method
+                <select
+                  className={FIELD_CLASS}
+                  value={upfront.method}
+                  onChange={(e) => setUpfront((u) => ({ ...u, method: e.target.value }))}
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="MPESA">M-Pesa</option>
+                  <option value="CARD">Card</option>
+                </select>
+              </label>
+              <label className={LABEL_CLASS}>
+                Reference
+                <input
+                  className={`${FIELD_CLASS} w-40`}
+                  placeholder={upfront.method === "MPESA" ? "M-Pesa code" : "Optional"}
+                  value={upfront.reference}
+                  onChange={(e) => setUpfront((u) => ({ ...u, reference: e.target.value }))}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={payAndClearBilling}
+                disabled={paying}
+                className="rounded-md border border-surface-border bg-surface-card px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+              >
+                {paying ? "Recording…" : "Record upfront payment"}
+              </button>
+            </div>
           )}
           {paid && (
             <span className="text-sm font-medium text-brand-green-dark">
-              Billing cleared — upfront cash payment on file.
+              Billing cleared — upfront payment on file.
             </span>
           )}
         </div>

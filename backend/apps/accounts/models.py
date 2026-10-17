@@ -430,3 +430,39 @@ class PasswordHistory(TimestampedModel):
 
     def __str__(self):
         return f"password-history for {self.user_id}"
+
+
+class PractitionerCredential(TenantScopedModel):
+    """
+    A staff member's professional registration, as verified by the
+    organisation — the practitioner profile the statutory recommendation form
+    reads (master prompt LGL-R-01/02/08). FHIR: Practitioner.qualification
+    (identifier = registration number; issuer and identifier `system` URI are
+    VERIFY — CLAUDE.md §6, never invented here).
+
+    `mha_recommendation_approved` is the MHA_RECOMMENDATION_APPROVED flag: the
+    organisation has confirmed this practitioner is approved to make
+    recommendations under the Mental Health Act. Only a credential with a
+    verified registration *and* this flag can open or sign an LGL-R form.
+    """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="practitioner_credential")
+    registration_number = models.CharField(max_length=64, blank=True)
+    registration_body = models.CharField(max_length=150, blank=True)
+    registration_verified_at = models.DateTimeField(null=True, blank=True)
+    registration_verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    qualifications = models.CharField(max_length=255, blank=True)
+    mha_recommendation_approved = models.BooleanField(default=False)
+    mha_approved_at = models.DateTimeField(null=True, blank=True)
+    mha_approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    @property
+    def registration_verified(self):
+        return bool(self.registration_number.strip() and self.registration_verified_at)
+
+    def __str__(self):
+        return f"credential for {self.user_id}"

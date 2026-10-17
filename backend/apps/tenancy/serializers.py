@@ -1,10 +1,14 @@
 import re
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
+from .context import platform_admin_context
 from .crypto import encrypt_value
 from .models import (
     Branch,
+    BranchIdentifierChange,
     Department,
     Organization,
     PlatformBranding,
@@ -154,8 +158,35 @@ class OrganizationStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Organization.STATUS_CHOICES)
 
 
+class BranchIdentifierChangeSerializer(serializers.ModelSerializer):
+    field_label = serializers.CharField(source="get_field_display", read_only=True)
+    changed_by_email = serializers.CharField(source="changed_by.email", read_only=True, default="")
+
+    class Meta:
+        model = BranchIdentifierChange
+        fields = [
+            "id",
+            "field",
+            "field_label",
+            "previous_value",
+            "new_value",
+            "changed_by_email",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
 class BranchSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    is_registered_health_provider = serializers.BooleanField(
+        source="organization.is_registered_health_provider", read_only=True
+    )
+    missing_identifiers = serializers.ListField(read_only=True)
+    license_status = serializers.CharField(read_only=True)
+    license_days_remaining = serializers.IntegerField(read_only=True, allow_null=True)
+    identifier_history = BranchIdentifierChangeSerializer(
+        source="identifier_changes", many=True, read_only=True
+    )
     ward_count = serializers.SerializerMethodField()
     bed_count = serializers.SerializerMethodField()
     has_sha_credentials = serializers.BooleanField(read_only=True)
@@ -181,6 +212,15 @@ class BranchSerializer(serializers.ModelSerializer):
             "sub_county",
             "gps_coordinates",
             "mfl_code",
+            "kmpdc_registration_number",
+            "facility_license_number",
+            "facility_license_valid_until",
+            "sha_fr_code",
+            "is_registered_health_provider",
+            "missing_identifiers",
+            "license_status",
+            "license_days_remaining",
+            "identifier_history",
             "phone",
             "email",
             "outpatient_capacity_per_day",
@@ -206,17 +246,111 @@ class BranchSerializer(serializers.ModelSerializer):
 
         return Bed.all_objects.filter(ward__branch=obj).count()
 
+    def _target_organization(self):
+        """The organization this branch belongs (or will belong) to — the
+        same resolution BranchViewSet.perform_create applies on create."""
+        if self.instance is not None:
+            return self.instance.organization
+        request = self.context.get("request")
+        if request is None:
+            return None
+        if request.user.is_superuser:
+            with platform_admin_context():
+                try:
+                    return Organization.objects.filter(pk=request.data.get("organization")).first()
+                except DjangoValidationError:
+                    return None  # malformed id — perform_create reports it
+        return request.user.organization
+
+    def validate(self, attrs):
+        for field in BranchIdentifierChange.TRACKED_FIELDS:
+            if isinstance(attrs.get(field), str):
+                attrs[field] = attrs[field].strip()
+
+        def current(field):
+            if field in attrs:
+                return attrs[field]
+            return getattr(self.instance, field, None)
+
+        def enforced(field, *also_triggered_by):
+            # A legacy branch missing an identifier isn't blocked from an
+            # unrelated partial edit (e.g. deactivating it) — it's flagged
+            # via missing_identifiers instead. Creating a branch, a full
+            # update, or touching the identifier itself always enforces it.
+            if self.instance is None or not self.partial:
+                return True
+            return any(f in attrs for f in (field, *also_triggered_by))
+
+        errors = {}
+        organization = self._target_organization()
+        if (
+            organization is not None
+            and organization.is_registered_health_provider
+            and not current("kmpdc_registration_number")
+            and enforced("kmpdc_registration_number")
+        ):
+            errors["kmpdc_registration_number"] = (
+                "The KMPDC registration number is required for every branch of a registered "
+                "health provider."
+            )
+        if (
+            current("sha_claims_enabled")
+            and not current("sha_fr_code")
+            and enforced("sha_fr_code", "sha_claims_enabled")
+        ):
+            errors["sha_fr_code"] = (
+                "The SHA FR code is required for a branch that submits SHA claims — enter it, or "
+                "turn off SHA claims for this branch."
+            )
+        license_number = current("facility_license_number")
+        valid_until = current("facility_license_valid_until")
+        touched = {"facility_license_number", "facility_license_valid_until"} & set(attrs)
+        if touched and license_number and not valid_until:
+            errors["facility_license_valid_until"] = (
+                "Enter the date this licence is valid until — renewal reminders depend on it."
+            )
+        if touched and valid_until and not license_number:
+            errors["facility_license_number"] = "Enter the licence number this expiry date is for."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+    def _record_identifier_changes(self, branch, previous):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        for field in BranchIdentifierChange.TRACKED_FIELDS:
+            before, after = previous[field], getattr(branch, field)
+            if before == after:
+                continue
+            BranchIdentifierChange.objects.create(
+                organization=branch.organization,
+                branch=branch,
+                field=field,
+                previous_value="" if before is None else str(before),
+                new_value="" if after is None else str(after),
+                changed_by=user if getattr(user, "is_authenticated", False) else None,
+            )
+
     def create(self, validated_data):
         credentials = validated_data.pop("sha_api_credentials", None)
         if credentials:
             validated_data["sha_api_credentials_encrypted"] = encrypt_value(credentials)
-        return super().create(validated_data)
+        blank = Branch()
+        previous = {f: getattr(blank, f) for f in BranchIdentifierChange.TRACKED_FIELDS}
+        with transaction.atomic():
+            branch = super().create(validated_data)
+            self._record_identifier_changes(branch, previous)
+        return branch
 
     def update(self, instance, validated_data):
         credentials = validated_data.pop("sha_api_credentials", None)
         if credentials:
             validated_data["sha_api_credentials_encrypted"] = encrypt_value(credentials)
-        return super().update(instance, validated_data)
+        previous = {f: getattr(instance, f) for f in BranchIdentifierChange.TRACKED_FIELDS}
+        with transaction.atomic():
+            branch = super().update(instance, validated_data)
+            self._record_identifier_changes(branch, previous)
+        return branch
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

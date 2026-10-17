@@ -1,10 +1,11 @@
-import { AlertTriangle, Archive, Bell, CreditCard } from "lucide-react";
+import { AlertTriangle, Archive, Bell, CreditCard, FileBadge } from "lucide-react";
 import type { Notification } from "../lib/notificationsApi";
 
 const ICONS = {
   RISK_ALERT: AlertTriangle,
   SUBSCRIPTION: CreditCard,
   RETENTION: Archive,
+  FACILITY_LICENCE: FileBadge,
   SYSTEM: Bell,
 } as const;
 

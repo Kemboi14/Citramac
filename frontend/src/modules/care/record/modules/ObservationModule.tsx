@@ -125,6 +125,11 @@ export function ObservationModule({ patientId }: { patientId: string }) {
         </div>
       </div>
 
+      {!state.level && (
+        <Callout tone="warning">No observation level is set. Set the observation level at triage first (or above, with a reason) — observer hand-over and signed entries open once a level exists.</Callout>
+      )}
+
+      {state.level && (<>
       <div>
         <div className={FIELD_LABEL}>Observer hand-over</div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -157,7 +162,10 @@ export function ObservationModule({ patientId }: { patientId: string }) {
           </select>
           <input className={`${INPUT} sm:col-span-2`} aria-label="What you observed" placeholder="What you observed (behaviour, mood, what you talked about)" value={entry.note} onChange={(e) => setEntry((x) => ({ ...x, note: e.target.value }))} />
         </div>
-        <button type="button" className={`${BTN} ${BTN_SM} mt-2`} disabled={!entry.location} onClick={() => accessToken && void run(() => addObservationEntry(accessToken, patientId, entry), () => setEntry({ location: "", engagement: "", note: "" }))}>
+        {!entry.note.trim() && !entry.engagement.startsWith("Asleep") && (
+          <p className="mt-1 text-[11px] text-ink-500">Describe what you observed — only a client observed asleep may be signed without a note.</p>
+        )}
+        <button type="button" className={`${BTN} ${BTN_SM} mt-2`} disabled={!entry.location || (!entry.note.trim() && !entry.engagement.startsWith("Asleep"))} onClick={() => accessToken && void run(() => addObservationEntry(accessToken, patientId, entry), () => setEntry({ location: "", engagement: "", note: "" }))}>
           Sign observation entry
         </button>
         {state.entries.length > 0 && (
@@ -173,6 +181,7 @@ export function ObservationModule({ patientId }: { patientId: string }) {
           </div>
         )}
       </div>
+      </>)}
 
       <div>
         <div className={FIELD_LABEL}>Observation set (vital signs)</div>

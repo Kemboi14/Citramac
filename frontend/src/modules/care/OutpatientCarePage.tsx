@@ -31,6 +31,7 @@ import {
   Tag,
 } from "./shared/ui";
 import { useValueSets, type ValueSetsApi } from "./shared/useValueSets";
+import { TherapyModule } from "./record/modules/TherapyModule";
 
 // Outpatient Care — docs/15-CLINICAL-WORKSPACE-V3.md §1.11, mockup `outpatient()`.
 // All three Psychotherapy nav items open this page; `kind` picks which session
@@ -209,6 +210,13 @@ export function OutpatientCarePage({ kind }: { kind: Kind }) {
               // eslint-disable-next-line security/detect-object-injection -- `kind` is a typed union.
               sessionType={SESSION_TYPE[kind]}
             />
+            {kind !== "group" && (
+              // Master prompt §7 — the Psychotherapy Session note workflow (group
+              // attendance is recorded in the group programme, one client at a time).
+              <Card title="Psychotherapy Session">
+                <TherapyModule key={`therapy-${selected.patient_id}`} patientId={selected.patient_id} />
+              </Card>
+            )}
           </div>
         </div>
       )}

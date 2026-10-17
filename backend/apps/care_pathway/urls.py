@@ -1,7 +1,12 @@
 from django.urls import path
 
+from . import group_views as gview
 from . import intervention_views as iview
+from . import legal_views as lview
+from . import outcome_views as oview
 from . import plan_views, views
+from . import psychotherapy_views as psyview
+from . import triage_v4_views
 
 urlpatterns = [
     path("care/valuesets/", views.ValueSetsView.as_view(), name="care-valuesets"),
@@ -22,6 +27,8 @@ urlpatterns = [
         name="care-resolve-identity",
     ),
     path("care/triage/worklist/", views.TriageWorklistView.as_view(), name="care-triage-worklist"),
+    path("care/triage/v4/config/", triage_v4_views.TriageV4ConfigView.as_view(), name="care-triage-v4-config"),
+    path("care/queue/live/", triage_v4_views.LiveQueueView.as_view(), name="care-live-queue"),
     path("care/triage/<uuid:pk>/", views.TriageEncounterView.as_view(), name="care-triage"),
     path("care/triage/<uuid:pk>/start/", views.TriageStartView.as_view(), name="care-triage-start"),
     path("care/triage/<uuid:pk>/draft/", views.TriageDraftView.as_view(), name="care-triage-draft"),
@@ -92,8 +99,14 @@ urlpatterns = [
     path("care/clients/<uuid:patient_id>/observation-sets/", iview.ObservationSetView.as_view(), name="care-observation-sets"),
     path("care/clients/<uuid:patient_id>/sbar/", iview.SbarView.as_view(), name="care-sbar"),
     path("care/clients/<uuid:patient_id>/prescribing-checks/", iview.PrescribingChecksView.as_view(), name="care-prescribing-checks"),
+    path("care/clients/<uuid:patient_id>/prescribing/", iview.PrescribingView.as_view(), name="care-prescribing"),
     path("care/clients/<uuid:patient_id>/mar/", iview.MarView.as_view(), name="care-mar"),
     path("care/mar/<uuid:pk>/administer/", iview.MarAdministerView.as_view(), name="care-mar-administer"),
+    path(
+        "care/clients/<uuid:patient_id>/mar/orders/<uuid:item_id>/administer/",
+        iview.MarOrderAdministerView.as_view(),
+        name="care-mar-order-administer",
+    ),
     path("care/mar/<uuid:pk>/effect/", iview.MarEffectView.as_view(), name="care-mar-effect"),
     path("care/clients/<uuid:patient_id>/restrictive-practice/", iview.RestrictivePracticeView.as_view(), name="care-restrictive"),
     path("care/restrictive-checks/<uuid:pk>/done/", iview.RestrictiveCheckView.as_view(), name="care-restrictive-check"),
@@ -109,6 +122,26 @@ urlpatterns = [
         "care/clients/<uuid:patient_id>/care-plan/actions/<str:key>/decide/",
         plan_views.CarePlanActionDecisionView.as_view(),
         name="care-plan-action-decide",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/care-plan/accept-remaining/",
+        plan_views.CarePlanAcceptRemainingView.as_view(),
+        name="care-plan-accept-remaining",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/care-plan/client-acknowledge/",
+        plan_views.CarePlanClientAckView.as_view(),
+        name="care-plan-client-ack",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/care-plan/nursing/",
+        plan_views.NursingCarePlanView.as_view(),
+        name="care-plan-nursing",
+    ),
+    path(
+        "care/nursing-problems/<uuid:pk>/evaluate/",
+        plan_views.NursingEvaluationView.as_view(),
+        name="care-nursing-evaluate",
     ),
     path(
         "care/clients/<uuid:patient_id>/care-plan/details/",
@@ -193,16 +226,47 @@ urlpatterns = [
     path("care/clients/<uuid:patient_id>/therapy/", views.ClientTherapyView.as_view(), name="care-client-therapy"),
     path("care/therapy/<uuid:pk>/confidentiality/", views.TherapyConfidentialityView.as_view(), name="care-therapy-confidentiality"),
     path("care/clients/<uuid:patient_id>/therapy/sessions/", views.ClientTherapySessionView.as_view(), name="care-client-therapy-session"),
-    path("care/therapy/group-sessions/", views.GroupTherapySessionView.as_view(), name="care-group-therapy-session"),
+    # ── Psychotherapy Session note (master prompt §7) ──
+    path("care/psychotherapy/config/", psyview.PsyConfigView.as_view(), name="care-psy-config"),
+    path("care/psychotherapy/models/", psyview.TherapyModelsView.as_view(), name="care-psy-models"),
+    path("care/psychotherapy/models/<slug:code>/", psyview.TherapyModelView.as_view(), name="care-psy-model"),
+    path("care/clients/<uuid:patient_id>/psychotherapy-notes/", psyview.ClientPsyNotesView.as_view(), name="care-client-psy-notes"),
+    path("care/psychotherapy-notes/<uuid:pk>/", psyview.PsyNoteView.as_view(), name="care-psy-note"),
+    path("care/psychotherapy-notes/<uuid:pk>/generate/", psyview.PsyNoteGenerateView.as_view(), name="care-psy-note-generate"),
+    path("care/psychotherapy-notes/<uuid:pk>/sign/", psyview.PsyNoteSignView.as_view(), name="care-psy-note-sign"),
+    path("care/psychotherapy-notes/<uuid:pk>/amend/", psyview.PsyNoteAmendView.as_view(), name="care-psy-note-amend"),
     path("care/clients/<uuid:patient_id>/oat/", views.ClientOatView.as_view(), name="care-client-oat"),
     path("care/oat/<uuid:pk>/status/", views.OatStatusView.as_view(), name="care-oat-status"),
     path("care/clients/<uuid:patient_id>/naloxone/", views.ClientNaloxoneView.as_view(), name="care-client-naloxone"),
     path("care/appointments/<uuid:pk>/missed/", views.AppointmentMissedView.as_view(), name="care-appointment-missed"),
     path("care/appointments/<uuid:pk>/recontacted/", views.AppointmentRecontactedView.as_view(), name="care-appointment-recontacted"),
+    path("care/appointments/<uuid:pk>/contact-done/", oview.AppointmentContactDoneView.as_view(), name="care-appointment-contact-done"),
+    path("care/appointments/<uuid:pk>/rebook/", oview.AppointmentRebookView.as_view(), name="care-appointment-rebook"),
+    path("care/clients/<uuid:patient_id>/outcomes/overview/", oview.ClientOutcomesOverviewView.as_view(), name="care-client-outcomes-overview"),
+    path("care/clients/<uuid:patient_id>/discharge-checklist/", oview.ClientDischargeChecklistView.as_view(), name="care-client-discharge-checklist"),
+    path("care/clients/<uuid:patient_id>/follow-ups/", oview.ClientFollowUpListView.as_view(), name="care-client-follow-ups"),
     path("care/clients/<uuid:patient_id>/labs/", views.ClientLabsView.as_view(), name="care-client-labs"),
     path("care/labs/results/<uuid:pk>/acknowledge/", views.LabAcknowledgeView.as_view(), name="care-lab-acknowledge"),
+    path("care/labs/orders/<uuid:pk>/result/", iview.LabResultEntryView.as_view(), name="care-lab-result"),
     path("care/clients/<uuid:patient_id>/legal-forms/", views.ClientLegalFormsView.as_view(), name="care-client-legal-forms"),
     path("care/legal-forms/<uuid:pk>/sign/", views.LegalFormSignView.as_view(), name="care-legal-form-sign"),
+    # Legal admission status — master prompt §7A (LGL-*)
+    path("care/clients/<uuid:patient_id>/legal-status/", lview.ClientLegalStatusView.as_view(), name="care-client-legal-status"),
+    path("care/clients/<uuid:patient_id>/legal-status/applications/", lview.LegalApplicationView.as_view(), name="care-legal-application"),
+    path("care/legal/documents/<uuid:pk>/", lview.LegalDocumentView.as_view(), name="care-legal-document"),
+    path("care/legal/documents/<uuid:pk>/sign/", lview.LegalDocumentSignView.as_view(), name="care-legal-document-sign"),
+    path("care/legal/documents/<uuid:pk>/amend/", lview.LegalDocumentAmendView.as_view(), name="care-legal-document-amend"),
+    path("care/legal/documents/<uuid:pk>/recommendations/", lview.LegalRecommendationView.as_view(), name="care-legal-recommendation"),
+    path("care/legal/documents/<uuid:pk>/print/", lview.LegalDocumentPrintView.as_view(), name="care-legal-document-print"),
+    path("care/legal/<uuid:pk>/decision/", lview.LegalDecisionView.as_view(), name="care-legal-decision"),
+    path("care/legal/<uuid:pk>/end/", lview.LegalEndView.as_view(), name="care-legal-end"),
+    path("care/legal/<uuid:pk>/notices/", lview.LegalNoticeView.as_view(), name="care-legal-notice"),
+    path("care/legal/<uuid:pk>/identity/", lview.LegalIdentityView.as_view(), name="care-legal-identity"),
+    path("care/legal/notices/<uuid:pk>/withdraw/", lview.LegalNoticeWithdrawView.as_view(), name="care-legal-notice-withdraw"),
+    path("care/legal/notices/<uuid:pk>/depart/", lview.LegalNoticeDepartView.as_view(), name="care-legal-notice-depart"),
+    path("care/legal/tasks/<uuid:pk>/complete/", lview.LegalTaskCompleteView.as_view(), name="care-legal-task-complete"),
+    path("care/legal/templates/", lview.LegalTemplatesView.as_view(), name="care-legal-templates"),
+    path("care/legal/practitioners/<uuid:user_id>/credential/", lview.PractitionerCredentialView.as_view(), name="care-practitioner-credential"),
     path("care/clients/<uuid:patient_id>/modules/", views.ClientModulesView.as_view(), name="care-client-modules"),
     path("care/ward-board/", views.WardBoardTableView.as_view(), name="care-ward-board"),
     path("care/my-tasks/", views.MyTasksView.as_view(), name="care-my-tasks"),
@@ -268,6 +332,16 @@ urlpatterns = [
         name="care-client-interventions",
     ),
     path(
+        "care/clients/<uuid:patient_id>/interventions/workspace/",
+        iview.InterventionWorkspaceView.as_view(),
+        name="care-client-interventions-workspace",
+    ),
+    path(
+        "care/interventions/<uuid:pk>/void/",
+        iview.InterventionVoidView.as_view(),
+        name="care-intervention-void",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/billing/",
         views.ClientBillingView.as_view(),
         name="care-client-billing",
@@ -325,5 +399,51 @@ urlpatterns = [
         "care/discharges/<uuid:pk>/fhir/",
         views.DischargeFhirView.as_view(),
         name="care-discharge-fhir",
+    ),
+    # ── Group programme (v4 Group Psychotherapy workspace) ──
+    path(
+        "care/group-programme/categories/",
+        gview.GroupCategoriesView.as_view(),
+        name="care-group-categories",
+    ),
+    path(
+        "care/group-programme/categories/<slug:code>/",
+        gview.GroupCategoryView.as_view(),
+        name="care-group-category",
+    ),
+    path(
+        "care/group-programme/workspace/",
+        gview.GroupWorkspaceView.as_view(),
+        name="care-group-workspace",
+    ),
+    path(
+        "care/group-programme/sessions/",
+        gview.GroupSessionsView.as_view(),
+        name="care-group-sessions",
+    ),
+    path(
+        "care/group-programme/sessions/<uuid:pk>/",
+        gview.GroupSessionView.as_view(),
+        name="care-group-session",
+    ),
+    path(
+        "care/group-programme/entries/<uuid:pk>/",
+        gview.GroupEntryView.as_view(),
+        name="care-group-entry",
+    ),
+    path(
+        "care/group-programme/entries/<uuid:pk>/follow-up/complete/",
+        gview.GroupEntryFollowUpCompleteView.as_view(),
+        name="care-group-entry-follow-up-complete",
+    ),
+    path(
+        "care/group-programme/utilisation/",
+        gview.GroupUtilisationView.as_view(),
+        name="care-group-utilisation",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/group-entries/",
+        gview.ClientGroupEntriesView.as_view(),
+        name="care-client-group-entries",
     ),
 ]

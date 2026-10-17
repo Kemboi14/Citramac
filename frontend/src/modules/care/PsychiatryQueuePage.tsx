@@ -16,6 +16,7 @@ import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
 import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
 import { useRecordData } from "./record/useRecordData";
+import { LiveQueue } from "./triage/LiveQueue";
 
 const REFRESH_MS = 60_000;
 
@@ -52,7 +53,7 @@ export function PsychiatryQueuePage() {
     "Couldn't load the psychiatry queue.",
   );
   const rows: PsychiatryQueueRow[] = data?.results ?? [];
-  // Starts in the server's order (RED → GREEN, newest first); headers re-sort.
+  // Starts in the server's order (RED → GREEN, longest wait first); headers re-sort.
   const controls = useTableControls(data ? rows : null, { sorts: SORTS, searchText });
 
   const openReview = async (row: PsychiatryQueueRow) => {
@@ -76,6 +77,18 @@ export function PsychiatryQueuePage() {
         subtitle="Signed triage referrals · highest priority first"
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
+      {/* v4 live queue (mockup renderQueue): all four lanes; the table below is the
+          sortable list of signed triage referrals. */}
+      <Card className="mb-5 mt-3" title="Live queue" bodyClassName="p-4">
+        <LiveQueue
+          opening={opening}
+          onOpenReview={(row) => {
+            const match = rows.find((r) => r.id === row.id);
+            if (match) void openReview(match);
+            else navigate(`/clinical/triage/${row.id}`);
+          }}
+        />
+      </Card>
       <Card
         className="mb-5 mt-3"
         title="Clients queued for psychiatric review · RED → ORANGE → YELLOW → GREEN"

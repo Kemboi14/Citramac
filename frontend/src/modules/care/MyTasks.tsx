@@ -15,13 +15,23 @@ export function MyTasks() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!accessToken) return;
-    getMyTasks(accessToken).then((r) => setTasks(r.results)).catch((e) => setError(errorText(e, "Couldn't load tasks.")));
+    let cancelled = false;
+    getMyTasks(accessToken)
+      .then((r) => {
+        if (cancelled) return;
+        setTasks(r.results);
+        setError(null);
+      })
+      .catch((e) => !cancelled && setError(errorText(e, "Couldn't load tasks.")));
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken]);
   return (
     <Card title={<>My tasks {tasks && <Tag>{tasks.length}</Tag>}</>}>
       <ErrorNote>{error}</ErrorNote>
       {!tasks ? (
-        <p className="text-[13px] text-ink-500">Loading…</p>
+        !error && <p className="text-[13px] text-ink-500">Loading…</p>
       ) : tasks.length === 0 ? (
         <p className="text-[13px] text-ink-500">Nothing outstanding.</p>
       ) : (

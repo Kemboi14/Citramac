@@ -7,14 +7,16 @@ with a reason. Nothing is auto-ordered. Scores are stored once in
 OutcomeScore and flow to the Care Plan and Outcomes.
 """
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from . import instruments
+from . import facility_time, instruments, mental_state
 from .intake import latest_signed
 from .intake_schema import RISK_ROWS, _code
-from .models import AssessmentToolDecision, OutcomeScore
+from .models import AssessmentToolDecision, LocalConcept, OutcomeScore
 
 LINK_TOOLS = {
     "SRA": "Structured suicide / clinical risk formulation",
@@ -58,15 +60,27 @@ def triggers(patient):
     subs = s.get("subs", {})
     mse = s.get("mse", {})
     age = patient.age_years
-    affect = str(mse.get("affect", "")).lower()
-    content = str(mse.get("thought_content", "")).lower()
+    if mental_state.is_structured(mse):
+        suicidal_content = mental_state.has(mse, "thought_content", "Suicidal")
+        low_affect = (
+            mental_state.has(mse, "affect", "Flat")
+            or mental_state.has(mse, "affect", "Blunted")
+            or mental_state.has(mse, "thought_content", "Hopelessness")
+        )
+        elevated_affect = mental_state.has(mse, "affect", "Elevated")
+    else:  # legacy free-text MSE (pre-v4 intakes are read as stored)
+        affect = str(mse.get("affect", "")).lower()
+        content = str(mse.get("thought_content", "")).lower()
+        suicidal_content = "suicidal" in content
+        low_affect = "flat" in affect or "blunted" in affect or "hopelessness" in content
+        elevated_affect = "elevated" in affect
 
     suicide = _active_risk(s, "suicide")
     if suicide:
         reason = "Suicide / self-harm finding: " + ", ".join(o.lower() for o in suicide)
         add("SRA", reason)
         add("SAFETY", reason)
-    if "suicidal" in content:
+    if suicidal_content:
         add("SRA", "MSE thought content: suicidal")
     violence = _active_risk(s, "violence")
     if violence:
@@ -76,7 +90,10 @@ def triggers(patient):
 
     # CIWA-Ar / COWS (withdrawal severity) belong to the withdrawal module, which
     # needs a clinical protocol source — they are not recommended here.
-    if subs.get("kind") == _code("Alcohol"):
+    current_cards = {
+        c.get("substance") for c in subs.get("substances") or [] if isinstance(c, dict) and c.get("current") == _code("Yes")
+    }
+    if subs.get("kind") == _code("Alcohol") or _code("Alcohol") in current_cards:
         add("PAWSS", "Alcohol use recorded — predict withdrawal risk")
         add("AUDITC", "Alcohol use recorded — structured screen")
 
@@ -84,7 +101,7 @@ def triggers(patient):
     if low:
         teen = age is not None and 12 <= age < 18
         add("PHQA" if teen else "PHQ9", ("Adolescent with " if teen else "Symptoms: ") + ", ".join(x.lower() for x in low))
-    if "flat" in affect or "blunted" in affect or "hopelessness" in content:
+    if low_affect:
         add("PHQA" if age is not None and age < 18 else "PHQ9", "MSE: low affect / hopelessness")
     anxious = [x for x in ("Anxiety/worry", "Panic") if _code(x) in sx]
     if anxious:
@@ -92,7 +109,7 @@ def triggers(patient):
     manic = [x for x in ("Elevated/expansive mood", "Reduced need for sleep", "Racing thoughts", "Impulsivity") if _code(x) in sx]
     if manic:
         add("MDQ", "Possible manic symptoms: " + ", ".join(x.lower() for x in manic))
-    if "elevated" in affect:
+    if elevated_affect:
         add("MDQ", "MSE: elevated affect")
     if _code("Trauma symptoms") in sx:
         add("PCL5", "Symptoms: trauma symptoms")
@@ -206,19 +223,31 @@ def decide(patient, user, key, status, reason=""):
 
 @transaction.atomic
 def record_assessment(patient, user, instrument, *, answers=None, total=None, positive=None,
-                      context="", note="", intake=None):
+                      context="", note="", intake=None, detail=None, timepoint="", assessed_at=None):
     if instrument not in instruments.INSTRUMENTS:
         raise ValidationError({"instrument": "Unknown instrument."})
     spec = instruments.INSTRUMENTS[instrument]
+    if timepoint and not LocalConcept.objects.filter(
+        valueset_id="assessment-timepoint", code=timepoint, active=True
+    ).exists():
+        raise ValidationError({"timepoint": "Choose the timepoint (baseline, repeat, …)."})
+    recorded_at = _assessment_time(assessed_at)
     try:
-        if spec["kind"] == "items":
+        detail = instruments.validate_detail(instrument, detail)
+        if instruments.items_skipped(instrument, detail):
+            total, items = 0, []
+        elif spec["kind"] == "items":
             total, items = instruments.score_items(instrument, answers)
         else:
             items = []
             total = instruments.validate_total(instrument, total)
     except ValueError as exc:
         raise ValidationError({"score": str(exc)}) from exc
-    flags = instruments.result_flags(instrument, items)
+    flags = instruments.result_flags(instrument, items, detail)
+    if spec.get("positive_rule"):
+        positive = instruments.positive_for(instrument, total, detail)
+    elif not spec.get("has_positive_flag"):
+        positive = None
     score = OutcomeScore.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -226,12 +255,14 @@ def record_assessment(patient, user, instrument, *, answers=None, total=None, po
         score=total,
         items=items,
         flags=flags,
-        positive=positive if spec.get("has_positive_flag") else None,
+        positive=positive,
+        detail=detail,
         context=context[:24],
+        timepoint=timepoint,
         note=(note or "")[:400],
         source_intake=intake,
         recorded_by=user,
-        recorded_at=timezone.now(),
+        recorded_at=recorded_at,
     )
     from . import records
 
@@ -247,6 +278,22 @@ def record_assessment(patient, user, instrument, *, answers=None, total=None, po
             decided_by=user,
         )
     return score
+
+
+def _assessment_time(value):
+    """When the assessment was done: now, or an earlier time the clinician gives
+    (a measure completed on paper and entered later) — never in the future."""
+    from django.utils.dateparse import parse_datetime
+
+    if not value:
+        return timezone.now()
+    moment = parse_datetime(value) if isinstance(value, str) else value
+    if moment is None:
+        raise ValidationError({"assessed_at": "Enter the assessment date and time."})
+    moment = facility_time.make_local_aware(moment)
+    if moment > timezone.now() + timedelta(minutes=5):
+        raise ValidationError({"assessed_at": "The assessment date cannot be in the future."})
+    return moment
 
 
 def outcome_summary(patient):

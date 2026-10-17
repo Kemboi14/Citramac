@@ -64,6 +64,13 @@ const ICONS = {
       <path d="m9 16 2 2 4-4" />
     </svg>
   ),
+  group: (
+    <svg {...ICON_PROPS}>
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3 20v-1a6 6 0 0 1 12 0v1M15 15a5 5 0 0 1 6 5" />
+    </svg>
+  ),
   inpatient: (
     <svg {...ICON_PROPS}>
       <path d="M3 21V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v13M3 13h18M7 10h3v3H7zm7 0h3v3h-3zM5 21v-4m14 4v-4" />
@@ -192,6 +199,9 @@ export function DashboardPage() {
   }, [load]);
 
   const n = (value: number | undefined) => (data ? String(value ?? 0) : "—");
+  /** "1 client" / "3 clients" — "— clients" while loading. */
+  const count = (value: number | undefined, one: string, many: string) =>
+    data ? `${value ?? 0} ${(value ?? 0) === 1 ? one : many}` : `— ${many}`;
 
   // What needs a person's attention right now, most urgent first, each with a way in.
   const attention = data
@@ -199,7 +209,7 @@ export function DashboardPage() {
         {
           count: data.red_orange,
           text: (c: number) =>
-            `${c} RED / ORANGE ${c === 1 ? "client" : "clients"} need priority attention`,
+            `${c} RED / ORANGE ${c === 1 ? "client needs" : "clients need"} priority attention`,
           to: "/clinical/psychiatry",
         },
         {
@@ -295,7 +305,7 @@ export function DashboardPage() {
         <StatCard
           value={n(data?.inpatients)}
           label="Inpatients"
-          change={data ? `${data.beds_available} beds available` : ""}
+          change={data ? `${count(data.beds_available, "bed", "beds")} available` : ""}
         />
         <StatCard
           value={n(data?.outpatients)}
@@ -341,8 +351,20 @@ export function DashboardPage() {
             icon={ICONS.caseload}
             title="My caseload"
             detail="Clients assigned to you"
-            count={`${n(data?.caseload_count)} clients`}
+            count={count(data?.caseload_count, "client", "clients")}
             onClick={() => navigate("/clinical/caseload")}
+          />
+          <QuickTile
+            icon={ICONS.group}
+            title="Group Psychotherapy"
+            detail="Session attendance and linked client records"
+            count={
+              data?.group_follow_up_open
+                ? count(data.group_follow_up_open, "follow-up", "follow-ups")
+                : count(data?.group_session_count, "session", "sessions")
+            }
+            attention={(data?.group_follow_up_open ?? 0) > 0}
+            onClick={() => navigate("/clinical/psychotherapy/group")}
           />
           <QuickTile
             icon={ICONS.appointments}
@@ -365,7 +387,7 @@ export function DashboardPage() {
             icon={ICONS.inpatient}
             title="Inpatient admissions"
             detail="Current stays and bed allocation"
-            count={`${n(data?.beds_available)} beds free`}
+            count={`${count(data?.beds_available, "bed", "beds")} free`}
             onClick={() => navigate("/clinical/inpatient")}
           />
         </div>

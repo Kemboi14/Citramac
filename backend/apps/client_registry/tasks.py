@@ -3,6 +3,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
+from apps.care_pathway import facility_time
 from apps.notifications.email import get_email_connection_and_sender, send_html_email
 from apps.notifications.sms import send_sms
 from apps.tenancy.context import platform_admin_context
@@ -59,8 +60,9 @@ def send_appointment_reminders():
         )
         sent = 0
         for appointment in due:
-            when_text = timezone.localtime(appointment.scheduled_for).strftime(
-                "%A, %d %B %Y at %H:%M"
+            # Facility wall-clock time, not UTC (settings.FACILITY_TIME_ZONE).
+            when_text = facility_time.local_format(
+                appointment.scheduled_for, "%A, %d %B %Y at %H:%M"
             )
             if appointment.patient.contact_email:
                 connection, from_email = get_email_connection_and_sender(appointment.organization)

@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { listAppointments, type AppointmentStatus } from "../../../lib/appointmentsApi";
+import { getClientFollowUps } from "../../../lib/carePlanOutcomesApi";
 import { formatDate, formatTime } from "../shared/format";
 import { BTN_GHOST, TABLE, TD, TH } from "../shared/styles";
 import { Card, ErrorNote, PageHeader, Tag } from "../shared/ui";
+import { FollowUpPanel } from "./outcomes/FollowUpPanel";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 
@@ -14,11 +17,19 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
   NO_SHOW: "No show",
 };
 
-/** Follow-up — docs/15-CLINICAL-WORKSPACE-V3.md §1.17; mockup `followup()`. */
-export function FollowUpStage({ patientId, banner }: RecordViewProps) {
+/** Follow-up — mockup v4 stage 6 follow-up: the same follow-ups as the
+ * worklist, actioned in the record; every other appointment listed below. */
+export function FollowUpStage({ patientId, banner, onRecordChanged }: RecordViewProps) {
+  const [version, setVersion] = useState(0);
+  const followUps = useRecordData(
+    patientId,
+    version,
+    (token) => getClientFollowUps(token, patientId),
+    "Couldn't load this client's follow-up.",
+  );
   const { data, error, loading } = useRecordData(
     patientId,
-    0,
+    version,
     (token) => listAppointments(token, { patient: patientId }),
     "Couldn't load this client's appointments.",
   );
@@ -38,8 +49,19 @@ export function FollowUpStage({ patientId, banner }: RecordViewProps) {
           </Link>
         }
       />
-      <ErrorNote>{error}</ErrorNote>
-      <Card title="Follow-up Schedule" bodyClassName="p-0" className="mt-3">
+      <ErrorNote>{followUps.error ?? error}</ErrorNote>
+      <Card title="Follow-up" className="mt-3">
+        <FollowUpPanel
+          patientId={patientId}
+          clientName={name}
+          data={followUps.data}
+          onChanged={() => {
+            setVersion((v) => v + 1);
+            onRecordChanged();
+          }}
+        />
+      </Card>
+      <Card title="All appointments" bodyClassName="p-0" className="mt-3">
         <div className="overflow-x-auto">
           <table className={`${TABLE} min-w-[560px]`}>
             <thead>

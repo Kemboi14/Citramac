@@ -293,3 +293,67 @@ class AllergySectionTests(IntakeTestCase):
         self.assertEqual(bad.status_code, 400)
 
 
+
+
+class TriageCarryForwardMappingTests(IntakeTestCase):
+    """Triage → intake risk register mapping (v4 mockup triageRiskItems)."""
+
+    def rows(self):
+        return self.draft().data["sections"]["risk"]["rows"]
+
+    def test_none_identified_safeguarding_carries_nothing(self):
+        self.sign_triage(i_flags=["none_identified"])
+        self.assertNotIn("safeguarding", self.rows())
+
+    def test_safeguarding_flags_map_to_their_own_options(self):
+        self.sign_triage(i_flags=["sexual_violence", "child_safeguarding", "domestic_violence"])
+        self.assertEqual(
+            sorted(self.rows()["safeguarding"]),
+            ["Abuse", "Child concern", "Sexual violence/exploitation"],
+        )
+
+    def test_feeling_unsafe_is_a_vulnerability_not_neglect(self):
+        self.sign_triage(i_safe="no")
+        rows = self.rows()
+        self.assertEqual(rows["neglect"], ["Exploitation/vulnerability concern"])
+        self.assertNotIn("safeguarding", rows)
+
+    def test_medical_concern_carries_forward(self):
+        self.sign_triage(h_concern="yes", h_flags=["chest_pain"])
+        self.assertEqual(self.rows()["medical"], ["Concern identified"])
+
+
+class RiskFormulationSignatureTests(IntakeTestCase):
+    FORMULATION = {"static": "a", "dynamic": "b", "protective": "c", "change_72h": "d", "summary": "e"}
+
+    def risk(self):
+        return self.draft().data["sections"]["risk"]
+
+    def test_server_records_signer_and_time_not_the_client_value(self):
+        self.draft()
+        self.save(sections={"risk": {**self.FORMULATION, "formulation_signed_at": "1999-01-01T00:00:00Z",
+                                     "formulation_signed_by": "Someone else"}})
+        risk = self.risk()
+        self.assertNotEqual(risk["formulation_signed_at"], "1999-01-01T00:00:00Z")
+        self.assertEqual(risk["formulation_signed_by"], self.nurse.get_full_name() or self.nurse.get_username())
+
+    def test_cannot_sign_an_incomplete_formulation(self):
+        self.draft()
+        response = self.save(sections={"risk": {"static": "a", "formulation_signed_at": "sign"}})
+        self.assertEqual(response.status_code, 400)
+
+    def test_autosave_echo_keeps_the_original_signature_time(self):
+        self.draft()
+        self.save(sections={"risk": {**self.FORMULATION, "formulation_signed_at": "sign"}})
+        signed_at = self.risk()["formulation_signed_at"]
+        self.save(sections={"risk": {**self.FORMULATION, "formulation_signed_at": signed_at}})
+        self.assertEqual(self.risk()["formulation_signed_at"], signed_at)
+
+    def test_not_present_carried_finding_is_kept_with_who_resolved_it(self):
+        self.sign_triage(d_suicidal="yes")
+        carried = self.risk()["carried"]
+        carried["suicide:Thoughts"] = {**carried["suicide:Thoughts"], "confirmed": True, "not_present": True}
+        self.save(sections={"risk": {"rows": {"suicide": []}, "carried": carried}})
+        entry = self.risk()["carried"]["suicide:Thoughts"]
+        self.assertTrue(entry["not_present"])
+        self.assertTrue(entry["resolved_at"])

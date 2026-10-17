@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Clock } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
+  getClientTools,
   getIntakeSchema,
   listIntakeAssessments,
   openIntakeDraft,
@@ -12,6 +14,7 @@ import {
   type IntakeSectionSpec,
   type IntakeSectionState,
   type IntakeSections,
+  type ToolRow,
 } from "../../../lib/carePathwayApi";
 import { formatDateTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL } from "../shared/styles";
@@ -27,7 +30,9 @@ import { MedsSection } from "./intake/MedsSection";
 import { MseSection } from "./intake/MseSection";
 import { RiskSection } from "./intake/RiskSection";
 import { SchemaSection } from "./intake/SchemaSection";
+import { SubstanceSection } from "./intake/SubstanceSection";
 import { ToolsSection } from "./intake/ToolsSection";
+import { TriggerHint } from "./intake/TriggerHint";
 import type { RecordViewProps } from "./types";
 
 const STATE_MARK: Record<IntakeSectionState, { glyph: string; label: string }> = {
@@ -36,6 +41,37 @@ const STATE_MARK: Record<IntakeSectionState, { glyph: string; label: string }> =
   "Not applicable": { glyph: "—", label: "not applicable" },
   "Not started": { glyph: "○", label: "not started" },
 };
+
+// INT-04-07 / 04-08: Section 4 "Yes" links "Past history" onto the Section 3 risk row.
+// Mirrors intake._link_past_history on the server so the register updates at once.
+const PAST_HISTORY_LINKS: Record<string, string> = { past_attempts: "suicide", past_violence: "violence" };
+const PAST_HISTORY = "Past history";
+
+function linkPastHistory(sections: IntakeSections, field: string, value: unknown): IntakeSections {
+  // eslint-disable-next-line security/detect-object-injection -- fixed key map.
+  const row = PAST_HISTORY_LINKS[field];
+  const risk = (sections.risk ?? {}) as Record<string, unknown>;
+  const rows = { ...((risk.rows as Record<string, string[]>) ?? {}) };
+  const linked = { ...((risk.linked as Record<string, unknown>) ?? {}) };
+  const key = `${row}:${PAST_HISTORY}`;
+  // eslint-disable-next-line security/detect-object-injection -- risk row key.
+  const chosen = rows[row] ?? [];
+  if (value === "YES") {
+    if (chosen.includes(PAST_HISTORY)) return sections;
+    // eslint-disable-next-line security/detect-object-injection -- risk row key.
+    rows[row] = [...chosen, PAST_HISTORY];
+    // eslint-disable-next-line security/detect-object-injection -- composed key.
+    linked[key] = { from: `mh.${field}` };
+  } else if (key in linked) {
+    // eslint-disable-next-line security/detect-object-injection -- risk row key.
+    rows[row] = chosen.filter((o) => o !== PAST_HISTORY);
+    // eslint-disable-next-line security/detect-object-injection -- composed key.
+    delete linked[key];
+  } else {
+    return sections;
+  }
+  return { ...sections, risk: { ...risk, rows, linked } };
+}
 
 interface Payload {
   sections: IntakeSections;
@@ -126,6 +162,10 @@ function IntakeWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [showPrevious, setShowPrevious] = useState(false);
   const [listVersion, setListVersion] = useState(0);
+  // Mockup: the Information trail opens from a "Trail" button, so the section
+  // form keeps the full width by default.
+  const [showTrail, setShowTrail] = useState(false);
+  const trailId = useId();
   const topRef = useRef<HTMLDivElement>(null);
 
   const payload: Payload = { sections, section_state: states, current_section: current };
@@ -134,10 +174,41 @@ function IntakeWorkspace({
       if (!accessToken) return;
       const next = await saveIntakeDraft(accessToken, patientId, value);
       setMeta({ outstanding: next.outstanding_now, overview: next.section_overview });
+      // The server owns the risk-formulation signature and the carried-finding stamps.
+      const serverRisk = next.sections?.risk ?? {};
+      setSections((prev) => ({
+        ...prev,
+        risk: {
+          ...(prev.risk ?? {}),
+          formulation_signed_at: serverRisk.formulation_signed_at ?? "",
+          formulation_signed_by: serverRisk.formulation_signed_by ?? "",
+          carried: serverRisk.carried ?? prev.risk?.carried,
+        },
+      }));
     },
     [accessToken, patientId],
   );
   const autosave = useAutosaveDraft({ value: payload, save, enabled: !signed });
+
+  // Tool triggers are computed on the server from the saved draft, so they are
+  // re-read after each autosave and on every section change.
+  const [toolRows, setToolRows] = useState<ToolRow[] | null>(null);
+  const [toolsError, setToolsError] = useState<string | null>(null);
+  const savedAtMs = autosave.savedAt?.getTime() ?? 0;
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    getClientTools(accessToken, patientId)
+      .then((r) => {
+        if (cancelled) return;
+        setToolRows(r.results);
+        setToolsError(null);
+      })
+      .catch((e) => !cancelled && setToolsError(errorText(e, "Couldn't load the assessment-tool triggers.")));
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, patientId, savedAtMs, current]);
 
   const spec = schema.sections.find((s) => s.key === current) ?? schema.sections[0];
 
@@ -148,13 +219,39 @@ function IntakeWorkspace({
     );
   };
   const values = sectionValues(sections, spec.key);
-  const onChange = (key: string, value: unknown) => patch(spec.key, { [key]: value });
+  const onChange = (key: string, value: unknown) => {
+    patch(spec.key, { [key]: value });
+    if (spec.key === "mh" && key in PAST_HISTORY_LINKS) setSections((prev) => linkPastHistory(prev, key, value));
+  };
   const setState = (state: IntakeSectionState) => setStates((prev) => ({ ...prev, [spec.key]: state }));
+  const stateOf = (key: string) => (states[key] ?? meta.overview[key] ?? "Not started") as IntakeSectionState;
 
   const go = (key: string) => {
     setCurrent(key);
     topRef.current?.scrollIntoView({ block: "start" });
   };
+  const index = schema.sections.findIndex((s) => s.key === spec.key);
+  const prevSpec = index > 0 ? schema.sections[index - 1] : null;
+  const nextSpec = index < schema.sections.length - 1 ? schema.sections[index + 1] : null;
+  // Mark done, then move on to the next section of the same group that is not yet
+  // complete (mockup: "Mark Section N done").
+  const markDone = () => {
+    setState("Complete");
+    const after = schema.sections.slice(index + 1);
+    const target =
+      after.find((s) => s.core === spec.core && !["Complete", "Not applicable"].includes(stateOf(s.key))) ?? nextSpec;
+    if (target) go(target.key);
+  };
+  const sectionName = (s: IntakeSectionSpec) => `Section ${s.n}`;
+  const saveState = signed
+    ? `Signed ${signed.signed_at ? formatDateTime(signed.signed_at) : ""}`
+    : autosave.failed
+      ? "Couldn't save — retrying…"
+      : autosave.dirty
+        ? "Saving…"
+        : autosave.savedAt
+          ? `Draft saved ${autosave.savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+          : "Draft not yet saved";
 
   async function sign(completeness: "COMPLETE" | "PARTIAL" | "UNABLE") {
     if (!accessToken) return;
@@ -194,21 +291,20 @@ function IntakeWorkspace({
             <button type="button" className={BTN_GHOST} aria-expanded={showPrevious} onClick={() => setShowPrevious((v) => !v)}>
               Previous assessments
             </button>
-            <span role="status" className="self-center text-xs text-ink-500">
-              {signed
-                ? `Signed ${signed.signed_at ? formatDateTime(signed.signed_at) : ""}`
-                : autosave.failed
-                  ? "Couldn't save — retrying…"
-                  : autosave.dirty
-                    ? "Saving…"
-                    : autosave.savedAt
-                      ? `Saved ${autosave.savedAt.toLocaleTimeString()}`
-                      : "Draft"}
-            </span>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              aria-expanded={showTrail}
+              aria-controls={trailId}
+              onClick={() => setShowTrail((v) => !v)}
+            >
+              <Clock aria-hidden="true" className="h-4 w-4" />
+              Trail
+            </button>
           </>
         }
       />
-      <ErrorNote>{error ?? vs.error}</ErrorNote>
+      <ErrorNote>{error ?? vs.error ?? toolsError}</ErrorNote>
       {signed && (
         <Callout tone="success" role="status" className="mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -241,7 +337,11 @@ function IntakeWorkspace({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[250px_1fr_300px]">
+      <div
+        className={`grid grid-cols-1 items-start gap-4 lg:grid-cols-[250px_1fr] ${
+          showTrail ? "2xl:grid-cols-[250px_1fr_300px]" : ""
+        }`}
+      >
         <nav aria-label="Intake sections" className="flex flex-col gap-3">
           {groups.map(([title, specs]) => {
             const done = specs.filter((s) => ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? "")).length;
@@ -282,8 +382,34 @@ function IntakeWorkspace({
 
         <div className="min-w-0">
           <Card
-            title={`${spec.core ? "" : `Section ${spec.n} · `}${spec.title}`}
-            aside={<Tag tone={states[spec.key] === "Complete" ? "brand" : "neutral"}>{states[spec.key] ?? "Not started"}</Tag>}
+            title={
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>
+                  Section {spec.n} · {spec.title}{" "}
+                  <span className="text-[11px] font-semibold text-ink-500">{spec.core ? "Core" : "Extended"}</span>
+                </span>
+                <Tag tone={stateOf(spec.key) === "Complete" ? "brand" : stateOf(spec.key) === "In progress" ? "warn" : "neutral"}>
+                  {STATE_MARK[stateOf(spec.key)].glyph} {stateOf(spec.key)}
+                </Tag>
+              </span>
+            }
+            aside={
+              !signed && spec.key !== "close" ? (
+                <span className="flex flex-wrap gap-2">
+                  {/* Only an optional section nobody has started can be set aside. */}
+                  {!spec.required && stateOf(spec.key) === "Not started" && (
+                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("Not applicable")}>
+                      Not applicable
+                    </button>
+                  )}
+                  {["Complete", "Not applicable"].includes(stateOf(spec.key)) && (
+                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("In progress")}>
+                      Re-open section
+                    </button>
+                  )}
+                </span>
+              ) : undefined
+            }
           >
             <fieldset disabled={Boolean(signed)} className="min-w-0 border-0 p-0">
               <SectionBody
@@ -300,26 +426,37 @@ function IntakeWorkspace({
                 onSign={sign}
                 signing={signing}
                 onRecordChanged={onRecordChanged}
+                toolRows={toolRows}
+                onOpenTools={() => go("tools")}
               />
             </fieldset>
-            {!signed && spec.key !== "close" && (
-              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
-                <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => setState("Complete")}>
-                  Mark section complete
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
+              <span role="status" className="mr-auto text-xs text-ink-500">
+                {saveState}
+              </span>
+              {prevSpec && (
+                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => go(prevSpec.key)}>
+                  ← {sectionName(prevSpec)}
                 </button>
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("Not applicable")}>
-                  Not applicable
+              )}
+              {!signed && spec.key !== "close" && stateOf(spec.key) !== "Complete" && (
+                <button type="button" className={`${BTN} ${BTN_SM}`} onClick={markDone}>
+                  ✓ Mark Section {spec.n} done
                 </button>
-                {states[spec.key] === "Complete" && (
-                  <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("In progress")}>
-                    Re-open
-                  </button>
-                )}
-              </div>
-            )}
+              )}
+              {nextSpec && (
+                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => go(nextSpec.key)}>
+                  {sectionName(nextSpec)} →
+                </button>
+              )}
+            </div>
           </Card>
         </div>
-        <InformationTrail patientId={patientId} version={listVersion} />
+        {showTrail && (
+          <div id={trailId} className="order-first lg:col-span-2 2xl:order-none 2xl:col-span-1">
+            <InformationTrail patientId={patientId} version={listVersion} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -339,6 +476,8 @@ function SectionBody({
   onSign,
   signing,
   onRecordChanged,
+  toolRows,
+  onOpenTools,
 }: {
   spec: IntakeSectionSpec;
   schema: IntakeSchema;
@@ -353,17 +492,42 @@ function SectionBody({
   onSign: (completeness: "COMPLETE" | "PARTIAL" | "UNABLE") => void;
   signing: boolean;
   onRecordChanged: () => void;
+  toolRows: ToolRow[] | null;
+  onOpenTools: () => void;
 }) {
+  const hint = (keys: string[]) => <TriggerHint rows={toolRows} keys={keys} onOpen={onOpenTools} />;
   const sources = (values._sources ?? undefined) as Record<string, { stage?: string; version?: number }> | undefined;
   switch (spec.kind) {
     case "risk":
-      return <RiskSection spec={spec} riskRows={schema.riskRows} values={values} vs={vs} onChange={onChange} onPatch={onPatch} />;
+      return (
+        <RiskSection
+          spec={spec}
+          riskRows={schema.riskRows}
+          values={values}
+          vs={vs}
+          onChange={onChange}
+          onPatch={onPatch}
+          triggers={hint(["SRA", "SAFETY", "SAFEGUARD"])}
+        />
+      );
     case "meds":
       return <MedsSection patientId={patientId} spec={spec} values={values} vs={vs} onChange={onChange} onListChanged={onRecordChanged} />;
     case "allergy":
-      return <AllergySection patientId={patientId} onChanged={onRecordChanged} />;
+      return <AllergySection patientId={patientId} vs={vs} onChanged={onRecordChanged} />;
     case "mse":
       return <MseSection schema={schema} values={values} vs={vs} onChange={onChange} onPatch={onPatch} />;
+    case "substances":
+      return (
+        <SubstanceSection
+          spec={spec}
+          values={values}
+          vs={vs}
+          onChange={onChange}
+          triggers={hint(["PAWSS", "AUDITC"])}
+          auditC={toolRows?.find((row) => row.key === "AUDITC") ?? null}
+          onOpenTools={onOpenTools}
+        />
+      );
     case "tools":
       return <ToolsSection patientId={patientId} onChanged={onRecordChanged} />;
     case "formulation":
@@ -380,6 +544,27 @@ function SectionBody({
     case "close":
       return <CloseSection spec={spec} values={values} vs={vs} onChange={onChange} outstanding={meta.outstanding} onSign={onSign} signing={signing} draft={draft} />;
     default:
+      if (spec.key === "sx") {
+        // Mockup: the triggered chips sit right under the symptom list.
+        const at = spec.fields.findIndex((f) => f.key === "list") + 1;
+        return (
+          <div>
+            <SchemaSection spec={{ ...spec, fields: spec.fields.slice(0, at) }} values={values} vs={vs} onChange={onChange} sources={sources} />
+            {hint(["PHQ9", "PHQA", "GAD7", "MDQ", "PCL5"])}
+            <div className="mt-3">
+              <SchemaSection spec={{ ...spec, fields: spec.fields.slice(at) }} values={values} vs={vs} onChange={onChange} sources={sources} />
+            </div>
+          </div>
+        );
+      }
+      if (spec.key === "trauma") {
+        return (
+          <div>
+            <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} sources={sources} />
+            {hint(["PCL5", "SAFEGUARD"])}
+          </div>
+        );
+      }
       return <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} sources={sources} />;
   }
 }

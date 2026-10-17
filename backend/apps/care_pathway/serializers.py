@@ -26,8 +26,10 @@ class CareTaskSerializer(serializers.ModelSerializer):
             "status",
             "created_at",
             "created_by_name",
+            "focus_type",
+            "due_at",
         ]
-        read_only_fields = ["action_code", "action_label", "owner", "created_at"]
+        read_only_fields = ["action_code", "action_label", "owner", "created_at", "focus_type", "due_at"]
 
     def get_created_by_name(self, obj):
         return user_display(obj.created_by)
@@ -132,7 +134,9 @@ class OutcomeScoreSerializer(serializers.ModelSerializer):
             "items",
             "flags",
             "positive",
+            "detail",
             "context",
+            "timepoint",
             "note",
             "recorded_at",
             "source_intake",
@@ -178,34 +182,73 @@ class CarePlanSerializer(serializers.ModelSerializer):
 
 
 class InterventionRecordSerializer(serializers.ModelSerializer):
+    """A delivery recorded from an Interventions module. With `module`, billing
+    follows the module's tariff line (see intervention_catalogue); without it,
+    the caller names the billed service explicitly."""
+
     provider_name = serializers.SerializerMethodField()
-    activity_title = serializers.CharField(source="activity.title", read_only=True)
-    activity_goal = serializers.CharField(source="activity.goal", read_only=True)
-    billing_service_name = serializers.CharField(source="billing_service.name", read_only=True)
+    activity_title = serializers.CharField(source="activity.title", read_only=True, default="")
+    activity_goal = serializers.CharField(source="activity.goal", read_only=True, default="")
+    billing_service_name = serializers.CharField(
+        source="billing_service.name", read_only=True, default=None
+    )
+    quantity = serializers.IntegerField(min_value=1, max_value=999, required=False, default=1)
 
     class Meta:
         model = InterventionRecord
         fields = [
             "id",
             "activity",
+            "module",
             "activity_title",
             "activity_goal",
             "performed_at",
             "provider",
             "provider_name",
             "intervention",
+            "note",
             "response",
+            "outcome",
             "next_action",
+            "completes_activity",
             "billable",
             "billing_service",
             "billing_service_name",
             "quantity",
+            "voided_at",
+            "void_reason",
+            "corrections",
         ]
+        read_only_fields = ["voided_at", "void_reason", "corrections"]
+
+    def validate_module(self, value):
+        from . import intervention_catalogue
+
+        if value and not intervention_catalogue.is_served(value):
+            raise serializers.ValidationError("Unknown intervention module.")
+        return value
 
     def validate(self, attrs):
-        if attrs.get("billable") and not attrs.get("billing_service"):
+        from . import intervention_catalogue
+
+        module = attrs.get("module")
+        if module:
+            if not (attrs.get("note") or "").strip():
+                raise serializers.ValidationError({"note": "Add a brief note of what was done."})
+            if attrs.get("intervention") not in intervention_catalogue.BY_CODE[module]["options"]:
+                raise serializers.ValidationError(
+                    {"intervention": "Choose one of this module's interventions."}
+                )
+            service = intervention_catalogue.billing_service_for(module)
+            attrs["billing_service"] = service
+            attrs["billable"] = service is not None
+        elif attrs.get("billable") and not attrs.get("billing_service"):
             raise serializers.ValidationError(
                 {"billing_service": "Choose the billed service for a billable intervention."}
+            )
+        if attrs.get("completes_activity") and not attrs.get("activity"):
+            raise serializers.ValidationError(
+                {"completes_activity": "Link a care-plan action to mark it complete."}
             )
         return attrs
 

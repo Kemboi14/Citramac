@@ -59,6 +59,7 @@ class DiagnosisCodeSerializer(serializers.ModelSerializer):
             "is_primary",
             "noted_at",
             "status",
+            "verification_status",
             "clinical_notes",
             "diagnostic_criteria_met",
         ]
@@ -94,8 +95,14 @@ class PrescriptionItemSerializer(serializers.ModelSerializer):
             "allergy_check_passed",
             "interaction_check_passed",
             "pediatric_dose_flag",
+            "is_prn",
+            "prn_max_per_24h",
+            "indication",
+            "controlled_drug",
+            "check_findings",
+            "allergy_override_reason",
         ]
-        read_only_fields = ["prescription"]
+        read_only_fields = ["prescription", "check_findings", "allergy_override_reason"]
 
 
 class PrescriptionSerializer(serializers.ModelSerializer):

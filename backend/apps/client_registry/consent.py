@@ -30,6 +30,8 @@ def capture_consent(
     decision=None,
     purpose="",
     valid_until=None,
+    recipient="",
+    disclosure_scope=None,
 ):
     if decision is None:
         decision = "YES" if granted else "NO"
@@ -44,11 +46,26 @@ def capture_consent(
         consent_text_version=consent_text_version,
         consent_text_snapshot=consent_text_snapshot,
         captured_by=user,
+        recipient=recipient,
+        disclosure_scope=list(disclosure_scope or []),
     )
     if consent_type == HIE_GENERAL:
         patient.consent_data_sharing = granted
         patient.consent_captured_at = timezone.now()
         patient.save(update_fields=["consent_data_sharing", "consent_captured_at"])
+    return record
+
+
+def current_record(patient, consent_type):
+    """The latest unexpired ConsentRecord of this type, or None."""
+    now = timezone.now()
+    record = (
+        ConsentRecord.all_objects.filter(patient=patient, consent_type=consent_type)
+        .order_by("-captured_at")
+        .first()
+    )
+    if record is None or (record.valid_until and record.valid_until <= now):
+        return None
     return record
 
 

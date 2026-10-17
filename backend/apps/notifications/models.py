@@ -22,11 +22,13 @@ class Notification(models.Model):
     CATEGORY_SYSTEM = "SYSTEM"
     CATEGORY_SUBSCRIPTION = "SUBSCRIPTION"
     CATEGORY_RETENTION = "RETENTION"
+    CATEGORY_FACILITY_LICENCE = "FACILITY_LICENCE"
     CATEGORY_CHOICES = [
         (CATEGORY_RISK_ALERT, "Risk Alert"),
         (CATEGORY_SYSTEM, "System"),
         (CATEGORY_SUBSCRIPTION, "Subscription"),
         (CATEGORY_RETENTION, "Records Retention"),
+        (CATEGORY_FACILITY_LICENCE, "Facility Licence"),
     ]
     SEVERITY_INFO = "INFO"
     SEVERITY_WARNING = "WARNING"

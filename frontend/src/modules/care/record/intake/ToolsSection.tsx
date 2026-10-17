@@ -141,6 +141,7 @@ export function ToolsSection({
                 patientId={patientId}
                 def={def}
                 context="intake"
+                hasPrevious={Boolean(tool.last)}
                 onCancel={() => setOpen(null)}
                 onSaved={() => {
                   setOpen(null);

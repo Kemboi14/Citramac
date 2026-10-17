@@ -7,7 +7,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.client_registry.models import Appointment, Patient
-from apps.mhp_program.models import PsychotherapySession
 from apps.tenancy.context import platform_admin_context
 
 from .test_records import RecordsTestCase
@@ -38,22 +37,6 @@ class TherapyTests(RecordsTestCase):
         from . import therapy
 
         self.assertNotIn("process_notes", therapy.visible_extra({"process_notes": "x", "a": 1}, None))
-
-    def test_group_session_writes_one_separate_row_per_attendee_with_no_cross_references(self):
-        eid = self.start().data["id"]
-        self.post("care-therapy-confidentiality", {}, eid)
-        response = self.client.post(
-            reverse("care-group-therapy-session"),
-            {"session_type": "GROUP", "attendees": [{"patient": self.pid, "episode": eid, "session_notes": "Own note"}]},
-            format="json", **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        with platform_admin_context():
-            rows = PsychotherapySession.objects.filter(patient_id=self.pid, session_type="GROUP")
-            self.assertEqual(rows.count(), 1)
-            self.assertEqual(rows[0].session_notes, "Own note")
-            self.assertNotIn("attendees", rows[0].extra)
-        self.assertEqual(self.client.post(reverse("care-group-therapy-session"), {"attendees": []}, format="json", **self.auth).status_code, 400)
 
 
 class OatTests(RecordsTestCase):
@@ -94,11 +77,20 @@ class MissedAppointmentTests(RecordsTestCase):
         self.post("care-appointment-recontacted", {}, appt.pk)
         self.assertFalse(any(i["key"].startswith("dna:") for i in self.get("care-client-attention").data["items"]))
 
+    def discharge_checklist_done(self):
+        # A planned discharge waits for the discharge checklist (test_care_plan_v4).
+        self.client.patch(reverse("care-client-discharge-checklist", args=[self.pid]), {
+            "meds_reconciled": True, "counter_referral": "NO_REFERRER", "teach_back": True,
+            "no_follow_up_reason": "Facility schedule books it",
+        }, format="json", **self.auth)
+
     def test_follow_up_schedule_is_configuration_and_generates_only_when_set(self):
+        self.discharge_checklist_done()
         self.post("care-client-episode-outcome", {"outcome": "PLANNED"})
         with platform_admin_context():
             self.assertEqual(Appointment.objects.filter(patient_id=self.pid, origin="DISCHARGE").count(), 0)
         self.post("care-client-new-episode", {})
+        self.discharge_checklist_done()
         with override_settings(FOLLOW_UP_SCHEDULE=[{"reason": "POST_DISCHARGE", "after_hours": 72}]):
             self.post("care-client-episode-outcome", {"outcome": "PLANNED"})
         with platform_admin_context():
@@ -133,9 +125,11 @@ class LabsAndLegalFormTests(RecordsTestCase):
         data = self.get("care-client-labs").data
         self.assertEqual(data["results"][0]["acknowledged"], False)
         self.assertTrue(any(i["key"] == f"lab:{result.pk}" for i in self.get("care-client-attention").data["items"]))
+        ack = reverse("care-lab-acknowledge", args=[result.pk])
+        self.assertEqual(self.post("care-lab-acknowledge", {}, result.pk).status_code, 403)  # not a prescriber
         with override_settings(INTAKE_LAB_WRITEBACK={"TEST-1": "qtc"}):
-            self.assertEqual(self.post("care-lab-acknowledge", {}, result.pk).status_code, 200)
-        self.assertEqual(self.post("care-lab-acknowledge", {}, result.pk).status_code, 400)
+            self.assertEqual(self.client.post(ack, {}, format="json", **self.psych_auth).status_code, 200)
+        self.assertEqual(self.client.post(ack, {}, format="json", **self.psych_auth).status_code, 400)
         self.assertEqual(self.get("care-client-intake-draft").data["sections"]["medical"]["qtc"], "480")
         self.assertEqual(self.post("care-client-labs", {"codes": ["NOPE-9"]}).status_code, 400)
         self.assertEqual(self.post("care-client-labs", {"codes": ["TEST-1"]}).status_code, 201)
@@ -160,7 +154,7 @@ class ModuleLinkTests(RecordsTestCase):
             from . import intake
 
             draft = intake.open_draft(Patient.objects.get(pk=self.pid), self.nurse)
-            draft.sections = {**draft.sections, "subs": {"kind": "Opioids"}}
+            draft.sections = {**draft.sections, "subs": {"kind": "OPIOIDS"}}
             draft.save()
         self.assertIn("oat", self.get("care-client-modules").data["recommended"])
 

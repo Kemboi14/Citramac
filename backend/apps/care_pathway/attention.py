@@ -16,7 +16,7 @@ from django.utils import timezone
 from apps.client_registry.models import Appointment, Patient
 from apps.triage.models import VitalSigns
 
-from . import ews, instruments, intake, tools, withdrawal
+from . import ews, facility_time, instruments, intake, mental_state, tools, withdrawal
 from . import interventions as iv
 from .models import (
     AssessmentToolDecision,
@@ -47,6 +47,11 @@ def active_alerts(patient):
         out.append({"key": key, "severity": severity, "text": text, "source": source})
 
     for a in ClinicalAlert.objects.filter(patient=patient, status="ACTIVE"):
+        if a.alert_code in ("PSYCHOTHERAPY_SAFETY_CONCERN", "SAFETY_NOT_ASSESSED"):
+            # Psychotherapy session (PSY-S): "not assessed" is a review flag, not a risk finding.
+            severity = "medium" if a.alert_code == "SAFETY_NOT_ASSESSED" else "high"
+            add(f"alert:{a.alert_code}", severity, a.label, "Psychotherapy session")
+            continue
         add(f"alert:{a.alert_code}", "high", a.label, "Triage alert")
 
     sections = _intake_sections(patient)
@@ -59,10 +64,10 @@ def active_alerts(patient):
             add(f"risk:{spec['key']}", "high", f"{spec['label']}: {', '.join(chosen)}", "Intake risk")
 
     for code, spec in instruments.INSTRUMENTS.items():
-        if spec.get("safety_item") is None:
+        if spec.get("safety_item") is None and not spec.get("safety_detail"):
             continue
         last = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at").first()
-        if last and last.items and last.items[spec["safety_item"]] > 0:
+        if last and instruments.safety_positive(code, last.items, last.detail):
             add(f"score:{code}:safety", "high", f"{spec['name']} self-harm item positive — review risk", spec["name"])
 
     for scale in withdrawal.overview(patient):
@@ -76,8 +81,12 @@ def active_alerts(patient):
             add("ews", "high", result["response"]["text"], "Early warning score")
 
     mse = (sections.get("mse") or {})
-    perception, content = str(mse.get("perception", "")), str(mse.get("thought_content", ""))
-    if "hallucination" in perception.lower() or "Delusions" in content:
+    if mental_state.is_structured(mse):
+        psychotic = mental_state.psychotic_features(mse)
+    else:  # legacy free-text MSE
+        perception, content = str(mse.get("perception", "")), str(mse.get("thought_content", ""))
+        psychotic = "hallucination" in perception.lower() or "Delusions" in content
+    if psychotic:
         add("psychosis", "medium", "Possible psychotic features on mental state exam", "Mental state exam")
 
     obs = iv.observation_state(patient)
@@ -137,8 +146,14 @@ def patient_items(patient, now=None):
     for task in CarePlanTask.objects.filter(activity__care_plan__patient=patient, done_at__isnull=True):
         add(f"task:{task.id}", "Care plan", task.label, task.due_at)
 
+    from .models import CareTask
+
+    # Legal admission status tasks (master prompt LGL-V-WF-3, LGL-WF-02/03/05).
+    for task in CareTask.objects.filter(patient=patient, focus_type="LegalStatus", completed_at__isnull=True):
+        add(f"legal:{task.id}", "Legal status", task.action_label, task.due_at)
+
     for mdt in MdtReview.objects.filter(patient=patient, held_at__isnull=True):
-        due = timezone.make_aware(timezone.datetime.combine(mdt.scheduled_for, timezone.datetime.min.time()))
+        due = facility_time.combine_local(mdt.scheduled_for)
         add(f"mdt:{mdt.id}", "Care plan", "MDT review", due)
 
     risky = any(a["severity"] == "high" for a in active_alerts(patient))
@@ -166,6 +181,12 @@ def patient_items(patient, now=None):
 
     if patient.allergy_status == "UNKNOWN":
         add("allergy", "Safety", "Allergy status unknown")
+    from . import triage_queue
+
+    # Triage v4: vital-sign completion, re-check / re-triage, call-back, PEP/EC and
+    # duty-to-protect tasks, the minor prompt.
+    for item in triage_queue.patient_items(patient, now):
+        add(f"triage:{item['key']}", "Triage", item["text"], item["due_at"])
     items.sort(key=lambda i: (not i["overdue"], i["due_at"] or now))
     return items
 
@@ -214,7 +235,7 @@ def ward_board():
         rows.append({
             "patient_id": str(patient.pk), "patient": patient.get_full_name(),
             "bed": adm.bed.bed_number if adm.bed_id else "", "ward": adm.bed.ward.name if adm.bed_id else "",
-            "day": (now.date() - adm.admitted_at.date()).days + 1,
+            "day": (facility_time.local_date(now) - facility_time.local_date(adm.admitted_at)).days + 1,
             "legal_status": adm.get_admission_type_display(),
             "observation": obs["level"]["display"] if obs["level"] else "",
             "ews": ews_now["label"] if ews_now else "", "ews_trend": trend,

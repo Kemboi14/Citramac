@@ -6,7 +6,8 @@ import { FieldControl, type SectionValues } from "./fields";
 const GRID = "grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2";
 
 /** Renders every field of a section from the served schema. `skip` hides
- * fields a specialised section draws itself. */
+ * fields a specialised section draws itself; a `show_when` field is shown only
+ * while its controlling answer allows it, and is cleared when hidden (X-08). */
 export function SchemaSection({
   spec,
   values,
@@ -22,7 +23,17 @@ export function SchemaSection({
   skip?: string[];
   sources?: Record<string, { stage?: string; version?: number } | undefined>;
 }) {
-  const fields = spec.fields.filter((f) => !skip.includes(f.key));
+  const visible = (f: IntakeField) =>
+    !f.show_when || f.show_when.in.includes(String(values[f.show_when.field] ?? ""));
+  const fields = spec.fields.filter((f) => !skip.includes(f.key) && visible(f));
+  const change = (key: string, value: unknown) => {
+    onChange(key, value);
+    for (const dependent of spec.fields) {
+      if (dependent.show_when?.field === key && !dependent.show_when.in.includes(String(value ?? ""))) {
+        onChange(dependent.key, undefined);
+      }
+    }
+  };
   const groups: { name: string; fields: IntakeField[] }[] = [];
   for (const field of fields) {
     const name = field.group ?? "";
@@ -46,7 +57,7 @@ export function SchemaSection({
                   field={field}
                   value={values[field.key]}
                   vs={vs}
-                  onChange={(value) => onChange(field.key, value)}
+                  onChange={(value) => change(field.key, value)}
                   carriedFrom={source ? `${source.stage ?? "an earlier step"}${source.version ? ` v${source.version}` : ""}` : undefined}
                 />
               );

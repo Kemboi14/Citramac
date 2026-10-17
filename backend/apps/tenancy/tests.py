@@ -936,7 +936,12 @@ class BranchAndSubscriptionScopingTests(APITestCase):
     def test_org_admin_can_create_branch_in_own_org(self):
         response = self.client.post(
             reverse("branch-list"),
-            {"organization": str(self.org_a.id), "name": "New Branch", "facility_level": "L3"},
+            {
+                "organization": str(self.org_a.id),
+                "name": "New Branch",
+                "facility_level": "L3",
+                "kmpdc_registration_number": "TEST-KMPDC-1",
+            },
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
         )
@@ -947,7 +952,12 @@ class BranchAndSubscriptionScopingTests(APITestCase):
         """Submitting a different org's id doesn't work — it's ignored, not honored."""
         response = self.client.post(
             reverse("branch-list"),
-            {"organization": str(self.org_b.id), "name": "Sneaky Branch", "facility_level": "L3"},
+            {
+                "organization": str(self.org_b.id),
+                "name": "Sneaky Branch",
+                "facility_level": "L3",
+                "kmpdc_registration_number": "TEST-KMPDC-1",
+            },
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
         )
@@ -1028,7 +1038,12 @@ class BranchAndSubscriptionScopingTests(APITestCase):
             self.org_b.save(update_fields=["status"])
         response = self.client.post(
             reverse("branch-list"),
-            {"organization": str(self.org_b.id), "name": "New Branch", "facility_level": "L3"},
+            {
+                "organization": str(self.org_b.id),
+                "name": "New Branch",
+                "facility_level": "L3",
+                "kmpdc_registration_number": "TEST-KMPDC-1",
+            },
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
         )

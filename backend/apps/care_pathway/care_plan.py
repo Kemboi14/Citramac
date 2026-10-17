@@ -23,6 +23,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from . import ews as ews_module
+from . import facility_time
+from . import mental_state
 from .intake_schema import _code
 from .models import (
     CarePlan,
@@ -35,6 +37,9 @@ from .models import (
 from .tools import _active_risk, _record_view
 
 RULES_VERSION = "mockup-2026-10-illustrative"
+# Agreement codes (served `care-plan-agreement`) that need the client's reasons
+# recorded as structured disagreement points before the plan can be signed.
+REASONS_NEEDED = ("PARTIAL", "DECLINED")
 RANK = {"RED": 0, "ORANGE": 1, "YELLOW": 2, "GREEN": 3}
 LABEL = {"RED": "Emergency", "ORANGE": "Urgent", "YELLOW": "Priority", "GREEN": "Routine"}
 # Minutes after the plan is signed until an action is due, by priority (mockup TASK_DUE).
@@ -140,6 +145,8 @@ def _withdrawal(patient, sections):
     )
     answers = signed.answers if signed else {}
     signs = [x for x in (answers.get("g_withdrawal") or []) if str(x).lower() != "none"]
+    if answers.get("subst_withdrawal_signs") == "yes" or answers.get("r_stopped_heavy") == "yes":
+        signs.append("withdrawal signs / recent cessation (triage v4)")
     subs = sections.get("subs", {})
     kind = subs.get("kind")
     features = set(subs.get("features", []) or [])
@@ -199,14 +206,18 @@ def recommend(patient):
     if score and (score["score"] >= 3 or score["single_parameter_3"] or score["glucose_low"]):
         level = "RED" if score["score"] >= 5 or score["glucose_low"] else "ORANGE"
         add("medical_review", level,
-            f"Triggered by abnormal vital signs — {score['label']} ({vital.recorded_at:%Y-%m-%d %H:%M})")
+            f"Triggered by abnormal vital signs — {score['label']} ({facility_time.local_format(vital.recorded_at)})")
     if _has(sections, "medical", "Concern identified"):
         add("medical_review", "ORANGE", "Triggered by medical-safety finding")
 
     mse = sections.get("mse", {})
-    perception = str(mse.get("perception", "")).lower()
-    content = str(mse.get("thought_content", "")).lower()
-    if "hallucination" in perception or "delusion" in content:
+    if mental_state.is_structured(mse):
+        psychotic = mental_state.psychotic_features(mse)
+    else:  # legacy free-text MSE
+        perception = str(mse.get("perception", "")).lower()
+        content = str(mse.get("thought_content", "")).lower()
+        psychotic = "hallucination" in perception or "delusion" in content
+    if psychotic:
         add("psych_review", "ORANGE", "Triggered by psychotic features on the mental state examination")
 
     for code in ("PHQ9", "PHQA"):
@@ -323,7 +334,7 @@ def decide_action(plan, user, key, decision, *, priority="", instructions="", re
         if len(reason) < 5:
             raise ValidationError({"reason": "Give a reason for declining (clinical judgement)."})
         values = {"decision": "DECLINED", "reason": reason, "priority": "",
-                  "recommended_priority": rec["priority"], "why": rec["why"]}
+                  "recommended_priority": rec["priority"], "why": rec["why"], "bulk_accepted": False}
     elif decision in ("ACCEPTED", "MODIFIED", "ADDED"):
         chosen = _validate_priority(priority or (rec["priority"] if rec else ("GREEN" if spec["low"] else suggested_priority(plan.patient) or "GREEN")))
         if rec and RANK[chosen] > RANK[rec["priority"]] and len(reason) < 10:
@@ -335,7 +346,7 @@ def decide_action(plan, user, key, decision, *, priority="", instructions="", re
         values = {"decision": outcome, "priority": chosen, "instructions": instructions,
                   "reason": reason if rec and chosen != rec["priority"] else "",
                   "recommended_priority": rec["priority"] if rec else "",
-                  "why": rec["why"] if rec else ["Added by clinician"]}
+                  "why": rec["why"] if rec else ["Added by clinician"], "bulk_accepted": False}
     else:
         raise ValidationError({"decision": "Use ACCEPTED, MODIFIED, ADDED or DECLINED."})
 
@@ -352,6 +363,36 @@ def decide_action(plan, user, key, decision, *, priority="", instructions="", re
         setattr(activity, field, value)
     activity.save()
     return activity
+
+
+@transaction.atomic
+def accept_remaining(plan, user):
+    """"Accept the N remaining recommendations as proposed": each is accepted at
+    its recommended priority and marked bulk-accepted, so the signer must confirm
+    they reviewed each one before signing (RULE-05)."""
+    decided = set(plan.activities.exclude(action_key="").values_list("action_key", flat=True))
+    accepted = []
+    for key, rec in recommend(plan.patient).items():
+        if key in decided:
+            continue
+        activity = decide_action(plan, user, key, "ACCEPTED", priority=rec["priority"])
+        activity.bulk_accepted = True
+        activity.save(update_fields=["bulk_accepted", "updated_at"])
+        accepted.append(activity)
+    return accepted
+
+
+def remove_added(plan, key):
+    """Take back an action the clinician added (not recommended) before it was
+    signed into a version — once signed it has tasks and stays in the record."""
+    activity = plan.activities.filter(action_key=key).first()
+    if activity is None or activity.decision != "ADDED":
+        raise ValidationError({"action_key": "Only an action you added can be removed."})
+    if activity.tasks.exists() or activity.due_at:
+        raise ValidationError(
+            {"action_key": "This action is part of a signed plan — mark it completed instead."}
+        )
+    activity.delete()
 
 
 @transaction.atomic
@@ -388,7 +429,51 @@ def conflicts(plan):
     wd = _withdrawal(patient, sections)
     if wd["active"] and wd["life_threatening"] and "detox" not in keys:
         out.append("Alcohol / sedative withdrawal risk is active but no withdrawal-management action is planned.")
+    if live and _involuntary_admission(patient) and not keys & {"admission", "referral"}:
+        out.append("Legal status is involuntary but no admission or transfer is planned.")
+    if "detox" in keys and is_opioid(patient) and not opioid_safety_recorded(plan):
+        out.append("Opioid withdrawal plan with no naloxone or opioid-agonist-therapy discussion recorded.")
+    if "family" in keys and family_consent(patient) == "NO":
+        out.append("Family intervention is planned but the client declined family involvement.")
     return out
+
+
+def _involuntary_admission(patient):
+    """The current legal status the record holds: an open involuntary admission.
+    (Emergency detention outside an admission is not recorded anywhere yet.)"""
+    from apps.ipd_ward.models import Admission
+
+    return Admission.objects.filter(
+        patient=patient, status="ADMITTED", admission_type="INVOLUNTARY"
+    ).exists()
+
+
+def is_opioid(patient):
+    from . import withdrawal
+
+    return withdrawal.is_opioid(patient)
+
+
+def opioid_safety_recorded(plan):
+    from .models import NaloxoneSupply, OatEnrolment
+
+    return bool(
+        plan.naloxone_teaching
+        or plan.oat_offer
+        or NaloxoneSupply.objects.filter(patient=plan.patient).exists()
+        or OatEnrolment.objects.filter(patient=plan.patient).exists()
+    )
+
+
+def family_consent(patient):
+    """The client's current decision on family involvement (ConsentRecord), or
+    NOT_ASKED. The plan shows it next to the family field and never overrides it."""
+    from apps.client_registry.models import ConsentRecord
+
+    latest = ConsentRecord.objects.filter(
+        patient=patient, consent_type="FAMILY_INVOLVEMENT"
+    ).order_by("-captured_at").first()
+    return latest.decision if latest else "NOT_ASKED"
 
 
 def _current_triage_priority(patient):
@@ -429,6 +514,10 @@ def outstanding(plan):
             items.append("Senior review")
     if not plan.client_agreement:
         items.append("Client agreement status")
+    elif plan.client_agreement in REASONS_NEEDED and not any(
+        str(d.get("words", "")).strip() for d in plan.disagreements or []
+    ):
+        items.append("Where the client disagrees — record each point in their words")
     if needs_safety_plan(plan):
         if not safety_plan_complete(plan.patient):
             items.append("Safety plan — signed, with warning signs or people to contact")
@@ -440,10 +529,16 @@ def outstanding(plan):
 
 
 @transaction.atomic
-def confirm_plan(plan, user):
+def confirm_plan(plan, user, bulk_reviewed=False):
     items, found = outstanding(plan)
     if items:
         raise ValidationError({"outstanding": items, "plan": f"Cannot sign yet — {len(items)} item(s) to complete."})
+    bulk = list(live_activities(plan).filter(bulk_accepted=True))
+    if bulk and not bulk_reviewed:
+        raise ValidationError({
+            "bulk_reviewed": "Confirm you have reviewed each bulk-accepted action.",
+            "bulk": [{"key": a.action_key, "name": a.title, "priority": a.priority, "why": a.why} for a in bulk],
+        })
     now = timezone.now()
     plan.version += 1
     plan.confirmed_at = now
@@ -455,13 +550,23 @@ def confirm_plan(plan, user):
             {
                 "key": a.action_key, "name": a.title, "decision": a.decision, "priority": a.priority,
                 "recommended_priority": a.recommended_priority, "instructions": a.instructions,
-                "reason": a.reason, "why": a.why,
+                "reason": a.reason, "why": a.why, "bulk": a.bulk_accepted,
             }
             for a in plan.activities.all()
         ],
+        "bulk_reviewed_by": (user.get_full_name() or str(user)) if bulk else "",
         "client_agreement": plan.client_agreement,
         "disagreements": plan.disagreements,
         "what_matters": plan.what_matters,
+        "goals": plan.goal_items,
+        "crisis_plan": plan.crisis_plan,
+        "family_involvement": plan.family_involvement,
+        "advance_statement": plan.advance_statement,
+        "naloxone_teaching": plan.naloxone_teaching,
+        "oat_offer": plan.oat_offer,
+        "client_acknowledged_at": plan.client_ack_at.isoformat() if plan.client_ack_at else "",
+        "contact_72h_at": plan.contact_72h_at.isoformat() if plan.contact_72h_at else "",
+        "follow_up_clinician": plan.follow_up_clinician,
         "rationale": plan.rationale,
         "rules_version": RULES_VERSION,
     }
@@ -475,7 +580,80 @@ def confirm_plan(plan, user):
             activity.due_at = now + timedelta(minutes=DUE_MINUTES.get(activity.priority, DUE_MINUTES["GREEN"]))
             activity.status = "ACTIVE" if activity.status == "PLANNED" else activity.status
             activity.save(update_fields=["due_at", "status", "updated_at"])
+    plan.activities.filter(bulk_accepted=True).update(bulk_accepted=False)
+    book_72h_contact(plan, user)
     return plan
+
+
+def book_72h_contact(plan, user):
+    """The safety plan's 72-hour contact becomes a real follow-up appointment on
+    the episode, so it appears in the follow-up worklist. Booked once per agreed
+    time: a changed time moves the open booking, a re-signed plan never duplicates it."""
+    from apps.client_registry.models import Appointment
+
+    from . import services
+
+    if not plan.contact_72h_at:
+        return None
+    booked = Appointment.objects.filter(episode=plan.episode, origin="CARE_PLAN", reason="CONTACT_72H")
+    same_time = booked.filter(scheduled_for=plan.contact_72h_at).first()
+    if same_time:
+        return same_time
+    open_booking = booked.filter(status="SCHEDULED").first()
+    if open_booking:
+        open_booking.scheduled_for = plan.contact_72h_at
+        open_booking.reminder_sent_at = None
+        open_booking.save(update_fields=["scheduled_for", "reminder_sent_at", "updated_at"])
+        return open_booking
+    notes = f"With {plan.follow_up_clinician}" if plan.follow_up_clinician else ""
+    return services.book_follow_up(
+        user, plan.patient,
+        {"reason": "CONTACT_72H", "scheduled_for": plan.contact_72h_at, "notes": notes,
+         "client_request_id": f"care-plan-72h:{plan.pk}:v{plan.version}"},
+        episode=plan.episode, origin="CARE_PLAN",
+    )
+
+
+# Latest result of each instrument, carried onto the plan (AT-04: stored once,
+# read here — never re-entered). Order as the mockup's carried chips.
+CARRIED_INSTRUMENTS = ["CIWA", "COWS", "PAWSS", "AUDITC", "PHQ9", "PHQA", "EPDS", "GAD7", "MDQ", "PCL5", "CRI"]
+
+
+def carried_scores(patient):
+    from . import instruments
+
+    out = []
+    for code in CARRIED_INSTRUMENTS:
+        row = _last_score(patient, code)
+        if row:
+            spec = instruments.INSTRUMENTS[code]
+            out.append({
+                "instrument": code, "name": spec["name"], "score": row.score, "max": spec["max"],
+                "band": instruments.band_for(code, row.score), "at": row.recorded_at,
+                "timepoint": row.timepoint, "approval": spec["approval"],
+            })
+    return out
+
+
+def intake_context(patient):
+    """What the plan carries from intake, and whether intake is finished — the
+    plan warns but never blocks on an unsigned or partial intake."""
+    from . import intake
+
+    signed = intake.latest_signed(patient)
+    draft = intake.current_draft(patient)
+    source = draft or signed
+    sections = source.sections if source else {}
+    if signed is None:
+        state = "unsigned" if draft else "none"
+    else:
+        state = "complete" if signed.completeness == "COMPLETE" else "partial"
+    return {
+        "state": state,
+        "reason_incomplete": str((signed.sections.get("close") or {}).get("reason_incomplete", "")) if signed else "",
+        "what_matters": str((sections.get("persp") or {}).get("matters", "")),
+        "goals": str((sections.get("pres") or {}).get("goals", "")),
+    }
 
 
 def served_catalogue():

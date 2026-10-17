@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.client_registry.models import Patient
@@ -48,6 +49,23 @@ class Invoice(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     created_at = models.DateTimeField(default=timezone.now)
+    # Local business identifier (e.g. INV-…-01); a re-issue is a new invoice
+    # with the next version that supersedes the previous one, which is
+    # cancelled — never edited.
+    number = models.CharField(max_length=40, blank=True)
+    version = models.PositiveSmallIntegerField(default=1)
+    supersedes = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "number"],
+                condition=~Q(number=""),
+                name="unique_invoice_number_per_org",
+            )
+        ]
 
     @property
     def total_amount(self):
@@ -78,6 +96,15 @@ class InvoiceLine(TenantScopedModel):
     fund_source = models.CharField(max_length=20, choices=FUND_SOURCE_CHOICES, default="CASH")
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    # The documented delivered service this line bills, when generated from
+    # the client record (FHIR Invoice.lineItem.chargeItemReference).
+    charge_item = models.ForeignKey(
+        "care_pathway.ChargeItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
 
     @property
     def line_total(self):
@@ -104,6 +131,18 @@ class Payment(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     paid_at = models.DateTimeField(default=timezone.now)
+    # Client-generated key per payment attempt: a retried POST returns the
+    # payment already recorded instead of recording it twice.
+    idempotency_key = models.CharField(max_length=64, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                condition=~Q(idempotency_key=""),
+                name="unique_payment_idempotency_key",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

@@ -19,6 +19,18 @@ import { setOrganizationTheme } from "../../theme/runtimeTheme";
 import { sanitizeOverrides, type ThemeOverrides } from "../../theme/themeTokens";
 import { LocationFields } from "../../components/LocationFields";
 import {
+  BranchIdentifierBanner,
+  BranchIdentifierFields,
+  BranchIdentifierHistory,
+  LicenseStatusBadge,
+} from "../../components/BranchIdentifierFields";
+import {
+  identifierFieldErrors,
+  identifierPayload,
+  identifiersFromBranch,
+  type BranchIdentifierValues,
+} from "../../lib/branchIdentifiers";
+import {
   listBranches,
   setBranchCredentials,
   updateBranch,
@@ -64,7 +76,7 @@ const MHP_OPTIONS: { value: MhpRegistrationStatus; label: string }[] = [
   { value: "CLOSED", label: "Closed" },
 ];
 
-interface FormState {
+interface FormState extends BranchIdentifierValues {
   name: string;
   facility_level: Branch["facility_level"];
   address: string;
@@ -80,6 +92,7 @@ interface FormState {
 
 function formFromBranch(branch: Branch): FormState {
   return {
+    ...identifiersFromBranch(branch),
     name: branch.name,
     facility_level: branch.facility_level,
     address: branch.address,
@@ -220,6 +233,10 @@ function smsFormFromSettings(settings: OrganizationSmsSettings): SmsFormState {
 export function BranchSettingsPage() {
   const { accessToken, claims } = useAuth();
   const [branch, setBranch] = useState<Branch | null>(null);
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
+  const [identifierErrors, setIdentifierErrors] = useState<
+    ReturnType<typeof identifierFieldErrors>
+  >({});
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -261,6 +278,7 @@ export function BranchSettingsPage() {
     if (!accessToken) return;
     const res = await listBranches(accessToken);
     const first = res.results[0] ?? null;
+    setAllBranches(res.results);
     setBranch(first);
     setForm(first ? formFromBranch(first) : null);
   };
@@ -435,8 +453,15 @@ export function BranchSettingsPage() {
   const saveForm = async () => {
     if (!accessToken || !branch || !form) return;
     setSaveError(null);
+    setIdentifierErrors({});
     try {
       const payload: Partial<Branch> = {
+        ...identifierPayload({
+          kmpdc_registration_number: form.kmpdc_registration_number,
+          facility_license_number: form.facility_license_number,
+          facility_license_valid_until: form.facility_license_valid_until,
+          sha_fr_code: form.sha_fr_code,
+        }),
         name: form.name,
         facility_level: form.facility_level,
         address: form.address,
@@ -452,8 +477,10 @@ export function BranchSettingsPage() {
       };
       const updated = await updateBranch(accessToken, branch.id, payload);
       setBranch(updated);
+      setAllBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       setForm(formFromBranch(updated));
     } catch (err) {
+      setIdentifierErrors(identifierFieldErrors(err));
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save branch settings.");
       throw err;
     }
@@ -469,6 +496,7 @@ export function BranchSettingsPage() {
     try {
       const updated = await updateBranch(accessToken, branch.id, { [field]: next });
       setBranch(updated);
+      setAllBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       setForm(formFromBranch(updated));
     } catch (err) {
       setToggleError(err instanceof ApiError ? err.message : "Couldn't update the integration.");
@@ -514,6 +542,8 @@ export function BranchSettingsPage() {
           </p>
         </div>
       )}
+
+      {!loading && <BranchIdentifierBanner branches={allBranches} />}
 
       {branch && form && (
         <div className="flex flex-col gap-6 lg:flex-row">
@@ -631,6 +661,21 @@ export function BranchSettingsPage() {
                     </select>
                   </label>
                 </div>
+                <div className="mt-4">
+                  <BranchIdentifierFields
+                    values={form}
+                    onChange={updateForm}
+                    kmpdcRequired={branch.is_registered_health_provider}
+                    shaClaimsEnabled={branch.sha_claims_enabled}
+                    errors={identifierErrors}
+                    labelClassName={LABEL_CLASS}
+                    fieldClassName={FIELD_CLASS}
+                    rowClassName="grid grid-cols-1 gap-4 md:grid-cols-2"
+                  />
+                </div>
+                <div className="mt-4">
+                  <BranchIdentifierHistory branch={branch} />
+                </div>
               </div>
 
               <div className={CARD_CLASS}>
@@ -717,6 +762,20 @@ export function BranchSettingsPage() {
                     okLabel="Verified"
                     pendingLabel="Pending"
                   />
+                </div>
+                {branch.is_registered_health_provider && (
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-ink-700">KMPDC Registration</span>
+                    <StatusPill
+                      ok={Boolean(branch.kmpdc_registration_number)}
+                      okLabel="Recorded"
+                      pendingLabel="Missing"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-ink-700">Facility Licence</span>
+                  <LicenseStatusBadge branch={branch} />
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-ink-700">SHA Integration</span>

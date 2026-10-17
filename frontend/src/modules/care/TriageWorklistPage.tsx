@@ -169,7 +169,7 @@ export function TriageWorklistPage() {
                       <>
                         <br />
                         <span className="text-[11px] font-bold uppercase text-priority-red">
-                          Overdue
+                          {row.recheck_overdue ? `Re-triage overdue (${row.priority})` : "Overdue"}
                         </span>
                       </>
                     )}

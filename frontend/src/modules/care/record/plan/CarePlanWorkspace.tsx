@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
-import { confirmPlan, getPlanWorkspace, listCosign, type CosignRow, type PlanWorkspace } from "../../../../lib/carePathwayApi";
+import { getPlanWorkspace, listCosign, type CosignRow, type PlanWorkspace } from "../../../../lib/carePathwayApi";
+import { confirmPlanReviewed } from "../../../../lib/carePlanOutcomesApi";
 import { formatDateTime } from "../../shared/format";
-import { BTN } from "../../shared/styles";
+import { BTN, BTN_GHOST } from "../../shared/styles";
 import { Callout, ErrorNote, PageHeader, Tag } from "../../shared/ui";
 import { errorText } from "../../triage/helpers";
 import { DocumentedActions } from "../CarePlanStage";
 import type { RecordViewProps } from "../types";
 import { ClientTab } from "./ClientTab";
 import { DecisionsTab } from "./DecisionsTab";
+import { NursingCarePlan } from "./NursingCarePlan";
 import { TasksTab } from "./TasksTab";
 
 const TABS = [
@@ -29,6 +31,8 @@ export function CarePlanStage(props: RecordViewProps) {
   const [tab, setTab] = useState<TabKey>("decisions");
   const [error, setError] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [bulkReviewed, setBulkReviewed] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -45,12 +49,25 @@ export function CarePlanStage(props: RecordViewProps) {
     };
   }, [accessToken, patientId]);
 
+  const bulk = ws?.actions.filter((a) => a.bulk_accepted && a.decision !== "DECLINED") ?? [];
+
+  function startSigning() {
+    // Bulk-accepted actions are listed again for review before signing (RULE-05).
+    if (bulk.length) {
+      setBulkReviewed(false);
+      setReviewing(true);
+      return;
+    }
+    void sign();
+  }
+
   async function sign() {
     if (!accessToken) return;
     setSigning(true);
     setError(null);
     try {
-      setWs(await confirmPlan(accessToken, patientId));
+      setWs(await confirmPlanReviewed(accessToken, patientId, bulk.length > 0 && bulkReviewed));
+      setReviewing(false);
       setCosign((await listCosign(accessToken, patientId)).results);
       onRecordChanged();
     } catch (e) {
@@ -75,12 +92,53 @@ export function CarePlanStage(props: RecordViewProps) {
         title="Care Plan"
         subtitle={ws.version ? `Version ${ws.version} signed ${ws.confirmed_at ? formatDateTime(ws.confirmed_at) : ""} by ${ws.confirmed_by}` : "Not yet signed — findings recommend, the clinician decides"}
         actions={
-          <button type="button" className={BTN} disabled={signing} onClick={() => void sign()}>
+          <button type="button" className={BTN} disabled={signing} onClick={startSigning}>
             {signing ? "Signing…" : ws.version ? "Sign a new version" : "Sign care plan"}
           </button>
         }
       />
       <ErrorNote>{error}</ErrorNote>
+      {reviewing && (
+        <Callout tone="warning" role="alert" className="mb-3">
+          <strong>Accepted in bulk — review each before signing:</strong>
+          <ul className="mt-1 list-disc pl-5">
+            {bulk.map((a) => (
+              <li key={a.id}>
+                {a.name} — why: {a.why[0] ?? "recommended from the record"}
+              </li>
+            ))}
+          </ul>
+          <label className="mt-2 flex items-center gap-2 font-semibold">
+            <input type="checkbox" checked={bulkReviewed} onChange={(e) => setBulkReviewed(e.target.checked)} />
+            I have reviewed each bulk-accepted action
+          </label>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className={BTN} disabled={!bulkReviewed || signing} onClick={() => void sign()}>
+              {signing ? "Signing…" : "Sign care plan"}
+            </button>
+            <button type="button" className={BTN_GHOST} onClick={() => setReviewing(false)}>
+              Keep editing
+            </button>
+          </div>
+        </Callout>
+      )}
+      {ws.details.what_matters && (
+        <Callout className="mb-3">
+          <strong>What matters to the client:</strong> “{ws.details.what_matters}”
+        </Callout>
+      )}
+      {(ws.intake.state === "partial" || ws.intake.state === "unsigned" || ws.intake.state === "none") && (
+        <Callout tone="warning" className="mb-3">
+          {ws.intake.state === "partial" ? (
+            <>
+              Intake is <strong>partially complete</strong>
+              {ws.intake.reason_incomplete ? ` (${ws.intake.reason_incomplete})` : ""}. You can plan now; open items remain in the task list.
+            </>
+          ) : (
+            "Intake is not signed yet. You can plan now — recommendations update as findings are added."
+          )}
+        </Callout>
+      )}
       {ws.outstanding.length > 0 && (
         <Callout tone="warning" className="mb-3">
           <strong>{ws.outstanding.length} item(s) before the plan can be signed:</strong>
@@ -114,13 +172,18 @@ export function CarePlanStage(props: RecordViewProps) {
         ))}
       </div>
       {tab === "decisions" && <DecisionsTab patientId={patientId} ws={ws} onChange={setWs} disabled={false} />}
-      {tab === "client" && <ClientTab patientId={patientId} ws={ws} onChange={setWs} disabled={false} />}
+      {tab === "client" && (
+        <ClientTab patientId={patientId} clientName={props.banner.name.trim() || "the client"} ws={ws} onChange={setWs} disabled={false} />
+      )}
       {tab === "tasks" && (
-        <TasksTab
-          patientId={patientId}
-          ws={ws}
-          onTaskChanged={(action) => setWs({ ...ws, actions: ws.actions.map((a) => (a.id === action.id ? action : a)) })}
-        />
+        <>
+          <TasksTab
+            patientId={patientId}
+            ws={ws}
+            onTaskChanged={(action) => setWs({ ...ws, actions: ws.actions.map((a) => (a.id === action.id ? action : a)) })}
+          />
+          <NursingCarePlan patientId={patientId} ws={ws} />
+        </>
       )}
       {tab === "documented" && <DocumentedActions {...props} />}
     </div>

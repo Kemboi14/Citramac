@@ -173,18 +173,41 @@ _OPTIONS = {
         "Reliability of account",
         ["Reliable", "Partly reliable", "Limited — collateral needed", "Unable to assess"],
     ),
-    "intake-orientation": ("Orientation", ["Oriented", "Partly oriented", "Disoriented", "Unable to assess"]),
+    # INT-16-10: one select per sphere (time / place / person), as in the v4 mockup.
+    "intake-orientation": ("Orientation", ["Oriented", "Disoriented", "Not tested"]),
     "intake-status": (
         "Intake status",
         ["Complete", "Partially complete — clinically safe to continue later", "Unable to complete"],
     ),
-    "intake-dx-status": ("Diagnosis status", ["Provisional", "Working", "Confirmed", "Ruled out"]),
+    # Diagnostic certainty → Condition.verificationStatus (clinical_encounter.DiagnosisCode).
+    "intake-dx-status": ("Diagnosis status", ["Provisional", "Differential", "Confirmed", "Ruled out"]),
     "intake-concern-level": ("Level of concern", ["Low", "Moderate", "High"]),
     "intake-marital": (
         "Relationship / marital status",
         ["Single", "Married", "Cohabiting", "Separated / divorced", "Widowed", "Not stated"],
     ),
     "intake-med-status": ("Medication status", ["Taking", "Stopped", "Intermittent", "Unknown"]),
+    # ── v4 intake additions (mockup ALG_SOURCES, SUB_ROWS, measureForm timepoint) ──
+    "assessment-timepoint": ("Assessment timepoint", ["Baseline", "Repeat", "Interval", "Discharge", "Follow-up"]),
+    "allergy-severity": ("Allergy severity", ["Unknown", "Mild", "Moderate", "Severe", "Anaphylaxis"]),
+    "allergy-info-source": (
+        "Source of allergy information",
+        ["Client report", "Third-party report", "Previous record", "Clinical record / referral letter",
+         "Clinician observation"],
+    ),
+    "intake-substance-rows": (
+        "Substances used",
+        ["Alcohol", "Cannabis", "Opioids", "Stimulants", "Sedatives", "Nicotine", "Khat (miraa)", "Other"],
+    ),
+    "intake-substance-current": ("Currently using?", ["Yes", "No", "Past only"]),
+}
+# Value sets whose codes are fixed by the model they bind to (code → display).
+_CODED_OPTIONS = {
+    # client_registry.AllergyRecord.TYPE_CHOICES — drives the prescribing tier (INT-06).
+    "allergy-type": (
+        "Allergy type",
+        [("ALLERGY", "Allergy"), ("INTOLERANCE", "Intolerance"), ("ADR", "Adverse drug reaction (ADR)")],
+    ),
 }
 
 # MSE domains: key → (label, valueset id or None for free text). Stored in
@@ -220,10 +243,13 @@ MSE_NORMAL = {
     "insight": "Good",
     "judgment": "Intact",
     "impulse_control": "Intact",
-    "orientation": "Oriented to time, place and person",
+    "orient_time": "ORIENTED",
+    "orient_place": "ORIENTED",
+    "orient_person": "ORIENTED",
     "attention": "Intact (months backwards)",
-    "reliability": "Reliable",
+    "reliability": "RELIABLE",
 }
+MSE_REQUIRED = ("mood", "thought_content")
 for _key, _label, _opts in MSE_DOMAINS:
     if _opts:
         _OPTIONS[f"mse-{_key.replace('_', '-')}"] = (_label, _opts)
@@ -295,7 +321,8 @@ SECTIONS = [
     ]},
     {"key": "sx", "n": "2", "title": "Current symptoms & functioning", "core": True, "fields": [
         multi("list", "Current symptoms", "intake-symptoms",
-              highlight=["Hallucinations", "Delusions/suspiciousness", "Confusion/disorientation"]),
+              highlight=[_code(x) for x in ("Hallucinations", "Delusions/suspiciousness",
+                                            "Confusion/disorientation")]),
         F("hpi", "Describe current symptoms, severity, frequency, triggers and impact",
           "textarea", rows=4, full=True),
         F("sleep_hours", "Sleep — hours / night", "number", unit="h"),
@@ -382,20 +409,35 @@ SECTIONS = [
         F("pe_poc", "Point-of-care results (glucose, malaria RDT, HIV rapid test, pregnancy test, breath alcohol)",
           "textarea", full=True, group="Examination"),
     ]},
-    {"key": "subs", "n": "8", "title": "Substance use", "core": True, "fields": [
+    {"key": "subs", "n": "8", "title": "Substance use", "core": True, "kind": "substances", "fields": [
         sel("kind", "Main substance", "intake-substance-kind",
             hint="Opens the right withdrawal chart in Interventions"),
         F("screen", "Other screening results (ASSIST / DUDIT / urine drug screen)"),
-        multi("features", "Features", "intake-substance-features"),
+        # `highlight`: codes the form shows in red when chosen (mockup `hi`).
+        multi("features", "Features", "intake-substance-features",
+              highlight=[_code(x) for x in ("Withdrawal", "Overdose history", "Seizure history",
+                                            "Substance-related psychosis")]),
         multi("consequences", "Consequences", "intake-substance-consequences"),
         sel("injecting", "Injecting drug use", "intake-injecting"),
-        multi("harm_reduction", "Harm reduction", "intake-harm-reduction"),
+        # Harm-reduction prompts only when injecting is "Yes" (INT-08; hidden → not submitted, X-08).
+        multi("harm_reduction", "Harm-reduction prompts", "intake-harm-reduction",
+              show_when={"field": "injecting", "in": [_code("Yes — currently"), _code("Yes — in the past")]}),
         F("complications", "Past seizures, delirium tremens, overdoses (detail)", full=True),
         F("prev_tx", "Previous detox, rehabilitation, mutual-help / peer support, medication-assisted treatment and response",
           "textarea", rows=3, full=True),
         F("motivation", "Readiness to change and the client’s own substance-use goal",
           "textarea", rows=2, full=True),
-    ], "list": "substances"},
+    ], "list": "substances",
+     # INT-08-01: one card per substance (rows: `intake-substance-rows`; Nicotine is Intake-only).
+     "cardFields": [
+        sel("current", "Currently using?", "intake-substance-current"),
+        F("amount", "Amount / pattern"),
+        F("route", "Route"),
+        F("age_first", "Age at first use", "number"),
+        F("last_use", "Last use"),
+        F("abstinence", "Longest abstinence"),
+        F("problems", "Problems / withdrawal", full=True),
+     ]},
     {"key": "family", "n": "9", "title": "Family history", "core": False, "fields": [
         F("history", "Family history of mental illness, suicide/self-harm, substance use/addiction or significant medical/neurological conditions",
           "textarea", rows=4, full=True),
@@ -515,10 +557,12 @@ RESTRICTED_FIELDS = {
 
 def option_valuesets():
     """{valueset id: (title, [(code, display), …])} — seeds LocalValueSet."""
-    return {
+    sets = {
         vs_id: (title, [(_code(d), d) for d in displays])
         for vs_id, (title, displays) in _OPTIONS.items()
     }
+    sets.update(_CODED_OPTIONS)
+    return sets
 
 
 def risk_rows_served():
@@ -535,7 +579,8 @@ def served_schema():
         "required": REQUIRED_SECTIONS,
         "riskRows": risk_rows_served(),
         "mseDomains": [
-            {"key": k, "label": label, "valueset": f"mse-{k.replace('_', '-')}" if opts else None}
+            {"key": k, "label": label, "valueset": f"mse-{k.replace('_', '-')}" if opts else None,
+             "required": k in MSE_REQUIRED}
             for k, label, opts in MSE_DOMAINS
         ],
         "mseNormal": MSE_NORMAL,

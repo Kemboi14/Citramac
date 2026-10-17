@@ -17,6 +17,13 @@ NO_YES_UNCERTAIN = [("no", "No"), ("yes", "Yes"), ("uncertain", "Uncertain")]
 YES_NO_UNCERTAIN = [("yes", "Yes"), ("no", "No"), ("uncertain", "Uncertain")]
 
 VALUESETS = {
+    # Group programme attendance (v4 mockup). Local codes; VERIFY: mapping to the
+    # R4 participation-status binding once the national IG names one.
+    "group-attendance": (
+        "Group session attendance",
+        [("PRESENT", "Present"), ("ABSENT", "Absent"), ("EXCUSED", "Excused"),
+         ("DECLINED", "Declined")],
+    ),
     "missed-appointment-reason": (
         "Reason for a missed appointment",
         [("TRANSPORT", "Transport"), ("COST", "Cost"), ("FELT_BETTER", "Felt better"),
@@ -42,7 +49,8 @@ VALUESETS = {
     "note-type": (
         "Progress note type",
         [("PROGRESS", "Progress note"), ("WARD_ROUND", "Ward round"), ("PHONE", "Telephone contact"),
-         ("FAMILY", "Family contact"), ("MDT", "MDT review"), ("NURSING_SHIFT", "Nursing shift note")],
+         ("FAMILY", "Family contact"), ("MDT", "MDT review"), ("NURSING_SHIFT", "Nursing shift note"),
+         ("FOLLOW_UP", "Follow-up contact")],
     ),
     "episode-outcome": (
         "How the episode ended",
@@ -526,6 +534,60 @@ VALUESETS = {
             ("AFTERCARE", "After-care / relapse prevention"),
             ("CARE_PLAN_REVIEW", "Care-plan review"),
             ("OUTREACH", "Missed-appointment outreach"),
+            ("OTHER", "Other"),
+            ("CONTACT_72H", "72-hour safety contact"),
+        ],
+    ),
+    # ── Care plan, outcomes and follow-up (mockup v4 stages 4 and 6) ──
+    "care-plan-agreement": (
+        "Client agreement with the care plan",
+        [
+            ("AGREES", "Agreed"),
+            ("CHANGES", "Agreed with changes"),
+            ("PARTIAL", "Disagrees with part of the plan"),
+            ("DECLINED", "Declined — reasons recorded"),
+            ("UNABLE", "Unable at present — lacks capacity for this decision (revisit)"),
+        ],
+    ),
+    "care-plan-disagreement-part": (
+        "Part of the plan the client disagrees with",
+        [
+            ("ACTION", "An action"),
+            ("GOAL", "A goal"),
+            ("SAFETY_PLAN", "The safety plan"),
+            ("PRIORITY", "Priority / urgency"),
+            ("MEDICATION", "Medication"),
+            ("ADMISSION_LEGAL", "Admission / legal status"),
+            ("OTHER", "Other"),
+        ],
+    ),
+    "formulation-5p": (
+        "Formulation heading (5P)",
+        [
+            ("PRESENTING", "Presenting problem"),
+            ("PREDISPOSING", "Predisposing"),
+            ("PRECIPITATING", "Precipitating"),
+            ("PERPETUATING", "Perpetuating"),
+            ("PROTECTIVE", "Protective"),
+        ],
+    ),
+    "oat-offer": (
+        "Opioid agonist therapy offered",
+        [
+            ("OFFERED_METHADONE", "Offered — methadone"),
+            ("OFFERED_BUPRENORPHINE", "Offered — buprenorphine"),
+            ("DECLINED", "Offered — declined"),
+            ("NOT_APPROPRIATE", "Not appropriate (reason in notes)"),
+        ],
+    ),
+    "episode-destination": (
+        "Destination at the end of the episode",
+        [
+            ("HOME_SELF", "Home — self-care"),
+            ("HOME_FAMILY", "Home — with family"),
+            ("STEP_DOWN", "Step-down / halfway house"),
+            ("RESIDENTIAL", "Residential rehabilitation"),
+            ("OTHER_FACILITY", "Other facility"),
             ("OTHER", "Other"),
         ],
     ),

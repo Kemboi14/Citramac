@@ -68,6 +68,7 @@ export function AppShell({
   variant = "default",
   pageTitles,
   searchSlot,
+  focusRoutes,
 }: {
   brandName: string;
   brandSub: string;
@@ -88,6 +89,10 @@ export function AppShell({
   pageTitles?: Record<string, string>;
   /** Replaces the topbar's plain search box (brand variant), e.g. with a working client search. */
   searchSlot?: ReactNode;
+  /** Full-height workspaces (e.g. Group Psychotherapy): the sidebar collapses to its
+   * icon rail on entry and the user's own setting comes back on leaving; the page
+   * gets the whole content area with no padding (v4 mockup `showPage`). */
+  focusRoutes?: string[];
 }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(readStoredCollapse);
   const isDesktop = useIsDesktop();
@@ -115,6 +120,17 @@ export function AppShell({
         ),
       ),
   );
+  // Entering a focus route remembers the user's own collapse setting and shows the
+  // rail; leaving restores it. Done while rendering so the first paint is right.
+  const focusLayout = Boolean(focusRoutes?.includes(location.pathname));
+  const [collapseBeforeFocus, setCollapseBeforeFocus] = useState<boolean | null>(null);
+  if (focusLayout && collapseBeforeFocus === null) {
+    setCollapseBeforeFocus(desktopCollapsed);
+    setDesktopCollapsed(true);
+  } else if (!focusLayout && collapseBeforeFocus !== null) {
+    setDesktopCollapsed(collapseBeforeFocus);
+    setCollapseBeforeFocus(null);
+  }
   const pageTitle =
     resolvePageTitle(pageTitles, location.pathname) ??
     navGroups
@@ -185,13 +201,15 @@ export function AppShell({
   }, [accessToken, claims?.organization_id]);
 
   useEffect(() => {
+    // The rail forced by a focus route is not the user's preference — don't store it.
+    if (collapseBeforeFocus !== null) return;
     try {
       localStorage.setItem(COLLAPSE_KEY, desktopCollapsed ? "1" : "0");
     } catch {
       // Best-effort only — a private window or blocked storage just means
       // the collapse preference won't persist across reloads.
     }
-  }, [desktopCollapsed]);
+  }, [desktopCollapsed, collapseBeforeFocus]);
 
   const toggleSidebar = () => {
     if (isDesktop) {
@@ -468,7 +486,8 @@ export function AppShell({
             >
               <Menu className="h-[17px] w-[17px]" />
             </button>
-            <div className="min-w-0 flex-1 truncate font-display text-sm font-semibold">
+            {/* Narrow screens: wrap to two lines rather than cut the title off. */}
+            <div className="min-w-0 flex-1 truncate font-display text-sm font-semibold max-[480px]:line-clamp-2 max-[480px]:whitespace-normal max-[480px]:text-[13px] max-[480px]:leading-tight">
               {pageTitle}
             </div>
             <div className="relative hidden w-72 max-w-[34vw] min-[481px]:block">
@@ -512,9 +531,13 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="w-full flex-1 px-4 py-5 pb-16 outline-none sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-16"
+          className={
+            focusLayout
+              ? "w-full flex-1 outline-none lg:h-[calc(100vh-56px)] lg:overflow-y-auto"
+              : "w-full flex-1 px-4 py-5 pb-16 outline-none sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-16"
+          }
         >
-          <div className="mx-auto w-full max-w-[1920px]">
+          <div className={focusLayout ? "h-full w-full" : "mx-auto w-full max-w-[1920px]"}>
             <ErrorBoundary resetKey={location.pathname}>
               <SubscriptionBanner />
               <OfflineSyncBanner />

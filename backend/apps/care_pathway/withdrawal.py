@@ -17,10 +17,14 @@ from rest_framework.exceptions import ValidationError
 
 from . import instruments
 from .models import AssessmentAttempt, OutcomeScore
+from .intake_schema import _code
 
 CODES = [code for code, spec in instruments.INSTRUMENTS.items() if spec.get("withdrawal")]
 # How soon after an unscorable attempt to try again (clinical-neutral nudge, not a dose rule).
 RETRY_MINUTES = 60
+# Points on the serial chart and rows in the history table.
+SERIES_LENGTH = 20
+HISTORY_LENGTH = 6
 
 
 def protocol(code):
@@ -60,6 +64,11 @@ def status(patient, code, now=None):
         "flags": [],
         "nextDueAt": None,
         "lastAttempt": None,
+        # Facility thresholds for the chart's reference line — None when unset.
+        "prnThreshold": cfg["prn_threshold"],
+        "severeThreshold": cfg["severe_threshold"],
+        "series": _series(patient, code),
+        "history": _history(patient, code),
     }
     if last:
         out["latest"] = {
@@ -83,6 +92,30 @@ def status(patient, code, now=None):
     return out
 
 
+def _by(user):
+    return (user.get_full_name() or str(user)) if user else ""
+
+
+def _series(patient, code):
+    rows = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at")[:SERIES_LENGTH]
+    return [{"score": r.score, "at": r.recorded_at} for r in reversed(rows)]
+
+
+def _history(patient, code):
+    """The latest scores and unable-to-score attempts, newest first."""
+    scores = OutcomeScore.objects.filter(patient=patient, instrument=code).select_related("recorded_by")
+    attempts = AssessmentAttempt.objects.filter(patient=patient, instrument=code).select_related("recorded_by")
+    rows = [
+        {"at": s.recorded_at, "score": s.score, "band": instruments.band_for(code, s.score),
+         "unable": "", "by": _by(s.recorded_by)}
+        for s in scores.order_by("-recorded_at")[:HISTORY_LENGTH]
+    ] + [
+        {"at": a.recorded_at, "score": None, "band": "", "unable": a.get_reason_display(), "by": _by(a.recorded_by)}
+        for a in attempts.order_by("-recorded_at")[:HISTORY_LENGTH]
+    ]
+    return sorted(rows, key=lambda r: r["at"], reverse=True)[:HISTORY_LENGTH]
+
+
 def overview(patient):  # scales with any chart activity
     return [status(patient, code) for code in CODES if OutcomeScore.objects.filter(patient=patient, instrument=code).exists()
             or AssessmentAttempt.objects.filter(patient=patient, instrument=code).exists()]
@@ -96,9 +129,19 @@ def main_substance(patient):
 
 
 def is_opioid(patient):
-    return main_substance(patient) == "Opioids"
+    # The intake stores the value-set code (e.g. "OPIOIDS"), not the display label.
+    return main_substance(patient) == _code("Opioids")
+
+
+def substance_display(patient):
+    """The intake's main-substance answer as the clinician saw it ('' when unset)."""
+    from .models import LocalConcept
+
+    code = main_substance(patient)
+    concept = LocalConcept.objects.filter(valueset_id="intake-substance-kind", code=code).first() if code else None
+    return concept.display if concept else code
 
 
 def recommended_scale(patient):
     """CIWA-Ar for alcohol, COWS for opioids — a suggestion; the clinician chooses."""
-    return {"Alcohol": "CIWA", "Opioids": "COWS"}.get(main_substance(patient))
+    return {_code("Alcohol"): "CIWA", _code("Opioids"): "COWS"}.get(main_substance(patient))

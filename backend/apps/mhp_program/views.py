@@ -163,7 +163,13 @@ class PsychotherapySessionViewSet(
     restricted_serializer_class = PsychotherapySessionRestrictedSerializer
 
     def get_queryset(self):
-        queryset = PsychotherapySession.objects.select_related("patient").order_by("-session_date")
+        # A session whose structured note (care_pathway.psychotherapy) is still a
+        # draft is not a recorded session yet.
+        queryset = (
+            PsychotherapySession.objects.select_related("patient")
+            .exclude(psy_note__status="DRAFT")
+            .order_by("-session_date")
+        )
         session_type = self.request.query_params.get("session_type")
         if session_type:
             queryset = queryset.filter(session_type=session_type)
@@ -174,6 +180,17 @@ class PsychotherapySessionViewSet(
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, therapist=self.request.user)
+
+    def perform_update(self, serializer):
+        # A session documented through the psychotherapy note workflow is
+        # changed only there: drafts by their author, signed notes by audited
+        # amendment (master prompt PSY-SIGN, AT-18).
+        if hasattr(serializer.instance, "psy_note"):
+            raise PermissionDenied(
+                "This session's note is managed in the psychotherapy session workflow — "
+                "a signed note is changed by amendment."
+            )
+        super().perform_update(serializer)
 
 
 class CareTeamMembershipViewSet(viewsets.ModelViewSet):

@@ -6,6 +6,8 @@ import {
   type PriorityOrBlank,
 } from "../../../lib/carePathwayApi";
 import { ErrorNote } from "./ui";
+import { countdownText, useNow } from "../record/legal/countdown";
+import type { LegalBanner } from "../../../lib/legalStatusApi";
 
 const SEX_SHORT: Record<string, string> = { FEMALE: "F", MALE: "M", OTHER: "Intersex / other" };
 
@@ -199,6 +201,7 @@ export function SafetyBanner({
               />
               <span>{setting}</span>
             </div>
+            {banner.legal_status && <LegalBannerLine legal={banner.legal_status} inpatient={inpatient} />}
           </div>
           <div>
             <div className={label}>Triage / risk priority</div>
@@ -251,5 +254,24 @@ export function SafetyBanner({
         </div>
       </div>
     </section>
+  );
+}
+
+/** BAN-10 / LGL-DATA-01: "INPATIENT — INVOLUNTARY, expires …" plus a live notice
+ * countdown — always as text, never colour alone. */
+function LegalBannerLine({ legal, inpatient }: { legal: LegalBanner; inpatient: boolean }) {
+  const now = useNow();
+  return (
+    <div aria-label="Legal admission status" className="mt-1.5 flex flex-col gap-0.5">
+      <span className="text-xs font-extrabold tracking-[.2px] text-ink-900">
+        {inpatient ? "INPATIENT — " : ""}
+        {legal.label}
+      </span>
+      {legal.notice && (
+        <span className="text-xs font-bold text-priority-orange">
+          {legal.notice.notice_period_hours}-h discharge notice: {countdownText(legal.notice.earliest_departure_at, now)}
+        </span>
+      )}
+    </div>
   );
 }

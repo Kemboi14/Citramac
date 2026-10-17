@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.functions import TruncMonth
@@ -24,6 +25,7 @@ from apps.tenancy.crypto import decrypt_value
 from config.errors import error_response
 
 from .models import (
+    HEALTH_PROVIDER_ORG_TYPES,
     Branch,
     Department,
     Organization,
@@ -588,6 +590,23 @@ class OrganizationSmsTestView(APIView):
         return Response(test_sms_connection(credentials, phone))
 
 
+def _license_status_filter(status):
+    """Q for Branch.license_status — computed in SQL so it can filter a page."""
+    today = timezone.localdate()
+    window_end = today + timedelta(days=max(settings.FACILITY_LICENSE_REMINDER_DAYS, default=0))
+    if status == Branch.LICENSE_MISSING:
+        return Q(facility_license_valid_until__isnull=True)
+    if status == Branch.LICENSE_EXPIRED:
+        return Q(facility_license_valid_until__lt=today)
+    if status == Branch.LICENSE_EXPIRING:
+        return Q(
+            facility_license_valid_until__gte=today, facility_license_valid_until__lte=window_end
+        )
+    if status == Branch.LICENSE_VALID:
+        return Q(facility_license_valid_until__gt=window_end)
+    raise ValidationError({"license_status": "Expected MISSING, VALID, EXPIRING or EXPIRED."})
+
+
 class BranchViewSet(viewsets.ModelViewSet):
     """
     Super Admin: every branch across every tenant (Branches screen). Org
@@ -605,17 +624,37 @@ class BranchViewSet(viewsets.ModelViewSet):
     org_admin_can_create = True
 
     def get_queryset(self):
-        queryset = Branch.objects.annotate(
-            ward_count=Count("ward", distinct=True),
-        ).select_related("organization")
+        queryset = (
+            Branch.objects.annotate(
+                ward_count=Count("ward", distinct=True),
+            )
+            .select_related("organization")
+            .prefetch_related("identifier_changes__changed_by")
+        )
         params = self.request.query_params
         q = params.get("q")
         if q:
-            queryset = queryset.filter(Q(name__icontains=q) | Q(mfl_code__icontains=q))
+            queryset = queryset.filter(
+                Q(name__icontains=q)
+                | Q(mfl_code__icontains=q)
+                | Q(kmpdc_registration_number__icontains=q)
+                | Q(sha_fr_code__icontains=q)
+            )
         for field in ("country", "county", "facility_level", "mhp_registration_status"):
             value = params.get(field)
             if value:
                 queryset = queryset.filter(**{field: value})
+        license_status = params.get("license_status")
+        if license_status:
+            queryset = queryset.filter(_license_status_filter(license_status))
+        if params.get("missing_identifiers") == "true":
+            queryset = queryset.filter(
+                Q(
+                    kmpdc_registration_number="",
+                    organization__org_type__in=HEALTH_PROVIDER_ORG_TYPES,
+                )
+                | Q(sha_claims_enabled=True, sha_fr_code="")
+            )
         return queryset.order_by("name")
 
     def perform_create(self, serializer):

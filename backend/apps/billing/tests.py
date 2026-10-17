@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.clinical_encounter.models import Encounter
@@ -28,6 +28,8 @@ class BillingTests(APITestCase):
                 organization=self.org,
                 is_active=True,
             )
+            # Writes are finance-only (apps.billing.permissions).
+            self.clinician.roles.add(Role.objects.get(name="Billing Clerk", organization=None))
             self.patient = Patient.objects.create(
                 organization=self.org,
                 first_name="Faith",
