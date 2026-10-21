@@ -1,6 +1,6 @@
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -479,3 +479,102 @@ class FhirR4ConformanceTests(APITestCase):
             )
             bundle = build_client_history_bundle(assessment)
         assert_conformant(bundle)
+
+    def test_condition_carries_verification_and_clinical_status(self):
+        """A ruled-out diagnosis must travel as `refuted` — both statuses are R4
+        modifier elements, so leaving them off asserts the diagnosis."""
+        from apps.clinical_encounter.models import DiagnosisCode
+
+        with platform_admin_context():
+            encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
+            for code, primary, certainty in (
+                ("6A70", True, "CONFIRMED"),
+                ("6A60", False, "RULED_OUT"),
+            ):
+                DiagnosisCode.objects.create(
+                    organization=self.org,
+                    encounter=encounter,
+                    icd11_code=IcdCodeIndex.objects.get(code=code),
+                    is_primary=primary,
+                    verification_status=certainty,
+                )
+            unstated = DiagnosisCode.objects.create(
+                organization=self.org,
+                encounter=encounter,
+                icd11_code=IcdCodeIndex.objects.get(code="6B00"),
+                verification_status="",
+            )
+            referral = ReferralPacket.objects.create(
+                organization=self.org, encounter=encounter, destination_facility="KNH"
+            )
+            bundle = build_referral_bundle(referral)
+        assert_conformant(bundle)
+        conditions = {
+            e["resource"]["code"]["coding"][0]["code"]: e["resource"]
+            for e in bundle["entry"]
+            if e["resource"]["resourceType"] == "Condition"
+        }
+        confirmed, refuted = conditions["6A70"], conditions["6A60"]
+        self.assertEqual(confirmed["verificationStatus"]["coding"][0]["code"], "confirmed")
+        self.assertEqual(confirmed["clinicalStatus"]["coding"][0]["code"], "active")
+        self.assertEqual(refuted["verificationStatus"]["coding"][0]["code"], "refuted")
+        self.assertNotIn("clinicalStatus", refuted)
+        self.assertNotIn("verificationStatus", conditions[unstated.icd11_code_id])
+
+
+class FhirR4ConformanceInteropExamplesTests(SimpleTestCase):
+    """Published referral, admission and client-history examples (CLAUDE.md §3
+    item 8): a routine case, an edge case and a refusal or omission for each."""
+
+    def _folder(self):
+        from pathlib import Path
+
+        return Path(__file__).parent / "fhir_examples"
+
+    def _load(self, name):
+        import json
+
+        return json.loads((self._folder() / f"{name}.json").read_text())
+
+    def _resources(self, bundle, resource_type):
+        return [
+            e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == resource_type
+        ]
+
+    def test_every_example_is_valid_r4_with_three_per_kind(self):
+        import json
+
+        from .fhir_validation.validator import validate_bundle
+
+        for kind in ("referral", "admission", "client-history"):
+            paths = sorted(self._folder().glob(f"{kind}-*.json"))
+            self.assertGreaterEqual(len(paths), 3, kind)
+            for path in paths:
+                with self.subTest(example=path.name):
+                    self.assertEqual(validate_bundle(json.loads(path.read_text())), {})
+
+    def test_ruled_out_diagnosis_is_sent_as_refuted(self):
+        bundle = self._load("referral-edge-provisional-and-ruled-out-diagnoses")
+        statuses = sorted(
+            c["verificationStatus"]["coding"][0]["code"]
+            for c in self._resources(bundle, "Condition")
+        )
+        self.assertEqual(statuses, ["provisional", "refuted"])
+
+    def test_declined_admission_consent_is_rejected(self):
+        bundle = self._load("admission-refusal-voluntary-consent-declined")
+        self.assertEqual(self._resources(bundle, "Consent")[0]["status"], "rejected")
+
+    def test_involuntary_admission_carries_risk_not_consent(self):
+        bundle = self._load("admission-edge-involuntary-with-risk-flags")
+        self.assertEqual(len(self._resources(bundle, "RiskAssessment")), 1)
+        self.assertEqual(self._resources(bundle, "Consent"), [])
+
+    def test_omissions_send_only_what_was_recorded(self):
+        for name in (
+            "referral-omission-no-diagnosis-or-prescription",
+            "client-history-omission-draft-nothing-recorded",
+        ):
+            with self.subTest(example=name):
+                types = [e["resource"]["resourceType"] for e in self._load(name)["entry"]]
+                self.assertEqual(types, ["Composition", "Patient"])

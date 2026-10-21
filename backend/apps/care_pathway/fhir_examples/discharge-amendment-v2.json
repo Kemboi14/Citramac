@@ -157,6 +157,22 @@
       "resource": {
         "resourceType": "Condition",
         "id": "accc5a5d-ae5a-47bb-84cf-4121db541327",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "provisional"
+            }
+          ]
+        },
         "code": {
           "coding": [
             {

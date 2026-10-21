@@ -1,0 +1,135 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:f9c9f834-6070-4667-a423-d42b63a7d052",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "f9c9f834-6070-4667-a423-d42b63a7d052",
+        "status": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "57133-1",
+              "display": "Referral note"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "date": "2026-10-21T06:28:57.193853Z",
+        "author": [
+          {
+            "display": "CITRAMAC System"
+          }
+        ],
+        "title": "Referral to County Referral Hospital",
+        "section": [
+          {
+            "title": "Clinical Summary",
+            "entry": [
+              {
+                "reference": "urn:citramac:condition:c0d6f81c-2537-4306-9a3a-160e0827e6a9"
+              },
+              {
+                "reference": "urn:citramac:condition:b2fb9174-a8f3-4db3-9c81-7117f062ada4"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "092074cf-6f0b-4df0-af30-37d13db42558",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Mwangi",
+            "given": [
+              "Faith"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1997-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:condition:c0d6f81c-2537-4306-9a3a-160e0827e6a9",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "c0d6f81c-2537-4306-9a3a-160e0827e6a9",
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "refuted"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://id.who.int/icd/release/11/mms",
+              "code": "6A60",
+              "display": "Bipolar type I disorder"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:condition:b2fb9174-a8f3-4db3-9c81-7117f062ada4",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "b2fb9174-a8f3-4db3-9c81-7117f062ada4",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "provisional"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://id.who.int/icd/release/11/mms",
+              "code": "6C40",
+              "display": "Disorders due to use of alcohol"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        }
+      }
+    }
+  ]
+}

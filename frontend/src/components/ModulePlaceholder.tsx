@@ -53,9 +53,7 @@ export function ModulePlaceholder({
             <Info className="h-4 w-4 text-brand-green" /> Module status
           </h2>
           <p className="mt-3 text-[12.5px] leading-relaxed text-ink-500">
-            Not built yet — no backend model or spec currently exists for this screen. See{" "}
-            <span className="font-mono text-[11.5px]">docs/07-CLINICAL-MODULES-SPEC.md</span> for
-            what is planned.
+            Not built yet — no backend model or spec currently exists for this screen.
           </p>
         </div>
       </div>

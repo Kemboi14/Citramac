@@ -12,7 +12,7 @@ export function PlaceholderPage({ title, eyebrow }: { title: string; eyebrow: st
       </div>
       <h1 className="font-display text-2xl font-bold text-ink-900">{title}</h1>
       <p className="mt-2 max-w-md text-sm text-ink-500">
-        The real screens for this module land in a later phase — see docs/11-ROADMAP-AND-PHASES.md.
+        The real screens for this module land in a later phase.
       </p>
     </div>
   );

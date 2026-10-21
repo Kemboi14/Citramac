@@ -1,4 +1,4 @@
-from django.test import Client, TestCase
+from django.test import Client, SimpleTestCase, TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -193,3 +193,159 @@ class AppendOnlyAndCoverageTests(TestCase):
             action=AuditLogEntry.ACTION_DELETE,
         )
         self.assertEqual(entry.field_diff["name"]["old"], "Doomed")
+
+
+class FhirR4ConformanceAuditEventTests(APITestCase):
+    """CLAUDE.md §4 — AuditEvent for every access to a psychiatric record,
+    mapped from the one append-only trail. The class name starts with
+    `FhirR4Conformance` so the CI conformance step runs it on every build."""
+
+    def setUp(self):
+        from apps.care_pathway.models import ProgressNote
+        from apps.client_registry.models import Patient
+
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org A", slug="fhir-audit-org-a", facility_type="MENTAL_HEALTH_MHP"
+            )
+            other_org = Organization.objects.create(
+                name="Org B", slug="fhir-audit-org-b", facility_type="MENTAL_HEALTH_MHP"
+            )
+            self.org_admin = AuditLogApiTests._user("admin@fhir-a.test", self.org, "Org Admin")
+            self.clinician = AuditLogApiTests._user("staff@fhir-a.test", self.org, None)
+            self.outsider = AuditLogApiTests._user("admin@fhir-b.test", other_org, "Org Admin")
+            self.patient = Patient.objects.create(
+                organization=self.org, first_name="Faith", last_name="Mwangi", gender="FEMALE"
+            )
+            self.other_patient = Patient.objects.create(
+                organization=self.org, first_name="Peter", last_name="Otieno", gender="MALE"
+            )
+            self.note = ProgressNote.objects.create(
+                organization=self.org, patient=self.patient, note_type="NURSING"
+            )
+            other_note = ProgressNote.objects.create(
+                organization=self.org, patient=self.other_patient, note_type="NURSING"
+            )
+            AuditLogEntry.objects.create(
+                organization_id=self.org.id,
+                actor_user_id=self.clinician.id,
+                actor_role="Psychiatrist",
+                action=AuditLogEntry.ACTION_VIEW,
+                model="care_pathway.progressnote",
+                object_id=str(self.note.id),
+                source_ip="10.0.0.7",
+            )
+            AuditLogEntry.objects.create(
+                organization_id=self.org.id,
+                actor_user_id=self.clinician.id,
+                action=AuditLogEntry.ACTION_UPDATE,
+                model="care_pathway.progressnote",
+                object_id=str(self.note.id),
+                field_diff={"text": {"old": "SECRET-OLD", "new": "SECRET-NEW"}},
+            )
+            AuditLogEntry.objects.create(
+                organization_id=self.org.id,
+                actor_user_id=self.clinician.id,
+                action=AuditLogEntry.ACTION_VIEW,
+                model="care_pathway.progressnote",
+                object_id=str(other_note.id),
+            )
+        self.url = reverse("fhir-auditevent-search")
+
+    def _get(self, user, query):
+        access, _ = issue_tokens(user)
+        return self.client.get(self.url + query, HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def _events(self, bundle):
+        return [entry["resource"] for entry in bundle.get("entry", [])]
+
+    def test_patient_trail_is_a_valid_r4_searchset(self):
+        from apps.dha_interop.fhir_validation.validator import validate_bundle
+
+        response = self._get(self.org_admin, f"?patient={self.patient.id}")
+        self.assertEqual(response.status_code, 200)
+        bundle = response.data
+        self.assertEqual(validate_bundle(bundle), {})
+        self.assertEqual(bundle["type"], "searchset")
+        events = self._events(bundle)
+        note_events = [e for e in events if str(self.note.id) in str(e["entity"][1:])]
+        # The note's own CREATE comes from the signal-driven trail, not the fixture.
+        self.assertEqual(sorted(e["action"] for e in note_events), ["C", "R", "U"])
+        view = next(e for e in note_events if e["action"] == "R")
+        self.assertEqual(view["type"]["code"], "110110")
+        self.assertEqual(view["outcome"], "0")
+        self.assertTrue(view["agent"][0]["requestor"])
+        self.assertEqual(view["agent"][0]["network"], {"address": "10.0.0.7", "type": "2"})
+        self.assertEqual(view["entity"][0]["role"]["code"], "1")
+        self.assertEqual(view["entity"][1]["securityLabel"][0]["code"], "R")
+
+    def test_only_this_patients_record_is_included(self):
+        response = self._get(self.org_admin, f"?patient={self.patient.id}")
+        patient_refs = {e["entity"][0]["what"]["reference"] for e in self._events(response.data)}
+        self.assertEqual(patient_refs, {f"urn:citramac:patient:{self.patient.id}"})
+
+    def test_field_values_are_never_returned(self):
+        response = self._get(self.org_admin, f"?patient={self.patient.id}")
+        self.assertNotIn("SECRET", str(response.data))
+
+    def test_clinician_and_other_organization_are_refused(self):
+        self.assertEqual(self._get(self.clinician, f"?patient={self.patient.id}").status_code, 403)
+        refused = self._get(self.outsider, f"?patient={self.patient.id}")
+        self.assertEqual(refused.status_code, 404)
+        self.assertEqual(refused.data["resourceType"], "OperationOutcome")
+
+    def test_bad_parameters_return_a_valid_operation_outcome(self):
+        from apps.dha_interop.fhir_validation.validator import validate_resource
+
+        for query in ("", "?patient=nope", f"?patient={self.patient.id}&_count=x"):
+            with self.subTest(query=query):
+                response = self._get(self.org_admin, query)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(validate_resource(response.data), [])
+
+    def test_reading_the_trail_is_itself_audited(self):
+        self._get(self.org_admin, f"?patient={self.patient.id}")
+        entry = AuditLogEntry.objects.filter(model="sysadmin_audit.auditlogentry").latest(
+            "timestamp"
+        )
+        self.assertEqual(entry.actor_user_id, self.org_admin.id)
+        self.assertEqual(
+            entry.field_diff["filters"], {"patient": str(self.patient.id), "format": "fhir"}
+        )
+
+
+class FhirR4ConformanceAuditEventExamplesTests(SimpleTestCase):
+    """Published AuditEvent examples (CLAUDE.md §3 item 8): a psychiatric note
+    viewed, a system action with no human actor, and an update whose changed
+    values are withheld."""
+
+    def _load(self, name):
+        import json
+        from pathlib import Path
+
+        return json.loads((Path(__file__).parent / "fhir_examples" / f"{name}.json").read_text())
+
+    def test_every_example_is_a_valid_r4_searchset(self):
+        import json
+        from pathlib import Path
+
+        from apps.dha_interop.fhir_validation.validator import validate_bundle
+
+        paths = sorted((Path(__file__).parent / "fhir_examples").glob("auditevent-*.json"))
+        self.assertGreaterEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(example=path.name):
+                bundle = json.loads(path.read_text())
+                self.assertEqual(validate_bundle(bundle), {})
+                self.assertEqual(bundle["type"], "searchset")
+
+    def test_system_action_has_no_requestor(self):
+        event = self._load("auditevent-edge-system-archive-no-human-actor")["entry"][0]["resource"]
+        self.assertFalse(event["agent"][0]["requestor"])
+        self.assertEqual(event["agent"][0]["who"]["display"], "System")
+
+    def test_changed_values_are_withheld(self):
+        bundle = self._load("auditevent-omission-changed-values-withheld")
+        self.assertEqual(bundle["entry"][0]["resource"]["action"], "U")
+        self.assertNotIn("wording", str(bundle))

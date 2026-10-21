@@ -49,10 +49,31 @@ def build_patient_resource(patient):
     return resource
 
 
+CONDITION_CLINICAL_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-clinical"
+CONDITION_VER_STATUS_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-ver-status"
+_CLINICAL_STATUS = {"ACTIVE": "active", "HISTORICAL": "inactive", "RESOLVED": "resolved"}
+
+
 def build_condition_resource(diagnosis, patient_ref):
+    """Both statuses are modifier elements in R4: without verificationStatus a
+    ruled-out diagnosis reads as an asserted one. A row whose certainty was
+    never stated carries none rather than a guessed one, and a refuted
+    diagnosis carries no clinical status (it is not active, it never was)."""
+    verification = diagnosis.FHIR_VERIFICATION.get(diagnosis.verification_status)
+    clinical = None if verification == "refuted" else _CLINICAL_STATUS.get(diagnosis.status)
     return Condition(
         id=str(diagnosis.id),
         subject=Reference(reference=patient_ref),
+        clinicalStatus=(
+            CodeableConcept(coding=[Coding(system=CONDITION_CLINICAL_SYSTEM, code=clinical)])
+            if clinical
+            else None
+        ),
+        verificationStatus=(
+            CodeableConcept(coding=[Coding(system=CONDITION_VER_STATUS_SYSTEM, code=verification)])
+            if verification
+            else None
+        ),
         code=CodeableConcept(
             coding=[
                 Coding(

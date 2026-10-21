@@ -1,0 +1,54 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:6ff8ecf5-eb1e-4a5a-82f6-3d23feb04be5",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "6ff8ecf5-eb1e-4a5a-82f6-3d23feb04be5",
+        "status": "preliminary",
+        "type": {
+          "text": "Client Intake History Form"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "date": "2026-10-21T06:28:58.312817Z",
+        "author": [
+          {
+            "display": "CITRAMAC System"
+          }
+        ],
+        "title": "Client Intake History Form"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "092074cf-6f0b-4df0-af30-37d13db42558",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Mwangi",
+            "given": [
+              "Faith"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1997-03-14"
+      }
+    }
+  ]
+}

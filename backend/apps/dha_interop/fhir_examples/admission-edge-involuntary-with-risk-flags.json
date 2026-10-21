@@ -1,0 +1,69 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "092074cf-6f0b-4df0-af30-37d13db42558",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Mwangi",
+            "given": [
+              "Faith"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1997-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:3f872c33-b2fe-4131-beeb-bb62cbe8ad8d",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "3f872c33-b2fe-4131-beeb-bb62cbe8ad8d",
+        "status": "in-progress",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP",
+          "display": "inpatient encounter"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "period": {
+          "start": "2026-10-21T06:28:57.627113Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:riskassessment:3f872c33-b2fe-4131-beeb-bb62cbe8ad8d",
+      "resource": {
+        "resourceType": "RiskAssessment",
+        "id": "3f872c33-b2fe-4131-beeb-bb62cbe8ad8d",
+        "status": "final",
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "occurrenceDateTime": "2026-10-21T06:28:57.627113Z",
+        "note": [
+          {
+            "text": "Identified risks: Self-harm / suicide risk, Absconding / wandering risk\nObservation level: Continuous Observation\nAttempted to leave twice; voicing intent to self-harm."
+          }
+        ]
+      }
+    }
+  ]
+}

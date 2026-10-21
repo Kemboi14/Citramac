@@ -1,0 +1,88 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:patient:b2593290-9064-44ec-908a-4fcb6841f206",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "b2593290-9064-44ec-908a-4fcb6841f206",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "temp",
+            "type": {
+              "text": "Temporary (emergency) ID"
+            },
+            "system": "urn:citramac:temporary-number",
+            "value": "ER-202610ORG--001"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "temp",
+            "text": "Adult male, about 30, brought by police, not giving a name (ER-202610ORG--001)"
+          }
+        ],
+        "gender": "female"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:9a9769f1-0396-4c54-894d-ebdbc6607a0e",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "9a9769f1-0396-4c54-894d-ebdbc6607a0e",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-21T06:29:00.367877Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:b2593290-9064-44ec-908a-4fcb6841f206"
+        },
+        "period": {
+          "start": "2026-10-21T06:29:00.367877Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:5419a636-5fe1-4c10-a03d-d164ed846a05",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "5419a636-5fe1-4c10-a03d-d164ed846a05",
+        "status": "arrived",
+        "class": {
+          "display": "triage"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:b2593290-9064-44ec-908a-4fcb6841f206"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:9a9769f1-0396-4c54-894d-ebdbc6607a0e"
+          }
+        ],
+        "period": {
+          "start": "2026-10-21T06:29:00.343927Z"
+        },
+        "reasonCode": [
+          {
+            "text": "Found wandering and confused"
+          }
+        ]
+      }
+    }
+  ]
+}

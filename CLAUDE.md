@@ -204,3 +204,35 @@ version left in `localStorage` is moved into memory once and the keys are remove
 §4's durable outbox therefore holds on the server side only (e.g. notification deliveries,
 `apps/notifications` `NotificationDelivery`), not in the browser. Revisit if a native/desktop
 client is ever built, where durable encrypted local storage outside the browser is possible.
+
+### 2026-10-21 — spec documents and mockups removed; strict R4 for incoming designs
+
+On the project owner's instruction, `docs/` (the numbered specification, the master prompt,
+the DPIA, the DHA certification readiness notes, the on-call runbook), `mockups/` and
+`SPEC-README.md` were deleted. Updated mockups will replace them. Everything removed is still
+in git at `f80b45b`; code comments that cite `docs/NN-…` sections can be read with
+`git show f80b45b:docs/<file>`. This file is now the only standing specification in the repo.
+
+How new mockups are to be built — this applies the rules above, it does not relax them:
+
+1. "v4", "V4" or any revision label on a mockup is a design version. The data contract is
+   and stays **FHIR R4 4.0.1** (§1).
+2. Before building any screen from a mockup, state for each piece of clinical data it shows:
+   R4 resource, profile (a published IG's where one fits, §7), ValueSet binding, and where it
+   hangs off `EpisodeOfCare` — then wait for confirmation (§3, §7).
+3. A mockup field with no R4 home is raised, never stored in a repurposed element, an
+   invented extension or a private table (§5).
+4. A mockup that changes how already-signed records are captured or shown must state its
+   reversibility cost (§3 item 7).
+
+The CI conformance step now runs every `FhirR4Conformance*` test in
+`apps/dha_interop/tests.py`, `apps/care_pathway/test_fhir_examples.py`,
+`apps/care_pathway/test_registration_hie.py` and `apps/sysadmin_audit/tests.py` — including
+the published examples for registration, triage, referral, admission, client history,
+discharge and AuditEvent. AuditEvent is a read-time view of the append-only
+`sysadmin_audit.AuditLogEntry` trail, not a second store.
+
+Open §5 item, awaiting the owner's decision: clinical notes have two stores —
+`clinical_encounter.SoapNote` (written by the offline queue and v3 encounter screen) and
+`care_pathway.ProgressNote` (v4). Consolidating them means migrating signed notes, so it is a
+§3 item 7 question, not a refactor.

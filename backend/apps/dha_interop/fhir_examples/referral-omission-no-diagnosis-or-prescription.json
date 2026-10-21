@@ -1,0 +1,60 @@
+{
+  "resourceType": "Bundle",
+  "type": "document",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:composition:4ea3e0b1-c918-4720-a7d8-434205ec19f6",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "4ea3e0b1-c918-4720-a7d8-434205ec19f6",
+        "status": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "57133-1",
+              "display": "Referral note"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "date": "2026-10-21T06:28:57.345279Z",
+        "author": [
+          {
+            "display": "CITRAMAC System"
+          }
+        ],
+        "title": "Referral to County Referral Hospital"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "092074cf-6f0b-4df0-af30-37d13db42558",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Mwangi",
+            "given": [
+              "Faith"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1997-03-14"
+      }
+    }
+  ]
+}

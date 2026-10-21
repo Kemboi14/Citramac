@@ -1,0 +1,282 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "171b6e6e-db59-49bc-8f5d-96fa15018f44",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610ORG--002"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Mutai",
+            "given": [
+              "Brian",
+              "Kiprono"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1988-07-02"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:c985a3e3-89d2-4518-9192-66f769091cae",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "c985a3e3-89d2-4518-9192-66f769091cae",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-21T06:28:59.784539Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "period": {
+          "start": "2026-10-21T06:28:59.784539Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "b3c3fac0-44de-47b0-9aa8-88a485fe05f7",
+        "status": "finished",
+        "class": {
+          "display": "triage"
+        },
+        "priority": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-priority",
+              "code": "RED"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:c985a3e3-89d2-4518-9192-66f769091cae"
+          }
+        ],
+        "period": {
+          "start": "2026-10-21T06:28:59.754693Z"
+        },
+        "reasonCode": [
+          {
+            "text": "Suicidal intent with a plan"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "resource": {
+        "resourceType": "QuestionnaireResponse",
+        "id": "dc80d638-2a2b-4856-b429-7974b89a139e",
+        "status": "completed",
+        "subject": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+        },
+        "authored": "2026-10-21T06:28:59.847985Z",
+        "item": [
+          {
+            "linkId": "c_concern",
+            "answer": [
+              {
+                "valueString": "Suicidal intent with a plan"
+              }
+            ]
+          },
+          {
+            "linkId": "d_act_now",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "d_suicidal",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "e_thoughts",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "f_change",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "h_concern",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "i_safe",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "j_concern",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:riskassessment:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "resource": {
+        "resourceType": "RiskAssessment",
+        "id": "dc80d638-2a2b-4856-b429-7974b89a139e",
+        "status": "final",
+        "subject": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+        },
+        "occurrenceDateTime": "2026-10-21T06:28:59.847985Z",
+        "basis": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e"
+          }
+        ],
+        "note": [
+          {
+            "text": "suicidal thoughts present · Alerts: Suicide risk"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-dc80d638-2a2b-4856-b429-7974b89a139e",
+        "target": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e"
+          }
+        ],
+        "recorded": "2026-10-21T06:28:59.847985Z",
+        "agent": [
+          {
+            "who": {
+              "reference": "urn:citramac:practitioner:9e6b35cb-a1c1-4ad6-9fc7-74c7031ab5ff",
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:flag:c5e4c7d6-2e5c-4140-b458-4fc913da203f",
+      "resource": {
+        "resourceType": "Flag",
+        "id": "c5e4c7d6-2e5c-4140-b458-4fc913da203f",
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-alert",
+              "code": "SUICIDE_RISK",
+              "display": "Suicide risk"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "period": {
+          "start": "2026-10-21T06:28:59.847985Z"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:task:ea06391f-cd98-4c78-ba6e-ffef42acf65b",
+      "resource": {
+        "resourceType": "Task",
+        "id": "ea06391f-cd98-4c78-ba6e-ffef42acf65b",
+        "status": "requested",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-action",
+              "code": "safety_plan",
+              "display": "Safety Plan"
+            }
+          ]
+        },
+        "for": {
+          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+        },
+        "authoredOn": "2026-10-21T06:29:00.010014Z",
+        "owner": {
+          "display": "Psychiatry / Nursing"
+        }
+      }
+    }
+  ]
+}

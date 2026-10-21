@@ -1,0 +1,85 @@
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "total": 1,
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:auditevent:1212dd6a-5672-4f09-8bed-535fea3899d2",
+      "resource": {
+        "resourceType": "AuditEvent",
+        "id": "1212dd6a-5672-4f09-8bed-535fea3899d2",
+        "type": {
+          "system": "http://dicom.nema.org/resources/ontology/DCM",
+          "code": "110110",
+          "display": "Patient Record"
+        },
+        "subtype": [
+          {
+            "system": "urn:citramac:codesystem:audit-action",
+            "code": "UPDATE",
+            "display": "Update"
+          }
+        ],
+        "action": "U",
+        "recorded": "2026-10-21T06:28:58.443497Z",
+        "outcome": "0",
+        "agent": [
+          {
+            "role": [
+              {
+                "text": "Psychiatrist"
+              }
+            ],
+            "who": {
+              "reference": "urn:citramac:practitioner:fae72c46-8b43-40a3-ad1b-faa55fe038c8",
+              "display": "Jane Njoroge"
+            },
+            "requestor": true
+          }
+        ],
+        "source": {
+          "site": "Org",
+          "observer": {
+            "display": "CITRAMAC HMIS"
+          }
+        },
+        "entity": [
+          {
+            "what": {
+              "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+            },
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+              "code": "1",
+              "display": "Person"
+            },
+            "role": {
+              "system": "http://terminology.hl7.org/CodeSystem/object-role",
+              "code": "1",
+              "display": "Patient"
+            }
+          },
+          {
+            "what": {
+              "display": "care_pathway.ProgressNote eb857bb1-0dc2-494a-9259-4aeed6f0fce8"
+            },
+            "type": {
+              "system": "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+              "code": "2",
+              "display": "System Object"
+            },
+            "securityLabel": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+                "code": "R"
+              }
+            ]
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

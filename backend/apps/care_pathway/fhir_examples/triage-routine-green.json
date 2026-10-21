@@ -1,0 +1,236 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:patient:ab69b6b6-37bb-4941-8db9-86d8388e8b95",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "ab69b6b6-37bb-4941-8db9-86d8388e8b95",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610ORG--001"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Kamau",
+            "given": [
+              "Amina",
+              "Wanjiku"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1992-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:1fe64c6d-6a22-48c6-94c0-0d71a9072fbd",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "1fe64c6d-6a22-48c6-94c0-0d71a9072fbd",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-21T06:28:59.184775Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:ab69b6b6-37bb-4941-8db9-86d8388e8b95"
+        },
+        "period": {
+          "start": "2026-10-21T06:28:59.184775Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:42dfebba-db9b-46fd-9462-82d5b687bedc",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "42dfebba-db9b-46fd-9462-82d5b687bedc",
+        "status": "finished",
+        "class": {
+          "display": "triage"
+        },
+        "priority": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-priority",
+              "code": "GREEN"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:ab69b6b6-37bb-4941-8db9-86d8388e8b95"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:1fe64c6d-6a22-48c6-94c0-0d71a9072fbd"
+          }
+        ],
+        "period": {
+          "start": "2026-10-21T06:28:59.154400Z"
+        },
+        "reasonCode": [
+          {
+            "text": "Poor sleep"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:questionnaireresponse:2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+      "resource": {
+        "resourceType": "QuestionnaireResponse",
+        "id": "2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+        "status": "completed",
+        "subject": {
+          "reference": "urn:citramac:patient:ab69b6b6-37bb-4941-8db9-86d8388e8b95"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:42dfebba-db9b-46fd-9462-82d5b687bedc"
+        },
+        "authored": "2026-10-21T06:28:59.252302Z",
+        "item": [
+          {
+            "linkId": "c_concern",
+            "answer": [
+              {
+                "valueString": "Poor sleep"
+              }
+            ]
+          },
+          {
+            "linkId": "d_suicidal",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "e_thoughts",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "f_change",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "h_bp",
+            "answer": [
+              {
+                "valueString": "118/76"
+              }
+            ]
+          },
+          {
+            "linkId": "h_concern",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "h_pulse",
+            "answer": [
+              {
+                "valueString": "74"
+              }
+            ]
+          },
+          {
+            "linkId": "i_safe",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "j_concern",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:riskassessment:2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+      "resource": {
+        "resourceType": "RiskAssessment",
+        "id": "2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+        "status": "final",
+        "subject": {
+          "reference": "urn:citramac:patient:ab69b6b6-37bb-4941-8db9-86d8388e8b95"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:42dfebba-db9b-46fd-9462-82d5b687bedc"
+        },
+        "occurrenceDateTime": "2026-10-21T06:28:59.252302Z",
+        "basis": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a"
+          }
+        ],
+        "note": [
+          {
+            "text": "No immediate safety/medical concern identified in the completed screen."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a",
+        "target": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:2e8ea749-a3e5-4e7c-a0a9-5b8a9919117a"
+          }
+        ],
+        "recorded": "2026-10-21T06:28:59.252302Z",
+        "agent": [
+          {
+            "who": {
+              "reference": "urn:citramac:practitioner:9e6b35cb-a1c1-4ad6-9fc7-74c7031ab5ff",
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
