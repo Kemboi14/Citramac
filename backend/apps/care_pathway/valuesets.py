@@ -75,6 +75,75 @@ VALUESETS = {
             ("MALE", "M"),
             ("OTHER", "Intersex / other"),
             ("NOT_STATED", "Not stated"),
+            ("NOT_SAID", "Prefer not to say"),
+        ],
+    ),
+    # Social & personal details — same codes as the Patient model choices.
+    # Stored locally; not emitted in FHIR (project owner decision).
+    "disability-status": (
+        "Living with a disability",
+        [
+            ("NO", "No"),
+            ("YES", "Yes"),
+            ("NOT_SAID", "Prefer not to say"),
+            ("NOT_KNOWN", "Not known"),
+        ],
+    ),
+    "employment-status": (
+        "Employment status",
+        [
+            ("EMPLOYED", "Employed"),
+            ("SELF_EMPLOYED", "Self-employed"),
+            ("UNEMPLOYED", "Unemployed"),
+            ("STUDENT", "Student"),
+            ("RETIRED", "Retired"),
+            ("UNABLE_TO_WORK", "Unable to work"),
+            ("NOT_STATED", "Not stated"),
+            ("NOT_SAID", "Prefer not to say"),
+        ],
+    ),
+    "marital-status": (
+        "Marital status",
+        [
+            ("SINGLE", "Single"),
+            ("MARRIED", "Married"),
+            ("SEPARATED", "Separated"),
+            ("DIVORCED", "Divorced"),
+            ("WIDOWED", "Widowed"),
+            ("PARTNERED", "Partnered"),
+            ("NOT_STATED", "Not stated"),
+            ("NOT_SAID", "Prefer not to say"),
+        ],
+    ),
+    # Emergency — identity unknown. Apparent sex is what staff observe, kept on
+    # the arrival (TriageEncounter.apparent_sex), never as Patient.gender.
+    "apparent-sex": (
+        "Apparent sex",
+        [
+            ("UNDETERMINED", "Unable to determine / not recorded"),
+            ("FEMALE_APPEARING", "Female appearing"),
+            ("MALE_APPEARING", "Male appearing"),
+        ],
+    ),
+    "brought-by-relationship": (
+        "Relationship of the person who brought or referred the client",
+        [
+            ("FAMILY", "Family member"),
+            ("FRIEND", "Friend"),
+            ("POLICE", "Police officer"),
+            ("AMBULANCE", "Ambulance / paramedic"),
+            ("HEALTH_WORKER", "Health worker / referring facility"),
+            ("PUBLIC", "Member of the public"),
+            ("OTHER", "Other"),
+        ],
+    ),
+    # Same codes as registration-allergy-status, worded for an emergency arrival.
+    "emergency-allergy-status": (
+        "Allergy status",
+        [
+            ("UNKNOWN", "Unknown"),
+            ("NONE", "No known allergies"),
+            ("ACTIVE_ALLERGIES", "Known allergy"),
         ],
     ),
     "id-document-type": (

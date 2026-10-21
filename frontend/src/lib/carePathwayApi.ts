@@ -55,6 +55,17 @@ export interface RegistrationRow {
   sex: string;
   phone: string;
   next_of_kin: string;
+  next_of_kin_relationship: string;
+  next_of_kin_phone: string;
+  referral_source: string;
+  /** A temporary (unidentified / unknown) record awaiting identity resolution. */
+  is_temporary: boolean;
+  emergency_arrival: EmergencyArrival | null;
+  marital_status: string;
+  employment_status: string;
+  occupation: string;
+  living_with_disability: string;
+  disability_details: string;
   address: string;
   id_document_type: string;
   id_document_number: string;
@@ -64,6 +75,40 @@ export interface RegistrationRow {
   allergy_details: string;
   payer: string;
   identifiers?: { kind: string; value: string; superseded: boolean }[];
+}
+
+/** What the desk recorded when a temporary record arrived (registration only). */
+export interface EmergencyArrival {
+  arrival_at: string | null;
+  found_location: string;
+  arrival_referral_info: string;
+  identification_notes: string;
+  brought_by: { name: string; relationship: string; phone: string } | null;
+}
+
+/** Identity and social details sent by a registration or an identity resolution. */
+export interface IdentityDetails {
+  first_name?: string;
+  last_name?: string;
+  middle_other_names?: string;
+  preferred_name?: string;
+  pronouns?: string;
+  date_of_birth?: string;
+  estimated_age?: number | null;
+  sex?: string;
+  phone?: string;
+  address?: string;
+  id_document_type?: string;
+  id_document_number?: string;
+  unhcr_number?: string;
+  sha_member_number?: string;
+  preferred_language?: string;
+  interpreter?: string;
+  living_with_disability?: string;
+  disability_details?: string;
+  employment_status?: string;
+  occupation?: string;
+  marital_status?: string;
 }
 
 export type ConsentDecision = "NOT_ASKED" | "YES" | "NO" | "RESTRICTED";
@@ -85,6 +130,8 @@ export function checkRegistrationDuplicates(
   accessToken: string,
   payload: {
     full_name?: string;
+    first_name?: string;
+    last_name?: string;
     date_of_birth?: string;
     sex?: string;
     phone?: string;
@@ -108,62 +155,51 @@ export function searchRegistrations(accessToken: string, q: string) {
   );
 }
 
-export interface RegistrationPayload {
+export interface RegistrationPayload extends IdentityDetails {
   client_request_id: string;
   patient_id?: string;
   identity_status: IdentityStatus;
+  /** Older single-field name; still accepted by the API. */
   full_name?: string;
   description?: string;
-  preferred_name?: string;
-  pronouns?: string;
-  date_of_birth?: string;
-  estimated_age?: number | null;
-  sex?: string;
-  phone?: string;
   next_of_kin_name?: string;
   next_of_kin_phone?: string;
   next_of_kin_relationship?: string;
   next_of_kin_is_guardian?: boolean;
   guardian_legal_status?: string;
   next_of_kin_may_be_informed?: boolean;
-  address?: string;
-  id_document_type?: string;
-  id_document_number?: string;
-  unhcr_number?: string;
-  sha_member_number?: string;
   hie_consent?: HieConsentPayload;
   consent_text_version?: string;
   consent_text_snapshot?: string;
   confirm_new_record?: boolean;
   referral_source?: string;
-  preferred_language?: string;
-  interpreter?: string;
   allergy_status?: string;
   allergy_details?: string;
   payer?: string;
   reason?: string;
+  // Emergency — identity unknown
+  apparent_sex?: string;
+  found_location?: string;
+  arrival_referral_info?: string;
+  identification_notes?: string;
+  brought_by_name?: string;
+  brought_by_relationship?: string;
+  brought_by_phone?: string;
+  brought_by_id_number?: string;
+  brought_by_address?: string;
 }
 
 export function registerArrival(accessToken: string, payload: RegistrationPayload) {
-  return apiRequest<{ triage_encounter_id: string; patient_id: string }>("/care/registrations/", {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
+  return apiRequest<{ triage_encounter_id: string; patient_id: string; open_triage: boolean }>(
+    "/care/registrations/",
+    { method: "POST", body: payload, accessToken },
+  );
 }
 
 export function resolveIdentity(
   accessToken: string,
   patientId: string,
-  payload: {
-    full_name: string;
-    date_of_birth?: string;
-    sex?: string;
-    phone?: string;
-    id_document_type?: string;
-    id_document_number?: string;
-    merge_into_patient_id?: string;
-  },
+  payload: IdentityDetails & { merge_into_patient_id?: string },
 ) {
   return apiRequest<RegistrationRow>(`/care/patients/${patientId}/resolve-identity/`, {
     method: "POST",

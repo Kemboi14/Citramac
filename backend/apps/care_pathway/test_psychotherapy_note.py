@@ -74,7 +74,7 @@ class DraftAndResumeTests(PsyNoteTestCase):
 
     def test_context_panel_carries_goals_previous_note_risk_and_safety_plan(self):
         ctx = self.start().data["context"]
-        self.assertEqual(set(ctx), {"goals", "previous_note", "risk", "safety_plan"})
+        self.assertEqual(set(ctx), {"goals", "previous_note", "risk", "safety_plan", "diagnoses"})
 
     def test_other_staff_without_care_team_access_cannot_read_or_change_the_note(self):
         nid = self.start().data["id"]
@@ -112,6 +112,8 @@ class SafetyQuestionTests(PsyNoteTestCase):
         proposals = self.get("care-client-proposals").data["results"]
         self.assertEqual([(p["row"], p["option"], p["status"]) for p in proposals], [("suicide", "Thoughts", "PROPOSED")])
         self.assertEqual(self.alerts("PSYCHOTHERAPY_SAFETY_CONCERN"), ["ACTIVE"])  # not duplicated
+        self.assertIn("RISK_LINK", self.blocker_codes(self.patch(nid, {"accuracy_confirmed": False}).data))
+        self.assertEqual(self.patch(nid, {"link_risk_assessment": True}).status_code, 200)
         data = self.ready(nid, **self.answers(q2="Appeared tired.")).data
         risk = data["sections"]["risk_safety"]
         self.assertIn("Suicide / self-harm — Thoughts", risk)
@@ -138,7 +140,8 @@ class AT14NotAssessedTests(PsyNoteTestCase):
         self.assertIn("Safety was not assessed in this session.", data["sections"]["risk_safety"])
         self.assertEqual(self.act("care-psy-note-sign", nid).status_code, 400)
         self.assertEqual(self.patch(nid, {"acknowledge_not_assessed": {"reason": ""}}).status_code, 400)
-        self.patch(nid, {"acknowledge_not_assessed": {"reason": "Session ended early — client left for childcare."}})
+        self.patch(nid, {"acknowledge_not_assessed": {"reason": "Session ended early — client left for childcare.",
+                                                    "acknowledged": True}})
         self.assertEqual(self.alerts("SAFETY_NOT_ASSESSED"), ["RESOLVED"])
         data = self.ready(nid).data
         self.assertEqual(data["blockers"], [])
@@ -158,7 +161,7 @@ class AT15RiskDetectionTests(PsyNoteTestCase):
                                         "appropriate risk assessment.")
         self.assertEqual(q2[hit["start"]:hit["end"]], "ending it")
         self.assertIn("thoughts of ending it", hit["passage"])
-        self.assertIn("DETECTION_MISMATCH", self.blocker_codes(data))
+        self.assertIn("DETECTION_UNREVIEWED", self.blocker_codes(data))
         self.assertEqual(self.act("care-psy-note-sign", nid).status_code, 400)
         # No automatic risk label: nothing written to the alerts or the risk register.
         self.assertEqual(self.alerts("PSYCHOTHERAPY_SAFETY_CONCERN"), [])
@@ -190,8 +193,9 @@ class AT16TherapyModelTests(PsyNoteTestCase):
         data = self.ready(nid, safety_answer="NO", **self.answers(q3=q3)).data
         self.assertEqual({m["code"] for m in data["models_applied"]}, {"cbt", "dbt"})
         section = data["sections"]["interventions"]
-        self.assertIn("CBT — elements described in this session: Thoughts, restructuring", section)
-        self.assertIn("DBT — elements described in this session: distress tolerance", section)
+        self.assertIn("Approach(es) identified by clinician: CBT, DBT", section)
+        self.assertIn("- CBT: Thoughts, restructuring", section)
+        self.assertIn("- DBT: distress tolerance", section)
         self.assertNotIn("mindfulness", section.lower())
         self.assertNotIn("Motivational", section)
 
@@ -226,7 +230,7 @@ class AT17RegistryTests(PsyNoteTestCase):
         nid = self.start().data["id"]
         data = self.ready(nid, safety_answer="NO",
                           **self.answers(q3="ACT: worked on defusion from the thought 'I am a failure'.")).data
-        self.assertIn("Acceptance and Commitment Therapy — elements described in this session: defusion",
+        self.assertIn("- Acceptance and Commitment Therapy: defusion",
                       data["sections"]["interventions"])
         # Disabled per tenant → no longer offered or applied; the version is kept on revision.
         code = created.data["code"]
@@ -283,8 +287,8 @@ class AT18SignAndAmendTests(PsyNoteTestCase):
         data = self.ready(nid, safety_answer="NO", **self.answers(
             q2="She said she has not been sleeping. Appeared restless and distracted.")).data
         section = data["sections"]["assessment"]
-        self.assertIn("Clinician observed / assessed:\n- Appeared restless and distracted.", section)
-        self.assertIn("Client reported:\n- She said she has not been sleeping.", section)
+        self.assertIn("Clinician observation / assessment:\n- Appeared restless and distracted.", section)
+        self.assertIn("Client report:\n- She said she has not been sleeping.", section)
 
     def test_stigmatizing_terms_are_flagged_with_a_rewrite_not_replaced(self):  # PSY-GEN-11
         nid = self.start().data["id"]

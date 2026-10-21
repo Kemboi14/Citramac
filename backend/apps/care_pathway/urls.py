@@ -229,6 +229,7 @@ urlpatterns = [
     # ── Psychotherapy Session note (master prompt §7) ──
     path("care/psychotherapy/config/", psyview.PsyConfigView.as_view(), name="care-psy-config"),
     path("care/psychotherapy/models/", psyview.TherapyModelsView.as_view(), name="care-psy-models"),
+    path("care/psychotherapy/clients/", psyview.PsyClientListView.as_view(), name="care-psy-clients"),
     path("care/psychotherapy/models/<slug:code>/", psyview.TherapyModelView.as_view(), name="care-psy-model"),
     path("care/clients/<uuid:patient_id>/psychotherapy-notes/", psyview.ClientPsyNotesView.as_view(), name="care-client-psy-notes"),
     path("care/psychotherapy-notes/<uuid:pk>/", psyview.PsyNoteView.as_view(), name="care-psy-note"),

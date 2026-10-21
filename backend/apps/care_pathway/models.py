@@ -180,6 +180,20 @@ class TriageEncounter(TenantScopedModel):
     due_at = models.DateTimeField()
     presenting_concern = models.TextField(blank=True)
     referral_source = models.CharField(max_length=255, blank=True)
+    # "Emergency — identity unknown" arrival details, as recorded at the desk.
+    # Text only, kept with this arrival; not emitted in FHIR. `apparent_sex` is a
+    # code of the served `apparent-sex` value set — an observation, never
+    # written to Patient.gender.
+    apparent_sex = models.CharField(max_length=20, blank=True)
+    found_location = models.CharField(
+        "Where the person was found or brought from", max_length=255, blank=True
+    )
+    arrival_referral_info = models.TextField(
+        "Police / ambulance / referral information", blank=True
+    )
+    identification_notes = models.TextField(
+        "How the person can currently be identified", blank=True
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AWAITING)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, blank=True)
     triage_started_at = models.DateTimeField(null=True, blank=True)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getClientBanner, type PriorityOrBlank } from "../../lib/carePathwayApi";
@@ -267,6 +267,10 @@ export function InpatientAdmissionsPage() {
   const formRef = useRef<HTMLElement>(null);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const bannerRequest = useRef(0);
+  // `?patient=<id>` (the client record's Admission module) preselects that
+  // client once, when the eligible list first loads.
+  const [params] = useSearchParams();
+  const requestedPatient = useRef(params.get("patient"));
 
   // Bumped after an admission so the lists, beds and eligible clients refresh.
   const [reloadKey, setReloadKey] = useState(0);
@@ -287,6 +291,32 @@ export function InpatientAdmissionsPage() {
         setBeds(bedRows);
         setAdmissions(admissionRows);
         setLoadError(null);
+        const requested = eligibleRows.find((p) => p.id === requestedPatient.current);
+        const admitted = admissionRows.find((a) => a.patient === requestedPatient.current);
+        requestedPatient.current = null;
+        if (!requested && admitted) {
+          setSuccess(`${admitted.patient_name} is already admitted — ${admitted.bed_label}.`);
+        }
+        if (requested) {
+          setForm((prev) => ({
+            ...prev,
+            clientText: patientLabel(requested),
+            patientId: requested.id,
+          }));
+          const request = ++bannerRequest.current;
+          getClientBanner(accessToken, requested.id)
+            .then((banner) => {
+              if (request !== bannerRequest.current) return;
+              setForm((prev) =>
+                prev.patientId === requested.id && !prev.priorityTouched
+                  ? { ...prev, priority: banner.priority }
+                  : prev,
+              );
+            })
+            .catch(() => {
+              // No banner (e.g. never triaged): the priority stays for the clinician to choose.
+            });
+        }
       })
       .catch((err) => {
         if (cancelled) return;

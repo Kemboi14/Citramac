@@ -1,5 +1,6 @@
 import { WideModal } from "../../components/WideModal";
 import type { PatientDetail } from "../../lib/clinicalApi";
+import { useValueSets } from "../care/shared/useValueSets";
 
 const SECTION_CLASS = "rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm";
 const SECTION_TITLE_CLASS = "mb-3 font-display text-[13.5px] font-semibold text-ink-900";
@@ -36,6 +37,7 @@ export function PatientDetailsModal({
   onClose: () => void;
   patient: PatientDetail | null;
 }) {
+  const vs = useValueSets();
   if (!patient) return null;
   const kin = patient.emergency_contacts.find((c) => c.id === patient.next_of_kin) ?? null;
 
@@ -93,7 +95,10 @@ export function PatientDetailsModal({
 
         <section className={SECTION_CLASS}>
           <h3 className={SECTION_TITLE_CLASS}>Personal &amp; Social</h3>
-          <Field label="Marital Status" value={patient.marital_status} />
+          <Field
+            label="Marital Status"
+            value={vs.label("marital-status", patient.marital_status)}
+          />
           <Field label="Occupation" value={patient.occupation} />
           <Field label="Insurer Details" value={patient.insurer_details} />
         </section>
@@ -120,9 +125,15 @@ export function PatientDetailsModal({
           <h3 className={SECTION_TITLE_CLASS}>Disability &amp; Employment</h3>
           <Field
             label="Living With Disability"
-            value={patient.living_with_disability ? "Yes" : "No"}
+            value={vs.label("disability-status", patient.living_with_disability)}
           />
-          <Field label="Employment Status" value={patient.employment_status} />
+          {patient.living_with_disability === "YES" && (
+            <Field label="Disability / Support Needs" value={patient.disability_details} />
+          )}
+          <Field
+            label="Employment Status"
+            value={vs.label("employment-status", patient.employment_status)}
+          />
         </section>
 
         <section className={`${SECTION_CLASS} md:col-span-2`}>

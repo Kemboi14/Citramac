@@ -78,7 +78,9 @@ export interface PatientDetail {
   nationality: string;
   occupation: string;
   employment_status: string;
-  living_with_disability: boolean;
+  /** Code of the served `disability-status` value set ("" = not recorded). */
+  living_with_disability: string;
+  disability_details: string;
   national_id: string;
   passport_number: string;
   contact_phone: string;
@@ -149,7 +151,7 @@ export interface NewPatientPayload {
   nationality?: string;
   occupation?: string;
   employment_status?: string;
-  living_with_disability?: boolean;
+  living_with_disability?: string;
   uhid_number?: string;
   contact_phone?: string;
   contact_email?: string;

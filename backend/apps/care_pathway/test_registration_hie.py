@@ -16,8 +16,8 @@ from apps.dha_interop import hie_client
 from apps.dha_interop.fhir_patient import (
     build_hie_consent,
     build_patient_resource,
-    build_related_person,
     build_registration_provenance,
+    build_related_person,
 )
 from apps.dha_interop.fhir_validation import validate_resource
 from apps.dha_interop.models import FhirResourceCache
@@ -66,7 +66,7 @@ class IdentifierTests(CarePathwayApiTestCase):
         )
         with platform_admin_context():
             patient = Patient.objects.get(pk=response.data["patient_id"])
-        self.assertTrue(patient.citramac_number.startswith("ER-"))
+        self.assertRegex(patient.citramac_number, r"^CIT-ER-\d{6}$")
 
     def test_numbers_are_sequential_and_unique(self):
         numbers = set()
@@ -312,6 +312,260 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
                 patient, self.nurse, False, "v1", "text", decision="NOT_ASKED"
             )
             self.assertIsNone(build_hie_consent(record))
+
+    def test_emergency_arrival_is_valid_and_its_escort_is_not_next_of_kin(self):
+        patient = self.patient(
+            identity_status="UNKNOWN",
+            full_name="",
+            date_of_birth="",
+            sex="",
+            apparent_sex="MALE_APPEARING",
+            brought_by_name="PC Otieno",
+            brought_by_relationship="Police officer",
+        )
+        payload, _ = self.build(patient)
+        self.assertEqual(payload["name"][0]["text"], f"UNKNOWN CLIENT — {patient.citramac_number}")
+        # Apparent sex is an observation on the arrival, never Patient.gender.
+        self.assertEqual(payload["gender"], "unknown")
+        self.assertNotIn("maritalStatus", payload)
+        with platform_admin_context():
+            contact = EmergencyContact.objects.get(patient=patient)
+            related = build_related_person(contact, f"Patient/{patient.pk}")
+        related = related.model_dump(mode="json", exclude_none=True)
+        self.assertEqual(validate_resource(related), [], related)
+        relationship = related["relationship"][0]
+        self.assertNotIn("coding", relationship)
+        self.assertIn("Police officer", relationship["text"])
+
+    def test_prefer_not_to_say_and_local_social_details_are_not_emitted(self):
+        patient = self.patient(
+            first_name="Amina",
+            last_name="Kamau",
+            full_name="",
+            sex="NOT_SAID",
+            marital_status="MARRIED",
+            employment_status="STUDENT",
+            occupation="Nursing student",
+            living_with_disability="YES",
+            disability_details="Uses a wheelchair",
+        )
+        payload, _ = self.build(patient)
+        self.assertEqual(payload["gender"], "unknown")
+        text = str(payload)
+        for local in ("maritalStatus", "Nursing student", "wheelchair", "STUDENT"):
+            self.assertNotIn(local, text)
+
+
+class RegistrationV4Tests(CarePathwayApiTestCase):
+    """Client mockup v4 registration: split name, social & personal details,
+    emergency arrival, CIT-ER numbers and identity resolution in place."""
+
+    def get_patient(self, response):
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            return Patient.objects.get(pk=response.data["patient_id"])
+
+    def search(self, q):
+        response = self.client.get(reverse("care-registration-search") + f"?q={q}", **self.auth)
+        self.assertEqual(response.status_code, 200)
+        return response.data["results"]
+
+    def test_first_and_last_name_are_stored_separately_and_both_required(self):
+        patient = self.get_patient(
+            self.register(full_name="", first_name="Amina Wanjiku", last_name="Kamau")
+        )
+        self.assertEqual((patient.first_name, patient.last_name), ("Amina Wanjiku", "Kamau"))
+        missing_last = self.register(full_name="", first_name="Amina", last_name="")
+        self.assertEqual(missing_last.status_code, 400)
+        self.assertIn("last_name", missing_last.data)
+        missing_first = self.register(full_name="", first_name="", last_name="Kamau")
+        self.assertIn("first_name", missing_first.data)
+
+    def test_full_name_is_still_accepted(self):
+        patient = self.get_patient(self.register(full_name="Amina Wanjiku Kamau"))
+        self.assertEqual(
+            (patient.first_name, patient.middle_other_names, patient.last_name),
+            ("Amina", "Wanjiku", "Kamau"),
+        )
+
+    def test_returning_client_with_a_single_word_name_is_still_registrable(self):
+        first = self.get_patient(self.register(full_name="Cher"))
+        again = self.register(
+            patient_id=str(first.pk), full_name="", first_name="Cher", last_name=""
+        )
+        self.assertEqual(again.status_code, 201, again.data)
+
+    def test_returning_client_keeps_middle_names_when_none_are_sent(self):
+        first = self.get_patient(self.register())
+        again = self.get_patient(
+            self.register(
+                patient_id=str(first.pk), full_name="", first_name="Amina", last_name="Kamau"
+            )
+        )
+        self.assertEqual(again.middle_other_names, "Wanjiku")
+
+    def test_social_details_are_coded_and_disability_details_follow_yes(self):
+        patient = self.get_patient(
+            self.register(
+                marital_status="SEPARATED",
+                employment_status="UNABLE_TO_WORK",
+                occupation="Carpenter",
+                living_with_disability="YES",
+                disability_details="Hearing impairment — needs a sign interpreter",
+            )
+        )
+        self.assertEqual(patient.marital_status, "SEPARATED")
+        self.assertEqual(patient.employment_status, "UNABLE_TO_WORK")
+        self.assertEqual(patient.occupation, "Carpenter")
+        self.assertEqual(patient.living_with_disability, "YES")
+        self.assertIn("Hearing", patient.disability_details)
+        again = self.get_patient(
+            self.register(
+                patient_id=str(patient.pk),
+                living_with_disability="NOT_SAID",
+                disability_details="ignored",
+            )
+        )
+        self.assertEqual(again.living_with_disability, "NOT_SAID")
+        self.assertEqual(again.disability_details, "")
+        free_text = self.register(employment_status="Employed", confirm_new_record=True)
+        self.assertEqual(free_text.status_code, 400)
+        self.assertIn("employment_status", free_text.data)
+        self.assertEqual(self.register(sex="NOT_SAID", phone="0799").status_code, 201)
+
+    def test_emergency_arrival_details_and_brought_by_contact(self):
+        response = self.register(
+            identity_status="UNKNOWN",
+            full_name="",
+            date_of_birth="",
+            sex="",
+            estimated_age=35,
+            apparent_sex="FEMALE_APPEARING",
+            description="Red headscarf, green dress, small scar on left hand",
+            found_location="Bus stage, Moi Avenue",
+            arrival_referral_info="Brought by police, OB 12/10/2026",
+            identification_notes="Responds to 'Mama Wanjiru'; phone in pocket is locked",
+            brought_by_name="PC Otieno",
+            brought_by_relationship="Police officer",
+            brought_by_phone="0711000222",
+            brought_by_id_number="POL-4471",
+            brought_by_address="Central Police Station",
+            allergy_status="ACTIVE_ALLERGIES",
+            allergy_details="Penicillin — rash",
+        )
+        patient = self.get_patient(response)
+        self.assertEqual(patient.estimated_age, 35)
+        self.assertEqual(patient.gender, "")
+        self.assertIn("Red headscarf", patient.identity_description)
+        self.assertIsNone(patient.next_of_kin_id)
+        self.assertEqual(patient.get_full_name(), f"UNKNOWN CLIENT — {patient.citramac_number}")
+        with platform_admin_context():
+            te = TriageEncounter.objects.get(pk=response.data["triage_encounter_id"])
+            contact = EmergencyContact.objects.get(patient=patient)
+        self.assertEqual(te.apparent_sex, "FEMALE_APPEARING")
+        self.assertEqual(te.found_location, "Bus stage, Moi Avenue")
+        self.assertIn("OB 12/10/2026", te.arrival_referral_info)
+        self.assertIn("Mama Wanjiru", te.identification_notes)
+        self.assertEqual(contact.contact_role, EmergencyContact.ROLE_BROUGHT_BY)
+        self.assertEqual(
+            (contact.name, contact.relationship, contact.phone, contact.id_number, contact.address),
+            ("PC Otieno", "Police officer", "0711000222", "POL-4471", "Central Police Station"),
+        )
+        self.assertEqual(
+            self.register(identity_status="UNKNOWN", full_name="", apparent_sex="TALL").status_code,
+            400,
+        )
+
+    def test_temporary_numbers_run_in_sequence(self):
+        numbers = [
+            self.get_patient(
+                self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+            ).citramac_number
+            for _ in range(2)
+        ]
+        first, second = (int(n.rsplit("-", 1)[1]) for n in numbers)
+        self.assertEqual(second, first + 1)
+        unidentified = self.get_patient(
+            self.register(identity_status="UNIDENTIFIED", full_name="", description="Grey coat")
+        )
+        self.assertTrue(unidentified.citramac_number.startswith("CIT-ER-"))
+
+    def test_resolving_identity_updates_the_same_record_without_a_new_encounter(self):
+        temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        before = self.get_patient(temp)
+        response = self.client.post(
+            reverse("care-resolve-identity", args=[temp.data["patient_id"]]),
+            {
+                "first_name": "Wanjiru",
+                "last_name": "Mwangi",
+                "date_of_birth": "1988-05-02",
+                "sex": "FEMALE",
+                "phone": "0722111333",
+                "id_document_type": "NATIONAL_ID",
+                "id_document_number": "30112233",
+                "marital_status": "WIDOWED",
+                "employment_status": "SELF_EMPLOYED",
+                "occupation": "Trader",
+                "living_with_disability": "NO",
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["id"], temp.data["patient_id"])
+        with platform_admin_context():
+            patient = Patient.objects.get(pk=temp.data["patient_id"])
+            encounters = TriageEncounter.objects.filter(patient=patient).count()
+            kinds = set(
+                PatientIdentifier.objects.filter(patient=patient).values_list("kind", flat=True)
+            )
+        self.assertEqual(encounters, 1)
+        self.assertEqual(patient.citramac_number, before.citramac_number)
+        self.assertEqual(patient.identity_status, "IDENTIFIED")
+        self.assertIsNotNone(patient.identity_confirmed_at)
+        self.assertEqual((patient.first_name, patient.last_name), ("Wanjiru", "Mwangi"))
+        self.assertEqual(patient.national_id, "30112233")
+        self.assertEqual(patient.marital_status, "WIDOWED")
+        self.assertEqual(patient.employment_status, "SELF_EMPLOYED")
+        self.assertEqual(patient.occupation, "Trader")
+        self.assertEqual(patient.living_with_disability, "NO")
+        self.assertEqual(kinds, {"TEMPORARY", "NATIONAL_ID"})
+
+    def test_search_row_reloads_next_of_kin_and_referral_but_no_clinical_content(self):
+        self.register(
+            next_of_kin_name="Joan Kamau",
+            next_of_kin_relationship="Sibling",
+            next_of_kin_phone="0722000000",
+            referral_source="GP",
+            reason="Hearing voices since last week",
+        )
+        row = self.search("Kamau")[0]
+        self.assertEqual(row["next_of_kin"], "Joan Kamau")
+        self.assertEqual(row["next_of_kin_relationship"], "Sibling")
+        self.assertEqual(row["next_of_kin_phone"], "0722000000")
+        self.assertEqual(row["referral_source"], "GP")
+        self.assertFalse(row["is_temporary"])
+        self.assertIsNone(row["emergency_arrival"])
+        self.assertNotIn("Hearing voices", str(row))
+        for clinical in ("reason", "presenting_concern", "priority", "diagnosis", "triage"):
+            self.assertNotIn(clinical, row)
+
+    def test_temporary_search_row_carries_the_arrival_details_for_resolution(self):
+        self.register(
+            identity_status="UNKNOWN",
+            full_name="",
+            date_of_birth="",
+            sex="",
+            found_location="Bus stage",
+            identification_notes="Locked phone in pocket",
+            brought_by_name="PC Otieno",
+            reason="Confused, smells of alcohol",
+        )
+        row = self.search("CIT-ER-")[0]
+        self.assertTrue(row["is_temporary"])
+        self.assertEqual(row["emergency_arrival"]["found_location"], "Bus stage")
+        self.assertEqual(row["emergency_arrival"]["brought_by"]["name"], "PC Otieno")
+        self.assertNotIn("alcohol", str(row))
 
 
 class OutboxTests(CarePathwayApiTestCase):

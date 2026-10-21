@@ -58,6 +58,26 @@ WATERMARK = "DRAFT — CLINICIAN REVIEW REQUIRED"
 SAFETY_NO_TEXT = "No new or changed safety concern identified based on today's assessment."
 NOT_RECORDED = "Not recorded in this session."
 
+# Answer metadata (input mode, language). Kiswahili and Sheng answers carry an
+# English translation beside the original when AI assistance is on.
+INPUT_MODES = ("TYPED", "DICTATED")
+LEGACY_MODES = {"TYPE": "TYPED", "SPEAK": "DICTATED"}
+LANGUAGES = [
+    ("en-GB", "English (UK)"), ("en-KE", "English (Kenya)"), ("en-US", "English (US)"),
+    ("sw-KE", "Kiswahili → English"), ("sheng", "Sheng → English"),
+]
+TRANSLATED_LANGUAGES = ("sw-KE", "sheng")
+
+# Goal-link decisions (PSY-LINK). CONFIRMED / DISMISSED are the earlier values,
+# still valid on notes written before these four existed.
+GOAL_DECISIONS = {
+    "PROGRESS": "progress noted",
+    "NO_CHANGE": "no clear change noted",
+    "BARRIER": "barrier or setback noted",
+    "NOT_RELEVANT": "",
+}
+LEGACY_GOAL_DECISIONS = ("CONFIRMED", "DISMISSED")
+
 # PSY-OUT — required sections, in order.
 SECTIONS = [
     ("session_information", "Session Information"),
@@ -85,6 +105,16 @@ def sentences(text):
     """Split the clinician's text into sentences, keeping each one verbatim."""
     parts = re.split(r"(?<=[.!?])\s+|\n+", str(text or ""))
     return [p.strip(" -•\t") for p in parts if p and p.strip(" -•\t")]
+
+
+def english_text(answer):
+    """The text the note is organised from: the English translation when one
+    is done, otherwise the clinician's original words."""
+    answer = answer or {}
+    translation = answer.get("translation") or {}
+    if translation.get("status") == "done" and translation.get("text"):
+        return translation["text"]
+    return answer.get("text", "")
 
 
 def _phrase_pattern(phrase):
@@ -123,19 +153,25 @@ def detect_risk_language(answers, risk_terms):
     in the answer (for highlighting). A prompt only — no label, no score."""
     out = []
     for key in QUESTION_KEYS:
-        text = (answers.get(key) or {}).get("text", "")
-        seen = set()
-        for term, start, end in sorted(find_terms(text, risk_terms), key=lambda t: t[1]):
-            dkey = f"{key}:{term['id']}"
-            if dkey in seen:
-                continue
-            seen.add(dkey)
-            passage, p_start, p_end = _passage(text, start, end)
-            out.append({
-                "key": dkey, "question": key, "category": term.get("category", ""),
-                "phrase": term["phrase"], "matched": text[start:end], "start": start, "end": end,
-                "passage": passage, "passage_start": p_start, "passage_end": p_end,
-            })
+        answer = answers.get(key) or {}
+        translation = answer.get("translation") or {}
+        sources = [("original", answer.get("text", ""), "")]
+        # A Kiswahili / Sheng answer is screened in its English translation too.
+        if translation.get("status") == "done" and translation.get("text"):
+            sources.append(("translation", translation["text"], "~en"))
+        for source, text, suffix in sources:
+            seen = set()
+            for term, start, end in sorted(find_terms(text, risk_terms), key=lambda t: t[1]):
+                dkey = f"{key}{suffix}:{term['id']}"
+                if dkey in seen:
+                    continue
+                seen.add(dkey)
+                passage, p_start, p_end = _passage(text, start, end)
+                out.append({
+                    "key": dkey, "question": key, "source": source, "category": term.get("category", ""),
+                    "phrase": term["phrase"], "matched": text[start:end], "start": start, "end": end,
+                    "passage": passage, "passage_start": p_start, "passage_end": p_end,
+                })
     return out
 
 
@@ -187,6 +223,26 @@ def supported_concepts(model, texts):
     return [c for c in model.get("concepts", []) if find_terms(joined, [{"phrase": c}])]
 
 
+def detect_models(q3_text, q4_text, registry):
+    """PSY-TM: every registry model the clinician named in Q3 ("named"), or —
+    when not named — two or more of whose distinct concepts appear across Q3
+    and Q4 ("suggested"). A suggestion is only a suggestion: the clinician
+    includes or excludes each model."""
+    named = {m["code"] for m in named_models(q3_text, (), registry)}
+    out = []
+    for model in registry:
+        concepts = supported_concepts(model, [q3_text, q4_text])
+        if model["code"] in named:
+            how = "named"
+        elif len({c.lower() for c in concepts}) >= 2:
+            how = "suggested"
+        else:
+            continue
+        out.append({"code": model["code"], "name": model["name"], "version": model.get("version", ""),
+                    "how": how, "concepts": concepts})
+    return out
+
+
 def _bullets(lines):
     return "\n".join(f"- {line}" for line in lines)
 
@@ -209,7 +265,7 @@ def goal_suggestions(goals, answers):
         return {w[:5] for w in re.findall(r"[a-z]+", str(text).lower()) if len(w) >= 4 and w not in _STOPWORDS}
 
     out = []
-    pool = [s for k in ("q4", "q1") for s in sentences((answers.get(k) or {}).get("text", ""))]
+    pool = [s for k in ("q4", "q1") for s in sentences(english_text(answers.get(k)))]
     for goal in goals:
         g = stems(goal["goal"])
         if not g:
@@ -240,8 +296,15 @@ def _risk_safety(safety, detections, resolutions, context):
         lines.append(f"New or changed safety concern identified in today's session: {concerns}.")
         if safety.get("description"):
             lines.append(f"Clinician's description: {safety['description']}")
-        if safety.get("actions"):
-            lines.append(f"Actions taken: {safety['actions']}")
+        actions = safety.get("actions")
+        if isinstance(actions, str):  # notes written before the actions checklist
+            actions = [actions] if actions else []
+        if actions:
+            lines.append("Actions taken:")
+            lines.extend(f"- {a}" for a in actions)
+        link = safety.get("link")
+        if link:
+            lines.append(f"Linked risk assessment: {link['display_id']} (opened {link['opened']})")
         lines.append("Safety concern alert raised on the client record; the findings are queued for "
                      "the risk register for clinician review.")
         plan = context.get("safety_plan")
@@ -259,41 +322,77 @@ def _risk_safety(safety, detections, resolutions, context):
     reviewed = [d for d in detections if d["key"] in resolutions]
     if reviewed:
         lines.append("Language prompting a safety review was reviewed by the clinician:")
-        lines.extend(f"- \"{d['passage']}\" — {resolutions[d['key']]['reason']}" for d in reviewed)
+        for d in reviewed:
+            r = resolutions[d["key"]]
+            lines.append(f"- \"{d['passage']}\" — {r.get('reason') or 'reviewed by ' + str(r.get('by') or 'the clinician')}")
     return "\n".join(lines)
 
 
+def goal_lines(links):
+    """Treatment-plan goal lines for the decided links (PSY-LINK). Nothing is
+    added for a goal until the clinician decides; "not relevant" adds nothing.
+    Legacy CONFIRMED links keep their clinician-written statement."""
+    lines = []
+    for link in links:
+        status = link.get("status")
+        label = GOAL_DECISIONS.get(status)
+        if label:
+            line = f"G{link['goal_index'] + 1} {link['goal']}: {label}."
+            if link.get("evidence"):
+                line += f" Session detail: {link['evidence']}"
+            lines.append(line)
+    return lines
+
+
+def model_block(models):
+    """The approach lines of the interventions section, for the models the
+    clinician included (named or suggested-and-included)."""
+    if not models:
+        return ""
+    names = ", ".join(m["name"] for m in models)
+    elements = [
+        f"{m['name']}: {', '.join(m['concepts'])}" if m.get("concepts")
+        else f"{m['name']}: no specific elements described" for m in models
+    ]
+    return _join(f"Approach(es) identified by clinician: {names}",
+                 _block("Model-consistent elements documented", elements))
+
+
 def organize(answers, safety, info, registry, cue_terms, detections=(), resolutions=None,
-             confirmed_links=(), measure=None, context=None, selected_models=()):
-    """Build the seven PSY-OUT sections from the clinician's answers. Returns
-    {"sections": {key: text}, "models_applied": [...]}."""
+             confirmed_links=(), measure=None, context=None, selected_models=(), applied_models=None,
+             goal_links=()):
+    """Build the seven PSY-OUT sections from the clinician's answers (the
+    English translation where one is done). Returns {"sections": {key: text},
+    "models_applied": [...], "fixed": {...}} — `fixed` holds the deterministic
+    parts (approach lines, confirmed goal lines, measurement) that stay as they
+    are when a section's narrative is reworded."""
     resolutions = resolutions or {}
     context = context or {}
-    text = {k: (answers.get(k) or {}).get("text", "") for k in QUESTION_KEYS}
+    text = {k: english_text(answers.get(k)) for k in QUESTION_KEYS}
 
     presenting = _block("Client report", sentences(text["q1"]))
 
     reported2, observed2 = split_attribution(text["q2"], cue_terms)
-    assessment = _join(_block("Clinician observed / assessed", observed2), _block("Client reported", reported2))
+    assessment = _join(_block("Client report", reported2), _block("Clinician observation / assessment", observed2))
 
-    models = named_models(text["q3"], selected_models, registry)
-    model_lines = []
-    for m in models:
-        concepts = supported_concepts(m, [text["q3"], text["q4"]])
-        model_lines.append(
-            f"{m['name']} — elements described in this session: {', '.join(concepts)}"
-            if concepts else f"{m['name']} — named by the clinician; no specific elements described"
-        )
-    interventions = _join(_block("Clinician described", sentences(text["q3"])),
-                          _block("Therapy model(s) named by the clinician", model_lines))
+    if applied_models is None:
+        applied_models = [{**m, "concepts": supported_concepts(m, [text["q3"], text["q4"]])}
+                          for m in named_models(text["q3"], selected_models, registry)]
+    approaches = model_block(applied_models)
+    work = _block("Session work and interventions", sentences(text["q3"]))
+    interventions = _join(approaches, work)
 
     reported4, observed4 = split_attribution(text["q4"], cue_terms)
-    progress = [f"Goal \"{link['goal']}\": {link['statement']}" for link in confirmed_links]
+    legacy = [f"Goal \"{link['goal']}\": {link['statement']}" for link in confirmed_links]
     measured = ([f"{measure['name']} total {measure['total']} (recorded through the outcome store)"]
                 if measure else [])
+    response_extra = "\n\n".join(b for b in (
+        _block("Treatment-plan goals (clinician confirmed)", goal_lines(goal_links)),
+        _block("Progress toward care-plan goals (confirmed by the clinician)", legacy),
+        _block("Measurement", measured),
+    ) if b)
     response = _join(_block("Client response as observed", observed4), _block("Client reported", reported4),
-                     _block("Progress toward care-plan goals (confirmed by the clinician)", progress),
-                     _block("Measurement", measured))
+                     response_extra)
 
     plan = _block("Next steps", sentences(text["q5"]))
 
@@ -306,8 +405,23 @@ def organize(answers, safety, info, registry, cue_terms, detections=(), resoluti
         "risk_safety": _risk_safety(safety, list(detections), resolutions, context),
         "plan": plan or NOT_RECORDED,
     }
-    applied = [{"code": m["code"], "name": m["name"], "version": m.get("version", "")} for m in models]
-    return {"sections": sections, "models_applied": applied}
+    applied = [{"code": m["code"], "name": m["name"], "version": m.get("version", "")} for m in applied_models]
+    return {"sections": sections, "models_applied": applied,
+            "fixed": {"interventions": approaches, "response": response_extra}}
+
+
+# Which section each question's narrative feeds (for the reworded sections).
+QUESTION_SECTION = {"q1": "presenting_focus", "q2": "assessment", "q3": "interventions",
+                    "q4": "response", "q5": "plan"}
+
+
+def compose_reworded(question_key, reworded, fixed):
+    """A section from a reworded narrative plus the deterministic parts."""
+    if question_key == "q3":
+        return _join(fixed.get("interventions", ""), f"Session work and interventions:\n{reworded}")
+    if question_key == "q4":
+        return _join(reworded, fixed.get("response", ""))
+    return reworded
 
 
 def render(sections, watermark=True):

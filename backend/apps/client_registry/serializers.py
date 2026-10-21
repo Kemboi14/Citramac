@@ -253,6 +253,7 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "occupation",
             "employment_status",
             "living_with_disability",
+            "disability_details",
             "national_id",
             "passport_number",
             "contact_phone",

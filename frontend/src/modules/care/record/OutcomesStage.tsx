@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { getInstruments, type InstrumentDef } from "../../../lib/carePathwayApi";
 import {
@@ -29,7 +30,11 @@ const TABS: { key: OutcomeTab; label: string }[] = [
 export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordViewProps) {
   const { accessToken } = useAuth();
   const [version, setVersion] = useState(0);
-  const [tab, setTab] = useState<OutcomeTab>("overview");
+  // `?tab=` opens a section directly (e.g. the Discharge intervention module).
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<OutcomeTab>(
+    () => TABS.find((t) => t.key === params.get("tab"))?.key ?? "overview",
+  );
   const { data: overview, error } = useRecordData(
     patientId,
     version,

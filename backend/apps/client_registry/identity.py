@@ -13,7 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from .models import Patient, PatientIdentifier
+from .models import IdentifierSequence, Patient, PatientIdentifier
 
 # Registration `id_document_type` → identifier kind.
 DOCUMENT_KIND = {
@@ -25,16 +25,43 @@ DOCUMENT_KIND = {
 }
 
 
+# Temporary (unidentified / unknown-identity) numbers. New ones are
+# CIT-ER-000001…; ER-YYYYMM<org>-NNN numbers issued before 2026-10 are kept
+# unchanged (project owner decision) and are still temporary.
+TEMPORARY_SEQUENCE = "CIT-ER"
+TEMPORARY_PREFIXES = ("CIT-ER-", "ER-")
+
+
+def is_temporary_number(number):
+    return bool(number) and number.startswith(TEMPORARY_PREFIXES)
+
+
+def _next_temporary_number():
+    """CIT-ER-000001, CIT-ER-000002, … — one series for the deployment, because
+    `citramac_number` is unique across organisations and every temporary number
+    shares one FHIR identifier system. The row lock serialises allocation; the
+    increment commits or rolls back with the registration that took it, so an
+    issued number is never handed out again."""
+    with transaction.atomic():
+        sequence, _ = IdentifierSequence.objects.select_for_update().get_or_create(
+            name=TEMPORARY_SEQUENCE
+        )
+        sequence.last_value += 1
+        sequence.save(update_fields=["last_value"])
+    return f"{TEMPORARY_SEQUENCE}-{sequence.last_value:06d}"
+
+
 def generate_citramac_number(organization, temporary=False):
     """
-    Local business identifier, generated before any network call. A
-    transaction-scoped advisory lock per prefix makes the read-then-assign
-    race-free; the highest existing suffix (not the count) is used so a gap
-    can never produce a duplicate.
+    Local business identifier, generated before any network call. Permanent
+    numbers: a transaction-scoped advisory lock per prefix makes the
+    read-then-assign race-free; the highest existing suffix (not the count) is
+    used so a gap can never produce a duplicate. Temporary numbers come from
+    the CIT-ER sequence.
     """
-    prefix = f"{timezone.now():%Y%m}{organization.slug[:4].upper()}"
     if temporary:
-        prefix = f"ER-{prefix}"
+        return _next_temporary_number()
+    prefix = f"{timezone.now():%Y%m}{organization.slug[:4].upper()}"
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [prefix])
@@ -88,7 +115,7 @@ def sync_identifiers(patient):
     if patient.citramac_number:
         kind = (
             PatientIdentifier.KIND_TEMPORARY
-            if patient.citramac_number.startswith("ER-")
+            if is_temporary_number(patient.citramac_number)
             else PatientIdentifier.KIND_CITRAMAC
         )
         record_identifier(patient, kind, patient.citramac_number)

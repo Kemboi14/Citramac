@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
-from apps.client_registry.models import AllergyRecord, Patient
+from apps.client_registry.models import AllergyRecord, EmergencyContact, Patient
 from apps.dha_interop.fhir_validation.validator import validate_bundle
 from apps.ipd_ward.models import Bed, Ward
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
@@ -161,7 +161,7 @@ class RegistrationTests(CarePathwayApiTestCase):
         banner = self.client.get(
             reverse("care-client-banner", args=[response.data["patient_id"]]), **self.auth
         )
-        self.assertTrue(banner.data["name"].startswith("Unknown person ("))
+        self.assertTrue(banner.data["name"].startswith("UNKNOWN CLIENT — CIT-ER-"))
         self.assertEqual(banner.data["allergy"]["state"], "unknown")
 
     def test_returning_client_gets_a_new_encounter_in_the_same_episode(self):
@@ -173,6 +173,36 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertNotEqual(a.id, b.id)
         self.assertEqual(a.episode_id, b.episode_id)
         self.assertEqual(b.visit_number, 2)
+
+    def test_only_clinical_staff_are_sent_to_open_the_new_encounter(self):
+        front_desk = self.register()
+        self.assertFalse(front_desk.data["open_triage"])
+        with platform_admin_context():
+            role, _ = Role.objects.get_or_create(
+                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
+            self.nurse.roles.add(role)
+        self.assertTrue(self.register(full_name="Brian Otieno").data["open_triage"])
+        with platform_admin_context():
+            te = TriageEncounter.objects.get(pk=front_desk.data["triage_encounter_id"])
+        self.assertEqual(te.status, TriageEncounter.STATUS_AWAITING)
+        self.assertIsNone(te.triage_started_at)
+
+    def test_changed_next_of_kin_phone_is_kept_as_a_new_contact(self):
+        nok = {"next_of_kin_name": "Joan Kamau", "next_of_kin_relationship": "Sibling"}
+        first = self.register(next_of_kin_phone="0722000000", **nok)
+        pid = first.data["patient_id"]
+        self.register(patient_id=pid, next_of_kin_phone="0722000000", **nok)
+        self.register(patient_id=pid, next_of_kin_phone="0799000111", **nok)
+        with platform_admin_context():
+            current_phone = Patient.objects.get(pk=pid).next_of_kin.phone
+            phones = list(
+                EmergencyContact.objects.filter(patient_id=pid)
+                .order_by("created_at")
+                .values_list("phone", flat=True)
+            )
+        self.assertEqual(current_phone, "0799000111")
+        self.assertEqual(phones, ["0722000000", "0799000111"])
 
     def test_search_returns_registration_details_only(self):
         self.register(phone="+254712345678")

@@ -18,3 +18,4 @@ sentry-sdk==2.36.0
 django-prometheus==2.5.0
 Pillow==12.3.0
 jsonschema==4.26.0
+anthropic==1.11.0

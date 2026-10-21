@@ -268,6 +268,10 @@ def can_prescribe(user):
     return _has_role(user, settings.PRESCRIBER_ROLES)
 
 
+def is_clinical_staff(user):
+    return _has_role(user, settings.DOC_ROLE_GROUPS["CLINICAL_STAFF"])
+
+
 def _current_admission(patient):
     from . import services
 

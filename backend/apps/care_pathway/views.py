@@ -49,6 +49,7 @@ from .serializers import (
     InterventionRecordSerializer,
     OutcomeScoreSerializer,
 )
+from .interventions import is_clinical_staff
 from .services import EFFECTIVE_STATUS_LABELS, user_display
 
 
@@ -100,6 +101,39 @@ class ValueSetsView(APIView):
 # ── Registration (doc 15 §1.4) ──
 
 
+def _emergency_arrival(patient):
+    """What the desk recorded when a temporary record arrived — what the person
+    resolving identity works from. Registration details, not clinical content."""
+    from apps.client_registry.models import EmergencyContact
+
+    if patient.identity_status == Patient.IDENTITY_IDENTIFIED:
+        return None
+    arrival = (
+        TriageEncounter.objects.filter(patient=patient)
+        .order_by("arrival_at")
+        .values("arrival_at", "found_location", "arrival_referral_info", "identification_notes")
+        .first()
+    )
+    brought_by = patient.emergency_contacts.filter(
+        contact_role=EmergencyContact.ROLE_BROUGHT_BY
+    ).first()
+    return {
+        "arrival_at": _iso(arrival["arrival_at"]) if arrival else None,
+        "found_location": arrival["found_location"] if arrival else "",
+        "arrival_referral_info": arrival["arrival_referral_info"] if arrival else "",
+        "identification_notes": arrival["identification_notes"] if arrival else "",
+        "brought_by": (
+            {
+                "name": brought_by.name,
+                "relationship": brought_by.relationship,
+                "phone": brought_by.phone,
+            }
+            if brought_by
+            else None
+        ),
+    }
+
+
 def _registration_row(patient):
     """Registration details only — Front Desk never sees clinical content."""
     allergies = ", ".join(
@@ -107,6 +141,7 @@ def _registration_row(patient):
             "substance", flat=True
         )
     )
+    next_of_kin = patient.next_of_kin
     return {
         "id": str(patient.id),
         "name": patient.get_full_name(),
@@ -128,7 +163,18 @@ def _registration_row(patient):
         "age": patient.age_years,
         "sex": patient.gender,
         "phone": patient.contact_phone,
-        "next_of_kin": patient.next_of_kin.name if patient.next_of_kin else "",
+        "next_of_kin": next_of_kin.name if next_of_kin else "",
+        "next_of_kin_relationship": next_of_kin.relationship if next_of_kin else "",
+        "next_of_kin_phone": next_of_kin.phone if next_of_kin else "",
+        "referral_source": patient.referral_source,
+        # A temporary record awaiting identity resolution.
+        "is_temporary": patient.identity_status != Patient.IDENTITY_IDENTIFIED,
+        "emergency_arrival": _emergency_arrival(patient),
+        "marital_status": patient.marital_status,
+        "employment_status": patient.employment_status,
+        "occupation": patient.occupation,
+        "living_with_disability": patient.living_with_disability,
+        "disability_details": patient.disability_details,
         "address": patient.address,
         "id_document_type": patient.id_document_type,
         "id_document_number": patient.id_document_number or patient.national_id,
@@ -187,11 +233,10 @@ class DuplicateCheckView(APIView):
             identifiers["UNHCR"] = str(data["unhcr_number"]).strip()
         if data.get("sha_member_number"):
             identifiers["SHA_MEMBER"] = str(data["sha_member_number"]).strip()
-        full_name = (data.get("full_name") or "").strip()
         matches = identity_service.find_duplicates(
             request.user.organization_id,
             identifiers=identifiers,
-            last_name=services._split_name(full_name)[2],
+            last_name=services._names_from(data)[2],
             date_of_birth=data.get("date_of_birth") or None,
             gender=data.get("sex") or "",
             phone=data.get("phone") or "",
@@ -213,8 +258,14 @@ class DuplicateCheckView(APIView):
 class RegistrationView(APIView):
     def post(self, request):
         te = services.register_arrival(request.user, request.data)
+        # Opening the encounter starts triage under the viewer, so only
+        # clinical staff are sent there; front desk returns to the worklist.
         return Response(
-            {"triage_encounter_id": str(te.id), "patient_id": str(te.patient_id)},
+            {
+                "triage_encounter_id": str(te.id),
+                "patient_id": str(te.patient_id),
+                "open_triage": is_clinical_staff(request.user),
+            },
             status=status.HTTP_201_CREATED,
         )
 
@@ -222,6 +273,7 @@ class RegistrationView(APIView):
 class ResolveIdentityView(APIView):
     def post(self, request, patient_id):
         patient = services.resolve_identity(request.user, _patient(patient_id), request.data)
+        patient.refresh_from_db()  # typed values (dates) for the row, not request strings
         return Response(_registration_row(patient))
 
 

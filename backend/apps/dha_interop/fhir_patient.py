@@ -90,12 +90,11 @@ def _names(patient):
         )
     else:
         # Unidentified / unknown: a temporary name, never a blank HumanName.
-        label = patient.identity_description or (
-            "Unidentified person"
-            if patient.identity_status == "UNIDENTIFIED"
-            else "Unknown person"
-        )
-        names.append(HumanName(use="temp", text=f"{label} ({patient.citramac_number})"))
+        if patient.identity_description:
+            text = f"{patient.identity_description} ({patient.citramac_number})"
+        else:
+            text = patient.get_full_name()
+        names.append(HumanName(use="temp", text=text))
     if patient.preferred_name:
         names.append(HumanName(use="usual", text=patient.preferred_name))
     return names
@@ -111,6 +110,11 @@ def _contact_points(patient):
 
 
 def _relationship(contact):
+    if contact.contact_role == "BROUGHT_BY":
+        # The person who brought an emergency arrival in is not next of kin;
+        # text only — no relationship code is asserted for them.
+        detail = f" — {contact.relationship}" if contact.relationship else ""
+        return CodeableConcept(text=f"Brought the client to the facility{detail}")
     text = "Guardian" if contact.is_guardian else (contact.relationship or "Next of kin")
     coding = []
     if not contact.is_guardian:
@@ -161,6 +165,11 @@ def build_patient_resource(patient):
         identifier=identifiers or None,
         name=_names(patient),
         telecom=_contact_points(patient) or None,
+        # NOT_STATED and NOT_SAID ("Prefer not to say") → unknown. Pronouns,
+        # disability, employment and occupation stay local (owner decision).
+        # VERIFY: Patient.maritalStatus (system
+        # http://terminology.hl7.org/CodeSystem/v3-MaritalStatus) is not emitted
+        # until the local → v3 code mapping is confirmed against the national IG.
         gender=_GENDER.get(patient.gender, "unknown"),
         birthDate=patient.date_of_birth,
         address=address,

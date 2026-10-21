@@ -100,10 +100,17 @@ class PsychotherapyNote(TenantScopedModel):
     )
     author = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
     status = models.CharField(max_length=6, choices=STATUS_CHOICES, default="DRAFT")
-    # {"q1".."q5": {"text": str, "mode": "SPEAK" | "TYPE"}}
+    # {"q1".."q5": {"text", "mode": "TYPED" | "DICTATED", "answered_at", "language",
+    #  "translation": {"status": pending|done|error|unavailable, "text", "model", "at", ...}}}
+    # `text` is always the clinician's own words; a translation is kept beside it
+    # with its provenance, never in place of it. (Earlier drafts: mode SPEAK | TYPE.)
     answers = models.JSONField(default=dict, blank=True)
     # Therapy models the clinician ticked in Q3 (TherapyModel codes).
     selected_models = models.JSONField(default=list, blank=True)
+    # {model code: "INCLUDE" | "EXCLUDE"} — the clinician's decision on each
+    # detected model (named → included unless excluded; suggested → excluded
+    # unless included).
+    model_decisions = models.JSONField(default=dict, blank=True)
     safety_answer = models.CharField(max_length=12, choices=SAFETY_CHOICES, blank=True)
     # YES: {"concerns": [{"row", "option"} | {"other": code}], "description", "actions"}
     safety_detail = models.JSONField(default=dict, blank=True)
@@ -120,10 +127,21 @@ class PsychotherapyNote(TenantScopedModel):
     )
     # {"<question>:<term id>": {"reason", "by", "at"}} — PSY-RD mismatch resolutions.
     detection_resolutions = models.JSONField(default=dict, blank=True)
-    # [{"goal_index", "goal", "statement", "status": CONFIRMED|DISMISSED, "by", "at"}]
+    # [{"goal_index", "goal", "evidence", "statement",
+    #   "status": PROGRESS|NO_CHANGE|BARRIER|NOT_RELEVANT (earlier: CONFIRMED|DISMISSED), "by", "at"}]
     goal_links = models.JSONField(default=list, blank=True)
-    # PSY-OUT sections ({key: text}); generated, then editable until signed.
+    # PSY-OUT sections ({key: text}) as they stand: the generated text, with the
+    # clinician's own edit in place of it for an edited section.
     sections = models.JSONField(default=dict, blank=True)
+    # The system-generated text of each section (rule-based or reworded) — what
+    # "Revert" restores — and the clinician's edits, kept apart so organising
+    # again never overwrites an edited section.
+    generated_sections = models.JSONField(default=dict, blank=True)
+    section_edits = models.JSONField(default=dict, blank=True)  # {key: {"text", "by", "at"}}
+    # How the sections were produced: {"engine": "rules" | "ai", "status":
+    # done | pending | error | disabled, "model", "requested_at", "at", "token",
+    # "sections": {key: {"source": "ai" | "rules", "model", "at"}}, "error"}.
+    processing = models.JSONField(default=dict, blank=True)
     models_applied = models.JSONField(default=list, blank=True)
     generated_at = models.DateTimeField(null=True, blank=True)
     sections_edited = models.BooleanField(default=False)

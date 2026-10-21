@@ -493,6 +493,20 @@ INTAKE_RESTRICTED_VIEW_ROLES = env.list(
 # browsers, so it stays off until the organisation's data-protection review
 # approves that processing — VERIFY before enabling. Off = typing only.
 PSYCHOTHERAPY_DICTATION_ENABLED = env.bool("PSYCHOTHERAPY_DICTATION_ENABLED", default=False)
+# Psychotherapy note AI assistance (Kiswahili/Sheng → English translation and
+# trauma-informed rewording of the generated note sections). Off by default:
+# when on, the clinician's session text is sent server-side to the Anthropic
+# API (the browser never calls a model). VERIFY before enabling: the
+# organisation's data-protection review of sending psychotherapy content to
+# Anthropic as a processor, and the client-consent position for it. Off, or on
+# but failing, the note is organised by the rule-based organiser
+# (care_pathway/psy_organizer.py) and translations show as not available.
+PSYCHOTHERAPY_AI_ENABLED = env.bool("PSYCHOTHERAPY_AI_ENABLED", default=False)
+# From the environment only — never committed.
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+PSYCHOTHERAPY_AI_MODEL = env("PSYCHOTHERAPY_AI_MODEL", default="claude-opus-5-5")
+# Per-request timeout (seconds) for the background translation / rewording task.
+PSYCHOTHERAPY_AI_TIMEOUT = env.int("PSYCHOTHERAPY_AI_TIMEOUT", default=60)
 # Roles whose members may co-sign (senior review). The requester can never be
 # the decider.
 COSIGN_ROLES = env.list("COSIGN_ROLES", default=["Psychiatrist"])

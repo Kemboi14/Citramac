@@ -683,7 +683,12 @@ def _consents(ctx):
 def _family(ctx):
     from apps.client_registry.models import EmergencyContact
 
-    rows = list(EmergencyContact.objects.filter(patient=ctx.patient))
+    # The person who brought an emergency arrival in is not family.
+    rows = list(
+        EmergencyContact.objects.filter(patient=ctx.patient).exclude(
+            contact_role=EmergencyContact.ROLE_BROUGHT_BY
+        )
+    )
     items = [
         f"{c.name}"
         + (f" ({c.relationship})" if c.relationship else "")

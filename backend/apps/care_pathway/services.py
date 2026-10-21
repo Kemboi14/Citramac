@@ -38,6 +38,7 @@ from .models import (
     TriageEncounter,
     TriageRecheck,
 )
+from .valuesets import VALUESETS
 
 CURRENT_ADMISSION_STATUSES = ("ADMITTED", "TRANSFERRED")
 PRIORITY_LABELS = {"RED": "Emergency", "ORANGE": "Urgent", "YELLOW": "Priority", "GREEN": "Routine"}
@@ -135,6 +136,135 @@ def _split_name(full_name):
     return parts[0], " ".join(parts[1:-1]), parts[-1]
 
 
+NAME_REQUIRED = (
+    "Enter the client’s first and last name, or change Identity status to "
+    "Unidentified or Unknown to register without one."
+)
+
+
+def _names_from(data):
+    """(first, middle or None, last) from `first_name`/`last_name`, or from the
+    older single `full_name`. Middle names are None when the caller did not
+    send them, so an existing record keeps its own."""
+    first = (data.get("first_name") or "").strip()
+    last = (data.get("last_name") or "").strip()
+    if first or last:
+        middle = data.get("middle_other_names")
+        return first, (middle.strip() if isinstance(middle, str) else None), last
+    return _split_name((data.get("full_name") or "").strip())
+
+
+def _require_names(data, first, last, patient=None):
+    """First and last name are both required — except for a returning client
+    whose stored name is a single word, who must still be registrable. A
+    caller still sending the older single `full_name` needs only a name."""
+    if not first and not last:
+        raise ValidationError({"first_name": NAME_REQUIRED, "last_name": NAME_REQUIRED})
+    if not ((data.get("first_name") or "").strip() or (data.get("last_name") or "").strip()):
+        return
+    if not first:
+        raise ValidationError({"first_name": "Enter the client’s first name."})
+    single_word_on_file = patient is not None and patient.first_name and not patient.last_name
+    if not last and not single_word_on_file:
+        raise ValidationError({"last_name": "Enter the client’s last name."})
+
+
+def _set_names(patient, first, middle, last):
+    patient.first_name = first
+    patient.last_name = last
+    if middle is not None:
+        patient.middle_other_names = middle
+
+
+def _coded(data, key, choices):
+    """A coded value from the request, checked against its value set."""
+    value = (data.get(key) or "").strip()
+    if value and value not in dict(choices):
+        raise ValidationError({key: "Unknown code."})
+    return value
+
+
+def _apply_details(patient, data):
+    """Registration details shared by a new arrival and an identity
+    resolution: everything except name, identity status and next of kin."""
+
+    def take(field, key=None):
+        value = data.get(key or field)
+        if value not in (None, ""):
+            setattr(patient, field, value)
+
+    take("preferred_name")
+    take("pronouns")
+    take("date_of_birth")
+    take("estimated_age")
+    if data.get("sex"):
+        patient.gender = _coded(data, "sex", Patient.GENDER_CHOICES)
+    take("contact_phone", "phone")
+    take("address")
+    take("id_document_type")
+    take("id_document_number")
+    take("preferred_language")
+    take("interpreter")
+    take("payer")
+    take("occupation")
+    for field, choices in (
+        ("marital_status", Patient.MARITAL_STATUS_CHOICES),
+        ("employment_status", Patient.EMPLOYMENT_STATUS_CHOICES),
+        ("living_with_disability", Patient.DISABILITY_CHOICES),
+    ):
+        value = _coded(data, field, choices)
+        if value:
+            setattr(patient, field, value)
+    if patient.living_with_disability == "YES":
+        take("disability_details")
+    else:
+        patient.disability_details = ""
+    if data.get("id_document_number"):
+        if data.get("id_document_type") == "NATIONAL_ID":
+            patient.national_id = data["id_document_number"]
+        elif data.get("id_document_type") == "PASSPORT":
+            patient.passport_number = data["id_document_number"]
+
+
+def _claimed_identifiers(data):
+    from apps.client_registry import identity as identity_service
+    from apps.client_registry.models import PatientIdentifier
+
+    document_kind = identity_service.DOCUMENT_KIND.get(data.get("id_document_type"))
+    claimed = {}
+    if document_kind and data.get("id_document_number"):
+        claimed[document_kind] = data["id_document_number"].strip()
+    for key, kind in (
+        ("unhcr_number", PatientIdentifier.KIND_UNHCR),
+        ("sha_member_number", PatientIdentifier.KIND_SHA),
+        ("client_registry_id", PatientIdentifier.KIND_CLIENT_REGISTRY),
+    ):
+        if (data.get(key) or "").strip():
+            claimed[kind] = data[key].strip()
+    return claimed
+
+
+def _record_brought_by(patient, data):
+    """The person who brought or referred an emergency arrival: a contact row
+    with the BROUGHT_BY role (FHIR RelatedPerson), never the next of kin."""
+    values = {
+        key: (data.get(f"brought_by_{key}") or "").strip()
+        for key in ("name", "relationship", "phone", "id_number", "address")
+    }
+    if not any(values.values()):
+        return None
+    return EmergencyContact.objects.create(
+        organization_id=patient.organization_id,
+        patient=patient,
+        contact_role=EmergencyContact.ROLE_BROUGHT_BY,
+        name=values["name"] or "Name not recorded",
+        relationship=values["relationship"],
+        phone=values["phone"],
+        id_number=values["id_number"],
+        address=values["address"],
+    )
+
+
 def _allergy_items(text):
     return [item.strip() for item in re.split(r"[;,]", text or "") if item.strip()]
 
@@ -165,7 +295,7 @@ def register_arrival(user, data):
     reopens an earlier one (doc 15 §1.4). Idempotent on `client_request_id`."""
     from apps.client_registry import identity as identity_service
     from apps.client_registry.consent import capture_consent
-    from apps.client_registry.models import ConsentRecord, PatientIdentifier
+    from apps.client_registry.models import ConsentRecord
 
     request_id = (data.get("client_request_id") or "").strip()
     if not request_id:
@@ -177,15 +307,7 @@ def register_arrival(user, data):
     identity = data.get("identity_status") or Patient.IDENTITY_IDENTIFIED
     if identity not in dict(Patient.IDENTITY_STATUS_CHOICES):
         raise ValidationError({"identity_status": "Unknown identity status."})
-    full_name = (data.get("full_name") or "").strip()
     description = (data.get("description") or "").strip()
-    if identity == Patient.IDENTITY_IDENTIFIED and not full_name:
-        raise ValidationError(
-            {
-                "full_name": "Enter the client’s full name, or change Identity status to "
-                "Unidentified or Unknown to register without one."
-            }
-        )
     if identity == Patient.IDENTITY_UNIDENTIFIED and not description:
         raise ValidationError(
             {
@@ -193,6 +315,9 @@ def register_arrival(user, data):
                 "unidentified arrival can be distinguished safely."
             }
         )
+    apparent_sex = (data.get("apparent_sex") or "").strip()
+    if apparent_sex and apparent_sex not in dict(VALUESETS["apparent-sex"][1]):
+        raise ValidationError({"apparent_sex": "Unknown code."})
 
     patient = None
     if data.get("patient_id"):
@@ -200,18 +325,12 @@ def register_arrival(user, data):
         if patient is None:
             raise ValidationError({"patient_id": "Client not found."})
 
+    first_name, middle_names, last_name = _names_from(data)
+    if identity == Patient.IDENTITY_IDENTIFIED:
+        _require_names(data, first_name, last_name, patient)
+
     now = timezone.now()
-    document_kind = identity_service.DOCUMENT_KIND.get(data.get("id_document_type"))
-    claimed = {}
-    if document_kind and data.get("id_document_number"):
-        claimed[document_kind] = data["id_document_number"].strip()
-    for key, kind in (
-        ("unhcr_number", PatientIdentifier.KIND_UNHCR),
-        ("sha_member_number", PatientIdentifier.KIND_SHA),
-        ("client_registry_id", PatientIdentifier.KIND_CLIENT_REGISTRY),
-    ):
-        if (data.get(key) or "").strip():
-            claimed[kind] = data[key].strip()
+    claimed = _claimed_identifiers(data)
 
     if patient is None:
         # An identifier that already belongs to someone is a duplicate, not a
@@ -228,7 +347,7 @@ def register_arrival(user, data):
         if identity == Patient.IDENTITY_IDENTIFIED and not data.get("confirm_new_record"):
             probable = identity_service.find_duplicates(
                 user.organization_id,
-                last_name=_split_name(full_name)[2],
+                last_name=last_name,
                 date_of_birth=data.get("date_of_birth") or None,
                 gender=data.get("sex") or "",
                 phone=data.get("phone") or "",
@@ -258,33 +377,12 @@ def register_arrival(user, data):
     if identity == Patient.IDENTITY_IDENTIFIED:
         if patient.pk and patient.identity_status != Patient.IDENTITY_IDENTIFIED:
             patient.identity_confirmed_at = now
-        patient.first_name, patient.middle_other_names, patient.last_name = _split_name(full_name)
+        _set_names(patient, first_name, middle_names, last_name)
     patient.identity_status = identity
     if description:
         patient.identity_description = description
 
-    def take(field, key=None):
-        value = data.get(key or field)
-        if value not in (None, ""):
-            setattr(patient, field, value)
-
-    take("preferred_name")
-    take("pronouns")
-    take("date_of_birth")
-    take("estimated_age")
-    take("gender", "sex")
-    take("contact_phone", "phone")
-    take("address")
-    take("id_document_type")
-    take("id_document_number")
-    take("preferred_language")
-    take("interpreter")
-    take("payer")
-    if data.get("id_document_number"):
-        if data.get("id_document_type") == "NATIONAL_ID":
-            patient.national_id = data["id_document_number"]
-        elif data.get("id_document_type") == "PASSPORT":
-            patient.passport_number = data["id_document_number"]
+    _apply_details(patient, data)
     referral = (data.get("referral_source") or "").strip() or "Self-presented"
     if not patient.referral_source:
         patient.referral_source = referral
@@ -296,6 +394,7 @@ def register_arrival(user, data):
     identity_service.sync_identifiers(patient)
     for kind, value in claimed.items():
         identity_service.record_identifier(patient, kind, value)
+    _record_brought_by(patient, data)
 
     consent = data.get("hie_consent") or {}
     if consent:
@@ -335,17 +434,23 @@ def register_arrival(user, data):
         )
 
     next_of_kin = (data.get("next_of_kin_name") or data.get("next_of_kin") or "").strip()
-    if next_of_kin and (patient.next_of_kin is None or patient.next_of_kin.name != next_of_kin):
+    nok_fields = {
+        "name": next_of_kin,
+        "relationship": (data.get("next_of_kin_relationship") or "").strip()
+        or "Next of kin / emergency contact",
+        "phone": (data.get("next_of_kin_phone") or "").strip(),
+        "is_guardian": bool(data.get("next_of_kin_is_guardian")),
+        "guardian_legal_status": (data.get("guardian_legal_status") or "").strip(),
+        "may_be_informed": bool(data.get("next_of_kin_may_be_informed")),
+    }
+    current = patient.next_of_kin
+    # Any changed detail (not just the name) is a new contact row; the old one
+    # stays as history.
+    if next_of_kin and (
+        current is None or any(getattr(current, k) != v for k, v in nok_fields.items())
+    ):
         contact = EmergencyContact.objects.create(
-            organization_id=patient.organization_id,
-            patient=patient,
-            name=next_of_kin,
-            relationship=(data.get("next_of_kin_relationship") or "").strip()
-            or "Next of kin / emergency contact",
-            phone=(data.get("next_of_kin_phone") or "").strip(),
-            is_guardian=bool(data.get("next_of_kin_is_guardian")),
-            guardian_legal_status=(data.get("guardian_legal_status") or "").strip(),
-            may_be_informed=bool(data.get("next_of_kin_may_be_informed")),
+            organization_id=patient.organization_id, patient=patient, **nok_fields
         )
         patient.next_of_kin = contact
         patient.save(update_fields=["next_of_kin", "updated_at"])
@@ -379,6 +484,10 @@ def register_arrival(user, data):
         due_at=triage_rules.triage_due_at(now),
         presenting_concern=reason,
         referral_source=referral,
+        apparent_sex=apparent_sex,
+        found_location=(data.get("found_location") or "").strip()[:255],
+        arrival_referral_info=(data.get("arrival_referral_info") or "").strip(),
+        identification_notes=(data.get("identification_notes") or "").strip(),
         registered_by=user,
     )
 
@@ -391,19 +500,15 @@ def resolve_identity(user, patient, data):
     If the document number already belongs to a permanent record the person is
     already registered: with `merge_into_patient_id` set (and matching) the
     temporary record is merged into it; without, the request is refused and
-    names that record. Otherwise the temporary record is upgraded in place and
-    keeps its emergency number as a superseded identifier."""
+    names that record. Otherwise the temporary record is upgraded in place —
+    same patient, same encounters — and keeps its emergency number as its
+    CITRAMAC ID (a TEMPORARY identifier)."""
     from apps.client_registry import identity as identity_service
-    from apps.client_registry.models import PatientIdentifier
 
-    full_name = (data.get("full_name") or "").strip()
-    if not full_name:
-        raise ValidationError({"full_name": "Enter the client’s full name."})
+    first_name, middle_names, last_name = _names_from(data)
+    _require_names(data, first_name, last_name, patient)
 
-    document_kind = identity_service.DOCUMENT_KIND.get(data.get("id_document_type"))
-    claimed = {}
-    if document_kind and data.get("id_document_number"):
-        claimed[document_kind] = data["id_document_number"].strip()
+    claimed = _claimed_identifiers(data)
     duplicates = identity_service.find_duplicates(
         patient.organization_id, identifiers=claimed, exclude_patient_id=patient.pk
     )
@@ -420,22 +525,10 @@ def resolve_identity(user, patient, data):
         identity_service.merge_patients(user, patient, target)
         return target
 
-    patient.first_name, patient.middle_other_names, patient.last_name = _split_name(full_name)
+    _set_names(patient, first_name, middle_names, last_name)
     patient.identity_status = Patient.IDENTITY_IDENTIFIED
     patient.identity_confirmed_at = timezone.now()
-    for field, key in (
-        ("date_of_birth", "date_of_birth"),
-        ("gender", "sex"),
-        ("contact_phone", "phone"),
-        ("id_document_type", "id_document_type"),
-        ("id_document_number", "id_document_number"),
-    ):
-        if data.get(key):
-            setattr(patient, field, data[key])
-    if claimed.get(PatientIdentifier.KIND_NATIONAL_ID):
-        patient.national_id = claimed[PatientIdentifier.KIND_NATIONAL_ID]
-    if claimed.get(PatientIdentifier.KIND_PASSPORT):
-        patient.passport_number = claimed[PatientIdentifier.KIND_PASSPORT]
+    _apply_details(patient, data)
     patient.save()
     identity_service.sync_identifiers(patient)
     for kind, value in claimed.items():

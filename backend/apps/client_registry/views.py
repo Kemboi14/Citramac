@@ -39,8 +39,8 @@ def _is_compliance_officer(user):
     return user.is_superuser or user.roles.filter(name="Auditor").exists()
 
 
-def _generate_citramac_number(organization):
-    return generate_citramac_number(organization)
+def _generate_citramac_number(organization, temporary=False):
+    return generate_citramac_number(organization, temporary=temporary)
 
 
 class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
@@ -79,7 +79,14 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         serializer.save(
             organization=self.request.user.organization,
             registered_by=self.request.user,
-            citramac_number=_generate_citramac_number(self.request.user.organization),
+            citramac_number=_generate_citramac_number(
+                self.request.user.organization,
+                # Unidentified / unknown arrivals get a temporary CIT-ER number.
+                temporary=serializer.validated_data.get(
+                    "identity_status", Patient.IDENTITY_IDENTIFIED
+                )
+                != Patient.IDENTITY_IDENTIFIED,
+            ),
         )
 
     @action(detail=True, methods=["post"], url_path="verify-iprs")

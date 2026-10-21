@@ -81,7 +81,12 @@ STIGMA_TERMS = [
     ("difficult client", _DESCRIBE),
     ("difficult patient", _DESCRIBE),
     ("frequent flyer", "Describe the attendance pattern factually."),
+    ("resistant", "Describe what the client said or did, e.g. \"expressed reservations about…\"."),
+    ("resistance", "Describe what the client said or did, e.g. \"expressed reservations about…\"."),
+    ("committed suicide", "Use \"died by suicide\"."),
 ]
+# Added after the first seeding (migration 0042 loads only these).
+STIGMA_TERMS_V2 = ("resistant", "resistance", "committed suicide", "unmotivated")
 
 # PSY-GEN-3 — a sentence carrying one of these is the client's report.
 REPORT_CUES = ["reported", "reports", "said", "says", "stated", "states", "told", "tells",
@@ -105,6 +110,38 @@ OTHER_CONCERNS = [
     ("other_immediate", "Another immediate safety concern"),
 ]
 ATTENDANCE_MODES = [("IN_PERSON", "In person"), ("VIRTUAL", "Virtual (video)"), ("TELEPHONE", "Telephone")]
+
+# PSY-S YES: the eight concern categories the safety question names (served
+# value set `psy-safety-concern`). Local codes — not SNOMED CT.
+SAFETY_CONCERNS = [
+    ("suicide", "Suicide"),
+    ("self_harm", "Self-harm"),
+    ("harm_to_others", "Harm to others"),
+    ("abuse_exploitation", "Abuse or exploitation"),
+    ("severe_deterioration", "Severe deterioration"),
+    ("intoxication_withdrawal", "Intoxication or withdrawal"),
+    ("self_care", "Inability to care for self"),
+    ("other_immediate", "Other immediate safety concern"),
+]
+# Concern category → the risk-register row it maps to (intake_schema.RISK_ROWS),
+# where one exists. A category with no register row raises the alert only.
+CONCERN_REGISTER_ROW = {
+    "suicide": "suicide",
+    "self_harm": "suicide",
+    "harm_to_others": "violence",
+    "abuse_exploitation": "safeguarding",
+    "self_care": "neglect",
+}
+# PSY-S YES: actions taken (served value set `psy-safety-action`). The safety-plan
+# action is offered only when the client has an active signed safety plan.
+SAFETY_ACTIONS = [
+    ("safety_plan_reviewed", "Safety plan reviewed with client"),
+    ("risk_assessment_completed", "Risk assessment completed in session"),
+    ("supervisor_consulted", "Supervisor / senior clinician consulted"),
+    ("support_person_involved", "Emergency contact or support person involved"),
+    ("emergency_services_contacted", "Crisis or emergency services contacted"),
+    ("frequency_increased", "Session frequency increased"),
+]
 
 # DATA-07 alert codes raised by this module (added to the `clinical-alert` value set).
 ALERTS = [

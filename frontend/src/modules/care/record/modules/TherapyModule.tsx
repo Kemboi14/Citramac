@@ -107,7 +107,7 @@ function TherapyEpisode({ patientId, episode: e, state, act }: {
           ) : (
             <div>
               <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => { setViewing(null); setWriting(true); }}>
-                Session {n}{e.planned_sessions ? ` of ${e.planned_sessions}` : ""} — start or resume note
+                Start new session <span className="font-normal">· session {n}{e.planned_sessions ? ` of ${e.planned_sessions}` : ""} (resumes an open draft)</span>
               </button>
             </div>
           )}

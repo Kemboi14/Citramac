@@ -138,13 +138,13 @@ export function InterventionDrawer({
           {tab === "Record" && (
             <>
               <ClinicalContext context={context} />
+              <ModuleTools code={module.code} patientId={patientId} clientName={clientName} />
               <DeliveryForm
                 patientId={patientId}
                 module={module}
                 actions={actions}
                 onRecorded={onRecorded}
               />
-              <ModuleTools code={module.code} patientId={patientId} />
             </>
           )}
           {tab === "History" && (

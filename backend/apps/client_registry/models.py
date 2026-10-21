@@ -12,6 +12,7 @@ class Patient(TenantScopedModel):
         ("FEMALE", "Female"),
         ("OTHER", "Intersex / other"),
         ("NOT_STATED", "Not stated"),
+        ("NOT_SAID", "Prefer not to say"),
     ]
     # docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — the three registration tiers.
     IDENTITY_IDENTIFIED = "IDENTIFIED"
@@ -52,11 +53,34 @@ class Patient(TenantScopedModel):
         ("WAIVER", "Waiver / charity"),
         ("UNKNOWN", "Unknown"),
     ]
+    # Registration "Social & personal details" (served value sets of the same
+    # codes in apps.care_pathway.valuesets). Stored locally; employment,
+    # occupation and disability are not emitted in FHIR (project owner decision).
     MARITAL_STATUS_CHOICES = [
         ("SINGLE", "Single"),
         ("MARRIED", "Married"),
+        ("SEPARATED", "Separated"),
         ("DIVORCED", "Divorced"),
         ("WIDOWED", "Widowed"),
+        ("PARTNERED", "Partnered"),
+        ("NOT_STATED", "Not stated"),
+        ("NOT_SAID", "Prefer not to say"),
+    ]
+    EMPLOYMENT_STATUS_CHOICES = [
+        ("EMPLOYED", "Employed"),
+        ("SELF_EMPLOYED", "Self-employed"),
+        ("UNEMPLOYED", "Unemployed"),
+        ("STUDENT", "Student"),
+        ("RETIRED", "Retired"),
+        ("UNABLE_TO_WORK", "Unable to work"),
+        ("NOT_STATED", "Not stated"),
+        ("NOT_SAID", "Prefer not to say"),
+    ]
+    DISABILITY_CHOICES = [
+        ("NO", "No"),
+        ("YES", "Yes"),
+        ("NOT_SAID", "Prefer not to say"),
+        ("NOT_KNOWN", "Not known"),
     ]
     ALLERGY_STATUS_CHOICES = [
         ("NONE", "None"),
@@ -110,8 +134,12 @@ class Patient(TenantScopedModel):
     marital_status = models.CharField(max_length=10, choices=MARITAL_STATUS_CHOICES, blank=True)
     nationality = models.CharField(max_length=100, blank=True)
     occupation = models.CharField(max_length=150, blank=True)
-    employment_status = models.CharField(max_length=32, blank=True)
-    living_with_disability = models.BooleanField(default=False)
+    employment_status = models.CharField(
+        max_length=32, choices=EMPLOYMENT_STATUS_CHOICES, blank=True
+    )
+    # Was a Boolean before migration 0022 (True → YES, False → NO).
+    living_with_disability = models.CharField(max_length=10, choices=DISABILITY_CHOICES, blank=True)
+    disability_details = models.TextField("Disability / support needs", blank=True)
 
     national_id = models.CharField(max_length=32, blank=True)
     passport_number = models.CharField(max_length=32, blank=True)
@@ -249,13 +277,24 @@ class Patient(TenantScopedModel):
             return name
         if self.identity_status == self.IDENTITY_UNIDENTIFIED:
             return f"Unidentified person ({self.citramac_number or self.id})"
-        return f"Unknown person ({self.citramac_number or self.id})"
+        return f"UNKNOWN CLIENT — {self.citramac_number or self.id}"
 
 
 class EmergencyContact(TenantScopedModel):
+    # BROUGHT_BY: the person who brought or referred an emergency arrival
+    # (registration "Emergency — identity unknown"). Still a FHIR RelatedPerson,
+    # but never coded as next of kin.
+    ROLE_CONTACT = "CONTACT"
+    ROLE_BROUGHT_BY = "BROUGHT_BY"
+    ROLE_CHOICES = [
+        (ROLE_CONTACT, "Next of kin / contact"),
+        (ROLE_BROUGHT_BY, "Brought or referred the client"),
+    ]
+
     patient = models.ForeignKey(
         Patient, on_delete=models.PROTECT, related_name="emergency_contacts"
     )
+    contact_role = models.CharField(max_length=12, choices=ROLE_CHOICES, default=ROLE_CONTACT)
     name = models.CharField(max_length=255)
     relationship = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=32, blank=True)
@@ -347,6 +386,22 @@ class PatientIdentifier(TenantScopedModel):
 
     def __str__(self):
         return f"{self.kind}: {self.value}"
+
+
+class IdentifierSequence(models.Model):
+    """
+    Running counter for a number series that must never be reused —
+    `CIT-ER-000001` temporary (emergency) numbers. Deliberately not
+    tenant-scoped: `citramac_number` is unique across the deployment and the
+    TEMPORARY identifier system is one namespace, so the series is too. Holds a
+    count only, never patient data. Allocated under `select_for_update`.
+    """
+
+    name = models.CharField(max_length=32, unique=True)
+    last_value = models.PositiveBigIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.name}: {self.last_value}"
 
 
 class AllergyRecord(TenantScopedModel):

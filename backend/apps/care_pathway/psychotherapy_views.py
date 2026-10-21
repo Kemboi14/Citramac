@@ -45,6 +45,16 @@ class TherapyModelView(APIView):
         return Response(psy.model_row(psy.update_model(request.user, model, request.data)))
 
 
+class PsyClientListView(APIView):
+    """GET care/psychotherapy/clients/ — the Individual Psychotherapy list:
+    clients in therapy or with a psychotherapy care-plan action (session
+    counts only where the user has full MHP access; the view is audit-logged)."""
+
+    def get(self, request):
+        rows = psy.client_list(request.user)
+        return Response({"results": rows, "count": len(rows)})
+
+
 class ClientPsyNotesView(APIView):
     """GET the client's psychotherapy notes (summary); POST starts or resumes
     the clinician's draft for a therapy episode."""

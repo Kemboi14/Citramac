@@ -165,6 +165,7 @@ class PsychotherapySession(TenantScopedModel):
 
     SESSION_TYPE_CHOICES = [
         ("INDIVIDUAL", "Individual Psychotherapy"),
+        ("COUPLE", "Couple Therapy"),
         ("FAMILY", "Family Therapy"),
         ("GROUP", "Group Psychotherapy"),
     ]

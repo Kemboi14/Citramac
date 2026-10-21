@@ -11,6 +11,7 @@ import {
   type NewPatientPayload,
 } from "../../lib/clinicalApi";
 import { listStaff, type Staff } from "../../lib/governanceApi";
+import { useValueSets } from "../care/shared/useValueSets";
 
 const FIELD_CLASS =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.8px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green disabled:bg-surface-bg disabled:text-ink-400";
@@ -64,7 +65,7 @@ interface FormState {
   allergy_status: "NONE" | "ACTIVE_ALLERGIES";
   medication_allergies: string;
   food_allergies: string;
-  living_with_disability: "NO" | "YES";
+  living_with_disability: string;
   employment_status: string;
   referral_mode: string;
   referral_date: string;
@@ -124,6 +125,7 @@ export function PatientRegistrationModal({
   onRegistered: () => void;
 }) {
   const { accessToken, claims } = useAuth();
+  const vs = useValueSets();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [attested, setAttested] = useState(false);
@@ -191,7 +193,7 @@ export function PatientRegistrationModal({
     ["Nationality", form.nationality],
     ["Client Physical Address", form.address],
     ["Visit Type", form.visit_type ? CARE_LABEL[form.visit_type] : ""],
-    ["Marital Status", form.marital_status],
+    ["Marital Status", vs.label("marital-status", form.marital_status)],
     ["Occupation", form.occupation],
     ["Insurer Details", form.insurer_details],
     [
@@ -200,8 +202,8 @@ export function PatientRegistrationModal({
     ],
     ["Medication Allergies", form.medication_allergies],
     ["Food Allergies", form.food_allergies],
-    ["Living With Disability", form.living_with_disability === "YES" ? "Yes" : "No"],
-    ["Employment Status", form.employment_status],
+    ["Living With Disability", vs.label("disability-status", form.living_with_disability)],
+    ["Employment Status", vs.label("employment-status", form.employment_status)],
     ["Mode of Referral", form.referral_mode],
     ["Referral Date", form.referral_date],
     ["Staff Registering", staffRegisteringLabel],
@@ -237,7 +239,7 @@ export function PatientRegistrationModal({
         occupation: form.occupation.trim(),
         insurer_details: form.insurer_details.trim(),
         allergy_status: form.allergy_status,
-        living_with_disability: form.living_with_disability === "YES",
+        living_with_disability: form.living_with_disability,
         employment_status: form.employment_status,
         referral_source: form.referral_source,
         referral_mode: form.referral_mode.trim(),
@@ -518,10 +520,11 @@ export function PatientRegistrationModal({
                   onChange={(e) => set("marital_status", e.target.value)}
                 >
                   <option value="">Select</option>
-                  <option value="SINGLE">Single</option>
-                  <option value="MARRIED">Married</option>
-                  <option value="DIVORCED">Divorced</option>
-                  <option value="WIDOWED">Widowed</option>
+                  {vs.options("marital-status").map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className={LABEL_CLASS}>
@@ -591,10 +594,9 @@ export function PatientRegistrationModal({
                   <PillRadio
                     value={form.living_with_disability}
                     onChange={(v) => set("living_with_disability", v)}
-                    options={[
-                      { value: "NO", label: "No" },
-                      { value: "YES", label: "Yes" },
-                    ]}
+                    options={vs
+                      .options("disability-status")
+                      .map((o) => ({ value: o.code, label: o.display }))}
                   />
                 </div>
               </label>
@@ -606,12 +608,11 @@ export function PatientRegistrationModal({
                   onChange={(e) => set("employment_status", e.target.value)}
                 >
                   <option value="">Select</option>
-                  <option>Employed</option>
-                  <option>Unemployed</option>
-                  <option>Self-employed</option>
-                  <option>Student</option>
-                  <option>Retired</option>
-                  <option>Other</option>
+                  {vs.options("employment-status").map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>

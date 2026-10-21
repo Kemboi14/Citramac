@@ -14,3 +14,21 @@ def sweep_legal_statuses():
 
     with platform_admin_context():
         legal_status.sweep_all()
+
+
+@shared_task
+def translate_psy_answer(note_id, question_key, digest):
+    """Psychotherapy note: translate one Kiswahili / Sheng answer into English
+    (AI assistance, psy_ai.py). Stored beside the original with provenance."""
+    from . import psychotherapy
+
+    psychotherapy.run_translation(note_id, question_key, digest)
+
+
+@shared_task
+def reword_psy_note(note_id, token):
+    """Psychotherapy note: reword the organised sections in trauma-informed
+    language (AI assistance). Failure leaves the rule-based text, logged."""
+    from . import psychotherapy
+
+    psychotherapy.run_reword(note_id, token)

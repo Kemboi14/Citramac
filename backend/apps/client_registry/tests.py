@@ -987,3 +987,137 @@ class IdentifiedPatientValidationTests(APITestCase):
             reverse("patient-list"), {"identity_status": "UNKNOWN"}, format="json", **self.auth
         )
         self.assertEqual(response.status_code, 201)
+
+    def test_unknown_identity_client_gets_a_temporary_number(self):
+        response = self.client.post(
+            reverse("patient-list"), {"identity_status": "UNKNOWN"}, format="json", **self.auth
+        )
+        self.assertRegex(response.data["citramac_number"], r"^CIT-ER-\d{6}$")
+
+    def test_social_details_take_the_served_codes_not_a_boolean(self):
+        client = {
+            "first_name": "Amina",
+            "last_name": "Kamau",
+            "gender": "NOT_SAID",
+            "date_of_birth": "1990-01-01",
+            "marital_status": "PARTNERED",
+            "employment_status": "UNABLE_TO_WORK",
+        }
+        created = self.client.post(
+            reverse("patient-list"),
+            {**client, "living_with_disability": "YES", "disability_details": "Low vision"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(created.data["living_with_disability"], "YES")
+        self.assertEqual(created.data["disability_details"], "Low vision")
+        boolean = self.client.post(
+            reverse("patient-list"),
+            {**client, "living_with_disability": True},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(boolean.status_code, 400)
+        self.assertIn("living_with_disability", boolean.data)
+
+
+class TemporaryNumberTests(APITestCase):
+    """CIT-ER temporary numbers (registration v4); ER- numbers issued earlier
+    are kept unchanged and still read as temporary."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org T", slug="orgt", facility_type="MENTAL_HEALTH_MHP"
+            )
+
+    def test_new_temporary_numbers_are_a_running_six_digit_series(self):
+        from .identity import generate_citramac_number
+
+        with platform_admin_context():
+            first = generate_citramac_number(self.org, temporary=True)
+            second = generate_citramac_number(self.org, temporary=True)
+            permanent = generate_citramac_number(self.org)
+        self.assertRegex(first, r"^CIT-ER-\d{6}$")
+        self.assertEqual(int(second[-6:]), int(first[-6:]) + 1)
+        self.assertFalse(permanent.startswith(("CIT-ER-", "ER-")))
+
+    def test_old_and_new_prefixes_are_both_temporary(self):
+        from .identity import is_temporary_number
+
+        self.assertTrue(is_temporary_number("ER-202610ORGT-003"))
+        self.assertTrue(is_temporary_number("CIT-ER-000001"))
+        self.assertFalse(is_temporary_number("202610ORGT-003"))
+        self.assertFalse(is_temporary_number(""))
+
+    def test_an_existing_er_number_keeps_its_value_and_its_temporary_slice(self):
+        from .identity import sync_identifiers
+        from .models import PatientIdentifier
+
+        with platform_admin_context():
+            old = Patient.objects.create(
+                organization=self.org,
+                identity_status="UNKNOWN",
+                citramac_number="ER-202609ORGT-001",
+            )
+            new = Patient.objects.create(
+                organization=self.org, identity_status="UNKNOWN", citramac_number="CIT-ER-000042"
+            )
+            for patient in (old, new):
+                sync_identifiers(patient)
+            kinds = dict(
+                PatientIdentifier.objects.filter(patient__in=[old, new]).values_list(
+                    "value", "kind"
+                )
+            )
+            old.refresh_from_db()
+        self.assertEqual(old.citramac_number, "ER-202609ORGT-001")
+        self.assertEqual(kinds, {"ER-202609ORGT-001": "TEMPORARY", "CIT-ER-000042": "TEMPORARY"})
+
+    def test_unknown_display_name_shows_the_temporary_number(self):
+        patient = Patient(identity_status="UNKNOWN", citramac_number="CIT-ER-000007")
+        self.assertEqual(patient.get_full_name(), "UNKNOWN CLIENT — CIT-ER-000007")
+
+
+class RegistrationSocialMigrationTests(APITestCase):
+    """Migration 0022's column conversions, run against the live database so
+    the exact SQL expressions are what is tested."""
+
+    def migration(self):
+        import importlib
+
+        return importlib.import_module(
+            "apps.client_registry.migrations.0022_registration_social_emergency"
+        )
+
+    def test_disability_boolean_becomes_a_code(self):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {self.migration().DISABILITY_USING} FROM (VALUES (true), (false), "
+                "(NULL::boolean)) AS t(living_with_disability)"
+            )
+            self.assertEqual([row[0] for row in cursor.fetchall()], ["YES", "NO", ""])
+
+    def test_free_text_employment_maps_to_codes_and_unknown_text_is_kept(self):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {self.migration().EMPLOYMENT_USING} FROM (VALUES ('Employed'), "
+                "('Self-employed'), ('Student'), ('Other'), ('')) AS t(employment_status)"
+            )
+            self.assertEqual(
+                [row[0] for row in cursor.fetchall()],
+                ["EMPLOYED", "SELF_EMPLOYED", "STUDENT", "Other", ""],
+            )
+
+    def test_column_is_now_coded(self):
+        field = Patient._meta.get_field("living_with_disability")
+        self.assertEqual(field.get_internal_type(), "CharField")
+        self.assertEqual(
+            [code for code, _ in field.choices], ["NO", "YES", "NOT_SAID", "NOT_KNOWN"]
+        )
