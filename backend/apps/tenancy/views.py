@@ -128,7 +128,15 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 support_phone=data.get("support_phone", ""),
                 website=data.get("website", ""),
                 theme_overrides=data.get("theme_overrides") or {},
+                psy_ai_allowed=data.get("psy_ai_allowed", False),
+                psy_dictation_allowed=data.get("psy_dictation_allowed", False),
             )
+            if organization.psy_ai_allowed or organization.psy_dictation_allowed:
+                organization.psy_assist_changed_by = (
+                    f"{request.user.get_full_name() or request.user.email} (Super Admin)"
+                )
+                organization.psy_assist_changed_at = timezone.now()
+                organization.save(update_fields=["psy_assist_changed_by", "psy_assist_changed_at"])
 
             plan_code = data.get("subscription_plan_code")
             if plan_code:

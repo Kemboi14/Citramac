@@ -305,6 +305,30 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         self.assertEqual(consent["provision"]["type"], "deny")
         self.assertIn("restricted", consent["category"][0]["text"])
 
+    def test_ai_note_consent_matches_the_published_examples(self):
+        import json
+        from pathlib import Path
+
+        folder = Path(__file__).parents[1] / "dha_interop" / "fhir_examples"
+        patient = self.patient()
+        for granted, name in (
+            (True, "ai-consent-routine-agreed"),
+            (False, "ai-consent-edge-withdrawn-after-agreeing"),
+        ):
+            with self.subTest(example=name), platform_admin_context():
+                record = capture_consent(
+                    patient, self.nurse, granted, "v1", "text", consent_type="AI_NOTE_PROCESSING"
+                )
+                built = build_hie_consent(record).model_dump(mode="json", exclude_none=True)
+                self.assertEqual(validate_resource(built), [], built)
+                published = next(
+                    e["resource"]
+                    for e in json.loads((folder / f"{name}.json").read_text())["entry"]
+                    if e["resource"]["resourceType"] == "Consent"
+                )
+                for key in ("status", "scope", "category", "provision"):
+                    self.assertEqual(built[key], published[key], key)
+
     def test_not_asked_produces_no_consent_resource(self):
         patient = self.patient()
         with platform_admin_context():
@@ -691,6 +715,41 @@ class FhirR4ConformanceRegistrationExamplesTests(SimpleTestCase):
         for path in paths:
             with self.subTest(example=path.name):
                 self.assertEqual(validate_bundle(json.loads(path.read_text())), {})
+
+    def test_ai_consent_examples_are_valid_r4_with_who_recorded_them(self):
+        import json
+
+        from apps.dha_interop.fhir_validation.validator import validate_bundle
+
+        paths = sorted(self._folder().glob("ai-consent-*.json"))
+        self.assertGreaterEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(example=path.name):
+                bundle = json.loads(path.read_text())
+                self.assertEqual(validate_bundle(bundle), {})
+                resources = [e["resource"] for e in bundle["entry"]]
+                consents = [r for r in resources if r["resourceType"] == "Consent"]
+                for consent in consents:
+                    # By whom and when (CLAUDE.md §3 item 4).
+                    provenance = next(
+                        r for r in resources
+                        if r["resourceType"] == "Provenance"
+                        and r["target"][0]["reference"] == f"Consent/{consent['id']}"
+                    )
+                    self.assertTrue(provenance["agent"][0]["who"]["display"])
+
+    def test_ai_consent_not_asked_example_has_no_consent(self):
+        import json
+
+        bundle = json.loads((self._folder() / "ai-consent-omission-not-asked.json").read_text())
+        self.assertNotIn("Consent", [e["resource"]["resourceType"] for e in bundle["entry"]])
+        withdrawn = json.loads(
+            (self._folder() / "ai-consent-edge-withdrawn-after-agreeing.json").read_text()
+        )
+        consent = next(
+            e["resource"] for e in withdrawn["entry"] if e["resource"]["resourceType"] == "Consent"
+        )
+        self.assertEqual(consent["provision"]["type"], "deny")
 
     def test_the_refusal_example_withholds_sharing(self):
         import json

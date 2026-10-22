@@ -144,7 +144,7 @@ function AiConsentCard({
           {consent.captured_at
             ? `${consent.decision === "YES" ? "Agreed" : "Declined or withdrawn"} · ${formatDateTime(
                 consent.captured_at,
-              )}${consent.captured_by ? ` · ${consent.captured_by}` : ""} · wording v${
+              )}${consent.captured_by ? ` · ${consent.captured_by}` : ""} · wording version ${
                 consent.consent_text_version
               }`
             : "Not asked — AI assistance is not used for this client's psychotherapy notes."}
@@ -223,7 +223,7 @@ function ConsentCard({
       setNote(
         `${saved.granted ? "Consent granted" : "Declined / withdrawn"} recorded · ${formatDateTime(
           saved.captured_at,
-        )} · wording v${saved.consent_text_version}`,
+        )} · wording version ${saved.consent_text_version}`,
       );
       onSaved();
     } catch (err) {

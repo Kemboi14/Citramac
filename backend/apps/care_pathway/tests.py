@@ -633,6 +633,37 @@ class JourneyAndBillingTests(CarePathwayApiTestCase):
         self.assertTrue(legal.data["current_consent"]["granted"])
         self.assertEqual(legal.data["data_sharing_consent"][0]["consent_text_version"], "v1")
 
+    def test_ai_note_wording_is_versioned_separately_from_hie_wording(self):
+        with platform_admin_context():
+            self.nurse.roles.add(Role.objects.get(name="Org Admin", organization__isnull=True))
+        templates = reverse("care-consent-templates")
+
+        def post(body):
+            return self.client.post(templates, body, format="json", **self.auth)
+
+        self.assertEqual(post({"version": "v1", "text": "HIE wording."}).status_code, 201)
+        ai = {"version": "v1", "text": "AI wording.", "consent_type": "AI_NOTE_PROCESSING"}
+        # The same label is free per type, and publishing AI wording leaves HIE active.
+        self.assertEqual(post(ai).status_code, 201)
+        self.assertEqual(post({**ai, "version": "v2"}).status_code, 201)
+        self.assertEqual(post({**ai, "consent_type": "NOT_A_TYPE"}).status_code, 400)
+        active = {
+            (t["consent_type"], t["version"])
+            for t in self.client.get(templates, **self.auth).data["results"]
+            if t["active"]
+        }
+        self.assertEqual(active, {("DATA_SHARING_HIE", "v1"), ("AI_NOTE_PROCESSING", "v2")})
+        # Each client consent is recorded against its own type's wording.
+        url = reverse("care-client-consent", args=[self.patient_id])
+        response = self.client.post(
+            url, {"granted": True, "consent_type": "AI_NOTE_PROCESSING"}, format="json", **self.auth
+        )
+        self.assertEqual(response.data["consent_text_version"], "v2")
+        legal = self.client.get(reverse("care-client-legal", args=[self.patient_id]), **self.auth)
+        self.assertEqual(legal.data["ai_consent"]["decision"], "YES")
+        # AI consent never changes the client's HIE data-sharing flag.
+        self.assertFalse(legal.data["current_consent"]["granted"])
+
     def test_alert_can_be_resolved_and_leaves_the_banner(self):
         banner = self.client.get(reverse("care-client-banner", args=[self.patient_id]), **self.auth)
         alert_id = banner.data["alerts"][0]["id"]

@@ -1,0 +1,42 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "88888888-8888-4888-8888-888888888888",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610CAFR-034"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Odhiambo",
+            "given": [
+              "Brian"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1979-04-12"
+      }
+    }
+  ]
+}

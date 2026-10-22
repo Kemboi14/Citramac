@@ -69,6 +69,8 @@ export interface CreateOrganizationPayload {
   support_phone?: string;
   website?: string;
   theme_overrides?: ThemeOverrides;
+  psy_ai_allowed?: boolean;
+  psy_dictation_allowed?: boolean;
   org_admin: { email: string; first_name: string; last_name: string; phone?: string };
 }
 

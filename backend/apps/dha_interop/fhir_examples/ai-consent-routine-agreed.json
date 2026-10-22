@@ -1,0 +1,96 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "55555555-5555-4555-8555-555555555555",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610CAFR-031"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "family": "Wanjiru",
+            "given": [
+              "Grace"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1990-11-08"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Consent",
+        "id": "c5555555-5555-4555-8555-555555555555",
+        "status": "active",
+        "scope": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+              "code": "patient-privacy"
+            }
+          ]
+        },
+        "category": [
+          {
+            "text": "AI-assisted processing of psychotherapy notes"
+          }
+        ],
+        "patient": {
+          "reference": "Patient/55555555-5555-4555-8555-555555555555"
+        },
+        "dateTime": "2026-10-22T10:15:00+03:00",
+        "performer": [
+          {
+            "reference": "Patient/55555555-5555-4555-8555-555555555555"
+          }
+        ],
+        "provision": {
+          "type": "permit"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-c5555555-5555-4555-8555-555555555555",
+        "target": [
+          {
+            "reference": "Consent/c5555555-5555-4555-8555-555555555555"
+          }
+        ],
+        "recorded": "2026-10-22T10:15:00+03:00",
+        "agent": [
+          {
+            "type": {
+              "text": "author"
+            },
+            "who": {
+              "display": "Mary Achieng"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

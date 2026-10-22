@@ -489,6 +489,27 @@ class OrganizationConsoleApiTests(APITestCase):
             admin_user = User.objects.get(email="admin@branded-wellness.test")
             self.assertEqual(admin_user.phone, "+254711111111")
 
+    def test_create_organization_may_allow_psychotherapy_assist_but_leaves_it_off(self):
+        response = self.client.post(
+            reverse("platform-organizations"),
+            {
+                "name": "Assist Clinic",
+                "slug": "assist-clinic",
+                "org_type": "HOSPITAL",
+                "facility_type": "MENTAL_HEALTH_MHP",
+                "psy_ai_allowed": True,
+                "org_admin": {"email": "admin@assist.test", "first_name": "A", "last_name": "B"},
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["psy_ai_allowed"])
+        self.assertFalse(response.data["psy_dictation_allowed"])
+        # Allowed is not on: only the new organisation's Org Admin turns it on.
+        self.assertFalse(response.data["psy_ai_enabled"])
+        self.assertIn("(Super Admin)", response.data["psy_assist_changed_by"])
+
     def test_create_organization_with_light_and_dark_theme(self):
         payload = {
             "name": "Themed Clinic",

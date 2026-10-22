@@ -86,6 +86,10 @@ class CreateOrganizationSerializer(serializers.Serializer):
     # Distinct from primary_color above, which only recolors the pre-login
     # tenant login panel. Status colors are platform-wide only.
     theme_overrides = serializers.JSONField(required=False)
+    # Psychotherapy note assistance: Super Admin may allow it at creation; it
+    # stays off until the new organisation's Org Admin turns it on.
+    psy_ai_allowed = serializers.BooleanField(required=False, default=False)
+    psy_dictation_allowed = serializers.BooleanField(required=False, default=False)
     org_admin = OrgAdminInviteSerializer()
 
     def validate_slug(self, value):
