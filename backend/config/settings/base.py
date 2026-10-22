@@ -490,18 +490,21 @@ INTAKE_RESTRICTED_VIEW_ROLES = env.list(
 )
 # Psychotherapy session note dictation (master prompt X-12). The browser Web
 # Speech API sends audio to the browser vendor's speech service in most
-# browsers, so it stays off until the organisation's data-protection review
-# approves that processing — VERIFY before enabling. Off = typing only.
-PSYCHOTHERAPY_DICTATION_ENABLED = env.bool("PSYCHOTHERAPY_DICTATION_ENABLED", default=False)
+# browsers. This is the platform kill switch only: dictation is off for every
+# organisation until Super Admin allows it and that organisation's Org Admin
+# turns it on after its data-protection review (Organization.psy_dictation_*).
+PSYCHOTHERAPY_DICTATION_ENABLED = env.bool("PSYCHOTHERAPY_DICTATION_ENABLED", default=True)
 # Psychotherapy note AI assistance (Kiswahili/Sheng → English translation and
-# trauma-informed rewording of the generated note sections). Off by default:
-# when on, the clinician's session text is sent server-side to the Anthropic
-# API (the browser never calls a model). VERIFY before enabling: the
-# organisation's data-protection review of sending psychotherapy content to
-# Anthropic as a processor, and the client-consent position for it. Off, or on
-# but failing, the note is organised by the rule-based organiser
-# (care_pathway/psy_organizer.py) and translations show as not available.
-PSYCHOTHERAPY_AI_ENABLED = env.bool("PSYCHOTHERAPY_AI_ENABLED", default=False)
+# trauma-informed rewording of the generated note sections). When used, the
+# clinician's session text is sent server-side to the Anthropic API (the
+# browser never calls a model). Platform kill switch + API key here; then, per
+# organisation, Super Admin allows and the Org Admin turns on
+# (Organization.psy_ai_*), and per client a recorded "AI-assisted note
+# processing" consent of Yes is required (care_pathway/psy_ai.py). VERIFY
+# before allowing an organisation: the data-processing agreement with Anthropic
+# and the organisation's own data-protection review. Otherwise the note is
+# organised by the rule-based organiser (care_pathway/psy_organizer.py).
+PSYCHOTHERAPY_AI_ENABLED = env.bool("PSYCHOTHERAPY_AI_ENABLED", default=True)
 # From the environment only — never committed.
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 PSYCHOTHERAPY_AI_MODEL = env("PSYCHOTHERAPY_AI_MODEL", default="claude-opus-5-5")

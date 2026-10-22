@@ -789,7 +789,7 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
           </button>
         </div>
         {!config.dictation_enabled && (
-          <p className="text-center text-[12px] text-ink-500">Dictation is turned off for this organisation (browser dictation sends the audio to the browser maker’s speech service). Questions can still be read aloud on this device.</p>
+          <p className="text-center text-[12px] text-ink-500">Dictation is turned off for this organisation (browser dictation sends the audio to the browser maker’s speech service). Your Org Admin can turn it on under Data Protection. Questions can still be read aloud on this device.</p>
         )}
         <div className="flex flex-wrap justify-center gap-2">
           <button type="button" className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green" onClick={() => { quiet(); setExample(true); if (wide) setPanel("open"); }}>Try an example session</button>

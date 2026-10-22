@@ -41,6 +41,13 @@ export interface Organization {
   support_phone: string;
   website: string;
   theme_overrides: ThemeOverrides;
+  /** Psychotherapy assistance: the Super Admin allows, the Org Admin turns on. */
+  psy_ai_allowed: boolean;
+  psy_dictation_allowed: boolean;
+  psy_ai_enabled: boolean;
+  psy_dictation_enabled: boolean;
+  psy_assist_changed_by: string;
+  psy_assist_changed_at: string | null;
 }
 
 export interface CreateOrganizationPayload {

@@ -667,9 +667,11 @@ export function getClientSnapshot(accessToken: string, patientId: string) {
   return apiRequest<ClientSnapshot>(`/care/clients/${patientId}/snapshot/`, { accessToken });
 }
 
+export type ConsentType = "DATA_SHARING_HIE" | "AI_NOTE_PROCESSING";
+
 export interface ConsentTemplate {
   id: string;
-  consent_type: "DATA_SHARING_HIE";
+  consent_type: ConsentType;
   version: string;
   text: string;
   active: boolean;
@@ -680,6 +682,16 @@ export interface ConsentTemplate {
 export interface ClientLegal {
   active_consent_template: ConsentTemplate | null;
   current_consent: { granted: boolean; captured_at: string | null };
+  /** AI-assisted psychotherapy note processing — offered only where the
+   * organisation has turned the AI assistance on. */
+  ai_consent: {
+    offered: boolean;
+    template: ConsentTemplate | null;
+    decision: "YES" | "NO" | "NOT_ASKED" | string;
+    captured_at: string | null;
+    captured_by: string;
+    consent_text_version: string;
+  };
   data_sharing_consent: {
     id: string;
     consent_type: string;
@@ -714,13 +726,22 @@ export interface ClientLegal {
   }[];
 }
 
-export function recordDataSharingConsent(accessToken: string, patientId: string, granted: boolean) {
+export function recordDataSharingConsent(
+  accessToken: string,
+  patientId: string,
+  granted: boolean,
+  consentType: ConsentType = "DATA_SHARING_HIE",
+) {
   return apiRequest<{
     id: string;
     granted: boolean;
     consent_text_version: string;
     captured_at: string;
-  }>(`/care/clients/${patientId}/consent/`, { method: "POST", body: { granted }, accessToken });
+  }>(`/care/clients/${patientId}/consent/`, {
+    method: "POST",
+    body: { granted, consent_type: consentType },
+    accessToken,
+  });
 }
 
 export function listConsentTemplates(accessToken: string) {
@@ -729,7 +750,7 @@ export function listConsentTemplates(accessToken: string) {
 
 export function createConsentTemplate(
   accessToken: string,
-  payload: { version: string; text: string; consent_type?: "DATA_SHARING_HIE" },
+  payload: { version: string; text: string; consent_type?: ConsentType },
 ) {
   return apiRequest<ConsentTemplate>("/care/consent-templates/", {
     method: "POST",

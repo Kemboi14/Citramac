@@ -99,10 +99,45 @@ class AIUnavailable(Exception):
     timeout, refusal, malformed output). The caller degrades to rule-based."""
 
 
+AI_CONSENT = "AI_NOTE_PROCESSING"
+
+
 def enabled():
+    """The platform side: the server switch is on and an API key is configured."""
     return bool(getattr(settings, "PSYCHOTHERAPY_AI_ENABLED", False)) and bool(
         getattr(settings, "ANTHROPIC_API_KEY", "")
     )
+
+
+def org_enabled(organization):
+    """Allowed for the organisation by Super Admin and turned on by its Org Admin."""
+    return (
+        enabled()
+        and organization is not None
+        and organization.psy_ai_allowed
+        and organization.psy_ai_enabled
+    )
+
+
+def client_consented(patient):
+    """The client's latest unexpired decision on AI-assisted note processing is Yes."""
+    from apps.client_registry.consent import current_decision
+
+    return current_decision(patient, AI_CONSENT) == "YES"
+
+
+def enabled_for(patient):
+    """Whether this client's session text may be sent to the AI service now."""
+    return org_enabled(patient.organization) and client_consented(patient)
+
+
+def unavailable_reason(patient):
+    """Why the note is organised by rule for this client ("" when AI is used)."""
+    if not org_enabled(patient.organization):
+        return ""
+    if not client_consented(patient):
+        return "AI assistance not used — the client has not agreed to AI-assisted note processing."
+    return ""
 
 
 def model_name():

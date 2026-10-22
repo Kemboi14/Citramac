@@ -68,6 +68,9 @@ export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
       <ErrorNote>{error}</ErrorNote>
       <LegalAdmissionStatus patientId={patientId} onChanged={refresh} />
       <ConsentCard patientId={patientId} legal={data} onSaved={refresh} />
+      {data.ai_consent && (data.ai_consent.offered || data.ai_consent.decision !== "NOT_ASKED") && (
+        <AiConsentCard patientId={patientId} consent={data.ai_consent} onSaved={refresh} />
+      )}
       <CapacityConsentCard patientId={patientId} />
       <SubjectRequestsCard patientId={patientId} />
       <Card title="Admission legal status">
@@ -84,6 +87,109 @@ export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
         )}
       </Card>
     </div>
+  );
+}
+
+/** Consent to AI-assisted processing of this client's psychotherapy notes.
+ * Without a Yes the psychotherapy workspace never sends their text to the AI
+ * service; the clinician organises the note by hand. */
+function AiConsentCard({
+  patientId,
+  consent,
+  onSaved,
+}: {
+  patientId: string;
+  consent: ClientLegal["ai_consent"];
+  onSaved: () => void;
+}) {
+  const { accessToken } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const template = consent.template;
+
+  const record = async (granted: boolean) => {
+    if (!accessToken || !template) return;
+    const question = granted
+      ? `Record that the client AGREED to AI-assisted processing of their psychotherapy notes (wording version ${template.version})?`
+      : `Record that the client DECLINED or WITHDREW agreement to AI-assisted note processing (wording version ${template.version})?`;
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await recordDataSharingConsent(accessToken, patientId, granted, "AI_NOTE_PROCESSING");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't record the consent decision.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title="AI-assisted note processing"
+      aside={
+        consent.decision === "YES" ? (
+          <Tag tone="brand">Agreed</Tag>
+        ) : consent.decision === "NO" ? (
+          <Tag tone="risk">Declined or withdrawn</Tag>
+        ) : (
+          <Tag>Not asked</Tag>
+        )
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <p className="text-[13px] text-ink-900">
+          <span className="font-semibold">Current status: </span>
+          {consent.captured_at
+            ? `${consent.decision === "YES" ? "Agreed" : "Declined or withdrawn"} · ${formatDateTime(
+                consent.captured_at,
+              )}${consent.captured_by ? ` · ${consent.captured_by}` : ""} · wording v${
+                consent.consent_text_version
+              }`
+            : "Not asked — AI assistance is not used for this client's psychotherapy notes."}
+        </p>
+        {!consent.offered && (
+          <p className="text-xs text-ink-500">
+            AI note assistance is currently turned off for this organisation.
+          </p>
+        )}
+        {template ? (
+          <div className="rounded-lg border border-surface-border bg-surface-bg p-3.5">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              Facility consent wording · version {template.version}
+            </div>
+            <blockquote className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-900">
+              {template.text}
+            </blockquote>
+          </div>
+        ) : (
+          <Callout tone="warning" role="status">
+            No AI-assisted note processing wording is configured. An Org Admin must publish it first
+            (Org Admin → Consent wording → AI-assisted notes) before this consent can be recorded.
+          </Callout>
+        )}
+        <ErrorNote>{error}</ErrorNote>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={BTN}
+            disabled={!template || busy}
+            onClick={() => void record(true)}
+          >
+            Record agreed
+          </button>
+          <button
+            type="button"
+            className={BTN_GHOST}
+            disabled={!template || busy}
+            onClick={() => void record(false)}
+          >
+            Record declined / withdrawn
+          </button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -309,22 +415,23 @@ function AdmissionLegal({
           consent_notes: form.consent_notes,
         }
       : involuntary
-      ? {
-          ...shared,
-          legal_status: form.legal_status,
-          legal_order_reference: form.legal_order_reference,
-          legal_order_date: form.legal_order_date || null,
-          legal_review_due_date: form.legal_review_due_date || null,
-          authorizing_professional: form.authorizing_professional,
-          legal_rationale: form.legal_rationale,
-          oversight_notes: form.oversight_notes,
-        }
-      : {
-          ...shared,
-          consent_status: form.consent_status,
-          capacity_assessed: form.capacity === "YES" ? true : form.capacity === "NO" ? false : null,
-          consent_notes: form.consent_notes,
-        };
+        ? {
+            ...shared,
+            legal_status: form.legal_status,
+            legal_order_reference: form.legal_order_reference,
+            legal_order_date: form.legal_order_date || null,
+            legal_review_due_date: form.legal_review_due_date || null,
+            authorizing_professional: form.authorizing_professional,
+            legal_rationale: form.legal_rationale,
+            oversight_notes: form.oversight_notes,
+          }
+        : {
+            ...shared,
+            consent_status: form.consent_status,
+            capacity_assessed:
+              form.capacity === "YES" ? true : form.capacity === "NO" ? false : null,
+            consent_notes: form.consent_notes,
+          };
     try {
       await updateAdmission(accessToken, a.id, payload);
       setEditing(false);

@@ -5,13 +5,24 @@ import {
   createConsentTemplate,
   listConsentTemplates,
   type ConsentTemplate,
+  type ConsentType,
 } from "../../lib/carePathwayApi";
 
-// Org Admin — the facility's data-sharing (HIE) consent wording. The legal
+// Org Admin — the facility's consent wording: data sharing (HIE) and
+// AI-assisted processing of psychotherapy notes, each versioned separately. The legal
 // text is set by the facility and never written or suggested by the system
 // (CLAUDE.md §6). Every consent record keeps the version the client was shown,
 // so wording is never edited in place: saving creates a new version and the
 // server retires the previous one.
+
+const KINDS: { type: ConsentType; label: string; subject: string }[] = [
+  { type: "DATA_SHARING_HIE", label: "Data sharing (HIE)", subject: "data-sharing consent" },
+  {
+    type: "AI_NOTE_PROCESSING",
+    label: "AI-assisted notes",
+    subject: "consent to AI-assisted psychotherapy note processing",
+  },
+];
 
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card shadow-sm";
 const CARD_HEADER =
@@ -48,9 +59,13 @@ function Wording({ text }: { text: string }) {
 }
 
 function NewVersionForm({
+  consentType,
+  subject,
   hasActive,
   onCreated,
 }: {
+  consentType: ConsentType;
+  subject: string;
   hasActive: boolean;
   onCreated: (template: ConsentTemplate) => void;
 }) {
@@ -78,7 +93,7 @@ function NewVersionForm({
     if (!accessToken || !ready) return;
     setSaving(true);
     setError(null);
-    createConsentTemplate(accessToken, { version: version.trim(), text })
+    createConsentTemplate(accessToken, { version: version.trim(), text, consent_type: consentType })
       .then((created) => {
         onCreated(created);
         setVersion("");
@@ -174,7 +189,7 @@ function NewVersionForm({
               Publish version &ldquo;{version.trim()}&rdquo; as the consent wording?
             </p>
             <p>
-              From now on clinicians will record data-sharing consent against this exact wording.
+              From now on clinicians will record {subject} against this exact wording.
               {hasActive && " The current version will be retired."} Published wording cannot be
               edited; a correction means publishing another version.
             </p>
@@ -225,13 +240,18 @@ export function ConsentWordingPage() {
     };
   }, [accessToken]);
 
-  const active = templates?.find((t) => t.active) ?? null;
-  const history = templates?.filter((t) => !t.active) ?? [];
+  const [kindType, setKindType] = useState<ConsentType>("DATA_SHARING_HIE");
+  const kind = KINDS.find((k) => k.type === kindType) ?? KINDS[0];
+  const ofKind = templates?.filter((t) => (t.consent_type || "DATA_SHARING_HIE") === kind.type);
+  const active = ofKind?.find((t) => t.active) ?? null;
+  const history = ofKind?.filter((t) => !t.active) ?? [];
 
   const onCreated = (created: ConsentTemplate) => {
     setTemplates((prev) => [
       created,
-      ...(prev ?? []).map((t) => (t.active ? { ...t, active: false } : t)),
+      ...(prev ?? []).map((t) =>
+        t.active && t.consent_type === created.consent_type ? { ...t, active: false } : t,
+      ),
     ]);
     setNotice(`Version “${created.version}” is now the active consent wording.`);
   };
@@ -244,11 +264,12 @@ export function ConsentWordingPage() {
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Consent Wording</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-500">
-          Clinicians record each client&rsquo;s data-sharing (HIE) consent against this exact
-          wording, and every consent record keeps a copy of the version the client was shown. So the
-          wording is never edited in place: changing it publishes a new version and retires the
-          previous one, which stays in the history below. The wording is your facility&rsquo;s legal
-          text — none is suggested or filled in for you.
+          Clinicians record each client&rsquo;s data-sharing (HIE) consent — and, where AI note
+          assistance is on, consent to AI-assisted psychotherapy note processing — against this
+          exact wording, and every consent record keeps a copy of the version the client was shown.
+          So the wording is never edited in place: changing it publishes a new version and retires
+          the previous one, which stays in the history below. The wording is your facility&rsquo;s
+          legal text — none is suggested or filled in for you.
         </p>
       </div>
 
@@ -271,6 +292,27 @@ export function ConsentWordingPage() {
 
       {templates && (
         <>
+          <div role="tablist" aria-label="Consent type" className="flex flex-wrap gap-1.5">
+            {KINDS.map((k) => (
+              <button
+                key={k.type}
+                type="button"
+                role="tab"
+                aria-selected={k.type === kind.type}
+                onClick={() => {
+                  setKindType(k.type);
+                  setNotice(null);
+                }}
+                className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                  k.type === kind.type
+                    ? "border-brand-green bg-brand-green text-on-primary"
+                    : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
           <section className={CARD_CLASS} aria-labelledby="consent-active-title">
             <div className={CARD_HEADER}>
               <h2 id="consent-active-title" className={CARD_TITLE}>
@@ -295,15 +337,20 @@ export function ConsentWordingPage() {
                 <div className="flex gap-2.5 rounded-lg border border-l-[3px] border-priority-orange bg-priority-orange-tint px-3.5 py-3 text-[12.5px] text-priority-orange">
                   <div>
                     <strong>No consent wording is set.</strong> Clinicians can&rsquo;t record a
-                    client&rsquo;s data-sharing consent until your facility publishes a version
-                    below.
+                    client&rsquo;s {kind.subject} until your facility publishes a version below.
                   </div>
                 </div>
               )}
             </div>
           </section>
 
-          <NewVersionForm hasActive={!!active} onCreated={onCreated} />
+          <NewVersionForm
+            key={kind.type}
+            consentType={kind.type}
+            subject={kind.subject}
+            hasActive={!!active}
+            onCreated={onCreated}
+          />
 
           <section className={CARD_CLASS} aria-labelledby="consent-history-title">
             <div className={CARD_HEADER}>

@@ -231,8 +231,10 @@ def config(user):
         "attestation_text": ATTESTATION_TEXT,
         # X-12: browser dictation is off unless the organisation has approved it —
         # most browsers send the audio to the vendor's speech service.
-        "dictation_enabled": bool(getattr(settings, "PSYCHOTHERAPY_DICTATION_ENABLED", False)),
-        "ai_enabled": psy_ai.enabled(),
+        # Two keys per organisation (Super Admin allows, Org Admin turns on); AI
+        # also needs each client's consent, reported on the note.
+        "dictation_enabled": dictation_enabled(user.organization),
+        "ai_enabled": psy_ai.org_enabled(user.organization),
         "processed_labels": {"ai": PROCESSED_AI, "rules": PROCESSED_RULES, "not_translated": NOT_TRANSLATED},
         "can_configure": can_configure(user),
     }
@@ -308,7 +310,7 @@ def _set_answers(note, user, answers, to_translate):
         raise ValidationError({"answers": "Answers must be keyed by question."})
     current = dict(note.answers or {})
     languages = dict(org.LANGUAGES)
-    ai_on = psy_ai.enabled()
+    ai_on = psy_ai.enabled_for(note.patient)
     for key, value in answers.items():
         if key not in org.QUESTION_KEYS or not isinstance(value, dict):
             raise ValidationError({"answers": f"Unknown question {key!r}."})
@@ -734,6 +736,8 @@ def run_translation(note_id, key, digest, failure=None):
         slot = (answer or {}).get("translation") or {}
         if not answer or slot.get("digest") != digest or slot.get("status") != "pending":
             return
+        if failure is None and not psy_ai.enabled_for(note.patient):
+            failure = "AI assistance was turned off or the client's consent was withdrawn."
         if failure is None:
             try:
                 english, model = psy_ai.translate(answer["text"])
@@ -770,6 +774,8 @@ def run_reword(note_id, token, failure=None):
         if not note or proc.get("token") != token or proc.get("status") != "pending":
             return
         reworded, model, error = {}, "", failure
+        if error is None and not psy_ai.enabled_for(note.patient):
+            error = "AI assistance was turned off or the client's consent was withdrawn."
         if error is None:
             names = [m["name"] for m in note.models_applied or []]
             try:
@@ -806,6 +812,17 @@ def run_reword(note_id, token, failure=None):
             note.save()
 
 
+def dictation_enabled(organization):
+    """X-12: browser dictation sends the audio to the browser maker's speech
+    service, so it needs the platform switch and both organisation keys."""
+    return (
+        bool(getattr(settings, "PSYCHOTHERAPY_DICTATION_ENABLED", False))
+        and organization is not None
+        and organization.psy_dictation_allowed
+        and organization.psy_dictation_enabled
+    )
+
+
 def processing_state(note):
     """How the note's sections were produced, for the "processed" line."""
     proc = dict(note.processing or {})
@@ -818,6 +835,7 @@ def processing_state(note):
     return {"engine": proc.get("engine", "rules"), "status": status or "none", "model": proc.get("model", ""),
             "at": proc.get("at"), "error": proc.get("error", ""),
             "label": PROCESSED_AI if ai_done else PROCESSED_RULES,
+            "reason": "" if ai_done else psy_ai.unavailable_reason(note.patient),
             "sections": proc.get("sections") or {}}
 
 
@@ -1031,7 +1049,7 @@ def generate(note, user):
     note.generated_sections, note.models_applied = result["sections"], result["models_applied"]
     now = _now_iso()
     rules = {k: {"source": "rules", "at": now} for k in org.SECTION_KEYS}
-    if psy_ai.enabled():
+    if psy_ai.enabled_for(note.patient):
         token = uuid.uuid4().hex
         note.processing = {"engine": "ai", "status": "pending", "model": psy_ai.model_name(), "token": token,
                            "requested_at": now, "requested_by": _by(user), "fixed": result["fixed"],

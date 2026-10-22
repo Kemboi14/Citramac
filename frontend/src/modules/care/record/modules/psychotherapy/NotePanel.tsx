@@ -187,6 +187,7 @@ function ProcessingLine({ note }: { note: PsyNote }) {
       <span aria-hidden className={`h-[7px] w-[7px] flex-shrink-0 rounded-full ${p.status === "done" ? "bg-brand-green" : "bg-ink-500"}`} />
       {p.label}
       {p.status === "error" && <span className="text-priority-orange"> — the AI step did not complete, so your words are organised by rule.</span>}
+      {p.reason && <span> — {p.reason}</span>}
     </p>
   );
 }

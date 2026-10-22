@@ -81,7 +81,7 @@ export interface TranscriptRow {
 }
 export interface Processing {
   engine: "rules" | "ai"; status: "none" | "pending" | "done" | "error" | "disabled"; model: string;
-  at: string | null; error: string; label: string; sections: Record<string, { source: "ai" | "rules"; model?: string; at: string }>;
+  at: string | null; error: string; label: string; reason?: string; sections: Record<string, { source: "ai" | "rules"; model?: string; at: string }>;
 }
 export interface ChecklistItem { key: string; label: string; done: boolean; detail: string }
 export interface HistoryEntry { at: string; by: string; action: string; [k: string]: unknown }
@@ -166,3 +166,32 @@ export const addTherapyModel = (t: string, body: { name: string; aliases: string
   apiRequest<TherapyModelRow>("/care/psychotherapy/models/", { method: "POST", body, accessToken: t });
 export const updateTherapyModel = (t: string, code: string, body: Partial<TherapyModelRow>) =>
   apiRequest<TherapyModelRow>(`/care/psychotherapy/models/${code}/`, { method: "PATCH", body, accessToken: t });
+
+/** The organisation's psychotherapy AI / dictation switches: Super Admin
+ * allows, the Org Admin turns on (with the data-protection attestation). */
+export interface PsyAssistSettings {
+  ai_platform_available: boolean;
+  ai_allowed: boolean;
+  ai_enabled: boolean;
+  dictation_platform_available: boolean;
+  dictation_allowed: boolean;
+  dictation_enabled: boolean;
+  changed_by: string;
+  changed_at: string | null;
+  can_edit: boolean;
+}
+
+export function getPsyAssistSettings(accessToken: string) {
+  return apiRequest<PsyAssistSettings>("/care/psychotherapy/assist-settings/", { accessToken });
+}
+
+export function updatePsyAssistSettings(
+  accessToken: string,
+  body: { ai_enabled?: boolean; dictation_enabled?: boolean; attest?: boolean },
+) {
+  return apiRequest<PsyAssistSettings>("/care/psychotherapy/assist-settings/", {
+    method: "PUT",
+    body,
+    accessToken,
+  });
+}

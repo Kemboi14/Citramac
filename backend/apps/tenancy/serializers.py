@@ -2,6 +2,7 @@ import re
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from .context import platform_admin_context
@@ -140,8 +141,44 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "support_phone",
             "website",
             "theme_overrides",
+            "psy_ai_allowed",
+            "psy_dictation_allowed",
+            "psy_ai_enabled",
+            "psy_dictation_enabled",
+            "psy_assist_changed_by",
+            "psy_assist_changed_at",
         ]
-        read_only_fields = ["is_active", "mfl_verified_at", "created_at"]
+        # Super Admin *allows*; only the organisation's own Org Admin turns on.
+        read_only_fields = [
+            "is_active",
+            "mfl_verified_at",
+            "created_at",
+            "psy_ai_enabled",
+            "psy_dictation_enabled",
+            "psy_assist_changed_by",
+            "psy_assist_changed_at",
+        ]
+
+    def update(self, instance, validated_data):
+        # Withdrawing permission also switches the capability off, so turning it
+        # back on needs the Org Admin's fresh confirmation.
+        changed = False
+        for allowed, enabled in (
+            ("psy_ai_allowed", "psy_ai_enabled"),
+            ("psy_dictation_allowed", "psy_dictation_enabled"),
+        ):
+            if allowed in validated_data and validated_data[allowed] != getattr(instance, allowed):
+                changed = True
+                if not validated_data[allowed]:
+                    setattr(instance, enabled, False)
+        if changed:
+            request = self.context.get("request")
+            user = getattr(request, "user", None)
+            instance.psy_assist_changed_by = (
+                f"{user.get_full_name() or user.email} (Super Admin)" if user else "Super Admin"
+            )
+            instance.psy_assist_changed_at = timezone.now()
+        return super().update(instance, validated_data)
 
     def get_identity_code_label(self, obj):
         return IDENTITY_CODE_PATTERNS.get(obj.org_type, (None, "DHA MFL Code", None))[1]

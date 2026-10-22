@@ -5,6 +5,7 @@ approved 2026-10-07 clinical workspace mockup reads and writes through here.
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -752,6 +753,80 @@ class MyTasksView(APIView):
         return Response({"results": attention.my_tasks(request.user)})
 
 
+def _ai_consent(patient):
+    """AI-assisted note processing consent: offered only where the organisation
+    has psychotherapy AI turned on; the wording is the facility's own."""
+    from apps.client_registry.consent import current_record
+
+    from . import psy_ai
+
+    record = current_record(patient, psy_ai.AI_CONSENT)
+    template = ConsentTemplate.objects.filter(consent_type=psy_ai.AI_CONSENT, active=True).first()
+    return {
+        "offered": psy_ai.org_enabled(patient.organization),
+        "template": _template_payload(template),
+        "decision": record.decision if record else "NOT_ASKED",
+        "captured_at": _iso(record.captured_at) if record else None,
+        "captured_by": user_display(record.captured_by) if record else "",
+        "consent_text_version": record.consent_text_version if record else "",
+    }
+
+
+class PsychotherapyAssistSettingsView(APIView):
+    """The organisation's psychotherapy AI / dictation switches. GET for anyone
+    in the organisation; PUT by its Org Admin, only for capabilities Super
+    Admin has allowed, and turning one on needs the data-protection attestation."""
+
+    def _payload(self, org):
+        from . import psy_ai
+
+        return {
+            "ai_platform_available": psy_ai.enabled(),
+            "ai_allowed": org.psy_ai_allowed,
+            "ai_enabled": org.psy_ai_enabled,
+            "dictation_platform_available": bool(
+                getattr(settings, "PSYCHOTHERAPY_DICTATION_ENABLED", False)
+            ),
+            "dictation_allowed": org.psy_dictation_allowed,
+            "dictation_enabled": org.psy_dictation_enabled,
+            "changed_by": org.psy_assist_changed_by,
+            "changed_at": _iso(org.psy_assist_changed_at),
+            "can_edit": _is_org_admin(self.request.user),
+        }
+
+    def get(self, request):
+        return Response(self._payload(request.user.organization))
+
+    def put(self, request):
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin can change these settings.")
+        org = request.user.organization
+        changes = {}
+        for key, allowed in (("ai_enabled", org.psy_ai_allowed), ("dictation_enabled", org.psy_dictation_allowed)):
+            if key not in request.data:
+                continue
+            value = bool(request.data[key])
+            if value and not allowed:
+                return Response(
+                    {key: "Not allowed for this organisation — ask the platform Super Admin."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            changes[f"psy_{key}"] = value
+        turning_on = any(v and not getattr(org, k) for k, v in changes.items())
+        if turning_on and request.data.get("attest") is not True:
+            return Response(
+                {"attest": "Confirm the organisation's data-protection review approves this."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if changes:
+            for field, value in changes.items():
+                setattr(org, field, value)
+            org.psy_assist_changed_by = f"{user_display(request.user)} (Org Admin)"
+            org.psy_assist_changed_at = timezone.now()
+            org.save(update_fields=[*changes, "psy_assist_changed_by", "psy_assist_changed_at", "updated_at"])
+        return Response(self._payload(org))
+
+
 class ClientLegalView(APIView):
     def get(self, request, patient_id):
         patient = _patient(patient_id)
@@ -767,6 +842,7 @@ class ClientLegalView(APIView):
                     "granted": patient.consent_data_sharing,
                     "captured_at": _iso(patient.consent_captured_at),
                 },
+                "ai_consent": _ai_consent(patient),
                 "data_sharing_consent": [
                     {
                         "id": str(c.id),
@@ -1385,8 +1461,12 @@ class ConsentTemplatesView(APIView):
         return Response(_template_payload(template), status=status.HTTP_201_CREATED)
 
 
+CLIENT_CONSENT_TYPES = ("DATA_SHARING_HIE", "AI_NOTE_PROCESSING")
+
+
 class ClientConsentView(APIView):
-    """POST {granted} — capture or withdraw data-sharing consent against the
+    """POST {granted, consent_type?} — capture or withdraw a client consent
+    (HIE data sharing by default, or AI-assisted note processing) against the
     facility's active wording, snapshotted into the immutable ConsentRecord."""
 
     def post(self, request, patient_id):
@@ -1395,9 +1475,10 @@ class ClientConsentView(APIView):
         patient = _patient(patient_id)
         if "granted" not in request.data:
             return Response({"granted": "Required."}, status=status.HTTP_400_BAD_REQUEST)
-        template = ConsentTemplate.objects.filter(
-            consent_type="DATA_SHARING_HIE", active=True
-        ).first()
+        consent_type = request.data.get("consent_type") or "DATA_SHARING_HIE"
+        if consent_type not in CLIENT_CONSENT_TYPES:
+            return Response({"consent_type": "Unknown consent type."}, status=status.HTTP_400_BAD_REQUEST)
+        template = ConsentTemplate.objects.filter(consent_type=consent_type, active=True).first()
         if template is None:
             return Response(
                 {
@@ -1407,7 +1488,12 @@ class ClientConsentView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         record = capture_consent(
-            patient, request.user, bool(request.data["granted"]), template.version, template.text
+            patient,
+            request.user,
+            bool(request.data["granted"]),
+            template.version,
+            template.text,
+            consent_type=consent_type,
         )
         return Response(
             {

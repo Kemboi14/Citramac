@@ -11,6 +11,11 @@ from . import triage_v4_views
 urlpatterns = [
     path("care/valuesets/", views.ValueSetsView.as_view(), name="care-valuesets"),
     path(
+        "care/psychotherapy/assist-settings/",
+        views.PsychotherapyAssistSettingsView.as_view(),
+        name="care-psy-assist-settings",
+    ),
+    path(
         "care/registration/search/",
         views.RegistrationSearchView.as_view(),
         name="care-registration-search",

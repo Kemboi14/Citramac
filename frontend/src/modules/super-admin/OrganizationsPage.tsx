@@ -397,6 +397,8 @@ function OrganizationDrawer({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const formId = "organization-form";
 
+  // Edited only on an existing organisation: a new one starts with both off.
+  const [assist, setAssist] = useState({ ai: false, dictation: false });
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
 
@@ -439,6 +441,10 @@ function OrganizationDrawer({
       setLogoFile(null);
       setSlugTouched(Boolean(organization));
       setForm(organization ? organizationToFormState(organization) : EMPTY_FORM);
+      setAssist({
+        ai: organization?.psy_ai_allowed ?? false,
+        dictation: organization?.psy_dictation_allowed ?? false,
+      });
     });
   }, [open, organization]);
 
@@ -507,6 +513,8 @@ function OrganizationDrawer({
           support_phone: form.support_phone,
           website: form.website,
           theme_overrides: sanitizeOverrides(form.theme_overrides, false),
+          psy_ai_allowed: assist.ai,
+          psy_dictation_allowed: assist.dictation,
         };
         if (form.org_type === "HOSPITAL") payload.facility_type = form.facility_type;
         saved = await updateOrganization(accessToken, organization.id, payload);
@@ -1019,6 +1027,55 @@ function OrganizationDrawer({
             </label>
           </div>
         </div>
+
+        {isEdit && organization && (
+          <div>
+            <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">
+              Psychotherapy Note Assistance
+            </h3>
+            <p className="mb-3 text-xs leading-relaxed text-ink-500">
+              Allow only once the data-processing agreement covers it. The organisation&apos;s Org
+              Admin then decides whether to turn it on, and AI is used only for clients who agreed
+              to it. Withdrawing permission switches it off immediately.
+            </p>
+            <div className="flex flex-col divide-y divide-surface-border rounded-md border border-surface-border">
+              {(
+                [
+                  ["ai", "AI-assisted notes", "Translation and trauma-informed rewording (Anthropic)", organization.psy_ai_enabled],
+                  ["dictation", "Dictation", "Browser speech-to-text", organization.psy_dictation_enabled],
+                ] as const
+              ).map(([key, label, detail, enabled]) => (
+                <label key={key} className="flex items-center gap-3 px-3 py-2.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={key === "ai" ? assist.ai : assist.dictation}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setAssist((a) => ({ ...a, [key]: checked }));
+                    }}
+                  />
+                  <span className="flex-1">
+                    <span className="block font-semibold text-ink-900">{label} — allowed</span>
+                    <span className="text-ink-500">{detail}</span>
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-bold ${
+                      enabled ? "bg-brand-green-tint text-brand-green-dark" : "bg-surface-bg text-ink-500"
+                    }`}
+                  >
+                    {enabled ? "On at the organisation" : "Off at the organisation"}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {organization.psy_assist_changed_at && (
+              <p className="mt-2 text-xs text-ink-500">
+                Last changed by {organization.psy_assist_changed_by} ·{" "}
+                {new Date(organization.psy_assist_changed_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <h3 className="mb-3 font-display text-sm font-semibold text-ink-900">

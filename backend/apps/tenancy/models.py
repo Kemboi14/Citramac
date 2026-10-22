@@ -208,6 +208,19 @@ class Organization(TimestampedModel):
         help_text="e.g. 'Cafric Demo <notifications@cafric.org>'. Blank uses the platform default.",
     )
 
+    # Psychotherapy note assistance — two keys. Super Admin *allows* each
+    # capability for this organisation (platform-side: the AI provider's
+    # data-processing agreement is in place); the organisation's Org Admin then
+    # *turns it on* after its own data-protection review. Effective only when
+    # both are set and the platform switch/API key exist (care_pathway/psy_ai.py).
+    # AI additionally needs each client's recorded consent. Saves are audited.
+    psy_ai_allowed = models.BooleanField(default=False)
+    psy_ai_enabled = models.BooleanField(default=False)
+    psy_dictation_allowed = models.BooleanField(default=False)
+    psy_dictation_enabled = models.BooleanField(default=False)
+    psy_assist_changed_by = models.CharField(max_length=255, blank=True)
+    psy_assist_changed_at = models.DateTimeField(null=True, blank=True)
+
     # Self-service SMS gateway (Org Admin's own "SMS Configuration" settings
     # screen, right next to Email Configuration) — used for OTP-over-SMS
     # (apps.accounts.auth_views) and appointment reminders

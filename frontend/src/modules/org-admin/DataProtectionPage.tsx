@@ -13,6 +13,7 @@ import { formatDate, formatDateTime } from "../care/shared/format";
 import { BTN, INPUT } from "../care/shared/styles";
 import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "../care/shared/ui";
 import { useRecordData } from "../care/record/useRecordData";
+import { PsychotherapyAssistCard } from "./PsychotherapyAssistCard";
 
 // Org Admin — the facility's data-protection compliance profile (legal opinion
 // of 2 Oct 2026 §4.3, §5, §6): its Data Protection Officer, ODPC registration
@@ -458,6 +459,7 @@ export function DataProtectionPage() {
           <OdpcCard profile={profile} onSaved={onSaved} />
           <DpaCard profile={profile} />
           <WarrantyCard profile={profile} onSaved={onSaved} />
+          <PsychotherapyAssistCard />
         </>
       )}
     </div>

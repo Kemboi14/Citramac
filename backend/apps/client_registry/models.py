@@ -647,6 +647,9 @@ class ConsentRecord(TenantScopedModel):
         ("EMPLOYER_COMMUNICATION", "Communicating with the client's employer"),
         ("SCHOOL_COMMUNICATION", "Communicating with the client's school / university"),
         ("RELEASE_OF_INFORMATION", "Releasing health information to a named third party"),
+        # Local processing consent — never sent to the HIE (hie_client sends only
+        # on DATA_SHARING_HIE). Gates psychotherapy AI assistance per client.
+        ("AI_NOTE_PROCESSING", "AI-assisted processing of psychotherapy notes"),
     ]
     DECISION_CHOICES = [
         ("NOT_ASKED", "Not yet asked"),

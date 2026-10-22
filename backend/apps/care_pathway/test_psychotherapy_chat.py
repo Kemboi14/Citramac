@@ -60,6 +60,38 @@ def fake_create(**kwargs):
 
 
 class ChatTestCase(PsyNoteTestCase):
+    def setUp(self):
+        super().setUp()
+        # AI tests run with the organisation switches on and the client's consent
+        # recorded; the platform switch / key come from @override_settings(**AI_ON).
+        self.set_org(psy_ai_allowed=True, psy_ai_enabled=True)
+        self.ai_consent(True)
+
+    def set_org(self, **fields):
+        with platform_admin_context():
+            org = self.nurse.organization
+            for key, value in fields.items():
+                setattr(org, key, value)
+            org.save()
+
+    def ai_consent(self, granted):
+        from .models import ConsentTemplate
+
+        with platform_admin_context():
+            if not ConsentTemplate.all_objects.filter(
+                organization=self.org, consent_type="AI_NOTE_PROCESSING", active=True
+            ).exists():
+                ConsentTemplate.objects.create(
+                    organization=self.org, consent_type="AI_NOTE_PROCESSING", version="1",
+                    text="Facility wording for AI-assisted note processing.",
+                )
+        response = self.client.post(
+            reverse("care-client-consent", args=[self.pid]),
+            {"granted": granted, "consent_type": "AI_NOTE_PROCESSING"},
+            format="json", **self.auth,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
     def detail(self, nid):
         return self.client.get(reverse("care-psy-note", args=[nid]), **self.auth).data
 
@@ -173,6 +205,67 @@ class TranslationTests(ChatTestCase):
         self.assertEqual(data["processing"]["label"], "Organised from your words (rule-based)")
         self.assertIn("Sijalala siku mbili.", data["sections"]["presenting_focus"])
         self.assertIn("REWORD_FAILED", [h["action"] for h in data["history"]])
+
+
+class AssistGatingTests(ChatTestCase):
+    @override_settings(**AI_ON)
+    def test_org_switches_and_client_consent_both_gate_ai(self):
+        patcher, client = self.ai_client()
+        self.set_org(psy_ai_enabled=False)
+        self.assertFalse(self.client.get(reverse("care-psy-config"), **self.auth).data["ai_enabled"])
+        nid = self.start().data["id"]
+        with patcher, self.captureOnCommitCallbacks(execute=True):
+            data = self.say(nid, "q1", "Sijalala siku mbili.", language="sw-KE").data
+        self.assertEqual(data["answers"]["q1"]["translation"]["status"], "unavailable")
+        self.set_org(psy_ai_enabled=True)
+        self.ai_consent(False)
+        with patcher, self.captureOnCommitCallbacks(execute=True):
+            data = self.say(nid, "q1", "Sijalala siku tatu.", language="sw-KE").data
+        self.assertEqual(data["answers"]["q1"]["translation"]["status"], "unavailable")
+        generated = self.act("care-psy-note-generate", nid).data
+        self.assertIn("has not agreed", generated["processing"]["reason"])
+        client.beta.messages.create.assert_not_called()
+        self.ai_consent(True)
+        with patcher, self.captureOnCommitCallbacks(execute=True):
+            data = self.say(nid, "q1", "Sijalala siku nne.", language="sw-KE").data
+        self.assertEqual(self.detail(nid)["answers"]["q1"]["translation"]["status"], "done")
+
+    def test_org_admin_turns_on_only_what_super_admin_allowed_with_attestation(self):
+        from apps.accounts.models import Role
+
+        url = reverse("care-psy-assist-settings")
+        self.set_org(psy_ai_allowed=False, psy_ai_enabled=False)
+        self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
+                                         **self.auth).status_code, 403)
+        with platform_admin_context():
+            role, _ = Role.objects.get_or_create(name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            self.nurse.roles.add(role)
+        self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
+                                         **self.auth).status_code, 400)  # not allowed by Super Admin
+        self.set_org(psy_ai_allowed=True, psy_dictation_allowed=True)
+        self.assertEqual(self.client.put(url, {"ai_enabled": True}, format="json", **self.auth).status_code, 400)
+        data = self.client.put(url, {"ai_enabled": True, "dictation_enabled": True, "attest": True},
+                               format="json", **self.auth).data
+        self.assertTrue(data["ai_enabled"] and data["dictation_enabled"])
+        self.assertIn("(Org Admin)", data["changed_by"])
+        config = self.client.get(reverse("care-psy-config"), **self.auth).data
+        self.assertTrue(config["dictation_enabled"])
+        # Turning off needs no attestation.
+        self.assertFalse(self.client.put(url, {"dictation_enabled": False}, format="json",
+                                         **self.auth).data["dictation_enabled"])
+
+    def test_super_admin_withdrawing_permission_switches_it_off(self):
+        from apps.tenancy.serializers import OrganizationSerializer
+
+        self.set_org(psy_ai_allowed=True, psy_ai_enabled=True)
+        with platform_admin_context():
+            org = self.nurse.organization
+            serializer = OrganizationSerializer(org, data={"psy_ai_allowed": False}, partial=True)
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            serializer.save()
+            org.refresh_from_db()
+        self.assertFalse(org.psy_ai_enabled)
+        self.assertTrue(org.psy_assist_changed_at)
 
 
 class SectionEditTests(ChatTestCase):
