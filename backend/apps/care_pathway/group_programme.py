@@ -41,6 +41,7 @@ from apps.ipd_ward.models import Admission
 from . import facility_time, services
 from .models import (
     CareTask,
+    ClinicalAlert,
     EpisodeOfCare,
     GroupProgrammeCategory,
     GroupSession,
@@ -78,6 +79,10 @@ FOLLOW_UP_CODE = "group_follow_up"
 FOLLOW_UP_LABEL = "Individual follow-up after group session"
 FOLLOW_UP_NEXT_ACTION = "Individual follow-up task required."
 FOLLOW_UP_COMPLETED_REASON = "Individual follow-up task marked completed"
+# A risk disclosure raises this alert on that client's record only (§4).
+RISK_ALERT_CODE = "GROUP_RISK_DISCLOSURE"
+RISK_ALERT_LABEL = "Group session: risk disclosure — individual clinical review"
+RISK_OVERRIDE_MIN = 5
 
 
 # ── Categories ──
@@ -358,6 +363,8 @@ def _entry_clinical(entry, labels):
         "attendance_display": labels.get((ATTENDANCE_VALUESET, entry.attendance), entry.attendance),
         "observation": entry.observation,
         "risk_disclosure": entry.risk_disclosure,
+        "risk_detected": bool(entry.risk_detected),
+        "risk_override_reason": entry.risk_override_reason,
         "follow_up_required": bool(entry.follow_up_task_id),
         "follow_up_status": _follow_up_status(entry),
         "follow_up_task_id": str(entry.follow_up_task_id) if entry.follow_up_task_id else None,
@@ -492,6 +499,11 @@ class EntrySerializer(serializers.Serializer):
     observation = serializers.CharField(max_length=1000, required=False, allow_blank=True)
     risk_disclosure = serializers.BooleanField(default=False)
     follow_up = serializers.BooleanField(default=False)
+    # Why detected risk language is not a risk disclosure (owner decision
+    # 2026-10-22: auto-flag, the clinician may untick only with a reason).
+    risk_override_reason = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, default=""
+    )
 
     def validate_attendance(self, code):
         if code not in services._valid_codes(ATTENDANCE_VALUESET):
@@ -509,6 +521,17 @@ class EntrySerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"follow_up": "A risk disclosure needs an individual follow-up task."}
                 )
+        data["risk_override_reason"] = data.get("risk_override_reason", "").strip()
+        data["risk_detected"] = screen_observation(data["observation"])
+        if data["risk_detected"] and not data["risk_disclosure"]:
+            if len(data["risk_override_reason"]) < RISK_OVERRIDE_MIN:
+                words = ", ".join(sorted({f["matched"] for f in data["risk_detected"]}))
+                raise serializers.ValidationError(
+                    {"risk_disclosure": f"Possible risk language detected ({words}). Mark it as a "
+                     "risk disclosure, or give the reason it is not one."}
+                )
+        else:
+            data["risk_override_reason"] = ""
         return data
 
 
@@ -575,6 +598,50 @@ def _create_follow_up(user, session, patient):
         status="INITIATED",
         created_by=user,
     )
+
+
+# ── Risk screen ──
+
+
+def screen_observation(text):
+    """Possible safety language in one client's observation — the same served
+    lexicon and idiom rules as the psychotherapy note (PSY-RD). A prompt for
+    the clinician, never a label or a score."""
+    from . import psy_organizer, psychotherapy
+
+    if not (text or "").strip():
+        return []
+    return [
+        {"matched": d["matched"], "category": d["category"], "passage": d["passage"]}
+        for d in psy_organizer.detect_risk_language(
+            {"q1": {"text": text}}, psychotherapy.lexicon("PSY_RISK")
+        )
+    ]
+
+
+def screen_entries(rows):
+    """POST group-sessions/screen/ — run before review so the flags show where
+    the clinician decides. Nothing is stored."""
+    if not isinstance(rows, list):
+        raise ValidationError({"entries": "Send the entries to screen."})
+    return [
+        {"patient": str(row.get("patient", "")), "flags": screen_observation(row.get("observation", ""))}
+        for row in rows if isinstance(row, dict)
+    ]
+
+
+def _raise_risk_alert(user, entry):
+    entry.risk_alert = ClinicalAlert.objects.create(
+        organization_id=entry.organization_id, patient=entry.patient,
+        alert_code=RISK_ALERT_CODE, label=RISK_ALERT_LABEL, raised_by=user,
+    )
+
+
+def _resolve_risk_alert(user, entry):
+    alert = entry.risk_alert
+    if alert and alert.status == "ACTIVE":
+        alert.status, alert.resolved_at, alert.resolved_by = "RESOLVED", timezone.now(), user
+        alert.save(update_fields=["status", "resolved_at", "resolved_by", "updated_at"])
 
 
 # ── Confirm ──
@@ -653,9 +720,13 @@ def confirm_session(user, data):
             attendance=row["attendance"],
             observation=row["observation"],
             risk_disclosure=row["risk_disclosure"],
+            risk_detected=row["risk_detected"],
+            risk_override_reason=row["risk_override_reason"],
         )
         if row["follow_up"]:
             entry.follow_up_task = _create_follow_up(user, session, patient)
+        if entry.risk_disclosure:
+            _raise_risk_alert(user, entry)
         if entry.attendance == PRESENT:
             entry.intervention_record = _record_intervention(user, session, entry)
         entry.save()
@@ -738,6 +809,7 @@ def _entry_snapshot(entry):
         "attendance": entry.attendance,
         "observation": entry.observation,
         "risk_disclosure": entry.risk_disclosure,
+        "risk_override_reason": entry.risk_override_reason,
         "follow_up_required": bool(entry.follow_up_task_id),
     }
 
@@ -796,13 +868,20 @@ def correct_entry(user, entry, data):
                 }
             )
         entry.follow_up_task = None
+    was_risk = entry.risk_disclosure
     entry.attendance = changes["attendance"]
     entry.observation = changes["observation"]
     entry.risk_disclosure = changes["risk_disclosure"]
+    entry.risk_detected = changes["risk_detected"]
+    entry.risk_override_reason = changes["risk_override_reason"]
     after = _entry_snapshot(entry)
     if after == before:
         raise ValidationError({"detail": "Change at least one field before saving a correction."})
     _sync_entry_intervention(user, session, entry, before, reason)
+    if entry.risk_disclosure and not was_risk:
+        _raise_risk_alert(user, entry)
+    elif was_risk and not entry.risk_disclosure:
+        _resolve_risk_alert(user, entry)
     entry.version += 1
     entry.audit = [
         *entry.audit,

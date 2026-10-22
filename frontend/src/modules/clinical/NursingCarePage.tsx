@@ -102,8 +102,8 @@ export function NursingCarePage() {
     return (
       <p className="text-ink-500">
         {selected.patientName} has no active admission. Start one from{" "}
-        <Link to="/clinical/ipd" className="font-semibold text-brand-green hover:underline">
-          Inpatient &amp; Ward / Admission
+        <Link to="/clinical/inpatient" className="font-semibold text-brand-green hover:underline">
+          Inpatient Admissions
         </Link>
         .
       </p>

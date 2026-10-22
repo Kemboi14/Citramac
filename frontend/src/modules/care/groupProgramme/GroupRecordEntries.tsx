@@ -100,6 +100,12 @@ export function GroupRecordEntries({ patientId }: { patientId: string }) {
                   restricted to this client record.
                 </div>
               )}
+              {!entry.risk_disclosure && entry.risk_override_reason && (
+                <Row label="Risk screen">
+                  Possible risk language was detected; not recorded as a disclosure —{" "}
+                  {entry.risk_override_reason}
+                </Row>
+              )}
               {entry.follow_up_required && (
                 <Row label="Follow-up">
                   {entry.follow_up_status}

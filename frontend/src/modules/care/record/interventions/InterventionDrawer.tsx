@@ -11,18 +11,23 @@ import type {
 import { ClinicalContext } from "./ClinicalContext";
 import { DeliveryForm } from "./DeliveryForm";
 import { ModuleHistory } from "./ModuleHistory";
-import { ModuleIcon, RecommendedBadge } from "./ModuleList";
-import { ModuleInfo } from "./ModuleInfo";
+import { ModuleIcon, ModuleMeta } from "./ModuleList";
+import { ModuleInfo, ModuleNote } from "./ModuleInfo";
 import { ModuleTools } from "./ModuleTools";
-import { rateText } from "./rates";
+import { PsychotherapyRecord } from "./PsychotherapyRecord";
+
+/** v4 `appendModuleRecord`: the delivery form shows for separately priced
+ * modules, except where the module's own workflow records the delivery
+ * (the signed psychotherapy note; laboratory orders). */
+const OWN_DELIVERY = new Set(["psychotherapy", "blood_work"]);
 
 const TABS = ["Record", "History", "Info"] as const;
 type Tab = (typeof TABS)[number];
 const GUTTER = "px-[clamp(18px,4vw,48px)]";
 
-/** Full-screen module drawer (mockup `openInterventionDrawer`): header,
- * Record / History / Info tabs. Portal-rendered so `position: fixed` is not
- * captured by an animated ancestor (see components/WideModal). */
+/** Full-screen module drawer (v4 `moduleDrawer`): header, Record / History /
+ * Info tabs. Portal-rendered so `position: fixed` is not captured by an
+ * animated ancestor (see components/WideModal). */
 export function InterventionDrawer({
   patientId,
   clientName,
@@ -41,14 +46,14 @@ export function InterventionDrawer({
   context: InterventionContext;
   records: InterventionRecord[];
   onClose: () => void;
-  onRecorded: () => void;
+  onRecorded: (message: string) => void;
   onCorrected: (message: string) => void;
 }) {
   const dialogRef = useDialogA11y<HTMLElement>(true, onClose);
   const id = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [tab, setTab] = useState<Tab>("Record");
-  const action = actions.find((item) => item.id === module.action_id);
+  const showForm = Boolean(module.billing_service) && !OWN_DELIVERY.has(module.code);
 
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -72,21 +77,13 @@ export function InterventionDrawer({
         aria-labelledby={`${id}-title`}
         className="flex min-h-full w-full flex-col bg-surface-card"
       >
-        <div className={`flex items-center gap-3 border-b border-surface-border py-[18px] ${GUTTER}`}>
-          <ModuleIcon name={module.name} large />
-          <div className="min-w-0 flex-1 pt-px">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id={`${id}-title`} className="font-display text-[15px] font-bold text-ink-900">
-                {module.name}
-              </h2>
-              {module.recommended && <RecommendedBadge />}
-            </div>
-            <p className="mt-[3px] text-xs text-ink-500">
-              {module.recommended
-                ? `Suggested from the existing client record · ${module.reason}`
-                : "Record care delivered and link it to a plan action when appropriate."}
-            </p>
-            <div className="mt-[3px] text-xs text-ink-500">{rateText(module)}</div>
+        <div className={`flex items-center gap-[11px] border-b border-surface-border py-4 ${GUTTER}`}>
+          <ModuleIcon code={module.code} recommended={module.recommended} large />
+          <div className="min-w-0 flex-1">
+            <h2 id={`${id}-title`} className="sr-only">
+              {module.name}
+            </h2>
+            <ModuleMeta module={module} actions={actions} />
           </div>
           <button
             type="button"
@@ -133,29 +130,33 @@ export function InterventionDrawer({
           id={`${id}-panel`}
           role="tabpanel"
           aria-labelledby={`${id}-tab-${tab}`}
-          className={`w-full max-w-[1120px] flex-1 self-center pb-8 pt-6 ${GUTTER}`}
+          className={`w-full max-w-[1200px] flex-1 self-center pb-8 pt-[18px] ${GUTTER}`}
         >
-          {tab === "Record" && (
-            <>
-              <ClinicalContext context={context} />
-              <ModuleTools code={module.code} patientId={patientId} clientName={clientName} />
-              <DeliveryForm
-                patientId={patientId}
-                module={module}
-                actions={actions}
-                onRecorded={onRecorded}
-              />
-            </>
-          )}
+          {tab === "Record" &&
+            (module.code === "psychotherapy" ? (
+              <PsychotherapyRecord patientId={patientId} onClose={onClose} />
+            ) : (
+              <>
+                <ClinicalContext context={context} />
+                {module.note && <ModuleNote note={module.note} />}
+                <ModuleTools code={module.code} patientId={patientId} clientName={clientName} />
+                {showForm && (
+                  <DeliveryForm
+                    patientId={patientId}
+                    module={module}
+                    actions={actions}
+                    onRecorded={(message) => {
+                      onRecorded(message);
+                      setTab("History");
+                    }}
+                  />
+                )}
+              </>
+            ))}
           {tab === "History" && (
-            <ModuleHistory
-              module={module}
-              records={records}
-              clientName={clientName}
-              onCorrected={onCorrected}
-            />
+            <ModuleHistory module={module} records={records} onCorrected={onCorrected} />
           )}
-          {tab === "Info" && <ModuleInfo module={module} action={action} />}
+          {tab === "Info" && <ModuleInfo module={module} />}
         </div>
       </section>
     </div>,

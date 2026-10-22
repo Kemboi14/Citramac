@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getClientBanner, type PriorityOrBlank } from "../../lib/carePathwayApi";
+import { getLegalWorkspace, type LegalWorkspace } from "../../lib/legalStatusApi";
 import {
   admitPatient,
   listAllBeds,
@@ -10,15 +11,14 @@ import {
   listCurrentAdmissions,
   listEligibleAdmissionPatients,
   type Admission,
-  type AdmissionType,
   type Bed,
-  type ConsentStatus,
   type EligiblePatient,
   type NokNotification,
   type Ward,
 } from "../../lib/ipdApi";
 import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
-import { formatDate } from "./shared/format";
+import { LegalAdmissionStatus } from "./record/legal/LegalAdmissionStatus";
+import { formatDate, formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN, BTN_GHOST, GROUP_LABEL, INPUT, TABLE, TD, TH } from "./shared/styles";
 import {
@@ -36,6 +36,13 @@ import { useValueSets, type ValueSetsApi } from "./shared/useValueSets";
 // Inpatient Admissions — docs/15-CLINICAL-WORKSPACE-V3.md §1.10, mockup `inpatient()`.
 // The admission is an Encounter (class IMP) inside the client's EpisodeOfCare;
 // the server opens/links both on create (CLAUDE.md §4).
+//
+// Legal status first (owner decision 2026-10-22): the legal basis is the
+// client's legal admission status — one store, worked here inline. Voluntary:
+// the signed application and the admitting officer's decision; involuntary:
+// the application, the signed medical recommendation(s) and the decision.
+// The admission is saved only once that status is Active, and takes its type
+// from it; there is no free-text legal basis.
 
 const pad = (n: number) => String(n).padStart(2, "0");
 function todayIso() {
@@ -66,33 +73,26 @@ function bedLabel(bed: Bed | undefined, wardsById: Map<string, Ward>) {
   return `${wardsById.get(bed.ward)?.name ?? "Ward"} — Bed ${bed.bed_number}`;
 }
 
-// Legal basis at admission: consent status, capacity and next-of-kin options come
-// from the served value sets admission-consent-status, capacity-assessed and
-// nok-notification. Legal status stays free text — no source for its categories.
+// Capacity and next-of-kin options come from the served value sets
+// capacity-assessed and nok-notification.
 type Capacity = "NOT_ASSESSED" | "YES" | "NO";
+
+type LegalState = LegalWorkspace["legal_status"];
 
 type FieldErrors = Partial<Record<string, string>>;
 
 /** Fields rendered with an inline error; any other server error goes to the summary. */
 const SHOWN_FIELDS = new Set([
   "patient",
-  "admission_type",
+  "legal_status_record",
   "admitted_at",
   "clinical_priority",
   "reason_for_admission",
   "consultant",
   "primary_care_team",
   "bed",
-  "consent_status",
   "capacity_assessed",
   "consent_notes",
-  "legal_status",
-  "legal_order_reference",
-  "legal_order_date",
-  "legal_review_due_date",
-  "authorizing_professional",
-  "legal_rationale",
-  "oversight_notes",
   "next_of_kin_notification",
   "next_of_kin_notes",
 ]);
@@ -117,6 +117,10 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 }
 
 function LegalTag({ admission, label }: { admission: Admission; label: ValueSetsApi["label"] }) {
+  if (admission.legal_status_record) {
+    return <Tag tone="brand">Legal status active</Tag>;
+  }
+  // Admissions recorded before legal status first: their own legacy fields.
   if (admission.admission_type === "INVOLUNTARY") {
     if (!admission.legal_review_due_date) return <Tag tone="warn">Review date not set</Tag>;
     const overdue = admission.legal_review_due_date < todayIso();
@@ -145,7 +149,6 @@ function titleCase(value: string) {
 interface FormState {
   clientText: string;
   patientId: string;
-  admissionType: AdmissionType | "";
   admissionDate: string;
   priority: PriorityOrBlank;
   priorityTouched: boolean;
@@ -153,19 +156,8 @@ interface FormState {
   consultant: string;
   teamName: string;
   bed: string;
-  // Voluntary
-  consentStatus: ConsentStatus;
   capacity: Capacity;
   consentNotes: string;
-  // Involuntary
-  legalStatus: string;
-  legalOrderReference: string;
-  legalOrderDate: string;
-  legalReviewDueDate: string;
-  authorizingProfessional: string;
-  legalRationale: string;
-  oversightNotes: string;
-  // Both
   nokNotification: NokNotification;
   nokNotes: string;
 }
@@ -173,7 +165,6 @@ interface FormState {
 const emptyForm = (): FormState => ({
   clientText: "",
   patientId: "",
-  admissionType: "",
   admissionDate: todayIso(),
   priority: "",
   priorityTouched: false,
@@ -181,66 +172,35 @@ const emptyForm = (): FormState => ({
   consultant: "",
   teamName: "",
   bed: "",
-  consentStatus: "",
   capacity: "NOT_ASSESSED",
   consentNotes: "",
-  legalStatus: "",
-  legalOrderReference: "",
-  legalOrderDate: "",
-  legalReviewDueDate: "",
-  authorizingProfessional: "",
-  legalRationale: "",
-  oversightNotes: "",
   nokNotification: "NOT_NOTIFIED",
   nokNotes: "",
 });
 
-function validate(form: FormState): FieldErrors {
+const legalActive = (legal: LegalState) => legal?.status === "ACTIVE";
+
+function validate(form: FormState, legal: LegalState): FieldErrors {
   const errors: FieldErrors = {};
   if (!form.patientId) errors.patient = "Choose a client from the list.";
-  if (!form.admissionType) errors.admission_type = "Choose the admission type.";
+  else if (!legalActive(legal)) {
+    errors.legal_status_record =
+      "Complete the legal admission status below — the admission is saved once it is Active.";
+  }
   if (!form.admissionDate) errors.admitted_at = "Enter the admission date.";
   else if (form.admissionDate > todayIso())
     errors.admitted_at = "The admission date can't be in the future.";
   if (!form.bed) errors.bed = "Assign an available bed.";
-  if (form.admissionType === "VOLUNTARY" && !form.consentStatus) {
-    errors.consent_status = "Record the consent status for a voluntary admission.";
-  }
-  if (form.admissionType === "INVOLUNTARY") {
-    const required = "Required for an involuntary admission.";
-    if (!form.legalStatus.trim()) errors.legal_status = required;
-    if (!form.legalOrderReference.trim()) errors.legal_order_reference = required;
-    if (!form.legalOrderDate) errors.legal_order_date = required;
-    else if (form.legalOrderDate > todayIso())
-      errors.legal_order_date = "The legal order date can't be in the future.";
-    if (!form.authorizingProfessional.trim()) errors.authorizing_professional = required;
-  }
   return errors;
 }
 
-/** The legal-basis fields for the chosen admission type only. */
-function legalPayload(form: FormState): Partial<Admission> {
-  const shared = {
-    next_of_kin_notification: form.nokNotification,
-    next_of_kin_notes: form.nokNotes.trim(),
-  };
-  if (form.admissionType === "INVOLUNTARY") {
-    return {
-      ...shared,
-      legal_status: form.legalStatus.trim(),
-      legal_order_reference: form.legalOrderReference.trim(),
-      legal_order_date: form.legalOrderDate || null,
-      legal_review_due_date: form.legalReviewDueDate || null,
-      authorizing_professional: form.authorizingProfessional.trim(),
-      legal_rationale: form.legalRationale.trim(),
-      oversight_notes: form.oversightNotes.trim(),
-    };
-  }
+/** What the admission itself records beside the legal status. */
+function admissionExtras(form: FormState): Partial<Admission> {
   return {
-    ...shared,
-    consent_status: form.consentStatus,
     capacity_assessed: form.capacity === "NOT_ASSESSED" ? null : form.capacity === "YES",
     consent_notes: form.consentNotes.trim(),
+    next_of_kin_notification: form.nokNotification,
+    next_of_kin_notes: form.nokNotes.trim(),
   };
 }
 
@@ -259,6 +219,12 @@ export function InpatientAdmissionsPage() {
   const [rosterError, setRosterError] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>(emptyForm);
+  // The chosen client's legal admission status (the single store), refetched
+  // whenever the inline workflow changes it.
+  const [loadedLegal, setLoadedLegal] = useState<{ patientId: string; legal: LegalState } | null>(
+    null,
+  );
+  const [legalVersion, setLegalVersion] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -345,6 +311,19 @@ export function InpatientAdmissionsPage() {
     };
   }, [accessToken]);
 
+  useEffect(() => {
+    const patientId = form.patientId;
+    if (!accessToken || !patientId) return;
+    let cancelled = false;
+    getLegalWorkspace(accessToken, patientId)
+      .then((ws) => !cancelled && setLoadedLegal({ patientId, legal: ws.legal_status }))
+      .catch(() => !cancelled && setLoadedLegal({ patientId, legal: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, form.patientId, legalVersion]);
+  const legal = loadedLegal?.patientId === form.patientId ? loadedLegal.legal : null;
+
   const wardsById = new Map(wards.map((w) => [w.id, w]));
   const bedsById = new Map(beds.map((b) => [b.id, b]));
   const availableBeds = beds.filter((b) => b.status === "AVAILABLE");
@@ -394,9 +373,9 @@ export function InpatientAdmissionsPage() {
     event.preventDefault();
     if (!accessToken) return;
     setSuccess(null);
-    const errors = validate(form);
+    const errors = validate(form, legal);
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0 || !form.admissionType) {
+    if (Object.keys(errors).length > 0) {
       setSaveError("Some required details are missing — see the highlighted fields.");
       return;
     }
@@ -406,13 +385,12 @@ export function InpatientAdmissionsPage() {
       const admission = await admitPatient(accessToken, {
         patient: form.patientId,
         bed: form.bed,
-        admission_type: form.admissionType,
         admitted_at: admittedAtFor(form.admissionDate),
         clinical_priority: form.priority,
         reason_for_admission: form.reason.trim(),
         consultant: form.consultant || null,
         primary_care_team: form.teamName.trim(),
-        ...legalPayload(form),
+        ...admissionExtras(form),
       });
       const name = admission.patient_name || form.clientText;
       setSuccess(`${name} admitted to ${bedLabel(bedsById.get(form.bed), wardsById)}.`);
@@ -494,172 +472,60 @@ export function InpatientAdmissionsPage() {
                 </datalist>
                 {errorFor("patient", "adm-client")}
               </Field>
-              <Field label="Admission Type" htmlFor="adm-type">
-                <SelectChoices
-                  id="adm-type"
-                  options={valueSets.options("admission-type")}
-                  value={form.admissionType}
-                  placeholder="Select admission type"
-                  required
-                  onChange={(code) => update({ admissionType: code as AdmissionType | "" })}
-                />
-                {errorFor("admission_type", "adm-type")}
-              </Field>
-              {form.admissionType && (
+              {form.patientId && (
                 <fieldset className="rounded-lg border border-surface-border p-3.5 sm:col-span-2">
-                  <legend className={`${GROUP_LABEL} !my-0 px-1`}>
-                    {form.admissionType === "INVOLUNTARY"
-                      ? "Legal basis — involuntary admission"
-                      : "Consent — voluntary admission"}
-                  </legend>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                    {form.admissionType === "VOLUNTARY" ? (
-                      <>
-                        <Field label="Consent status *" htmlFor="adm-consent">
-                          <select
-                            id="adm-consent"
-                            className={INPUT}
-                            value={form.consentStatus}
-                            required
-                            {...invalid("consent_status", "adm-consent")}
-                            onChange={(e) =>
-                              update({ consentStatus: e.target.value as ConsentStatus })
-                            }
-                          >
-                            <option value="">Select consent status</option>
-                            {valueSets.options("admission-consent-status").map((o) => (
-                              <option key={o.code} value={o.code}>
-                                {o.display}
-                              </option>
-                            ))}
-                          </select>
-                          {errorFor("consent_status", "adm-consent")}
-                        </Field>
-                        <Field label="Capacity assessed" htmlFor="adm-capacity">
-                          <select
-                            id="adm-capacity"
-                            className={INPUT}
-                            value={form.capacity}
-                            {...invalid("capacity_assessed", "adm-capacity")}
-                            onChange={(e) => update({ capacity: e.target.value as Capacity })}
-                          >
-                            {valueSets.options("capacity-assessed").map((o) => (
-                              <option key={o.code} value={o.code}>
-                                {o.display}
-                              </option>
-                            ))}
-                          </select>
-                          {errorFor("capacity_assessed", "adm-capacity")}
-                        </Field>
-                        <Field
-                          label="Consent notes"
-                          htmlFor="adm-consent-notes"
-                          className="sm:col-span-2"
-                        >
-                          <textarea
-                            id="adm-consent-notes"
-                            rows={2}
-                            className={INPUT}
-                            value={form.consentNotes}
-                            {...invalid("consent_notes", "adm-consent-notes")}
-                            onChange={(e) => update({ consentNotes: e.target.value })}
-                          />
-                          {errorFor("consent_notes", "adm-consent-notes")}
-                        </Field>
-                      </>
-                    ) : (
-                      <>
-                        <Field label="Legal status *" htmlFor="adm-legal-status">
-                          <input
-                            id="adm-legal-status"
-                            type="text"
-                            className={INPUT}
-                            value={form.legalStatus}
-                            required
-                            maxLength={150}
-                            {...invalid("legal_status", "adm-legal-status")}
-                            onChange={(e) => update({ legalStatus: e.target.value })}
-                          />
-                          {errorFor("legal_status", "adm-legal-status")}
-                        </Field>
-                        <Field label="Legal order reference *" htmlFor="adm-order-ref">
-                          <input
-                            id="adm-order-ref"
-                            type="text"
-                            className={INPUT}
-                            value={form.legalOrderReference}
-                            required
-                            maxLength={100}
-                            {...invalid("legal_order_reference", "adm-order-ref")}
-                            onChange={(e) => update({ legalOrderReference: e.target.value })}
-                          />
-                          {errorFor("legal_order_reference", "adm-order-ref")}
-                        </Field>
-                        <Field label="Legal order date *" htmlFor="adm-order-date">
-                          <input
-                            id="adm-order-date"
-                            type="date"
-                            className={INPUT}
-                            value={form.legalOrderDate}
-                            max={todayIso()}
-                            required
-                            {...invalid("legal_order_date", "adm-order-date")}
-                            onChange={(e) => update({ legalOrderDate: e.target.value })}
-                          />
-                          {errorFor("legal_order_date", "adm-order-date")}
-                        </Field>
-                        <Field label="Legal review due date" htmlFor="adm-review-date">
-                          <input
-                            id="adm-review-date"
-                            type="date"
-                            className={INPUT}
-                            value={form.legalReviewDueDate}
-                            {...invalid("legal_review_due_date", "adm-review-date")}
-                            onChange={(e) => update({ legalReviewDueDate: e.target.value })}
-                          />
-                          {errorFor("legal_review_due_date", "adm-review-date")}
-                        </Field>
-                        <Field label="Authorising professional *" htmlFor="adm-authoriser">
-                          <input
-                            id="adm-authoriser"
-                            type="text"
-                            className={INPUT}
-                            value={form.authorizingProfessional}
-                            required
-                            maxLength={255}
-                            {...invalid("authorizing_professional", "adm-authoriser")}
-                            onChange={(e) => update({ authorizingProfessional: e.target.value })}
-                          />
-                          {errorFor("authorizing_professional", "adm-authoriser")}
-                        </Field>
-                        <Field label="Legal rationale" htmlFor="adm-rationale">
-                          <textarea
-                            id="adm-rationale"
-                            rows={2}
-                            className={INPUT}
-                            value={form.legalRationale}
-                            {...invalid("legal_rationale", "adm-rationale")}
-                            onChange={(e) => update({ legalRationale: e.target.value })}
-                          />
-                          {errorFor("legal_rationale", "adm-rationale")}
-                        </Field>
-                        <Field
-                          label="Oversight notes"
-                          htmlFor="adm-oversight"
-                          className="sm:col-span-2"
-                        >
-                          <textarea
-                            id="adm-oversight"
-                            rows={2}
-                            className={INPUT}
-                            value={form.oversightNotes}
-                            {...invalid("oversight_notes", "adm-oversight")}
-                            onChange={(e) => update({ oversightNotes: e.target.value })}
-                          />
-                          {errorFor("oversight_notes", "adm-oversight")}
-                        </Field>
-                      </>
-                    )}
+                  <legend className={`${GROUP_LABEL} !my-0 px-1`}>Legal basis</legend>
+                  {legalActive(legal) ? (
+                    <Callout tone="success" role="status">
+                      {legal?.category === "INVOLUNTARY" ? "Involuntary" : "Voluntary"} legal
+                      status active
+                      {legal?.decision_by ? ` — decided by ${legal.decision_by}` : ""}
+                      {legal?.decision_at ? ` on ${formatDateTime(legal.decision_at)}` : ""}. The
+                      admission takes its type from it.
+                    </Callout>
+                  ) : (
+                    <p className="mb-2 text-[13px] text-ink-700">
+                      Complete the legal admission status here. Voluntary: the client’s signed
+                      application and the admitting officer’s decision. Involuntary: the
+                      application, the signed medical recommendation(s) and the decision. The
+                      admission can be approved once the status is Active.
+                    </p>
+                  )}
+                  {errorFor("legal_status_record", "adm-legal")}
+                  <div className="mt-3">
+                    <LegalAdmissionStatus
+                      patientId={form.patientId}
+                      onChanged={() => setLegalVersion((v) => v + 1)}
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                    <Field label="Capacity assessed" htmlFor="adm-capacity">
+                      <select
+                        id="adm-capacity"
+                        className={INPUT}
+                        value={form.capacity}
+                        {...invalid("capacity_assessed", "adm-capacity")}
+                        onChange={(e) => update({ capacity: e.target.value as Capacity })}
+                      >
+                        {valueSets.options("capacity-assessed").map((o) => (
+                          <option key={o.code} value={o.code}>
+                            {o.display}
+                          </option>
+                        ))}
+                      </select>
+                      {errorFor("capacity_assessed", "adm-capacity")}
+                    </Field>
+                    <Field label="Consent / capacity notes" htmlFor="adm-consent-notes">
+                      <textarea
+                        id="adm-consent-notes"
+                        rows={2}
+                        className={INPUT}
+                        value={form.consentNotes}
+                        {...invalid("consent_notes", "adm-consent-notes")}
+                        onChange={(e) => update({ consentNotes: e.target.value })}
+                      />
+                      {errorFor("consent_notes", "adm-consent-notes")}
+                    </Field>
                     <Field label="Next-of-kin notification" htmlFor="adm-nok">
                       <select
                         id="adm-nok"
@@ -790,7 +656,11 @@ export function InpatientAdmissionsPage() {
                 <button type="button" className={BTN_GHOST} onClick={resetForm}>
                   Cancel
                 </button>
-                <button type="submit" className={BTN} disabled={isSaving}>
+                <button
+                  type="submit"
+                  className={BTN}
+                  disabled={isSaving || (Boolean(form.patientId) && !legalActive(legal))}
+                >
                   {isSaving ? "Approving…" : "Approve Admission"}
                 </button>
               </div>

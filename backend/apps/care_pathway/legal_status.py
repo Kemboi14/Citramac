@@ -402,13 +402,13 @@ def active_risk(patient):
 # ── application lifecycle ──
 
 
-def _open_episode(patient):
-    from .services import open_episode_for
+def _open_episode(patient, user):
+    """The episode the legal status belongs to. Admission starts here (legal
+    status first), so a registered client without one gets a waitlist episode —
+    the same one the admission then joins."""
+    from .services import get_or_open_episode
 
-    episode = open_episode_for(patient)
-    if episode is None:
-        raise ValidationError({"episode": "This client has no open episode of care. Register or open one first."})
-    return episode
+    return get_or_open_episode(patient, user)
 
 
 def legal_status_for(patient):
@@ -422,7 +422,7 @@ def legal_status_for(patient):
 def start_application(patient, user, category):
     if category not in APPLICATION_TEMPLATES:
         raise ValidationError({"category": "Choose VOLUNTARY or INVOLUNTARY."})
-    episode = _open_episode(patient)
+    episode = _open_episode(patient, user)
     template = APPLICATION_TEMPLATES[category]
     ls = LegalStatus.objects.select_for_update().filter(episode=episode).first()
     if ls and ls.pending_application_id:

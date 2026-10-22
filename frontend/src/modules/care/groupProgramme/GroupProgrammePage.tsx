@@ -6,6 +6,8 @@ import { ApiError } from "../../../lib/apiClient";
 import { fieldErrorsFrom } from "../../../lib/formErrors";
 import {
   confirmGroupSession,
+  screenGroupEntries,
+  type RiskFlag,
   getGroupSession,
   getGroupUtilisation,
   getGroupWorkspace,
@@ -87,6 +89,8 @@ export function GroupProgrammePage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
+  // Server risk screen of each observation, run at review (nothing stored).
+  const [riskFlags, setRiskFlags] = useState<Record<string, RiskFlag[]>>({});
   const [editorErrors, setEditorErrors] = useState<Record<string, string>>({});
   const [editorStatus, setEditorStatus] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -231,6 +235,19 @@ export function GroupProgrammePage() {
     }));
   };
 
+  /** A change made in the review panel itself — keeps the review open. */
+  const changeAtReview = (clientId: string, updates: DraftAttendance) => {
+    if (!editable) return;
+    updateDraft(editable, (draft) => ({
+      ...draft,
+      attendance: {
+        ...draft.attendance,
+        // eslint-disable-next-line security/detect-object-injection -- client id from the served list.
+        [clientId]: { ...draft.attendance[clientId], ...updates },
+      },
+    }));
+  };
+
   const changeDetails = (updates: Partial<SessionForm>) => {
     if (!editable) return;
     setReviewKey(null);
@@ -302,9 +319,38 @@ export function GroupProgrammePage() {
       problem = "Complete the session details before reviewing the session.";
     }
     setEditorStatus(problem);
-    setReviewKey(problem ? null : editable.key);
-    if (problem) scrollToEditor();
-    else scrollToId("group-session-review");
+    if (problem || !accessToken) {
+      setReviewKey(null);
+      scrollToEditor();
+      return;
+    }
+    // Owner decision 2026-10-22: risk language in an observation is flagged
+    // automatically — pre-ticked as a disclosure with a follow-up; unticking
+    // it needs a reason (the server enforces the same rule on confirm).
+    const key = editable.key;
+    setEditorStatus("Checking observations for risk language…");
+    screenGroupEntries(
+      accessToken,
+      rows.map(({ client, entry }) => ({ patient: client.id, observation: entry.observation ?? "" })),
+    )
+      .then(({ results }) => {
+        const flags: Record<string, RiskFlag[]> = {};
+        for (const row of results) {
+          if (row.flags.length) flags[row.patient] = row.flags;
+        }
+        setRiskFlags(flags);
+        setEditorStatus("");
+        for (const { client, entry } of rows) {
+          if (client.id in flags && !entry.riskDisclosure && !entry.riskOverrideReason) {
+            changeAtReview(client.id, { riskDisclosure: true, followUp: true });
+          }
+        }
+        setReviewKey(key);
+        scrollToId("group-session-review");
+      })
+      .catch((err) =>
+        setEditorStatus(err instanceof ApiError ? err.message : "Couldn't screen the observations for risk language."),
+      );
   };
 
   const confirm = () => {
@@ -322,6 +368,7 @@ export function GroupProgrammePage() {
         observation: entry.observation?.trim() ?? "",
         risk_disclosure: Boolean(entry.riskDisclosure),
         follow_up: Boolean(entry.followUp || entry.riskDisclosure),
+        risk_override_reason: entry.riskDisclosure ? "" : (entry.riskOverrideReason?.trim() ?? ""),
       })),
     })
       .then((saved) => {
@@ -537,6 +584,8 @@ export function GroupProgrammePage() {
                   documentedBy: currentUser.name,
                 }}
                 rows={reviewRows}
+                riskFlags={riskFlags}
+                onEntryChange={changeAtReview}
                 attendanceLabel={attendanceLabel}
                 confirming={confirming}
                 onConfirm={confirm}

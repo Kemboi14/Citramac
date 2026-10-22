@@ -147,6 +147,19 @@ def _passage(text, start, end):
     return raw.strip(), start - s - lead, end - s - lead
 
 
+# A risk word that is ordinary language when followed by these words — "cutting
+# down drinking" is a reduction goal, not self-harm. Narrow on purpose: a missed
+# disclosure is worse than a prompt the clinician marks reviewed.
+_NOT_RISK_WHEN_FOLLOWED_BY = {
+    "cutting": re.compile(r"\s+(?:down|back|out)(?![\w])", re.IGNORECASE),
+}
+
+
+def _is_idiom(text, matched, end):
+    follow = _NOT_RISK_WHEN_FOLLOWED_BY.get(matched.lower())
+    return bool(follow and follow.match(str(text), end))
+
+
 def detect_risk_language(answers, risk_terms):
     """PSY-RD: every possible safety-language match in the five answers, each
     with its key (question + term), the triggering passage and the match offsets
@@ -163,7 +176,7 @@ def detect_risk_language(answers, risk_terms):
             seen = set()
             for term, start, end in sorted(find_terms(text, risk_terms), key=lambda t: t[1]):
                 dkey = f"{key}{suffix}:{term['id']}"
-                if dkey in seen:
+                if dkey in seen or _is_idiom(text, text[start:end], end):
                     continue
                 seen.add(dkey)
                 passage, p_start, p_end = _passage(text, start, end)

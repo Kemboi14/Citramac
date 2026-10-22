@@ -1497,6 +1497,14 @@ class GroupSessionEntry(TenantScopedModel):
     attendance = models.CharField(max_length=16)
     observation = models.TextField(blank=True)
     risk_disclosure = models.BooleanField(default=False)
+    # Served-lexicon matches found in the observation ([{matched, category,
+    # passage}]) and, when the clinician did not mark them a risk disclosure,
+    # why not. The alert a disclosure raised on this client's record.
+    risk_detected = models.JSONField(default=list, blank=True)
+    risk_override_reason = models.TextField(blank=True)
+    risk_alert = models.ForeignKey(
+        "ClinicalAlert", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
     follow_up_task = models.ForeignKey(
         CareTask, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )

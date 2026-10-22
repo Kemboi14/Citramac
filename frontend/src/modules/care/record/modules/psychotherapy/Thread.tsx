@@ -157,7 +157,17 @@ export function Thread({ config, note, step, acks, busy, h, reviewExtras }: {
                   ))}
                   {step < SAFETY_STEP
                     ? <span className="text-[12px] text-ink-500">You will be asked the safety question after question 5.</span>
-                    : note.safety_answer === "YES" && !locked && <div><button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={h.onOpenRisk}>Open risk assessment</button></div>}
+                    : locked ? null
+                    : note.safety_answer === "YES"
+                      ? <div><button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={h.onOpenRisk}>Open risk assessment</button></div>
+                      : flags.some((d) => !d.resolution) && (
+                        // Review gate: flagged language with a No / Not-assessed answer must be
+                        // either a formal risk assessment or explicitly reviewed — never ignored.
+                        <div className="flex flex-col gap-1.5 text-[12.5px]">
+                          <span>If this is a new or changed concern, change the safety answer to Yes and complete the risk assessment. Otherwise mark each passage reviewed.</span>
+                          <div><button type="button" className={`${BTN_GHOST} ${BTN_SM}`} disabled={busy} onClick={() => h.onSafety("YES")}>Answer Yes and complete the risk assessment</button></div>
+                        </div>
+                      )}
                 </div>
               </Sys>
             )}

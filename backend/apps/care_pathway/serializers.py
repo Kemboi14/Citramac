@@ -220,6 +220,8 @@ class InterventionRecordSerializer(serializers.ModelSerializer):
             "corrections",
         ]
         read_only_fields = ["voided_at", "void_reason", "corrections"]
+        # Optional for a module record (defaults to the module's name, below).
+        extra_kwargs = {"intervention": {"required": False, "allow_blank": True}}
 
     def validate_module(self, value):
         from . import intervention_catalogue
@@ -235,13 +237,20 @@ class InterventionRecordSerializer(serializers.ModelSerializer):
         if module:
             if not (attrs.get("note") or "").strip():
                 raise serializers.ValidationError({"note": "Add a brief note of what was done."})
-            if attrs.get("intervention") not in intervention_catalogue.BY_CODE[module]["options"]:
+            spec = intervention_catalogue.BY_CODE[module]
+            chosen = (attrs.get("intervention") or "").strip()
+            if not chosen:
+                # v4: the sub-intervention chip is optional; the module names the care.
+                attrs["intervention"] = spec["display"]
+            elif chosen not in spec["options"]:
                 raise serializers.ValidationError(
                     {"intervention": "Choose one of this module's interventions."}
                 )
             service = intervention_catalogue.billing_service_for(module)
             attrs["billing_service"] = service
             attrs["billable"] = service is not None
+        elif not (attrs.get("intervention") or "").strip() and not self.instance:
+            raise serializers.ValidationError({"intervention": "Name the intervention delivered."})
         elif attrs.get("billable") and not attrs.get("billing_service"):
             raise serializers.ValidationError(
                 {"billing_service": "Choose the billed service for a billable intervention."}

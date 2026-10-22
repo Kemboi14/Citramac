@@ -1,5 +1,5 @@
-import type { GroupClient } from "../../../lib/groupProgrammeApi";
-import { BTN, BTN_GHOST, TABLE, TD, TH } from "../shared/styles";
+import type { GroupClient, RiskFlag } from "../../../lib/groupProgrammeApi";
+import { BTN, BTN_GHOST, INPUT, TABLE, TD, TH } from "../shared/styles";
 import { clientLabel, type DraftAttendance } from "./model";
 
 export interface ReviewSummary {
@@ -13,10 +13,32 @@ export interface ReviewSummary {
   documentedBy: string;
 }
 
-/** The mockup's "Review before confirmation" card. Nothing is saved until Confirm. */
+const OVERRIDE_MIN = 5;
+
+/** The passage with the matched words emphasised. */
+function Passage({ flag }: { flag: RiskFlag }) {
+  const at = flag.passage.toLowerCase().indexOf(flag.matched.toLowerCase());
+  if (at < 0) return <q className="italic">{flag.passage}</q>;
+  return (
+    <q className="italic">
+      {flag.passage.slice(0, at)}
+      <mark className="rounded bg-priority-red-tint px-0.5 not-italic text-priority-red">
+        {flag.passage.slice(at, at + flag.matched.length)}
+      </mark>
+      {flag.passage.slice(at + flag.matched.length)}
+    </q>
+  );
+}
+
+/** The mockup's "Review before confirmation" card. Nothing is saved until
+ * Confirm. Observations the served lexicon flags arrive pre-ticked as a risk
+ * disclosure (individual alert + follow-up on that client's record only); the
+ * clinician may untick one only by saying why — the reason is kept in the audit. */
 export function ReviewPanel({
   summary,
   rows,
+  riskFlags,
+  onEntryChange,
   attendanceLabel,
   confirming,
   onConfirm,
@@ -24,12 +46,22 @@ export function ReviewPanel({
 }: {
   summary: ReviewSummary;
   rows: { client: GroupClient; entry: DraftAttendance }[];
+  riskFlags: Record<string, RiskFlag[]>;
+  onEntryChange: (clientId: string, updates: DraftAttendance) => void;
   attendanceLabel: (code: string) => string;
   confirming: boolean;
   onConfirm: () => void;
   onReturn: () => void;
 }) {
   const anyRisk = rows.some((row) => row.entry.riskDisclosure);
+  const flagMap = new Map(Object.entries(riskFlags));
+  const flagsFor = (id: string) => flagMap.get(id) ?? [];
+  const unresolved = rows.some(
+    ({ client, entry }) =>
+      flagsFor(client.id).length > 0 &&
+      !entry.riskDisclosure &&
+      (entry.riskOverrideReason?.trim().length ?? 0) < OVERRIDE_MIN,
+  );
   return (
     <section
       id="group-session-review"
@@ -69,7 +101,47 @@ export function ReviewPanel({
                     : "No observation recorded"}
                 </td>
                 <td className={TD}>
-                  {entry.riskDisclosure ? "Individual clinical review required" : "None flagged"}
+                  {flagsFor(client.id).length > 0 ? (
+                    <div className="flex flex-col gap-1.5 text-xs">
+                      <span className="font-semibold text-priority-red">
+                        Possible risk language detected
+                      </span>
+                      {flagsFor(client.id).map((flag) => (
+                        <Passage key={`${flag.matched}-${flag.passage}`} flag={flag} />
+                      ))}
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(entry.riskDisclosure)}
+                          onChange={(e) =>
+                            onEntryChange(client.id, {
+                              riskDisclosure: e.target.checked,
+                              followUp: e.target.checked || entry.followUp,
+                            })
+                          }
+                        />
+                        Risk disclosure — alert and follow-up on this client’s record
+                      </label>
+                      {!entry.riskDisclosure && (
+                        <label className="flex flex-col gap-1">
+                          <span>Why this is not a risk disclosure (kept in the audit)</span>
+                          <textarea
+                            rows={2}
+                            maxLength={500}
+                            className={INPUT}
+                            value={entry.riskOverrideReason ?? ""}
+                            onChange={(e) =>
+                              onEntryChange(client.id, { riskOverrideReason: e.target.value })
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ) : entry.riskDisclosure ? (
+                    "Individual clinical review required"
+                  ) : (
+                    "None flagged"
+                  )}
                 </td>
               </tr>
             ))}
@@ -83,7 +155,12 @@ export function ReviewPanel({
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={BTN} onClick={onConfirm} disabled={confirming}>
+        {unresolved && (
+          <span role="status" className="w-full text-xs text-priority-red">
+            Give the reason for each flagged observation you are not recording as a risk disclosure.
+          </span>
+        )}
+        <button type="button" className={BTN} onClick={onConfirm} disabled={confirming || unresolved}>
           {confirming ? "Saving…" : "Confirm and save session"}
         </button>
         <button type="button" className={BTN_GHOST} onClick={onReturn} disabled={confirming}>

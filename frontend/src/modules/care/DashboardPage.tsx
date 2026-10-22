@@ -6,7 +6,7 @@ import { getCareDashboard, type CareDashboard } from "../../lib/carePathwayApi";
 import { EmptyState } from "../../components/EmptyState";
 import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
 import { formatTime } from "./shared/format";
-import { Callout, Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
+import { Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 import { DecisionInbox } from "./DecisionInbox";
 import { MyTasks } from "./MyTasks";
@@ -62,6 +62,12 @@ const ICONS = {
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
       <path d="m9 16 2 2 4-4" />
+    </svg>
+  ),
+  followup: (
+    <svg {...ICON_PROPS}>
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 3v5h-5" />
     </svg>
   ),
   group: (
@@ -203,35 +209,6 @@ export function DashboardPage() {
   const count = (value: number | undefined, one: string, many: string) =>
     data ? `${value ?? 0} ${(value ?? 0) === 1 ? one : many}` : `— ${many}`;
 
-  // What needs a person's attention right now, most urgent first, each with a way in.
-  const attention = data
-    ? [
-        {
-          count: data.red_orange,
-          text: (c: number) =>
-            `${c} RED / ORANGE ${c === 1 ? "client needs" : "clients need"} priority attention`,
-          to: "/clinical/psychiatry",
-        },
-        {
-          count: data.triage_due,
-          text: (c: number) => `${c} triage ${c === 1 ? "item is" : "items are"} due`,
-          to: "/clinical/triage",
-        },
-        {
-          count: data.follow_ups_overdue,
-          text: (c: number) =>
-            `${c} follow-up ${c === 1 ? "appointment is" : "appointments are"} overdue`,
-          to: "/clinical/follow-up?bucket=overdue",
-        },
-        {
-          count: data.discharged_without_follow_up,
-          text: (c: number) =>
-            `${c} discharged ${c === 1 ? "client has" : "clients have"} no follow-up booked`,
-          to: "/clinical/follow-up?bucket=unbooked",
-        },
-      ].filter((item) => item.count > 0)
-    : [];
-
   return (
     <div className="animate-fade-in">
       <PageHeader
@@ -267,29 +244,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {data && (
-        <section className="mb-6" aria-label="Needs attention">
-          {attention.length > 0 ? (
-            <Callout tone="warning" role="status">
-              <div className="mb-1.5 text-[13px] font-bold">Needs attention</div>
-              <ul className="flex flex-col gap-1">
-                {attention.map((item) => (
-                  <li key={item.to}>
-                    <Link className="font-semibold underline hover:no-underline" to={item.to}>
-                      {item.text(item.count)}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Callout>
-          ) : (
-            <Callout tone="success" role="status">
-              Nothing is waiting on you right now.
-            </Callout>
-          )}
-        </section>
-      )}
-
       <div className="mb-6">
         <DecisionInbox />
         <MyTasks />
@@ -302,11 +256,7 @@ export function DashboardPage() {
           change={data ? `↑ ${data.new_this_week} this week` : ""}
           tone="up"
         />
-        <StatCard
-          value={n(data?.inpatients)}
-          label="Inpatients"
-          change={data ? `${count(data.beds_available, "bed", "beds")} available` : ""}
-        />
+        <StatCard value={n(data?.inpatients)} label="Inpatients" change="" />
         <StatCard
           value={n(data?.outpatients)}
           label="Outpatients"
@@ -316,7 +266,15 @@ export function DashboardPage() {
         <StatCard
           value={n(data?.red_orange)}
           label="RED / ORANGE"
-          change="Requires attention"
+          change={
+            data && data.red_orange > 0 ? (
+              <Link to="/clinical/psychiatry" className="underline hover:no-underline">
+                Requires attention
+              </Link>
+            ) : (
+              ""
+            )
+          }
           tone="down"
         />
       </div>
@@ -374,7 +332,7 @@ export function DashboardPage() {
             onClick={() => navigate("/clinical/appointments")}
           />
           <QuickTile
-            icon={ICONS.appointments}
+            icon={ICONS.followup}
             title="Follow-up"
             detail="Overdue and unbooked follow-ups"
             count={`${data ? data.follow_ups_overdue + data.discharged_without_follow_up : "—"} to action`}

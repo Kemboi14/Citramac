@@ -333,3 +333,23 @@ class OrganizerUnitTests(SimpleTestCase):
         answers = {"q1": {"text": "Worried about exams. Sleeping badly."}}
         sections = org.organize(answers, {"answer": "NO"}, {}, [], [])["sections"]
         self.assertEqual(sections["presenting_focus"], "Client report:\n- Worried about exams.\n- Sleeping badly.")
+
+
+class SignRecordsDeliveryTests(PsyNoteTestCase):
+    def test_signing_records_one_psychotherapy_delivery_without_therapy_content(self):
+        from .models import InterventionRecord
+
+        nid = self.start().data["id"]
+        self.ready(nid, safety_answer="NO", **self.answers(q1="Talked about grief after the funeral."))
+        self.assertEqual(self.act("care-psy-note-sign", nid).data["status"], "SIGNED")
+        with platform_admin_context():
+            records = list(InterventionRecord.objects.filter(patient_id=self.pid, module="psychotherapy"))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].intervention, "Individual")
+        self.assertNotIn("grief", records[0].note)  # the fact of the session only (§4)
+        modules = self.get("care-client-interventions-workspace").data["modules"]
+        psy = next(m for m in modules if m["code"] == "psychotherapy")
+        self.assertEqual(psy["delivered"], 1)
+        self.assertEqual(self.act("care-psy-note-sign", nid).status_code, 400)  # signed once
+        with platform_admin_context():
+            self.assertEqual(InterventionRecord.objects.filter(patient_id=self.pid, module="psychotherapy").count(), 1)

@@ -286,6 +286,9 @@ function AdmissionLegal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const involuntary = a.admission_type === "INVOLUNTARY";
+  // Legal status first: a linked admission's basis is the legal status above;
+  // only what the admission itself holds (capacity, notes, next of kin) is edited here.
+  const linked = a.legal_status_linked;
   const today = formatDate(new Date().toISOString());
   const due = dateOnly(a.legal_review_due_date);
   const overdue = Boolean(due) && due < today && a.status !== "Discharged";
@@ -299,7 +302,13 @@ function AdmissionLegal({
       next_of_kin_notification: form.next_of_kin_notification,
       next_of_kin_notes: form.next_of_kin_notes,
     };
-    const payload = involuntary
+    const payload = linked
+      ? {
+          ...shared,
+          capacity_assessed: form.capacity === "YES" ? true : form.capacity === "NO" ? false : null,
+          consent_notes: form.consent_notes,
+        }
+      : involuntary
       ? {
           ...shared,
           legal_status: form.legal_status,
@@ -391,7 +400,15 @@ function AdmissionLegal({
 
       {!editing ? (
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {involuntary ? (
+          {linked ? (
+            <>
+              <Item label="Legal basis">Legal admission status, above</Item>
+              <Item label="Capacity assessed">
+                {a.capacity_assessed === null ? "Not assessed" : a.capacity_assessed ? "Yes" : "No"}
+              </Item>
+              <Item label="Consent / capacity notes">{a.consent_notes || NOT_RECORDED}</Item>
+            </>
+          ) : involuntary ? (
             <>
               <Item label="Legal status">{a.legal_status || NOT_RECORDED}</Item>
               <Item label="Legal order reference">{a.legal_order_reference || NOT_RECORDED}</Item>
@@ -435,7 +452,19 @@ function AdmissionLegal({
           }}
         >
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-            {involuntary ? (
+            {linked ? (
+              <>
+                <Field label="Capacity assessed" htmlFor={`${id}-capacity`}>
+                  <SelectChoices
+                    id={`${id}-capacity`}
+                    options={vs.options("capacity-assessed")}
+                    value={form.capacity}
+                    onChange={(capacity) => set({ capacity })}
+                  />
+                </Field>
+                {text("consent_notes", "Consent / capacity notes", true)}
+              </>
+            ) : involuntary ? (
               <>
                 {text("legal_status", "Legal status")}
                 {text("legal_order_reference", "Legal order reference")}

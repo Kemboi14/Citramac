@@ -107,6 +107,8 @@ export interface Admission {
   discharge_summary: string;
   follow_up_date: string | null;
   admission_type: AdmissionType;
+  /** The client's legal admission status this admission rests on (null for older admissions). */
+  legal_status_record: string | null;
   admission_source: string;
   priority: "ROUTINE" | "URGENT" | "EMERGENCY";
   reason_for_admission: string;

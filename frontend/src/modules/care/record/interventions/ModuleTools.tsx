@@ -6,14 +6,13 @@ import { clientRecordPath } from "../../shared/recordRoutes";
 import { BTN_GHOST, BTN_SM } from "../../shared/styles";
 import { Card, ErrorNote } from "../../shared/ui";
 import { LegalAdmissionStatus } from "../legal/LegalAdmissionStatus";
-import { LegalFormsModule, OatModule } from "../modules/ClinicalExtras";
+import { OatModule } from "../modules/ClinicalExtras";
 import { LabsModule } from "../modules/LabsModule";
 import { MarModule } from "../modules/MarModule";
 import { ObservationModule } from "../modules/ObservationModule";
 import { PrescribingModule } from "../modules/PrescribingModule";
 import { RestrictiveModule } from "../modules/RestrictiveModule";
 import { SbarModule } from "../modules/SmallModules";
-import { TherapyModule } from "../modules/TherapyModule";
 import { WithdrawalModule } from "../modules/WithdrawalModule";
 import { FollowUpPanel } from "../outcomes/FollowUpPanel";
 import { useRecordData } from "../useRecordData";
@@ -69,7 +68,8 @@ function ClientFollowUps({ patientId, clientName }: Target) {
  * client: the record selects it in the shared patient context, and the
  * admissions page takes `?patient=`. Modules with no dedicated module yet
  * (medical review, psychosocial support, nutrition & fitness) record through
- * the delivery form only. */
+ * the delivery form only. Psychotherapy is the guided session itself
+ * (PsychotherapyRecord), drawn by the drawer instead of a tool here. */
 const MODULES = new Map<string, ModuleDef>(
   Object.entries({
     emergency_care: {
@@ -124,20 +124,15 @@ const MODULES = new Map<string, ModuleDef>(
       tools: [
         {
           title: "Legal admission status",
-          note: "Voluntary / involuntary status, rights information, notices — as in Legal & consent",
+          note: "The single legal basis for admission — application, recommendation(s), decision, rights",
           render: ({ patientId }: Target) => (
             <LegalAdmissionStatus patientId={patientId} onChanged={() => undefined} />
           ),
           bare: true,
         },
-        {
-          title: "Statutory forms",
-          note: "Forms linked to legal status",
-          render: ({ patientId }: Target) => <LegalFormsModule patientId={patientId} />,
-        },
       ],
       page: {
-        label: "Admit or view admission",
+        label: "Bed allocation — admit or view admission",
         to: (patientId: string) => `/clinical/inpatient?patient=${encodeURIComponent(patientId)}`,
       },
     },
@@ -178,19 +173,6 @@ const MODULES = new Map<string, ModuleDef>(
           title: "Restrictive practice",
           note: "De-escalation first, authoriser, timed checks, debrief",
           render: ({ patientId }: Target) => <RestrictiveModule patientId={patientId} />,
-        },
-      ],
-    },
-    group_psychotherapy: {
-      tools: [],
-      page: { label: "Open Group psychotherapy", to: () => "/clinical/psychotherapy/group" },
-    },
-    psychotherapy: {
-      tools: [
-        {
-          title: "Therapy",
-          note: "Therapy contract, numbered sessions, measurement-based care",
-          render: ({ patientId }: Target) => <TherapyModule patientId={patientId} />,
         },
       ],
     },

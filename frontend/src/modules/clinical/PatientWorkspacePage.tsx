@@ -399,8 +399,8 @@ export function PatientWorkspacePage() {
               <Link className="text-brand-green hover:underline" to="/clinical/review">
                 Clinical Review
               </Link>
-              <Link className="text-brand-green hover:underline" to="/clinical/ipd">
-                Inpatient &amp; Ward / Admission
+              <Link className="text-brand-green hover:underline" to="/clinical/inpatient">
+                Inpatient Admissions
               </Link>
               <Link className="text-brand-green hover:underline" to="/clinical/mhp/individual">
                 Individual Psychotherapy
@@ -556,7 +556,7 @@ export function PatientWorkspacePage() {
             <button
               type="button"
               className="text-sm font-semibold text-brand-green"
-              onClick={() => navigate("/clinical/ipd")}
+              onClick={() => navigate("/clinical/inpatient")}
             >
               {patient?.patient_category === "INPATIENT" ? "Manage admission" : "Start admission"}
             </button>

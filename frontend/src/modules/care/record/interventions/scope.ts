@@ -1,22 +1,18 @@
-import type { InterventionGroup, InterventionModule } from "../../../../lib/carePathwayApi";
+import type { InterventionModule } from "../../../../lib/carePathwayApi";
 
 export type ModuleScope = "plan" | "all";
 
-const GROUP_ORDER: InterventionGroup[] = ["Assess", "Treat", "Support", "Close-out"];
-
-/** The modules a scope shows, in the mockup's order: by group, recommended
- * first, then catalogue order (`renderInterventionModules`). */
+/** The modules a scope shows, in the v4 order: recommended first, then the
+ * catalogue order (`stageInterventions`). "For this plan" is what the plan
+ * or the record recommends, plus anything a plan action is delivered through. */
 export function scopedModules(modules: InterventionModule[], scope: ModuleScope) {
-  const shown = modules.filter(
-    (module) => scope === "all" || module.recommended || module.action_id !== null,
-  );
-  return shown
-    .map((module) => ({ module, index: modules.indexOf(module) }))
+  const forPlan = (m: InterventionModule) => m.recommended || m.linked_actions.length > 0;
+  return modules
+    .map((module, index) => ({ module, index }))
+    .filter(({ module }) => scope === "all" || forPlan(module))
     .sort(
       (a, b) =>
-        GROUP_ORDER.indexOf(a.module.group) - GROUP_ORDER.indexOf(b.module.group) ||
-        Number(b.module.recommended) - Number(a.module.recommended) ||
-        a.index - b.index,
+        Number(forPlan(b.module)) - Number(forPlan(a.module)) || a.index - b.index,
     )
     .map(({ module }) => module);
 }

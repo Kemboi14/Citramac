@@ -676,6 +676,8 @@ export interface ClientLegal {
     status: string;
     admission_type: "VOLUNTARY" | "INVOLUNTARY";
     admission_type_label: string;
+    /** The legal basis is the client's legal admission status, not these legacy fields. */
+    legal_status_linked: boolean;
     consent_status: string;
     capacity_assessed: boolean | null;
     consent_at: string | null;
@@ -1077,6 +1079,13 @@ export interface InterventionAction {
   status: CarePlanActivity["status"];
   status_display: string;
   priority: PriorityOrBlank;
+  instructions: string;
+  /** Accepted / Modified / Added by clinician, with the first recommendation reason. */
+  decision_display: string;
+  why: string;
+  due_at: string | null;
+  /** Past due, not completed, and not Routine (v4). */
+  overdue: boolean;
   records: number;
   latest_by: string;
   latest_at: string | null;
@@ -1099,12 +1108,25 @@ export interface InterventionModule {
   /** Set when the module's own workflow raises the charge (e.g. "signing the discharge"). */
   charged_by: string;
   delivered: number;
+  /** Modules whose records this card counts and lists (Psychotherapy includes group sessions). */
+  history_modules: string[];
+  unit: string;
+  note: string;
+  /** Care-plan actions this module delivers. */
+  linked_actions: string[];
+  /** The facility's configured SHA code for the tariff line — blank when not configured. */
+  sha_code: string;
+  /** A configured payer requires pre-authorisation for this service. */
+  preauth: boolean;
 }
 
 export interface InterventionContext {
   client: string;
   diagnoses: string[];
   allergies: string;
+  /** Signed intake risk formulation; blank when none is signed. */
+  risk: string;
+  risk_change_72h: string;
   alerts: string[];
   medicines: string[];
   goals: string[];
@@ -1112,6 +1134,8 @@ export interface InterventionContext {
 
 export interface InterventionWorkspace {
   has_plan: boolean;
+  /** The care plan has a signed version (v4 "confirmed"). */
+  plan_signed: boolean;
   actions: InterventionAction[];
   modules: InterventionModule[];
   context: InterventionContext;

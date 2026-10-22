@@ -11,6 +11,24 @@ from apps.tenancy.models import Organization
 from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
 
 
+def active_legal_status(patient, user, category="VOLUNTARY"):
+    """An Active legal admission status on the client's open episode — what the
+    legal-status workflow leaves behind once the admitting officer decides."""
+    from apps.care_pathway import legal_config
+    from apps.care_pathway.legal_models import LegalStatus
+    from apps.care_pathway.services import get_or_open_episode
+
+    with platform_admin_context():
+        episode = get_or_open_episode(patient, user)
+        return LegalStatus.objects.create(
+            organization_id=patient.organization_id, patient=patient, episode=episode,
+            config_version=legal_config.version(), category=category,
+            statutory_basis=legal_config.statutory_basis(category), created_by=user,
+            status="ACTIVE", decision="ADMITTED", decision_by=user, decision_at=timezone.now(),
+            effective_from=timezone.now(),
+        )
+
+
 class IpdWardTests(APITestCase):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.7 — ADT + bed status transitions."""
 
@@ -39,17 +57,17 @@ class IpdWardTests(APITestCase):
         self.access, _ = issue_tokens(self.nurse)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
 
-    def test_admission_marks_bed_occupied(self):
-        response = self.client.post(
+    def admit(self, **body):
+        return self.client.post(
             reverse("ipd-admission-list"),
-            {
-                "patient": str(self.patient.id),
-                "bed": str(self.bed_a.id),
-                "consent_status": "OBTAINED",
-            },
+            {"patient": str(self.patient.id), "bed": str(self.bed_a.id), **body},
             format="json",
             **self.auth,
         )
+
+    def test_admission_marks_bed_occupied(self):
+        active_legal_status(self.patient, self.nurse)
+        response = self.admit()
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             self.bed_a.refresh_from_db()
@@ -127,21 +145,43 @@ class IpdWardTests(APITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["id"], str(self.ward.id))
 
-    def test_involuntary_admission_requires_its_legal_basis(self):
-        """Owner decision 2026-10-07 (docs/15 §4): the legal order is captured at admission."""
-        response = self.client.post(
-            reverse("ipd-admission-list"),
-            {
-                "patient": str(self.patient.id),
-                "bed": str(self.bed_a.id),
-                "admission_type": "INVOLUNTARY",
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 400)
+    def test_no_admission_without_an_active_legal_status(self):
+        """Owner decision 2026-10-22: legal status first — no free-text legal basis."""
+        for body in ({}, {"admission_type": "INVOLUNTARY", "legal_status": "Order",
+                          "legal_order_reference": "MHA-1", "legal_order_date": "2026-09-01",
+                          "authorizing_professional": "Dr. A"}):
+            response = self.admit(**body)
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("legal_status_record", response.data)
+        with platform_admin_context():
+            self.assertFalse(Admission.objects.exists())
 
-    def test_legal_basis_can_be_updated_but_not_blanked(self):
+    def test_a_pending_legal_status_does_not_admit(self):
+        status = active_legal_status(self.patient, self.nurse, "INVOLUNTARY")
+        with platform_admin_context():
+            status.status = "PENDING"
+            status.save(update_fields=["status"])
+        self.assertEqual(self.admit().status_code, 400)
+
+    def test_voluntary_admission_links_the_legal_status_and_its_consent(self):
+        status = active_legal_status(self.patient, self.nurse)
+        response = self.admit(consent_status="")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["admission_type"], "VOLUNTARY")
+        self.assertEqual(response.data["legal_status_record"], status.id)
+        self.assertEqual(response.data["consent_status"], "OBTAINED")
+
+    def test_involuntary_admission_takes_its_type_from_the_legal_status(self):
+        status = active_legal_status(self.patient, self.nurse, "INVOLUNTARY")
+        response = self.admit(legal_order_reference="typed-in", risk_self_harm=True)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["admission_type"], "INVOLUNTARY")
+        self.assertEqual(response.data["legal_status_record"], status.id)
+        self.assertEqual(response.data["legal_order_reference"], "")  # never a second store
+        self.assertTrue(response.data["risk_self_harm"])
+        self.assertEqual(self.admit(admission_type="VOLUNTARY", bed=str(self.bed_b.id)).status_code, 400)
+
+    def test_legacy_legal_basis_can_be_updated_but_not_blanked(self):
         with platform_admin_context():
             admission = Admission.objects.create(
                 organization=self.org,
@@ -160,39 +200,6 @@ class IpdWardTests(APITestCase):
         self.assertEqual(renewed.status_code, 200, renewed.data)
         blanked = self.client.patch(url, {"legal_order_reference": ""}, format="json", **self.auth)
         self.assertEqual(blanked.status_code, 400)
-
-    def test_voluntary_admission_requires_consent_status(self):
-        response = self.client.post(
-            reverse("ipd-admission-list"),
-            {"patient": str(self.patient.id), "bed": str(self.bed_a.id)},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_involuntary_admission_stores_legal_status(self):
-        """Mental Health Act (Cap. 248) legal-status fields round-trip on admission."""
-        response = self.client.post(
-            reverse("ipd-admission-list"),
-            {
-                "patient": str(self.patient.id),
-                "bed": str(self.bed_a.id),
-                "admission_type": "INVOLUNTARY",
-                "legal_status": "Involuntary admission order",
-                "legal_order_reference": "MHA-2026-014",
-                "legal_order_date": "2026-09-01",
-                "authorizing_professional": "Dr. A. Mwangi",
-                "legal_review_due_date": "2026-09-10",
-                "risk_self_harm": True,
-                "observation_level": "ENHANCED",
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["admission_type"], "INVOLUNTARY")
-        self.assertEqual(response.data["legal_order_reference"], "MHA-2026-014")
-        self.assertTrue(response.data["risk_self_harm"])
 
     def test_admission_list_filters_by_admission_type(self):
         with platform_admin_context():

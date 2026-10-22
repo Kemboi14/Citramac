@@ -15,7 +15,7 @@ from .test_care_plan import CarePlanTestCase
 
 class InterventionWorkspaceTests(CarePlanTestCase):
     def record(self, auth=None, **body):
-        payload = {"module": "psychotherapy", "intervention": "CBT session", "note": "Session 1", **body}
+        payload = {"module": "psychotherapy", "intervention": "Individual", "note": "Session 1", **body}
         return self.client.post(
             reverse("care-client-interventions", args=[self.pid]), payload, format="json",
             **(auth or self.auth),
@@ -66,7 +66,7 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertTrue(response.data["billable"])
         self.assertEqual(response.data["billing_service_name"], "Psychotherapy")
-        unpriced = self.record(module="observation_safety", intervention="Observation review", note="Calm")
+        unpriced = self.record(module="observation_safety", intervention="Step-down review", note="Calm")
         self.assertFalse(unpriced.data["billable"])
         with platform_admin_context():
             charges = ChargeItem.objects.filter(patient_id=self.pid)
@@ -76,7 +76,7 @@ class InterventionWorkspaceTests(CarePlanTestCase):
 
     def test_admission_and_discharge_deliveries_never_charge_twice(self):
         # Their charge comes from admitting the client / signing the discharge.
-        for module, chip in (("admission", "Admission review"), ("discharge", "Discharge planning")):
+        for module, chip in (("admission", "Bed allocation"), ("discharge", "Discharge summary")):
             response = self.record(module=module, intervention=chip, note="Done")
             self.assertEqual(response.status_code, 201, response.data)
             self.assertFalse(response.data["billable"])
@@ -120,7 +120,8 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.set_rate("Psychotherapy", Decimal("3000"))
 
         data = self.workspace()
-        self.assertEqual(set(data), {"has_plan", "actions", "modules", "context"})
+        self.assertEqual(set(data), {"has_plan", "plan_signed", "actions", "modules", "context"})
+        self.assertFalse(data["plan_signed"])
         action = data["actions"][0]
         self.assertEqual((action["id"], action["records"], action["status"]), (activity_id, 1, "ACTIVE"))
         self.assertTrue(action["latest_by"])
@@ -130,7 +131,13 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(data["context"]["allergies"], "No known allergies")
 
         modules = {m["code"]: m for m in data["modules"]}
-        self.assertEqual(len(modules), 18)
+        # v4 CARE_MENU: 17 cards. Group sessions count inside the Psychotherapy card.
+        self.assertEqual(len(modules), 17)
+        self.assertNotIn("group_psychotherapy", modules)
+        self.assertEqual(modules["psychotherapy"]["history_modules"], ["psychotherapy", "group_psychotherapy"])
+        self.assertEqual(modules["psychotherapy"]["linked_actions"], [activity_id])
+        self.assertEqual((modules["psychiatry"]["unit"], modules["psychiatry"]["sha_code"]), ("review", ""))
+        self.assertIn("bed-day tariff", modules["observation_safety"]["note"])
         recommended = {code for code, m in modules.items() if m["recommended"]}
         self.assertTrue(
             {"withdrawal_management", "medical_review", "admission", "psychiatric_nursing", "discharge"}
@@ -142,8 +149,6 @@ class InterventionWorkspaceTests(CarePlanTestCase):
             "Diagnosis, alert, or flag references substance use or withdrawal",
         )
         self.assertEqual(modules["psychotherapy"]["action_id"], activity_id)
-        # Group psychotherapy delivers the same therapy action (mockup actionId).
-        self.assertEqual(modules["group_psychotherapy"]["action_id"], activity_id)
         self.assertEqual((modules["psychotherapy"]["rate"], modules["psychotherapy"]["delivered"]), ("3000.00", 1))
         self.assertIsNone(modules["observation_safety"]["billing_service"])
         self.assertFalse(modules["observation_safety"]["billable"])
@@ -153,5 +158,20 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(self.record(module="nope").status_code, 400)
         self.assertEqual(self.record(intervention="Not an option").status_code, 400)
         self.assertEqual(self.record(note=" ").status_code, 400)
+        # The chip is optional: the module then names the care.
+        unnamed = self.record(module="appointments", intervention="", note="Booked")
+        self.assertEqual((unnamed.status_code, unnamed.data["intervention"]), (201, "Appointments"))
         self.assertEqual(self.record(quantity=0).status_code, 400)
         self.assertEqual(self.record(completes_activity=True).status_code, 400)
+
+    def test_payer_code_and_preauth_come_from_the_facility_configuration(self):
+        from apps.insurance_claims.models import ServicePayerCode
+
+        with platform_admin_context():
+            service = BillingService.objects.get(organization=self.org, name="Admission")
+            ServicePayerCode.objects.create(
+                organization=self.org, service=service, payer="SHA", payer_code="CFG-1",
+                requires_preauth=True,
+            )
+        admission = {m["code"]: m for m in self.workspace()["modules"]}["admission"]
+        self.assertEqual((admission["sha_code"], admission["preauth"]), ("CFG-1", True))

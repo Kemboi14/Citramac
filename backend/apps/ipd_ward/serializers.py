@@ -87,6 +87,7 @@ class AdmissionSerializer(serializers.ModelSerializer):
             "episode",
             "consultant_name",
             "patient_citramac_number",
+            "legal_status_record",
         ]
         # admitted_at is writable: the admission form records the admission date
         # (docs/15-CLINICAL-WORKSPACE-V3.md §1.10); it defaults to now.
@@ -94,6 +95,7 @@ class AdmissionSerializer(serializers.ModelSerializer):
         # discharge is now a signed DischargeSummary (apps.care_pathway), and
         # leaving these writable would let signed content be bypassed by PATCH.
         read_only_fields = [
+            "legal_status_record",
             "admitted_by",
             "status",
             "discharged_at",
@@ -151,20 +153,38 @@ class AdmissionSerializer(serializers.ModelSerializer):
                     {"consent_status": "Record the consent status for a voluntary admission."}
                 )
             return attrs
-        if self.instance is None:
-            admission_type = attrs.get("admission_type", "VOLUNTARY")
-            if admission_type == "INVOLUNTARY":
-                missing = {
-                    field: "Required for an involuntary admission."
-                    for field in self.INVOLUNTARY_REQUIRED
-                    if not attrs.get(field)
+        # Owner decision 2026-10-22 ("legal status first"): a new admission's legal
+        # basis is the client's Active legal admission status — the single store
+        # (CLAUDE.md §5). Voluntary: the signed application and the admitting
+        # officer's decision; involuntary: the application, the signed medical
+        # recommendation(s) and the decision. No free-text legal basis at create.
+        from apps.care_pathway.legal_models import LegalStatus
+        from apps.care_pathway.services import open_episode_for
+
+        patient = attrs.get("patient")
+        episode = open_episode_for(patient) if patient else None
+        ls = LegalStatus.objects.filter(episode=episode).first() if episode else None
+        if ls is None or ls.status != "ACTIVE":
+            raise serializers.ValidationError(
+                {
+                    "legal_status_record": "Complete the client's legal admission status first — "
+                    "a signed application and the admitting officer's decision (and, for an "
+                    "involuntary admission, the signed medical recommendation)."
                 }
-                if missing:
-                    raise serializers.ValidationError(missing)
-            elif not attrs.get("consent_status"):
-                raise serializers.ValidationError(
-                    {"consent_status": "Record the consent status for a voluntary admission."}
-                )
+            )
+        requested = attrs.get("admission_type")
+        if requested and requested != ls.category:
+            raise serializers.ValidationError(
+                {"admission_type": f"The client's legal status is {ls.get_category_display().lower()}."}
+            )
+        for field in self.LEGAL_STATUS_OWNED:
+            attrs.pop(field, None)
+        attrs["admission_type"] = ls.category
+        attrs["legal_status_record"] = ls
+        if ls.category == "VOLUNTARY" and not attrs.get("consent_status"):
+            # The signed voluntary application is the client's consent to admission.
+            attrs["consent_status"] = "OBTAINED"
+            attrs.setdefault("consent_at", ls.decision_at)
         return attrs
 
     def get_consultant_name(self, obj):

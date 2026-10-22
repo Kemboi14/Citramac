@@ -466,6 +466,16 @@ class OrganizerChatUnitTests(PsyNoteTestCase):
         )
         self.assertEqual([(d["key"], d["source"]) for d in found], [("q2~en:1", "translation")])
 
+    def test_cutting_down_is_a_reduction_goal_but_cutting_alone_still_flags(self):
+        terms = [{"id": 1, "category": "self_harm", "phrase": "cutting"}]
+
+        def flagged(text):
+            return [d["matched"] for d in org.detect_risk_language({"q2": {"text": text}}, terms)]
+
+        self.assertEqual(flagged("Working on cutting down drinking and cutting back on khat."), [])
+        self.assertEqual(flagged("He has been cutting again."), ["cutting"])
+        self.assertEqual(flagged("Cutting out beer, but still cutting at night."), ["cutting"])
+
     def test_reworded_sections_keep_the_deterministic_parts(self):
         fixed = {
             "interventions": "Approach(es) identified by clinician: CBT",

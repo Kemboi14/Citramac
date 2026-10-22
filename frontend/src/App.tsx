@@ -175,7 +175,6 @@ const GroupProgrammePage = lazyNamed(
 );
 const LimsPage = lazyNamed(() => import("./modules/clinical/LimsPage"), "LimsPage");
 const PharmacyPage = lazyNamed(() => import("./modules/clinical/PharmacyPage"), "PharmacyPage");
-const IpdPage = lazyNamed(() => import("./modules/clinical/IpdPage"), "IpdPage");
 const ClinicalReviewPage = lazyNamed(
   () => import("./modules/clinical/ClinicalReviewPage"),
   "ClinicalReviewPage",
@@ -392,7 +391,8 @@ function App() {
             <Route path="encounter" element={<ClinicalEncounterPage />} />
             <Route path="lims" element={<LimsPage />} />
             <Route path="pharmacy" element={<PharmacyPage />} />
-            <Route path="ipd" element={<IpdPage />} />
+            {/* One admission flow (legal status first): the old ADT screen redirects. */}
+            <Route path="ipd" element={<Navigate to="/clinical/inpatient" replace />} />
             <Route path="mhp/individual" element={<IndividualPsychotherapyPage />} />
             <Route path="mhp/family" element={<FamilyTherapyPage />} />
             <Route path="mhp/group" element={<GroupPsychotherapyPage />} />

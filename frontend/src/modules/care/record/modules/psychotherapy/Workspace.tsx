@@ -106,12 +106,14 @@ function started(note: PsyNote) {
 }
 
 /** Start or resume the clinician's draft for a therapy episode, or open a saved
- * note by id — as a full-screen workspace over the page it was opened from. */
-export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose }: {
+ * note by id — as a full-screen workspace over the page it was opened from, or
+ * `inline` inside the Psychotherapy module's Record tab (v4 `psyWorkflowMount`). */
+export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, inline = false }: {
   patientId: string;
   episodeId?: string;
   noteId?: string;
   onClose: () => void;
+  inline?: boolean;
 }) {
   const { accessToken } = useAuth();
   const [config, setConfig] = useState<PsyConfig | null>(null);
@@ -125,6 +127,7 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose }
     load.then(setNote).catch((e) => setError(errorText(e, "Couldn't open the session note.")));
   }, [accessToken, patientId, episodeId, noteId]);
   useEffect(() => {
+    if (inline) return () => stopSpeaking();
     const opener = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -134,10 +137,15 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose }
       stopSpeaking();
       opener?.focus?.();
     };
-  }, []);
-  return createPortal(
-    <div ref={root} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Psychotherapy session"
-      className="fixed inset-0 z-[100] flex bg-surface-bg text-ink-900 outline-none">
+  }, [inline]);
+  const body = (
+    <div ref={root} tabIndex={-1}
+      {...(inline
+        ? { role: "region", "aria-label": "Guided individual psychotherapy session" }
+        : { role: "dialog", "aria-modal": true, "aria-label": "Psychotherapy session" })}
+      className={inline
+        ? "relative flex h-[clamp(620px,82vh,820px)] overflow-hidden rounded-[14px] border border-surface-border bg-surface-bg text-ink-900 shadow-sm outline-none [transform:translateZ(0)]"
+        : "fixed inset-0 z-[100] flex bg-surface-bg text-ink-900 outline-none"}>
       {config && note ? (
         <WorkspaceBody key={note.id} config={config} initial={note} patientId={patientId} onClose={onClose}
           onReplace={setNote} />
@@ -148,9 +156,9 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose }
           <button type="button" className={BTN_GHOST} onClick={onClose}>Close</button>
         </div>
       )}
-    </div>,
-    document.body,
+    </div>
   );
+  return inline ? body : createPortal(body, document.body);
 }
 
 function RailButton({ label, current, onClick, children }: { label: string; current?: boolean; onClick: () => void; children: ReactNode }) {

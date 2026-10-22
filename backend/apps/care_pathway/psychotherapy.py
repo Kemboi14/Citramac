@@ -1151,7 +1151,43 @@ def sign(note, user):
     session.session_notes = org.render(note.sections, watermark=False)
     session.save(update_fields=["session_notes", "updated_at"])
     Encounter.objects.filter(pk=note.encounter_id).update(status="CLOSED", closed_at=now)
+    _record_delivery(note, user)
     return note
+
+
+def _record_delivery(note, user):
+    """v4 `recordDelivery("Psychotherapy", 1)` on sign: the session counts as
+    delivered on the Interventions card, moves the linked therapy action on and
+    raises the tariff charge — so the session is never documented twice. Only
+    the fact of the session is written; its content stays on the signed note."""
+    from . import intervention_catalogue, services
+
+    if note.intervention_record_id:
+        return
+    session = note.session
+    activity_id = (session.extra or {}).get("activity")
+    activity = (
+        CarePlanActivity.objects.filter(pk=activity_id, care_plan__patient=note.patient).first()
+        if activity_id else None
+    ) or (note.therapy_episode.activity if note.therapy_episode_id else None)
+    number = _session_number(note)
+    service = intervention_catalogue.billing_service_for("psychotherapy")
+    note.intervention_record = services.record_intervention(
+        user,
+        note.patient,
+        {
+            "module": "psychotherapy",
+            "intervention": "Family therapy" if session.session_type == "FAMILY" else "Individual",
+            "performed_at": session.session_date,
+            "provider": note.author or user,
+            "note": f"Psychotherapy session {number} — signed note" if number else "Psychotherapy session — signed note",
+            "billable": service is not None,
+            "billing_service": service,
+        },
+        activity=activity,
+    )
+    note.save(update_fields=["intervention_record", "updated_at"])
+    _audit(note, user, "DELIVERY_RECORDED", intervention=str(note.intervention_record_id))
 
 
 @transaction.atomic

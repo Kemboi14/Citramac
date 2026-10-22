@@ -41,6 +41,8 @@ export interface DraftAttendance {
   observation?: string;
   riskDisclosure?: boolean;
   followUp?: boolean;
+  /** Reason the clinician gives for unticking an automatically flagged risk. */
+  riskOverrideReason?: string;
 }
 
 /** A session being documented: its details and the attendance marked so far. */

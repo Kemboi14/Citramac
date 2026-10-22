@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
-import { ErrorNote } from "../shared/ui";
+import { Callout, ErrorNote } from "../shared/ui";
 import { CarePlanActionsTable } from "./interventions/CarePlanActionsTable";
 import { InterventionDrawer } from "./interventions/InterventionDrawer";
 import { ModuleList, ScopeToggle } from "./interventions/ModuleList";
@@ -12,11 +12,11 @@ const SECTION_HEAD = "mb-2 mt-5 flex flex-wrap items-center justify-between gap-
 const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-700";
 
 /**
- * Interventions — the approved v4 mockup (`psychiatricInterventionWorkspace`):
- * what the plan asked for, the clinical modules care is recorded from, and a
- * full-screen module drawer. Recommendations and tariff come from the server
- * (care/clients/<id>/interventions/workspace/); nothing is kept in browser
- * storage (CLAUDE.md §5).
+ * Interventions — the v4 patient workflow's `stageInterventions` (what the
+ * Psychiatric review opens): what the plan asked for, the clinical modules care
+ * is recorded from, and a full-screen module drawer. Recommendations, tariff and
+ * payer codes come from the server (care/clients/<id>/interventions/workspace/);
+ * nothing is kept in browser storage (CLAUDE.md §5).
  */
 export function InterventionsStage({ patientId, banner }: RecordViewProps) {
   const [version, setVersion] = useState(0);
@@ -57,9 +57,10 @@ export function InterventionsStage({ patientId, banner }: RecordViewProps) {
       <h2 id="interventions-title" className="font-display text-xl font-semibold text-ink-900">
         Interventions
       </h2>
-      <p className="mb-[18px] mt-1 max-w-[640px] text-[12.5px] text-ink-700">
-        Record care delivered in response to the care plan. Client context carries forward;
-        confirm it before recording. Review charges in Billing.
+      <p className="mb-[18px] mt-1 max-w-[74ch] text-[12.5px] leading-relaxed text-ink-700">
+        Record what was delivered in response to the Care Plan. Each record links to a care-plan
+        action and captures provider, time, intervention, client response, outcome and next action.
+        Billable care creates the billing event automatically — nothing is documented twice.
       </p>
 
       <p role="status" aria-live="polite" className="mb-3.5 text-xs text-ink-500 empty:hidden">
@@ -67,17 +68,24 @@ export function InterventionsStage({ patientId, banner }: RecordViewProps) {
       </p>
       <ErrorNote>{workspace.error ?? records.error}</ErrorNote>
 
-      <div className={SECTION_HEAD}>
-        <div>
-          <b className={SECTION_LABEL}>Care-plan actions</b>
-          <span className="ml-2 text-xs text-ink-500">what the plan asked for</span>
-        </div>
-      </div>
-      <CarePlanActionsTable
-        actions={actions}
-        loading={workspace.loading && !data}
-        triagePriority={banner.priority}
-      />
+      {data && !data.plan_signed ? (
+        <Callout tone="warning">
+          No confirmed care plan yet. Modules are available (e.g. for emergency care), but action
+          tracking and recommendations from the plan appear once the plan is signed.
+        </Callout>
+      ) : (
+        <>
+          <div className={SECTION_HEAD}>
+            <div>
+              <b className={SECTION_LABEL}>Care-plan actions</b>
+              <span className="ml-2 text-xs text-ink-500">
+                what the plan asked for · status updates as care is recorded
+              </span>
+            </div>
+          </div>
+          <CarePlanActionsTable actions={actions} loading={workspace.loading && !data} />
+        </>
+      )}
 
       <div className={SECTION_HEAD}>
         <b className={SECTION_LABEL}>Clinical modules</b>
@@ -106,12 +114,14 @@ export function InterventionsStage({ patientId, banner }: RecordViewProps) {
           module={openModule}
           actions={actions}
           context={data.context}
-          records={(records.data?.results ?? []).filter((r) => r.module === openModule.code)}
-          onClose={() => setOpenCode(null)}
-          onRecorded={() => {
+          records={(records.data?.results ?? []).filter((r) =>
+            openModule.history_modules.includes(r.module),
+          )}
+          onClose={() => {
             setOpenCode(null);
-            refresh(`Intervention recorded for ${clientName}.`);
+            setVersion((v) => v + 1);
           }}
+          onRecorded={(message) => refresh(message)}
           onCorrected={refresh}
         />
       )}

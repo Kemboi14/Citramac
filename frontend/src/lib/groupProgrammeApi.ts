@@ -101,6 +101,9 @@ export interface GroupEntryClinical {
   attendance_display: string;
   observation: string;
   risk_disclosure: boolean;
+  /** The served lexicon found possible risk language in the observation. */
+  risk_detected: boolean;
+  risk_override_reason: string;
   follow_up_required: boolean;
   follow_up_status: FollowUpStatus;
   follow_up_task_id: string | null;
@@ -149,6 +152,27 @@ export interface GroupEntryPayload {
   observation: string;
   risk_disclosure: boolean;
   follow_up: boolean;
+  /** Why detected risk language is not a risk disclosure (kept in the audit). */
+  risk_override_reason?: string;
+}
+
+/** Possible safety language the served lexicon found in one observation. */
+export interface RiskFlag {
+  matched: string;
+  category: string;
+  passage: string;
+}
+
+/** Screen observations before review — nothing is stored. */
+export function screenGroupEntries(
+  accessToken: string,
+  entries: { patient: string; observation: string }[],
+) {
+  return apiRequest<{ results: { patient: string; flags: RiskFlag[] }[] }>(`${BASE}/screen/`, {
+    method: "POST",
+    body: { entries },
+    accessToken,
+  });
 }
 
 export interface ConfirmGroupSessionPayload extends GroupSessionDetailsPayload {

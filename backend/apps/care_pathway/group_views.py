@@ -78,6 +78,14 @@ class GroupSessionsView(APIView):
         return Response(detail, status=status.HTTP_201_CREATED)
 
 
+class GroupScreenView(APIView):
+    """POST care/group-programme/screen/ {entries: [{patient, observation}]} —
+    possible risk language per observation, shown at review. Nothing stored."""
+
+    def post(self, request):
+        return Response({"results": gp.screen_entries(request.data.get("entries"))})
+
+
 def _session(pk):
     return get_object_or_404(GroupSession.objects.select_related("category"), pk=pk)
 

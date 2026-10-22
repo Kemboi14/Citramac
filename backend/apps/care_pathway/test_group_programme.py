@@ -396,3 +396,60 @@ class FacilityTimeHelperTests(GroupProgrammeTestCase):
                     datetime(2026, 10, 14, 17, 0, tzinfo=dt_timezone.utc),
                 ],
             )
+
+
+class RiskScreenTests(GroupProgrammeTestCase):
+    """Owner decision 2026-10-22: risk language in an observation is flagged
+    automatically; the clinician may untick it only with a recorded reason."""
+
+    def alerts(self, patient):
+        from .models import ClinicalAlert
+
+        with platform_admin_context():
+            return list(
+                ClinicalAlert.objects.filter(patient_id=patient, alert_code="GROUP_RISK_DISCLOSURE")
+                .values_list("status", flat=True)
+            )
+
+    def test_screen_reports_possible_risk_language_and_stores_nothing(self):
+        response = self.client.post(
+            reverse("care-group-screen"),
+            {"entries": [{"patient": self.amina, "observation": RISK_NOTE},
+                         {"patient": self.brian, "observation": "Spoke about cutting down drinking."}]},
+            format="json", **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        amina, brian = response.data["results"]
+        self.assertTrue(amina["flags"])
+        self.assertEqual(brian["flags"], [])  # a reduction goal, not self-harm
+
+    def test_detected_risk_needs_the_disclosure_or_a_reason_not_to(self):
+        refused = self.confirm([self.entry(self.amina, observation=RISK_NOTE)])
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("entries.0.risk_disclosure", refused.data)
+        self.assertEqual(self.alerts(self.amina), [])
+        overridden = self.confirm([self.entry(
+            self.amina, observation=RISK_NOTE,
+            risk_override_reason="Quoting a film the group discussed; no personal disclosure.",
+        )])
+        self.assertEqual(overridden.status_code, 201, overridden.data)
+        entry = self.entry_for(overridden.data, self.amina)
+        self.assertTrue(entry["risk_detected"])
+        self.assertIn("Quoting a film", entry["risk_override_reason"])
+        self.assertEqual(self.alerts(self.amina), [])
+
+    def test_a_disclosure_alerts_only_that_clients_record_and_a_correction_resolves_it(self):
+        session = self.standard_session()
+        self.assertEqual(self.alerts(self.carol), ["ACTIVE"])
+        self.assertEqual(self.alerts(self.amina), [])
+        banner = self.client.get(reverse("care-client-banner", args=[self.carol]), **self.auth)
+        self.assertEqual(banner.status_code, 200)
+        carol = self.entry_for(session, self.carol)
+        with platform_admin_context():
+            CareTask.objects.filter(pk=carol["follow_up_task_id"]).update(status="COMPLETED")
+        corrected = self.correct(
+            carol["id"], attendance="PRESENT", observation="Discussed sleep routines.",
+            risk_disclosure=False, follow_up=False, reason="Observation recorded against the wrong client",
+        )
+        self.assertEqual(corrected.status_code, 200, corrected.data)
+        self.assertEqual(self.alerts(self.carol), ["RESOLVED"])

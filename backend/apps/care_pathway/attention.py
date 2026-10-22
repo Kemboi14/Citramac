@@ -52,6 +52,9 @@ def active_alerts(patient):
             severity = "medium" if a.alert_code == "SAFETY_NOT_ASSESSED" else "high"
             add(f"alert:{a.alert_code}", severity, a.label, "Psychotherapy session")
             continue
+        if a.alert_code == "GROUP_RISK_DISCLOSURE":
+            add(f"alert:{a.alert_code}", "high", a.label, "Group session")
+            continue
         add(f"alert:{a.alert_code}", "high", a.label, "Triage alert")
 
     sections = _intake_sections(patient)

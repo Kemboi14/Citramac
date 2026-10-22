@@ -770,6 +770,8 @@ class ClientLegalView(APIView):
                         "status": a.get_status_display(),
                         "admission_type": a.admission_type,
                         "admission_type_label": a.get_admission_type_display(),
+                        # Legal status first: the basis lives in the legal admission status.
+                        "legal_status_linked": bool(a.legal_status_record_id),
                         "consent_status": (
                             a.get_consent_status_display() if a.consent_status else ""
                         ),

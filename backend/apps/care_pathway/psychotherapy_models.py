@@ -125,6 +125,12 @@ class PsychotherapyNote(TenantScopedModel):
     not_assessed_alert = models.ForeignKey(
         "ClinicalAlert", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    # The Psychotherapy delivery recorded when the note is signed (v4: one
+    # session delivered, linked to the therapy action, billed per the tariff).
+    # It carries no therapy content — that stays on this note (§4 confidentiality).
+    intervention_record = models.OneToOneField(
+        "InterventionRecord", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
     # {"<question>:<term id>": {"reason", "by", "at"}} — PSY-RD mismatch resolutions.
     detection_resolutions = models.JSONField(default=dict, blank=True)
     # [{"goal_index", "goal", "evidence", "statement",

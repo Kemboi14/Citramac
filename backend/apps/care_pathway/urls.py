@@ -423,6 +423,11 @@ urlpatterns = [
         name="care-group-sessions",
     ),
     path(
+        "care/group-programme/screen/",
+        gview.GroupScreenView.as_view(),
+        name="care-group-screen",
+    ),
+    path(
         "care/group-programme/sessions/<uuid:pk>/",
         gview.GroupSessionView.as_view(),
         name="care-group-session",

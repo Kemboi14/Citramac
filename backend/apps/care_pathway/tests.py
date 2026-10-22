@@ -509,9 +509,13 @@ class JourneyAndBillingTests(CarePathwayApiTestCase):
         )
 
     def test_admission_joins_the_episode_and_records_an_admission_charge(self):
+        from apps.ipd_ward.tests import active_legal_status
+
         with platform_admin_context():
             ward = Ward.objects.create(organization=self.org, name="Ward A")
             bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="12")
+            patient = Patient.objects.get(pk=self.patient_id)
+        status = active_legal_status(patient, self.nurse)
         response = self.client.post(
             reverse("ipd-admission-list"),
             {
@@ -525,7 +529,7 @@ class JourneyAndBillingTests(CarePathwayApiTestCase):
             **self.auth,
         )
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertIsNotNone(response.data["episode"])
+        self.assertEqual(str(response.data["episode"]), str(status.episode_id))
         with platform_admin_context():
             self.assertTrue(
                 ChargeItem.objects.filter(
