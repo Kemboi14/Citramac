@@ -55,6 +55,31 @@ RISK_TERMS = {
                   "unable to care for", "neglecting myself"],
 }
 
+# Added after the first seeding (migration 0045): the third-person forms
+# clinicians write in notes ("wants to kill herself"), passive wishes to
+# disappear, and the Kiswahili phrases from the v4 mockup's risk screen.
+RISK_TERMS_V2 = {
+    "suicide": ["kill herself", "kill himself", "kill themselves", "killing herself", "killing himself",
+                "end her life", "end his life", "end their life", "wanted to die", "wish I was dead",
+                "wishes she was dead", "wishes he was dead", "wished she was dead", "wished he was dead",
+                "not wake up", "not waking up", "just disappear", "could disappear", "want to disappear",
+                "wants to disappear", "wanted to disappear", "overdosed",
+                "kujiua", "kujimaliza", "nataka kufa", "anataka kufa", "kujitoa uhai"],
+    "self_harm": ["harm herself", "harm himself", "hurt herself", "hurt himself", "hurting herself",
+                  "hurting himself", "cut herself", "cut himself", "cutting herself", "cutting himself",
+                  "burned herself", "burned himself", "burning herself", "kujidhuru", "kujikata"],
+    "harm_to_others": ["kill someone", "hurt them", "hurt the kids", "threaten", "threatens", "knife",
+                       "gun", "get back at", "revenge", "kumuua", "kumdhuru", "kumchoma"],
+    "abuse_exploitation": ["assault", "hit her", "hits her", "hit him", "slapped her", "slapped him",
+                           "beat her", "beats her", "choked her", "choked him", "pushed her", "coerced",
+                           "coercion", "trafficking", "ananipiga", "anampiga", "alimpiga", "unyanyasaji"],
+    "unsafe_home": ["afraid of him", "afraid of her"],
+    "severe_deterioration": ["hallucinating", "hallucinations", "psychotic"],
+    "intoxication_withdrawal": ["the DTs", "blackouts"],
+    "self_care": ["not bathing", "no food at home", "nowhere to sleep", "can't look after herself",
+                  "can't look after himself"],
+}
+
 # PSY-GEN-11 — stigmatizing terms with a suggested behavioural rewrite.
 _DESCRIBE = "Describe the behaviour and what the client said, rather than a label."
 STIGMA_TERMS = [
@@ -98,6 +123,7 @@ REPORT_CUES = ["reported", "reports", "said", "says", "stated", "states", "told"
 def lexicon_rows():
     """(lexicon, category, phrase, suggestion) for every seed term."""
     rows = [("PSY_RISK", cat, p, "") for cat, phrases in RISK_TERMS.items() for p in phrases]
+    rows += [("PSY_RISK", cat, p, "") for cat, phrases in RISK_TERMS_V2.items() for p in phrases]
     rows += [("PSY_STIGMA", "", p, s) for p, s in STIGMA_TERMS]
     rows += [("PSY_REPORT_CUE", "", p, "") for p in REPORT_CUES]
     return rows

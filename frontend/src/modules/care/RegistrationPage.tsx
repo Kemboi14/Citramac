@@ -4,9 +4,11 @@ import { useAuth } from "../../auth/useAuth";
 import {
   checkRegistrationDuplicates,
   getClientBanner,
+  getRegistration,
   registerArrival,
   resolveIdentity,
   searchRegistrations,
+  updateRegistration,
   type ClientBanner,
   type ConsentDecision,
   type DuplicateMatch,
@@ -17,6 +19,7 @@ import {
   type ValueSetConcept,
 } from "../../lib/carePathwayApi";
 import { formatDateTime, newRequestId } from "./shared/format";
+import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, SelectChoices, Tag } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
@@ -215,7 +218,11 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
     pronouns: row.pronouns || "",
     dob: row.date_of_birth || "",
     estimatedAge:
-      row.age !== null ? String(row.age) : row.estimated_age !== null ? String(row.estimated_age) : "",
+      row.age !== null
+        ? String(row.age)
+        : row.estimated_age !== null
+          ? String(row.estimated_age)
+          : "",
     sex: row.sex || "",
     phone: row.phone || "",
     nextOfKin: row.next_of_kin || "",
@@ -300,6 +307,9 @@ export function RegistrationPage() {
   const vs = useValueSets();
   const [searchParams] = useSearchParams();
   const resolveId = searchParams.get("resolve");
+  // `?edit=<patient>` corrects a client's saved details without opening a
+  // triage encounter (the Edit client details action on the record).
+  const editId = resolveId ? null : searchParams.get("edit");
 
   const [mode, setMode] = useState<IdentityStatus>("IDENTIFIED");
   const [form, setForm] = useState<RegForm>(EMPTY_FORM);
@@ -313,6 +323,8 @@ export function RegistrationPage() {
   const [lastNameError, setLastNameError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   // Shown, not sent: the server stamps the arrival time when the record is saved.
   const [openedAt] = useState(() => new Date().toISOString());
 
@@ -341,6 +353,7 @@ export function RegistrationPage() {
   const formRef = useRef<HTMLFormElement>(null);
 
   const resolving = Boolean(resolveId);
+  const editing = Boolean(editId);
   const modeInfo = MODES.find((m) => m.status === mode) ?? MODES[0];
   const identified = mode === "IDENTIFIED";
   const emergency = mode === "UNKNOWN" && !resolving;
@@ -388,6 +401,34 @@ export function RegistrationPage() {
   useEffect(() => {
     if (resolveTarget) firstNameRef.current?.focus();
   }, [resolveTarget]);
+
+  useEffect(() => {
+    if (!accessToken || !editId) return;
+    let cancelled = false;
+    getRegistration(accessToken, editId)
+      .then((row) => {
+        if (cancelled) return;
+        if (row.is_temporary) {
+          setEditError(
+            "This is a temporary record. Confirm the client’s identity first — then the details can be edited.",
+          );
+          return;
+        }
+        setEditError(null);
+        setSelected(row);
+        setMode(row.identity_status);
+        setForm(formFromRow(row, vs.options("next-of-kin-relationship")));
+        window.setTimeout(() => firstNameRef.current?.focus(), 0);
+      })
+      .catch((err) => {
+        if (!cancelled) setEditError(errorText(err, "Couldn't load this client's details."));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // The relationship list only maps a code here; reloading on it would wipe edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, editId]);
 
   useEffect(() => () => window.clearTimeout(searchTimer.current), []);
 
@@ -526,8 +567,82 @@ export function RegistrationPage() {
     return !firstMissing && !lastMissing;
   }
 
+  /** Every editable detail, blanks included: on an edit a blank clears the
+   * field, so the saved record matches what the form shows. */
+  function editPayload() {
+    const decided = Object.entries(consent).some(([, value]) => value !== "NOT_ASKED");
+    return {
+      first_name: form.firstName.trim(),
+      last_name: form.lastName.trim(),
+      middle_other_names: form.middleNames.trim(),
+      preferred_name: form.preferredName.trim(),
+      pronouns: form.pronouns,
+      date_of_birth: form.dob,
+      estimated_age: !form.dob && form.estimatedAge ? Number(form.estimatedAge) : null,
+      sex: form.sex,
+      phone: form.phone.trim(),
+      address: form.address.trim(),
+      id_document_type: form.idType,
+      id_document_number: form.documentNumber.trim(),
+      unhcr_number: form.unhcrNumber.trim() || undefined,
+      sha_member_number: form.shaMemberNumber.trim() || undefined,
+      preferred_language: form.language.trim(),
+      interpreter: interpreter || "",
+      living_with_disability: form.disability,
+      disability_details: showDisabilityDetails ? form.disabilityDetails.trim() : "",
+      employment_status: form.employment,
+      occupation: form.occupation.trim(),
+      marital_status: form.marital,
+      next_of_kin_name: form.nextOfKin.trim() || undefined,
+      next_of_kin_phone: form.nokPhone.trim() || undefined,
+      next_of_kin_relationship: display("next-of-kin-relationship", form.nokRelationship),
+      next_of_kin_is_guardian: form.nokGuardian || undefined,
+      guardian_legal_status: form.nokGuardian ? form.guardianStatus.trim() || undefined : undefined,
+      next_of_kin_may_be_informed: form.nokMayInform || undefined,
+      hie_consent: decided ? consent : undefined,
+      consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
+      consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
+      referral_source: form.referral.trim(),
+      payer: form.payer,
+      allergy_status: allergyStatus || undefined,
+      allergy_details: showAllergyDetails ? form.allergyDetails.trim() || undefined : undefined,
+    };
+  }
+
+  /** Save corrected details only — no triage encounter. */
+  async function saveDetails() {
+    if (!accessToken || submitting || !selected) return;
+    if (!validateNames()) return;
+    if (!formRef.current?.reportValidity()) return;
+    setFeedback(null);
+    setSaved(null);
+    setSubmitting(true);
+    try {
+      const row = await updateRegistration(accessToken, selected.id, editPayload());
+      if (editing) {
+        navigate(clientRecordPath(row.id, "snapshot"));
+        return;
+      }
+      setSelected(row);
+      setForm((prev) => ({
+        ...formFromRow(row, vs.options("next-of-kin-relationship")),
+        reason: prev.reason,
+      }));
+      setConsent(EMPTY_CONSENT);
+      setSaved(`Details saved for ${row.name}. No triage encounter was opened.`);
+    } catch (err) {
+      setFeedback(errorText(err, OFFLINE));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editing) {
+      void saveDetails();
+      return;
+    }
     if (!accessToken || submitting) return;
     const description = form.description.trim();
     if ((identified || resolving) && !validateNames()) return;
@@ -648,11 +763,13 @@ export function RegistrationPage() {
     selectClient(match.client);
   }
 
-  const submitText = resolving
-    ? "Confirm identity"
-    : selected && selectedLabel
-      ? SELECTED_SUBMIT
-      : modeInfo.submit;
+  const submitText = editing
+    ? "Save changes"
+    : resolving
+      ? "Confirm identity"
+      : selected && selectedLabel
+        ? SELECTED_SUBMIT
+        : modeInfo.submit;
   const tempName =
     resolveTarget?.name.trim() || (resolveTarget ? "Temporary client (unnamed)" : "");
   const arrival = resolveRow?.emergency_arrival;
@@ -660,10 +777,15 @@ export function RegistrationPage() {
     ? [
         arrival.found_location && `Found / brought from: ${arrival.found_location}`,
         arrival.brought_by &&
-          `Brought by: ${[arrival.brought_by.name, arrival.brought_by.relationship, arrival.brought_by.phone]
+          `Brought by: ${[
+            arrival.brought_by.name,
+            arrival.brought_by.relationship,
+            arrival.brought_by.phone,
+          ]
             .filter(Boolean)
             .join(" · ")}`,
-        arrival.arrival_referral_info && `Police / ambulance / referral: ${arrival.arrival_referral_info}`,
+        arrival.arrival_referral_info &&
+          `Police / ambulance / referral: ${arrival.arrival_referral_info}`,
         arrival.identification_notes && `Identification notes: ${arrival.identification_notes}`,
       ].filter((fact): fact is string => Boolean(fact))
     : [];
@@ -704,7 +826,10 @@ export function RegistrationPage() {
 
   return (
     <div className="mx-auto max-w-[1360px]">
-      <PageHeader eyebrow="Client registry" title="New arrival" />
+      <PageHeader
+        eyebrow="Client registry"
+        title={editing ? "Edit client details" : "New arrival"}
+      />
 
       <Card bodyClassName="p-4">
         <div
@@ -714,12 +839,13 @@ export function RegistrationPage() {
         >
           {MODES.map((m) => {
             const pressed = (resolving ? "IDENTIFIED" : mode) === m.status;
+            const locked = editing ? m.status !== mode : resolving && m.status !== "IDENTIFIED";
             return (
               <button
                 key={m.status}
                 type="button"
                 aria-pressed={pressed}
-                disabled={resolving && m.status !== "IDENTIFIED"}
+                disabled={locked}
                 onClick={() => changeMode(m.status)}
                 className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   pressed ? "bg-surface-card text-ink-900 shadow-sm" : "text-ink-500"
@@ -730,9 +856,11 @@ export function RegistrationPage() {
             );
           })}
         </div>
-        <p className="-mt-1.5 mb-3 text-xs text-ink-500">
-          {resolving ? MODES[0].hint : modeInfo.hint}
-        </p>
+        {!editing && (
+          <p className="-mt-1.5 mb-3 text-xs text-ink-500">
+            {resolving ? MODES[0].hint : modeInfo.hint}
+          </p>
+        )}
         {vs.error && <ErrorNote>{vs.error}</ErrorNote>}
 
         <form ref={formRef} noValidate onSubmit={onSubmit}>
@@ -756,6 +884,22 @@ export function RegistrationPage() {
                     </ul>
                   )}
                 </Callout>
+              )}
+            </div>
+          ) : editing ? (
+            <div className="mb-3">
+              {editError ? (
+                <ErrorNote>{editError}</ErrorNote>
+              ) : selected ? (
+                <Callout role="status">
+                  <strong>
+                    Editing {selected.name} · {selected.citramac_number}
+                  </strong>{" "}
+                  Saving updates this client’s registration details only. It does not open a triage
+                  encounter, and earlier records keep the details they were made with.
+                </Callout>
+              ) : (
+                <p className="text-[13px] text-ink-500">Loading the client’s details…</p>
               )}
             </div>
           ) : (
@@ -842,8 +986,9 @@ export function RegistrationPage() {
                         {selected.name} · {selected.citramac_number}
                       </strong>{" "}
                       <span>
-                        Saved registration details loaded. Sending to triage creates a new
-                        encounter; it does not reopen an earlier one.
+                        Saved registration details loaded. Correct them and use “Save details only”,
+                        or send to triage — that creates a new encounter; it does not reopen an
+                        earlier one.
                       </span>
                     </div>
                     <button
@@ -1171,9 +1316,7 @@ export function RegistrationPage() {
                       <input
                         type="checkbox"
                         checked={form.nokMayInform}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, nokMayInform: e.target.checked }))
-                        }
+                        onChange={(e) => setForm((p) => ({ ...p, nokMayInform: e.target.checked }))}
                       />
                       Client agrees this person may be told about their care
                     </label>
@@ -1188,7 +1331,11 @@ export function RegistrationPage() {
 
               <RegSection
                 title="Social & personal details"
-                intro={<p className="mb-2 text-xs text-ink-500">Optional — ask only what the client is comfortable sharing.</p>}
+                intro={
+                  <p className="mb-2 text-xs text-ink-500">
+                    Optional — ask only what the client is comfortable sharing.
+                  </p>
+                }
               >
                 <RegField id="reg-disability" label="Living with a disability">
                   <SelectChoices
@@ -1265,10 +1412,7 @@ export function RegistrationPage() {
                       {textInput("reg-allergy-details", "allergyDetails")}
                     </RegField>
                   )}
-                  <RegField
-                    id="reg-payer"
-                    label="Payer / insurance (optional — never blocks care)"
-                  >
+                  <RegField id="reg-payer" label="Payer / insurance (optional — never blocks care)">
                     <SelectChoices
                       id="reg-payer"
                       options={vs.options("payer")}
@@ -1307,7 +1451,7 @@ export function RegistrationPage() {
             </>
           )}
 
-          {!resolving && (
+          {!resolving && !editing && (
             <div className="mt-3">
               <RegField
                 id="reg-reason"
@@ -1373,14 +1517,33 @@ export function RegistrationPage() {
           <div role="alert" aria-live="polite" className={feedback ? "mt-3" : ""}>
             {feedback && <Callout>{feedback}</Callout>}
           </div>
+          <div role="status" aria-live="polite" className={saved ? "mt-3" : ""}>
+            {saved && <Callout tone="success">{saved}</Callout>}
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" className={BTN_GHOST} onClick={() => navigate("/clinical")}>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              onClick={() =>
+                navigate(editing && editId ? clientRecordPath(editId, "snapshot") : "/clinical")
+              }
+            >
               Cancel
             </button>
+            {!editing && !resolving && selected && selected.identity_status === "IDENTIFIED" && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                disabled={submitting}
+                onClick={() => void saveDetails()}
+              >
+                Save details only
+              </button>
+            )}
             <button
               type="submit"
               className={`${BTN} !rounded-[20px]`}
-              disabled={submitting || (resolving && !resolveTarget)}
+              disabled={submitting || (resolving && !resolveTarget) || (editing && !selected)}
             >
               {submitText}
             </button>

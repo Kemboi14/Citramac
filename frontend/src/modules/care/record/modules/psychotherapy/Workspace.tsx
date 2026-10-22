@@ -10,7 +10,8 @@ import {
   MessageSquare,
   Mic,
   Minimize2,
-  Minus,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   User,
   X,
@@ -43,7 +44,7 @@ import {
   type PsyNoteSummary,
   type SafetyAnswer,
 } from "../../../../../lib/psychotherapyNoteApi";
-import { BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../../shared/styles";
+import { BTN_GHOST, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { ErrorNote, Tag } from "../../../shared/ui";
 import { errorText } from "../../../triage/helpers";
 import { AssessmentForm } from "../../intake/AssessmentForm";
@@ -107,7 +108,7 @@ function started(note: PsyNote) {
 
 /** Start or resume the clinician's draft for a therapy episode, or open a saved
  * note by id — as a full-screen workspace over the page it was opened from, or
- * `inline` inside the Psychotherapy module's Record tab (v4 `psyWorkflowMount`). */
+ * `inline`, filling the Psychotherapy module drawer (v4 `psyWorkflowMount`). */
 export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, inline = false }: {
   patientId: string;
   episodeId?: string;
@@ -144,7 +145,7 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, 
         ? { role: "region", "aria-label": "Guided individual psychotherapy session" }
         : { role: "dialog", "aria-modal": true, "aria-label": "Psychotherapy session" })}
       className={inline
-        ? "relative flex h-[clamp(620px,82vh,820px)] overflow-hidden rounded-[14px] border border-surface-border bg-surface-bg text-ink-900 shadow-sm outline-none [transform:translateZ(0)]"
+        ? "relative flex min-h-0 flex-1 overflow-hidden bg-surface-bg text-ink-900 outline-none [transform:translateZ(0)]"
         : "fixed inset-0 z-[100] flex bg-surface-bg text-ink-900 outline-none"}>
       {config && note ? (
         <WorkspaceBody key={note.id} config={config} initial={note} patientId={patientId} onClose={onClose}
@@ -664,54 +665,52 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     const status = signed ? "Done" : stepStatus(note, config, i, begun ? step : -1);
     // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
     const alert = i < QUESTION_COUNT && flags.some((d) => d.question === config.questions[i]?.key);
-    const tone = alert ? "bg-priority-red" : status === "Done" ? "bg-brand-green" : status === "Current" ? "bg-brand-green-dark" : "bg-surface-border";
+    const tone = alert ? "bg-priority-red" : status === "Current" ? "bg-brand-green" : status === "Done" ? "bg-[color-mix(in_srgb,var(--green)_45%,var(--border))]" : "bg-surface-border";
     return (
       <button key={i} type="button" disabled={!begun || status === "Not yet"} onClick={() => jump(i)}
         aria-label={`${stepLabel(config, i)} (${alert ? "needs review" : status.toLowerCase()})`} title={stepLabel(config, i)}
         aria-current={status === "Current" ? "step" : undefined}
-        className={`h-1.5 flex-1 rounded-full ${tone} ${status === "Current" ? "ring-2 ring-brand-green-tint" : ""} disabled:cursor-default`} />
+        className="flex h-5 w-[22px] items-center disabled:cursor-default">
+        <span className={`block h-1 w-full rounded-sm ${tone}`} />
+      </button>
     );
   });
-  const noteToggle = (wide ? panel === "closed" || panel === "min" : true) && (
-    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => (wide ? setPanel("open") : setNotesOpen(true))} aria-label="Open therapy note">
-      <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Therapy note</span>
+  const noteToggle = (wide ? panel === "closed" : true) && (
+    <button type="button" onClick={() => (wide ? setPanel("open") : setNotesOpen(true))} aria-label="Open therapy note" title="Open therapy note"
+      className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900">
+      <FileText className="h-[19px] w-[19px]" />
     </button>
   );
   const sessionCrumb = (
-    <>Session {note.session_number ?? ""} · <strong>{note.patient.name}</strong></>
+    <><span className="hidden sm:inline">Session {note.session_number ?? ""} · </span><strong className="font-semibold text-ink-900">{note.patient.name}</strong></>
   );
+  const sep = <li aria-hidden className="mx-1 h-1.5 w-1.5 rotate-45 border-r-[1.5px] border-t-[1.5px] border-ink-500 opacity-60" />;
+  const crumb = "inline-flex items-center gap-1.5 rounded-[7px] px-1.5 py-1 hover:bg-surface-bg hover:text-ink-900";
   const header = (
-    <header className="flex flex-col gap-1.5 border-b border-surface-border bg-surface-card px-3 py-2 sm:px-5">
-      <div className="flex items-center justify-between gap-2">
-        <nav aria-label="Breadcrumb" className="min-w-0 overflow-x-auto">
-          <ol className="flex items-center gap-1 whitespace-nowrap text-[12.5px] text-ink-500">
-            <li><button type="button" onClick={onClose} className="rounded-md px-1.5 py-0.5 hover:bg-surface-bg hover:text-ink-900">Interventions</button></li>
-            <li aria-hidden>›</li>
-            <li><button type="button" onClick={() => setView("history")} aria-current={view === "history" ? "page" : undefined} className="rounded-md px-1.5 py-0.5 hover:bg-surface-bg hover:text-ink-900">Psychotherapy</button></li>
-            {view !== "history" && <li aria-hidden>›</li>}
-            {view === "past" && <li><span aria-current="page" className="px-1.5">Earlier session</span></li>}
-            {view !== "history" && view !== "past" && (
-              <li>
-                <button type="button" onClick={() => setView("chat")} aria-current={view === "chat" && !begun ? "page" : undefined}
-                  className="rounded-md px-1.5 py-0.5 text-ink-700 hover:bg-surface-bg">{sessionCrumb}</button>
-              </li>
-            )}
-            {view === "chat" && begun && !example && <><li aria-hidden>›</li><StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} /></>}
-            {view === "chat" && example && <><li aria-hidden>›</li><li><span aria-current="page" className="px-1.5 font-semibold text-priority-orange">Example</span></li></>}
-            {view === "client" && <><li aria-hidden>›</li><li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Client file</span></li></>}
-            {view === "audit" && <><li aria-hidden>›</li><li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Audit trail</span></li></>}
-          </ol>
-        </nav>
-        {noteToggle}
-      </div>
+    <header className="flex min-h-[56px] flex-wrap items-center gap-x-3.5 gap-y-1.5 px-4 py-2.5 sm:flex-nowrap sm:px-5">
+      <nav aria-label="Breadcrumb" className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto">
+        <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
+          <li><button type="button" onClick={onClose} className={crumb} title="Back to Interventions"><ArrowLeft className="h-[15px] w-[15px]" /><span className="hidden sm:inline">Interventions</span></button></li>
+          {sep}
+          <li><button type="button" onClick={() => setView("history")} aria-current={view === "history" ? "page" : undefined}
+            className={`${crumb} ${view === "history" ? "font-semibold text-ink-900" : ""}`}>Psychotherapy</button></li>
+          {view !== "history" && sep}
+          {view === "past" && <li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Earlier session</span></li>}
+          {view !== "history" && view !== "past" && (
+            <li>
+              <button type="button" onClick={() => setView("chat")} aria-current={view === "chat" && !begun ? "page" : undefined} className={crumb}>{sessionCrumb}</button>
+            </li>
+          )}
+          {view === "chat" && begun && !example && <>{sep}<StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} /></>}
+          {view === "chat" && example && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-priority-orange">Example</span></li></>}
+          {view === "client" && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Client file</span></li></>}
+          {view === "audit" && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Audit trail</span></li></>}
+        </ol>
+      </nav>
       {view === "chat" && !example && (
-        <div className="flex items-center gap-3">
-          <span className="whitespace-nowrap text-[11.5px] font-semibold text-ink-500">
-            {signed ? "Signed" : !begun ? "Not started" : step < QUESTION_COUNT ? `Question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step)}
-          </span>
-          <div className="flex flex-1 gap-1" aria-label="Session progress" role="group">{segments}</div>
-        </div>
+        <div className="flex gap-[3px]" aria-label={`Session progress — ${signed ? "signed" : !begun ? "not started" : step < QUESTION_COUNT ? `question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step)}`} role="group">{segments}</div>
       )}
+      {noteToggle}
     </header>
   );
 
@@ -752,9 +751,9 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
 
   const welcome = (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="m-auto flex w-full max-w-[680px] flex-col gap-5 px-4 py-8 sm:px-6">
-        <h1 className="flex flex-col gap-2 font-display text-ink-900">
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[17px] font-semibold">
+      <div className="m-auto flex w-full max-w-[680px] flex-col gap-[22px] px-5 pb-[10vh] pt-6">
+        <h1 className="flex flex-col items-center text-center font-doc font-medium leading-tight text-ink-900">
+          <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(19px,2.6vw,23px)] font-normal text-ink-500">
             Psychotherapy session {note.session_number ?? ""} done on
             <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" maxLength={10} value={dateText}
               aria-label="Session date (dd/mm/yyyy)" aria-describedby="psy-date-error" aria-invalid={!!dateError} disabled={locked}
@@ -766,35 +765,35 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
                 setDateError("");
               }}
               onBlur={() => void commitDate()} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitDate(); } }}
-              className={`w-[118px] rounded-md border bg-surface-card px-2 py-0.5 font-mono text-[15px] ${dateError ? "border-priority-red" : "border-surface-border"}`} />
+              className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`} />
             with
           </span>
-          <span id="psy-date-error" role="status" className="text-[12.5px] font-normal text-priority-red">{dateError}</span>
-          <span className="text-[28px] font-bold leading-tight">{note.patient.name}</span>
-          <small className="font-sans text-[13.5px] font-normal text-ink-500">{note.author}, I’ll ask five short questions and one safety question, then organise your note.</small>
+          <span id="psy-date-error" role="status" className="font-sans text-[12.5px] font-normal text-priority-red">{dateError}</span>
+          <span className="mt-1 text-[clamp(38px,6vw,54px)] font-semibold tracking-[-0.01em] text-brand-green">{note.patient.name}</span>
+          <small className="mt-2 font-sans text-[14.5px] font-normal text-ink-500">{note.author}, I’ll ask five short questions and one safety question, then organise your note.</small>
         </h1>
-        <div className="flex items-center gap-2 rounded-[14px] border border-surface-border bg-surface-card p-2.5 shadow-sm">
-          <button type="button" disabled={locked} onClick={() => begin()} className="flex min-w-0 flex-1 items-center gap-3 rounded-[10px] px-2 py-1.5 text-left hover:bg-surface-bg disabled:opacity-60">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-green-tint text-brand-green">
+        <div className="flex items-center gap-2 rounded-[22px] border border-surface-border bg-surface-card py-2.5 pl-2.5 pr-3 shadow-md hover:border-brand-green">
+          <button type="button" disabled={locked} onClick={() => begin()} className="flex min-w-0 flex-1 items-center gap-3.5 rounded-[14px] px-2 py-2 text-left disabled:opacity-60">
+            <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[12px] bg-brand-green-tint text-brand-green">
               {dictationOn ? <Mic className="h-4 w-4" /> : <Keyboard className="h-4 w-4" />}
             </span>
             <span className="min-w-0">
-              <strong className="block text-[14px]">Begin session</strong>
-              <span className="block text-[12px] text-ink-500">{dictationOn ? "Questions will be read aloud; answer by voice." : "Questions appear one at a time; type your answers."}</span>
+              <strong className="block text-[16px] font-semibold">Begin session</strong>
+              <span className="block text-[13px] text-ink-500">{dictationOn ? "Questions will be read aloud; answer by voice." : "Questions appear one at a time; type your answers."}</span>
             </span>
           </button>
           {modeMenu}
           <button type="button" aria-label="Begin session" disabled={locked} onClick={() => begin()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-green text-on-primary disabled:opacity-40">
+            className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:opacity-40">
             {dictationOn ? <Mic className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
           </button>
         </div>
         {!config.dictation_enabled && (
-          <p className="text-[12px] text-ink-500">Dictation is turned off for this organisation (browser dictation sends the audio to the browser maker’s speech service). Questions can still be read aloud on this device.</p>
+          <p className="text-center text-[12px] text-ink-500">Dictation is turned off for this organisation (browser dictation sends the audio to the browser maker’s speech service). Questions can still be read aloud on this device.</p>
         )}
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM} !rounded-full`} onClick={() => { quiet(); setExample(true); if (wide) setPanel("open"); }}>Try an example session</button>
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM} !rounded-full`} onClick={() => setView("client")}>Open client file</button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button type="button" className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green" onClick={() => { quiet(); setExample(true); if (wide) setPanel("open"); }}>Try an example session</button>
+          <button type="button" className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green" onClick={() => setView("client")}><User className="h-4 w-4" /> Open client file</button>
         </div>
       </div>
     </div>
@@ -828,20 +827,21 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
       }} />
   );
 
+  const ICON = "grid h-8 w-8 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900";
   const panelControls = wide ? (
     <>
       {panel === "expanded"
-        ? <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label="Collapse the note" title="Collapse" onClick={() => setPanel("open")}><Minimize2 className="h-3.5 w-3.5" /></button>
-        : <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label="Expand the note to full width" title="Expand" onClick={() => setPanel("expanded")}><Maximize2 className="h-3.5 w-3.5" /></button>}
-      <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label="Minimise the note" title="Minimise" onClick={() => setPanel("min")}><Minus className="h-3.5 w-3.5" /></button>
-      <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label="Close the note" title="Close" onClick={() => setPanel("closed")}><X className="h-3.5 w-3.5" /></button>
+        ? <button type="button" className={ICON} aria-label="Exit full width" title="Exit full width" onClick={() => setPanel("open")}><Minimize2 className="h-4 w-4" /></button>
+        : <button type="button" className={ICON} aria-label="Expand" title="Expand" onClick={() => setPanel("expanded")}><Maximize2 className="h-4 w-4" /></button>}
+      <button type="button" className={ICON} aria-label="Minimise" title="Minimise" onClick={() => setPanel("min")}><PanelRightClose className="h-4 w-4" /></button>
+      <button type="button" className={ICON} aria-label="Close note" title="Close" onClick={() => setPanel("closed")}><X className="h-[18px] w-[18px]" /></button>
     </>
   ) : (
     <>
-      <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label={full ? "Collapse the note" : "Expand the note to full width"} onClick={() => setFull((f) => !f)}>
-        {full ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+      <button type="button" className={ICON} aria-label={full ? "Exit full width" : "Expand"} title={full ? "Exit full width" : "Expand"} onClick={() => setFull((f) => !f)}>
+        {full ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
       </button>
-      <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} aria-label="Close the note" onClick={() => setNotesOpen(false)}><X className="h-3.5 w-3.5" /></button>
+      <button type="button" className={ICON} aria-label="Close note" title="Close" onClick={() => setNotesOpen(false)}><X className="h-[18px] w-[18px]" /></button>
     </>
   );
   const notePanel = (
@@ -853,7 +853,7 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     <>
       <nav aria-label="Workspace" className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16">
         <RailButton label="Back to Interventions" onClick={onClose}><ArrowLeft className="h-5 w-5" /></RailButton>
-        <div aria-hidden className="my-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-green text-[13px] font-bold text-on-primary">C</div>
+        <div aria-hidden className="mb-3 grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-brand-green font-display text-[19px] font-semibold text-on-primary">C</div>
         <RailButton label="New session" onClick={() => void newSession()}><Plus className="h-5 w-5" /></RailButton>
         <RailButton label="Chat · session history" current={view === "history" || view === "past"} onClick={() => setView("history")}><MessageSquare className="h-5 w-5" /></RailButton>
         <RailButton label="Client file" current={view === "client"} onClick={() => setView("client")}><User className="h-5 w-5" /></RailButton>
@@ -891,12 +891,11 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
         </aside>
       )}
       {wide && panel === "min" && (
-        <aside aria-label="Therapy note (minimised)" className="flex w-[52px] flex-shrink-0 flex-col items-center border-l border-surface-border bg-surface-card py-3">
-          <button type="button" onClick={() => setPanel("open")} aria-label="Restore the therapy note"
-            className="flex flex-col items-center gap-2 rounded-md px-1 py-2 text-[11px] font-semibold text-ink-700 hover:bg-surface-bg">
-            <FileText className="h-4 w-4" />
-            <span className="[writing-mode:vertical-rl]">Therapy note</span>
-          </button>
+        <aside aria-label="Therapy note (minimised)" className="flex w-[52px] flex-shrink-0 flex-col items-center gap-2.5 border-l border-surface-border bg-surface-card py-3">
+          <button type="button" className={ICON} onClick={() => setPanel("open")} aria-label="Restore note" title="Restore"><PanelRightOpen className="h-4 w-4" /></button>
+          <button type="button" className={ICON} onClick={() => setPanel("expanded")} aria-label="Expand note" title="Expand"><Maximize2 className="h-4 w-4" /></button>
+          <span aria-hidden className={`h-[7px] w-[7px] rounded-full ${signed ? "bg-brand-green" : "bg-priority-orange"}`} />
+          <span className="rotate-180 text-[12.5px] font-semibold tracking-[.04em] text-ink-500 [writing-mode:vertical-rl]">Therapy note · {signed ? "Signed" : "Draft"}</span>
         </aside>
       )}
       {!wide && notesOpen && (

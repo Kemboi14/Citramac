@@ -196,6 +196,24 @@ export function registerArrival(accessToken: string, payload: RegistrationPayloa
   );
 }
 
+export function getRegistration(accessToken: string, patientId: string) {
+  return apiRequest<RegistrationRow>(`/care/patients/${patientId}/registration/`, { accessToken });
+}
+
+/** Correct an identified client's details in place — no triage encounter is
+ * opened. A field sent as "" is cleared; one left out keeps what is on file. */
+export function updateRegistration(
+  accessToken: string,
+  patientId: string,
+  payload: Omit<RegistrationPayload, "client_request_id" | "identity_status" | "patient_id">,
+) {
+  return apiRequest<RegistrationRow>(`/care/patients/${patientId}/registration/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
 export function resolveIdentity(
   accessToken: string,
   patientId: string,
@@ -838,7 +856,11 @@ export interface InstrumentDef {
   /** Positive / negative is derived on the server from the published rule (MDQ). */
   positiveRule?: boolean;
   /** Questions answered alongside the items or total; each is required. */
-  supplementary?: { key: string; text: string; options: { value: string | number; label: string }[] }[];
+  supplementary?: {
+    key: string;
+    text: string;
+    options: { value: string | number; label: string }[];
+  }[];
   /** A supplementary answer that ends the screen before the items (PAWSS threshold 'No'). */
   gate?: { key: string; value: string | number } | null;
   withdrawal?: boolean;
@@ -873,10 +895,11 @@ export function decideTool(
   status: "ACCEPTED" | "DECLINED" | "RECONSIDERED",
   reason = "",
 ) {
-  return apiRequest<{ results: ToolRow[] }>(
-    `/care/clients/${patientId}/tools/${tool}/decision/`,
-    { method: "POST", body: { status, reason }, accessToken },
-  );
+  return apiRequest<{ results: ToolRow[] }>(`/care/clients/${patientId}/tools/${tool}/decision/`, {
+    method: "POST",
+    body: { status, reason },
+    accessToken,
+  });
 }
 
 export function recordAssessment(
@@ -921,10 +944,18 @@ export interface WithdrawalScale {
 }
 
 export function getWithdrawal(accessToken: string, patientId: string) {
-  return apiRequest<{ scales: WithdrawalScale[]; recommended: string | null; substance: string }>(`/care/clients/${patientId}/withdrawal/`, { accessToken });
+  return apiRequest<{ scales: WithdrawalScale[]; recommended: string | null; substance: string }>(
+    `/care/clients/${patientId}/withdrawal/`,
+    { accessToken },
+  );
 }
 
-export function recordUnableToScore(accessToken: string, patientId: string, instrument: string, reason: string) {
+export function recordUnableToScore(
+  accessToken: string,
+  patientId: string,
+  instrument: string,
+  reason: string,
+) {
   return apiRequest<{ id: string }>(`/care/clients/${patientId}/withdrawal/`, {
     method: "POST",
     body: { instrument, reason },
@@ -933,9 +964,12 @@ export function recordUnableToScore(accessToken: string, patientId: string, inst
 }
 
 export function getOutcomeScores(accessToken: string, patientId: string) {
-  return apiRequest<{ results: OutcomeScore[]; summary: OutcomeSummary[] }>(`/care/clients/${patientId}/outcomes/`, {
-    accessToken,
-  });
+  return apiRequest<{ results: OutcomeScore[]; summary: OutcomeSummary[] }>(
+    `/care/clients/${patientId}/outcomes/`,
+    {
+      accessToken,
+    },
+  );
 }
 
 export interface CarePlan {
@@ -1142,10 +1176,9 @@ export interface InterventionWorkspace {
 }
 
 export function getInterventionWorkspace(accessToken: string, patientId: string) {
-  return apiRequest<InterventionWorkspace>(
-    `/care/clients/${patientId}/interventions/workspace/`,
-    { accessToken },
-  );
+  return apiRequest<InterventionWorkspace>(`/care/clients/${patientId}/interventions/workspace/`, {
+    accessToken,
+  });
 }
 
 // ── Billing ──
@@ -1476,7 +1509,9 @@ export function addIntakeAllergy(
 export function updateAllergyRecord(
   accessToken: string,
   recordId: string,
-  body: Partial<Pick<IntakeAllergyRecord, "substance" | "reaction" | "allergy_type" | "severity">> & {
+  body: Partial<
+    Pick<IntakeAllergyRecord, "substance" | "reaction" | "allergy_type" | "severity">
+  > & {
     status?: "ACTIVE" | "RESOLVED" | "REFUTED";
   },
 ) {
@@ -1557,7 +1592,13 @@ export interface PlanWorkspace {
   rules_version: string;
   rules_approval: string;
   suggested_priority: PlanPriority;
-  recommendations: { key: string; name: string; priority: PlanPriority; why: string[]; decided: boolean }[];
+  recommendations: {
+    key: string;
+    name: string;
+    priority: PlanPriority;
+    why: string[];
+    decided: boolean;
+  }[];
   actions: PlanAction[];
   details: {
     /** A code of the served `care-plan-agreement` value set. */
@@ -1595,7 +1636,9 @@ export interface PlanWorkspace {
 }
 
 export function getPlanWorkspace(accessToken: string, patientId: string) {
-  return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/workspace/`, { accessToken });
+  return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/workspace/`, {
+    accessToken,
+  });
 }
 
 export function decidePlanAction(
@@ -1614,7 +1657,9 @@ export function decidePlanAction(
 export function updatePlanDetails(
   accessToken: string,
   patientId: string,
-  body: Partial<Omit<PlanWorkspace["details"], "contact_72h_at">> & { contact_72h_at?: string | null },
+  body: Partial<Omit<PlanWorkspace["details"], "contact_72h_at">> & {
+    contact_72h_at?: string | null;
+  },
 ) {
   return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/details/`, {
     method: "PATCH",
@@ -1664,7 +1709,11 @@ export function openSafetyPlan(accessToken: string, patientId: string) {
   return apiRequest<SafetyPlanDoc>(`/care/clients/${patientId}/safety-plan/`, { accessToken });
 }
 
-export function saveSafetyPlan(accessToken: string, patientId: string, body: Partial<SafetyPlanDoc>) {
+export function saveSafetyPlan(
+  accessToken: string,
+  patientId: string,
+  body: Partial<SafetyPlanDoc>,
+) {
   return apiRequest<SafetyPlanDoc>(`/care/clients/${patientId}/safety-plan/`, {
     method: "PUT",
     body,
@@ -1698,7 +1747,9 @@ export interface MdtReviewRow {
 }
 
 export function listMdt(accessToken: string, patientId: string) {
-  return apiRequest<{ results: MdtReviewRow[] }>(`/care/clients/${patientId}/care-plan/mdt/`, { accessToken });
+  return apiRequest<{ results: MdtReviewRow[] }>(`/care/clients/${patientId}/care-plan/mdt/`, {
+    accessToken,
+  });
 }
 
 export function scheduleMdt(accessToken: string, patientId: string, scheduledFor: string) {
@@ -1712,9 +1763,19 @@ export function scheduleMdt(accessToken: string, patientId: string, scheduledFor
 export function recordMdt(
   accessToken: string,
   reviewId: string,
-  body: { notes: string; attendees?: string; outcome?: string; dissent?: string; next_review?: string },
+  body: {
+    notes: string;
+    attendees?: string;
+    outcome?: string;
+    dissent?: string;
+    next_review?: string;
+  },
 ) {
-  return apiRequest<MdtReviewRow>(`/care/mdt/${reviewId}/record/`, { method: "POST", body, accessToken });
+  return apiRequest<MdtReviewRow>(`/care/mdt/${reviewId}/record/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
 }
 
 export interface CosignRow {
@@ -1734,7 +1795,9 @@ export interface CosignRow {
 }
 
 export function listCosign(accessToken: string, patientId: string) {
-  return apiRequest<{ results: CosignRow[] }>(`/care/clients/${patientId}/cosign/`, { accessToken });
+  return apiRequest<{ results: CosignRow[] }>(`/care/clients/${patientId}/cosign/`, {
+    accessToken,
+  });
 }
 
 export function requestCosign(accessToken: string, patientId: string, what: string) {
@@ -1783,7 +1846,14 @@ export interface ObservationState {
   observer: { name: string; gender: string; since: string } | null;
   rotation_due: string | null;
   rotation_overdue: boolean;
-  entries: { id: string; at: string; location: string; engagement: string; note: string; by: string }[];
+  entries: {
+    id: string;
+    at: string;
+    location: string;
+    engagement: string;
+    note: string;
+    by: string;
+  }[];
 }
 
 export const getObservationConfig = (t: string) =>
@@ -1791,11 +1861,32 @@ export const getObservationConfig = (t: string) =>
 export const getObservation = (t: string, id: string) =>
   apiRequest<ObservationState>(`/care/clients/${id}/observation/`, { accessToken: t });
 export const setObservationLevel = (t: string, id: string, level: string, reason: string) =>
-  apiRequest<ObservationState>(`/care/clients/${id}/observation/level/`, { method: "POST", body: { level, reason }, accessToken: t });
-export const handOverObserver = (t: string, id: string, observer_name: string, observer_gender: string) =>
-  apiRequest<ObservationState>(`/care/clients/${id}/observation/handover/`, { method: "POST", body: { observer_name, observer_gender }, accessToken: t });
-export const addObservationEntry = (t: string, id: string, body: { location: string; engagement: string; note: string }) =>
-  apiRequest<ObservationState>(`/care/clients/${id}/observation/entries/`, { method: "POST", body, accessToken: t });
+  apiRequest<ObservationState>(`/care/clients/${id}/observation/level/`, {
+    method: "POST",
+    body: { level, reason },
+    accessToken: t,
+  });
+export const handOverObserver = (
+  t: string,
+  id: string,
+  observer_name: string,
+  observer_gender: string,
+) =>
+  apiRequest<ObservationState>(`/care/clients/${id}/observation/handover/`, {
+    method: "POST",
+    body: { observer_name, observer_gender },
+    accessToken: t,
+  });
+export const addObservationEntry = (
+  t: string,
+  id: string,
+  body: { location: string; engagement: string; note: string },
+) =>
+  apiRequest<ObservationState>(`/care/clients/${id}/observation/entries/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 
 export type ObservationSetPayload = {
   heart_rate?: number | string;
@@ -1825,7 +1916,11 @@ export interface PrescribingCheck {
   not_checked: string[];
 }
 export const checkPrescribing = (t: string, id: string, drug: string) =>
-  apiRequest<PrescribingCheck>(`/care/clients/${id}/prescribing-checks/`, { method: "POST", body: { drug }, accessToken: t });
+  apiRequest<PrescribingCheck>(`/care/clients/${id}/prescribing-checks/`, {
+    method: "POST",
+    body: { drug },
+    accessToken: t,
+  });
 
 export interface MarEntry {
   id: string;
@@ -1884,15 +1979,26 @@ export interface DoseDocumentation {
   own_supply?: boolean;
   override_reason?: string;
 }
-export const getMar = (t: string, id: string) => apiRequest<MarState>(`/care/clients/${id}/mar/`, { accessToken: t });
-export const administerDose = (
-  t: string,
-  entryId: string,
-  body: DoseDocumentation,
-) => apiRequest<MarState>(`/care/mar/${entryId}/administer/`, { method: "POST", body, accessToken: t });
+export const getMar = (t: string, id: string) =>
+  apiRequest<MarState>(`/care/clients/${id}/mar/`, { accessToken: t });
+export const administerDose = (t: string, entryId: string, body: DoseDocumentation) =>
+  apiRequest<MarState>(`/care/mar/${entryId}/administer/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 /** A dose against an order — at one of today's dose times (`slot`), or unscheduled when `slot` is blank. */
-export const administerOrder = (t: string, patientId: string, orderId: string, body: DoseDocumentation & { slot?: string }) =>
-  apiRequest<MarState>(`/care/clients/${patientId}/mar/orders/${orderId}/administer/`, { method: "POST", body, accessToken: t });
+export const administerOrder = (
+  t: string,
+  patientId: string,
+  orderId: string,
+  body: DoseDocumentation & { slot?: string },
+) =>
+  apiRequest<MarState>(`/care/clients/${patientId}/mar/orders/${orderId}/administer/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 
 export interface PrescribingState {
   allergy_status: string;
@@ -1919,9 +2025,17 @@ export interface OrderPayload {
 export const getPrescribing = (t: string, id: string) =>
   apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, { accessToken: t });
 export const placeOrder = (t: string, id: string, body: OrderPayload) =>
-  apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, { method: "POST", body, accessToken: t });
+  apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const recordPrnEffect = (t: string, entryId: string, effect: string) =>
-  apiRequest<MarState>(`/care/mar/${entryId}/effect/`, { method: "POST", body: { effect }, accessToken: t });
+  apiRequest<MarState>(`/care/mar/${entryId}/effect/`, {
+    method: "POST",
+    body: { effect },
+    accessToken: t,
+  });
 
 export interface RestrictiveEpisode {
   id: string;
@@ -1942,74 +2056,198 @@ export interface RestrictiveEpisode {
   checks: { id: string; label: string; due_at: string; done_at: string | null; done_by: string }[];
 }
 export const listRestrictive = (t: string, id: string) =>
-  apiRequest<{ results: RestrictiveEpisode[]; de_escalation_options: string[]; authorisers: { id: string; name: string; senior: boolean }[] }>(
-    `/care/clients/${id}/restrictive-practice/`,
-    { accessToken: t },
-  );
+  apiRequest<{
+    results: RestrictiveEpisode[];
+    de_escalation_options: string[];
+    authorisers: { id: string; name: string; senior: boolean }[];
+  }>(`/care/clients/${id}/restrictive-practice/`, { accessToken: t });
 export const recordRestrictive = (t: string, id: string, body: Record<string, unknown>) =>
-  apiRequest<RestrictiveEpisode>(`/care/clients/${id}/restrictive-practice/`, { method: "POST", body, accessToken: t });
+  apiRequest<RestrictiveEpisode>(`/care/clients/${id}/restrictive-practice/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const completeRestrictiveCheck = (t: string, checkId: string) =>
-  apiRequest<RestrictiveEpisode>(`/care/restrictive-checks/${checkId}/done/`, { method: "POST", accessToken: t });
+  apiRequest<RestrictiveEpisode>(`/care/restrictive-checks/${checkId}/done/`, {
+    method: "POST",
+    accessToken: t,
+  });
 export const endRestrictive = (t: string, id: string, endAt?: string) =>
-  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/end/`, { method: "POST", body: endAt ? { end_at: endAt } : {}, accessToken: t });
+  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/end/`, {
+    method: "POST",
+    body: endAt ? { end_at: endAt } : {},
+    accessToken: t,
+  });
 export const debriefRestrictive = (t: string, id: string) =>
-  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/debrief/`, { method: "POST", accessToken: t });
+  apiRequest<RestrictiveEpisode>(`/care/restrictive-practice/${id}/debrief/`, {
+    method: "POST",
+    accessToken: t,
+  });
 
 // ── attention, proposals, capacity, consent, notes, episode outcome ──
 
-export interface AttentionAlert { key: string; severity: "high" | "medium" | "info"; text: string; source: string }
-export interface AttentionItem { key: string; category: string; text: string; due_at: string | null; overdue: boolean }
-export interface MyTask extends AttentionItem { patient_id: string; patient: string; kind?: string }
+export interface AttentionAlert {
+  key: string;
+  severity: "high" | "medium" | "info";
+  text: string;
+  source: string;
+}
+export interface AttentionItem {
+  key: string;
+  category: string;
+  text: string;
+  due_at: string | null;
+  overdue: boolean;
+}
+export interface MyTask extends AttentionItem {
+  patient_id: string;
+  patient: string;
+  kind?: string;
+}
 export interface RiskProposalRow {
-  id: string; source: string; row: string; option: string; status: "PROPOSED" | "ADDED" | "DEFERRED" | "DISMISSED";
-  reason: string; created_at: string; decided_at: string | null; decided_by: string;
+  id: string;
+  source: string;
+  row: string;
+  option: string;
+  status: "PROPOSED" | "ADDED" | "DEFERRED" | "DISMISSED";
+  reason: string;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string;
 }
 export interface CapacityRow {
-  id: string; decision: string; other_decision: string; understand: string; retain: string; weigh: string;
-  communicate: string; outcome: string; reassess_by: string | null; note: string; assessed_by: string; assessed_at: string;
+  id: string;
+  decision: string;
+  other_decision: string;
+  understand: string;
+  retain: string;
+  weigh: string;
+  communicate: string;
+  outcome: string;
+  reassess_by: string | null;
+  note: string;
+  assessed_by: string;
+  assessed_at: string;
 }
 export interface VisitConsentRow {
-  id: string; scope: string; party: string; method: string; given_by_name: string; warnings: string[];
-  recorded_at: string; recorded_by: string; completed_at: string | null; open_deferred: boolean;
+  id: string;
+  scope: string;
+  party: string;
+  method: string;
+  given_by_name: string;
+  warnings: string[];
+  recorded_at: string;
+  recorded_by: string;
+  completed_at: string | null;
+  open_deferred: boolean;
 }
 export interface ProgressNoteRow {
-  id: string; note_type: string; text: string; status: "DRAFT" | "SIGNED"; amends: string | null;
-  author: string; created_at: string; signed_at: string | null;
+  id: string;
+  note_type: string;
+  text: string;
+  status: "DRAFT" | "SIGNED";
+  amends: string | null;
+  author: string;
+  created_at: string;
+  signed_at: string | null;
 }
 
 export const getAttention = (t: string, id: string) =>
-  apiRequest<{ alerts: AttentionAlert[]; items: AttentionItem[] }>(`/care/clients/${id}/attention/`, { accessToken: t });
-export const getMyTasks = (t: string) => apiRequest<{ results: MyTask[] }>("/care/my-tasks/", { accessToken: t });
+  apiRequest<{ alerts: AttentionAlert[]; items: AttentionItem[] }>(
+    `/care/clients/${id}/attention/`,
+    { accessToken: t },
+  );
+export const getMyTasks = (t: string) =>
+  apiRequest<{ results: MyTask[] }>("/care/my-tasks/", { accessToken: t });
 export const getProposals = (t: string, id: string) =>
   apiRequest<{ results: RiskProposalRow[] }>(`/care/clients/${id}/proposals/`, { accessToken: t });
-export const decideProposal = (t: string, proposalId: string, action: "ADD" | "DEFER" | "DISMISS", reason = "") =>
-  apiRequest<RiskProposalRow>(`/care/proposals/${proposalId}/decision/`, { method: "POST", body: { action, reason }, accessToken: t });
+export const decideProposal = (
+  t: string,
+  proposalId: string,
+  action: "ADD" | "DEFER" | "DISMISS",
+  reason = "",
+) =>
+  apiRequest<RiskProposalRow>(`/care/proposals/${proposalId}/decision/`, {
+    method: "POST",
+    body: { action, reason },
+    accessToken: t,
+  });
 export const getCapacity = (t: string, id: string) =>
-  apiRequest<{ current: CapacityRow[]; history: CapacityRow[] }>(`/care/clients/${id}/capacity/`, { accessToken: t });
+  apiRequest<{ current: CapacityRow[]; history: CapacityRow[] }>(`/care/clients/${id}/capacity/`, {
+    accessToken: t,
+  });
 export const recordCapacity = (t: string, id: string, body: Record<string, unknown>) =>
-  apiRequest<CapacityRow>(`/care/clients/${id}/capacity/`, { method: "POST", body, accessToken: t });
+  apiRequest<CapacityRow>(`/care/clients/${id}/capacity/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const getVisitConsents = (t: string, id: string) =>
-  apiRequest<{ results: VisitConsentRow[] }>(`/care/clients/${id}/visit-consents/`, { accessToken: t });
+  apiRequest<{ results: VisitConsentRow[] }>(`/care/clients/${id}/visit-consents/`, {
+    accessToken: t,
+  });
 export const recordVisitConsent = (t: string, id: string, body: Record<string, unknown>) =>
-  apiRequest<VisitConsentRow>(`/care/clients/${id}/visit-consents/`, { method: "POST", body, accessToken: t });
+  apiRequest<VisitConsentRow>(`/care/clients/${id}/visit-consents/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const completeDeferredConsent = (t: string, consentId: string) =>
-  apiRequest<VisitConsentRow>(`/care/visit-consents/${consentId}/complete/`, { method: "POST", body: {}, accessToken: t });
+  apiRequest<VisitConsentRow>(`/care/visit-consents/${consentId}/complete/`, {
+    method: "POST",
+    body: {},
+    accessToken: t,
+  });
 export const getNotes = (t: string, id: string) =>
   apiRequest<{ results: ProgressNoteRow[] }>(`/care/clients/${id}/notes/`, { accessToken: t });
-export const createNote = (t: string, id: string, body: { note_type: string; text: string; amends?: string }) =>
-  apiRequest<ProgressNoteRow>(`/care/clients/${id}/notes/`, { method: "POST", body, accessToken: t });
+export const createNote = (
+  t: string,
+  id: string,
+  body: { note_type: string; text: string; amends?: string },
+) =>
+  apiRequest<ProgressNoteRow>(`/care/clients/${id}/notes/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const saveNote = (t: string, noteId: string, text: string) =>
-  apiRequest<ProgressNoteRow>(`/care/notes/${noteId}/`, { method: "PUT", body: { text }, accessToken: t });
+  apiRequest<ProgressNoteRow>(`/care/notes/${noteId}/`, {
+    method: "PUT",
+    body: { text },
+    accessToken: t,
+  });
 export const signNote = (t: string, noteId: string) =>
-  apiRequest<ProgressNoteRow>(`/care/notes/${noteId}/`, { method: "POST", body: {}, accessToken: t });
-export const closeEpisode = (t: string, id: string, body: { outcome: string; destination?: string; reason?: string }) =>
-  apiRequest<{ episode: string; outcome: string }>(`/care/clients/${id}/episode-outcome/`, { method: "POST", body, accessToken: t });
+  apiRequest<ProgressNoteRow>(`/care/notes/${noteId}/`, {
+    method: "POST",
+    body: {},
+    accessToken: t,
+  });
+export const closeEpisode = (
+  t: string,
+  id: string,
+  body: { outcome: string; destination?: string; reason?: string },
+) =>
+  apiRequest<{ episode: string; outcome: string }>(`/care/clients/${id}/episode-outcome/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
 export const startNewEpisode = (t: string, id: string, presenting = "") =>
-  apiRequest<{ episode: string }>(`/care/clients/${id}/new-episode/`, { method: "POST", body: { presenting }, accessToken: t });
+  apiRequest<{ episode: string }>(`/care/clients/${id}/new-episode/`, {
+    method: "POST",
+    body: { presenting },
+    accessToken: t,
+  });
 
 // ── therapy, OAT, labs, legal forms, module recommendations, missed appointments ──
 export interface TherapySessionRow {
-  id: string; n: number; at: string; by: string; notes: string; homework: string; activity: string;
+  id: string;
+  n: number;
+  at: string;
+  by: string;
+  notes: string;
+  homework: string;
+  activity: string;
   measure: { score_id: string; instrument: string; name: string; total: number } | null;
   has_process_notes: boolean;
   /** Present only for roles that may see restricted content. */
@@ -2018,9 +2256,18 @@ export interface TherapySessionRow {
   note_id: string | null;
 }
 export interface TherapyEpisodeRow {
-  id: string; modality: string; planned_sessions: number | null; frequency: string; trauma_phase: number | null;
-  confidentiality_agreed: boolean; consent_to_record: boolean; under_supervision: boolean; ended: boolean;
-  activity: string; activity_title: string; sessions: TherapySessionRow[];
+  id: string;
+  modality: string;
+  planned_sessions: number | null;
+  frequency: string;
+  trauma_phase: number | null;
+  confidentiality_agreed: boolean;
+  consent_to_record: boolean;
+  under_supervision: boolean;
+  ended: boolean;
+  activity: string;
+  activity_title: string;
+  sessions: TherapySessionRow[];
 }
 export interface TherapyState {
   results: TherapyEpisodeRow[];
@@ -2028,15 +2275,49 @@ export interface TherapyState {
   can_view_process_notes: boolean;
 }
 export interface OatState {
-  enrolments: { id: string; medicine: string; clinic: string; status: string; prescribed_dose: string; supervised_dispensing: boolean; status_reason: string }[];
-  naloxone: { id: string; outcome: string; quantity: number | null; training_given: boolean; at: string }[];
+  enrolments: {
+    id: string;
+    medicine: string;
+    clinic: string;
+    status: string;
+    prescribed_dose: string;
+    supervised_dispensing: boolean;
+    status_reason: string;
+  }[];
+  naloxone: {
+    id: string;
+    outcome: string;
+    quantity: number | null;
+    training_given: boolean;
+    at: string;
+  }[];
 }
 export interface LabsState {
-  orders: { id: string; code: string; name: string; status: string; ordered_at: string; ordered_by: string }[];
+  orders: {
+    id: string;
+    code: string;
+    name: string;
+    status: string;
+    ordered_at: string;
+    ordered_by: string;
+  }[];
   results: {
-    id: string; order: string; code: string; name: string; value: string; unit: string; reference_range: string;
-    abnormal: boolean; critical: boolean; interpretation: string; recorded_at: string; ordered_at: string; ordered_by: string;
-    acknowledged: boolean; acknowledged_by: string; acknowledged_at: string | null;
+    id: string;
+    order: string;
+    code: string;
+    name: string;
+    value: string;
+    unit: string;
+    reference_range: string;
+    abnormal: boolean;
+    critical: boolean;
+    interpretation: string;
+    recorded_at: string;
+    ordered_at: string;
+    ordered_by: string;
+    acknowledged: boolean;
+    acknowledged_by: string;
+    acknowledged_at: string | null;
   }[];
   order_sets: Record<string, string[]>;
   /** Abnormal-result acknowledgement is for prescribers only. */
@@ -2044,35 +2325,81 @@ export interface LabsState {
 }
 export interface LegalFormsState {
   catalogue: { key: string; title: string }[];
-  results: { id: string; form_key: string; status: string; signed_at: string | null; signed_by: string }[];
+  results: {
+    id: string;
+    form_key: string;
+    status: string;
+    signed_at: string | null;
+    signed_by: string;
+  }[];
 }
-const post = (t: string, path: string, body: unknown = {}) => apiRequest<Record<string, unknown>>(path, { method: "POST", body, accessToken: t });
-export const getTherapy = (t: string, id: string) => apiRequest<TherapyState>(`/care/clients/${id}/therapy/`, { accessToken: t });
-export const startTherapy = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/therapy/`, body);
-export const agreeConfidentiality = (t: string, episodeId: string) => post(t, `/care/therapy/${episodeId}/confidentiality/`);
-export const recordTherapySession = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/therapy/sessions/`, body);
-export const getOat = (t: string, id: string) => apiRequest<OatState>(`/care/clients/${id}/oat/`, { accessToken: t });
-export const referOat = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/oat/`, body);
-export const updateOatStatus = (t: string, oatId: string, body: Record<string, unknown>) => post(t, `/care/oat/${oatId}/status/`, body);
-export const recordNaloxone = (t: string, id: string, body: Record<string, unknown>) => post(t, `/care/clients/${id}/naloxone/`, body);
-export const getLabs = (t: string, id: string) => apiRequest<LabsState>(`/care/clients/${id}/labs/`, { accessToken: t });
-export const orderLabs = (t: string, id: string, codes: string[]) => post(t, `/care/clients/${id}/labs/`, { codes });
-export const acknowledgeLab = (t: string, resultId: string, note = "") => post(t, `/care/labs/results/${resultId}/acknowledge/`, { note });
+const post = (t: string, path: string, body: unknown = {}) =>
+  apiRequest<Record<string, unknown>>(path, { method: "POST", body, accessToken: t });
+export const getTherapy = (t: string, id: string) =>
+  apiRequest<TherapyState>(`/care/clients/${id}/therapy/`, { accessToken: t });
+export const startTherapy = (t: string, id: string, body: Record<string, unknown>) =>
+  post(t, `/care/clients/${id}/therapy/`, body);
+export const agreeConfidentiality = (t: string, episodeId: string) =>
+  post(t, `/care/therapy/${episodeId}/confidentiality/`);
+export const recordTherapySession = (t: string, id: string, body: Record<string, unknown>) =>
+  post(t, `/care/clients/${id}/therapy/sessions/`, body);
+export const getOat = (t: string, id: string) =>
+  apiRequest<OatState>(`/care/clients/${id}/oat/`, { accessToken: t });
+export const referOat = (t: string, id: string, body: Record<string, unknown>) =>
+  post(t, `/care/clients/${id}/oat/`, body);
+export const updateOatStatus = (t: string, oatId: string, body: Record<string, unknown>) =>
+  post(t, `/care/oat/${oatId}/status/`, body);
+export const recordNaloxone = (t: string, id: string, body: Record<string, unknown>) =>
+  post(t, `/care/clients/${id}/naloxone/`, body);
+export const getLabs = (t: string, id: string) =>
+  apiRequest<LabsState>(`/care/clients/${id}/labs/`, { accessToken: t });
+export const orderLabs = (t: string, id: string, codes: string[]) =>
+  post(t, `/care/clients/${id}/labs/`, { codes });
+export const acknowledgeLab = (t: string, resultId: string, note = "") =>
+  post(t, `/care/labs/results/${resultId}/acknowledge/`, { note });
 export const enterLabResult = (
   t: string,
   orderId: string,
-  body: { value: string; interpretation: "NORMAL" | "ABNORMAL" | "CRITICAL"; unit?: string; reference_range?: string },
-) => apiRequest<LabsState>(`/care/labs/orders/${orderId}/result/`, { method: "POST", body, accessToken: t });
-export const getLegalForms = (t: string, id: string) => apiRequest<LegalFormsState>(`/care/clients/${id}/legal-forms/`, { accessToken: t });
-export const prepareLegalForm = (t: string, id: string, formKey: string) => post(t, `/care/clients/${id}/legal-forms/`, { form_key: formKey });
-export const signLegalForm = (t: string, formId: string) => post(t, `/care/legal-forms/${formId}/sign/`);
-export const getModuleRecommendations = (t: string, id: string) => apiRequest<{ recommended: Record<string, string[]> }>(`/care/clients/${id}/modules/`, { accessToken: t });
-export const markAppointmentMissed = (t: string, apptId: string, reason: string) => post(t, `/care/appointments/${apptId}/missed/`, { reason });
-export const markRecontacted = (t: string, apptId: string) => post(t, `/care/appointments/${apptId}/recontacted/`);
+  body: {
+    value: string;
+    interpretation: "NORMAL" | "ABNORMAL" | "CRITICAL";
+    unit?: string;
+    reference_range?: string;
+  },
+) =>
+  apiRequest<LabsState>(`/care/labs/orders/${orderId}/result/`, {
+    method: "POST",
+    body,
+    accessToken: t,
+  });
+export const getLegalForms = (t: string, id: string) =>
+  apiRequest<LegalFormsState>(`/care/clients/${id}/legal-forms/`, { accessToken: t });
+export const prepareLegalForm = (t: string, id: string, formKey: string) =>
+  post(t, `/care/clients/${id}/legal-forms/`, { form_key: formKey });
+export const signLegalForm = (t: string, formId: string) =>
+  post(t, `/care/legal-forms/${formId}/sign/`);
+export const getModuleRecommendations = (t: string, id: string) =>
+  apiRequest<{ recommended: Record<string, string[]> }>(`/care/clients/${id}/modules/`, {
+    accessToken: t,
+  });
+export const markAppointmentMissed = (t: string, apptId: string, reason: string) =>
+  post(t, `/care/appointments/${apptId}/missed/`, { reason });
+export const markRecontacted = (t: string, apptId: string) =>
+  post(t, `/care/appointments/${apptId}/recontacted/`);
 
 export interface WardBoardRow {
-  patient_id: string; patient: string; bed: string; ward: string; day: number; legal_status: string;
-  observation: string; ews: string; ews_trend: "rising" | "improving" | "steady" | null;
-  withdrawal: Record<string, { score: number; band: string }>; next_mdt: string | null; due_within_hour: number;
+  patient_id: string;
+  patient: string;
+  bed: string;
+  ward: string;
+  day: number;
+  legal_status: string;
+  observation: string;
+  ews: string;
+  ews_trend: "rising" | "improving" | "steady" | null;
+  withdrawal: Record<string, { score: number; band: string }>;
+  next_mdt: string | null;
+  due_within_hour: number;
 }
-export const getWardBoardTable = (t: string) => apiRequest<{ results: WardBoardRow[] }>("/care/ward-board/", { accessToken: t });
+export const getWardBoardTable = (t: string) =>
+  apiRequest<{ results: WardBoardRow[] }>("/care/ward-board/", { accessToken: t });

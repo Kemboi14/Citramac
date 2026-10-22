@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
+import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { BillingStage } from "./record/BillingStage";
@@ -104,16 +105,30 @@ export function ClientRecordPage() {
 
   return (
     <div>
-      <Breadcrumbs
-        items={[
-          { label: "My Caseload", to: "/clinical/caseload" },
-          {
-            label: loadedBanner
-              ? loadedBanner.name.trim() || "Temporary client (unnamed)"
-              : "Client",
-          },
-        ]}
-      />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <Breadcrumbs
+          items={[
+            { label: "My Caseload", to: "/clinical/caseload" },
+            {
+              label: loadedBanner
+                ? loadedBanner.name.trim() || "Temporary client (unnamed)"
+                : "Client",
+            },
+          ]}
+        />
+        {loadedBanner && (
+          <Link
+            className={`${BTN_GHOST} ${BTN_SM} mb-2`}
+            to={`/clinical/registration?${
+              loadedBanner.identity_status === "IDENTIFIED" ? "edit" : "resolve"
+            }=${encodeURIComponent(patientId)}`}
+          >
+            {loadedBanner.identity_status === "IDENTIFIED"
+              ? "Edit client details"
+              : "Resolve identity"}
+          </Link>
+        )}
+      </div>
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} />
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}

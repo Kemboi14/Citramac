@@ -87,43 +87,49 @@ export function InterventionsStage({ patientId, banner }: RecordViewProps) {
         </>
       )}
 
-      <div className={SECTION_HEAD}>
-        <b className={SECTION_LABEL}>Clinical modules</b>
-        <ScopeToggle
-          scope={scope}
-          planCount={planModules.length}
-          allCount={modules.length}
-          onChange={setScope}
-        />
-      </div>
-      <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        {data ? (
-          <ModuleList modules={shown} actions={actions} onOpen={setOpenCode} />
-        ) : (
-          <p className="p-4 text-xs text-ink-500">
-            {workspace.loading ? "Loading clinical modules…" : "Clinical modules are unavailable."}
-          </p>
-        )}
-      </div>
-
-      {openModule && data && (
-        <InterventionDrawer
-          key={openModule.code}
-          patientId={patientId}
-          clientName={clientName}
-          module={openModule}
-          actions={actions}
-          context={data.context}
-          records={(records.data?.results ?? []).filter((r) =>
-            openModule.history_modules.includes(r.module),
-          )}
-          onClose={() => {
-            setOpenCode(null);
-            setVersion((v) => v + 1);
-          }}
-          onRecorded={(message) => refresh(message)}
-          onCorrected={refresh}
-        />
+      {openModule && data ? (
+        <div className="mt-5">
+          <InterventionDrawer
+            key={openModule.code}
+            patientId={patientId}
+            clientName={clientName}
+            module={openModule}
+            actions={actions}
+            context={data.context}
+            records={(records.data?.results ?? []).filter((r) =>
+              openModule.history_modules.includes(r.module),
+            )}
+            onClose={() => {
+              setOpenCode(null);
+              setVersion((v) => v + 1);
+            }}
+            onRecorded={(message) => refresh(message)}
+            onCorrected={refresh}
+          />
+        </div>
+      ) : (
+        <>
+          <div className={SECTION_HEAD}>
+            <b className={SECTION_LABEL}>Clinical modules</b>
+            <ScopeToggle
+              scope={scope}
+              planCount={planModules.length}
+              allCount={modules.length}
+              onChange={setScope}
+            />
+          </div>
+          <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
+            {data ? (
+              <ModuleList modules={shown} actions={actions} onOpen={setOpenCode} />
+            ) : (
+              <p className="p-4 text-xs text-ink-500">
+                {workspace.loading
+                  ? "Loading clinical modules…"
+                  : "Clinical modules are unavailable."}
+              </p>
+            )}
+          </div>
+        </>
       )}
     </section>
   );

@@ -24,8 +24,8 @@ const pill = (on: boolean) => `${PILL} ${on ? "border-brand-green bg-brand-green
 function Sys({ children, id }: { children: ReactNode; id?: string }) {
   return (
     <div id={id} className="flex scroll-mt-4 gap-2.5">
-      <div aria-hidden className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-green-tint text-[12px] font-bold text-brand-green">C</div>
-      <div className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-ink-900">{children}</div>
+      <div aria-hidden className="mt-px grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] bg-brand-green-tint font-doc text-[15px] font-semibold text-brand-green">C</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-2 text-[14.5px] leading-normal text-ink-900">{children}</div>
     </div>
   );
 }
@@ -33,11 +33,28 @@ function Sys({ children, id }: { children: ReactNode; id?: string }) {
 function Mine({ children, foot }: { children: ReactNode; foot?: ReactNode }) {
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="max-w-[85%] whitespace-pre-wrap rounded-[14px] rounded-br-sm bg-surface-bg px-3.5 py-2.5 text-[13.5px] text-ink-900">{children}</div>
-      {foot && <div className="flex items-center gap-2 text-[11px] text-ink-500">{foot}</div>}
+      <div className="max-w-[min(560px,88%)] whitespace-pre-wrap break-words rounded-[18px] bg-[color-mix(in_srgb,var(--border)_65%,var(--bg))] px-[15px] py-2.5 text-[15px] text-ink-900">{children}</div>
+      {foot && <div className="flex items-center gap-2.5 text-[12px] text-ink-500">{foot}</div>}
     </div>
   );
 }
+
+/** v4 question: small counter, the question in the document face, its hint. */
+function QuestionHead({ n, title, hint }: { n: number; title: string; hint: string }) {
+  return (
+    <>
+      <span className="text-[12px] font-medium text-ink-500">Question {n} of {QUESTION_COUNT}</span>
+      <div className="font-doc text-[21px] font-medium leading-[1.3]">{title}</div>
+      <div className="max-w-[60ch] text-[14px] text-ink-500">{hint}</div>
+    </>
+  );
+}
+
+/** A chosen safety answer: Yes in risk red, No in green, Not assessed in amber. */
+const safetyOn = (code: string) =>
+  code === "YES" ? "border-priority-red bg-priority-red-tint text-priority-red"
+    : code === "NOT_ASSESSED" ? "border-priority-orange bg-priority-orange-tint text-priority-orange"
+      : "border-brand-green bg-brand-green-tint text-brand-green";
 
 /** The flagged sentence with the matched phrase marked (offsets are within the passage). */
 function Highlight({ d }: { d: Detection }) {
@@ -81,11 +98,7 @@ export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave:
       <Sys><p>Example session. I’ll ask five questions, one at a time, then the safety question.</p></Sys>
       {config.questions.map((q, i) => (
         <div key={q.key} className="flex flex-col gap-3">
-          <Sys>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Question {i + 1} of {QUESTION_COUNT}</span>
-            <div className="font-semibold">{q.title}</div>
-            <div className="text-[12.5px] text-ink-500">{q.hint}</div>
-          </Sys>
+          <Sys><QuestionHead n={i + 1} title={q.title} hint={q.hint} /></Sys>
           <Mine foot={<span>Typed · example</span>}>{EXAMPLE_ANSWERS[q.key]}</Mine>
         </div>
       ))}
@@ -127,15 +140,11 @@ export function Thread({ config, note, step, acks, busy, h, reviewExtras }: {
         const language = note.flags.filter((f) => f.where === q.key);
         return (
           <div key={q.key} className="flex flex-col gap-3">
-            <Sys id={`psy-m-q${i}`}>
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Question {i + 1} of {QUESTION_COUNT}</span>
-              <div className="font-semibold">{q.title}</div>
-              <div className="text-[12.5px] text-ink-500">{q.hint}</div>
-            </Sys>
+            <Sys id={`psy-m-q${i}`}><QuestionHead n={i + 1} title={q.title} hint={q.hint} /></Sys>
             {text.trim() && (
               <Mine foot={<>
                 <span>{modeLabel(answer?.mode)}{answer?.answered_at ? ` · ${hhmm(answer.answered_at)}` : ""}</span>
-                {!locked && <button type="button" className="font-semibold text-brand-green hover:underline" onClick={() => h.onEdit(q.key)}>Edit</button>}
+                {!locked && <button type="button" className="text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900" onClick={() => h.onEdit(q.key)}>Edit</button>}
               </>}>{text}</Mine>
             )}
             {flags.length > 0 && (
@@ -222,16 +231,18 @@ export function Thread({ config, note, step, acks, busy, h, reviewExtras }: {
       )}
       {step >= SAFETY_STEP && (
         <Sys id="psy-m-safety">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Required · every session</span>
-          <div className="font-semibold">{config.safety_question}</div>
-          <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Safety answer">
+          <span className="text-[12px] font-medium text-ink-500">Required · every session</span>
+          <div className="font-doc text-[18.5px] leading-[1.4]">{config.safety_question}</div>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Safety answer">
             {config.safety_options.map((o) => (
               <button key={o.code} type="button" role="radio" aria-checked={note.safety_answer === o.code} disabled={locked || busy}
-                className={`${pill(note.safety_answer === o.code)} uppercase tracking-wide`} onClick={() => h.onSafety(o.code)}>{o.label}</button>
+                className={`rounded-[12px] border-[1.5px] px-4 py-[9px] text-[13px] font-bold uppercase tracking-[.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  note.safety_answer === o.code ? safetyOn(o.code) : "border-surface-border bg-surface-card text-ink-900 hover:border-brand-green"}`}
+                onClick={() => h.onSafety(o.code)}>{o.label}</button>
             ))}
           </div>
           {note.safety_answer === "YES" && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {link && <span className="rounded-full bg-priority-red-tint px-2 py-0.5 text-[11.5px] font-semibold text-priority-red">Linked risk assessment: {link.display_id} (opened {link.opened})</span>}
               {!locked && <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={h.onOpenRisk}>{link ? "Edit risk details" : "Open risk workflow"}</button>}
             </div>

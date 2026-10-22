@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { WideModal } from "../../components/WideModal";
 import type { PatientDetail } from "../../lib/clinicalApi";
 import { useValueSets } from "../care/shared/useValueSets";
@@ -48,13 +49,21 @@ export function PatientDetailsModal({
       title="Client Registration Details"
       subtitle={`${patient.first_name} ${patient.last_name} · ${patient.uhid_number || patient.citramac_number}`}
       footer={
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary hover:bg-brand-green-dark"
-        >
-          Close
-        </button>
+        <>
+          <Link
+            to={`/clinical/registration?edit=${encodeURIComponent(patient.id)}`}
+            className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-900 hover:bg-surface-bg"
+          >
+            Edit details
+          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary hover:bg-brand-green-dark"
+          >
+            Close
+          </button>
+        </>
       }
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

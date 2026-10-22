@@ -218,6 +218,61 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertNotIn("diagnosis", row)
 
 
+
+class RegistrationEditTests(CarePathwayApiTestCase):
+    def edit(self, patient_id, **data):
+        return self.client.patch(
+            reverse("care-registration-details", args=[patient_id]), data, format="json", **self.auth
+        )
+
+    def test_edit_updates_details_without_a_new_encounter(self):
+        first = self.register(phone="0700000001", occupation="Teacher")
+        pid = first.data["patient_id"]
+        response = self.edit(
+            pid,
+            first_name="Amina",
+            last_name="Otieno",
+            phone="0711111111",
+            occupation="",
+            next_of_kin_name="Sara Otieno",
+            next_of_kin_phone="0722222222",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["last_name"], "Otieno")
+        self.assertEqual(response.data["phone"], "0711111111")
+        self.assertEqual(response.data["occupation"], "")
+        self.assertEqual(response.data["next_of_kin"], "Sara Otieno")
+        with platform_admin_context():
+            self.assertEqual(TriageEncounter.objects.filter(patient_id=pid).count(), 1)
+        loaded = self.client.get(reverse("care-registration-details", args=[pid]), **self.auth)
+        self.assertTrue(loaded.data["citramac_number"])
+        self.assertEqual(loaded.data["first_name"], "Amina")
+
+    def test_edit_keeps_unsent_fields_and_requires_names(self):
+        pid = self.register(occupation="Teacher").data["patient_id"]
+        self.assertEqual(self.edit(pid, first_name="", last_name="").status_code, 400)
+        response = self.edit(pid, first_name="Amina", last_name="Kamau", phone="0733")
+        self.assertEqual(response.data["occupation"], "Teacher")
+
+    def test_temporary_record_cannot_be_edited_only_resolved(self):
+        pid = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="").data[
+            "patient_id"
+        ]
+        self.assertEqual(self.edit(pid, first_name="A", last_name="B").status_code, 400)
+
+    def test_identifier_held_by_another_client_is_refused(self):
+        self.register(id_document_type="NATIONAL_ID", id_document_number="12345678")
+        other = self.register(
+            full_name="Brian Ochieng", date_of_birth="1980-01-01", sex="MALE",
+            confirm_new_record=True,
+        ).data["patient_id"]
+        response = self.edit(
+            other, first_name="Brian", last_name="Ochieng",
+            id_document_type="NATIONAL_ID", id_document_number="12345678",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("duplicate_of", response.data)
+
 class TriageFlowTests(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()

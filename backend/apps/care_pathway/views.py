@@ -270,6 +270,21 @@ class RegistrationView(APIView):
         )
 
 
+class RegistrationDetailsView(APIView):
+    """One client's registration details: read them into the Registration form,
+    and correct them in place without opening a triage encounter."""
+
+    def get(self, request, patient_id):
+        patient = _patient(patient_id)
+        log_view(patient)
+        return Response(_registration_row(patient))
+
+    def patch(self, request, patient_id):
+        patient = services.update_registration(request.user, _patient(patient_id), request.data)
+        patient.refresh_from_db()
+        return Response(_registration_row(patient))
+
+
 class ResolveIdentityView(APIView):
     def post(self, request, patient_id):
         patient = services.resolve_identity(request.user, _patient(patient_id), request.data)

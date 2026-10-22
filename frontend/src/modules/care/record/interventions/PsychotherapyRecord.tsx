@@ -23,34 +23,37 @@ export function PsychotherapyRecord({
   const [chosen, setChosen] = useState<string | null>(null);
   const episodeId = chosen ?? (ready.length === 1 ? ready[0].id : null);
 
-  if (error) return <ErrorNote>{error}</ErrorNote>;
-  if (!data) return <p className="text-[13px] text-ink-500">Loading…</p>;
+  if (error) return <div className="p-6"><ErrorNote>{error}</ErrorNote></div>;
+  if (!data) return <p className="p-6 text-[13px] text-ink-500">Loading…</p>;
+  if (episodeId) {
+    return <PsychotherapyWorkspace inline patientId={patientId} episodeId={episodeId} onClose={onClose} />;
+  }
   return (
-    <div className="flex flex-col gap-3">
-      {episodeId ? (
-        <PsychotherapyWorkspace inline patientId={patientId} episodeId={episodeId} onClose={onClose} />
-      ) : ready.length > 1 ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-[13px] text-ink-700">Choose the therapy episode this session belongs to.</p>
-          <div className="flex flex-wrap gap-2">
-            {ready.map((e) => (
-              <button key={e.id} type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setChosen(e.id)}>
-                {e.modality}
-                {e.activity_title ? ` · ${e.activity_title}` : ""}
-              </button>
-            ))}
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-3 px-[clamp(18px,4vw,48px)] py-6">
+        {ready.length > 1 ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-[13px] text-ink-700">Choose the therapy episode this session belongs to.</p>
+            <div className="flex flex-wrap gap-2">
+              {ready.map((e) => (
+                <button key={e.id} type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setChosen(e.id)}>
+                  {e.modality}
+                  {e.activity_title ? ` · ${e.activity_title}` : ""}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <TherapyModule patientId={patientId} />
-      )}
-      <p className="text-xs text-ink-500">
-        Group sessions are documented once in{" "}
-        <Link to="/clinical/psychotherapy/group" className="font-semibold text-brand-green hover:underline">
-          Group psychotherapy
-        </Link>
-        ; each attendee’s entry is listed in History here.
-      </p>
+        ) : (
+          <TherapyModule patientId={patientId} />
+        )}
+        <p className="text-xs text-ink-500">
+          Group sessions are documented once in{" "}
+          <Link to="/clinical/psychotherapy/group" className="font-semibold text-brand-green hover:underline">
+            Group psychotherapy
+          </Link>
+          ; each attendee’s entry is listed on their record.
+        </p>
+      </div>
     </div>
   );
 }

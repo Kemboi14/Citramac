@@ -184,6 +184,21 @@ class AT15RiskDetectionTests(PsyNoteTestCase):
         data = self.patch(nid, self.answers(q1="Mentioned a purple elephant.")).data
         self.assertTrue(any(d["matched"] == "purple elephant" for d in data["detections"]))
 
+    def test_third_person_and_kiswahili_phrases_are_prompted(self):
+        nid = self.start().data["id"]
+        data = self.patch(nid, self.answers(
+            q1="She said sometimes she wishes she could just disappear for a while.",
+            q2="Her partner said she wants to kill herself.",
+            q4="Alisema anataka kufa.",
+        )).data
+        matched = {d["question"]: d["matched"].lower() for d in data["detections"]}
+        self.assertEqual(matched.get("q1"), "just disappear")
+        self.assertEqual(matched.get("q2"), "kill herself")
+        self.assertEqual(matched.get("q4"), "anataka kufa")
+        # Ordinary language stays quiet.
+        quiet = self.patch(nid, self.answers(q1="The panic symptoms began to ease by the end.", q2="", q4="")).data
+        self.assertEqual(quiet["detections"], [])
+
 
 class AT16TherapyModelTests(PsyNoteTestCase):
     def test_two_named_models_each_used_only_for_supported_content(self):

@@ -22,6 +22,11 @@ urlpatterns = [
         name="care-registration-duplicate-check",
     ),
     path(
+        "care/patients/<uuid:patient_id>/registration/",
+        views.RegistrationDetailsView.as_view(),
+        name="care-registration-details",
+    ),
+    path(
         "care/patients/<uuid:patient_id>/resolve-identity/",
         views.ResolveIdentityView.as_view(),
         name="care-resolve-identity",

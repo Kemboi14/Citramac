@@ -93,6 +93,7 @@ export function SafetyBanner({
   return (
     <section
       aria-label="Patient safety banner"
+      data-safety-banner
       className="sticky top-0 z-[15] -mx-4 mb-4 border-b border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
       <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(250px,1.1fr)_minmax(300px,1.8fr)_minmax(200px,.9fr)_minmax(210px,1fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
@@ -201,7 +202,9 @@ export function SafetyBanner({
               />
               <span>{setting}</span>
             </div>
-            {banner.legal_status && <LegalBannerLine legal={banner.legal_status} inpatient={inpatient} />}
+            {banner.legal_status && (
+              <LegalBannerLine legal={banner.legal_status} inpatient={inpatient} />
+            )}
           </div>
           <div>
             <div className={label}>Triage / risk priority</div>
@@ -269,7 +272,8 @@ function LegalBannerLine({ legal, inpatient }: { legal: LegalBanner; inpatient: 
       </span>
       {legal.notice && (
         <span className="text-xs font-bold text-priority-orange">
-          {legal.notice.notice_period_hours}-h discharge notice: {countdownText(legal.notice.earliest_departure_at, now)}
+          {legal.notice.notice_period_hours}-h discharge notice:{" "}
+          {countdownText(legal.notice.earliest_departure_at, now)}
         </span>
       )}
     </div>

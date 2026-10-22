@@ -1,7 +1,5 @@
-import { X } from "lucide-react";
-import { useId, useRef, useState, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
-import { useDialogA11y } from "../../../../components/useDialogA11y";
+import { ArrowLeft, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type {
   InterventionAction,
   InterventionContext,
@@ -25,9 +23,10 @@ const TABS = ["Record", "History", "Info"] as const;
 type Tab = (typeof TABS)[number];
 const GUTTER = "px-[clamp(18px,4vw,48px)]";
 
-/** Full-screen module drawer (v4 `moduleDrawer`): header, Record / History /
- * Info tabs. Portal-rendered so `position: fixed` is not captured by an
- * animated ancestor (see components/WideModal). */
+/** An open clinical module (v4 `moduleDrawer`): header, Record / History /
+ * Info tabs. Shown in the page in place of the module list, so the main
+ * navigation, client banner and record tabs stay in view; Back (or Escape)
+ * returns to the list. */
 export function InterventionDrawer({
   patientId,
   clientName,
@@ -49,11 +48,26 @@ export function InterventionDrawer({
   onRecorded: (message: string) => void;
   onCorrected: (message: string) => void;
 }) {
-  const dialogRef = useDialogA11y<HTMLElement>(true, onClose);
+  const panelRef = useRef<HTMLElement>(null);
+  // The client banner is sticky: open the module just below it, and size the
+  // guided session to the space left under it.
+  const [bannerHeight] = useState(() =>
+    Math.round(document.querySelector("[data-safety-banner]")?.getBoundingClientRect().height ?? 0),
+  );
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.style.scrollMarginTop = `${bannerHeight + 12}px`;
+    panel.scrollIntoView({ block: "start" });
+    panel.focus({ preventScroll: true });
+  }, [bannerHeight]);
   const id = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [tab, setTab] = useState<Tab>("Record");
   const showForm = Boolean(module.billing_service) && !OWN_DELIVERY.has(module.code);
+  // v4: the psychotherapy module is the guided session itself — no tabs, and
+  // the workflow fills the screen under the module header.
+  const guided = module.code === "psychotherapy";
 
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -63,79 +77,90 @@ export function InterventionDrawer({
     tabRefs.current.at(next)?.focus();
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[90] flex justify-center overflow-auto bg-surface-bg"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+  return (
+    <section
+      ref={panelRef}
+      tabIndex={-1}
+      aria-labelledby={`${id}-title`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && event.target === event.currentTarget) onClose();
       }}
+      style={
+        guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 56 + 28}px))` } : undefined
+      }
+      className="flex flex-col overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm outline-none"
     >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${id}-title`}
-        className="flex min-h-full w-full flex-col bg-surface-card"
+      <button
+        type="button"
+        onClick={onClose}
+        className={`flex items-center gap-1.5 self-start pt-3 text-[12.5px] font-semibold text-brand-green hover:underline ${GUTTER}`}
       >
-        <div className={`flex items-center gap-[11px] border-b border-surface-border py-4 ${GUTTER}`}>
-          <ModuleIcon code={module.code} recommended={module.recommended} large />
-          <div className="min-w-0 flex-1">
-            <h2 id={`${id}-title`} className="sr-only">
-              {module.name}
-            </h2>
-            <ModuleMeta module={module} actions={actions} />
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close record form"
-            className="ml-auto grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg text-ink-500 transition-colors hover:bg-surface-bg"
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to clinical modules
+      </button>
+      <div
+        className={`flex items-center gap-[11px] border-b border-surface-border pb-4 pt-2 ${GUTTER}`}
+      >
+        <ModuleIcon code={module.code} recommended={module.recommended} large />
+        <div className="min-w-0 flex-1">
+          <h2 id={`${id}-title`} className="sr-only">
+            {module.name}
+          </h2>
+          <ModuleMeta module={module} actions={actions} />
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close module"
+          className="ml-auto grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg text-ink-500 transition-colors hover:bg-surface-bg"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {guided ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PsychotherapyRecord patientId={patientId} onClose={onClose} />
+        </div>
+      ) : (
+        <>
+          <div
+            role="tablist"
+            aria-label="Intervention details"
+            className={`flex gap-0.5 border-b border-surface-border ${GUTTER}`}
           >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+            {TABS.map((name, index) => (
+              <button
+                key={name}
+                ref={(node) => {
+                  // eslint-disable-next-line security/detect-object-injection -- `index` is the map position.
+                  tabRefs.current[index] = node;
+                }}
+                id={`${id}-tab-${name}`}
+                type="button"
+                role="tab"
+                aria-selected={tab === name}
+                aria-controls={`${id}-panel`}
+                tabIndex={tab === name ? 0 : -1}
+                onClick={() => setTab(name)}
+                onKeyDown={(event) => onTabKey(event, index)}
+                className={`min-h-[40px] border-b-2 px-3 py-[9px] text-[13px] font-semibold transition-colors ${
+                  tab === name
+                    ? "border-brand-green text-brand-green"
+                    : "border-transparent text-ink-500 hover:text-ink-900"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
 
-        <div
-          role="tablist"
-          aria-label="Intervention details"
-          className={`flex gap-0.5 border-b border-surface-border ${GUTTER}`}
-        >
-          {TABS.map((name, index) => (
-            <button
-              key={name}
-              ref={(node) => {
-                // eslint-disable-next-line security/detect-object-injection -- `index` is the map position.
-                tabRefs.current[index] = node;
-              }}
-              id={`${id}-tab-${name}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === name}
-              aria-controls={`${id}-panel`}
-              tabIndex={tab === name ? 0 : -1}
-              onClick={() => setTab(name)}
-              onKeyDown={(event) => onTabKey(event, index)}
-              className={`min-h-[40px] border-b-2 px-3 py-[9px] text-[13px] font-semibold transition-colors ${
-                tab === name
-                  ? "border-brand-green text-brand-green"
-                  : "border-transparent text-ink-500 hover:text-ink-900"
-              }`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-
-        <div
-          id={`${id}-panel`}
-          role="tabpanel"
-          aria-labelledby={`${id}-tab-${tab}`}
-          className={`w-full max-w-[1200px] flex-1 self-center pb-8 pt-[18px] ${GUTTER}`}
-        >
-          {tab === "Record" &&
-            (module.code === "psychotherapy" ? (
-              <PsychotherapyRecord patientId={patientId} onClose={onClose} />
-            ) : (
+          <div
+            id={`${id}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${id}-tab-${tab}`}
+            className={`w-full flex-1 pb-8 pt-[18px] ${GUTTER}`}
+          >
+            {tab === "Record" && (
               <>
                 <ClinicalContext context={context} />
                 {module.note && <ModuleNote note={module.note} />}
@@ -152,14 +177,14 @@ export function InterventionDrawer({
                   />
                 )}
               </>
-            ))}
-          {tab === "History" && (
-            <ModuleHistory module={module} records={records} onCorrected={onCorrected} />
-          )}
-          {tab === "Info" && <ModuleInfo module={module} />}
-        </div>
-      </section>
-    </div>,
-    document.body,
+            )}
+            {tab === "History" && (
+              <ModuleHistory module={module} records={records} onCorrected={onCorrected} />
+            )}
+            {tab === "Info" && <ModuleInfo module={module} />}
+          </div>
+        </>
+      )}
+    </section>
   );
 }

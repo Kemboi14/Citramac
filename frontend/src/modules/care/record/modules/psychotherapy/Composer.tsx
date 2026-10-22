@@ -52,8 +52,8 @@ export function ModeMenu({ config, mode, setMode, language, setLanguage, voice, 
   return (
     <div ref={ref} className="relative">
       <button ref={button} type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full border border-surface-border px-2.5 py-1 text-[12px] font-semibold text-ink-700 hover:bg-surface-bg">
-        {mode === "dictate" ? <Mic className="h-3.5 w-3.5" /> : <Keyboard className="h-3.5 w-3.5" />}
+        className={`inline-flex items-center gap-1.5 rounded-[9px] px-[9px] py-1.5 text-[13.5px] font-medium hover:bg-surface-bg hover:text-ink-900 ${open ? "bg-surface-bg text-ink-900" : "text-ink-500"}`}>
+        {mode === "dictate" ? <Mic className="h-[17px] w-[17px]" /> : <Keyboard className="h-[17px] w-[17px]" />}
         {mode === "dictate" ? "Dictate" : "Type"}
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
@@ -119,7 +119,7 @@ function DictationStrip({ state, countdown, error, onRepeat, onPause, onDone, on
             : done ? "All questions answered." : "Ready. Tap the microphone to answer.";
   const live = state === "listening" || state === "countdown";
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-surface-border px-3 py-2" role="status">
+    <div className="flex flex-wrap items-center gap-2.5 pb-1 pt-0.5" role="status">
       <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${live ? "animate-pulse bg-priority-red" : state === "speaking" ? "animate-pulse bg-brand-green" : "bg-surface-border"}`} />
       <span className={`min-w-0 flex-1 text-[12.5px] ${error ? "text-priority-red" : "text-ink-700"}`}>{text}</span>
       <div className="flex flex-wrap gap-1.5">
@@ -175,35 +175,35 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, mode,
   }
   let send = (
     <button type="button" aria-label="Send" disabled={disabled || !has} onClick={onSend}
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-green text-on-primary disabled:opacity-40">
+      className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:bg-surface-bg disabled:text-ink-500">
       <ArrowUp className="h-4 w-4" />
     </button>
   );
   if (dictation && live) {
     send = (
       <button type="button" aria-label="Stop dictating" onClick={dictation.onStop}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-priority-red text-on-primary">
+        className="grid h-9 w-9 animate-pulse place-items-center rounded-[11px] bg-priority-red text-on-primary">
         <Square className="h-3.5 w-3.5" />
       </button>
     );
   } else if (dictation && !has) {
     send = (
       <button type="button" aria-label="Start dictating" disabled={disabled} onClick={dictation.onMic}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-green text-on-primary disabled:opacity-40">
+        className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:bg-surface-bg disabled:text-ink-500">
         <Mic className="h-4 w-4" />
       </button>
     );
   }
   return (
-    <div className="border-t border-surface-border bg-surface-bg px-3 pb-3 pt-2 sm:px-5">
-      <div className="mx-auto w-full max-w-[760px]">
+    <div className="px-4 pb-[18px] sm:px-5">
+      <div className="mx-auto w-full max-w-[740px]">
         {editing && (
           <div className="mb-1.5 flex items-center gap-2 text-[12px] text-ink-700">
             <Pencil className="h-3.5 w-3.5" /> Editing answer to {editing}
             <button type="button" className="font-semibold text-brand-green hover:underline" onClick={onCancelEdit}>Cancel</button>
           </div>
         )}
-        <div className="overflow-hidden rounded-[14px] border border-surface-border bg-surface-card shadow-sm focus-within:border-brand-green">
+        <div className="flex flex-col gap-1 overflow-hidden rounded-[22px] border border-surface-border bg-surface-card pb-2 pl-[18px] pr-3 pt-3 shadow-md focus-within:border-brand-green">
           {dictation && mode === "dictate" && (
             <DictationStrip state={dictation.state} countdown={dictation.countdown} error={dictation.error}
               safety={dictation.safety} done={dictation.done} onRepeat={dictation.onRepeat} onPause={dictation.onPause}
@@ -211,13 +211,13 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, mode,
           )}
           <textarea ref={ref} rows={1} value={value} placeholder={placeholder} aria-label="Your answer" disabled={disabled}
             readOnly={live || dictation?.state === "speaking"} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey}
-            className="block max-h-[220px] w-full resize-none bg-transparent px-3.5 py-3 text-[14px] text-ink-900 outline-none placeholder:text-ink-400 disabled:opacity-60" />
-          <div className="flex items-center justify-end gap-2 px-2.5 pb-2">
+            className="block max-h-[220px] min-h-[26px] w-full resize-none bg-transparent py-0.5 text-[15.5px] leading-normal text-ink-900 outline-none placeholder:text-ink-500 disabled:opacity-60" />
+          <div className="flex items-center justify-end gap-2">
             {modeMenu}
             {send}
           </div>
         </div>
-        <p className="mt-1.5 text-center text-[11px] text-ink-500">{hint}</p>
+        <p className="pt-2 text-center text-[12px] text-ink-500">{hint}</p>
       </div>
     </div>
   );

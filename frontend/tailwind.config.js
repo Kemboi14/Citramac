@@ -95,6 +95,9 @@ export default {
       fontFamily: {
         display: ["Lexend", "sans-serif"],
         body: ["Inter", "sans-serif"],
+        // Long-form clinical text (the psychotherapy note, questions): the
+        // mockup's document face, mapped to system serifs (no web fonts).
+        doc: ["ui-serif", "Georgia", "Cambria", "Times New Roman", "serif"],
       },
       keyframes: {
         "fade-in": {

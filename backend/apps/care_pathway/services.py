@@ -184,14 +184,19 @@ def _coded(data, key, choices):
     return value
 
 
-def _apply_details(patient, data):
-    """Registration details shared by a new arrival and an identity
-    resolution: everything except name, identity status and next of kin."""
+def _apply_details(patient, data, clear=False):
+    """Registration details shared by a new arrival, an identity resolution and
+    a details edit: everything except name, identity status and next of kin.
+    A blank value keeps what is on file — except with `clear` (an edit), where
+    a key that is sent blank clears the field."""
 
     def take(field, key=None):
-        value = data.get(key or field)
+        key = key or field
+        value = data.get(key)
         if value not in (None, ""):
             setattr(patient, field, value)
+        elif clear and key in data:
+            setattr(patient, field, None if field in ("date_of_birth", "estimated_age") else "")
 
     take("preferred_name")
     take("pronouns")
@@ -213,7 +218,7 @@ def _apply_details(patient, data):
         ("living_with_disability", Patient.DISABILITY_CHOICES),
     ):
         value = _coded(data, field, choices)
-        if value:
+        if value or (clear and field in data):
             setattr(patient, field, value)
     if patient.living_with_disability == "YES":
         take("disability_details")
@@ -289,13 +294,72 @@ def _record_allergies(patient, items, user, source, verification):
             record.save(update_fields=["verification_status", "updated_at"])
 
 
+def _capture_hie_consent(patient, user, data):
+    """HIE / family-involvement consent decisions captured at registration.
+    Each decision is its own append-only ConsentRecord."""
+    from apps.client_registry.consent import capture_consent
+    from apps.client_registry.models import ConsentRecord
+
+    consent = data.get("hie_consent") or {}
+    if consent:
+        if not (data.get("consent_text_version") and data.get("consent_text_snapshot")):
+            raise ValidationError(
+                {"consent_text_version": "The consent wording shown to the client is required."}
+            )
+        for key, consent_type in (
+            ("general", "DATA_SHARING_HIE"),
+            ("mental_health", "MENTAL_HEALTH_HIE"),
+            ("substance_use", "SUBSTANCE_USE_HIE"),
+            ("family", "FAMILY_INVOLVEMENT"),
+        ):
+            decision = consent.get(key)
+            if not decision or decision == "NOT_ASKED":
+                continue
+            if decision not in dict(ConsentRecord.DECISION_CHOICES):
+                raise ValidationError({"hie_consent": f"Unknown decision for {key}."})
+            capture_consent(
+                patient,
+                user,
+                decision == "YES",
+                data["consent_text_version"],
+                data["consent_text_snapshot"],
+                consent_type=consent_type,
+                decision=decision,
+                purpose=data.get("consent_purpose") or "",
+            )
+
+
+def _apply_next_of_kin(patient, data):
+    """Point the client at a next-of-kin contact. Any changed detail is a new
+    contact row; the old one stays as history."""
+    next_of_kin = (data.get("next_of_kin_name") or data.get("next_of_kin") or "").strip()
+    nok_fields = {
+        "name": next_of_kin,
+        "relationship": (data.get("next_of_kin_relationship") or "").strip()
+        or "Next of kin / emergency contact",
+        "phone": (data.get("next_of_kin_phone") or "").strip(),
+        "is_guardian": bool(data.get("next_of_kin_is_guardian")),
+        "guardian_legal_status": (data.get("guardian_legal_status") or "").strip(),
+        "may_be_informed": bool(data.get("next_of_kin_may_be_informed")),
+    }
+    current = patient.next_of_kin
+    # Any changed detail (not just the name) is a new contact row; the old one
+    # stays as history.
+    if next_of_kin and (
+        current is None or any(getattr(current, k) != v for k, v in nok_fields.items())
+    ):
+        contact = EmergencyContact.objects.create(
+            organization_id=patient.organization_id, patient=patient, **nok_fields
+        )
+        patient.next_of_kin = contact
+        patient.save(update_fields=["next_of_kin", "updated_at"])
+
+
 @transaction.atomic
 def register_arrival(user, data):
     """Create or update the client, then open a NEW triage encounter — it never
     reopens an earlier one (doc 15 §1.4). Idempotent on `client_request_id`."""
     from apps.client_registry import identity as identity_service
-    from apps.client_registry.consent import capture_consent
-    from apps.client_registry.models import ConsentRecord
 
     request_id = (data.get("client_request_id") or "").strip()
     if not request_id:
@@ -396,33 +460,7 @@ def register_arrival(user, data):
         identity_service.record_identifier(patient, kind, value)
     _record_brought_by(patient, data)
 
-    consent = data.get("hie_consent") or {}
-    if consent:
-        if not (data.get("consent_text_version") and data.get("consent_text_snapshot")):
-            raise ValidationError(
-                {"consent_text_version": "The consent wording shown to the client is required."}
-            )
-        for key, consent_type in (
-            ("general", "DATA_SHARING_HIE"),
-            ("mental_health", "MENTAL_HEALTH_HIE"),
-            ("substance_use", "SUBSTANCE_USE_HIE"),
-            ("family", "FAMILY_INVOLVEMENT"),
-        ):
-            decision = consent.get(key)
-            if not decision or decision == "NOT_ASKED":
-                continue
-            if decision not in dict(ConsentRecord.DECISION_CHOICES):
-                raise ValidationError({"hie_consent": f"Unknown decision for {key}."})
-            capture_consent(
-                patient,
-                user,
-                decision == "YES",
-                data["consent_text_version"],
-                data["consent_text_snapshot"],
-                consent_type=consent_type,
-                decision=decision,
-                purpose=data.get("consent_purpose") or "",
-            )
+    _capture_hie_consent(patient, user, data)
 
     if allergy_status == "ACTIVE_ALLERGIES":
         _record_allergies(
@@ -433,27 +471,7 @@ def register_arrival(user, data):
             "UNCONFIRMED",
         )
 
-    next_of_kin = (data.get("next_of_kin_name") or data.get("next_of_kin") or "").strip()
-    nok_fields = {
-        "name": next_of_kin,
-        "relationship": (data.get("next_of_kin_relationship") or "").strip()
-        or "Next of kin / emergency contact",
-        "phone": (data.get("next_of_kin_phone") or "").strip(),
-        "is_guardian": bool(data.get("next_of_kin_is_guardian")),
-        "guardian_legal_status": (data.get("guardian_legal_status") or "").strip(),
-        "may_be_informed": bool(data.get("next_of_kin_may_be_informed")),
-    }
-    current = patient.next_of_kin
-    # Any changed detail (not just the name) is a new contact row; the old one
-    # stays as history.
-    if next_of_kin and (
-        current is None or any(getattr(current, k) != v for k, v in nok_fields.items())
-    ):
-        contact = EmergencyContact.objects.create(
-            organization_id=patient.organization_id, patient=patient, **nok_fields
-        )
-        patient.next_of_kin = contact
-        patient.save(update_fields=["next_of_kin", "updated_at"])
+    _apply_next_of_kin(patient, data)
 
     reason = (data.get("reason") or "").strip()
     episode = get_or_open_episode(patient, user, presenting=reason)
@@ -533,6 +551,64 @@ def resolve_identity(user, patient, data):
     identity_service.sync_identifiers(patient)
     for kind, value in claimed.items():
         identity_service.record_identifier(patient, kind, value)
+    return patient
+
+
+@transaction.atomic
+def update_registration(user, patient, data):
+    """Correct an identified client's registration details in place. Unlike a
+    registration submit this opens no triage encounter; unlike identity
+    resolution it never changes identity status (a temporary record is
+    resolved, not edited). Allergies reported here are added as unconfirmed —
+    removing one is a clinical correction, not a registration edit."""
+    from apps.client_registry import identity as identity_service
+
+    if patient.archived_at or patient.merged_into_id:
+        raise ValidationError({"patient_id": "This client record is archived or merged."})
+    if patient.identity_status != Patient.IDENTITY_IDENTIFIED:
+        raise ValidationError(
+            {"patient_id": "Confirm this temporary record’s identity before editing its details."}
+        )
+    first_name, middle_names, last_name = _names_from(data)
+    _require_names(data, first_name, last_name, patient)
+    claimed = _claimed_identifiers(data)
+    duplicates = identity_service.find_duplicates(
+        patient.organization_id, identifiers=claimed, exclude_patient_id=patient.pk
+    )
+    if duplicates:
+        target = duplicates[0]["patient"]
+        raise ValidationError(
+            {
+                "duplicate_of": str(target.pk),
+                "identifier": f"{duplicates[0]['reason']}: this identifier belongs to "
+                f"{target.get_full_name()} ({target.citramac_number}).",
+            }
+        )
+
+    _set_names(patient, first_name, middle_names, last_name)
+    _apply_details(patient, data, clear=True)
+    if "referral_source" in data:
+        patient.referral_source = (data.get("referral_source") or "").strip()
+    allergy_status = data.get("allergy_status")
+    if allergy_status in ("NONE", "ACTIVE_ALLERGIES"):
+        patient.allergy_status = allergy_status
+    patient.save()
+    identity_service.sync_identifiers(patient)
+    for kind, value in claimed.items():
+        identity_service.record_identifier(patient, kind, value)
+    _apply_next_of_kin(patient, data)
+    _capture_hie_consent(patient, user, data)
+    if allergy_status == "ACTIVE_ALLERGIES":
+        _record_allergies(
+            patient,
+            _allergy_items(data.get("allergy_details")) or ["Client reports an allergy"],
+            user,
+            "REGISTRATION",
+            "UNCONFIRMED",
+        )
+    from apps.dha_interop.hie_client import enqueue_patient
+
+    transaction.on_commit(lambda: enqueue_patient(patient))
     return patient
 
 
