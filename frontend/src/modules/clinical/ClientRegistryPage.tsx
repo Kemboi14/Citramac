@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
@@ -57,7 +57,9 @@ export function ClientRegistryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [careFilter, setCareFilter] = useState("");
+  // `?care=OUTPATIENT` (from the dashboard's Outpatients card) pre-selects the filter.
+  const [searchParams] = useSearchParams();
+  const [careFilter, setCareFilter] = useState(() => searchParams.get("care") ?? "");
   const [statusFilter, setStatusFilter] = useState("");
   const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>("");
   const [showRegister, setShowRegister] = useState(false);

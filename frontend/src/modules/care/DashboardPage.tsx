@@ -89,22 +89,37 @@ function StatCard({
   label,
   change,
   tone,
+  to,
 }: {
   value: ReactNode;
   label: string;
   change: ReactNode;
   tone?: "up" | "down";
+  /** Where the card opens — the list behind the number. */
+  to: string;
 }) {
   const toneClass =
     tone === "up" ? "text-brand-green" : tone === "down" ? "text-priority-red" : "text-ink-900";
   return (
-    <div className="rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm">
-      <div className="font-display text-[28px] font-extrabold text-ink-900">{value}</div>
+    <Link
+      to={to}
+      aria-label={`${label}: open the list`}
+      className="group block rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green motion-reduce:transform-none"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="font-display text-[28px] font-extrabold text-ink-900">{value}</div>
+        <span
+          aria-hidden
+          className="mt-2 text-ink-500 transition-colors group-hover:text-brand-green"
+        >
+          →
+        </span>
+      </div>
       <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-[.4px] text-ink-500">
         {label}
       </div>
       <div className={`mt-1.5 min-h-[1lh] text-[11.5px] font-medium ${toneClass}`}>{change}</div>
-    </div>
+    </Link>
   );
 }
 
@@ -253,28 +268,28 @@ export function DashboardPage() {
         <StatCard
           value={n(data?.total_clients)}
           label="Total Clients"
+          to="/clinical/registry"
           change={data ? `↑ ${data.new_this_week} this week` : ""}
           tone="up"
         />
-        <StatCard value={n(data?.inpatients)} label="Inpatients" change="" />
+        <StatCard
+          value={n(data?.inpatients)}
+          label="Inpatients"
+          change=""
+          to="/clinical/inpatient"
+        />
         <StatCard
           value={n(data?.outpatients)}
           label="Outpatients"
+          to="/clinical/registry?care=OUTPATIENT"
           change={data ? `↑ ${data.outpatients_new_today} new today` : ""}
           tone="up"
         />
         <StatCard
           value={n(data?.red_orange)}
           label="RED / ORANGE"
-          change={
-            data && data.red_orange > 0 ? (
-              <Link to="/clinical/psychiatry" className="underline hover:no-underline">
-                Requires attention
-              </Link>
-            ) : (
-              ""
-            )
-          }
+          to="/clinical/psychiatry"
+          change={data && data.red_orange > 0 ? "Requires attention" : ""}
           tone="down"
         />
       </div>
