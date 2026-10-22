@@ -13,6 +13,7 @@ from .models import (
     Department,
     Organization,
     PlatformBranding,
+    PlatformAiSettings,
     PlatformEmailSettings,
     PlatformSmsSettings,
     Subscription,
@@ -741,6 +742,67 @@ class PlatformSmsSettingsSerializer(serializers.ModelSerializer):
             validated_data["access_key_encrypted"] = encrypt_value(access_key)
         api_key = validated_data.pop("api_key", None)
         if api_key:
+            validated_data["api_key_encrypted"] = encrypt_value(api_key)
+        return super().update(instance, validated_data)
+
+
+class PlatformAiSettingsSerializer(serializers.ModelSerializer):
+    """
+    Super Admin's Anthropic API key for psychotherapy note assistance (AI
+    Settings screen). `api_key` is write-only and only ever encrypted at rest
+    (apps/tenancy/crypto.py), same pattern as PlatformSmsSettingsSerializer;
+    `remove_api_key` falls back to the server's ANTHROPIC_API_KEY, if any.
+    """
+
+    has_credentials = serializers.BooleanField(read_only=True)
+    api_key = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    remove_api_key = serializers.BooleanField(write_only=True, required=False, default=False)
+    key_source = serializers.SerializerMethodField()
+    default_model = serializers.SerializerMethodField()
+    server_switch_on = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PlatformAiSettings
+        fields = [
+            "api_key",
+            "remove_api_key",
+            "has_credentials",
+            "key_source",
+            "model",
+            "default_model",
+            "server_switch_on",
+            "updated_at",
+            "updated_by_name",
+        ]
+
+    def get_key_source(self, obj):
+        from apps.care_pathway import psy_ai
+
+        return psy_ai.key_source()
+
+    def get_default_model(self, obj):
+        from apps.care_pathway import psy_ai
+
+        return psy_ai.default_model()
+
+    def get_server_switch_on(self, obj):
+        from django.conf import settings
+
+        return bool(getattr(settings, "PSYCHOTHERAPY_AI_ENABLED", False))
+
+    def get_updated_by_name(self, obj):
+        user = obj.updated_by
+        return (user.get_full_name() or user.email) if user else ""
+
+    def validate_model(self, value):
+        return value.strip()
+
+    def update(self, instance, validated_data):
+        api_key = (validated_data.pop("api_key", None) or "").strip()
+        if validated_data.pop("remove_api_key", False):
+            validated_data["api_key_encrypted"] = ""
+        elif api_key:
             validated_data["api_key_encrypted"] = encrypt_value(api_key)
         return super().update(instance, validated_data)
 

@@ -505,7 +505,8 @@ PSYCHOTHERAPY_DICTATION_ENABLED = env.bool("PSYCHOTHERAPY_DICTATION_ENABLED", de
 # and the organisation's own data-protection review. Otherwise the note is
 # organised by the rule-based organiser (care_pathway/psy_organizer.py).
 PSYCHOTHERAPY_AI_ENABLED = env.bool("PSYCHOTHERAPY_AI_ENABLED", default=True)
-# From the environment only — never committed.
+# From the environment only — never committed. A key saved by Super Admin under
+# AI Settings (tenancy.PlatformAiSettings, encrypted) takes precedence.
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 PSYCHOTHERAPY_AI_MODEL = env("PSYCHOTHERAPY_AI_MODEL", default="claude-opus-5-5")
 # Per-request timeout (seconds) for the background translation / rewording task.

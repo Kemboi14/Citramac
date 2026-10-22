@@ -16,6 +16,7 @@ from apps.tenancy.models import (
     Branch,
     Department,
     Organization,
+    PlatformAiSettings,
     PlatformBranding,
     PlatformEmailSettings,
     Subscription,
@@ -1453,6 +1454,116 @@ class PlatformEmailSettingsApiTests(APITestCase):
         )
         self.assertEqual(get_response.data["host"], "smtp.softlinkoptions.co.ke")
         self.assertTrue(get_response.data["has_credentials"])
+
+
+class PlatformAiSettingsApiTests(APITestCase):
+    """Super Admin's Anthropic key for psychotherapy note assistance — same
+    write-only, encrypted-at-rest pattern as the SMS and email settings."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.super_admin = User.objects.create_superuser(
+                email="ai-settings-admin@platform.test", password="Password123!"
+            )
+            self.non_admin = User.objects.create_user(
+                email="ai-settings-staff@platform.test", password="Password123!", is_active=True
+            )
+        self.super_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.super_admin)[0]}"}
+        self.staff_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.non_admin)[0]}"}
+        self.addCleanup(lambda: PlatformAiSettings.objects.all().delete())
+
+    def patch(self, body, auth=None):
+        return self.client.patch(
+            reverse("platform-ai-settings"), body, format="json", **(auth or self.super_auth)
+        )
+
+    def test_only_super_admin_can_view_edit_or_test(self):
+        self.assertEqual(
+            self.client.get(reverse("platform-ai-settings"), **self.staff_auth).status_code, 403
+        )
+        self.assertEqual(self.patch({"model": "x"}, self.staff_auth).status_code, 403)
+        self.assertEqual(
+            self.client.post(reverse("platform-ai-settings-test"), {}, **self.staff_auth).status_code,
+            403,
+        )
+
+    def test_key_is_encrypted_never_returned_and_takes_precedence(self):
+        from django.test import override_settings
+
+        from apps.care_pathway import psy_ai
+
+        with override_settings(ANTHROPIC_API_KEY="env-key-not-real"):  # pragma: allowlist secret
+            self.assertEqual(psy_ai.key_source(), "environment")
+            response = self.patch({"api_key": "saved-key-not-real"})  # pragma: allowlist secret
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertNotIn("api_key", response.data)
+            self.assertTrue(response.data["has_credentials"])
+            self.assertEqual(response.data["key_source"], "saved")
+            stored = PlatformAiSettings.get_solo().api_key_encrypted
+            self.assertNotIn("saved-key-not-real", stored)
+            self.assertEqual(psy_ai.api_key(), "saved-key-not-real")
+            # Saving other fields with a blank key keeps the saved key.
+            self.patch({"api_key": "", "model": " claude-opus-5-5 "})
+            self.assertEqual(psy_ai.api_key(), "saved-key-not-real")
+            self.assertEqual(psy_ai.model_name(), "claude-opus-5-5")
+            # Removing it falls back to the server's environment key.
+            response = self.patch({"remove_api_key": True})
+            self.assertFalse(response.data["has_credentials"])
+            self.assertEqual(response.data["key_source"], "environment")
+            self.assertEqual(psy_ai.api_key(), "env-key-not-real")
+
+    def test_no_key_anywhere_means_ai_is_unavailable(self):
+        from django.test import override_settings
+
+        from apps.care_pathway import psy_ai
+
+        with override_settings(ANTHROPIC_API_KEY="", PSYCHOTHERAPY_AI_ENABLED=True):
+            self.assertFalse(psy_ai.enabled())
+            self.patch({"api_key": "saved-key-not-real"})  # pragma: allowlist secret
+            self.assertTrue(psy_ai.enabled())
+
+    def test_connection_test_sends_no_client_data_and_reports_a_rejected_key(self):
+        from unittest.mock import MagicMock, patch
+
+        import anthropic
+        import httpx2
+
+        from apps.care_pathway import psy_ai
+
+        client = MagicMock()
+        client.messages.create.return_value = MagicMock(model="claude-opus-5-5")
+        with patch.object(psy_ai, "_client", return_value=client) as make:
+            response = self.client.post(
+                reverse("platform-ai-settings-test"),
+                {"api_key": "typed-key-not-real", "model": "claude-opus-5-5"},  # pragma: allowlist secret
+                format="json",
+                **self.super_auth,
+            )
+        self.assertTrue(response.data["success"], response.data)
+        self.assertEqual(make.call_args.args[0], "typed-key-not-real")
+        sent = client.messages.create.call_args.kwargs["messages"]
+        self.assertEqual(sent, [{"role": "user", "content": "Reply with the single word OK."}])
+
+        request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        client.messages.create.side_effect = anthropic.AuthenticationError(
+            "bad key", response=httpx2.Response(401, request=request), body=None
+        )
+        with patch.object(psy_ai, "_client", return_value=client):
+            response = self.client.post(
+                reverse("platform-ai-settings-test"),
+                {"api_key": "wrong-key-not-real"},  # pragma: allowlist secret
+                format="json",
+                **self.super_auth,
+            )
+        self.assertFalse(response.data["success"])
+        self.assertIn("rejected", response.data["message"])
+
+        with patch.object(psy_ai, "api_key", return_value=""):
+            response = self.client.post(
+                reverse("platform-ai-settings-test"), {}, format="json", **self.super_auth
+            )
+        self.assertFalse(response.data["success"])
 
 
 class OrganizationEmailSettingsApiTests(APITestCase):

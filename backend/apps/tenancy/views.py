@@ -30,6 +30,7 @@ from .models import (
     Department,
     Organization,
     PlatformBranding,
+    PlatformAiSettings,
     PlatformEmailSettings,
     PlatformSmsSettings,
     Subscription,
@@ -46,6 +47,7 @@ from .serializers import (
     OrganizationSmsSettingsSerializer,
     OrganizationStatusSerializer,
     OrganizationThemeSerializer,
+    PlatformAiSettingsSerializer,
     PlatformBrandingSerializer,
     PlatformEmailSettingsSerializer,
     PlatformSmsSettingsSerializer,
@@ -525,6 +527,43 @@ class PlatformSmsTestView(APIView):
                 }
             )
         return Response(test_sms_connection(credentials, phone))
+
+
+class PlatformAiSettingsView(APIView):
+    """
+    Super Admin's Anthropic API key + model for psychotherapy note assistance
+    (AI Settings screen). Super-Admin-only for GET too — it describes a
+    credential. The key itself is never returned.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        return Response(PlatformAiSettingsSerializer(PlatformAiSettings.get_solo()).data)
+
+    def patch(self, request):
+        ai_settings = PlatformAiSettings.get_solo()
+        serializer = PlatformAiSettingsSerializer(ai_settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(PlatformAiSettingsSerializer(PlatformAiSettings.get_solo()).data)
+
+
+class PlatformAiTestView(APIView):
+    """
+    "Test connection" on the AI Settings screen: one tiny request with no
+    client data, using an unsaved key/model from the form when given, else the
+    saved ones — same "blank keeps the saved value" semantics as the SMS test.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def post(self, request):
+        from apps.care_pathway import psy_ai
+
+        key = (request.data.get("api_key") or "").strip() or psy_ai.api_key()
+        model = (request.data.get("model") or "").strip() or psy_ai.model_name()
+        return Response(psy_ai.test_connection(key, model))
 
 
 class OrganizationSmsSettingsView(APIView):

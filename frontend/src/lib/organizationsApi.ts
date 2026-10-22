@@ -359,3 +359,44 @@ export function testPlatformSmsSettings(accessToken: string, payload: SmsTestPay
     accessToken,
   });
 }
+
+// Super Admin's Anthropic API key for psychotherapy note assistance (AI
+// Settings screen). The key is write-only: it is never returned.
+export interface PlatformAiSettings {
+  has_credentials: boolean;
+  /** Where the key in use comes from: saved here, the server environment, or none. */
+  key_source: "saved" | "environment" | "";
+  model: string;
+  default_model: string;
+  server_switch_on: boolean;
+  updated_at: string;
+  updated_by_name: string;
+}
+
+export interface PlatformAiSettingsPayload {
+  api_key?: string;
+  remove_api_key?: boolean;
+  model?: string;
+}
+
+export function getPlatformAiSettings(accessToken: string) {
+  return apiRequest<PlatformAiSettings>("/platform/ai-settings/", { accessToken });
+}
+
+export function updatePlatformAiSettings(accessToken: string, payload: PlatformAiSettingsPayload) {
+  return apiRequest<PlatformAiSettings>("/platform/ai-settings/", {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
+export function testPlatformAiSettings(
+  accessToken: string,
+  payload: { api_key?: string; model?: string },
+) {
+  return apiRequest<{ success: boolean; message: string; model?: string }>(
+    "/platform/ai-settings/test/",
+    { method: "POST", body: payload, accessToken },
+  );
+}

@@ -2,7 +2,8 @@
 Psychotherapy note AI assistance — server-side only (Django → Anthropic API).
 
 Two narrow jobs, both off unless PSYCHOTHERAPY_AI_ENABLED is set and an API key
-is configured (config/settings/base.py):
+is configured — saved by Super Admin under AI Settings (tenancy.PlatformAiSettings,
+encrypted), else ANTHROPIC_API_KEY (config/settings/base.py):
 
 - translate(text): a Kiswahili / Sheng (or mixed) answer into plain English;
 - rewrite_section(question_key, english_text, confirmed_models): one note
@@ -102,11 +103,34 @@ class AIUnavailable(Exception):
 AI_CONSENT = "AI_NOTE_PROCESSING"
 
 
+def _saved_settings():
+    """The Super Admin's saved key and model (tenancy.PlatformAiSettings), or
+    None. Read-only: never creates the row on a request path."""
+    from apps.tenancy.models import PlatformAiSettings
+
+    return PlatformAiSettings.objects.filter(pk=1).first()
+
+
+def api_key():
+    """The key saved by Super Admin (AI Settings), else ANTHROPIC_API_KEY."""
+    from apps.tenancy.crypto import decrypt_value
+
+    saved = _saved_settings()
+    key = decrypt_value(saved.api_key_encrypted) if saved else ""
+    return key or getattr(settings, "ANTHROPIC_API_KEY", "")
+
+
+def key_source():
+    """Where the key in use comes from: "saved", "environment" or ""."""
+    saved = _saved_settings()
+    if saved and saved.has_credentials:
+        return "saved"
+    return "environment" if getattr(settings, "ANTHROPIC_API_KEY", "") else ""
+
+
 def enabled():
     """The platform side: the server switch is on and an API key is configured."""
-    return bool(getattr(settings, "PSYCHOTHERAPY_AI_ENABLED", False)) and bool(
-        getattr(settings, "ANTHROPIC_API_KEY", "")
-    )
+    return bool(getattr(settings, "PSYCHOTHERAPY_AI_ENABLED", False)) and bool(api_key())
 
 
 def org_enabled(organization):
@@ -140,18 +164,53 @@ def unavailable_reason(patient):
     return ""
 
 
-def model_name():
+def default_model():
     return getattr(settings, "PSYCHOTHERAPY_AI_MODEL", "") or "claude-opus-5-5"
 
 
-def _client():
+def model_name():
+    saved = _saved_settings()
+    return (saved.model if saved else "") or default_model()
+
+
+def _client(key=None, timeout=None):
     import anthropic
 
     return anthropic.Anthropic(
-        api_key=settings.ANTHROPIC_API_KEY,
-        timeout=float(getattr(settings, "PSYCHOTHERAPY_AI_TIMEOUT", 60)),
+        api_key=key or api_key(),
+        timeout=float(timeout or getattr(settings, "PSYCHOTHERAPY_AI_TIMEOUT", 60)),
         max_retries=1,
     )
+
+
+def test_connection(key, model):
+    """Super Admin's "Test connection": one tiny request carrying no client
+    data, so a wrong key or model shows up before any note depends on it."""
+    import anthropic
+
+    if not key:
+        return {"success": False, "message": "Enter an API key or save one first."}
+    try:
+        response = _client(key, timeout=30).messages.create(
+            model=model,
+            max_tokens=256,
+            output_config={"effort": "low"},
+            messages=[{"role": "user", "content": "Reply with the single word OK."}],
+        )
+    except anthropic.AuthenticationError:
+        return {"success": False, "message": "The API key was rejected (401). Check the key."}
+    except anthropic.PermissionDeniedError:
+        return {"success": False, "message": "The key has no access to this model (403)."}
+    except anthropic.NotFoundError:
+        return {"success": False, "message": f"Model “{model}” was not found (404)."}
+    except anthropic.RateLimitError:
+        return {"success": False, "message": "Rate limited (429) — the key works; try again shortly."}
+    except anthropic.APIStatusError as exc:
+        return {"success": False, "message": f"Anthropic API error {exc.status_code}."}
+    except anthropic.APIConnectionError:
+        return {"success": False, "message": "Couldn't reach the Anthropic API (network or timeout)."}
+    served = getattr(response, "model", "") or model
+    return {"success": True, "message": f"Connected — {served} answered.", "model": served}
 
 
 def _call(system, content, field):

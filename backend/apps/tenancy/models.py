@@ -444,6 +444,44 @@ class PlatformSmsSettings(models.Model):
         return "Platform SMS settings"
 
 
+class PlatformAiSettings(models.Model):
+    """
+    Singleton (always pk=1): the platform's Anthropic API key and model for
+    psychotherapy note assistance (apps.care_pathway.psy_ai). Platform-wide
+    only — Super Admin allows AI per organisation and the Org Admin turns it
+    on; organisations never hold their own key. Resolution: this key, else
+    settings.ANTHROPIC_API_KEY. Same singleton pattern as PlatformSmsSettings.
+    """
+
+    # Fernet-encrypted (apps/tenancy/crypto.py); never returned by the API.
+    api_key_encrypted = models.TextField(blank=True)
+    # Blank uses settings.PSYCHOTHERAPY_AI_MODEL.
+    model = models.CharField(max_length=100, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name_plural = "platform AI settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def has_credentials(self):
+        return bool(self.api_key_encrypted)
+
+    def __str__(self):
+        return "Platform AI settings"
+
+
 class Branch(TenantScopedModel):
     FACILITY_LEVEL_CHOICES = [
         ("L2", "Level 2"),

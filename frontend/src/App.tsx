@@ -258,6 +258,10 @@ const PlatformThemePage = lazyNamed(
   () => import("./modules/super-admin/PlatformThemePage"),
   "PlatformThemePage",
 );
+const PlatformAiSettingsPage = lazyNamed(
+  () => import("./modules/super-admin/PlatformAiSettingsPage"),
+  "PlatformAiSettingsPage",
+);
 const PlatformSmsSettingsPage = lazyNamed(
   () => import("./modules/super-admin/PlatformSmsSettingsPage"),
   "PlatformSmsSettingsPage",
@@ -304,6 +308,7 @@ function App() {
             <Route path="data-lifecycle" element={<DataLifecyclePage />} />
             <Route path="email-settings" element={<PlatformEmailSettingsPage />} />
             <Route path="sms-settings" element={<PlatformSmsSettingsPage />} />
+            <Route path="ai-settings" element={<PlatformAiSettingsPage />} />
             <Route path="theme" element={<PlatformThemePage />} />
             <Route path="roles" element={<GlobalRolesPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
