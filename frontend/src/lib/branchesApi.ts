@@ -18,6 +18,35 @@ export interface BranchIdentifierChange {
   created_at: string;
 }
 
+/**
+ * The DHA Facility Registry's answer for this branch's SHA FR code, as last
+ * checked (apps.dha_interop.registries.facility_summary). Values are the
+ * registry's own words — DHA publishes no vocabulary for them, so they are
+ * shown verbatim, never interpreted.
+ */
+export interface FacilityRegistry {
+  status: "" | "VERIFIED" | "NOT_FOUND";
+  status_label: string;
+  checked_at: string | null;
+  problem: string;
+  official_name: string;
+  fr_code: string;
+  fid_code: string;
+  keph_level: string;
+  facility_type: string;
+  regulatory_body: string;
+  registration_number: string;
+  license_number: string;
+  license_status: string;
+  license_end: string;
+  sha_contract_status: string;
+  sha_contract_end: string;
+  sha_contracted_services: string[];
+  sha_operational_status: string;
+  sha_operational_status_reason: string;
+  sha_suspension_reason: string;
+}
+
 export interface Branch {
   id: string;
   organization: string;
@@ -49,7 +78,9 @@ export interface Branch {
   sha_claims_enabled: boolean;
   mpesa_paybill_enabled: boolean;
   sms_reminders_enabled: boolean;
+  /** True when this branch holds its own facility-scoped DHA HIE credentials. */
   has_sha_credentials: boolean;
+  facility_registry: FacilityRegistry;
   is_active: boolean;
   ward_count: number;
   bed_count: number;
@@ -105,10 +136,27 @@ export function updateBranch(accessToken: string, id: string, payload: Partial<B
   });
 }
 
-export function setBranchCredentials(accessToken: string, id: string, credentials: string) {
+/**
+ * A branch's own facility-scoped DHA HIE credentials (write-only, stored
+ * encrypted) — both the client ID and secret together, or `remove` to fall
+ * back to the platform service account.
+ */
+export function setBranchShaCredentials(
+  accessToken: string,
+  id: string,
+  credentials: { sha_client_id: string; sha_client_secret: string } | { remove_sha_credentials: true },
+) {
   return apiRequest<Branch>(`/platform/branches/${id}/`, {
     method: "PATCH",
-    body: { sha_api_credentials: credentials },
+    body: credentials,
+    accessToken,
+  });
+}
+
+/** Look the branch's saved SHA FR code up in the DHA Facility Registry now. */
+export function checkBranchFacilityRegistry(accessToken: string, id: string) {
+  return apiRequest<Branch>(`/platform/branches/${id}/facility-registry/`, {
+    method: "POST",
     accessToken,
   });
 }

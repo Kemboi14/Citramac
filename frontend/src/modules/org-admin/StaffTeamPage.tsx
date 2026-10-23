@@ -20,6 +20,7 @@ import {
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
+import { PractitionerCredentialDrawer } from "./PractitionerCredentialDrawer";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -98,6 +99,7 @@ export function StaffTeamPage() {
     access_ends_at: "",
   });
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [credentialStaff, setCredentialStaff] = useState<Staff | null>(null);
 
   const refreshStaff = async () => {
     if (!accessToken) return;
@@ -423,6 +425,13 @@ export function StaffTeamPage() {
         >
           Branch / Access…
         </button>
+        <button
+          type="button"
+          className={`${itemClass} text-ink-700 hover:underline`}
+          onClick={() => setCredentialStaff(s)}
+        >
+          Credential…
+        </button>
       </>
     );
   }
@@ -715,6 +724,14 @@ export function StaffTeamPage() {
           )}
         </div>
       </Drawer>
+
+      <PractitionerCredentialDrawer
+        userId={credentialStaff?.id ?? null}
+        staffName={
+          credentialStaff ? `${credentialStaff.first_name} ${credentialStaff.last_name}` : undefined
+        }
+        onClose={() => setCredentialStaff(null)}
+      />
     </div>
   );
 }

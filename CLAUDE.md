@@ -236,3 +236,48 @@ Open §5 item, awaiting the owner's decision: clinical notes have two stores —
 `clinical_encounter.SoapNote` (written by the offline queue and v3 encounter screen) and
 `care_pathway.ProgressNote` (v4). Consolidating them means migrating signed notes, so it is a
 §3 item 7 question, not a refactor.
+
+### 2026-10-23 — DHA HIE integration; the national IG now exists
+
+Built on the project owner's instruction ("build everything"): one transport for DHA's Health
+Information Exchange middleware (`apps/dha_interop/hie_api.py`), serving the registries, SHA
+eligibility and e-claims, claim consent, status callbacks and the national Shared Health
+Record. Every path, field and enum it uses is from DHA's published specifications, vendored
+with hashes in `apps/dha_interop/hie_spec/` (`SOURCE.md` lists what DHA has *not* published —
+production URL, remittance endpoints, the eligibility coverage-status vocabulary, the PUID
+field — each left as configuration or `VERIFY:`, never guessed). Super Admin holds the
+service-account credentials (DHA / SHA Integration, encrypted); every branch is named to the HIE
+by its SHA FR code.
+
+What this changes in the rules above:
+
+1. **§8 — the regulator's IG exists.** Kenya Core 1.0.0 (`ke.fhir.core`, R4 4.0.1,
+   canonical `https://fhir.dha.go.ke/core`) is vendored at
+   `apps/dha_interop/fhir_validation/kenya_core/`. The 2026-09-18 amendment's "no real national
+   IG exists yet" no longer holds. The SHR exporter (`apps/dha_interop/shr.py`) conforms to its
+   Encounter / EpisodeOfCare / Condition profiles, and CI now runs HL7's official validator
+   against them (rung 4) — see `.github/workflows/ci.yml` and `scripts/hl7_validator_gate.py`,
+   which accepts exactly one documented defect *in the IG itself* (Condition.code bound to a
+   CodeSystem URL). Patient identifier systems for National ID and SHA number now default to
+   the Kenya Core slices; a test pins them to the package.
+2. **The HIE outbox targets the SHR only.** DHA publishes no endpoint for pushing a Patient or a
+   referral document; registration no longer queues a Patient (identity is reconciled by a
+   Client Registry lookup the clerk confirms — an added, verified identifier slice), and a
+   referral packet is recorded as not transmittable (no destination FR code is captured).
+3. **SHA claims are billed against a consented visit.** The old signed-JSON `sha_gateway` /
+   `signing` stub and the fabricated `seed_dha_sandbox_demo` cycle were removed. SHA's own
+   decisions arrive by status callback (durably stored, de-duplicated, applied after the 2xx)
+   or a status refresh; they are never typed in. Other payers have no connection and say so.
+4. **Sending to the SHR is P0-irreversible (§3 item 7)** and is gated: an approved SHR consent
+   for the visit, the client's explicit YES for general *and* mental-health sharing (and
+   substance-use sharing whenever SUD content is involved), R + PSY (+ SUD) labels from DHA's
+   catalogue on every resource, and conformance — or nothing is sent. Notes, trauma history,
+   risk assessments, group content, legal status and psychotherapy encounters are never sent;
+   observations, medications, allergies and referrals are omitted until a national code or
+   destination is verified. Each send writes an `HIE_DISCLOSURE` audit entry.
+
+Open items for the owner: confirm the VERIFY list in `hie_spec/SOURCE.md` against UAT (run
+`python manage.py dha_uat_probe`); report the Kenya Core Condition binding defect to DHA; raise
+with DHA that its public FHIR server reports 4.3.0 (R4B) while Kenya Core is R4; decide whether
+referrals should capture a destination FR code; complete Form HMIS 4 certification (Digital
+Health (HIM Procedures) Regulations 2025, regs 37–42).

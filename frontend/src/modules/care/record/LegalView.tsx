@@ -26,6 +26,7 @@ import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { CapacityConsentCard } from "./CapacityConsent";
 import { LegalAdmissionStatus } from "./legal/LegalAdmissionStatus";
+import { NationalHealthRecordCard } from "./legal/NationalHealthRecordCard";
 
 type AdmissionRow = ClientLegal["admissions"][number];
 
@@ -46,8 +47,8 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
 
 const NOT_RECORDED = <span className="text-ink-400">Not recorded</span>;
 
-/** Legal & consent — HIE data-sharing consent and per-admission legal status. */
-export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
+/** Legal & consent — HIE data-sharing consent, the national SHR, and per-admission legal status. */
+export function LegalView({ patientId, banner, onRecordChanged }: RecordViewProps) {
   const [version, setVersion] = useState(0);
   const { data, error, loading } = useRecordData(
     patientId,
@@ -68,6 +69,7 @@ export function LegalView({ patientId, onRecordChanged }: RecordViewProps) {
       <ErrorNote>{error}</ErrorNote>
       <LegalAdmissionStatus patientId={patientId} onChanged={refresh} />
       <ConsentCard patientId={patientId} legal={data} onSaved={refresh} />
+      <NationalHealthRecordCard patientId={patientId} episodeId={banner.episode_id} />
       {data.ai_consent && (data.ai_consent.offered || data.ai_consent.decision !== "NOT_ASKED") && (
         <AiConsentCard patientId={patientId} consent={data.ai_consent} onSaved={refresh} />
       )}

@@ -181,9 +181,10 @@ class ClinicalEncounterAndTriageTests(APITestCase):
 
     def test_send_referral_reports_honest_failure_with_no_hie_endpoint_configured(self):
         """
-        HIE_ENDPOINT_URL is unset in tests (matches the default dev/prod
-        posture — no real facility mTLS certificate exists) — the send
-        action must report this honestly, not fabricate a SENT status.
+        The DHA HIE takes referrals only as a Shared Health Record
+        ServiceRequest addressed to an FR code; a free-text destination
+        cannot be delivered — the send action must say so, not fabricate a
+        SENT status.
         """
         encounter_id = self._open_encounter()
         create_response = self.client.post(

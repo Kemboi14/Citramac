@@ -17,18 +17,22 @@ import {
   type ClaimLine,
   type PayerClaim,
 } from "../../../../lib/claimsApi";
-import { formatDateTime, formatKsh, newRequestId } from "../../shared/format";
+import { formatDateTime, newRequestId } from "../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "../../shared/styles";
 import { Callout, Card, ErrorNote, Field, Tag } from "../../shared/ui";
 import { printDocument } from "./billingPrint";
+import { money, type Ask, type Run } from "./billingUtil";
+import { Kv } from "./parts";
+import { ShaAttachments, ShaClaimCard, ShaPreauthRequest, ShaSubmitForm } from "./ShaClaim";
+import { ShaPanel } from "./ShaPanel";
 
 // v4 mockup stageBilling()/billingExtras(): create claim from billable events,
 // claim lines with payer codes, per-line pre-authorisation, finance review,
 // Draft → Submitted → With payer → Adjudicated, minimum-necessary
 // attachments, statement, invoice and payments. Every amount shown comes from
-// the server; this file holds no rate, code or ceiling.
-
-type Run = (action: () => Promise<BillingWorkspace>, success?: string) => Promise<boolean>;
+// the server; this file holds no rate, code or ceiling. SHA-payer clients add
+// the SHA panel (eligibility, consented visits) and SHA's own claim flow
+// through the DHA HIE (ShaPanel.tsx, ShaClaim.tsx).
 
 const PAYER_STATUSES = [
   { value: "UNDER_REVIEW", label: "With payer (under review)" },
@@ -36,23 +40,6 @@ const PAYER_STATUSES = [
   { value: "PARTIALLY_APPROVED", label: "Partially approved" },
   { value: "REJECTED", label: "Rejected" },
 ];
-
-function money(amount: string | number | null | undefined) {
-  return amount == null ? "—" : formatKsh(amount);
-}
-
-function Kv({ rows }: { rows: [ReactNode, ReactNode][] }) {
-  return (
-    <dl className="grid grid-cols-[minmax(0,max-content)_1fr] gap-x-4 gap-y-1.5 text-[13px]">
-      {rows.map(([label, value], index) => (
-        <div key={index} className="contents">
-          <dt className="text-ink-500">{label}</dt>
-          <dd className="min-w-0 break-words font-medium text-ink-900">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 function ClaimTimeline({ steps, stage }: { steps: string[]; stage: number }) {
   return (
@@ -174,6 +161,7 @@ function ClaimLines({
   accessToken: string;
 }) {
   const draft = claim.status === "DRAFT";
+  const isSha = claim.payer === "SHA";
   return (
     <div className="overflow-x-auto rounded-lg border border-surface-border">
       <table className={`${TABLE} min-w-[720px]`}>
@@ -185,6 +173,7 @@ function ClaimLines({
             <th className={`${TH} !text-right`}>Rate</th>
             <th className={`${TH} !text-right`}>Amount</th>
             <th className={TH}>Status</th>
+            {isSha && <th className={TH}>On SHA claim</th>}
           </tr>
         </thead>
         <tbody>
@@ -212,13 +201,26 @@ function ClaimLines({
                 </td>
                 <td className={TD}>
                   <Tag tone={status.tone}>{status.label}</Tag>
+                  {isSha && line.pre_authorization?.sha_state && (
+                    <span className="mt-1 block text-[11px] text-ink-500">
+                      SHA: {line.pre_authorization.sha_state}
+                    </span>
+                  )}
                   {line.requires_preauth === null && (
                     <span className="mt-1 block text-[11px] text-ink-500">
                       Pre-auth requirement unknown until the payer code is configured.
                     </span>
                   )}
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {canRequest && (
+                    {canRequest && isSha && (
+                      <ShaPreauthRequest
+                        claim={claim}
+                        line={line}
+                        run={run}
+                        accessToken={accessToken}
+                      />
+                    )}
+                    {canRequest && !isSha && (
                       <button
                         type="button"
                         className={`${BTN_GHOST} ${BTN_SM}`}
@@ -247,7 +249,7 @@ function ClaimLines({
                       </button>
                     )}
                   </div>
-                  {canEdit && (
+                  {canEdit && !isSha && (
                     <PreauthDecision
                       claim={claim}
                       line={line}
@@ -256,6 +258,11 @@ function ClaimLines({
                     />
                   )}
                 </td>
+                {isSha && (
+                  <td className={TD}>
+                    {line.sent_to_sha ? <Tag tone="brand">Sent</Tag> : <Tag>Not sent yet</Tag>}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -344,13 +351,17 @@ function Attachments({
 
 function FinanceReview({
   claim,
+  workspace,
   canEdit,
   run,
+  ask,
   accessToken,
 }: {
   claim: PayerClaim;
+  workspace: BillingWorkspace;
   canEdit: boolean;
   run: Run;
+  ask: Ask;
   accessToken: string;
 }) {
   const [linesChecked, setLinesChecked] = useState(false);
@@ -358,6 +369,7 @@ function FinanceReview({
   const [response, setResponse] = useState({ status: "", amount: "", note: "" });
   const draft = claim.status === "DRAFT";
   const adjudicated = claim.timeline_stage >= 3;
+  const sha = claim.payer === "SHA" ? workspace.sha : null;
   const nextStatuses = PAYER_STATUSES.filter(
     (s) => claim.status === "SUBMITTED" || s.value !== "UNDER_REVIEW",
   );
@@ -432,19 +444,31 @@ function FinanceReview({
               I have checked that every line matches documented care
             </label>
             <div>
-              <button
-                type="button"
-                className={BTN}
-                disabled={!canEdit}
-                onClick={() =>
-                  void run(
-                    () => submitClaim(accessToken, claim.id, linesChecked),
-                    "Claim submitted.",
-                  )
-                }
-              >
-                Submit claim
-              </button>
+              {sha ? (
+                <ShaSubmitForm
+                  claim={claim}
+                  sha={sha}
+                  canEdit={canEdit}
+                  linesChecked={linesChecked}
+                  run={run}
+                  ask={ask}
+                  accessToken={accessToken}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className={BTN}
+                  disabled={!canEdit}
+                  onClick={() =>
+                    void run(
+                      () => submitClaim(accessToken, claim.id, linesChecked),
+                      "Claim submitted.",
+                    )
+                  }
+                >
+                  Submit claim
+                </button>
+              )}
               {!canEdit && (
                 <p className="mt-1.5 text-[12px] text-ink-500">
                   Only finance staff can submit claims. You can view this claim.
@@ -472,11 +496,18 @@ function FinanceReview({
           </ol>
         )}
 
-        {canEdit && !draft && !adjudicated && (
+        {sha && claim.sha_visit && !draft && (
+          <p className="text-[12px] text-ink-500">
+            SHA posts its own decisions on this claim — use “Refresh from SHA” above for the latest.
+            They are never typed in here.
+          </p>
+        )}
+
+        {canEdit && !draft && !adjudicated && !(sha && claim.sha_visit) && (
           <div className="grid gap-2 rounded-lg border border-surface-border bg-surface-bg p-3">
             <p className="text-[12px] text-ink-500">
-              The payer gateway is not connected, so the payer’s response is recorded here from the
-              payer’s own notice.
+              This payer has no electronic connection, so the payer’s response is recorded here from
+              the payer’s own notice.
             </p>
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Payer response" htmlFor={`resp-${claim.id}`} className="w-56">
@@ -543,11 +574,15 @@ function FinanceReview({
 function PayerClaimTab({
   workspace,
   run,
+  ask,
   accessToken,
+  patientId,
 }: {
   workspace: BillingWorkspace;
   run: Run;
+  ask: Ask;
   accessToken: string;
+  patientId: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const claim = workspace.claims.find((c) => c.id === selectedId) ?? workspace.claims[0];
@@ -575,6 +610,7 @@ function PayerClaimTab({
     .reduce((sum, l) => sum + Number(l.amount), 0);
   const primary = claim.diagnoses.find((d) => d.is_primary) ?? claim.diagnoses[0];
   const diagnosisItem = claim.checklist.find((i) => i.key === "diagnosis");
+  const sha = claim.payer === "SHA" ? workspace.sha : null;
 
   return (
     <div className="grid gap-4">
@@ -593,6 +629,17 @@ function PayerClaimTab({
             ))}
           </select>
         </Field>
+      )}
+      {sha && (
+        <ShaClaimCard
+          key={claim.id}
+          claim={claim}
+          sha={sha}
+          canEdit={workspace.can_edit}
+          run={run}
+          ask={ask}
+          accessToken={accessToken}
+        />
       )}
       <ClaimLines claim={claim} canEdit={workspace.can_edit} run={run} accessToken={accessToken} />
       <Kv
@@ -630,14 +677,27 @@ function PayerClaimTab({
               ],
               [
                 "Attachments (minimum necessary)",
-                <Attachments
-                  key="attachments"
-                  claim={claim}
-                  workspace={workspace}
-                  canEdit={workspace.can_edit}
-                  run={run}
-                  accessToken={accessToken}
-                />,
+                sha ? (
+                  <ShaAttachments
+                    key={`attachments-${claim.id}`}
+                    claim={claim}
+                    workspace={workspace}
+                    sha={sha}
+                    canEdit={workspace.can_edit}
+                    run={run}
+                    accessToken={accessToken}
+                    patientId={patientId}
+                  />
+                ) : (
+                  <Attachments
+                    key="attachments"
+                    claim={claim}
+                    workspace={workspace}
+                    canEdit={workspace.can_edit}
+                    run={run}
+                    accessToken={accessToken}
+                  />
+                ),
               ],
             ]}
           />
@@ -653,8 +713,10 @@ function PayerClaimTab({
       <FinanceReview
         key={claim.id}
         claim={claim}
+        workspace={workspace}
         canEdit={workspace.can_edit}
         run={run}
+        ask={ask}
         accessToken={accessToken}
       />
     </div>
@@ -898,6 +960,8 @@ function InvoiceTab({
   );
 }
 
+type Area = "top" | "sha" | "claim";
+
 export function ClaimWorkspace({
   workspace,
   onChange,
@@ -913,25 +977,68 @@ export function ClaimWorkspace({
 }) {
   const [tab, setTab] = useState<"claim" | "invoice">("claim");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Outcome of the last action, shown next to the part of the screen it came
+  // from (the SHA panel and the claim card are far apart).
+  const [feedback, setFeedback] = useState<{
+    area: Area;
+    error: string | null;
+    notice: string | null;
+  }>({ area: "top", error: null, notice: null });
+  const setError = (error: string | null, area: Area = "top") =>
+    setFeedback({ area, error, notice: null });
 
-  const run: Run = async (action, success) => {
-    if (busy) return false;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      onChange(await action());
-      if (success) setNotice(success);
-      return true;
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "That could not be saved. Try again.");
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const runner = (area: Area): { run: Run; ask: Ask } => ({
+    run: async (action, success) => {
+      if (busy) return false;
+      setBusy(true);
+      setFeedback({ area, error: null, notice: null });
+      try {
+        onChange(await action());
+        if (success) setFeedback({ area, error: null, notice: success });
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : "That could not be saved. Try again.",
+          area,
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    ask: async (action, success) => {
+      if (busy) return null;
+      setBusy(true);
+      setFeedback({ area, error: null, notice: null });
+      try {
+        const result = await action();
+        const message = success?.(result);
+        if (message) setFeedback({ area, error: null, notice: message });
+        return result;
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "That request failed. Try again.", area);
+        return null;
+      } finally {
+        setBusy(false);
+      }
+    },
+  });
+  const top = runner("top");
+  const shaArea = runner("sha");
+  const claimArea = runner("claim");
+  const run = top.run;
+
+  const feedbackFor = (area: Area) =>
+    feedback.area === area ? (
+      <>
+        {feedback.notice && (
+          <Callout tone="success" role="status">
+            {feedback.notice}
+          </Callout>
+        )}
+        <ErrorNote>{feedback.error}</ErrorNote>
+      </>
+    ) : null;
 
   const draft = workspace.claims.find((c) => c.status === "DRAFT");
   const canCreate =
@@ -1049,12 +1156,23 @@ export function ClaimWorkspace({
         {!workspace.can_edit && " You have view-only access to billing."}
       </Callout>
 
-      {notice && (
-        <Callout tone="success" role="status">
-          {notice}
-        </Callout>
+      {feedbackFor("top")}
+
+      {workspace.sha && (
+        <div className="grid gap-2">
+          <ShaPanel
+            sha={workspace.sha}
+            canEdit={workspace.can_edit}
+            busy={busy}
+            run={shaArea.run}
+            ask={shaArea.ask}
+            accessToken={accessToken}
+            patientId={patientId}
+            onChange={onChange}
+          />
+          {feedbackFor("sha")}
+        </div>
       )}
-      <ErrorNote>{error}</ErrorNote>
 
       <Card title="Claim and invoice details" bodyClassName="p-[18px] grid gap-4">
         <div role="tablist" aria-label="Billing details" className="flex gap-1.5">
@@ -1080,14 +1198,21 @@ export function ClaimWorkspace({
             </button>
           ))}
         </div>
+        {feedbackFor("claim")}
         <div role="tabpanel">
           {tab === "claim" ? (
-            <PayerClaimTab workspace={workspace} run={run} accessToken={accessToken} />
+            <PayerClaimTab
+              workspace={workspace}
+              run={claimArea.run}
+              ask={claimArea.ask}
+              accessToken={accessToken}
+              patientId={patientId}
+            />
           ) : (
             <InvoiceTab
               workspace={workspace}
               patientLabel={patientLabel}
-              run={run}
+              run={claimArea.run}
               accessToken={accessToken}
               patientId={patientId}
             />

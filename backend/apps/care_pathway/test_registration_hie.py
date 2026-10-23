@@ -3,16 +3,12 @@
 Classes whose name starts with `FhirR4Conformance` run in the CI conformance step.
 """
 
-import uuid
-from unittest.mock import Mock, patch
 
-import requests
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
 from apps.client_registry.consent import capture_consent, may_send_to_hie
 from apps.client_registry.models import ConsentRecord, EmergencyContact, Patient, PatientIdentifier
-from apps.dha_interop import hie_client
 from apps.dha_interop.fhir_patient import (
     build_hie_consent,
     build_patient_resource,
@@ -194,15 +190,15 @@ class ConsentGateTests(CarePathwayApiTestCase):
         response = self.register(full_name="No Wording", hie_consent={"general": "YES"})
         self.assertEqual(response.status_code, 400)
 
-    def test_patient_is_not_queued_without_consent_and_is_queued_once_with_it(self):
-        with platform_admin_context():
-            self.assertIsNone(hie_client.enqueue_patient(self.patient))
+    def test_registration_queues_nothing_for_the_hie_even_with_consent(self):
+        # DHA publishes no endpoint for writing a Patient; nothing may sit in
+        # the outbox looking queued when it can never be delivered.
         self.capture("YES")
+        self.register(full_name="Another Client")
         with platform_admin_context():
-            first = hie_client.enqueue_patient(self.patient)
-            second = hie_client.enqueue_patient(self.patient)
-            self.assertEqual(first.pk, second.pk)
-            self.assertEqual(FhirResourceCache.objects.filter(idempotency_key__startswith="patient:").count(), 1)
+            self.assertFalse(
+                FhirResourceCache.objects.filter(idempotency_key__startswith="patient:").exists()
+            )
 
 
 @override_settings(
@@ -590,84 +586,6 @@ class RegistrationV4Tests(CarePathwayApiTestCase):
         self.assertEqual(row["emergency_arrival"]["found_location"], "Bus stage")
         self.assertEqual(row["emergency_arrival"]["brought_by"]["name"], "PC Otieno")
         self.assertNotIn("alcohol", str(row))
-
-
-class OutboxTests(CarePathwayApiTestCase):
-    def entry(self, retry_safe=True, resource_type="Patient"):
-        with platform_admin_context():
-            return hie_client.enqueue(
-                self.org.id,
-                resource_type,
-                {"resourceType": resource_type, "id": str(uuid.uuid4())},
-                f"test:{uuid.uuid4()}",
-                retry_safe=retry_safe,
-            )
-
-    def test_unconfigured_hie_holds_the_row_and_says_so(self):
-        entry = self.entry()
-        with platform_admin_context():
-            hie_client.deliver(entry)
-        entry.refresh_from_db()
-        self.assertEqual(entry.status, "CACHED")
-        self.assertIn("not configured", entry.transmission_detail)
-
-    @override_settings(HIE_ENDPOINT_URL="https://hie.example.test", HIE_PATIENT_PATH="Patient")
-    def test_rejection_keeps_operation_outcome_expressions_for_the_person_who_can_fix_it(self):
-        entry = self.entry()
-        response = Mock(status_code=422, ok=False)
-        response.json.return_value = {
-            "resourceType": "OperationOutcome",
-            "issue": [
-                {
-                    "severity": "error",
-                    "code": "invalid",
-                    "expression": ["Patient.birthDate"],
-                    "diagnostics": "Date of birth is in the future",
-                }
-            ],
-        }
-        with patch("apps.dha_interop.hie_client.requests.request", return_value=response):
-            with platform_admin_context():
-                hie_client.deliver(entry)
-        entry.refresh_from_db()
-        self.assertEqual(entry.status, "REJECTED")
-        self.assertEqual(entry.issues[0]["expression"], ["Patient.birthDate"])
-        self.assertIn("Patient.birthDate", entry.transmission_detail)
-        self.assertIsNone(entry.next_attempt_at)
-
-    @override_settings(HIE_ENDPOINT_URL="https://hie.example.test", HIE_PATIENT_PATH="Patient")
-    def test_timeout_is_retried_only_when_the_send_is_idempotent(self):
-        safe, unsafe = self.entry(retry_safe=True), self.entry(retry_safe=False)
-        with patch("apps.dha_interop.hie_client.requests.request", side_effect=requests.Timeout("slow")):
-            with platform_admin_context():
-                hie_client.deliver(safe)
-                hie_client.deliver(unsafe)
-        safe.refresh_from_db()
-        unsafe.refresh_from_db()
-        self.assertEqual(safe.status, "RETRY")
-        self.assertIsNotNone(safe.next_attempt_at)
-        self.assertEqual(unsafe.status, "FAILED")
-
-    @override_settings(HIE_ENDPOINT_URL="https://hie.example.test", HIE_PATIENT_PATH="Patient")
-    def test_patient_send_is_an_update_as_create_put_by_id(self):
-        entry = self.entry()
-        response = Mock(status_code=201, ok=True)
-        response.json.return_value = {}
-        with patch("apps.dha_interop.hie_client.requests.request", return_value=response) as call:
-            with platform_admin_context():
-                hie_client.deliver(entry)
-        method, url = call.call_args.args[:2]
-        self.assertEqual(method, "PUT")
-        self.assertTrue(url.endswith(f"/Patient/{entry.fhir_json['id']}"))
-        self.assertEqual(call.call_args.kwargs["headers"]["Content-Type"], "application/fhir+json")
-        entry.refresh_from_db()
-        self.assertEqual(entry.status, "SENT")
-
-    def test_enqueue_is_idempotent_and_drain_skips_when_not_due(self):
-        with platform_admin_context():
-            a = hie_client.enqueue(self.org.id, "Patient", {"id": "1"}, "dup-key")
-            b = hie_client.enqueue(self.org.id, "Patient", {"id": "1"}, "dup-key")
-        self.assertEqual(a.pk, b.pk)
 
 
 class DuplicateCheckEndpointTests(CarePathwayApiTestCase):

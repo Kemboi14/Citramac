@@ -142,6 +142,16 @@ class PractitionerCredentialView(APIView):
         number = str(data.get("registration_number", cred.registration_number) or "").strip()
         if number != cred.registration_number:
             cred.registration_number, cred.registration_verified_at, cred.registration_verified_by = number, None, None
+            # The registry record described the old number.
+            cred.hwr_record, cred.hwr_checked_at = {}, None
+        if "hwr_regulator" in data:
+            regulator = str(data.get("hwr_regulator") or "").strip()
+            if regulator and regulator not in dict(PractitionerCredential.HWR_REGULATOR_CHOICES):
+                raise ValidationError({"hwr_regulator": "The Health Worker Registry accepts KMPDC, COC, NCK or PPB."})
+            if regulator != cred.hwr_regulator:
+                cred.hwr_regulator, cred.hwr_record, cred.hwr_checked_at = regulator, {}, None
+        if "hwr_puid" in data:
+            cred.hwr_puid = str(data.get("hwr_puid") or "").strip()[:64]
         for field in ("registration_body", "qualifications"):
             if field in data:
                 setattr(cred, field, str(data.get(field) or "").strip()[:255])
@@ -157,4 +167,11 @@ class PractitionerCredentialView(APIView):
                 cred.mha_recommendation_approved = approved
                 cred.mha_approved_at, cred.mha_approved_by = (now, request.user) if approved else (None, None)
         cred.save()
+        if data.get("check_registry") is True:
+            from apps.dha_interop.registries import RegistryError, verify_practitioner
+
+            try:
+                verify_practitioner(cred)
+            except RegistryError as exc:
+                raise ValidationError({exc.field or "health_worker_registry": exc.message}) from None
         return Response(legal_status.credential_status(target))

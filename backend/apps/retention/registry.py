@@ -52,6 +52,9 @@ PATIENT_PATHS = {
     "insurance_claims.Remittance": "claim__patient",
     "insurance_claims.ClaimLine": "claim__patient",
     "insurance_claims.ClaimAttachment": "claim__patient",
+    "insurance_claims.ShaVisit": "patient",
+    "insurance_claims.ShaEligibilityCheck": "patient",
+    "dha_interop.ShrConsent": "patient",
     "mhp_program.CareTeamMembership": "patient",
     "mhp_program.BiopsychosocialAssessment": "patient",
     "mhp_program.SubstanceUseEntry": "assessment__patient",
@@ -161,6 +164,7 @@ MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mh
     "documents.GeneratedDocument",
     "documents.DocumentEvent",
     "documents.DisclosureRecord",
+    "dha_interop.ShrConsent",
 }
 
 FINANCIAL_MODELS = {
@@ -172,6 +176,8 @@ FINANCIAL_MODELS = {
     "insurance_claims.Remittance",
     "insurance_claims.ClaimLine",
     "insurance_claims.ClaimAttachment",
+    "insurance_claims.ShaVisit",
+    "insurance_claims.ShaEligibilityCheck",
     "care_pathway.ChargeItem",
 }
 

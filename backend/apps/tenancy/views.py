@@ -31,6 +31,7 @@ from .models import (
     Organization,
     PlatformBranding,
     PlatformAiSettings,
+    PlatformHieSettings,
     PlatformEmailSettings,
     PlatformSmsSettings,
     Subscription,
@@ -48,6 +49,7 @@ from .serializers import (
     OrganizationStatusSerializer,
     OrganizationThemeSerializer,
     PlatformAiSettingsSerializer,
+    PlatformHieSettingsSerializer,
     PlatformBrandingSerializer,
     PlatformEmailSettingsSerializer,
     PlatformSmsSettingsSerializer,
@@ -566,6 +568,138 @@ class PlatformAiTestView(APIView):
         return Response(psy_ai.test_connection(key, model))
 
 
+class PlatformHieSettingsView(APIView):
+    """
+    Super Admin's DHA HIE service account, callback and remittance settings
+    (DHA / SHA Integration screen). Super-Admin-only for GET too — it
+    describes a credential. The secret itself is never returned.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        return Response(PlatformHieSettingsSerializer(PlatformHieSettings.get_solo()).data)
+
+    def patch(self, request):
+        hie_settings = PlatformHieSettings.get_solo()
+        serializer = PlatformHieSettingsSerializer(hie_settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        from django.core.cache import cache
+
+        from apps.dha_interop.hie_api import HieNotConfigured, platform_credentials
+
+        try:
+            cache.delete(platform_credentials().cache_key)
+        except HieNotConfigured:
+            pass
+        return Response(PlatformHieSettingsSerializer(PlatformHieSettings.get_solo()).data)
+
+
+class PlatformHieTestView(APIView):
+    """
+    "Test connection": signs in with the saved service account, then looks
+    every SHA branch's FR code up in the DHA Facility Registry (recording the
+    answer on the branch). No client data is sent.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def post(self, request):
+        from apps.dha_interop.hie_api import test_connection
+        from apps.dha_interop.registries import (
+            RegistryError,
+            facility_summary,
+            verify_branch_facility,
+        )
+
+        result = test_connection()
+        facilities = []
+        if result["success"]:
+            with platform_admin_context():
+                for branch in (
+                    Branch.objects.unscoped()
+                    .filter(is_active=True)
+                    .exclude(sha_fr_code="")
+                    .select_related("organization")
+                ):
+                    try:
+                        verify_branch_facility(branch)
+                        facilities.append(
+                            {
+                                "branch": branch.name,
+                                "organization": branch.organization.name,
+                                **facility_summary(branch),
+                            }
+                        )
+                    except RegistryError as exc:
+                        facilities.append(
+                            {
+                                "branch": branch.name,
+                                "organization": branch.organization.name,
+                                "status": "ERROR",
+                                "problem": exc.message,
+                            }
+                        )
+        return Response({**result, "facilities": facilities})
+
+
+class PlatformHieCallbackRegistrationView(APIView):
+    """Register the claim / preauth / authorisation status callbacks with the
+    HIE for every SHA branch (idempotent)."""
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def post(self, request):
+        from apps.insurance_claims.sha_callbacks import register_callbacks
+        from apps.insurance_claims.sha_eligibility import ShaError
+
+        results = []
+        with platform_admin_context():
+            for branch in (
+                Branch.objects.unscoped()
+                .filter(is_active=True, sha_claims_enabled=True)
+                .exclude(sha_fr_code="")
+            ):
+                try:
+                    results.append(
+                        {"branch": branch.name, "results": register_callbacks(branch)}
+                    )
+                except ShaError as exc:
+                    results.append({"branch": branch.name, "error": exc.message})
+        return Response({"branches": results})
+
+
+class PlatformHieLogView(APIView):
+    """The latest HIE transactions, for troubleshooting (redacted bodies)."""
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request):
+        from apps.dha_interop.models import ShaTransactionLog
+
+        rows = ShaTransactionLog.objects.all()[:100]
+        return Response(
+            {
+                "transactions": [
+                    {
+                        "id": str(r.id),
+                        "at": r.created_at.isoformat(),
+                        "type": r.get_transaction_type_display(),
+                        "method": r.method,
+                        "endpoint": r.endpoint,
+                        "status": r.status,
+                        "http_status": r.http_status,
+                        "trace_id": r.trace_id,
+                        "error": r.error_detail,
+                        "duration_ms": r.duration_ms,
+                    }
+                    for r in rows
+                ]
+            }
+        )
+
+
 class OrganizationSmsSettingsView(APIView):
     """
     Self-service Onfon Media SMS gateway configuration for a single
@@ -723,6 +857,29 @@ class BranchViewSet(viewsets.ModelViewSet):
                 "ownership_type", organization.ownership_type
             ),
         )
+
+
+class BranchFacilityRegistryView(APIView):
+    """Org Admin / Super Admin: look this branch's FR code up in the DHA
+    Facility Registry now and record the registry's answer."""
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+
+    def post(self, request, pk):
+        from apps.dha_interop.registries import RegistryError, verify_branch_facility
+
+        branch = generics.get_object_or_404(Branch, pk=pk)
+        self.check_object_permissions(request, branch)
+        try:
+            verify_branch_facility(branch)
+        except RegistryError as exc:
+            return error_response(
+                "registry_refused",
+                exc.message,
+                status.HTTP_400_BAD_REQUEST,
+                fields={exc.field: [exc.message]} if exc.field else None,
+            )
+        return Response(BranchSerializer(branch, context={"request": request}).data)
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

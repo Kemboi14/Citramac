@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Building2,
   KeyRound,
   Loader2,
   Mail,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { fieldErrorsFrom } from "../../lib/formErrors";
 import { SaveButton } from "../../components/SaveButton";
 import { getPlatformBranding } from "../../lib/brandingApi";
 import { ThemeEditor } from "../../theme/ThemeEditor";
@@ -31,10 +33,12 @@ import {
   type BranchIdentifierValues,
 } from "../../lib/branchIdentifiers";
 import {
+  checkBranchFacilityRegistry,
   listBranches,
-  setBranchCredentials,
+  setBranchShaCredentials,
   updateBranch,
   type Branch,
+  type FacilityRegistry,
   type MhpRegistrationStatus,
 } from "../../lib/branchesApi";
 import {
@@ -145,6 +149,75 @@ function StatusPill({
   );
 }
 
+/** One registry field, the registry's own wording; a dash when it sent nothing. */
+function RegistryField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col py-1.5">
+      <dt className="text-[11px] font-bold uppercase tracking-wide text-ink-500">{label}</dt>
+      <dd className="text-sm text-ink-900">{value || "—"}</dd>
+    </div>
+  );
+}
+
+/**
+ * The DHA Facility Registry's record for this branch, read-only and verbatim
+ * — DHA publishes no vocabulary for these values, so none is interpreted.
+ */
+function FacilityRegistryPanel({ registry }: { registry: FacilityRegistry }) {
+  if (!registry.status && !registry.checked_at) {
+    return <p className="text-sm text-ink-500">Not yet checked against the registry.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill
+          ok={registry.status === "VERIFIED"}
+          okLabel={registry.status_label || "Verified"}
+          pendingLabel={registry.status_label || "Not verified"}
+        />
+        {registry.checked_at && (
+          <span className="text-xs text-ink-500">
+            Checked {new Date(registry.checked_at).toLocaleString()}
+          </span>
+        )}
+      </div>
+      {registry.problem && (
+        <p className="rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-ink-900">
+          {registry.problem}
+        </p>
+      )}
+      {registry.status === "VERIFIED" && (
+        <dl className="flex flex-col divide-y divide-surface-border">
+          <RegistryField label="Official name" value={registry.official_name} />
+          <RegistryField label="FR code" value={registry.fr_code} />
+          <RegistryField label="FID code" value={registry.fid_code} />
+          <RegistryField label="KEPH level" value={registry.keph_level} />
+          <RegistryField label="Facility type" value={registry.facility_type} />
+          <RegistryField label="Regulatory body" value={registry.regulatory_body} />
+          <RegistryField label="Registration number" value={registry.registration_number} />
+          <RegistryField label="Licence number" value={registry.license_number} />
+          <RegistryField label="Licence status" value={registry.license_status} />
+          <RegistryField label="Licence end" value={registry.license_end} />
+          <RegistryField label="SHA contract status" value={registry.sha_contract_status} />
+          <RegistryField label="SHA contract end" value={registry.sha_contract_end} />
+          <RegistryField
+            label="SHA contracted services"
+            value={registry.sha_contracted_services
+              .map((service) => (typeof service === "string" ? service : JSON.stringify(service)))
+              .join(", ")}
+          />
+          <RegistryField label="SHA operational status" value={registry.sha_operational_status} />
+          <RegistryField
+            label="SHA operational status reason"
+            value={registry.sha_operational_status_reason}
+          />
+          <RegistryField label="SHA suspension reason" value={registry.sha_suspension_reason} />
+        </dl>
+      )}
+    </div>
+  );
+}
+
 function ToggleRow({
   label,
   description,
@@ -245,8 +318,12 @@ export function BranchSettingsPage() {
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [togglingField, setTogglingField] = useState<string | null>(null);
 
-  const [credentialValue, setCredentialValue] = useState("");
+  const [shaClientId, setShaClientId] = useState("");
+  const [shaClientSecret, setShaClientSecret] = useState("");
   const [credentialError, setCredentialError] = useState<string | null>(null);
+  const [credentialFieldErrors, setCredentialFieldErrors] = useState<Record<string, string>>({});
+
+  const [registryError, setRegistryError] = useState<string | null>(null);
 
   const [emailSettings, setEmailSettings] = useState<OrganizationEmailSettings | null>(null);
   const [emailForm, setEmailForm] = useState<EmailFormState | null>(null);
@@ -505,15 +582,60 @@ export function BranchSettingsPage() {
     }
   };
 
+  const applyBranch = (updated: Branch) => {
+    setBranch(updated);
+    setAllBranches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+  };
+
   const saveCredentials = async () => {
-    if (!accessToken || !branch || !credentialValue) return;
+    if (!accessToken || !branch) return;
     setCredentialError(null);
+    setCredentialFieldErrors({});
     try {
-      await setBranchCredentials(accessToken, branch.id, credentialValue);
-      setCredentialValue("");
-      await load();
+      applyBranch(
+        await setBranchShaCredentials(accessToken, branch.id, {
+          sha_client_id: shaClientId.trim(),
+          sha_client_secret: shaClientSecret.trim(),
+        }),
+      );
+      setShaClientId("");
+      setShaClientSecret("");
     } catch (err) {
+      setCredentialFieldErrors(fieldErrorsFrom(err));
       setCredentialError(err instanceof ApiError ? err.message : "Couldn't save credentials.");
+      throw err;
+    }
+  };
+
+  const removeCredentials = async () => {
+    if (!accessToken || !branch) return;
+    if (
+      !window.confirm(
+        "Remove this branch's own DHA HIE credentials? It will use the platform service account with its SHA FR code.",
+      )
+    )
+      throw new Error("cancelled");
+    setCredentialError(null);
+    setCredentialFieldErrors({});
+    try {
+      applyBranch(
+        await setBranchShaCredentials(accessToken, branch.id, { remove_sha_credentials: true }),
+      );
+    } catch (err) {
+      setCredentialError(err instanceof ApiError ? err.message : "Couldn't remove credentials.");
+      throw err;
+    }
+  };
+
+  const checkRegistry = async () => {
+    if (!accessToken || !branch) return;
+    setRegistryError(null);
+    try {
+      applyBranch(await checkBranchFacilityRegistry(accessToken, branch.id));
+    } catch (err) {
+      setRegistryError(
+        err instanceof ApiError ? err.message : "Couldn't check the DHA Facility Registry.",
+      );
       throw err;
     }
   };
@@ -641,7 +763,9 @@ export function BranchSettingsPage() {
                       {branch.mfl_code || "—"}
                     </div>
                     <span className="text-xs font-normal text-ink-500">
-                      {branch.mfl_code ? "Verified by DHA MFL registry" : "Not yet verified"}
+                      {branch.facility_registry.status === "VERIFIED"
+                        ? "SHA FR code verified in the DHA Facility Registry"
+                        : "Not yet verified in the DHA Facility Registry"}
                     </span>
                   </div>
                   <label className={LABEL_CLASS}>
@@ -756,11 +880,13 @@ export function BranchSettingsPage() {
               </h2>
               <div className="flex flex-col divide-y divide-surface-border">
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-ink-700">DHA MFL Verification</span>
+                  <span className="text-sm text-ink-700">DHA Facility Registry</span>
                   <StatusPill
-                    ok={Boolean(branch.mfl_code)}
+                    ok={branch.facility_registry.status === "VERIFIED"}
                     okLabel="Verified"
-                    pendingLabel="Pending"
+                    pendingLabel={
+                      branch.facility_registry.status === "NOT_FOUND" ? "Not found" : "Pending"
+                    }
                   />
                 </div>
                 {branch.is_registered_health_provider && (
@@ -824,33 +950,114 @@ export function BranchSettingsPage() {
             <div className={CARD_CLASS}>
               <h2 className={SECTION_TITLE_CLASS}>
                 <span className="inline-flex items-center gap-2">
+                  <Building2 size={16} className="text-brand-green" />
+                  DHA Facility Registry
+                </span>
+              </h2>
+              <FacilityRegistryPanel registry={branch.facility_registry} />
+              <div className="mt-4 flex flex-col gap-2">
+                <p className="text-xs text-ink-500">
+                  Looks this branch’s saved SHA FR code up in the DHA Facility Registry and records
+                  the registry’s answer. Save a changed FR code first.
+                </p>
+                <div>
+                  <SaveButton
+                    onSave={checkRegistry}
+                    variant="ghost"
+                    disabled={!branch.sha_fr_code}
+                    savingLabel="Checking…"
+                    savedLabel="Checked"
+                  >
+                    Check Facility Registry
+                  </SaveButton>
+                </div>
+                {!branch.sha_fr_code && (
+                  <p className="text-xs text-ink-500">Record the SHA FR code to check it.</p>
+                )}
+                {registryError && (
+                  <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+                    {registryError}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className={CARD_CLASS}>
+              <h2 className={SECTION_TITLE_CLASS}>
+                <span className="inline-flex items-center gap-2">
                   <KeyRound size={16} className="text-brand-green" />
-                  SHA Claims Credentials
+                  Facility HIE Credentials
                 </span>
               </h2>
               <div className="mb-3">
                 <StatusPill
                   ok={branch.has_sha_credentials}
-                  okLabel="Configured"
-                  pendingLabel="Not configured"
+                  okLabel="Facility credentials saved"
+                  pendingLabel="Using the platform service account"
                 />
               </div>
+              <p className="mb-3 text-xs text-ink-500">
+                Optional. Only for a facility that holds its own facility-scoped DHA HIE
+                credentials. Otherwise the platform’s DHA service account is used, naming this
+                branch by its SHA FR code. Stored encrypted and never shown again.
+              </p>
               <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
                 <label className={LABEL_CLASS}>
-                  New Credentials
+                  Facility Client ID
+                  <input
+                    type="text"
+                    className={FIELD_CLASS}
+                    value={shaClientId}
+                    onChange={(e) => setShaClientId(e.target.value)}
+                    placeholder={
+                      branch.has_sha_credentials ? "Leave blank to keep the current credentials" : ""
+                    }
+                    autoComplete="off"
+                    aria-invalid={Boolean(credentialFieldErrors.sha_client_id)}
+                  />
+                  {credentialFieldErrors.sha_client_id && (
+                    <span className="text-xs font-normal text-status-red">
+                      {credentialFieldErrors.sha_client_id}
+                    </span>
+                  )}
+                </label>
+                <label className={LABEL_CLASS}>
+                  Facility Client Secret
                   <input
                     type="password"
                     className={FIELD_CLASS}
-                    value={credentialValue}
-                    onChange={(e) => setCredentialValue(e.target.value)}
-                    placeholder="Paste SHA API credential string"
+                    value={shaClientSecret}
+                    onChange={(e) => setShaClientSecret(e.target.value)}
+                    placeholder={
+                      branch.has_sha_credentials ? "Leave blank to keep the current credentials" : ""
+                    }
                     autoComplete="new-password"
+                    aria-invalid={Boolean(credentialFieldErrors.sha_client_secret)}
                   />
+                  {credentialFieldErrors.sha_client_secret && (
+                    <span className="text-xs font-normal text-status-red">
+                      {credentialFieldErrors.sha_client_secret}
+                    </span>
+                  )}
                 </label>
-                <div>
-                  <SaveButton onSave={saveCredentials} disabled={!credentialValue}>
+                <p className="text-xs text-ink-500">Enter both together.</p>
+                <div className="flex flex-wrap gap-2">
+                  <SaveButton
+                    onSave={saveCredentials}
+                    disabled={!shaClientId.trim() || !shaClientSecret.trim()}
+                  >
                     Save Credentials
                   </SaveButton>
+                  {branch.has_sha_credentials && (
+                    <SaveButton
+                      onSave={removeCredentials}
+                      variant="ghost"
+                      savingLabel="Removing…"
+                      savedLabel="Removed"
+                    >
+                      Remove credentials
+                    </SaveButton>
+                  )}
                 </div>
                 {credentialError && (
                   <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">

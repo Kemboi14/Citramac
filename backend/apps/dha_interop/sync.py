@@ -5,8 +5,7 @@ mirrors, each configurable with its own source endpoint and refresh
 cadence." No live WHO ICD-11 API / LOINC distribution / national drug
 registry endpoint is configured in this environment — `sync_terminology_source`
 honestly records a SKIPPED_NOT_CONFIGURED run rather than fabricating a
-successful sync, consistent with the sha_gateway.py/hie_client.py stub
-pattern established in Phase 4/6.
+successful sync, consistent with hie_api reporting "not configured".
 
 Expected source response shape (once a real endpoint is configured): a JSON
 array of `{"code": ..., "description": ...}` objects (ICD-11/LOINC) or

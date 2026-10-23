@@ -74,4 +74,52 @@ urlpatterns = [
         views.BillingPreauthDecisionView.as_view(),
         name="billing-preauth-decision",
     ),
+    # SHA through the DHA HIE.
+    path(
+        "claims/clients/<uuid:patient_id>/sha/eligibility/",
+        views.ClientShaEligibilityView.as_view(),
+        name="client-sha-eligibility",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/sha/interventions/",
+        views.ClientShaInterventionsView.as_view(),
+        name="client-sha-interventions",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/sha/contacts/",
+        views.ClientShaContactsView.as_view(),
+        name="client-sha-contacts",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/sha/otp/",
+        views.ClientShaOtpView.as_view(),
+        name="client-sha-otp",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/sha/visits/",
+        views.ClientShaVisitView.as_view(),
+        name="client-sha-visits",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/sha/otp-whitelist/",
+        views.ClientShaWhitelistView.as_view(),
+        name="client-sha-otp-whitelist",
+    ),
+    path(
+        "claims/sha-visits/<uuid:pk>/<str:action_name>/",
+        views.ShaVisitActionView.as_view(),
+        name="sha-visit-action",
+    ),
+    path(
+        "claims/billing-claims/<uuid:pk>/sha/<str:action_name>/",
+        views.BillingClaimShaView.as_view(),
+        name="billing-claim-sha",
+    ),
+    path("claims/sha-remittances/", views.ShaRemittanceView.as_view(), name="sha-remittances"),
+    # Public: the HIE posts status callbacks here (sha_callbacks.CALLBACK_PATHS).
+    path(
+        "integrations/dha/<str:token>/callbacks/<str:entity>-status/",
+        views.ShaCallbackReceiverView.as_view(),
+        name="sha-callback",
+    ),
 ] + router.urls

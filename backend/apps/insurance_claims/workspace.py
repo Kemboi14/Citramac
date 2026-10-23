@@ -13,11 +13,17 @@ FHIR R4 mapping (no export is built here; this is the internal model):
 Rules carried from the mockup and CLAUDE.md:
 - Lines come only from priced, non-voided ChargeItems; rates are the tariff
   snapshot on the charge, never a value held here.
-- Payer codes and the pre-authorisation requirement come only from
-  ServicePayerCode. Unconfigured → blank code, shown as "Payer code not
-  configured — VERIFY". No payer code is ever invented.
-- Package ceilings and emergency-fund routing are NOT applied: no configured
-  source exists for either (VERIFY with the payer's benefit schedule).
+- Payer codes come only from ServicePayerCode (for SHA, the facility's map
+  from its tariff service to an SHA intervention code). Unconfigured → blank
+  code, shown as "Payer code not configured — VERIFY". No payer code is ever
+  invented. For SHA the pre-authorisation requirement is SHA's own live
+  `needsPreauth` flag for the intervention (ShaIntervention), not a typed one.
+- SHA claims are billed against a consented SHA visit and dispatched through
+  the DHA HIE (apps.insurance_claims.sha_claims); SHA's decisions arrive by
+  status callback or a status refresh — they are never typed in. Other payers
+  have no connection: their submission and decision are recorded by finance.
+- Package ceilings and emergency-fund routing are NOT applied here: SHA rules
+  them on its side, and no source exists for other payers.
 - PSYCHOTHERAPY_NOTES and TRAUMA_HISTORY are never claim attachments.
 - `claim_number` / invoice `number` are assigned before any network call.
 """
@@ -37,7 +43,7 @@ from apps.client_registry.models import Patient, PatientIdentifier
 from apps.clinical_encounter.models import DiagnosisCode
 from apps.tenancy.models import Branch
 
-from . import sha_gateway
+from . import sha_claims
 from .models import (
     ATTACHMENT_DEFAULT_CATEGORIES,
     ATTACHMENT_EXCLUDED_CATEGORIES,
@@ -47,7 +53,10 @@ from .models import (
     PreAuthorization,
     Remittance,
     ServicePayerCode,
+    ShaIntervention,
+    ShaVisit,
 )
+from .sha_eligibility import ShaError
 
 ZERO = Decimal("0")
 TIMELINE = ["Draft", "Submitted", "With payer", "Adjudicated"]
@@ -61,7 +70,7 @@ PAYMENT_METHODS = {
     "CASH": "Cash",
     "CARD": "Card",
 }
-PAYER_STATUS_CHOICES = ("UNDER_REVIEW", "APPROVED", "PARTIALLY_APPROVED", "REJECTED")
+PAYER_STATUS_CHOICES = ("UNDER_REVIEW", "RETURNED", "APPROVED", "PARTIALLY_APPROVED", "REJECTED")
 PREAUTH_DECISIONS = ("APPROVED", "PARTIALLY_APPROVED", "REJECTED")
 APPROVED_PREAUTH = ("APPROVED", "PARTIALLY_APPROVED")
 
@@ -96,9 +105,13 @@ def timeline_stage(claim):
         return 0
     if claim.status == "SUBMITTED":
         return 1
-    if claim.status == "UNDER_REVIEW":
+    if claim.status in ("UNDER_REVIEW", "RETURNED"):
         return 2
     return 3
+
+
+def is_sha(claim):
+    return claim.payer == "SHA"
 
 
 # ── Charges and payer configuration ──
@@ -135,6 +148,17 @@ def _payer_codes(service_ids, payer):
             service_id__in=service_ids, payer=payer, active=True
         )
     }
+
+
+def _requires_preauth(code, payer):
+    """For SHA, SHA's own needsPreauth flag for the intervention once it has been
+    read from the HIE; None (unknown) until then. Other payers: as configured."""
+    if code is None:
+        return None
+    if payer == "SHA":
+        intervention = ShaIntervention.objects.filter(code=code.payer_code).first()
+        return intervention.needs_preauth if intervention else None
+    return code.requires_preauth
 
 
 # ── Finance review checklist ──
@@ -224,6 +248,28 @@ def checklist(claim):
                 "label": "Facility SHA FR code on file",
                 "ok": not problem,
                 "detail": problem or f"{branch.name} · FR code {branch.sha_fr_code}",
+            }
+        )
+        visit = claim.sha_visit
+        facility.append(
+            {
+                "key": "sha_visit",
+                "label": "SHA visit opened with the client's consent",
+                "ok": visit is not None and visit.status == ShaVisit.STATUS_OPEN,
+                "detail": (
+                    f"{visit.get_consent_method_display()} consent · {', '.join(visit.intervention_codes)}"
+                    if visit is not None and visit.status == ShaVisit.STATUS_OPEN
+                    else "Open the SHA visit while the client is present (OTP or fingerprint)"
+                ),
+            }
+        )
+        missing = sha_claims.missing_documents(claim)
+        facility.append(
+            {
+                "key": "sha_documents",
+                "label": "Documents SHA requires for the intervention",
+                "ok": not missing,
+                "detail": ("Missing: " + ", ".join(missing)) if missing else "All attached",
             }
         )
     mismatched = [
@@ -337,7 +383,7 @@ def create_claim(user, patient, charge_ids=None):
             quantity=charge.quantity,
             unit_price=charge.unit_price,
             payer_code=code.payer_code if code else "",
-            requires_preauth=code.requires_preauth if code else None,
+            requires_preauth=_requires_preauth(code, claim.payer),
         )
     _recalculate(claim)
     claim.save(update_fields=["status_history"])
@@ -367,9 +413,9 @@ def remove_line(user, claim, line):
     return claim
 
 
-@transaction.atomic
-def submit_claim(user, claim, lines_checked):
-    claim = InsuranceClaim.objects.select_for_update().get(pk=claim.pk)
+def _review(user, claim, lines_checked):
+    """Run the finance review on a locked draft and snapshot it (within the
+    caller's transaction). Raises BillingError listing what is incomplete."""
     _draft(claim)
     items = checklist(claim)
     failing = [i for i in items if not i["ok"]]
@@ -397,30 +443,77 @@ def submit_claim(user, claim, lines_checked):
     claim.checklist_snapshot = items
     claim.lines_checked_by = user
     claim.lines_checked_at = timezone.now()
-    facility_branch = sha_facility(claim)[0] if claim.payer == "SHA" else None
-    log_entry = sha_gateway.submit_e_claim(claim, facility_branch=facility_branch)
-    if log_entry.status == "FAILED":
-        detail = (log_entry.response_payload or {}).get("detail", "")
-        raise BillingError(
-            f"The payer gateway refused the submission — the claim stays a draft "
-            f"({claim.claim_number}) and can be resubmitted. {detail}".strip(),
-            field="gateway",
-        )
+
+
+def _mark_submitted(user, claim, note):
     claim.status = "SUBMITTED"
-    claim.sha_reference = str(log_entry.id)
     claim.submitted_at = timezone.now()
     claim.submitted_by = user
-    note = (
-        "Queued — the payer gateway is not connected; no live submission was made"
-        if log_entry.status == "PENDING"
-        else "Submitted to payer"
-    )
     _history(claim, "SUBMITTED", user, note)
     claim.save()
+
+
+def submit_claim(user, claim, lines_checked, dispatch=None):
+    """
+    Finance review, then:
+    - SHA → push lines, diagnoses and documents to the consented visit and
+      dispatch it through the HIE. These are network side effects a database
+      rollback cannot undo, so they run outside any transaction and each push
+      is recorded as it is accepted; `dispatch` (discharge reason, the client's
+      discharge OTP or fingerprint discharge authorisation) is validated
+      before anything is pushed.
+    - other payers → recorded as sent through the payer's own channel.
+    """
+    if not is_sha(claim):
+        with transaction.atomic():
+            claim = InsuranceClaim.objects.select_for_update().get(pk=claim.pk)
+            _review(user, claim, lines_checked)
+            _mark_submitted(
+                user,
+                claim,
+                "Recorded as submitted — CITRAMAC has no connection to this payer; send the "
+                "claim through the payer's own channel",
+            )
+        return claim
+
+    with transaction.atomic():
+        claim = InsuranceClaim.objects.select_for_update().get(pk=claim.pk)
+        _review(user, claim, lines_checked)
+        claim.save()
+    dispatch = dispatch or {}
+    try:
+        request = sha_claims.dispatch_request(
+            claim,
+            discharge_reason=dispatch.get("discharge_reason", ""),
+            otp=dispatch.get("otp", ""),
+            discharge_auth_guid=dispatch.get("discharge_auth_guid", ""),
+            discharge_status=dispatch.get("discharge_status") or "FULL",
+            notes=dispatch.get("notes", ""),
+        )
+        sha_claims.sync_claim(claim, user)
+        body = sha_claims.dispatch(claim, user, request)
+    except ShaError as exc:
+        # Refused or unreachable: the claim is not marked submitted. Lines and
+        # documents already accepted by the HIE stay recorded as sent.
+        raise BillingError(
+            f"SHA did not accept the submission — the claim stays a draft "
+            f"({claim.claim_number}) and can be resubmitted. {exc.message}",
+            field=exc.field or "gateway",
+        ) from None
+    with transaction.atomic():
+        claim = InsuranceClaim.objects.select_for_update().get(pk=claim.pk)
+        claim.sha_reference = str(body.get("edi_claim_guid") or claim.sha_visit.claim_guid)[:100]
+        _mark_submitted(user, claim, "Submitted to SHA through the DHA HIE")
     return claim
 
 
 def record_payer_status(user, claim, status, approved_amount=None, note=""):
+    if is_sha(claim) and claim.sha_visit_id:
+        raise BillingError(
+            "SHA posts its own decision on this claim — use “Refresh from SHA”; it is never "
+            "typed in.",
+            field="status",
+        )
     if status not in PAYER_STATUS_CHOICES:
         raise BillingError("Choose a payer status.", field="status")
     if claim.status == "DRAFT":
@@ -458,8 +551,28 @@ def record_payer_status(user, claim, status, approved_amount=None, note=""):
 
 
 @transaction.atomic
-def request_preauth(user, claim, line):
+def request_preauth(user, claim, line, data=None):
     _draft(claim)
+    if is_sha(claim):
+        data = data or {}
+        if line.requires_preauth is not True:
+            raise BillingError(
+                "SHA does not require pre-authorisation for this intervention.", field="preauth"
+            )
+        current = line.pre_authorization
+        if current and current.status in ("SUBMITTED", "APPROVED", "PARTIALLY_APPROVED"):
+            raise BillingError("Pre-authorisation has already been requested for this line.")
+        try:
+            return sha_claims.create_preauth(
+                claim,
+                line,
+                user,
+                service_start=data.get("service_start") or "",
+                service_end=data.get("service_end") or "",
+                notification_email=data.get("notification_email") or "",
+            )
+        except ShaError as exc:
+            raise BillingError(exc.message, field=exc.field or "gateway") from None
     if line.requires_preauth is not True:
         raise BillingError(
             "This service is not configured as needing pre-authorisation for this payer.",
@@ -476,23 +589,22 @@ def request_preauth(user, claim, line):
     )
     line.pre_authorization = pre_auth
     line.save(update_fields=["pre_authorization", "updated_at"])
-    log_entry = sha_gateway.submit_pre_authorization(pre_auth)
-    if log_entry.status == "FAILED":
-        pre_auth.sha_reference = str(log_entry.id)
-        pre_auth.save(update_fields=["sha_reference", "updated_at"])
-        raise BillingError(
-            "The payer gateway refused the pre-authorisation request. "
-            + (log_entry.response_payload or {}).get("detail", ""),
-            field="gateway",
-        )
+    # No connection to this payer: the request is recorded as sent through the
+    # payer's own channel and finance records the decision.
     pre_auth.status = "SUBMITTED"
-    pre_auth.sha_reference = str(log_entry.id)
     pre_auth.submitted_at = timezone.now()
-    pre_auth.save(update_fields=["status", "sha_reference", "submitted_at", "updated_at"])
+    pre_auth.save(update_fields=["status", "submitted_at", "updated_at"])
     return pre_auth
 
 
 def record_preauth_decision(user, pre_auth, status, approval_reference="", note=""):
+    if pre_auth.intervention_code:
+        # Even a manual-approval (POMSF) SHA preauth is decided by SHA's
+        # reviewers and arrives as a status callback.
+        raise BillingError(
+            "SHA posts its own decision on this pre-authorisation — it is never typed in.",
+            field="status",
+        )
     if status not in PREAUTH_DECISIONS:
         raise BillingError("Choose the payer's decision.", field="status")
     if pre_auth.status != "SUBMITTED":
@@ -515,8 +627,14 @@ def record_preauth_decision(user, pre_auth, status, approval_reference="", note=
 # ── Attachments ──
 
 
-def add_attachment(user, claim, category):
-    _draft(claim)
+def _editable_for_documents(claim):
+    if claim.status == "DRAFT" or (is_sha(claim) and claim.status == "RETURNED"):
+        return
+    raise BillingError("Documents can be added only to a draft or returned claim.", field="status")
+
+
+def add_attachment(user, claim, category, file_id=None, sha_document_type="", intervention_code=""):
+    _editable_for_documents(claim)
     if category in ATTACHMENT_EXCLUDED_CATEGORIES:
         raise BillingError(
             f"{category} is never attached to a payer claim — therapy and process notes and "
@@ -525,17 +643,41 @@ def add_attachment(user, claim, category):
         )
     if category not in dict(ClaimAttachment.CATEGORY_CHOICES):
         raise BillingError("Choose a document category.", field="category")
-    attachment, _ = ClaimAttachment.objects.get_or_create(
+    file = None
+    if file_id:
+        from apps.client_registry.models import Attachment
+
+        file = Attachment.objects.filter(pk=file_id, patient=claim.patient).first()
+        if file is None:
+            raise BillingError("Choose one of this client's filed documents.", field="file")
+    if sha_document_type and sha_document_type not in sha_claims.CLAIM_DOCUMENT_TYPES:
+        raise BillingError("Choose an SHA document type.", field="sha_document_type")
+    attachment, created = ClaimAttachment.objects.get_or_create(
         organization=claim.organization,
         claim=claim,
         category=category,
         defaults={"added_by": user},
     )
+    if file is not None or sha_document_type or intervention_code:
+        if attachment.sha_attachment_id:
+            raise BillingError(
+                "This document is already on the SHA claim; remove it there before replacing it.",
+                field="file",
+            )
+        attachment.file = file or attachment.file
+        attachment.sha_document_type = sha_document_type or attachment.sha_document_type
+        attachment.intervention_code = intervention_code or attachment.intervention_code
+        attachment.save()
     return attachment
 
 
 def remove_attachment(user, claim, attachment):
-    _draft(claim)
+    _editable_for_documents(claim)
+    if attachment.sha_attachment_id and claim.sha_visit_id:
+        try:
+            sha_claims.remove_attachment(claim, attachment)
+        except ShaError as exc:
+            raise BillingError(exc.message, field="file") from None
     attachment.delete()
 
 
@@ -698,12 +840,14 @@ def _claim_data(claim):
                 "amount": _money(line.amount),
                 "payer_code": line.payer_code,
                 "requires_preauth": line.requires_preauth,
+                "sent_to_sha": bool(line.sha_line_guid),
                 "pre_authorization": (
                     {
                         "id": str(line.pre_authorization.id),
                         "status": line.pre_authorization.status,
                         "status_label": line.pre_authorization.get_status_display(),
                         "approval_reference": line.pre_authorization.approval_reference,
+                        "sha_state": line.pre_authorization.sha_state,
                     }
                     if line.pre_authorization
                     else None
@@ -712,9 +856,23 @@ def _claim_data(claim):
             for line in lines
         ],
         "attachments": [
-            {"id": str(a.id), "category": a.category, "label": a.get_category_display()}
-            for a in claim.attachments.all()
+            {
+                "id": str(a.id),
+                "category": a.category,
+                "label": a.get_category_display(),
+                "file": (
+                    {"id": str(a.file_id), "name": a.file.file.name.rsplit("/", 1)[-1]}
+                    if a.file_id
+                    else None
+                ),
+                "sha_document_type": a.sha_document_type,
+                "intervention_code": a.intervention_code,
+                "sent_to_sha": bool(a.sha_attachment_id),
+            }
+            for a in claim.attachments.select_related("file")
         ],
+        "sha_visit": sha_claims.visit_data(claim.sha_visit) if claim.sha_visit_id else None,
+        "sha_missing_documents": sha_claims.missing_documents(claim) if is_sha(claim) else [],
         "checklist": checklist(claim) if claim.status == "DRAFT" else claim.checklist_snapshot,
         "remittances": [
             {
@@ -812,6 +970,32 @@ def workspace(user, patient):
         # Not configured anywhere — never applied (see module docstring).
         "package_ceiling": None,
         "emergency_fund_routing": None,
+        "sha": sha_section(patient) if payer == "SHA" else None,
+    }
+
+
+def sha_section(patient):
+    """SHA identity, eligibility and visits for the Billing stage."""
+    from apps.dha_interop.registries import client_registry_id
+
+    from .sha_eligibility import check_data, latest_check
+
+    branches = Branch.objects.filter(
+        organization_id=patient.organization_id, is_active=True, sha_claims_enabled=True
+    ).exclude(sha_fr_code="")
+    return {
+        "cr_id": client_registry_id(patient),
+        "eligibility": check_data(latest_check(patient)),
+        "visits": [sha_claims.visit_data(v) for v in sha_claims.patient_visits(patient)[:20]],
+        "branches": [
+            {"id": str(b.id), "name": b.name, "fr_code": b.sha_fr_code} for b in branches
+        ],
+        "service_types": list(sha_claims.SERVICE_TYPES),
+        "outpatient_discharge_reasons": list(sha_claims.OUTPATIENT_DISCHARGE_REASONS),
+        "inpatient_discharge_reasons": list(sha_claims.INPATIENT_DISCHARGE_REASONS),
+        "close_reasons": list(sha_claims.CLOSE_REASONS),
+        "otp_whitelist_reasons": list(sha_claims.OTP_WHITELIST_REASONS),
+        "document_types": list(sha_claims.CLAIM_DOCUMENT_TYPES),
     }
 
 

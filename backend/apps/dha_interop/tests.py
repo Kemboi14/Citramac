@@ -1,6 +1,4 @@
-from django.core.management import call_command
-from django.core.management.base import CommandError
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -9,7 +7,6 @@ from apps.accounts.models import User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.clinical_encounter.models import Encounter, ReferralPacket
-from apps.insurance_claims.models import InsuranceClaim, PreAuthorization, Remittance
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
@@ -110,31 +107,22 @@ class FhirMapperAndHieClientTests(APITestCase):
         self.assertEqual(len(conditions), 1)
         self.assertEqual(conditions[0]["code"]["coding"][0]["code"], "6A70")
 
-    def test_transmit_referral_caches_and_reports_failure_with_no_endpoint(self):
-        with platform_admin_context():
-            bundle = build_referral_bundle(self.referral)
-            cache_entry = transmit_referral(self.referral, bundle)
+    def test_referral_is_recorded_but_never_sent_with_the_reason(self):
+        """The DHA HIE takes referrals only as an SHR ServiceRequest addressed to an
+        FR code; a free-text destination cannot be delivered — FAILED, saying why."""
+        from unittest.mock import patch
+
+        with patch("apps.dha_interop.hie_api.requests.request") as request:
+            with platform_admin_context():
+                bundle = build_referral_bundle(self.referral)
+                cache_entry = transmit_referral(self.referral, bundle)
+        request.assert_not_called()
         self.assertEqual(cache_entry.status, "FAILED")
-        self.assertIn("not configured", cache_entry.transmission_detail)
+        self.assertIn("FR code", cache_entry.transmission_detail)
         with platform_admin_context():
             self.assertEqual(
                 FhirResourceCache.objects.filter(related_object_id=self.referral.id).count(), 1
             )
-
-    def test_transmit_referral_sends_when_endpoint_configured(self):
-        from unittest.mock import Mock, patch
-
-        fake_response = Mock(status_code=200, ok=True)
-        fake_response.json.return_value = {}
-        with patch(
-            "apps.dha_interop.hie_client.requests.request", return_value=fake_response
-        ) as post:
-            with self.settings(HIE_ENDPOINT_URL="https://hie.example.test/fhir/Bundle"):
-                with platform_admin_context():
-                    bundle = build_referral_bundle(self.referral)
-                    cache_entry = transmit_referral(self.referral, bundle)
-        post.assert_called_once()
-        self.assertEqual(cache_entry.status, "SENT")
 
 
 class ClientHistoryFhirBundleTests(APITestCase):
@@ -250,79 +238,6 @@ class TerminologySyncTests(APITestCase):
                 run = sync_terminology_source("ICD11")
         self.assertEqual(run.status, "FAILED")
         self.assertIn("down", run.detail)
-
-
-class SeedDhaSandboxDemoCommandTests(TestCase):
-    """
-    docs/08-DHA-SHA-INTEGRATION.md §8.6 / docs/11-ROADMAP-AND-PHASES.md
-    Phase 9 — the seeded-sandbox demo data DHA evaluators walk through live.
-    """
-
-    def setUp(self):
-        self.addCleanup(clear_tenant_context)
-        with platform_admin_context():
-            self.org = Organization.objects.create(
-                name="Demo Org", slug="demo-org", facility_type="MENTAL_HEALTH_MHP"
-            )
-            self.patient = Patient.objects.create(
-                organization=self.org,
-                citramac_number="TEST-SEED-0001",
-                first_name="Faith",
-                last_name="Mwangi",
-                gender="FEMALE",
-                date_of_birth="1997-03-14",
-            )
-            self.encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
-
-    def test_seeds_full_cycle(self):
-        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
-
-        with platform_admin_context():
-            pre_auth = PreAuthorization.objects.get(patient=self.patient)
-            claim = InsuranceClaim.objects.get(patient=self.patient)
-            remittance = Remittance.objects.get(claim=claim)
-            referral = ReferralPacket.objects.get(encounter=self.encounter)
-
-            self.assertEqual(pre_auth.status, "SUBMITTED")
-            self.assertTrue(pre_auth.sha_reference)
-            self.assertEqual(claim.status, "SUBMITTED")
-            self.assertTrue(claim.sha_reference)
-            self.assertGreater(remittance.amount_paid, 0)
-            self.assertEqual(referral.fhir_bundle_json.get("resourceType"), "Bundle")
-
-    def test_rerun_is_idempotent(self):
-        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
-        call_command("seed_dha_sandbox_demo", org_slug="demo-org")
-
-        with platform_admin_context():
-            self.assertEqual(PreAuthorization.objects.filter(patient=self.patient).count(), 1)
-            self.assertEqual(InsuranceClaim.objects.filter(patient=self.patient).count(), 1)
-            self.assertEqual(Remittance.objects.filter(claim__patient=self.patient).count(), 1)
-            self.assertEqual(ReferralPacket.objects.filter(encounter=self.encounter).count(), 1)
-
-    def test_raises_without_patient(self):
-        with platform_admin_context():
-            empty_org = Organization.objects.create(
-                name="Empty Org", slug="empty-org", facility_type="MENTAL_HEALTH_MHP"
-            )
-        with self.assertRaises(CommandError):
-            call_command("seed_dha_sandbox_demo", org_slug=empty_org.slug)
-
-    def test_raises_without_encounter(self):
-        with platform_admin_context():
-            org = Organization.objects.create(
-                name="No Encounter Org", slug="no-encounter-org", facility_type="MENTAL_HEALTH_MHP"
-            )
-            Patient.objects.create(
-                organization=org,
-                citramac_number="TEST-SEED-0002",
-                first_name="No",
-                last_name="Encounter",
-                gender="FEMALE",
-                date_of_birth="1990-01-01",
-            )
-        with self.assertRaises(CommandError):
-            call_command("seed_dha_sandbox_demo", org_slug=org.slug)
 
 
 class FhirR4ConformanceTests(APITestCase):

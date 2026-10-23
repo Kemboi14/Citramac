@@ -133,6 +133,14 @@ def can_unmask(user):
     )
 
 
+def _hwr(cred):
+    if cred is None:
+        return None
+    from apps.dha_interop.registries import practitioner_summary
+
+    return practitioner_summary(cred)
+
+
 def credential_status(user):
     """LGL-R-02 credential gate: a verified registration AND the MHA_RECOMMENDATION_APPROVED flag."""
     from apps.accounts.models import PractitionerCredential
@@ -145,6 +153,8 @@ def credential_status(user):
         "registration_verified_at": _iso(cred.registration_verified_at) if cred else None,
         "qualifications": cred.qualifications if cred else "",
         "mha_recommendation_approved": bool(cred and cred.mha_recommendation_approved),
+        "hwr_regulator": cred.hwr_regulator if cred else "",
+        "health_worker_registry": _hwr(cred),
         "can_sign": False,
         "reason": "",
     }

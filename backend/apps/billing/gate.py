@@ -33,6 +33,12 @@ def check_billing_clearance(encounter):
     if patient.insurance_coverages.filter(sha_verified=True, sha_premium_compliant=True).exists():
         return
 
+    # A recent SHA eligibility answer with active cover (apps.insurance_claims.sha_eligibility).
+    from apps.insurance_claims.sha_eligibility import fresh_active_check
+
+    if fresh_active_check(patient) is not None:
+        return
+
     from apps.insurance_claims.models import PreAuthorization
 
     if PreAuthorization.objects.filter(encounter=encounter, status="APPROVED").exists():

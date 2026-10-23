@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.retention.mixins import NoHardDeleteMixin
+from config.errors import error_response
 
 from .consent import capture_consent
 from .erasure import execute_erasure
@@ -89,18 +90,56 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
             ),
         )
 
-    @action(detail=True, methods=["post"], url_path="verify-iprs")
-    def verify_iprs(self, request, pk=None):
+    @action(detail=True, methods=["post"], url_path="client-registry")
+    def client_registry(self, request, pk=None):
         """
-        Stub — real IPRS national registry lookup lands with the full
-        DHA/SHA integration in Phase 6 (docs/08-DHA-SHA-INTEGRATION.md §8.3.4).
+        DHA Client Registry. `{"confirm": false}` (default) searches and shows
+        the match; `{"confirm": true, "cr_id": …}` re-fetches the same record
+        server-side and, if it still carries that CR ID, records it as a
+        verified identifier slice (apps.dha_interop.registries). Nothing the
+        browser sends about the match is trusted.
         """
+        from apps.dha_interop import registries
+
         patient = self.get_object()
+        id_type = (request.data.get("identification_type") or "").strip()
+        number = (request.data.get("identification_number") or "").strip()
+        if not id_type:
+            id_type, number = registries.patient_search_identifier(patient)
+        if not id_type:
+            return error_response(
+                "registry_refused",
+                "This client has no identifier the Client Registry can search — enter one.",
+                fields={"identification_number": ["Enter an identifier to search with."]},
+            )
+        try:
+            record = registries.search_client(patient.organization_id, id_type, number)
+        except registries.RegistryError as exc:
+            return error_response(
+                "registry_refused",
+                exc.message,
+                fields={exc.field: [exc.message]} if exc.field else None,
+            )
+        searched = {"identification_type": id_type, "identification_number": number}
+        if not request.data.get("confirm"):
+            return Response(
+                {
+                    "searched": searched,
+                    "match": registries.client_summary(record) if record else None,
+                }
+            )
+        if record is None or record.get("id") != request.data.get("cr_id"):
+            return error_response(
+                "registry_refused",
+                "The registry no longer returns that record for this identifier — search again.",
+            )
+        registries.confirm_client_match(patient, request.user, record)
         return Response(
             {
-                "verified": False,
-                "detail": "IPRS integration is a Phase 6 stub — no live registry call made.",
-                "patient_id": str(patient.id),
+                "searched": searched,
+                "match": registries.client_summary(record),
+                "confirmed": True,
+                "patient": PatientDetailSerializer(patient, context={"request": request}).data,
             }
         )
 

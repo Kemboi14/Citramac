@@ -295,6 +295,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.dha_interop.tasks.drain_hie_outbox",
         "schedule": crontab(minute="*/5"),
     },
+    # HIE status callbacks are applied as they arrive; this sweeps any left
+    # unapplied (worker down at receipt).
+    "apply-pending-sha-callbacks": {
+        "task": "apps.insurance_claims.tasks.apply_pending_sha_callbacks",
+        "schedule": crontab(minute="*/10"),
+    },
+    "recheck-facility-registry-nightly": {
+        "task": "apps.dha_interop.tasks.recheck_facility_registry",
+        "schedule": crontab(hour=3, minute=0),
+    },
     "sync-icd11-nightly": {
         "task": "apps.dha_interop.tasks.sync_icd11",
         "schedule": crontab(hour=2, minute=0),
@@ -440,29 +450,41 @@ FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5173")
 # the plain-http dev server.
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# ── DHA/SHA interoperability (docs/08-DHA-SHA-INTEGRATION.md) ─────────────
-# All empty by default — no real HIE/SHA sandbox credentials exist in this
-# environment. apps.dha_interop.hie_client and apps.insurance_claims.sha_gateway
-# honestly report a skipped/stubbed transmission rather than faking success
-# when these are unset; set them (and flip SHA_GATEWAY_MODE) only once a real
-# facility certificate and sandbox/production endpoint are provisioned.
-HIE_ENDPOINT_URL = env("HIE_ENDPOINT_URL", default="")
-# Per-interaction paths under HIE_ENDPOINT_URL. VERIFY: the national IG / DHA
-# onboarding pack defines these; none is assumed. Empty = interaction disabled.
-HIE_PATIENT_PATH = env("HIE_PATIENT_PATH", default="")
-HIE_BUNDLE_PATH = env("HIE_BUNDLE_PATH", default="")
+# ── DHA/SHA interoperability ──────────────────────────────────────────────
+# One middleware serves the registries, eligibility, claims, consent and the
+# Shared Health Record (apps/dha_interop/hie_spec/, fetched from
+# hie-docs.dha.go.ke). Super Admin's saved settings (tenancy.PlatformHieSettings)
+# win; these environment values are the fallback. With no base URL or client
+# credentials every call reports "not configured" — never a silent success.
+# The production base URL is issued by DHA at onboarding (hie_spec/SOURCE.md);
+# the UAT one is the server URL printed in every published spec.
+HIE_API_BASE_URL = env("HIE_API_BASE_URL", default="")
+HIE_API_CLIENT_ID = env("HIE_API_CLIENT_ID", default="")
+HIE_API_CLIENT_SECRET = env("HIE_API_CLIENT_SECRET", default="")
+HIE_API_TIMEOUT_SECONDS = env.int("HIE_API_TIMEOUT_SECONDS", default=30)
+# Values of eligibility `schemes[].coverage.status` that mean the member's cover
+# is active. VERIFY: DHA publishes no enum for this field (hie_spec/SOURCE.md
+# gap 3) — empty until confirmed against a real UAT response, so no member is
+# marked premium-compliant on a guessed string.
+SHA_ACTIVE_COVERAGE_STATUSES = env.list("SHA_ACTIVE_COVERAGE_STATUSES", default=[])
 # FHIR Identifier.system per identifier kind (apps.client_registry.PatientIdentifier).
-# VERIFY: NATIONAL_ID, PASSPORT, REFUGEE_ID, UNHCR, ALIEN_ID, BIRTH_CERTIFICATE,
-# IPRS_UPI, SHA_MEMBER and CLIENT_REGISTRY_ID system URIs must come from the
-# regulator's implementation guide — they are deliberately empty, and an
-# identifier with no configured system is left out of outbound FHIR (and the
-# omission is logged) rather than sent under an invented URI.
+# NATIONAL_ID and SHA_MEMBER default to the Kenya Core Patient profile's
+# identifier slices (fhir_validation/kenya_core/ke.fhir.core-1.0.0.tgz,
+# kenya-core-patient: nationalId / shaNumber patternUri) — a test pins them to
+# the package. VERIFY: PASSPORT, REFUGEE_ID, UNHCR, ALIEN_ID,
+# BIRTH_CERTIFICATE, IPRS_UPI and CLIENT_REGISTRY_ID have no system in that IG —
+# they stay empty, and an identifier with no configured system is left out of
+# outbound FHIR (and the omission is logged) rather than sent under an invented URI.
 # CITRAMAC / TEMPORARY / UHID are our own namespaces: set FHIR_LOCAL_SYSTEM_BASE
 # to a URI the organisation controls (project owner decision). UHID is made
 # per-organisation as <base>/uhid/<org-slug>.
 FHIR_LOCAL_SYSTEM_BASE = env("FHIR_LOCAL_SYSTEM_BASE", default="")
+_KENYA_CORE_IDENTIFIER_SYSTEMS = {
+    "NATIONAL_ID": "https://fhir.dha.go.ke/fhir/identifier/nationalid",
+    "SHA_MEMBER": "https://fhir.dha.go.ke/fhir/identifier/shanumber",
+}
 FHIR_NATIONAL_IDENTIFIER_SYSTEMS = {
-    kind: env(f"FHIR_SYSTEM_{kind}", default="")
+    kind: env(f"FHIR_SYSTEM_{kind}", default=_KENYA_CORE_IDENTIFIER_SYSTEMS.get(kind, ""))
     for kind in (
         "NATIONAL_ID",
         "PASSPORT",
@@ -605,18 +627,11 @@ WITHDRAWAL_PROTOCOL = {
     for code in ("CIWA", "COWS")
 }
 # Confidentiality code applied to psychiatric / substance-use content
-# (meta.security). VERIFY against the DS4P IG and the national IG; "R"
-# (restricted) from HL7 v3-Confidentiality is a placeholder until then.
+# (meta.security). "R" (restricted) from HL7 v3-Confidentiality — the Shared
+# Health Record's label catalogue (hie_spec/guides/sharedHealthRecord__…intro.md:
+# "N and R for confidentiality, plus the sensitivity codes such as HIV, PSY and
+# SUD") confirms R is the restricted code the national exchange recognises.
 FHIR_PSYCH_CONFIDENTIALITY_CODE = env("FHIR_PSYCH_CONFIDENTIALITY_CODE", default="R")
-HIE_MTLS_CLIENT_CERT = env("HIE_MTLS_CLIENT_CERT", default="")
-HIE_MTLS_CLIENT_KEY = env("HIE_MTLS_CLIENT_KEY", default="")
-
-# "stub" (default): sha_gateway logs to ShaTransactionLog and makes no live
-# call. "sandbox"/"production": makes a real signed HTTP call — requires
-# SHA_GATEWAY_ENDPOINT_URL and a signing key to also be configured.
-SHA_GATEWAY_MODE = env("SHA_GATEWAY_MODE", default="stub")
-SHA_GATEWAY_ENDPOINT_URL = env("SHA_GATEWAY_ENDPOINT_URL", default="")
-SHA_GATEWAY_SIGNING_KEY_PATH = env("SHA_GATEWAY_SIGNING_KEY_PATH", default="")
 
 # ── Data Protection Act compliance (docs/09-SECURITY-COMPLIANCE.md §9.5) ──
 # Statutory minimum retention for clinical records — confirm the exact

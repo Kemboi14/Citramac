@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { WideModal } from "../../components/WideModal";
 import type { PatientDetail } from "../../lib/clinicalApi";
 import { useValueSets } from "../care/shared/useValueSets";
+import { ClientRegistryLookup } from "./ClientRegistryLookup";
 
 const SECTION_CLASS = "rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm";
 const SECTION_TITLE_CLASS = "mb-3 font-display text-[13.5px] font-semibold text-ink-900";
@@ -27,16 +28,20 @@ const CARE_LABEL: Record<string, string> = {
  * Read-only "Client Registration Details" — the second clinical-workspace
  * mockup's full-field dump opened from a patient's "View details" button.
  * Every field mirrors `PatientRegistrationModal`'s sections exactly, sourced
- * from the same `PatientDetailSerializer` payload.
+ * from the same `PatientDetailSerializer` payload. The National Client
+ * Registry section is the one action here: a confirmed match adds a verified
+ * Client Registry ID and hands the refreshed record to `onPatientChanged`.
  */
 export function PatientDetailsModal({
   open,
   onClose,
   patient,
+  onPatientChanged,
 }: {
   open: boolean;
   onClose: () => void;
   patient: PatientDetail | null;
+  onPatientChanged?: (updated: PatientDetail) => void;
 }) {
   const vs = useValueSets();
   if (!patient) return null;
@@ -159,6 +164,17 @@ export function PatientDetailsModal({
             <Field label="UPI (IPRS)" value={patient.upi} />
           </div>
         </section>
+
+        {onPatientChanged && (
+          <section className={`${SECTION_CLASS} md:col-span-2`}>
+            <h3 className={SECTION_TITLE_CLASS}>National Client Registry</h3>
+            <ClientRegistryLookup
+              key={patient.id}
+              patient={patient}
+              onConfirmed={onPatientChanged}
+            />
+          </section>
+        )}
       </div>
     </WideModal>
   );

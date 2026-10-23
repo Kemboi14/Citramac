@@ -1,38 +1,41 @@
 """
-HIE (National Health Information Exchange) transmission — docs/08-DHA-SHA-INTEGRATION.md §8.1.
+Durable outbox for clinical data bound for the DHA Shared Health Record
+(POST /shr/bundles — hie_spec/openapi/sharedhealthrecord.openapi.json).
 
 CLAUDE.md §4 "Fail safely":
-- every outbound resource is first written to a durable outbox row
+- every outbound bundle is first written to a durable outbox row
   (`FhirResourceCache`) keyed by a stable idempotency key, so enqueueing twice
   is a no-op and clinical work never blocks on the network;
-- delivery parses an `OperationOutcome` and keeps `issue.expression` so the
-  person who can fix the data is told which field is wrong;
-- a timeout is retried only when the send is idempotent (`retry_safe`, an
-  update-as-create PUT by id) — never blind;
-- when the HIE is not configured or consent is absent, that is recorded and
-  logged explicitly — never a silent success.
+- delivery goes through apps.dha_interop.hie_api (token, facility headers,
+  transaction log) and keeps the HIE's message and trace id — and any FHIR
+  OperationOutcome issues with their `issue.expression` — for whoever can fix
+  the data;
+- a timeout is retried only when the send is idempotent (`retry_safe`) —
+  never blind; an SHR bundle POST is not documented as idempotent, so a
+  failed send is surfaced for a person to resend;
+- when the HIE is not configured, that is recorded and logged explicitly —
+  never a silent success.
 
-VERIFY: the HIE base URL, per-interaction paths and authentication are defined
-by the national IG / DHA onboarding pack. They are read from settings
-(`HIE_ENDPOINT_URL`, `HIE_PATIENT_PATH`, `HIE_BUNDLE_PATH`) and nothing is assumed.
+DHA publishes no endpoint for pushing a Patient (the Client Registry is
+read through GET /patients) nor for a free-standing referral document;
+registration identity is reconciled by a Client Registry lookup instead
+(apps.dha_interop.registries) and referrals reach the SHR only as a
+ServiceRequest addressed to a facility's FR code.
 """
 
 import logging
 from datetime import timedelta
 
-import requests
-from django.conf import settings
 from django.utils import timezone
 
-from apps.client_registry.consent import HIE_GENERAL, may_send_to_hie
-
+from . import hie_api
 from .models import FhirResourceCache
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 6
 BACKOFF_MINUTES = (1, 5, 15, 60, 240)
-FHIR_JSON = "application/fhir+json"
+SHR_BUNDLE = "ShrBundle"
 
 
 def parse_operation_outcome(payload):
@@ -86,84 +89,72 @@ def enqueue(organization_id, resource_type, fhir_json, idempotency_key, *, relat
     return entry
 
 
-def enqueue_patient(patient):
-    """Queue the Patient for the HIE — only with an explicit consent YES."""
-    from .fhir_patient import build_patient_resource
+def _branch_for(entry):
+    """The facility a queued SHR bundle is sent on behalf of (its consent's branch)."""
+    from .models import ShrConsent
 
-    if not may_send_to_hie(patient, HIE_GENERAL):
-        logger.info("Patient %s not queued for the HIE: no explicit consent.", patient.id)
+    if entry.related_object_type != "ShrConsent" or not entry.related_object_id:
         return None
-    resource, omitted = build_patient_resource(patient)
-    for reason in omitted:
-        logger.warning("Patient %s: identifier withheld from FHIR — %s", patient.id, reason)
-    return enqueue(
-        patient.organization_id,
-        "Patient",
-        resource.model_dump(mode="json", exclude_none=True),
-        f"patient:{patient.id}",
-        related=("Patient", patient.id),
-        retry_safe=True,
+    consent = (
+        ShrConsent.objects.unscoped().select_related("branch").filter(pk=entry.related_object_id).first()
     )
-
-
-def _target(entry):
-    endpoint = (getattr(settings, "HIE_ENDPOINT_URL", "") or "").rstrip("/")
-    if not endpoint:
-        return None, None, "HIE_ENDPOINT_URL is not configured"
-    if entry.resource_type == "Patient":
-        path = (getattr(settings, "HIE_PATIENT_PATH", "") or "").strip("/")
-        if not path:
-            return None, None, "HIE_PATIENT_PATH is not configured (VERIFY with the national IG)"
-        return "PUT", f"{endpoint}/{path}/{entry.fhir_json['id']}", ""
-    path = (getattr(settings, "HIE_BUNDLE_PATH", "") or "").strip("/")
-    return "POST", f"{endpoint}/{path}" if path else endpoint, ""
+    return consent.branch if consent else None
 
 
 def deliver(entry):
     """One delivery attempt. Updates and returns the outbox row."""
-    method, url, reason = _target(entry)
-    if method is None:
-        entry.status = "CACHED"
-        entry.transmission_detail = f"Queued, not sent: {reason}."
-        logger.warning("HIE outbox %s held: %s", entry.id, reason)
-        entry.save(update_fields=["status", "transmission_detail", "updated_at"])
-        return entry
-
-    client_cert = getattr(settings, "HIE_MTLS_CLIENT_CERT", "") or ""
-    client_key = getattr(settings, "HIE_MTLS_CLIENT_KEY", "") or ""
-    entry.attempts += 1
-    try:
-        response = requests.request(
-            method,
-            url,
-            json=entry.fhir_json,
-            headers={"Content-Type": FHIR_JSON, "Accept": FHIR_JSON},
-            cert=(client_cert, client_key) if client_cert and client_key else None,
-            timeout=30,
-        )
-    except requests.Timeout as exc:
-        return _after_transient(entry, f"Timed out: {exc}")
-    except requests.RequestException as exc:
-        return _after_transient(entry, str(exc))
-
-    entry.http_status = response.status_code
-    try:
-        body = response.json()
-    except ValueError:
-        body = None
-    entry.issues = parse_operation_outcome(body)
-    if response.ok:
-        entry.status = "SENT"
-        entry.next_attempt_at = None
-        entry.transmission_detail = f"HTTP {response.status_code}"
-    elif response.status_code in (408, 429) or response.status_code >= 500:
-        return _after_transient(entry, f"HTTP {response.status_code}")
-    else:
-        entry.status = "REJECTED"
+    if entry.resource_type != SHR_BUNDLE:
+        entry.status = "FAILED"
         entry.next_attempt_at = None
         entry.transmission_detail = (
-            describe_issues(entry.issues) or f"HTTP {response.status_code}"
+            f"No DHA HIE endpoint accepts a {entry.resource_type} — only Shared Health Record "
+            "bundles are sent."
         )
+        entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
+        return entry
+    branch = _branch_for(entry)
+    if branch is None:
+        entry.status = "FAILED"
+        entry.next_attempt_at = None
+        entry.transmission_detail = "The bundle's SHR consent (and so its facility) is missing."
+        entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
+        return entry
+    entry.attempts += 1
+    try:
+        body = hie_api.call(
+            "POST",
+            "/shr/bundles",
+            transaction_type="SHR_BUNDLE",
+            organization_id=entry.organization_id,
+            branch=branch,
+            json_body=entry.fhir_json,
+        )
+    except hie_api.HieNotConfigured as exc:
+        entry.attempts -= 1
+        entry.status = "CACHED"
+        entry.transmission_detail = f"Queued, not sent: {exc}"
+        logger.warning("SHR outbox %s held: %s", entry.id, exc)
+        entry.save(update_fields=["status", "attempts", "transmission_detail", "updated_at"])
+        return entry
+    except hie_api.HieError as exc:
+        entry.http_status = exc.http_status
+        entry.issues = parse_operation_outcome(exc.body)
+        if exc.transient:
+            return _after_transient(entry, exc.describe())
+        entry.status = "REJECTED"
+        entry.next_attempt_at = None
+        entry.transmission_detail = describe_issues(entry.issues) or exc.describe()
+        entry.save()
+        return entry
+    # Accepted and queued upstream — processing is asynchronous.
+    entry.http_status = 200
+    entry.issues = []
+    entry.status = "SENT"
+    entry.next_attempt_at = None
+    mediator = (body or {}).get("mediator_id", "")
+    entry.transmission_detail = (
+        f"Accepted by the SHR (mediator_id {mediator}). {(body or {}).get('message', '')}".strip()
+    )
     entry.save()
     return entry
 
@@ -184,28 +175,43 @@ def _after_transient(entry, detail):
 
 
 def drain_outbox(limit=50):
-    """Deliver everything due. Safe to run concurrently-ish: rows are claimed by
-    pushing next_attempt_at out before the network call."""
-    now = timezone.now()
-    due = FhirResourceCache.objects.filter(
-        direction="OUTBOUND", status__in=["CACHED", "RETRY"], next_attempt_at__lte=now
-    ).order_by("next_attempt_at")[:limit]
+    """Deliver everything due. Each row is claimed under `select_for_update(skip_locked=True)`
+    so two workers never send the same bundle."""
+    from django.db import transaction
+
+    from apps.tenancy.context import platform_admin_context
+
     delivered = 0
-    for entry in due:
-        FhirResourceCache.objects.filter(pk=entry.pk).update(
-            next_attempt_at=now + timedelta(minutes=10)
-        )
-        deliver(entry)
-        delivered += 1
+    with platform_admin_context():
+        for _ in range(limit):
+            with transaction.atomic():
+                entry = (
+                    FhirResourceCache.objects.select_for_update(skip_locked=True)
+                    .filter(
+                        direction="OUTBOUND",
+                        status__in=["CACHED", "RETRY"],
+                        next_attempt_at__lte=timezone.now(),
+                    )
+                    .order_by("next_attempt_at")
+                    .first()
+                )
+                if entry is None:
+                    break
+                FhirResourceCache.objects.filter(pk=entry.pk).update(
+                    next_attempt_at=timezone.now() + timedelta(minutes=10)
+                )
+            deliver(entry)
+            delivered += 1
     return delivered
 
 
 def transmit_referral(referral_packet, bundle_json):
     """
-    Referral Bundle: enqueue durably, then attempt delivery now. A Bundle POST
-    is not idempotent, so a timeout is NOT retried automatically
-    (`retry_safe=False`) — the row is FAILED for a person to resend. With no
-    endpoint configured the row is FAILED with that reason (existing behaviour).
+    Referral document Bundle: recorded, not sent. The national exchange takes
+    referrals only as an SHR ServiceRequest addressed to the destination
+    facility's FR code, and a referral packet records its destination as free
+    text — so there is nowhere to deliver this bundle. FAILED with that reason,
+    never a silent success.
     """
     entry = enqueue(
         referral_packet.organization_id,
@@ -215,14 +221,12 @@ def transmit_referral(referral_packet, bundle_json):
         related=("ReferralPacket", referral_packet.id),
         retry_safe=False,
     )
-    if not (getattr(settings, "HIE_ENDPOINT_URL", "") or ""):
-        entry.status = "FAILED"
-        entry.next_attempt_at = None
-        entry.transmission_detail = (
-            "HIE_ENDPOINT_URL is not configured — no live transmission attempted. Real "
-            "transmission requires the facility's mutual-TLS client certificate per "
-            "docs/08-DHA-SHA-INTEGRATION.md §8.4."
-        )
-        entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
-        return entry
-    return deliver(entry)
+    entry.status = "FAILED"
+    entry.next_attempt_at = None
+    entry.transmission_detail = (
+        "Not transmitted: the DHA HIE accepts referrals only as a Shared Health Record "
+        "ServiceRequest addressed to the destination facility's FR code, and this referral "
+        "records its destination as free text."
+    )
+    entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
+    return entry

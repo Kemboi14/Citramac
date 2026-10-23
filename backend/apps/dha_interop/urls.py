@@ -1,6 +1,12 @@
 from django.urls import path
 
-from .views import DrugIndexSearchView, Icd11SearchView, LoincSearchView
+from .views import (
+    DrugIndexSearchView,
+    Icd11SearchView,
+    LoincSearchView,
+    PatientShrView,
+    ShrConsentActionView,
+)
 
 urlpatterns = [
     path("terminology/icd11/search/", Icd11SearchView.as_view(), name="terminology-icd11-search"),
@@ -9,5 +15,11 @@ urlpatterns = [
         "terminology/drug-index/search/",
         DrugIndexSearchView.as_view(),
         name="terminology-drug-index-search",
+    ),
+    path("shr/clients/<uuid:patient_id>/", PatientShrView.as_view(), name="shr-client"),
+    path(
+        "shr/consents/<uuid:pk>/<str:action_name>/",
+        ShrConsentActionView.as_view(),
+        name="shr-consent-action",
     ),
 ]

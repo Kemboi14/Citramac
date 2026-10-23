@@ -141,7 +141,7 @@ class ClientRegistryTests(APITestCase):
         self.assertEqual(first.citramac_number, "")
         self.assertEqual(second.citramac_number, "")
 
-    def test_verify_iprs_and_verify_sha_are_honest_stubs(self):
+    def test_client_registry_lookup_refuses_honestly_when_hie_not_configured(self):
         create_response = self.client.post(
             reverse("patient-list"),
             {
@@ -155,11 +155,14 @@ class ClientRegistryTests(APITestCase):
         )
         patient_id = create_response.data["id"]
 
-        iprs_response = self.client.post(
-            reverse("patient-verify-iprs", args=[patient_id]), **self._auth(self.access_a)
+        response = self.client.post(
+            reverse("patient-client-registry", args=[patient_id]),
+            {"identification_type": "National ID", "identification_number": "12345678"},
+            format="json",
+            **self._auth(self.access_a),
         )
-        self.assertEqual(iprs_response.status_code, 200)
-        self.assertFalse(iprs_response.data["verified"])
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not configured", response.data["error"]["message"])
 
     def test_consent_capture_updates_patient_cache_and_writes_history(self):
         """docs/09-SECURITY-COMPLIANCE.md §9.5 — versioned, revocable consent capture."""

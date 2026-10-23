@@ -1,7 +1,6 @@
 # Honest-stub receiver, matching this project's pattern for unconfigured
-# third-party integrations (apps.dha_interop.hie_client,
-# apps.insurance_claims.sha_gateway, config/observability.py's Sentry
-# no-op): alerts fire and are visible in Alertmanager's own UI/API, but
+# third-party integrations (apps.dha_interop.hie_api reporting "not
+# configured", config/observability.py's Sentry no-op): alerts fire and are visible in Alertmanager's own UI/API, but
 # nothing pages anyone yet. Wiring a real PagerDuty/Slack/email receiver
 # needs real credentials (an ExternalSecret, same pattern as
 # infra/k8s/base/external-secret.yaml) which this environment has none of.

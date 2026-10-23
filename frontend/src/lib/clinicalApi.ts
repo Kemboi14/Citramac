@@ -83,6 +83,8 @@ export interface PatientDetail {
   disability_details: string;
   national_id: string;
   passport_number: string;
+  id_document_type: string;
+  id_document_number: string;
   contact_phone: string;
   contact_email: string;
   address: string;

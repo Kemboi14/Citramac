@@ -28,7 +28,7 @@ def _scrub_phi(event, hint):
 
 def init_sentry(dsn, environment, release=None):
     """No-ops when `dsn` is empty — matches this project's honest-stub
-    pattern (apps.dha_interop.hie_client, apps.insurance_claims.sha_gateway):
+    pattern (apps.dha_interop.hie_api reports "not configured"):
     no real Sentry project is configured in this environment, so error
     tracking is silently disabled rather than erroring or faking activity."""
     if not dsn:

@@ -1075,7 +1075,7 @@ class BranchAndSubscriptionScopingTests(APITestCase):
     def test_branch_sha_credentials_are_encrypted_at_rest(self):
         self.client.patch(
             reverse("branch-detail", args=[self.branch_a.id]),
-            {"sha_api_credentials": "super-secret-api-key"},
+            {"sha_client_id": "facility-client", "sha_client_secret": "super-secret-api-key"},
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_a_access}",
         )

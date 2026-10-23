@@ -482,6 +482,67 @@ class PlatformAiSettings(models.Model):
         return "Platform AI settings"
 
 
+class PlatformHieSettings(models.Model):
+    """
+    Singleton (always pk=1): CITRAMAC's service-account credentials for the
+    DHA Health Information Exchange middleware (registries, SHA eligibility,
+    claims, consent, Shared Health Record — apps/dha_interop/hie_api.py).
+
+    One multitenant service account serves every branch: each call names the
+    branch's facility with X-Facility-Id = Branch.sha_fr_code
+    (hie_spec/guides/authentication__process__facility-identification.md). A
+    branch that holds its own facility-scoped credentials overrides this.
+    Resolution: these saved values, else settings.HIE_API_*.
+    """
+
+    ENVIRONMENT_CHOICES = [("sandbox", "UAT / sandbox"), ("production", "Production")]
+
+    # The callback registration API accepts exactly these two environment
+    # values ("prod is rejected" — claims__guides__status-callbacks.md).
+    environment = models.CharField(max_length=12, choices=ENVIRONMENT_CHOICES, default="sandbox")
+    base_url = models.URLField(max_length=255, blank=True)
+    client_id = models.CharField(max_length=255, blank=True)
+    # Fernet-encrypted (apps/tenancy/crypto.py); never returned by the API.
+    client_secret_encrypted = models.TextField(blank=True)
+    # Callback registration: tenant id or tenant code issued by DHA (the code
+    # "is normally the same value as your client ID").
+    tenant_id = models.CharField(max_length=255, blank=True)
+    tenant_code = models.CharField(max_length=255, blank=True)
+    # Public base URL of this deployment's API, e.g. https://demo.citramac.com/api/v1
+    # — the HIE posts status callbacks under it.
+    public_api_base_url = models.URLField(max_length=255, blank=True)
+    # Unguessable path segment that authenticates inbound callbacks
+    # (auth_type "none" behind an unguessable path is the documented setup).
+    callback_token_encrypted = models.TextField(blank=True)
+    # VERIFY: DHA publishes the remittance workflows but not their paths
+    # (hie_spec/SOURCE.md gap 2). Relative to base_url; blank = not configured.
+    remittance_path = models.CharField(max_length=255, blank=True)
+    remittance_claims_path = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name_plural = "platform HIE settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def has_credentials(self):
+        return bool(self.client_id and self.client_secret_encrypted)
+
+    def __str__(self):
+        return "Platform HIE settings"
+
+
 class Branch(TenantScopedModel):
     FACILITY_LEVEL_CHOICES = [
         ("L2", "Level 2"),
@@ -548,6 +609,21 @@ class Branch(TenantScopedModel):
     # Fernet-encrypted JSON blob (apps/tenancy/crypto.py) — SHA claims API
     # key/certificate, never round-tripped in plaintext via the API.
     sha_api_credentials_encrypted = models.TextField(blank=True)
+    # DHA Facility Registry check (GET /facilities/search?identifier-type=fr-code,
+    # apps.dha_interop.registries.verify_branch_facility): the registry's own
+    # record, kept verbatim, and the outcome. Re-checked nightly. The registry's
+    # SHA contract and operational status are shown as the registry words them —
+    # DHA publishes no vocabulary for either, so neither is interpreted here.
+    REGISTRY_VERIFIED = "VERIFIED"
+    REGISTRY_NOT_FOUND = "NOT_FOUND"
+    REGISTRY_STATUS_CHOICES = [
+        (REGISTRY_VERIFIED, "Found in the Facility Registry"),
+        (REGISTRY_NOT_FOUND, "Not found in the Facility Registry"),
+    ]
+    registry_status = models.CharField(max_length=12, choices=REGISTRY_STATUS_CHOICES, blank=True)
+    registry_record = models.JSONField(default=dict, blank=True)
+    registry_problem = models.CharField(max_length=255, blank=True)
+    registry_checked_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta(TenantScopedModel.Meta):

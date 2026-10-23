@@ -74,7 +74,25 @@ jobs:
         run: pytest apps/tenancy/tests.py -v
 
       - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
-        run: pytest apps/dha_interop/tests.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py -k FhirR4Conformance -v
+        run: pytest apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py -k FhirR4Conformance -v
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Rung 4 (CLAUDE.md §2): HL7's own validator checks the published Shared
+      # Health Record examples against the vendored Kenya Core IG
+      # (apps/dha_interop/fhir_validation/kenya_core/). The jar is pinned by
+      # version and checksum; scripts/hl7_validator_gate.py fails on any error.
+      - name: Kenya Core IG validation — HL7 FHIR validator (cannot be skipped)
+        run: |
+          curl -fsSL -o /tmp/validator_cli.jar https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.10.4/validator_cli.jar
+          echo "1106b9d58f9e363e47bea7c4fc065841e5fc91fe9d062775c3bfdd212bd653cc  /tmp/validator_cli.jar" | sha256sum -c -
+          java -jar /tmp/validator_cli.jar -version 4.0.1 \
+            -ig apps/dha_interop/fhir_validation/kenya_core/ke.fhir.core-1.0.0.tgz \
+            apps/dha_interop/fhir_examples/shr-*.json -output /tmp/shr-outcome.json
+          python scripts/hl7_validator_gate.py /tmp/shr-outcome.json
 
       - name: Tests (coverage)
         run: pytest --cov=apps --cov-report=term-missing

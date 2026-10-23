@@ -485,12 +485,6 @@ def register_arrival(user, data):
         opened_at=now,
     )
     visit_number = TriageEncounter.objects.filter(patient=patient).count() + 1
-    # Queue the demographics for the HIE once this transaction commits. This is
-    # durable and idempotent (key patient:<id>); it never blocks registration
-    # and is withheld entirely unless the client explicitly consented.
-    from apps.dha_interop.hie_client import enqueue_patient
-
-    transaction.on_commit(lambda: enqueue_patient(patient))
     return TriageEncounter.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -606,9 +600,9 @@ def update_registration(user, patient, data):
             "REGISTRATION",
             "UNCONFIRMED",
         )
-    from apps.dha_interop.hie_client import enqueue_patient
-
-    transaction.on_commit(lambda: enqueue_patient(patient))
+    # Demographics are not pushed anywhere: DHA publishes no endpoint for
+    # writing a Patient. Identity is reconciled by a Client Registry lookup
+    # (apps.dha_interop.registries) once the clerk confirms the match.
     return patient
 
 

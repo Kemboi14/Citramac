@@ -65,6 +65,26 @@ export interface RelatedPersonRow {
   is_guardian: boolean;
 }
 
+/** The only regulators the DHA Health Worker Registry accepts a lookup for. */
+export const HWR_REGULATORS = ["KMPDC", "COC", "NCK", "PPB"] as const;
+export type HwrRegulator = "" | (typeof HWR_REGULATORS)[number];
+
+/** The Health Worker Registry's record for a practitioner, as last checked — the registry's own words. */
+export interface HealthWorkerRegistrySummary {
+  /** False with a `checked_at` means the registry had no record for the number. */
+  found: boolean;
+  checked_at: string | null;
+  full_name: string;
+  registration_id: string;
+  licensing_body: string;
+  is_active: boolean | null;
+  cadre: string;
+  specialty: string;
+  licenses: { type: string; start: string; end: string }[];
+  /** Practitioner Unique Identifier, typed by a person from the registry record — never derived. */
+  puid: string;
+}
+
 export interface Credential {
   name: string;
   registration_number: string;
@@ -72,8 +92,23 @@ export interface Credential {
   registration_verified_at: string | null;
   qualifications: string;
   mha_recommendation_approved: boolean;
+  hwr_regulator: HwrRegulator;
+  /** Null when no credential has been recorded for this practitioner. */
+  health_worker_registry: HealthWorkerRegistrySummary | null;
   can_sign: boolean;
   reason: string;
+}
+
+export interface CredentialUpdate {
+  registration_number?: string;
+  registration_body?: string;
+  qualifications?: string;
+  registration_verified?: boolean;
+  mha_recommendation_approved?: boolean;
+  hwr_regulator?: HwrRegulator;
+  hwr_puid?: string;
+  /** Runs the Health Worker Registry lookup after saving the other fields. */
+  check_registry?: boolean;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -171,6 +206,22 @@ export interface LegalWorkspace {
   me: { is_admitting_officer: boolean; can_unmask: boolean; credential: Credential };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+export function getPractitionerCredential(accessToken: string, userId: string) {
+  return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/`, { accessToken });
+}
+
+export function updatePractitionerCredential(
+  accessToken: string,
+  userId: string,
+  body: CredentialUpdate,
+) {
+  return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/`, {
+    method: "PUT",
+    body,
+    accessToken,
+  });
+}
 
 export function getLegalWorkspace(accessToken: string, patientId: string) {
   return apiRequest<LegalWorkspace>(`/care/clients/${patientId}/legal-status/`, { accessToken });

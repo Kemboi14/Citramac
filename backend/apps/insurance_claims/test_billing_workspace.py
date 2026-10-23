@@ -1,6 +1,10 @@
 """Client record → Billing stage: claims lifecycle, minimum-necessary
 attachments, finance role gating and payment allocation (v4 mockup
-stageBilling / billingExtras)."""
+stageBilling / billingExtras).
+
+The generic lifecycle runs against a private insurer — a payer CITRAMAC has
+no connection to, whose submission and decisions finance records. The SHA
+path (consented visit, dispatch through the DHA HIE) is in test_sha.py."""
 
 from decimal import Decimal
 
@@ -65,7 +69,7 @@ class BillingWorkspaceTests(APITestCase):
                 last_name="Mwangi",
                 gender="FEMALE",
                 date_of_birth="1997-03-14",
-                payer="SHA",
+                payer="PRIVATE",
             )
             # Test fixtures only — not real tariff, payer or ICD-11 codes.
             self.svc_a = BillingService.objects.create(
@@ -77,7 +81,7 @@ class BillingWorkspaceTests(APITestCase):
             ServicePayerCode.objects.create(
                 organization=self.org,
                 service=self.svc_b,
-                payer="SHA",
+                payer="PRIVATE",
                 payer_code="TEST-B",
                 requires_preauth=True,
             )
@@ -170,9 +174,8 @@ class BillingWorkspaceTests(APITestCase):
         pre_auth = self._line(requested.data["claims"][0], "Test service B")["pre_authorization"]
         self.assertEqual(pre_auth["status"], "SUBMITTED")
         with platform_admin_context():
-            log = ShaTransactionLog.objects.get(transaction_type="PRE_AUTHORIZATION")
-        self.assertEqual(log.request_payload["payer_code"], "TEST-B")
-        self.assertEqual(log.request_payload["clinical_notes"], "")
+            # No connection to this payer: nothing is sent anywhere.
+            self.assertFalse(ShaTransactionLog.objects.exists())
 
         no_ref = self._post("billing-preauth-decision", [pre_auth["id"]], {"status": "APPROVED"})
         self.assertEqual(no_ref.status_code, 400)
@@ -196,12 +199,9 @@ class BillingWorkspaceTests(APITestCase):
             claim["diagnoses"], [{"system": "ICD-11", "code": "TEST-DX", "is_primary": True}]
         )
         self.assertTrue(all(item["ok"] for item in claim["checklist"]))
-        self.assertIn("Queued", claim["status_history"][-1]["note"])
+        self.assertIn("Recorded as submitted", claim["status_history"][-1]["note"])
         with platform_admin_context():
-            log = ShaTransactionLog.objects.get(transaction_type="E_CLAIM")
-        self.assertEqual(log.request_payload["claim_number"], claim["claim_number"])
-        self.assertEqual(sorted(log.request_payload["attachments"]), ["FINAL_BILL", "INVOICE"])
-        self.assertEqual(log.request_payload["facility_fr_code"], "TEST-FR-1")
+            self.assertFalse(ShaTransactionLog.objects.exists())
 
         # A submitted claim is no longer editable.
         self.assertEqual(
@@ -254,6 +254,7 @@ class BillingWorkspaceTests(APITestCase):
     def test_sha_claim_blocked_without_the_branch_fr_code(self):
         self._make_ready()
         with platform_admin_context():
+            Patient.objects.filter(pk=self.patient.pk).update(payer="SHA")
             Branch.objects.filter(pk=self.branch.pk).update(sha_fr_code="")
         claim = self._create_claim([str(self.charge_a.id)])
         self.client.patch(
@@ -269,12 +270,15 @@ class BillingWorkspaceTests(APITestCase):
         with platform_admin_context():
             self.assertFalse(ShaTransactionLog.objects.filter(transaction_type="E_CLAIM").exists())
             Branch.objects.filter(pk=self.branch.pk).update(sha_fr_code="TEST-FR-1")
-        ok = self._post("billing-claim-submit", [claim["id"]], {"lines_checked": True})
-        self.assertEqual(ok.status_code, 200, ok.data)
+        # With the FR code, SHA still needs the client's consented visit.
+        still = self._post("billing-claim-submit", [claim["id"]], {"lines_checked": True})
+        self.assertEqual(still.status_code, 400)
+        self.assertEqual(still.data["error"]["field"], "sha_visit")
 
     def test_sha_claim_blocked_when_the_branch_is_ambiguous(self):
         self._make_ready()
         with platform_admin_context():
+            Patient.objects.filter(pk=self.patient.pk).update(payer="SHA")
             Branch.objects.create(
                 organization=self.org, name="Second", facility_level="L3", sha_fr_code="TEST-FR-2"
             )

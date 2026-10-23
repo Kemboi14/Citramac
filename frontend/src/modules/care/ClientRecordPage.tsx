@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { usePatientContext } from "../../clinical/usePatientContext";
+import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
@@ -70,6 +71,7 @@ export function ClientRecordPage() {
   const { banner, error } = useClientBanner(patientId || undefined, reloadKey);
   const { selected, selectPatient } = usePatientContext();
   const onRecordChanged = useCallback(() => setReloadKey((k) => k + 1), []);
+  const [registryOpen, setRegistryOpen] = useState(false);
 
   // Keep the older clinical screens pointed at this client.
   const bannerId = banner?.patient_id;
@@ -117,18 +119,35 @@ export function ClientRecordPage() {
           ]}
         />
         {loadedBanner && (
-          <Link
-            className={`${BTN_GHOST} ${BTN_SM} mb-2`}
-            to={`/clinical/registration?${
-              loadedBanner.identity_status === "IDENTIFIED" ? "edit" : "resolve"
-            }=${encodeURIComponent(patientId)}`}
-          >
-            {loadedBanner.identity_status === "IDENTIFIED"
-              ? "Edit client details"
-              : "Resolve identity"}
-          </Link>
+          <div className="mb-2 flex flex-wrap gap-2">
+            {loadedBanner.identity_status === "IDENTIFIED" && (
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM}`}
+                onClick={() => setRegistryOpen(true)}
+              >
+                Look up in Client Registry
+              </button>
+            )}
+            <Link
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              to={`/clinical/registration?${
+                loadedBanner.identity_status === "IDENTIFIED" ? "edit" : "resolve"
+              }=${encodeURIComponent(patientId)}`}
+            >
+              {loadedBanner.identity_status === "IDENTIFIED"
+                ? "Edit client details"
+                : "Resolve identity"}
+            </Link>
+          </div>
         )}
       </div>
+      <ClientRegistryLookupModal
+        open={registryOpen}
+        patientId={patientId}
+        onClose={() => setRegistryOpen(false)}
+        onConfirmed={onRecordChanged}
+      />
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} />
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}

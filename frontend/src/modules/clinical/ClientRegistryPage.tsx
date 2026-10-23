@@ -346,6 +346,7 @@ export function ClientRegistryPage() {
         open={detailsPatient !== null}
         onClose={() => setDetailsPatient(null)}
         patient={detailsPatient}
+        onPatientChanged={setDetailsPatient}
       />
     </div>
   );

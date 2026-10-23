@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getBillingOverview, type BillingOverview } from "../../lib/carePathwayApi";
 import { BillingOverviewView } from "./billing/BillingOverviewView";
+import { ShaRemittances } from "./billing/ShaRemittances";
 import { PageHeader } from "./shared/ui";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.15 — mockup billing().
@@ -42,6 +43,7 @@ export function BillingPage() {
         loading={loading}
         showTariffLink={claims?.role === "Org Admin"}
       />
+      {accessToken && <ShaRemittances accessToken={accessToken} />}
     </div>
   );
 }

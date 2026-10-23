@@ -51,6 +51,8 @@ class AuditLogEntry(models.Model):
     ACTION_LEGAL_HOLD = "LEGAL_HOLD"
     ACTION_SUPPORT_ACCESS = "SUPPORT_ACCESS"
     ACTION_EXPORT = "EXPORT"
+    # Clinical content sent to the national Shared Health Record (DHA HIE).
+    ACTION_HIE_DISCLOSURE = "HIE_DISCLOSURE"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -66,6 +68,7 @@ class AuditLogEntry(models.Model):
         (ACTION_LEGAL_HOLD, "Legal Hold Changed"),
         (ACTION_SUPPORT_ACCESS, "Platform Support Access (tenant-approved)"),
         (ACTION_EXPORT, "Patient Record Exported (data subject request)"),
+        (ACTION_HIE_DISCLOSURE, "Disclosed to the national Shared Health Record"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

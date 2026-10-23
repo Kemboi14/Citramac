@@ -741,6 +741,7 @@ export function PatientWorkspacePage() {
         open={showDetails}
         onClose={() => setShowDetails(false)}
         patient={patient}
+        onPatientChanged={setPatient}
       />
     </div>
   );

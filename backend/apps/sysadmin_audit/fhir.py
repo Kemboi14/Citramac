@@ -58,6 +58,8 @@ _ACTION = {
     AuditLogEntry.ACTION_CREATE: "C",
     AuditLogEntry.ACTION_VIEW: "R",
     AuditLogEntry.ACTION_EXPORT: "R",
+    # Reading the record to transmit it — audit-event-action has no "disclose".
+    AuditLogEntry.ACTION_HIE_DISCLOSURE: "R",
     AuditLogEntry.ACTION_UPDATE: "U",
     AuditLogEntry.ACTION_ARCHIVE: "U",
     AuditLogEntry.ACTION_RESTORE: "U",

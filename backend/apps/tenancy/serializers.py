@@ -14,6 +14,7 @@ from .models import (
     Organization,
     PlatformBranding,
     PlatformAiSettings,
+    PlatformHieSettings,
     PlatformEmailSettings,
     PlatformSmsSettings,
     Subscription,
@@ -232,12 +233,15 @@ class BranchSerializer(serializers.ModelSerializer):
     ward_count = serializers.SerializerMethodField()
     bed_count = serializers.SerializerMethodField()
     has_sha_credentials = serializers.BooleanField(read_only=True)
-    sha_api_credentials = serializers.CharField(
-        write_only=True,
-        required=False,
-        allow_blank=True,
-        help_text="Write-only. Set to store new SHA claims API credentials (encrypted at rest).",
+    # A facility-scoped DHA HIE client (optional — the platform's service
+    # account serves every branch otherwise). Write-only; stored encrypted as
+    # one JSON value (apps.dha_interop.hie_api.branch_credentials reads it).
+    sha_client_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    sha_client_secret = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    remove_sha_credentials = serializers.BooleanField(
+        write_only=True, required=False, default=False
     )
+    facility_registry = serializers.SerializerMethodField()
 
     class Meta:
         model = Branch
@@ -271,7 +275,10 @@ class BranchSerializer(serializers.ModelSerializer):
             "mpesa_paybill_enabled",
             "sms_reminders_enabled",
             "has_sha_credentials",
-            "sha_api_credentials",
+            "sha_client_id",
+            "sha_client_secret",
+            "remove_sha_credentials",
+            "facility_registry",
             "is_active",
             "ward_count",
             "bed_count",
@@ -324,6 +331,10 @@ class BranchSerializer(serializers.ModelSerializer):
             return any(f in attrs for f in (field, *also_triggered_by))
 
         errors = {}
+        if bool((attrs.get("sha_client_id") or "").strip()) != bool(
+            (attrs.get("sha_client_secret") or "").strip()
+        ):
+            errors["sha_client_secret"] = "Enter both the facility client ID and its secret."
         organization = self._target_organization()
         if (
             organization is not None
@@ -373,10 +384,25 @@ class BranchSerializer(serializers.ModelSerializer):
                 changed_by=user if getattr(user, "is_authenticated", False) else None,
             )
 
+    def get_facility_registry(self, obj):
+        from apps.dha_interop.registries import facility_summary
+
+        return facility_summary(obj)
+
+    def _pop_credentials(self, validated_data):
+        import json
+
+        client_id = (validated_data.pop("sha_client_id", None) or "").strip()
+        secret = (validated_data.pop("sha_client_secret", None) or "").strip()
+        if validated_data.pop("remove_sha_credentials", False):
+            validated_data["sha_api_credentials_encrypted"] = ""
+        elif client_id and secret:
+            validated_data["sha_api_credentials_encrypted"] = encrypt_value(
+                json.dumps({"client_id": client_id, "client_secret": secret})
+            )
+
     def create(self, validated_data):
-        credentials = validated_data.pop("sha_api_credentials", None)
-        if credentials:
-            validated_data["sha_api_credentials_encrypted"] = encrypt_value(credentials)
+        self._pop_credentials(validated_data)
         blank = Branch()
         previous = {f: getattr(blank, f) for f in BranchIdentifierChange.TRACKED_FIELDS}
         with transaction.atomic():
@@ -385,9 +411,7 @@ class BranchSerializer(serializers.ModelSerializer):
         return branch
 
     def update(self, instance, validated_data):
-        credentials = validated_data.pop("sha_api_credentials", None)
-        if credentials:
-            validated_data["sha_api_credentials_encrypted"] = encrypt_value(credentials)
+        self._pop_credentials(validated_data)
         previous = {f: getattr(instance, f) for f in BranchIdentifierChange.TRACKED_FIELDS}
         with transaction.atomic():
             branch = super().update(instance, validated_data)
@@ -590,7 +614,7 @@ class PlatformEmailSettingsSerializer(serializers.ModelSerializer):
     Organization-level equivalent is OrganizationEmailSettingsSerializer.
     `host_password` is write-only and only ever encrypted-at-rest
     (apps/tenancy/crypto.py), same pattern as BranchSerializer's
-    sha_api_credentials.
+    sha_client_secret.
     """
 
     has_credentials = serializers.BooleanField(read_only=True)
@@ -847,4 +871,89 @@ class OrganizationSmsSettingsSerializer(serializers.ModelSerializer):
         api_key = validated_data.pop("sms_api_key", None)
         if api_key:
             validated_data["sms_api_key_encrypted"] = encrypt_value(api_key)
+        return super().update(instance, validated_data)
+
+
+class PlatformHieSettingsSerializer(serializers.ModelSerializer):
+    """
+    Super Admin's DHA HIE service account (DHA / SHA Integration screen).
+    `client_secret` is write-only and only ever stored encrypted
+    (apps/tenancy/crypto.py), same pattern as PlatformAiSettingsSerializer.
+    `callback_url` is what to give DHA; it embeds the unguessable token that
+    authenticates inbound status callbacks.
+    """
+
+    has_credentials = serializers.BooleanField(read_only=True)
+    client_secret = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    remove_client_secret = serializers.BooleanField(write_only=True, required=False, default=False)
+    rotate_callback_token = serializers.BooleanField(write_only=True, required=False, default=False)
+    source = serializers.SerializerMethodField()
+    callback_url = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PlatformHieSettings
+        fields = [
+            "environment",
+            "base_url",
+            "client_id",
+            "client_secret",
+            "remove_client_secret",
+            "has_credentials",
+            "source",
+            "tenant_id",
+            "tenant_code",
+            "public_api_base_url",
+            "callback_url",
+            "rotate_callback_token",
+            "remittance_path",
+            "remittance_claims_path",
+            "updated_at",
+            "updated_by_name",
+        ]
+
+    def get_source(self, obj):
+        from django.conf import settings
+
+        if obj.has_credentials and obj.base_url:
+            return "saved"
+        if getattr(settings, "HIE_API_CLIENT_ID", "") and getattr(settings, "HIE_API_BASE_URL", ""):
+            return "environment"
+        return "none"
+
+    def get_callback_url(self, obj):
+        from apps.insurance_claims.sha_callbacks import callback_token
+
+        token = callback_token()
+        base = (obj.public_api_base_url or "").rstrip("/")
+        if not (base and token):
+            return ""
+        return f"{base}/integrations/dha/{token}/callbacks/<entity>-status/"
+
+    def get_updated_by_name(self, obj):
+        user = obj.updated_by
+        return (user.get_full_name() or user.email) if user else ""
+
+    def validate_base_url(self, value):
+        return value.strip().rstrip("/")
+
+    def validate_public_api_base_url(self, value):
+        return value.strip().rstrip("/")
+
+    def validate_remittance_path(self, value):
+        return value.strip()
+
+    def validate_remittance_claims_path(self, value):
+        return value.strip()
+
+    def update(self, instance, validated_data):
+        import secrets
+
+        secret = (validated_data.pop("client_secret", None) or "").strip()
+        if validated_data.pop("remove_client_secret", False):
+            validated_data["client_secret_encrypted"] = ""
+        elif secret:
+            validated_data["client_secret_encrypted"] = encrypt_value(secret)
+        if validated_data.pop("rotate_callback_token", False):
+            validated_data["callback_token_encrypted"] = encrypt_value(secrets.token_urlsafe(32))
         return super().update(instance, validated_data)

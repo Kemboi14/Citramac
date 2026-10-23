@@ -459,6 +459,22 @@ class PractitionerCredential(TenantScopedModel):
     mha_approved_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # DHA Health Worker Registry (GET /professionals). `hwr_regulator` is one
+    # of the published regulator codes; the HIE accepts no other value, so a
+    # cadre registered elsewhere (e.g. counsellors) cannot be looked up there.
+    HWR_REGULATOR_CHOICES = [
+        ("KMPDC", "KMPDC"),
+        ("COC", "COC"),
+        ("NCK", "NCK"),
+        ("PPB", "PPB"),
+    ]
+    hwr_regulator = models.CharField(max_length=8, choices=HWR_REGULATOR_CHOICES, blank=True)
+    hwr_record = models.JSONField(default=dict, blank=True)
+    hwr_checked_at = models.DateTimeField(null=True, blank=True)
+    # Practitioner Unique Identifier the Shared Health Record asks for.
+    # VERIFY (hie_spec/SOURCE.md gap 4): which registry field carries it is not
+    # published, so a person records it from the registry record — never derived.
+    hwr_puid = models.CharField(max_length=64, blank=True)
 
     @property
     def registration_verified(self):

@@ -106,3 +106,28 @@ variable "default_from_email" {
   type    = string
   default = "no-reply@citramac.local"
 }
+
+# DHA HIE service account — a fallback only: Super Admin normally saves these
+# under DHA / SHA Integration (stored encrypted in the database).
+variable "hie_api_base_url" {
+  type    = string
+  default = ""
+}
+
+variable "hie_api_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "hie_api_client_secret" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+# Eligibility coverage.status values that mean active cover — set only from a
+# confirmed UAT response (DHA publishes no vocabulary).
+variable "sha_active_coverage_statuses" {
+  type    = string
+  default = ""
+}

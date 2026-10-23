@@ -23,3 +23,12 @@ email_host_password = "" # pragma: allowlist secret
 email_use_tls       = "True"
 email_use_ssl       = "False"
 default_from_email  = "" # e.g. CITRAMAC <notifications@softlinkoptions.co.ke>
+
+# DHA HIE (registries, SHA claims, Shared Health Record). Optional: Super Admin
+# normally enters these under DHA / SHA Integration. UAT base URL is
+# https://ilm-dev.dha.go.ke/uat-middleware/api/v1; production is issued by DHA.
+hie_api_base_url      = ""
+hie_api_client_id     = ""
+hie_api_client_secret = "" # pragma: allowlist secret
+# Comma-separated; only from a confirmed UAT eligibility response.
+sha_active_coverage_statuses = ""
