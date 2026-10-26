@@ -1567,12 +1567,12 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             )
         response = self.client.patch(
             reverse("staff-detail", args=[staff.id]),
-            {"branch_access": [branch.id]},
+            {"assignments": [{"role": self.psychiatrist_template.id, "branch": str(branch.id)}]},
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("branch_access", response.data)
+        self.assertIn("assignments", response.data)
 
     def test_reset_credentials_emails_otp_to_active_staff(self):
         with platform_admin_context():

@@ -10,6 +10,8 @@ from django.conf import settings
 from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from apps.accounts.access import active_roles
+
 
 def is_finance(user):
     if not (user and user.is_authenticated) or user.is_superuser:
@@ -17,7 +19,7 @@ def is_finance(user):
     query = Q()
     for name in getattr(settings, "FINANCE_ROLES", []):
         query |= Q(name__iexact=name)
-    return bool(query) and user.roles.filter(query).exists()
+    return bool(query) and active_roles(user).filter(query).exists()
 
 
 class IsFinanceOrReadOnly(BasePermission):

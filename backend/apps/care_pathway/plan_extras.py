@@ -6,6 +6,8 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.accounts.access import active_roles
+
 from .models import CosignRequest, MdtReview, NursingCarePlanEntry, SafetyPlan
 
 SAFETY_FIELDS = [
@@ -152,7 +154,7 @@ def can_cosign(user):
     query = Q()
     for name in settings.COSIGN_ROLES:
         query |= Q(name__iexact=name)
-    return user.roles.filter(query).exists()
+    return active_roles(user).filter(query).exists()
 
 
 def request_cosign(patient, user, kind, what, subject_type="", subject_id=""):

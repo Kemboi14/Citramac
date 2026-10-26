@@ -1,11 +1,11 @@
-import { apiRequest } from "./apiClient";
+import { apiDownload, apiRequest } from "./apiClient";
 
 // Mirrors backend/apps/compliance (views.py) — docs/16-DATA-PROTECTION-COMPLIANCE.md,
 // the system-side obligations from the CAFRIC legal opinion of 2 October 2026.
 
 // ── Breach incidents (opinion §10) ──
 
-export type BreachTrack = "TENANT_CONTROLLER" | "ODPC" | "DHA" | "DATA_SUBJECTS";
+export type BreachTrack = "TENANT_CONTROLLER" | "ODPC" | "DHA" | "DHA_FOLLOWUP" | "DATA_SUBJECTS";
 export type BreachRisk = "UNLIKELY" | "RISK" | "HIGH_RISK";
 export type BreachStatus = "OPEN" | "CONTAINED" | "CLOSED";
 
@@ -21,13 +21,15 @@ export interface BreachNotificationTrack {
   track_label: string;
   required: boolean;
   due_at: string;
-  /** Data subjects: "without delay", no fixed hours. */
-  without_delay: boolean;
+  /** False for data subjects — "within a reasonably practical period" (DPA s.43(1)(b)), no fixed hours. */
+  has_deadline: boolean;
   notified_at: string | null;
   notified_by: string;
   method: string;
   reference: string;
   notes: string;
+  /** Reasons for a notice made after its deadline (DPA s.43(2)). */
+  late_reason: string;
   is_overdue: boolean;
 }
 
@@ -42,12 +44,60 @@ export interface BreachIncidentSummary {
   became_aware_at: string;
   risk_level: BreachRisk;
   risk_level_label: string;
+  /** Data Protection (General) Regulations 2021, reg. 37 — notifiable by the kind of data involved. */
+  is_notifiable: boolean;
+  /** DPA s.43(1)'s trigger: notifiable, or assessed as a risk of harm. */
+  real_risk_of_harm: boolean;
   status: BreachStatus;
   overdue_tracks: number;
   pending_tracks: number;
 }
 
-export interface BreachIncident extends BreachIncidentSummary {
+export type BreachCause = "" | "MALICIOUS" | "SYSTEM_FAULT" | "HUMAN_ERROR" | "OTHER";
+export type SubjectsExemption = "" | "SAFEGUARDS" | "IDENTITY_UNKNOWN" | "INVESTIGATION";
+
+/** Notifiability test (reg. 37) and notice content (reg. 38, Form HMIS 1, DPA s.43(5)). */
+export interface BreachAssessment {
+  cause: BreachCause;
+  how_it_occurred: string;
+  identifies_subjects: boolean;
+  schedule_categories: string[];
+  credentials_exposed: boolean;
+  publicly_available_only: boolean;
+  notifiability_reasoning: string;
+  likelihood: number | null;
+  impact: number | null;
+  likely_harm: string;
+  remedy_actions: string;
+  subject_guidance: string;
+  unauthorised_party: string;
+  other_entities_affected: string;
+  other_reports: string;
+  rectification_timeline: string;
+  subjects_exemption: SubjectsExemption;
+  subjects_exemption_grounds: string;
+}
+
+export interface BreachEvent {
+  id: string;
+  occurred_at: string;
+  note: string;
+  recorded_by: string;
+}
+
+export interface BreachOption {
+  code: string;
+  label: string;
+}
+
+export interface BreachOptions {
+  schedule_categories: BreachOption[];
+  causes: BreachOption[];
+  subjects_exemptions: BreachOption[];
+  report_kinds: BreachOption[];
+}
+
+export interface BreachIncident extends BreachIncidentSummary, BreachAssessment {
   description: string;
   occurred_at: string | null;
   involves_health_data: boolean;
@@ -56,7 +106,10 @@ export interface BreachIncident extends BreachIncidentSummary {
   containment_actions: string;
   reported_by: string;
   closed_at: string | null;
+  cause_label: string;
+  risk_score: number | null;
   tracks: BreachNotificationTrack[];
+  events: BreachEvent[];
 }
 
 export interface BreachIncidentPayload {
@@ -94,7 +147,7 @@ export function createBreachIncident(accessToken: string, payload: BreachInciden
 export function updateBreachIncident(
   accessToken: string,
   id: string,
-  payload: Partial<BreachIncidentPayload> & { status?: BreachStatus },
+  payload: Partial<BreachIncidentPayload> & Partial<BreachAssessment> & { status?: BreachStatus },
 ) {
   return apiRequest<BreachIncident>(`/compliance/breach-incidents/${id}/`, {
     method: "PATCH",
@@ -106,12 +159,45 @@ export function updateBreachIncident(
 export function recordBreachNotification(
   accessToken: string,
   trackId: string,
-  payload: { method: string; reference?: string; notes?: string; notified_at?: string },
+  payload: {
+    method: string;
+    reference?: string;
+    notes?: string;
+    notified_at?: string;
+    late_reason?: string;
+  },
 ) {
   return apiRequest<BreachNotificationTrack>(
     `/compliance/breach-notifications/${trackId}/record/`,
     { method: "POST", body: payload, accessToken },
   );
+}
+
+export function getBreachOptions(accessToken: string) {
+  return apiRequest<BreachOptions>("/compliance/breach-options/", { accessToken });
+}
+
+export function addBreachEvent(
+  accessToken: string,
+  incidentId: string,
+  payload: { note: string; occurred_at?: string },
+) {
+  return apiRequest<BreachIncident>(`/compliance/breach-incidents/${incidentId}/events/`, {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
+/** A printable notice (ODPC, Form HMIS 1, DHA follow-up, data-subject letter) as HTML. */
+export function downloadBreachReport(accessToken: string, incidentId: string, kind: string) {
+  return apiDownload(`/compliance/breach-incidents/${incidentId}/report/${kind}/`, accessToken);
+}
+
+/** The breach register (DPA s.43(8)). Platform staff name the organisation. */
+export function downloadBreachRegister(accessToken: string, organizationId?: string) {
+  const query = organizationId ? `?organization=${encodeURIComponent(organizationId)}` : "";
+  return apiDownload(`/compliance/breach-register/${query}`, accessToken);
 }
 
 // ── Data subject requests (opinion §11) ──

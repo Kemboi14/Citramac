@@ -3,6 +3,7 @@ import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
+import { BreachAssessmentPanel, BreachRegisterButton } from "../../components/BreachAssessmentPanel";
 import {
   BREACH_RISK_LABEL,
   createBreachIncident,
@@ -199,7 +200,8 @@ export function PlatformBreachIncidentsPage() {
           <p className="mt-1 max-w-3xl text-sm text-ink-500">
             Acting as processor, the platform must notify the affected facility within 48 hours of
             becoming aware of a breach. The facility, as controller, then notifies the ODPC (72
-            hours) and the Digital Health Agency (48 hours).
+            hours), the Digital Health Agency on Form HMIS 1 (48 hours, with a follow-up 72 hours
+            after that notice) and the clients affected.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -230,7 +232,7 @@ export function PlatformBreachIncidentsPage() {
       )}
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-surface-border bg-surface-bg text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="px-4 py-3 font-semibold">Facility</th>
@@ -239,6 +241,7 @@ export function PlatformBreachIncidentsPage() {
               <th className="px-4 py-3 font-semibold">Reported as</th>
               <th className="px-4 py-3 font-semibold">Became aware</th>
               <th className="px-4 py-3 font-semibold">Risk</th>
+              <th className="px-4 py-3 font-semibold">Notifiable</th>
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Notifications</th>
             </tr>
@@ -246,14 +249,14 @@ export function PlatformBreachIncidentsPage() {
           <tbody>
             {incidents === null && !error && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-ink-500">
                   Loading incidents…
                 </td>
               </tr>
             )}
             {incidents?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-ink-500">
                   No breach incidents have been recorded.
                 </td>
               </tr>
@@ -274,6 +277,15 @@ export function PlatformBreachIncidentsPage() {
                   {formatDateTime(incident.became_aware_at)}
                 </td>
                 <td className="px-4 py-3 text-ink-700">{incident.risk_level_label}</td>
+                <td className="px-4 py-3">
+                  {incident.real_risk_of_harm ? (
+                    <span className="rounded-sm bg-status-red-tint px-2 py-0.5 text-xs font-semibold text-status-red">
+                      Notifiable
+                    </span>
+                  ) : (
+                    <span className="text-ink-500">No</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[incident.status]}`}
@@ -573,14 +585,17 @@ function IncidentDetail({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close incident"
-          className="rounded p-1 text-ink-500 hover:text-ink-900"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-start gap-2">
+          {detail && <BreachRegisterButton organizationId={detail.organization_id} />}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close incident"
+            className="rounded p-1 text-ink-500 hover:text-ink-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -660,6 +675,22 @@ function IncidentDetail({
               </tbody>
             </table>
           </div>
+
+          <h3 className="mb-2 mt-6 font-display text-sm font-semibold text-ink-900">
+            Assessment and notices
+          </h3>
+          {detail.reported_role !== "PROCESSOR" && (
+            <p className="mb-3 text-xs text-ink-500">
+              The facility reported this incident as controller, so its assessment is theirs to
+              record. The notices can still be printed here.
+            </p>
+          )}
+          <BreachAssessmentPanel
+            key={detail.id}
+            incident={detail}
+            canEdit={detail.reported_role === "PROCESSOR" && detail.status !== "CLOSED"}
+            onChanged={onRecorded}
+          />
         </>
       )}
     </div>
@@ -703,8 +734,8 @@ function TrackRow({
   const remaining = new Date(track.due_at).getTime() - now;
   let timeLeft: React.ReactNode = "—";
   if (!track.notified_at && track.required) {
-    if (track.without_delay) {
-      timeLeft = <span className="font-semibold text-status-amber">Without delay</span>;
+    if (!track.has_deadline) {
+      timeLeft = <span className="text-ink-500">No fixed deadline</span>;
     } else if (track.is_overdue || remaining <= 0) {
       timeLeft = (
         <span className="inline-flex items-center gap-1 font-semibold text-status-red">
@@ -727,7 +758,7 @@ function TrackRow({
         <td className="px-3 py-2 font-medium text-ink-900">{track.track_label}</td>
         <td className="px-3 py-2 text-ink-700">{track.required ? "Yes" : "Not required"}</td>
         <td className="px-3 py-2 text-ink-700">
-          {track.without_delay ? "Without delay" : formatDateTime(track.due_at)}
+          {track.has_deadline ? formatDateTime(track.due_at) : "Within a reasonably practical period"}
         </td>
         <td className="px-3 py-2 text-ink-700">{timeLeft}</td>
         <td className="px-3 py-2 text-ink-700">
@@ -747,6 +778,11 @@ function TrackRow({
               {track.reference && <div className="text-xs text-ink-500">{track.reference}</div>}
               {track.notes && (
                 <div className="whitespace-pre-wrap text-xs text-ink-500">{track.notes}</div>
+              )}
+              {track.late_reason && (
+                <div className="whitespace-pre-wrap text-xs text-ink-500">
+                  Late: {track.late_reason}
+                </div>
               )}
             </>
           ) : (
@@ -792,7 +828,12 @@ function RecordNotificationForm({
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [notifiedAt, setNotifiedAt] = useState(() => toLocalInput(new Date()));
+  const [lateReason, setLateReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // DPA s.43(2): a notice made after its deadline must give the reasons for the delay.
+  const [openedAt] = useState(() => Date.now());
+  const notifiedMs = notifiedAt ? new Date(notifiedAt).getTime() : openedAt;
+  const late = track.has_deadline && notifiedMs > new Date(track.due_at).getTime();
 
   const submit = async () => {
     setError(null);
@@ -805,12 +846,17 @@ function RecordNotificationForm({
       setError("Notified at cannot be in the future.");
       throw new Error("validation");
     }
+    if (late && !lateReason.trim()) {
+      setError("This notice is after its deadline — give the reasons for the delay.");
+      throw new Error("validation");
+    }
     try {
       await recordBreachNotification(accessToken, track.id, {
         method: method.trim(),
         reference: reference.trim() || undefined,
         notes: notes.trim() || undefined,
         notified_at: at ? at.toISOString() : undefined,
+        late_reason: late ? lateReason.trim() : undefined,
       });
       onRecorded();
     } catch (err) {
@@ -861,6 +907,17 @@ function RecordNotificationForm({
             onChange={(e) => setNotes(e.target.value)}
           />
         </label>
+        {late && (
+          <label className={`${LABEL_CLASS} md:col-span-3`}>
+            Reasons for the delay (DPA s.43(2))
+            <textarea
+              className={`${FIELD_CLASS} min-h-[60px]`}
+              value={lateReason}
+              onChange={(e) => setLateReason(e.target.value)}
+              required
+            />
+          </label>
+        )}
       </div>
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>

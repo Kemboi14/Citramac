@@ -278,6 +278,7 @@ urlpatterns = [
     path("care/legal/tasks/<uuid:pk>/complete/", lview.LegalTaskCompleteView.as_view(), name="care-legal-task-complete"),
     path("care/legal/templates/", lview.LegalTemplatesView.as_view(), name="care-legal-templates"),
     path("care/legal/practitioners/<uuid:user_id>/credential/", lview.PractitionerCredentialView.as_view(), name="care-practitioner-credential"),
+    path("care/legal/practitioners/<uuid:user_id>/credential/nacada-evidence/", lview.NacadaEvidenceView.as_view(), name="care-practitioner-nacada-evidence"),
     path("care/clients/<uuid:patient_id>/modules/", views.ClientModulesView.as_view(), name="care-client-modules"),
     path("care/ward-board/", views.WardBoardTableView.as_view(), name="care-ward-board"),
     path("care/my-tasks/", views.MyTasksView.as_view(), name="care-my-tasks"),

@@ -460,6 +460,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     grace_ends_on = serializers.DateField(read_only=True)
     days_until_period_end = serializers.IntegerField(read_only=True)
     is_read_only = serializers.BooleanField(read_only=True)
+    effective_grace_period_days = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Subscription
@@ -479,8 +480,16 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "days_until_period_end",
             "renewing_soon",
             "is_read_only",
+            "grace_period_days",
+            "effective_grace_period_days",
         ]
         read_only_fields = ["past_due_since"]
+
+    def validate_grace_period_days(self, value):
+        # Same ceiling as the platform default (SubscriptionPolicySerializer).
+        if value is not None and value > 90:
+            raise serializers.ValidationError("At most 90 days.")
+        return value
 
     def update(self, instance, validated_data):
         """
@@ -579,7 +588,7 @@ class MySubscriptionSerializer(serializers.ModelSerializer):
         return SubscriptionPolicy.get_solo().renewal_contact
 
     def get_grace_period_days(self, obj):
-        return SubscriptionPolicy.get_solo().grace_period_days
+        return obj.effective_grace_period_days
 
 
 class PlatformBrandingSerializer(serializers.ModelSerializer):

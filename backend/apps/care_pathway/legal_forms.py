@@ -11,6 +11,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.accounts.access import active_roles
+
 from . import plan_extras
 from .models import LegalForm
 
@@ -28,7 +30,7 @@ def _spec(key):
 
 def _may_sign(user, spec):
     roles = spec.get("signer_roles") or []
-    return not roles or user.roles.filter(name__in=roles).exists()
+    return not roles or active_roles(user).filter(name__in=roles).exists()
 
 
 def prepare(patient, user, form_key, content, admission=None):

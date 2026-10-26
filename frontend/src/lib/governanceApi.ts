@@ -26,6 +26,18 @@ export interface Role {
 
 export type StaffAccessStatus = "not_started" | "active" | "expired" | null;
 
+/** One role held at one branch — `branch` null means every branch of the organisation. */
+export interface RoleAssignment {
+  id?: string;
+  role: number;
+  role_name?: string;
+  branch: string | null;
+  branch_name?: string | null;
+}
+
+/** PractitionerCredential.nacada_status — null when no NACADA number is recorded. */
+export type NacadaStatus = "UNVERIFIED" | "EXPIRED" | "EXPIRING" | "VALID" | null;
+
 export interface Staff {
   id: string;
   staff_id: string;
@@ -51,6 +63,8 @@ export interface Staff {
   access_starts_at: string | null;
   access_ends_at: string | null;
   access_status: StaffAccessStatus;
+  assignments: RoleAssignment[];
+  nacada_status: NacadaStatus;
 }
 
 export interface StaffInvitePayload {
@@ -58,7 +72,9 @@ export interface StaffInvitePayload {
   first_name: string;
   last_name: string;
   staff_id?: string;
-  role: number;
+  /** Either one `role` (held at `primary_branch`, or org-wide) or `assignments`. */
+  role?: number;
+  assignments?: RoleAssignment[];
   primary_branch?: string;
   department?: string;
   /** Super Admin only — which org to create this staff member in. Ignored
@@ -100,15 +116,27 @@ export function updateRole(
   return apiRequest<Role>(`/roles/${id}/`, { method: "PATCH", body: payload, accessToken });
 }
 
-export function listStaff(accessToken: string) {
-  return apiRequest<Paginated<Staff>>("/staff/", { accessToken });
+/** Every staff member — all pages, so filtering and printing never miss anyone past the first 25. */
+export async function listStaff(accessToken: string): Promise<Paginated<Staff>> {
+  const first = await apiRequest<Paginated<Staff>>("/staff/", { accessToken });
+  const results = [...first.results];
+  for (let page = 2; results.length < first.count; page += 1) {
+    const next = await apiRequest<Paginated<Staff>>(`/staff/?page=${page}`, { accessToken });
+    if (next.results.length === 0) break;
+    results.push(...next.results);
+  }
+  return { ...first, results };
 }
 
 export function inviteStaff(accessToken: string, payload: StaffInvitePayload) {
   return apiRequest<Staff>("/staff/", { method: "POST", body: payload, accessToken });
 }
 
-export function updateStaff(accessToken: string, id: string, payload: Partial<Staff>) {
+export function updateStaff(
+  accessToken: string,
+  id: string,
+  payload: Partial<Omit<Staff, "assignments">> & { assignments?: RoleAssignment[] },
+) {
   return apiRequest<Staff>(`/staff/${id}/`, { method: "PATCH", body: payload, accessToken });
 }
 

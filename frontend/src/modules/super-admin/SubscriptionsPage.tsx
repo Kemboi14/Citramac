@@ -584,6 +584,7 @@ export function SubscriptionsPage() {
               <th className="px-4 py-3">Billing Cycle</th>
               <th className="px-4 py-3">Seats Used</th>
               <th className="px-4 py-3">Renewal Date</th>
+              <th className="px-4 py-3">Grace Period</th>
               <th className="px-4 py-3">Status</th>
             </tr>
           </thead>
@@ -665,6 +666,14 @@ export function SubscriptionsPage() {
                     </div>
                   )}
                 </td>
+                <td className="px-4 py-3 text-ink-700">
+                  <GraceCell
+                    subscription={sub}
+                    onSaved={(updated) =>
+                      setSubscriptions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+                    }
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <select
                     className={`rounded-sm border-0 px-2 py-0.5 text-xs font-semibold outline-none ${
@@ -698,7 +707,7 @@ export function SubscriptionsPage() {
             ))}
             {!loading && filteredSubscriptions.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
                   {subscriptions.length === 0
                     ? "No subscriptions assigned yet."
                     : "No subscriptions match this filter."}
@@ -734,6 +743,104 @@ export function SubscriptionsPage() {
         </p>
         <p>No data is deleted. Setting a future renewal date restores full access.</p>
       </ConfirmDialog>
+    </div>
+  );
+}
+
+/**
+ * Per-tenant grace period: how long this organisation keeps full access after
+ * its subscription ends before becoming read-only. Blank uses the platform
+ * default (Data Lifecycle → Subscription reminders & grace).
+ */
+function GraceCell({
+  subscription,
+  onSaved,
+}: {
+  subscription: Subscription;
+  onSaved: (updated: Subscription) => void;
+}) {
+  const { accessToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (days: number | null) => {
+    if (!accessToken) return;
+    setError(null);
+    try {
+      onSaved(await updateSubscription(accessToken, subscription.id, { grace_period_days: days }));
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save the grace period.");
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span>
+          {subscription.effective_grace_period_days} days
+          {subscription.grace_period_days === null && (
+            <span className="text-xs text-ink-500"> (platform default)</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="text-xs font-semibold text-brand-green hover:underline"
+          onClick={() => {
+            setValue(String(subscription.effective_grace_period_days));
+            setError(null);
+            setEditing(true);
+          }}
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  const days = Number(value);
+  const valid = value.trim() !== "" && Number.isInteger(days) && days >= 0 && days <= 90;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          max={90}
+          aria-label={`Grace period in days for ${subscription.organization_name}`}
+          className="w-20 rounded-sm border border-surface-border bg-surface-card px-2 py-1 text-sm"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <span className="text-xs text-ink-500">days</span>
+        <button
+          type="button"
+          disabled={!valid}
+          className="text-xs font-semibold text-brand-green hover:underline disabled:opacity-50"
+          onClick={() => void save(days)}
+        >
+          Save
+        </button>
+        {subscription.grace_period_days !== null && (
+          <button
+            type="button"
+            className="text-xs font-semibold text-ink-700 hover:underline"
+            onClick={() => void save(null)}
+          >
+            Use default
+          </button>
+        )}
+        <button
+          type="button"
+          className="text-xs text-ink-500 hover:underline"
+          onClick={() => setEditing(false)}
+        >
+          Cancel
+        </button>
+      </div>
+      {!valid && <span className="text-xs text-status-red">0 to 90 days.</span>}
+      {error && <span className="text-xs text-status-red">{error}</span>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-from .context import clear_tenant_context, set_tenant_context
+from .context import clear_branch_scope, clear_tenant_context, set_tenant_context
 
 
 class TenantMiddleware:
@@ -30,6 +30,7 @@ class TenantMiddleware:
             organization_id = user.organization_id
 
         set_tenant_context(organization_id=organization_id, is_platform_admin=is_platform_admin)
+        clear_branch_scope()
         try:
             return self.get_response(request)
         finally:

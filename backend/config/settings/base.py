@@ -436,6 +436,10 @@ CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localho
 # The frontend needs the httpOnly refresh_token cookie sent/received cross-origin
 # (localhost:5173 -> localhost:8000 in dev) — see apps/accounts/auth_views.py.
 CORS_ALLOW_CREDENTIALS = True
+# X-Branch-Id: the branch the user is working in (apps.accounts.access).
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = (*default_headers, "x-branch-id")
 
 # The frontend's own public origin — used to build links that go out in
 # emails (e.g. the activation link in send_invite_email), since those are

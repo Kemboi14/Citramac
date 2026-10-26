@@ -115,7 +115,7 @@ def _send_active_reminder(subscription, policy, stage):
         severity = Notification.SEVERITY_WARNING if stage <= 7 else Notification.SEVERITY_INFO
     paragraphs = [
         lead,
-        f"If it isn't renewed, you keep full access for a {policy.grace_period_days}-day grace "
+        f"If it isn't renewed, you keep full access for a {subscription.effective_grace_period_days}-day grace "
         "period, after which CITRAMAC becomes read-only for your organisation: records stay "
         "viewable and exportable, but nothing new can be added. No data is deleted.",
         _renewal_line(policy),

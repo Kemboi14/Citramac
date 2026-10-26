@@ -23,7 +23,8 @@ export function ProtectedRoute({ allowedRoles }: { allowedRoles?: string[] }) {
 
   if (isLoading) return <FullPageSpinner />;
   if (!accessToken || !claims) return <Navigate to="/login" replace />;
-  if (allowedRoles && !allowedRoles.includes(claims.role)) {
+  const held = claims.roles?.length ? claims.roles : [claims.role];
+  if (allowedRoles && !held.some((role) => allowedRoles.includes(role))) {
     return <Navigate to={shellPathForRole(claims.role)} replace />;
   }
   return <Outlet />;

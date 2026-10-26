@@ -11,17 +11,24 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsPlatformSuperAdmin, IsPlatformSuperAdminOrOrgAdmin
+from apps.accounts.permissions import (
+    IsOrgAdminForWrites,
+    IsPlatformSuperAdmin,
+    IsPlatformSuperAdminOrOrgAdmin,
+)
 from apps.tenancy.context import platform_admin_context
 from config.errors import error_response
 
 from .models import ActivationInvite, OneTimePassword, Permission, Role, User
+from .access import set_assignments
 from .serializers import (
     MyProfileSerializer,
     PermissionSerializer,
     RoleSerializer,
     StaffInviteSerializer,
     StaffSerializer,
+    _covers_branch,
+    validate_assignments,
 )
 
 INVITE_TTL_DAYS = 7
@@ -97,7 +104,10 @@ class StaffViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = StaffSerializer
-    permission_classes = [IsAuthenticated]
+    # Reading the roster stays open to every member of the organization (the
+    # registration screen picks a care coordinator from it); changing anyone's
+    # roles, branches, access or status is the Org Admin's — or Super Admin's.
+    permission_classes = [IsAuthenticated, IsOrgAdminForWrites]
 
     def get_queryset(self):
         user = self.request.user
@@ -106,12 +116,12 @@ class StaffViewSet(viewsets.ModelViewSet):
                 return list(
                     User.all_objects.filter(organization__isnull=False)
                     .select_related("organization")
-                    .prefetch_related("roles", "branch_access")
+                    .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch")
                     .order_by("organization__name", "first_name", "last_name")
                 )
         return (
             User.all_objects.filter(organization=user.organization)
-            .prefetch_related("roles", "branch_access")
+            .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch")
             .order_by("first_name", "last_name")
         )
 
@@ -129,7 +139,7 @@ class StaffViewSet(viewsets.ModelViewSet):
                 obj = generics.get_object_or_404(
                     User.all_objects.filter(organization__isnull=False)
                     .select_related("organization")
-                    .prefetch_related("roles", "branch_access"),
+                    .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch"),
                     pk=self.kwargs["pk"],
                 )
             self.check_object_permissions(self.request, obj)
@@ -183,6 +193,12 @@ class StaffViewSet(viewsets.ModelViewSet):
         if department is not None and not department.is_active:
             raise ValidationError({"department": "This department is no longer active."})
 
+        pairs = validate_assignments(data["assignments"], organization)
+        if primary_branch is not None and not _covers_branch(pairs, primary_branch):
+            raise ValidationError(
+                {"primary_branch": "The primary branch must be one this person is assigned to."}
+            )
+
         with transaction.atomic():
             staff = User.objects.create_user(
                 email=data["email"],
@@ -198,11 +214,10 @@ class StaffViewSet(viewsets.ModelViewSet):
             # than depending on Organization.email_domains being kept
             # manually in sync by an admin.
             organization.register_email_domain(staff.email)
-            staff.roles.add(data["role"])
-            if data.get("primary_branch"):
-                staff.primary_branch = data["primary_branch"]
-                staff.branch_access.add(data["primary_branch"])
+            if primary_branch is not None:
+                staff.primary_branch = primary_branch
                 staff.save(update_fields=["primary_branch"])
+            set_assignments(staff, pairs, created_by=request.user)
             if data.get("department") or data.get("access_starts_at") or data.get("access_ends_at"):
                 staff.department = data.get("department")
                 staff.access_starts_at = data.get("access_starts_at")

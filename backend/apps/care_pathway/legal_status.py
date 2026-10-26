@@ -38,6 +38,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.accounts.access import active_roles
 from apps.client_registry.models import Attachment, EmergencyContact, PatientIdentifier
 from apps.clinical_encounter.models import DiagnosisCode, Encounter
 
@@ -121,7 +122,7 @@ def mask(value):
 def is_admitting_officer(user):
     return bool(
         user and user.is_authenticated and not user.is_superuser
-        and user.roles.filter(permissions__codename=ADMITTING_OFFICER_PERMISSION).exists()
+        and active_roles(user).filter(permissions__codename=ADMITTING_OFFICER_PERMISSION).exists()
     )
 
 
@@ -129,7 +130,7 @@ def can_unmask(user):
     codename = legal_config.privacy()["unmaskPermission"]
     return bool(
         user and user.is_authenticated and not user.is_superuser
-        and user.roles.filter(permissions__codename=codename).exists()
+        and active_roles(user).filter(permissions__codename=codename).exists()
     )
 
 
@@ -139,6 +140,23 @@ def _hwr(cred):
     from apps.dha_interop.registries import practitioner_summary
 
     return practitioner_summary(cred)
+
+
+def _nacada(cred):
+    """NACADA accreditation / licence (PractitionerCredential.nacada_*)."""
+    if cred is None:
+        return {"number": "", "category": "", "issued_on": None, "expires_on": None,
+                "verified_at": None, "verified_by": "", "has_evidence": False, "status": None}
+    return {
+        "number": cred.nacada_number,
+        "category": cred.nacada_category,
+        "issued_on": cred.nacada_issued_on.isoformat() if cred.nacada_issued_on else None,
+        "expires_on": cred.nacada_expires_on.isoformat() if cred.nacada_expires_on else None,
+        "verified_at": _iso(cred.nacada_verified_at),
+        "verified_by": _name(cred.nacada_verified_by) if cred.nacada_verified_by else "",
+        "has_evidence": bool(cred.nacada_evidence),
+        "status": cred.nacada_status,
+    }
 
 
 def credential_status(user):
@@ -155,6 +173,7 @@ def credential_status(user):
         "mha_recommendation_approved": bool(cred and cred.mha_recommendation_approved),
         "hwr_regulator": cred.hwr_regulator if cred else "",
         "health_worker_registry": _hwr(cred),
+        "nacada": _nacada(cred),
         "can_sign": False,
         "reason": "",
     }

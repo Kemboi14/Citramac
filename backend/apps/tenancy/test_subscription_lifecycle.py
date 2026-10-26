@@ -307,7 +307,8 @@ class ProfileContextTests(APITestCase):
         response = self.client.post(reverse("auth-refresh"), {"refresh": refresh}, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         claims = AccessToken(response.data["access"])
-        self.assertEqual(set(claims["branch_ids"]), {str(self.chiromo.id), str(self.closed.id)})
+        # Only branches still open — a closed branch is no place to work.
+        self.assertEqual(set(claims["branch_ids"]), {str(self.chiromo.id)})
 
 
 class PlatformHealthTests(APITestCase):

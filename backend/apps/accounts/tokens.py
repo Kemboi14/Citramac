@@ -4,12 +4,24 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.tenancy.context import platform_admin_context
 
+from .access import branches_for
+
+
+# Which shell a multi-role user lands in first: Org Admin's console, then the
+# Auditor's audit log, then the Clinical Workspace. They switch shells from
+# the sidebar (`roles` carries everything they hold).
+_LANDING_PRIORITY = ("org admin", "auditor")
+
 
 def _primary_role_name(user):
     if user.is_superuser:
         return "SUPER_ADMIN"
-    role = user.roles.values_list("name", flat=True).first()
-    return role or ""
+    names = sorted(user.roles.values_list("name", flat=True))
+    for wanted in _LANDING_PRIORITY:
+        for name in names:
+            if name.lower() == wanted:
+                return name
+    return names[0] if names else ""
 
 
 def apply_identity_claims(token, user):
@@ -33,8 +45,9 @@ def apply_identity_claims(token, user):
     # see apps/accounts/migrations/0002_rls.py's own comment on why that
     # table's policy has an extra clause Branch's doesn't).
     with platform_admin_context():
-        token["branch_ids"] = [str(bid) for bid in user.branch_access.values_list("id", flat=True)]
+        token["branch_ids"] = [str(bid) for bid in branches_for(user).values_list("id", flat=True)]
         token["role"] = _primary_role_name(user)
+        token["roles"] = sorted(user.roles.values_list("name", flat=True))
     token["email"] = user.email
     token["first_name"] = user.first_name
     token["last_name"] = user.last_name

@@ -15,8 +15,10 @@ export interface MyProfile {
   organization_name: string | null;
   /** Null when unassigned, or when the assigned branch has been deactivated. */
   primary_branch: { id: string; name: string } | null;
-  /** Every active branch this user has access to, alphabetical. */
-  branches: { id: string; name: string; is_primary: boolean }[];
+  /** Every active branch this user works at (all of them for an org-wide account), with the roles held there. */
+  branches: { id: string; name: string; is_primary: boolean; roles: string[] }[];
+  /** True for Org Admin and other organisation-wide accounts — may work across all branches at once. */
+  all_branches: boolean;
   department_name: string | null;
 }
 

@@ -236,13 +236,13 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Created inactive User '{email}'")
 
-        if branch is not None:
-            user.branch_access.add(branch)
-
         role = Role.objects.filter(name=role_name, organization__isnull=True).first()
         if role is None:
             raise CommandError(f"No platform template Role named '{role_name}' exists")
-        user.roles.add(role)
+        from apps.accounts.access import set_assignments
+
+        existing = [(a.role, a.branch) for a in user.role_assignments.all()]
+        set_assignments(user, existing + [(role, branch)])
 
         if created:
             invite = ActivationInvite.objects.create(

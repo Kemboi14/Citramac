@@ -98,3 +98,16 @@ class IsOwnOrganizationMember(BasePermission):
         if user.is_superuser:
             return True
         return str(user.organization_id) == str(view.kwargs.get("pk"))
+
+
+class IsOrgAdminForWrites(BasePermission):
+    """Reads for any authenticated member; anything else needs Org Admin or Super Admin."""
+
+    message = "Only the organisation's Org Admin can change staff accounts."
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return request.user.is_superuser or _has_org_admin_role(request.user)

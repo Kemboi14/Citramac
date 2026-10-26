@@ -5,6 +5,18 @@ from . import views
 urlpatterns = [
     path("breach-incidents/", views.BreachIncidentsView.as_view(), name="breach-incidents"),
     path("breach-incidents/<uuid:pk>/", views.BreachIncidentView.as_view(), name="breach-incident"),
+    path("breach-options/", views.BreachOptionsView.as_view(), name="breach-options"),
+    path("breach-register/", views.BreachRegisterView.as_view(), name="breach-register"),
+    path(
+        "breach-incidents/<uuid:pk>/events/",
+        views.BreachIncidentEventView.as_view(),
+        name="breach-incident-events",
+    ),
+    path(
+        "breach-incidents/<uuid:pk>/report/<slug:kind>/",
+        views.BreachReportView.as_view(),
+        name="breach-incident-report",
+    ),
     path(
         "breach-notifications/<uuid:pk>/record/",
         views.BreachNotificationView.as_view(),

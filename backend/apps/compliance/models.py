@@ -23,16 +23,48 @@ from django.utils import timezone
 from apps.client_registry.models import Patient
 from apps.tenancy.models import TenantScopedModel, TimestampedModel
 
-# Notification deadlines, in hours from becoming aware of the breach — legal
-# opinion of 2 Oct 2026, §10 (DPA s.43; Digital Health (Health Information
-# Management Procedures) Regulations, 2025). Data subjects: "without delay"
-# (no fixed hours), so their track is due immediately.
+# Notification deadlines, in hours. Sources read from the gazetted texts
+# (2026-10-26; copies of the research notes are not kept in the repo):
+# - TENANT_CONTROLLER: processor → controller "without delay and where
+#   reasonably practicable, within forty-eight hours" — DPA 2019 s.43(3).
+# - ODPC: "within seventy-two hours of becoming aware" — DPA s.43(1)(a);
+#   a late notice must give reasons for the delay — s.43(2).
+# - DHA: Form HMIS 1 to the Digital Health Agency CEO "within forty-eight
+#   hours of becoming aware" — Digital Health (Health Information Management
+#   Procedures) Regulations 2025 (LN 76/2025), reg. 11(2)(a).
+# - DHA_FOLLOWUP: corrective measures, mitigation and rectification timeline
+#   "within seventy-two hours of the notification" — reg. 11(2)(b); counted
+#   from when the DHA notice was actually made.
+# - DATA_SUBJECTS: "in writing within a reasonably practical period" —
+#   DPA s.43(1)(b): no fixed hours, so never shown as overdue.
+# VERIFY: whether s.43 has been amended since the 2019 text; DHA has not
+# published a submission channel for Form HMIS 1; whether reg. 11(2)'s
+# "health data controller of a digital health solution" means each facility,
+# CITRAMAC, or both — owner to confirm with DHA / counsel.
 BREACH_DEADLINE_HOURS = {
     "TENANT_CONTROLLER": 48,
     "ODPC": 72,
     "DHA": 48,
+    "DHA_FOLLOWUP": 72,
     "DATA_SUBJECTS": 0,
 }
+NO_FIXED_DEADLINE = {"DATA_SUBJECTS"}
+
+# Data Protection (General) Regulations 2021 (LN 263/2021), reg. 37 and the
+# Second Schedule: a breach of a data subject's name or identification number
+# together with any of these classes "amounts to notifiable data breach under
+# section 43". Only the items relevant to a mental-health and addiction
+# service are listed by name; OTHER covers the rest of the Schedule.
+SECOND_SCHEDULE_CATEGORIES = [
+    ("MENTAL_DISORDER", "Assessment, diagnosis or treatment of a mental disorder (item 16(c))"),
+    ("SUBSTANCE_ABUSE", "Assessment, diagnosis or treatment of substance abuse and addiction (item 16(d))"),
+    ("STI", "Assessment, diagnosis or treatment of a sexually transmitted disease (item 16(a))"),
+    ("HIV", "Assessment, diagnosis or treatment of HIV infection (item 16(b))"),
+    ("SUICIDE", "Suicide or attempted suicide of the individual (item 19)"),
+    ("ABUSE", "Domestic abuse, child abuse or sexual abuse (item 20)"),
+    ("CHILD_PROTECTION", "A child in conflict with the law or in need of care and protection (item 5)"),
+    ("OTHER", "Another class of personal data in the Second Schedule"),
+]
 
 
 class PlatformComplianceSettings(TimestampedModel):
@@ -76,6 +108,9 @@ class TenantComplianceProfile(TenantScopedModel):
     dpo_name = models.CharField(max_length=150, blank=True)
     dpo_email = models.EmailField(blank=True)
     dpo_phone = models.CharField(max_length=32, blank=True)
+    # Form HMIS 1 asks for the digital health solution's "DHS Certification
+    # of Compliance No." — recorded as issued by DHA, never derived.
+    dhs_certification_number = models.CharField(max_length=64, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         constraints = [
@@ -167,6 +202,18 @@ class BreachIncident(TenantScopedModel):
         ("HIGH_RISK", "Likely to result in a high risk"),
     ]
     STATUS_CHOICES = [("OPEN", "Open"), ("CONTAINED", "Contained"), ("CLOSED", "Closed")]
+    # The four causes both the ODPC online form and DHA Form HMIS 1 offer.
+    CAUSE_CHOICES = [
+        ("MALICIOUS", "Malicious or criminal attack"),
+        ("SYSTEM_FAULT", "System fault"),
+        ("HUMAN_ERROR", "Human error"),
+        ("OTHER", "Other"),
+    ]
+    SUBJECTS_EXEMPTION_CHOICES = [
+        ("SAFEGUARDS", "Appropriate security safeguards (e.g. encryption) protect the data — DPA s.43(6)"),
+        ("IDENTITY_UNKNOWN", "The data subjects' identity cannot be established — DPA s.43(1)(b)"),
+        ("INVESTIGATION", "Delayed for the prevention, detection or investigation of an offence — DPA s.43(4)"),
+    ]
 
     reference = models.CharField(max_length=32)
     title = models.CharField(max_length=200)
@@ -178,8 +225,48 @@ class BreachIncident(TenantScopedModel):
     data_categories = models.TextField(blank=True)
     subjects_affected = models.PositiveIntegerField(null=True, blank=True)
     risk_level = models.CharField(max_length=10, choices=RISK_CHOICES)
+    # Measures to mitigate the harm — reg. 38(1)(g)(i).
     containment_actions = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="OPEN")
+
+    # How it happened — reg. 38(1)(c); cause as the ODPC form / HMIS 1 ask it.
+    cause = models.CharField(max_length=16, choices=CAUSE_CHOICES, blank=True)
+    how_it_occurred = models.TextField(blank=True)
+    # Notifiability test — reg. 37. The controller's own reasoning is part of
+    # the notice to the Data Commissioner — reg. 38(1)(b).
+    identifies_subjects = models.BooleanField(
+        "Names or identification numbers were involved", default=False
+    )
+    schedule_categories = models.JSONField(default=list, blank=True)
+    credentials_exposed = models.BooleanField(
+        "Account identifiers with passwords, access codes or biometrics", default=False
+    )
+    publicly_available_only = models.BooleanField(
+        "Only publicly available data, or data disclosed as written law requires", default=False
+    )
+    notifiability_reasoning = models.TextField(blank=True)
+    # Risk scored as the ODPC DPIA guidance's risk register does: likelihood
+    # and impact on a 1–5 scale (optional; the statutory test is reg. 37).
+    likelihood = models.PositiveSmallIntegerField(null=True, blank=True)
+    impact = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Effects / potential harm — DPA s.43(8)(b), reg. 38(1)(f).
+    likely_harm = models.TextField(blank=True)
+    # Remedying the cause and preventing recurrence — reg. 38(1)(g)(ii).
+    remedy_actions = models.TextField(blank=True)
+    # What the data subjects should do to protect themselves — s.43(5)(c).
+    subject_guidance = models.TextField(blank=True)
+    # Identity of the unauthorised person, where known — s.43(5)(d).
+    unauthorised_party = models.TextField(blank=True)
+    other_entities_affected = models.TextField(blank=True)
+    other_reports = models.TextField("Police or other regulators told", blank=True)
+    # Timelines for rectifying the breach — reg. 11(2)(b)(iii).
+    rectification_timeline = models.TextField(blank=True)
+    # Not telling the data subjects needs a lawful ground, and the ground goes
+    # into the notice to the Data Commissioner — reg. 38(2).
+    subjects_exemption = models.CharField(
+        max_length=16, choices=SUBJECTS_EXEMPTION_CHOICES, blank=True
+    )
+    subjects_exemption_grounds = models.TextField(blank=True)
     reported_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -194,11 +281,50 @@ class BreachIncident(TenantScopedModel):
         ]
 
 
+    @property
+    def is_notifiable(self):
+        """Reg. 37: notifiable by the kind of data involved, before any risk judgement."""
+        if self.publicly_available_only:
+            return False
+        return bool(self.identifies_subjects and self.schedule_categories) or self.credentials_exposed
+
+    @property
+    def real_risk_of_harm(self):
+        """DPA s.43(1)'s trigger: notifiable under reg. 37, or assessed as a risk of harm."""
+        return self.is_notifiable or self.risk_level in ("RISK", "HIGH_RISK")
+
+    @property
+    def risk_score(self):
+        if self.likelihood and self.impact:
+            return self.likelihood * self.impact
+        return None
+
+
+class BreachIncidentEvent(TenantScopedModel):
+    """
+    The incident's chronology, append-only — the "chronological account of
+    the steps taken" the notice to the Data Commissioner must give
+    (reg. 38(1)(b)), and the facts/effects/remedial-action record s.43(8)
+    requires for every breach, notifiable or not.
+    """
+
+    incident = models.ForeignKey(BreachIncident, on_delete=models.CASCADE, related_name="events")
+    occurred_at = models.DateTimeField(default=timezone.now)
+    note = models.TextField()
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["occurred_at", "created_at"]
+
+
 class BreachNotification(TenantScopedModel):
     TRACK_CHOICES = [
         ("TENANT_CONTROLLER", "Platform → facility (as data controller)"),
         ("ODPC", "Office of the Data Protection Commissioner"),
-        ("DHA", "Digital Health Agency (Chief Executive Officer)"),
+        ("DHA", "Digital Health Agency (Chief Executive Officer) — Form HMIS 1"),
+        ("DHA_FOLLOWUP", "Digital Health Agency — corrective measures follow-up"),
         ("DATA_SUBJECTS", "Affected data subjects"),
     ]
 
@@ -215,6 +341,8 @@ class BreachNotification(TenantScopedModel):
     method = models.CharField(max_length=100, blank=True)
     reference = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
+    # Required when made after the deadline — DPA s.43(2); HMIS 1 asks too.
+    late_reason = models.TextField(blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["due_at"]
@@ -223,24 +351,38 @@ class BreachNotification(TenantScopedModel):
         ]
 
     @property
+    def has_deadline(self):
+        return self.track not in NO_FIXED_DEADLINE
+
+    @property
     def is_overdue(self):
-        return self.required and self.notified_at is None and self.due_at < timezone.now()
+        return (
+            self.has_deadline
+            and self.required
+            and self.notified_at is None
+            and self.due_at < timezone.now()
+        )
 
 
-def breach_tracks(incident):
+def breach_tracks(incident, dha_notified_at=None):
     """Which notification tracks an incident needs, and when each is due."""
     aware = incident.became_aware_at
+    harm = incident.real_risk_of_harm
     tracks = {
-        "ODPC": incident.risk_level in ("RISK", "HIGH_RISK"),
+        "ODPC": harm,
         "DHA": incident.involves_health_data,
-        "DATA_SUBJECTS": incident.risk_level == "HIGH_RISK",
+        "DHA_FOLLOWUP": incident.involves_health_data,
+        "DATA_SUBJECTS": harm
+        and incident.subjects_exemption not in ("SAFEGUARDS", "IDENTITY_UNKNOWN"),
     }
     if incident.reported_role == "PROCESSOR":
         tracks["TENANT_CONTROLLER"] = True
-    return {
-        track: (required, aware + timedelta(hours=BREACH_DEADLINE_HOURS[track]))
-        for track, required in tracks.items()
-    }
+    due = {track: aware + timedelta(hours=BREACH_DEADLINE_HOURS[track]) for track in tracks}
+    # The follow-up runs from the DHA notice itself; until it is made, from its deadline.
+    due["DHA_FOLLOWUP"] = (dha_notified_at or due["DHA"]) + timedelta(
+        hours=BREACH_DEADLINE_HOURS["DHA_FOLLOWUP"]
+    )
+    return {track: (required, due[track]) for track, required in tracks.items()}
 
 
 class DataSubjectRequest(TenantScopedModel):

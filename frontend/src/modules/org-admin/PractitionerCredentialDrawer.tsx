@@ -3,9 +3,11 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { fieldErrorsFrom, formErrorSummary } from "../../lib/formErrors";
 import {
+  downloadNacadaEvidence,
   getPractitionerCredential,
   HWR_REGULATORS,
   updatePractitionerCredential,
+  uploadNacadaEvidence,
   type Credential,
   type CredentialUpdate,
   type HealthWorkerRegistrySummary,
@@ -26,6 +28,9 @@ const INLINE_FIELDS = [
   "hwr_regulator",
   "hwr_puid",
   "health_worker_registry",
+  "nacada.number",
+  "nacada.issued_on",
+  "nacada.expires_on",
 ];
 
 interface FormState {
@@ -36,7 +41,19 @@ interface FormState {
   mha_recommendation_approved: boolean;
   hwr_regulator: HwrRegulator;
   hwr_puid: string;
+  nacada_number: string;
+  nacada_category: string;
+  nacada_issued_on: string;
+  nacada_expires_on: string;
+  nacada_verified: boolean;
 }
+
+const NACADA_STATUS: Record<string, { label: string; tint: string }> = {
+  VALID: { label: "NACADA licence valid", tint: "bg-brand-green-tint text-brand-green-dark" },
+  EXPIRING: { label: "NACADA licence expires within 30 days", tint: "bg-status-amber-tint text-status-amber" },
+  EXPIRED: { label: "NACADA licence expired", tint: "bg-status-red-tint text-status-red" },
+  UNVERIFIED: { label: "NACADA licence not yet verified", tint: "bg-status-amber-tint text-status-amber" },
+};
 
 function formFromCredential(c: Credential): FormState {
   return {
@@ -47,6 +64,11 @@ function formFromCredential(c: Credential): FormState {
     mha_recommendation_approved: c.mha_recommendation_approved,
     hwr_regulator: c.hwr_regulator,
     hwr_puid: c.health_worker_registry?.puid ?? "",
+    nacada_number: c.nacada.number,
+    nacada_category: c.nacada.category,
+    nacada_issued_on: c.nacada.issued_on ?? "",
+    nacada_expires_on: c.nacada.expires_on ?? "",
+    nacada_verified: Boolean(c.nacada.verified_at),
   };
 }
 
@@ -180,6 +202,10 @@ export function PractitionerCredentialDrawer({
     const verifyChanged =
       f.registration_verified !== wasVerified ||
       (f.registration_verified && number !== c.registration_number);
+    const nacadaNumber = f.nacada_number.trim();
+    const nacadaVerifyChanged =
+      f.nacada_verified !== Boolean(c.nacada.verified_at) ||
+      (f.nacada_verified && nacadaNumber !== c.nacada.number);
     return {
       registration_number: number,
       registration_body: f.registration_body.trim(),
@@ -188,6 +214,13 @@ export function PractitionerCredentialDrawer({
       hwr_regulator: f.hwr_regulator,
       hwr_puid: f.hwr_puid.trim(),
       ...(verifyChanged ? { registration_verified: f.registration_verified } : {}),
+      nacada: {
+        number: nacadaNumber,
+        category: f.nacada_category.trim(),
+        issued_on: f.nacada_issued_on || null,
+        expires_on: f.nacada_expires_on || null,
+        ...(nacadaVerifyChanged ? { verified: f.nacada_verified } : {}),
+      },
     };
   };
 
@@ -220,6 +253,28 @@ export function PractitionerCredentialDrawer({
   };
 
   const regulatorMissing = !form?.hwr_regulator || !form.registration_number.trim();
+
+  const uploadEvidence = async (file: File) => {
+    if (!accessToken || !userId) return;
+    setError(null);
+    try {
+      setCredential(await uploadNacadaEvidence(accessToken, userId, file));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't upload the certificate.");
+    }
+  };
+
+  const viewEvidence = async () => {
+    if (!accessToken || !userId) return;
+    try {
+      const blob = await downloadNacadaEvidence(accessToken, userId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't open the certificate.");
+    }
+  };
 
   return (
     <Drawer
@@ -382,6 +437,113 @@ export function PractitionerCredentialDrawer({
                 </span>
                 <FieldError message={fieldErrors.hwr_puid} />
               </label>
+            </div>
+          </div>
+
+          <div className="border-t border-surface-border pt-4">
+            <h3 className="mb-1 text-sm font-semibold text-ink-900">
+              NACADA accreditation / licence
+            </h3>
+            {credential.nacada.status && (
+              <span
+                className={`mb-3 inline-block rounded-sm px-2 py-0.5 text-xs font-semibold ${NACADA_STATUS[credential.nacada.status].tint}`}
+              >
+                {NACADA_STATUS[credential.nacada.status].label}
+              </span>
+            )}
+            <div className="flex flex-col gap-4">
+              <label className={LABEL_CLASS}>
+                Accreditation / licence number
+                <input
+                  className={FIELD_CLASS}
+                  value={form.nacada_number}
+                  maxLength={64}
+                  onChange={(e) =>
+                    updateForm({
+                      nacada_number: e.target.value,
+                      ...(e.target.value.trim() !== credential.nacada.number
+                        ? { nacada_verified: false }
+                        : { nacada_verified: Boolean(credential.nacada.verified_at) }),
+                    })
+                  }
+                  aria-invalid={Boolean(fieldErrors["nacada.number"])}
+                />
+                <FieldError message={fieldErrors["nacada.number"]} />
+              </label>
+              <label className={LABEL_CLASS}>
+                Category
+                <input
+                  className={FIELD_CLASS}
+                  value={form.nacada_category}
+                  maxLength={150}
+                  onChange={(e) => updateForm({ nacada_category: e.target.value })}
+                />
+                <span className={HELP_CLASS}>As written on the NACADA certificate.</span>
+              </label>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className={LABEL_CLASS}>
+                  Issued
+                  <input
+                    type="date"
+                    className={FIELD_CLASS}
+                    value={form.nacada_issued_on}
+                    onChange={(e) => updateForm({ nacada_issued_on: e.target.value })}
+                  />
+                  <FieldError message={fieldErrors["nacada.issued_on"]} />
+                </label>
+                <label className={LABEL_CLASS}>
+                  Expires
+                  <input
+                    type="date"
+                    className={FIELD_CLASS}
+                    value={form.nacada_expires_on}
+                    onChange={(e) => updateForm({ nacada_expires_on: e.target.value })}
+                    aria-invalid={Boolean(fieldErrors["nacada.expires_on"])}
+                  />
+                  <FieldError message={fieldErrors["nacada.expires_on"]} />
+                </label>
+              </div>
+              <label className="flex items-start gap-2 text-sm text-ink-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-brand-green"
+                  checked={form.nacada_verified}
+                  onChange={(e) => updateForm({ nacada_verified: e.target.checked })}
+                />
+                <span>
+                  Licence verified
+                  <span className={`block ${HELP_CLASS}`}>
+                    {credential.nacada.verified_at
+                      ? `Verified ${new Date(credential.nacada.verified_at).toLocaleString()}${credential.nacada.verified_by ? ` by ${credential.nacada.verified_by}` : ""}.`
+                      : "Tick once you have checked the certificate with NACADA."}
+                  </span>
+                </span>
+              </label>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="cursor-pointer rounded-md border border-surface-border px-3 py-1.5 font-semibold text-ink-700 hover:bg-surface-bg">
+                  {credential.nacada.has_evidence ? "Replace certificate" : "Upload certificate"}
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadEvidence(file);
+                    }}
+                  />
+                </label>
+                {credential.nacada.has_evidence && (
+                  <button
+                    type="button"
+                    className="font-semibold text-brand-green hover:underline"
+                    onClick={() => void viewEvidence()}
+                  >
+                    View certificate
+                  </button>
+                )}
+                <span className={HELP_CLASS}>PDF, PNG or JPEG, up to 10 MB.</span>
+              </div>
             </div>
           </div>
 

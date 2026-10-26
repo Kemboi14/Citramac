@@ -18,6 +18,7 @@ import {
 } from "../theme/runtimeTheme";
 import { useAuth } from "../auth/useAuth";
 import { useTheme } from "../theme/useTheme";
+import { useWorkingBranch } from "./useWorkingBranch";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
 const DESKTOP_BREAKPOINT = 1024; // matches Tailwind's `lg`
@@ -108,6 +109,7 @@ export function AppShell({
   const { clear: forgetSelectedClient } = usePatientContext();
   const navigate = useNavigate();
   const location = useLocation();
+  const workingBranch = useWorkingBranch();
   // One level of expandable nav sub-groups (e.g. "Psychiatry" → its
   // sub-screens) — keyed by label, collapsed by default. See navConfig.tsx.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
@@ -541,7 +543,8 @@ export function AppShell({
             <ErrorBoundary resetKey={location.pathname}>
               <SubscriptionBanner />
               <OfflineSyncBanner />
-              <Outlet />
+              {/* Keyed on the working branch: switching branch reloads the page's data under it. */}
+              <Outlet key={workingBranch} />
             </ErrorBoundary>
           </div>
         </main>

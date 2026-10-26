@@ -5,6 +5,8 @@
  * frontend (5173) and backend (8000) are different origins.
  */
 
+import { workingBranchHeader } from "./workingBranch";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 export interface ApiErrorBody {
@@ -105,6 +107,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       // forcing application/json here would corrupt the upload.
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
+      ...(options.accessToken ? workingBranchHeader() : {}),
     },
     body:
       options.body === undefined
@@ -139,7 +142,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 export async function apiDownload(path: string, accessToken: string): Promise<Blob> {
   const response = await fetch(`${BASE_URL}${path}`, {
     credentials: "include",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, ...workingBranchHeader() },
   });
   if (!response.ok) {
     let body: ApiErrorBody = {

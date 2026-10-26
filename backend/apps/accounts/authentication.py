@@ -3,7 +3,7 @@ from rest_framework.permissions import SAFE_METHODS
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.sysadmin_audit.context import set_audit_actor
-from apps.tenancy.context import platform_admin_context, set_tenant_context
+from apps.tenancy.context import platform_admin_context, set_branch_scope, set_tenant_context
 
 # Writes that stay allowed for a tenant whose subscription has EXPIRED.
 READ_ONLY_EXEMPT_PREFIXES = ("/api/v1/auth/", "/api/v1/me/", "/api/v1/notifications/")
@@ -117,6 +117,16 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
                     organization_id=user.organization_id,
                     is_platform_admin=bool(user.is_superuser),
                 )
+                if user.organization_id and not user.is_superuser:
+                    # Branch isolation within the organization: the branches
+                    # this user is assigned to, narrowed to the one they are
+                    # working in (apps.accounts.access).
+                    from apps.accounts.access import resolve_working_branch
+
+                    scope, working = resolve_working_branch(
+                        user, (request.headers.get("X-Branch-Id") or "").strip()
+                    )
+                    set_branch_scope(scope, working)
             set_audit_actor(user)
             if support_org is not None:
                 from apps.compliance.support_access import record_support_request

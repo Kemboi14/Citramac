@@ -91,9 +91,9 @@ class Command(BaseCommand):
             # org for this person automatically.
             organization.register_email_domain(email)
 
-            if branch is not None:
-                user.branch_access.add(branch)
-            user.roles.add(role)
+            from apps.accounts.access import set_assignments
+
+            set_assignments(user, [(role, branch)])
 
             invite = ActivationInvite.objects.create(
                 organization=organization,

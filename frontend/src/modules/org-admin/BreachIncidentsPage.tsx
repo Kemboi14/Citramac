@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../auth/useAuth";
+import { BreachAssessmentPanel, BreachRegisterButton } from "../../components/BreachAssessmentPanel";
 import { ApiError } from "../../lib/apiClient";
 import {
   BREACH_RISK_LABEL,
@@ -20,10 +21,11 @@ import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "../care/shared
 import { useRecordData } from "../care/record/useRecordData";
 
 // Org Admin — personal-data breach incidents and their notification deadlines
-// (docs/16-DATA-PROTECTION-COMPLIANCE.md; legal opinion of 2 Oct 2026 §10).
-// Which tracks are required and when each is due is computed by the server
+// (DPA 2019 s.43; Data Protection (General) Regulations 2021, regs 37–38;
+// Digital Health (HIM Procedures) Regulations 2025, reg. 11). Which tracks are
+// required and when each is due is computed by the server
 // (apps.compliance.models.breach_tracks); this screen only displays them. The
-// Digital Health Agency's prescribed notification form is not generated here.
+// notices themselves are rendered server-side (apps.compliance.breach_reports).
 
 const RISKS = Object.keys(BREACH_RISK_LABEL) as BreachRisk[];
 const STATUS_LABEL: Record<BreachStatus, string> = {
@@ -381,8 +383,8 @@ function ReportForm({
 function Countdown({ track, now }: { track: BreachNotificationTrack; now: number }) {
   if (!track.required) return <span className="text-ink-400">—</span>;
   if (track.notified_at) return <Tag tone="brand">Notified</Tag>;
-  if (track.without_delay) {
-    return <span className="font-semibold text-priority-red">Due now — without delay</span>;
+  if (!track.has_deadline) {
+    return <span className="text-ink-500">No fixed deadline</span>;
   }
   const remaining = new Date(track.due_at).getTime() - now;
   if (remaining <= 0 || track.is_overdue) {
@@ -412,8 +414,15 @@ function RecordNotificationForm({
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [notifiedAt, setNotifiedAt] = useState(() => toLocalInput(new Date()));
+  const [lateReason, setLateReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // DPA s.43(2): a notice made after its deadline must give the reasons for the delay.
+  const now = useNow();
+  const notifiedIso = localInputToIso(notifiedAt);
+  const notifiedMs = notifiedIso ? new Date(notifiedIso).getTime() : now;
+  const late = track.has_deadline && notifiedMs > new Date(track.due_at).getTime();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -427,6 +436,10 @@ function RecordNotificationForm({
       setError("When it was notified cannot be in the future.");
       return;
     }
+    if (late && !lateReason.trim()) {
+      setError("This notice is after its deadline — give the reasons for the delay.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -435,6 +448,7 @@ function RecordNotificationForm({
         reference: reference.trim(),
         notes: notes.trim(),
         ...(at ? { notified_at: at } : {}),
+        ...(late ? { late_reason: lateReason.trim() } : {}),
       });
       onSaved();
     } catch (err) {
@@ -488,6 +502,22 @@ function RecordNotificationForm({
             onChange={(e) => setNotes(e.target.value)}
           />
         </Field>
+        {late && (
+          <Field
+            label="Reasons for the delay (DPA s.43(2))"
+            htmlFor={`${id}-late`}
+            className="sm:col-span-2"
+          >
+            <textarea
+              id={`${id}-late`}
+              rows={2}
+              className={INPUT}
+              required
+              value={lateReason}
+              onChange={(e) => setLateReason(e.target.value)}
+            />
+          </Field>
+        )}
       </div>
       <ErrorNote>{error}</ErrorNote>
       <div className="flex flex-wrap gap-2">
@@ -507,10 +537,14 @@ function RecordNotificationForm({
   );
 }
 
-function notRequiredText(track: BreachNotificationTrack) {
-  return track.track === "DHA"
-    ? "Not required — no health data involved"
-    : "Not required for this risk level";
+function notRequiredText(track: BreachNotificationTrack, incident: BreachIncident) {
+  if (track.track === "DHA" || track.track === "DHA_FOLLOWUP") {
+    return "Not required — no health data involved";
+  }
+  if (track.track === "DATA_SUBJECTS" && incident.real_risk_of_harm) {
+    return "Not required — exemption recorded in the assessment";
+  }
+  return "Not required — not notifiable and no real risk of harm assessed";
 }
 
 function TracksTable({ incident, onChanged }: { incident: BreachIncident; onChanged: () => void }) {
@@ -544,14 +578,14 @@ function TracksTable({ incident, onChanged }: { incident: BreachIncident; onChan
                     {track.required ? (
                       "Required"
                     ) : (
-                      <span className="text-ink-500">{notRequiredText(track)}</span>
+                      <span className="text-ink-500">{notRequiredText(track, incident)}</span>
                     )}
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
                     {!track.required
                       ? "—"
-                      : track.without_delay
-                        ? "Without delay"
+                      : !track.has_deadline
+                        ? "Within a reasonably practical period"
                         : formatDateTime(track.due_at)}
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
@@ -566,6 +600,11 @@ function TracksTable({ incident, onChanged }: { incident: BreachIncident; onChan
                         {track.reference && <span>Reference: {track.reference}</span>}
                         {track.notes && (
                           <span className="whitespace-pre-wrap text-ink-500">{track.notes}</span>
+                        )}
+                        {track.late_reason && (
+                          <span className="whitespace-pre-wrap text-ink-500">
+                            Late: {track.late_reason}
+                          </span>
                         )}
                       </div>
                     ) : (
@@ -790,6 +829,13 @@ function IncidentDetail({
           </div>
           <TracksTable incident={incident} onChanged={onChanged} />
         </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-500">
+            Assessment and notices
+          </div>
+          <BreachAssessmentPanel incident={incident} canEdit={!closed} onChanged={onChanged} />
+        </div>
       </div>
     </Card>
   );
@@ -829,26 +875,31 @@ export function BreachIncidentsPage() {
         title="Breach Incidents"
         subtitle="Personal-data breaches affecting your facility and the notifications each one requires."
         actions={
-          !reporting && (
-            <button
-              type="button"
-              className={BTN}
-              onClick={() => {
-                setSelected(null);
-                setReporting(true);
-              }}
-            >
-              Report a breach
-            </button>
-          )
+          <div className="flex flex-wrap items-start gap-2">
+            <BreachRegisterButton />
+            {!reporting && (
+              <button
+                type="button"
+                className={BTN}
+                onClick={() => {
+                  setSelected(null);
+                  setReporting(true);
+                }}
+              >
+                Report a breach
+              </button>
+            )}
+          </div>
         }
       />
 
       <Callout>
-        Deadlines follow the Data Protection Act s.43 and the Digital Health regulations — ODPC
-        within 72 hours, Digital Health Agency within 48 hours, and the facility within 48 hours
-        when the platform is the processor. The Digital Health Agency notice must be made on its
-        prescribed form, which this page does not generate.
+        Deadlines follow the Data Protection Act s.43 and the Digital Health (HIM Procedures)
+        Regulations 2025, reg. 11 — the Data Commissioner within 72 hours, the Digital Health Agency
+        on Form HMIS 1 within 48 hours with a follow-up 72 hours after that notice, the clients
+        affected in writing within a reasonably practical period, and the facility within 48 hours
+        when the platform is the processor. Every breach, notifiable or not, stays in the breach
+        register.
       </Callout>
 
       {reporting && (
@@ -896,6 +947,7 @@ export function BreachIncidentsPage() {
                     <th className={TH}>Title</th>
                     <th className={TH}>Became aware</th>
                     <th className={TH}>Risk</th>
+                    <th className={TH}>Notifiable</th>
                     <th className={TH}>Status</th>
                     <th className={TH}>Notifications</th>
                   </tr>
@@ -924,6 +976,9 @@ export function BreachIncidentsPage() {
                         {formatDateTime(incident.became_aware_at)}
                       </td>
                       <td className={TD}>{incident.risk_level_label}</td>
+                      <td className={TD}>
+                        {incident.real_risk_of_harm ? <Tag tone="risk">Notifiable</Tag> : "No"}
+                      </td>
                       <td className={TD}>
                         <Tag tone={statusTone(incident.status)}>
                           {STATUS_LABEL[incident.status]}

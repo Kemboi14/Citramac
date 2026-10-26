@@ -4,6 +4,7 @@ import * as authApi from "../lib/authApi";
 import { ApiError, setSessionInvalidatedHandler } from "../lib/apiClient";
 import { decodeAccessToken } from "../lib/jwt";
 import { getMyProfile, type MyProfile } from "../lib/myProfileApi";
+import { ALL_BRANCHES, getWorkingBranch, setWorkingBranch } from "../lib/workingBranch";
 import { AuthContext, type LoginOutcome } from "./authContextObject";
 
 // Re-exported for existing consumers (e.g. steps/TenantLoginStep.tsx) — the
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionInvalidatedHandler((message) => {
       setAccessToken(null);
       setProfile(null);
+      setWorkingBranch("");
       setSessionEndedMessage(message);
     });
     return () => setSessionInvalidatedHandler(null);
@@ -81,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setAccessToken(null);
     setProfile(null);
+    setWorkingBranch("");
   }, [accessToken]);
 
   const claims = useMemo(
@@ -108,7 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let ignore = false;
     getMyProfile(accessToken)
       .then((fetched) => {
-        if (!ignore) setProfile(fetched);
+        if (ignore) return;
+        // A branch remembered from earlier that this user can't (or can no
+        // longer) work in would make every request fail — fall back to the
+        // server's default instead.
+        const working = getWorkingBranch();
+        const allowed =
+          working === ALL_BRANCHES
+            ? fetched.all_branches
+            : fetched.branches.some((branch) => branch.id === working);
+        if (working && !allowed) setWorkingBranch("");
+        setProfile(fetched);
       })
       .catch(() => {
         // Best-effort — see refreshProfile's own comment.

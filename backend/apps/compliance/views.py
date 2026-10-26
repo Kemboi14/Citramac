@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -23,8 +23,11 @@ from apps.tenancy.context import platform_admin_context
 from apps.tenancy.models import Organization
 
 from .export import build_patient_export
+from . import breach_reports
 from .models import (
+    SECOND_SCHEDULE_CATEGORIES,
     BreachIncident,
+    BreachIncidentEvent,
     BreachNotification,
     DataSubjectRequest,
     PlatformComplianceSettings,
@@ -76,12 +79,13 @@ def _track_payload(track):
         "track_label": track.get_track_display(),
         "required": track.required,
         "due_at": _iso(track.due_at),
-        "without_delay": track.track == "DATA_SUBJECTS",
+        "has_deadline": track.has_deadline,
         "notified_at": _iso(track.notified_at),
         "notified_by": _name(track.notified_by),
         "method": track.method,
         "reference": track.reference,
         "notes": track.notes,
+        "late_reason": track.late_reason,
         "is_overdue": track.is_overdue,
     }
 
@@ -98,6 +102,8 @@ def _incident_payload(incident, detail=False):
         "became_aware_at": _iso(incident.became_aware_at),
         "risk_level": incident.risk_level,
         "risk_level_label": incident.get_risk_level_display(),
+        "is_notifiable": incident.is_notifiable,
+        "real_risk_of_harm": incident.real_risk_of_harm,
         "status": incident.status,
         "overdue_tracks": sum(1 for t in incident.notifications.all() if t.is_overdue),
         "pending_tracks": sum(
@@ -115,7 +121,19 @@ def _incident_payload(incident, detail=False):
                 "containment_actions": incident.containment_actions,
                 "reported_by": _name(incident.reported_by),
                 "closed_at": _iso(incident.closed_at),
+                **{field: getattr(incident, field) for field in _ASSESSMENT_FIELDS},
+                "cause_label": incident.get_cause_display(),
+                "risk_score": incident.risk_score,
                 "tracks": [_track_payload(t) for t in incident.notifications.all()],
+                "events": [
+                    {
+                        "id": str(e.id),
+                        "occurred_at": _iso(e.occurred_at),
+                        "note": e.note,
+                        "recorded_by": _name(e.recorded_by),
+                    }
+                    for e in incident.events.all()
+                ],
             }
         )
     return data
@@ -124,7 +142,9 @@ def _incident_payload(incident, detail=False):
 def _sync_tracks(incident):
     """Create/update tracks from the incident's facts. A track already notified
     is never changed."""
-    for track, (required, due_at) in breach_tracks(incident).items():
+    dha = incident.notifications.filter(track="DHA").first()
+    dha_notified_at = dha.notified_at if dha else None
+    for track, (required, due_at) in breach_tracks(incident, dha_notified_at).items():
         existing = incident.notifications.filter(track=track).first()
         if existing is None:
             BreachNotification.objects.create(
@@ -156,6 +176,29 @@ def _notify_incident(incident, title, body, dedupe_suffix):
     )
 
 
+# Notifiability test (reg. 37), notice content (reg. 38, Form HMIS 1,
+# DPA s.43(5)) and the data-subject exemption (s.43(1)(b), (4), (6)).
+_ASSESSMENT_FIELDS = (
+    "cause",
+    "how_it_occurred",
+    "identifies_subjects",
+    "schedule_categories",
+    "credentials_exposed",
+    "publicly_available_only",
+    "notifiability_reasoning",
+    "likelihood",
+    "impact",
+    "likely_harm",
+    "remedy_actions",
+    "subject_guidance",
+    "unauthorised_party",
+    "other_entities_affected",
+    "other_reports",
+    "rectification_timeline",
+    "subjects_exemption",
+    "subjects_exemption_grounds",
+)
+
 _INCIDENT_FIELDS = (
     "title",
     "description",
@@ -165,7 +208,15 @@ _INCIDENT_FIELDS = (
     "subjects_affected",
     "risk_level",
     "containment_actions",
+    *_ASSESSMENT_FIELDS,
 )
+_BOOLEAN_FIELDS = {
+    "involves_health_data",
+    "identifies_subjects",
+    "credentials_exposed",
+    "publicly_available_only",
+}
+_SCORE_FIELDS = {"likelihood", "impact"}
 
 
 def _apply_incident_fields(incident, data):
@@ -174,13 +225,44 @@ def _apply_incident_fields(incident, data):
             value = data[field]
             if field == "occurred_at":
                 value = parse_datetime(value) if value else None
-            if field == "subjects_affected":
+            elif field == "subjects_affected":
                 value = int(value) if value not in (None, "") else None
+            elif field in _SCORE_FIELDS:
+                value = int(value) if value not in (None, "") else None
+                if value is not None and not 1 <= value <= 5:
+                    raise ValidationError({field: "Score from 1 to 5."})
+            elif field in _BOOLEAN_FIELDS:
+                value = value in (True, "true", "True", "1", 1)
+            elif field == "schedule_categories":
+                known = dict(SECOND_SCHEDULE_CATEGORIES)
+                value = [code for code in (value or []) if code in known]
+            elif value is None:
+                value = ""
             setattr(incident, field, value)
     if incident.risk_level not in dict(BreachIncident.RISK_CHOICES):
         raise ValidationError({"risk_level": "Choose a risk level."})
     if not incident.title or not incident.description:
         raise ValidationError({"title": "Title and description are required."})
+    if incident.cause and incident.cause not in dict(BreachIncident.CAUSE_CHOICES):
+        raise ValidationError({"cause": "Unknown cause."})
+    if incident.subjects_exemption:
+        if incident.subjects_exemption not in dict(BreachIncident.SUBJECTS_EXEMPTION_CHOICES):
+            raise ValidationError({"subjects_exemption": "Unknown ground."})
+        if not incident.subjects_exemption_grounds.strip():
+            raise ValidationError(
+                {
+                    "subjects_exemption_grounds": "Explain the grounds — they go into the notice "
+                    "to the Data Commissioner (reg. 38(2))."
+                }
+            )
+    if incident.occurred_at and incident.occurred_at > incident.became_aware_at:
+        raise ValidationError({"occurred_at": "Can't be after you became aware of it."})
+
+
+def _log_event(incident, note, user):
+    BreachIncidentEvent.objects.create(
+        organization_id=incident.organization_id, incident=incident, note=note, recorded_by=user
+    )
 
 
 class BreachIncidentsView(APIView):
@@ -190,7 +272,7 @@ class BreachIncidentsView(APIView):
             with platform_admin_context():
                 incidents = list(
                     BreachIncident.all_objects.select_related("organization").prefetch_related(
-                        "notifications"
+                        "notifications", "events"
                     )
                 )
         else:
@@ -227,6 +309,7 @@ class BreachIncidentsView(APIView):
             _apply_incident_fields(incident, data)
             incident.save()
             _sync_tracks(incident)
+            _log_event(incident, "Incident recorded.", user)
             _notify_incident(
                 incident,
                 f"Data breach incident {incident.reference} recorded",
@@ -265,6 +348,12 @@ class BreachIncidentView(APIView):
                     raise ValidationError(
                         {"status": "Record every required notification before closing."}
                     )
+                if new_status != incident.status:
+                    _log_event(
+                        incident,
+                        f"Status changed to {dict(BreachIncident.STATUS_CHOICES)[new_status]}.",
+                        request.user,
+                    )
                 incident.status = new_status
                 incident.closed_at = timezone.now() if new_status == "CLOSED" else None
             incident.save()
@@ -294,17 +383,106 @@ class BreachNotificationView(APIView):
         if track.notified_at:
             raise ValidationError({"detail": "This notification is already recorded."})
         notified_at = parse_datetime(request.data.get("notified_at") or "") or timezone.now()
+        if notified_at > timezone.now():
+            raise ValidationError({"notified_at": "Cannot be in the future."})
         method = (request.data.get("method") or "").strip()
         if not method:
             raise ValidationError({"method": "Say how the notification was made."})
-        with platform_admin_context():
+        late_reason = (request.data.get("late_reason") or "").strip()
+        if track.has_deadline and notified_at > track.due_at and not late_reason:
+            raise ValidationError(
+                {
+                    "late_reason": "This notice is after its deadline — give the reasons for "
+                    "the delay (DPA s.43(2))."
+                }
+            )
+        with transaction.atomic(), platform_admin_context():
             track.notified_at = notified_at
             track.notified_by = user
             track.method = method
             track.reference = (request.data.get("reference") or "").strip()
             track.notes = (request.data.get("notes") or "").strip()
+            track.late_reason = late_reason
             track.save()
+            _log_event(incident, f"Notified: {track.get_track_display()} ({method}).", user)
+            # The DHA follow-up's 72 hours run from this notice (reg. 11(2)(b)).
+            _sync_tracks(incident)
             return Response(_track_payload(track))
+
+
+class BreachIncidentEventView(APIView):
+    """POST — add a step to the incident's chronology (reg. 38(1)(b))."""
+
+    def post(self, request, pk):
+        incident = _incident_for(request.user, pk)
+        note = (request.data.get("note") or "").strip()
+        if not note:
+            raise ValidationError({"note": "Describe the step taken."})
+        occurred_at = parse_datetime(request.data.get("occurred_at") or "") or timezone.now()
+        if occurred_at > timezone.now():
+            raise ValidationError({"occurred_at": "Cannot be in the future."})
+        with platform_admin_context():
+            BreachIncidentEvent.objects.create(
+                organization_id=incident.organization_id,
+                incident=incident,
+                note=note,
+                occurred_at=occurred_at,
+                recorded_by=request.user,
+            )
+            return Response(_incident_payload(incident, detail=True), status=status.HTTP_201_CREATED)
+
+
+class BreachReportView(APIView):
+    """GET — a printable notice built from the incident record (see breach_reports)."""
+
+    def get(self, request, pk, kind):
+        incident = _incident_for(request.user, pk)
+        if kind not in breach_reports.KINDS:
+            raise ValidationError({"kind": "Unknown report."})
+        with platform_admin_context():
+            html = breach_reports.render(kind, incident, request.user)
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+class BreachRegisterView(APIView):
+    """GET — the printable register of every breach (DPA s.43(8)), notifiable or not."""
+
+    def get(self, request):
+        user = request.user
+        if user.is_superuser:
+            organization = get_object_or_404(Organization, pk=request.query_params.get("organization"))
+        else:
+            _require_org_admin(user)
+            organization = user.organization
+        with platform_admin_context():
+            incidents = list(
+                BreachIncident.all_objects.filter(organization=organization)
+                .prefetch_related("notifications", "events")
+                .order_by("became_aware_at")
+            )
+            html = breach_reports.render_register(organization, incidents, user)
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+class BreachOptionsView(APIView):
+    """GET — the choice lists the incident form needs."""
+
+    def get(self, request):
+        if not request.user.is_superuser:
+            _require_org_admin(request.user)
+        return Response(
+            {
+                "schedule_categories": [
+                    {"code": c, "label": label} for c, label in SECOND_SCHEDULE_CATEGORIES
+                ],
+                "causes": [{"code": c, "label": label} for c, label in BreachIncident.CAUSE_CHOICES],
+                "subjects_exemptions": [
+                    {"code": c, "label": label}
+                    for c, label in BreachIncident.SUBJECTS_EXEMPTION_CHOICES
+                ],
+                "report_kinds": [{"code": c, "label": label} for c, label in breach_reports.KINDS.items()],
+            }
+        )
 
 
 # ── Data subject requests (legal opinion §11) ──
@@ -595,6 +773,7 @@ def _profile_payload(profile, platform, evidence_path=None):
         "dpo_name": profile.dpo_name,
         "dpo_email": profile.dpo_email,
         "dpo_phone": profile.dpo_phone,
+        "dhs_certification_number": profile.dhs_certification_number,
         "gaps": profile.gaps(platform),
     }
 
@@ -618,7 +797,7 @@ class ComplianceProfileView(APIView):
     def patch(self, request):
         _require_org_admin(request.user)
         profile = _profile_for(request.user.organization)
-        for field in ("dpo_name", "dpo_email", "dpo_phone"):
+        for field in ("dpo_name", "dpo_email", "dpo_phone", "dhs_certification_number"):
             if field in request.data:
                 setattr(profile, field, (request.data.get(field) or "").strip())
         evidence = request.FILES.get("odpc_evidence")

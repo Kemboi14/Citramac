@@ -60,9 +60,21 @@ class TenantScopedModel(TimestampedModel):
     objects = TenantScopedManager()
     all_objects = models.Manager()
 
+    # Set per model by apps.tenancy.branch_scope at startup.
+    branch_scope_path = None
+    stamps_working_branch = False
+
     class Meta:
         abstract = True
         base_manager_name = "all_objects"
+
+    def save(self, *args, **kwargs):
+        if self.stamps_working_branch and self._state.adding and self.branch_id is None:
+            from .context import get_active_branch_id
+
+            working = get_active_branch_id()
+            self.branch_id = uuid.UUID(working) if working else None
+        super().save(*args, **kwargs)
 
 
 class SubscriptionPlan(models.Model):
@@ -766,6 +778,9 @@ class Subscription(TenantScopedModel):
     # Admin set it by hand (e.g. unpaid invoice). The grace period runs
     # from here. Maintained by save(); cleared once it's ACTIVE again.
     past_due_since = models.DateField(null=True, blank=True)
+    # This tenant's own grace period, set by Super Admin; blank uses the
+    # platform default (SubscriptionPolicy.grace_period_days).
+    grace_period_days = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         constraints = [
@@ -793,7 +808,13 @@ class Subscription(TenantScopedModel):
 
         if self.past_due_since is None:
             return None
-        return self.past_due_since + timedelta(days=SubscriptionPolicy.get_solo().grace_period_days)
+        return self.past_due_since + timedelta(days=self.effective_grace_period_days)
+
+    @property
+    def effective_grace_period_days(self):
+        if self.grace_period_days is not None:
+            return self.grace_period_days
+        return SubscriptionPolicy.get_solo().grace_period_days
 
     @property
     def days_until_period_end(self):

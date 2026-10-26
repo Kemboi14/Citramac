@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Printer, UserPlus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -21,6 +21,14 @@ import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 import { PractitionerCredentialDrawer } from "./PractitionerCredentialDrawer";
+import {
+  assignmentsFromRows,
+  coveredBranches,
+  rowsFromAssignments,
+  StaffAssignmentsEditor,
+  type AssignmentRow,
+} from "./StaffAssignmentsEditor";
+import { printStaffList, STATUS_FILTERS, staffStatusKeys, type StaffFilters } from "./staffList";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -40,21 +48,39 @@ const ACCESS_STATUS_LABEL: Record<string, string> = {
   expired: "Access expired",
 };
 
+const NACADA_BADGE: Record<string, { label: string; tint: string }> = {
+  EXPIRED: { label: "NACADA expired", tint: "bg-status-red-tint text-status-red" },
+  EXPIRING: { label: "NACADA expiring", tint: "bg-status-amber-tint text-status-amber" },
+  UNVERIFIED: { label: "NACADA unverified", tint: "bg-status-amber-tint text-status-amber" },
+  VALID: { label: "NACADA", tint: "bg-brand-green-tint text-brand-green-dark" },
+};
+
 const EMPTY_INVITE = {
   email: "",
   first_name: "",
   last_name: "",
   staff_id: "",
-  role: "",
   primary_branch: "",
   department: "",
+  limited: false,
   access_starts_at: "",
   access_ends_at: "",
+};
+
+const EMPTY_FILTERS: StaffFilters = {
+  search: "",
+  role: "",
+  branch: "",
+  department: "",
+  duty: "",
+  status: "",
 };
 
 interface AccessEditState {
   primary_branch: string;
   department: string;
+  /** False = unlimited (no access window); true = time-limited. */
+  limited: boolean;
   access_starts_at: string;
   access_ends_at: string;
 }
@@ -69,7 +95,7 @@ function toDatetimeLocalInput(value: string | null) {
  * citramac_ORG-admin.html "Staff / MHP Team".
  */
 export function StaffTeamPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, profile } = useAuth();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -83,9 +109,11 @@ export function StaffTeamPage() {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
 
-  const [roleFilter, setRoleFilter] = useState("");
+  const [filters, setFilters] = useState<StaffFilters>(EMPTY_FILTERS);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE);
+  const [inviteRows, setInviteRows] = useState<AssignmentRow[]>([{ role: "", branch: "" }]);
+  const [accessRows, setAccessRows] = useState<AssignmentRow[]>([]);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const [accessDrawer, setAccessDrawer] = useState<{ open: boolean; staff: Staff | null }>({
@@ -95,6 +123,7 @@ export function StaffTeamPage() {
   const [accessForm, setAccessForm] = useState<AccessEditState>({
     primary_branch: "",
     department: "",
+    limited: false,
     access_starts_at: "",
     access_ends_at: "",
   });
@@ -130,7 +159,8 @@ export function StaffTeamPage() {
 
   const submitInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!accessToken || !inviteForm.role) return;
+    const assignments = assignmentsFromRows(inviteRows);
+    if (!accessToken || assignments.length === 0) return;
     setInviteError(null);
     setBusy(true);
     try {
@@ -139,13 +169,14 @@ export function StaffTeamPage() {
         first_name: inviteForm.first_name,
         last_name: inviteForm.last_name,
         staff_id: inviteForm.staff_id || undefined,
-        role: Number(inviteForm.role),
+        assignments,
         primary_branch: inviteForm.primary_branch || undefined,
         department: inviteForm.department || undefined,
-        access_starts_at: inviteForm.access_starts_at || undefined,
-        access_ends_at: inviteForm.access_ends_at || undefined,
+        access_starts_at: inviteForm.limited ? inviteForm.access_starts_at || undefined : undefined,
+        access_ends_at: inviteForm.limited ? inviteForm.access_ends_at || undefined : undefined,
       });
       setInviteForm(EMPTY_INVITE);
+      setInviteRows([{ role: "", branch: "" }]);
       setShowInviteForm(false);
       await refreshStaff();
     } catch (err) {
@@ -160,9 +191,15 @@ export function StaffTeamPage() {
     setAccessForm({
       primary_branch: s.primary_branch ?? "",
       department: s.department ?? "",
+      limited: Boolean(s.access_starts_at || s.access_ends_at),
       access_starts_at: toDatetimeLocalInput(s.access_starts_at),
       access_ends_at: toDatetimeLocalInput(s.access_ends_at),
     });
+    setAccessRows(
+      s.assignments.length
+        ? rowsFromAssignments(s.assignments)
+        : s.roles.map((role) => ({ role: String(role), branch: "" })),
+    );
     setAccessDrawer({ open: true, staff: s });
   };
 
@@ -171,10 +208,11 @@ export function StaffTeamPage() {
     setAccessError(null);
     try {
       const updated = await updateStaff(accessToken, accessDrawer.staff.id, {
+        assignments: assignmentsFromRows(accessRows),
         primary_branch: accessForm.primary_branch || null,
         department: accessForm.department || null,
-        access_starts_at: accessForm.access_starts_at || null,
-        access_ends_at: accessForm.access_ends_at || null,
+        access_starts_at: accessForm.limited ? accessForm.access_starts_at || null : null,
+        access_ends_at: accessForm.limited ? accessForm.access_ends_at || null : null,
       });
       setStaff((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
       setAccessDrawer({ open: false, staff: null });
@@ -271,7 +309,50 @@ export function StaffTeamPage() {
     }
   };
 
-  const visibleStaff = roleFilter ? staff.filter((s) => s.role_names.includes(roleFilter)) : staff;
+  const visibleStaff = useMemo(() => {
+    const search = filters.search.trim().toLowerCase();
+    return staff.filter((s) => {
+      if (
+        search &&
+        ![s.first_name, s.last_name, s.email, s.staff_id]
+          .join(" ")
+          .toLowerCase()
+          .includes(search)
+      )
+        return false;
+      if (filters.role && !s.role_names.includes(filters.role)) return false;
+      if (filters.branch) {
+        const atBranch =
+          s.assignments.length > 0
+            ? s.assignments.some((a) => a.branch === null || a.branch === filters.branch)
+            : s.branch_access.includes(filters.branch) || s.primary_branch === filters.branch;
+        if (!atBranch) return false;
+      }
+      if (filters.department && s.department !== filters.department) return false;
+      if (filters.duty === "on" && !s.is_on_duty) return false;
+      if (filters.duty === "off" && s.is_on_duty) return false;
+      if (filters.status && !staffStatusKeys(s).includes(filters.status)) return false;
+      return true;
+    });
+  }, [staff, filters]);
+
+  const filtersActive = Object.values(filters).some(Boolean);
+  const setFilter = (patch: Partial<StaffFilters>) => setFilters((f) => ({ ...f, ...patch }));
+
+  const handlePrint = () => {
+    printStaffList({
+      organizationName: profile?.organization_name ?? "",
+      staff: visibleStaff,
+      filters,
+      branches,
+      departments,
+    });
+  };
+
+  const branchOptionsFor = (rows: AssignmentRow[]) => {
+    const covered = coveredBranches(rows, roles);
+    return covered === null ? branches : branches.filter((b) => covered.has(b.id));
+  };
 
   const initials = (s: Staff) => `${s.first_name.charAt(0)}${s.last_name.charAt(0)}`.toUpperCase();
 
@@ -301,10 +382,21 @@ export function StaffTeamPage() {
     },
     {
       key: "branch",
-      header: "Branch / Department",
+      header: "Branches / Department",
       cell: (s) => (
         <div>
-          <div>{s.primary_branch_name ?? "—"}</div>
+          {s.assignments.length > 0 ? (
+            <ul>
+              {s.assignments.map((a) => (
+                <li key={a.id ?? `${a.role}-${a.branch}`}>
+                  {a.role_name}{" "}
+                  <span className="text-ink-500">· {a.branch_name ?? "All branches"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>{s.primary_branch_name ?? "—"}</div>
+          )}
           {s.department_name && <div className="text-xs text-ink-500">{s.department_name}</div>}
         </div>
       ),
@@ -351,6 +443,13 @@ export function StaffTeamPage() {
               className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${ACCESS_STATUS_TINT[s.access_status]}`}
             >
               {ACCESS_STATUS_LABEL[s.access_status]}
+            </span>
+          )}
+          {s.nacada_status && (
+            <span
+              className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${NACADA_BADGE[s.nacada_status].tint}`}
+            >
+              {NACADA_BADGE[s.nacada_status].label}
             </span>
           )}
         </div>
@@ -423,7 +522,7 @@ export function StaffTeamPage() {
           className={`${itemClass} text-ink-700 hover:underline`}
           onClick={() => openAccessDrawer(s)}
         >
-          Branch / Access…
+          Roles, Branches & Access…
         </button>
         <button
           type="button"
@@ -447,22 +546,16 @@ export function StaffTeamPage() {
         <h1 className="font-display text-2xl font-bold text-ink-900">Staff / MHP Team</h1>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className={`${LABEL_CLASS} flex-row items-center gap-2`}>
-          <span>Role</span>
-          <select
-            className={FIELD_CLASS}
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-          >
-            <option value="">All Roles</option>
-            {roles.map((r) => (
-              <option key={r.id} value={r.name}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
+          onClick={handlePrint}
+          disabled={loading || visibleStaff.length === 0}
+        >
+          <Printer size={16} />
+          Print list
+        </button>
         <button
           type="button"
           className={`${BUTTON_CLASS} flex items-center gap-2`}
@@ -471,6 +564,105 @@ export function StaffTeamPage() {
           <UserPlus size={16} />
           Add Staff Member
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 rounded-lg border border-surface-border bg-surface-card p-4 sm:grid-cols-2 lg:grid-cols-6">
+        <label className={`${LABEL_CLASS} lg:col-span-2`}>
+          Search
+          <input
+            type="search"
+            className={FIELD_CLASS}
+            placeholder="Name, email or staff ID"
+            value={filters.search}
+            onChange={(e) => setFilter({ search: e.target.value })}
+          />
+        </label>
+        <label className={LABEL_CLASS}>
+          Role
+          <select
+            className={FIELD_CLASS}
+            value={filters.role}
+            onChange={(e) => setFilter({ role: e.target.value })}
+          >
+            <option value="">All roles</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.name}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL_CLASS}>
+          Branch
+          <select
+            className={FIELD_CLASS}
+            value={filters.branch}
+            onChange={(e) => setFilter({ branch: e.target.value })}
+          >
+            <option value="">All branches</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL_CLASS}>
+          Department
+          <select
+            className={FIELD_CLASS}
+            value={filters.department}
+            onChange={(e) => setFilter({ department: e.target.value })}
+          >
+            <option value="">All departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL_CLASS}>
+          Duty
+          <select
+            className={FIELD_CLASS}
+            value={filters.duty}
+            onChange={(e) => setFilter({ duty: e.target.value as StaffFilters["duty"] })}
+          >
+            <option value="">On or off duty</option>
+            <option value="on">On duty</option>
+            <option value="off">Off duty</option>
+          </select>
+        </label>
+        <label className={`${LABEL_CLASS} lg:col-span-2`}>
+          Status
+          <select
+            className={FIELD_CLASS}
+            value={filters.status}
+            onChange={(e) => setFilter({ status: e.target.value })}
+          >
+            <option value="">Any status</option>
+            {STATUS_FILTERS.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-end justify-between gap-3 text-sm text-ink-500 sm:col-span-2 lg:col-span-4">
+          <span>
+            Showing {visibleStaff.length} of {staff.length} staff
+          </span>
+          {filtersActive && (
+            <button
+              type="button"
+              className="font-semibold text-brand-green hover:underline"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {showInviteForm && (
@@ -516,22 +708,6 @@ export function StaffTeamPage() {
               />
             </label>
             <label className={LABEL_CLASS}>
-              Role
-              <select
-                className={FIELD_CLASS}
-                value={inviteForm.role}
-                onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))}
-                required
-              >
-                <option value="">Select a role…</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={LABEL_CLASS}>
               Primary Branch
               <select
                 className={FIELD_CLASS}
@@ -539,7 +715,7 @@ export function StaffTeamPage() {
                 onChange={(e) => setInviteForm((f) => ({ ...f, primary_branch: e.target.value }))}
               >
                 <option value="">Select a branch…</option>
-                {branches.map((b) => (
+                {branchOptionsFor(inviteRows).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
@@ -564,31 +740,22 @@ export function StaffTeamPage() {
           </div>
 
           <div className="mt-4">
-            <h3 className="mb-2 text-[11.5px] font-semibold text-ink-700">
-              Access window (optional — for a locum or fixed-term account)
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className={LABEL_CLASS}>
-                Access starts
-                <input
-                  type="datetime-local"
-                  className={FIELD_CLASS}
-                  value={inviteForm.access_starts_at}
-                  onChange={(e) =>
-                    setInviteForm((f) => ({ ...f, access_starts_at: e.target.value }))
-                  }
-                />
-              </label>
-              <label className={LABEL_CLASS}>
-                Access ends
-                <input
-                  type="datetime-local"
-                  className={FIELD_CLASS}
-                  value={inviteForm.access_ends_at}
-                  onChange={(e) => setInviteForm((f) => ({ ...f, access_ends_at: e.target.value }))}
-                />
-              </label>
-            </div>
+            <h3 className="mb-2 text-[11.5px] font-semibold text-ink-700">Roles and branches</h3>
+            <StaffAssignmentsEditor
+              rows={inviteRows}
+              onChange={setInviteRows}
+              roles={roles}
+              branches={branches}
+            />
+          </div>
+
+          <div className="mt-4">
+            <AccessWindowFields
+              limited={inviteForm.limited}
+              startsAt={inviteForm.access_starts_at}
+              endsAt={inviteForm.access_ends_at}
+              onChange={(patch) => setInviteForm((f) => ({ ...f, ...patch }))}
+            />
           </div>
 
           {inviteError && (
@@ -608,6 +775,7 @@ export function StaffTeamPage() {
                 setShowInviteForm(false);
                 setInviteError(null);
                 setInviteForm(EMPTY_INVITE);
+                setInviteRows([{ role: "", branch: "" }]);
               }}
             >
               Cancel
@@ -639,7 +807,7 @@ export function StaffTeamPage() {
 
       <Drawer
         open={accessDrawer.open}
-        title="Branch, Department & Access"
+        title="Roles, Branches & Access"
         subtitle={
           accessDrawer.staff ? `${accessDrawer.staff.first_name} ${accessDrawer.staff.last_name}` : undefined
         }
@@ -660,6 +828,18 @@ export function StaffTeamPage() {
         }
       >
         <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-ink-700">Roles and branches</h3>
+            <StaffAssignmentsEditor
+              rows={accessRows}
+              onChange={setAccessRows}
+              roles={roles}
+              branches={branches}
+            />
+            <p className="mt-2 text-xs text-ink-500">
+              Each role applies only at its branch. Org Admin always covers every branch.
+            </p>
+          </div>
           <label className={LABEL_CLASS}>
             Primary Branch
             <select
@@ -668,7 +848,7 @@ export function StaffTeamPage() {
               onChange={(e) => setAccessForm((f) => ({ ...f, primary_branch: e.target.value }))}
             >
               <option value="">Unassigned</option>
-              {branches.map((b) => (
+              {branchOptionsFor(accessRows).map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
@@ -690,33 +870,12 @@ export function StaffTeamPage() {
               ))}
             </select>
           </label>
-          <div>
-            <h3 className="mb-2 text-[11.5px] font-semibold text-ink-700">
-              Access window (optional — for a locum or fixed-term account)
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className={LABEL_CLASS}>
-                Access starts
-                <input
-                  type="datetime-local"
-                  className={FIELD_CLASS}
-                  value={accessForm.access_starts_at}
-                  onChange={(e) =>
-                    setAccessForm((f) => ({ ...f, access_starts_at: e.target.value }))
-                  }
-                />
-              </label>
-              <label className={LABEL_CLASS}>
-                Access ends
-                <input
-                  type="datetime-local"
-                  className={FIELD_CLASS}
-                  value={accessForm.access_ends_at}
-                  onChange={(e) => setAccessForm((f) => ({ ...f, access_ends_at: e.target.value }))}
-                />
-              </label>
-            </div>
-          </div>
+          <AccessWindowFields
+            limited={accessForm.limited}
+            startsAt={accessForm.access_starts_at}
+            endsAt={accessForm.access_ends_at}
+            onChange={(patch) => setAccessForm((f) => ({ ...f, ...patch }))}
+          />
           {accessError && (
             <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
               {accessError}
@@ -733,5 +892,66 @@ export function StaffTeamPage() {
         onClose={() => setCredentialStaff(null)}
       />
     </div>
+  );
+}
+
+/** Unlimited (the default) or a time-limited window, e.g. for a locum or fixed-term account. */
+function AccessWindowFields({
+  limited,
+  startsAt,
+  endsAt,
+  onChange,
+}: {
+  limited: boolean;
+  startsAt: string;
+  endsAt: string;
+  onChange: (patch: { limited?: boolean; access_starts_at?: string; access_ends_at?: string }) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-[11.5px] font-semibold text-ink-700">Access time</legend>
+      <div className="mb-3 flex flex-wrap gap-4 text-sm text-ink-700">
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            className="accent-brand-green"
+            checked={!limited}
+            onChange={() => onChange({ limited: false })}
+          />
+          Unlimited
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            className="accent-brand-green"
+            checked={limited}
+            onChange={() => onChange({ limited: true })}
+          />
+          Time-limited (locum or fixed-term)
+        </label>
+      </div>
+      {limited && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={LABEL_CLASS}>
+            Access starts
+            <input
+              type="datetime-local"
+              className={FIELD_CLASS}
+              value={startsAt}
+              onChange={(e) => onChange({ access_starts_at: e.target.value })}
+            />
+          </label>
+          <label className={LABEL_CLASS}>
+            Access ends
+            <input
+              type="datetime-local"
+              className={FIELD_CLASS}
+              value={endsAt}
+              onChange={(e) => onChange({ access_ends_at: e.target.value })}
+            />
+          </label>
+        </div>
+      )}
+    </fieldset>
   );
 }

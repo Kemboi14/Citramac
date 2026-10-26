@@ -18,9 +18,10 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.accounts.access import active_roles
+
 from . import ews as ews_module
-from . import facility_time
-from . import mental_state
+from . import facility_time, mental_state
 from .models import (
     ClinicalAlert,
     MedicationHistoryEntry,
@@ -261,7 +262,7 @@ def _has_role(user, names):
     query = Q()
     for name in names:
         query |= Q(name__iexact=name)
-    return user.roles.filter(query).exists()
+    return active_roles(user).filter(query).exists()
 
 
 def can_prescribe(user):
@@ -737,8 +738,9 @@ def allergy_text(patient):
 
 def build_sbar(patient, user):
     """Handover text built from the record — nothing is typed twice."""
-    from . import intake, services
     from apps.triage.models import VitalSigns
+
+    from . import intake, services
 
     signed = intake.current_draft(patient) or intake.latest_signed(patient)
     sections = signed.sections if signed else {}

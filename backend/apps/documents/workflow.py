@@ -13,6 +13,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.accounts.access import active_roles
+
 from . import catalogue, organizer
 from .models import (
     SIGNED_STATES,
@@ -61,7 +63,7 @@ ACTION_PERMISSION = {
 def role_names(user):
     if not (user and user.is_authenticated):
         return set()
-    return {name.lower() for name in user.roles.values_list("name", flat=True)}
+    return {name.lower() for name in active_roles(user).values_list("name", flat=True)}
 
 
 def in_groups(user, groups):

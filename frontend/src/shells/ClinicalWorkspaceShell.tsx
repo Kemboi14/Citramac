@@ -54,7 +54,11 @@ export function ClinicalWorkspaceShell() {
       navGroups={CLINICAL_NAV}
       userInitials={initials}
       userName={name}
-      userRole={claims?.role.replace(/_/g, " ") || "Clinician"}
+      userRole={
+        // In the clinical shell, name the clinical role of someone who is also Org Admin.
+        (claims?.roles?.find((role) => role !== "Org Admin" && role !== "Auditor") ?? claims?.role)
+          ?.replace(/_/g, " ") || "Clinician"
+      }
       searchPlaceholder="Search clients..."
       searchSlot={<GlobalClientSearch />}
       profilePath="/clinical/profile"

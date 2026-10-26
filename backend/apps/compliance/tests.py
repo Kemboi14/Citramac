@@ -182,7 +182,9 @@ class BreachIncidentTests(ComplianceTestCase):
             aware = BreachIncident.all_objects.get(pk=response.data["id"]).became_aware_at
         self.assertTrue(tracks["ODPC"]["required"])
         self.assertTrue(tracks["DHA"]["required"])
-        self.assertFalse(tracks["DATA_SUBJECTS"]["required"])
+        # DPA s.43(1): a real risk of harm triggers the Commissioner and the data subjects alike.
+        self.assertTrue(tracks["DATA_SUBJECTS"]["required"])
+        self.assertTrue(tracks["DHA_FOLLOWUP"]["required"])
         self.assertNotIn("TENANT_CONTROLLER", tracks)
         with platform_admin_context():
             odpc = BreachNotification.all_objects.get(incident_id=response.data["id"], track="ODPC")
@@ -241,6 +243,147 @@ class BreachIncidentTests(ComplianceTestCase):
         second = remind_breach_notification_deadlines()
         self.assertGreater(first, 0)
         self.assertEqual(second, 0)
+
+
+class BreachAssessmentTests(ComplianceTestCase):
+    """Notifiability (reg. 37), late notices (s.43(2)), the DHA follow-up, notices and register."""
+
+    _create = BreachIncidentTests._create
+
+    def _tracks(self, data):
+        return {t["track"]: t for t in data["tracks"]}
+
+    def _patch(self, incident_id, payload, user=None):
+        return self.client.patch(
+            reverse("breach-incident", args=[incident_id]),
+            payload,
+            format="json",
+            **self.auth(user or self.admin),
+        )
+
+    def _record(self, track_id, payload, user=None):
+        return self.client.post(
+            reverse("breach-notification-record", args=[track_id]),
+            payload,
+            format="json",
+            **self.auth(user or self.admin),
+        )
+
+    def test_names_with_mental_health_data_are_notifiable_whatever_the_risk_level(self):
+        incident_id = self._create(self.admin, risk_level="UNLIKELY").data["id"]
+        self.assertFalse(self._tracks(self._patch(incident_id, {}).data)["ODPC"]["required"])
+        data = self._patch(
+            incident_id, {"identifies_subjects": True, "schedule_categories": ["MENTAL_DISORDER"]}
+        ).data
+        self.assertTrue(data["is_notifiable"])
+        tracks = self._tracks(data)
+        self.assertTrue(tracks["ODPC"]["required"])
+        self.assertTrue(tracks["DATA_SUBJECTS"]["required"])
+        self.assertFalse(tracks["DATA_SUBJECTS"]["has_deadline"])
+        public = self._patch(incident_id, {"publicly_available_only": True}).data
+        self.assertFalse(public["is_notifiable"])
+        self.assertFalse(self._tracks(public)["ODPC"]["required"])
+
+    def test_unknown_schedule_categories_are_dropped(self):
+        incident_id = self._create(self.admin).data["id"]
+        data = self._patch(incident_id, {"schedule_categories": ["SUBSTANCE_ABUSE", "MADE_UP"]}).data
+        self.assertEqual(data["schedule_categories"], ["SUBSTANCE_ABUSE"])
+
+    def test_not_telling_data_subjects_needs_a_lawful_ground_stated(self):
+        incident_id = self._create(self.admin, risk_level="HIGH_RISK").data["id"]
+        no_grounds = self._patch(incident_id, {"subjects_exemption": "SAFEGUARDS"})
+        self.assertEqual(no_grounds.status_code, 400)
+        exempt = self._patch(
+            incident_id,
+            {
+                "subjects_exemption": "SAFEGUARDS",
+                "subjects_exemption_grounds": "Full-disk encryption; the key was not taken.",
+            },
+        )
+        self.assertEqual(exempt.status_code, 200, exempt.data)
+        self.assertFalse(self._tracks(exempt.data)["DATA_SUBJECTS"]["required"])
+        # Delay for an investigation postpones the letter; it does not remove it.
+        delayed = self._patch(
+            incident_id,
+            {"subjects_exemption": "INVESTIGATION", "subjects_exemption_grounds": "Police request."},
+        ).data
+        self.assertTrue(self._tracks(delayed)["DATA_SUBJECTS"]["required"])
+
+    def test_a_late_notice_must_give_reasons(self):
+        aware = (timezone.now() - timedelta(hours=80)).isoformat()
+        tracks = self._tracks(self._create(self.admin, became_aware_at=aware).data)
+        odpc = tracks["ODPC"]
+        self.assertTrue(odpc["is_overdue"])
+        missing = self._record(odpc["id"], {"method": "ODPC online form"})
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("late_reason", missing.data)
+        recorded = self._record(
+            odpc["id"], {"method": "ODPC online form", "late_reason": "DPO was on leave."}
+        )
+        self.assertEqual(recorded.status_code, 200, recorded.data)
+        self.assertEqual(recorded.data["late_reason"], "DPO was on leave.")
+
+    def test_dha_follow_up_runs_72_hours_from_the_dha_notice(self):
+        data = self._create(self.admin).data
+        tracks = self._tracks(data)
+        notified_at = timezone.now() - timedelta(minutes=30)
+        self._record(
+            tracks["DHA"]["id"], {"method": "Form HMIS 1 by email", "notified_at": notified_at.isoformat()}
+        )
+        with platform_admin_context():
+            follow_up = BreachNotification.all_objects.get(incident_id=data["id"], track="DHA_FOLLOWUP")
+        self.assertEqual(follow_up.due_at, notified_at + timedelta(hours=72))
+
+    def test_steps_are_kept_in_order(self):
+        incident_id = self._create(self.admin).data["id"]
+        url = reverse("breach-incident-events", args=[incident_id])
+        self.assertEqual(
+            self.client.post(url, {"note": " "}, format="json", **self.auth(self.admin)).status_code,
+            400,
+        )
+        response = self.client.post(
+            url, {"note": "Revoked the shared password."}, format="json", **self.auth(self.admin)
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        notes = [e["note"] for e in response.data["events"]]
+        self.assertEqual(notes, ["Incident recorded.", "Revoked the shared password."])
+
+    def test_every_notice_renders_escaped_and_unknown_kinds_are_refused(self):
+        incident_id = self._create(
+            self.admin, title="<script>alert(1)</script>", description="Laptop & files"
+        ).data["id"]
+        for kind in ("odpc", "dha_hmis1", "dha_followup", "subject_letter"):
+            response = self.client.get(
+                reverse("breach-incident-report", args=[incident_id, kind]), **self.auth(self.admin)
+            )
+            self.assertEqual(response.status_code, 200, kind)
+            self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
+            body = response.content.decode()
+            self.assertNotIn("<script>alert(1)</script>", body, kind)
+        unknown = self.client.get(
+            reverse("breach-incident-report", args=[incident_id, "nope"]), **self.auth(self.admin)
+        )
+        self.assertEqual(unknown.status_code, 400)
+        clinician = self.client.get(
+            reverse("breach-incident-report", args=[incident_id, "odpc"]), **self.auth(self.clinician)
+        )
+        self.assertEqual(clinician.status_code, 403)
+
+    def test_register_lists_only_the_admins_own_organisation(self):
+        self._create(self.admin, title="Alpha breach")
+        with platform_admin_context():
+            other_admin = self._user("admin", self.other_org, org_admin=True)
+        self._create(other_admin, title="Beta breach")
+        body = self.client.get(reverse("breach-register"), **self.auth(self.admin)).content.decode()
+        self.assertIn("Alpha breach", body)
+        self.assertNotIn("Beta breach", body)
+        missing_org = self.client.get(reverse("breach-register"), **self.auth(self.platform))
+        self.assertEqual(missing_org.status_code, 404)
+        platform = self.client.get(
+            f"{reverse('breach-register')}?organization={self.other_org.id}", **self.auth(self.platform)
+        ).content.decode()
+        self.assertIn("Beta breach", platform)
+        self.assertNotIn("Alpha breach", platform)
 
 
 class SubjectRequestTests(ComplianceTestCase):

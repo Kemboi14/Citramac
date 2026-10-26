@@ -95,8 +95,30 @@ export interface Credential {
   hwr_regulator: HwrRegulator;
   /** Null when no credential has been recorded for this practitioner. */
   health_worker_registry: HealthWorkerRegistrySummary | null;
+  nacada: NacadaCredential;
   can_sign: boolean;
   reason: string;
+}
+
+/** NACADA accreditation / licence held by the practitioner. */
+export interface NacadaCredential {
+  number: string;
+  /** As written on the certificate — NACADA's category list is not encoded here (VERIFY). */
+  category: string;
+  issued_on: string | null;
+  expires_on: string | null;
+  verified_at: string | null;
+  verified_by: string;
+  has_evidence: boolean;
+  status: "UNVERIFIED" | "EXPIRED" | "EXPIRING" | "VALID" | null;
+}
+
+export interface NacadaUpdate {
+  number?: string;
+  category?: string;
+  issued_on?: string | null;
+  expires_on?: string | null;
+  verified?: boolean;
 }
 
 export interface CredentialUpdate {
@@ -107,6 +129,7 @@ export interface CredentialUpdate {
   mha_recommendation_approved?: boolean;
   hwr_regulator?: HwrRegulator;
   hwr_puid?: string;
+  nacada?: NacadaUpdate;
   /** Runs the Health Worker Registry lookup after saving the other fields. */
   check_registry?: boolean;
 }
@@ -209,6 +232,19 @@ export interface LegalWorkspace {
 
 export function getPractitionerCredential(accessToken: string, userId: string) {
   return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/`, { accessToken });
+}
+
+export function uploadNacadaEvidence(accessToken: string, userId: string, file: File) {
+  const body = new FormData();
+  body.set("file", file);
+  return apiRequest<Credential>(
+    `/care/legal/practitioners/${userId}/credential/nacada-evidence/`,
+    { method: "POST", body, accessToken },
+  );
+}
+
+export function downloadNacadaEvidence(accessToken: string, userId: string) {
+  return apiDownload(`/care/legal/practitioners/${userId}/credential/nacada-evidence/`, accessToken);
 }
 
 export function updatePractitionerCredential(

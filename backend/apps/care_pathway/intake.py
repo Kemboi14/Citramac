@@ -17,6 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.accounts.access import active_roles
 from apps.triage.models import MentalStatusExam
 
 from . import intake_schema as schema
@@ -34,7 +35,7 @@ def can_view_restricted(user):
     query = Q()
     for name in settings.INTAKE_RESTRICTED_VIEW_ROLES:
         query |= Q(name__iexact=name)
-    return user.roles.filter(query).exists()
+    return active_roles(user).filter(query).exists()
 
 
 def latest_signed(patient):

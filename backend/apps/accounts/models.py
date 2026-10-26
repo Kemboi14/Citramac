@@ -293,6 +293,42 @@ class ActivationInvite(TenantScopedModel):
         return f"invite:{self.token[:8]}… for {self.user.email}"
 
 
+class RoleAssignment(TenantScopedModel):
+    """
+    One role a staff member holds at one branch — or at every branch of the
+    organization when `branch` is null. The source of truth for what a
+    tenant user may do and where (apps.accounts.access); `User.roles` and
+    `User.branch_access` are kept in step with it as the union, for the
+    many role checks and the JWT claims that read them.
+
+    Org Admin is always organization-wide (branch null).
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="role_assignments")
+    role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="assignments")
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE, null=True, blank=True, related_name="role_assignments"
+    )
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "role", "branch"], name="unique_role_assignment_per_branch"
+            ),
+            models.UniqueConstraint(
+                fields=["user", "role"],
+                condition=models.Q(branch__isnull=True),
+                name="unique_org_wide_role_assignment",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}: {self.role_id} @ {self.branch_id or 'all branches'}"
+
+
 class OneTimePassword(TimestampedModel):
     """
     docs/05-AUTHENTICATION-FLOW.md §5.2 Screen C / §5.3 login 2FA / §5.4
@@ -475,6 +511,35 @@ class PractitionerCredential(TenantScopedModel):
     # VERIFY (hie_spec/SOURCE.md gap 4): which registry field carries it is not
     # published, so a person records it from the registry record — never derived.
     hwr_puid = models.CharField(max_length=64, blank=True)
+
+    # NACADA accreditation / licence held by the staff member (addiction
+    # treatment practice). FHIR: a further Practitioner.qualification
+    # (identifier, period, issuer). NACADA's own accreditation categories and
+    # its identifier `system` URI are VERIFY (CLAUDE.md §6) — the category is
+    # recorded as NACADA wrote it on the certificate, never picked from a list
+    # invented here.
+    nacada_number = models.CharField("NACADA accreditation / licence no.", max_length=64, blank=True)
+    nacada_category = models.CharField(max_length=150, blank=True)
+    nacada_issued_on = models.DateField(null=True, blank=True)
+    nacada_expires_on = models.DateField(null=True, blank=True)
+    nacada_evidence = models.FileField(upload_to="credentials/nacada/%Y/%m/", null=True, blank=True)
+    nacada_verified_at = models.DateTimeField(null=True, blank=True)
+    nacada_verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    @property
+    def nacada_status(self):
+        """None (not recorded), UNVERIFIED, EXPIRED, EXPIRING (≤30 days) or VALID."""
+        if not self.nacada_number.strip():
+            return None
+        if self.nacada_expires_on and self.nacada_expires_on < timezone.localdate():
+            return "EXPIRED"
+        if not self.nacada_verified_at:
+            return "UNVERIFIED"
+        if self.nacada_expires_on and (self.nacada_expires_on - timezone.localdate()).days <= 30:
+            return "EXPIRING"
+        return "VALID"
 
     @property
     def registration_verified(self):

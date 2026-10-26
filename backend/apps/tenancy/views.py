@@ -177,7 +177,9 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 name="Org Admin", organization__isnull=True
             ).first()
             if org_admin_role:
-                org_admin.roles.add(org_admin_role)
+                from apps.accounts.access import set_assignments
+
+                set_assignments(org_admin, [(org_admin_role, None)], created_by=request.user)
 
             invite = ActivationInvite.objects.create(
                 organization=organization,

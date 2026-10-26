@@ -84,10 +84,33 @@ def current_or_latest_episode(patient):
     )
 
 
+def _require_working_branch(organization_id):
+    """
+    A new episode belongs to the branch the user is working in (stamped by
+    TenantScopedModel.save). With several branches and none chosen it would
+    belong to none — and so be visible at every branch — so refuse instead.
+    """
+    from rest_framework.exceptions import ValidationError
+
+    from apps.tenancy.context import get_active_branch_id
+    from apps.tenancy.models import Branch
+
+    if get_active_branch_id() is not None:
+        return
+    if Branch.all_objects.filter(organization_id=organization_id, is_active=True).count() > 1:
+        raise ValidationError(
+            {
+                "branch": "Choose the branch you're working in (top of the screen) before "
+                "opening an episode of care."
+            }
+        )
+
+
 def get_or_open_episode(patient, user, presenting=""):
     episode = open_episode_for(patient)
     if episode:
         return episode
+    _require_working_branch(patient.organization_id)
     now = timezone.now()
     episode = EpisodeOfCare.objects.create(
         organization_id=patient.organization_id,

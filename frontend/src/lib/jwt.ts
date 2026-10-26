@@ -10,7 +10,10 @@ export interface AccessTokenClaims {
   user_id: string;
   organization_id: string | null;
   branch_ids: string[];
+  /** The shell a multi-role user lands in first (Org Admin before clinical roles). */
   role: string;
+  /** Every role held, at any branch — for offering the other shells. */
+  roles?: string[];
   email: string;
   first_name: string;
   last_name: string;

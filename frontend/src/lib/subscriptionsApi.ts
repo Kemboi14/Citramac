@@ -33,6 +33,10 @@ export interface Subscription {
   renewing_soon: boolean;
   /** EXPIRED: staff can read and export, but not write. */
   is_read_only: boolean;
+  /** This tenant's own grace period in days; null uses the platform default. */
+  grace_period_days: number | null;
+  /** The grace period that applies — the override, else the platform default. */
+  effective_grace_period_days: number;
 }
 
 export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELED";
