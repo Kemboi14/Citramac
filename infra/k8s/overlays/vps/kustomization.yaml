@@ -82,6 +82,18 @@ patches:
         value:
           - name: mediafiles
             mountPath: /app/mediafiles
+      # The base 512Mi limit can't hold 4 gunicorn workers (~200MB each)
+      # plus one Argon2 hash (Django's default memory_cost, ~100MB) — every
+      # login, OTP issue/verify and activation step got the hashing worker
+      # OOM-killed mid-request (kernel memcg OOM, gunicorn "SIGKILL", the
+      # retry then 429'd on the OTP rate limit). Found 2026-10-26 when Cafric
+      # Health Centre staff couldn't log in. Weakening Argon2 is not the fix.
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 1536Mi
   - target:
       kind: Deployment
       name: citramac-frontend
