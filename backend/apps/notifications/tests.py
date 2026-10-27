@@ -72,6 +72,95 @@ class EmailConnectionResolutionTests(TestCase):
         self.assertEqual(from_email, "Tenant <tenant@example.com>")
 
 
+class OrganizationEmailFallbackTests(TestCase):
+    """
+    An org's own SMTP settings failing must not lose the email — a login OTP
+    that never arrives locks the user out. The message is re-sent through the
+    platform with the platform's From: address (OrganizationEmailBackend).
+    """
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        self.addCleanup(lambda: PlatformEmailSettings.objects.all().delete())
+        self.addCleanup(mail.outbox.clear)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Fallback Org", slug="fallback-org", facility_type="CLINIC"
+            )
+
+    def _send_otp(self):
+        from .tasks import send_otp_email
+
+        send_otp_email(
+            email="staff@fallback-org.example",
+            code="123456",
+            purpose="LOGIN_2FA",
+            organization_id=self.org.id,
+        )
+
+    def test_unreachable_org_smtp_falls_back_to_platform(self):
+        from django.conf import settings
+
+        from .email import OrganizationEmailBackend
+
+        self.org.email_host = "kennedy@fallback-org.example"
+        self.org.email_from_address = "Fallback Org <noreply@fallback-org.example>"
+        with platform_admin_context():
+            self.org.save()
+
+        with patch.object(
+            OrganizationEmailBackend, "open", side_effect=OSError("Name or service not known")
+        ):
+            self._send_otp()
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].from_email, settings.DEFAULT_FROM_EMAIL)
+        self.assertEqual(mail.outbox[0].to, ["staff@fallback-org.example"])
+
+    def test_refused_org_from_address_resent_with_platform_sender(self):
+        from smtplib import SMTPSenderRefused
+
+        from django.core.mail.backends.smtp import EmailBackend
+
+        PlatformEmailSettings.objects.create(
+            pk=1,
+            host="smtp.platform.example",
+            port=587,
+            default_from_email="CITRAMAC <platform@example.com>",
+        )
+        self.org.email_from_address = "Citramac"
+        with platform_admin_context():
+            self.org.save()
+
+        delivered = []
+
+        def fake_send(backend, messages):
+            if messages[0].from_email == "Citramac":
+                raise SMTPSenderRefused(501, b"sender address must contain a domain", "Citramac")
+            delivered.extend(messages)
+            return len(messages)
+
+        with patch.object(EmailBackend, "send_messages", autospec=True, side_effect=fake_send):
+            self._send_otp()
+
+        self.assertEqual(len(delivered), 1)
+        self.assertEqual(delivered[0].from_email, "CITRAMAC <platform@example.com>")
+
+    def test_failure_raised_when_platform_has_no_real_delivery_route(self):
+        from django.test import override_settings
+
+        from .email import OrganizationEmailBackend
+
+        self.org.email_host = "mail.fallback-org.example"
+        with platform_admin_context():
+            self.org.save()
+
+        with override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend"):
+            with patch.object(OrganizationEmailBackend, "open", side_effect=OSError("refused")):
+                with self.assertRaises(OSError):
+                    self._send_otp()
+
+
 class SendOtpEmailTaskTests(TestCase):
     """
     apps.notifications.tasks.send_otp_email actually routes through the
