@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
-from apps.tenancy.context import clear_tenant_context, platform_admin_context
+from apps.tenancy.context import clear_tenant_context, platform_admin_context, set_tenant_context
 from apps.tenancy.models import Organization
 
 from .models import Appointment, Attachment, Patient
@@ -1046,6 +1046,24 @@ class TemporaryNumberTests(APITestCase):
         self.assertRegex(first, r"^CIT-ER-\d{6}$")
         self.assertEqual(int(second[-6:]), int(first[-6:]) + 1)
         self.assertFalse(permanent.startswith(("CIT-ER-", "ER-")))
+
+    def test_permanent_number_skips_another_orgs_number_with_the_same_prefix(self):
+        """Live 500, 2026-10-27: two slugs sharing their first four letters
+        share a prefix, and RLS hid the other organisation's -001."""
+        from .identity import generate_citramac_number
+
+        with platform_admin_context():
+            twin = Organization.objects.create(
+                name="Org T Two", slug="orgt-two", facility_type="MENTAL_HEALTH_MHP"
+            )
+            taken = generate_citramac_number(twin)
+            Patient.objects.create(
+                organization=twin, first_name="A", last_name="B", citramac_number=taken
+            )
+        set_tenant_context(organization_id=self.org.id)
+        number = generate_citramac_number(self.org)
+        self.assertEqual(number.rsplit("-", 1)[0], taken.rsplit("-", 1)[0])
+        self.assertNotEqual(number, taken)
 
     def test_old_and_new_prefixes_are_both_temporary(self):
         from .identity import is_temporary_number

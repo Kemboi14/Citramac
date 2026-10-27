@@ -13,6 +13,8 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.tenancy.context import platform_admin_context
+
 from .models import IdentifierSequence, Patient, PatientIdentifier
 
 # Registration `id_document_type` → identifier kind.
@@ -56,8 +58,11 @@ def generate_citramac_number(organization, temporary=False):
     Local business identifier, generated before any network call. Permanent
     numbers: a transaction-scoped advisory lock per prefix makes the
     read-then-assign race-free; the highest existing suffix (not the count) is
-    used so a gap can never produce a duplicate. Temporary numbers come from
-    the CIT-ER sequence.
+    used so a gap can never produce a duplicate. The scan runs across every
+    organisation, like the unique constraint it must satisfy: two slugs can
+    share their first four letters, and RLS would otherwise hide the other
+    organisation's numbers. Only the number strings are read. Temporary
+    numbers come from the CIT-ER sequence.
     """
     if temporary:
         return _next_temporary_number()
@@ -65,10 +70,14 @@ def generate_citramac_number(organization, temporary=False):
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [prefix])
+        with platform_admin_context():
+            numbers = list(
+                Patient.all_objects.filter(citramac_number__startswith=f"{prefix}-").values_list(
+                    "citramac_number", flat=True
+                )
+            )
         highest = 0
-        for number in Patient.all_objects.filter(
-            citramac_number__startswith=f"{prefix}-"
-        ).values_list("citramac_number", flat=True):
+        for number in numbers:
             tail = number.rsplit("-", 1)[-1]
             if tail.isdigit():
                 highest = max(highest, int(tail))
