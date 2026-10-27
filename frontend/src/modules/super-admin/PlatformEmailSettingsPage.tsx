@@ -156,7 +156,7 @@ export function PlatformEmailSettingsPage() {
                 />
               </label>
               <div className="flex gap-3">
-                <label className={`${LABEL_CLASS} flex-1`}>
+                <label className={`${LABEL_CLASS} w-24 shrink-0`}>
                   Port
                   <input
                     type="number"
@@ -168,7 +168,7 @@ export function PlatformEmailSettingsPage() {
                     placeholder="587"
                   />
                 </label>
-                <label className={`${LABEL_CLASS} flex-[2]`}>
+                <label className={`${LABEL_CLASS} min-w-0 flex-1`}>
                   SMTP Username
                   <input
                     type="text"
@@ -198,7 +198,7 @@ export function PlatformEmailSettingsPage() {
                   autoComplete="new-password"
                 />
               </label>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
                 <label className="flex items-center gap-2 text-sm text-ink-700">
                   <input
                     type="checkbox"
