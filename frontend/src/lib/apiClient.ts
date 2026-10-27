@@ -118,13 +118,27 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
+  let data: unknown = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (err) {
+    // A 500/502 arrives as an HTML page. It is still an answer from the
+    // server, so it must become an ApiError — never look like "offline".
+    if (response.ok) throw err;
+  }
 
   if (!response.ok) {
-    const body: ApiErrorBody = data?.error
+    const body: ApiErrorBody = (data as ApiErrorBody | null)?.error
       ? (data as ApiErrorBody)
       : (parseValidationErrorBody(data) ?? {
-          error: { code: "UNKNOWN_ERROR", message: response.statusText || "Request failed" },
+          error:
+            response.status >= 500
+              ? {
+                  code: "SERVER_ERROR",
+                  message:
+                    "The server hit an error and nothing was saved. Try again; if it keeps happening, tell your administrator.",
+                }
+              : { code: "UNKNOWN_ERROR", message: response.statusText || "Request failed" },
         });
     const error = new ApiError(response.status, body);
 
