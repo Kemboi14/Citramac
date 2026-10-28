@@ -75,6 +75,24 @@ def triggers(patient):
         low_affect = "flat" in affect or "blunted" in affect or "hopelessness" in content
         elevated_affect = "elevated" in affect
 
+    # The shared finding store (findings.py): what triage found triggers the
+    # tools before an intake exists, and goes on doing so until a clinician
+    # updates the finding.
+    from .findings import current as current_findings
+
+    for finding in current_findings(patient):
+        if finding.status != "PRESENT":
+            continue
+        if finding.key == "SUICIDE_SELF_HARM":
+            add("SRA", f"{finding.title} ({finding.stage.lower()}): {finding.summary}")
+            add("SAFETY", f"{finding.title} ({finding.stage.lower()})")
+        elif finding.key == "HARM_TO_OTHERS":
+            add("SRA", f"{finding.title} ({finding.stage.lower()}): {finding.summary}")
+        elif finding.key == "SAFEGUARDING":
+            add("SAFEGUARD", f"{finding.title} ({finding.stage.lower()}): {finding.summary}")
+        elif finding.key == "SUBSTANCE:alcohol":
+            add("PAWSS", f"Alcohol use recorded at {finding.stage.lower()} — predict withdrawal risk")
+
     suicide = _active_risk(s, "suicide")
     if suicide:
         reason = "Suicide / self-harm finding: " + ", ".join(o.lower() for o in suicide)

@@ -129,6 +129,9 @@ def triage_risk_items(answers):
         add("neglect", "Difficulty with self-care")
     if answers.get("h_concern") == "yes" or [f for f in answers.get("h_flags") or [] if f != "other"]:
         add("medical", "Concern identified")
+    # v5 (the triage spec) uses the v3 keys above, plus the duty-to-protect step.
+    if answers.get("e_named") == "yes":
+        add("violence", "Intent")
     return items
 
 
@@ -575,6 +578,7 @@ def sign_intake(draft, user, completeness, data=None):
             raise ValidationError(
                 {"message": "Write a handover message so the next clinician can continue."}
             )
+    _review_carried_findings(draft, user)
     draft.status = IntakeAssessment.STATUS_SIGNED
     draft.completeness = completeness
     draft.outstanding = outstanding
@@ -583,6 +587,51 @@ def sign_intake(draft, user, completeness, data=None):
     _mirror_legacy_columns(draft)
     draft.save()
     return draft
+
+
+# Intake risk-register rows → the shared finding each one confirms (findings.py).
+CARRIED_FINDING_KEYS = {
+    "suicide": "SUICIDE_SELF_HARM",
+    "violence": "HARM_TO_OTHERS",
+    "safeguarding": "SAFEGUARDING",
+    "medical": "MEDICAL",
+}
+SELF_CARE = "neglect:Difficulty with self-care"
+
+
+def _carried_finding_key(item_key):
+    if item_key == SELF_CARE:
+        return "FUNCTIONAL"
+    row = item_key.split(":", 1)[0]
+    return "SAFEGUARDING" if row == "neglect" else CARRIED_FINDING_KEYS.get(row)
+
+
+def _review_carried_findings(draft, user):
+    """The Section 3 confirmation of each carried triage finding is the review of
+    the shared finding — written once, at signing, so a triage finding is never
+    confirmed twice. Only a finding still as triage left it is reviewed: a clone
+    of an earlier intake does not re-confirm what nobody looked at again."""
+    from . import findings
+
+    carried = (draft.sections.get("risk", {}) or {}).get("carried") or {}
+    by_key = {}
+    for item_key, entry in carried.items():
+        key = _carried_finding_key(item_key)
+        if key and entry.get("confirmed"):
+            by_key.setdefault(key, []).append((item_key.split(":", 1)[-1], entry))
+    current = {f.key: f for f in findings.current(draft.patient)}
+    for key, entries in by_key.items():
+        finding = current.get(key)
+        if finding is None or finding.stage != "TRIAGE":
+            continue
+        gone = [option for option, entry in entries if entry.get("not_present")]
+        if len(gone) == len(entries):
+            findings.review(
+                draft.patient, key, user, action="UPDATED", stage="INTAKE", status="ABSENT",
+                note="Not present now at intake: " + ", ".join(gone),
+            )
+        else:
+            findings.review(draft.patient, key, user, action="CONFIRMED", stage="INTAKE")
 
 
 def record_score(patient, user, instrument, score, intake=None):

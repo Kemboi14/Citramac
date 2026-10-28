@@ -3,10 +3,10 @@
   "type": "collection",
   "entry": [
     {
-      "fullUrl": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44",
+      "fullUrl": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06",
       "resource": {
         "resourceType": "Patient",
-        "id": "171b6e6e-db59-49bc-8f5d-96fa15018f44",
+        "id": "08cb0712-6079-4780-95ee-87fb27b07b06",
         "meta": {
           "security": [
             {
@@ -37,40 +37,50 @@
           }
         ],
         "gender": "male",
-        "birthDate": "1988-07-02"
+        "birthDate": "1987-06-02"
       }
     },
     {
-      "fullUrl": "urn:citramac:episodeofcare:c985a3e3-89d2-4518-9192-66f769091cae",
+      "fullUrl": "urn:citramac:episodeofcare:4189a396-cd5b-453f-bfce-b20c3efe3845",
       "resource": {
         "resourceType": "EpisodeOfCare",
-        "id": "c985a3e3-89d2-4518-9192-66f769091cae",
+        "id": "4189a396-cd5b-453f-bfce-b20c3efe3845",
         "status": "waitlist",
         "statusHistory": [
           {
             "status": "waitlist",
             "period": {
-              "start": "2026-10-21T06:28:59.784539Z"
+              "start": "2026-10-28T06:48:09.502895Z"
             }
           }
         ],
         "patient": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "period": {
-          "start": "2026-10-21T06:28:59.784539Z"
+          "start": "2026-10-28T06:48:09.502895Z"
         }
       }
     },
     {
-      "fullUrl": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7",
+      "fullUrl": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f",
       "resource": {
         "resourceType": "Encounter",
-        "id": "b3c3fac0-44de-47b0-9aa8-88a485fe05f7",
+        "id": "e0ea96da-1774-4abb-83ce-82ea19ef000f",
         "status": "finished",
         "class": {
           "display": "triage"
         },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:triage-encounter-type",
+                "code": "walk_in"
+              }
+            ]
+          }
+        ],
         "priority": {
           "coding": [
             {
@@ -80,42 +90,90 @@
           ]
         },
         "subject": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "episodeOfCare": [
           {
-            "reference": "urn:citramac:episodeofcare:c985a3e3-89d2-4518-9192-66f769091cae"
+            "reference": "urn:citramac:episodeofcare:4189a396-cd5b-453f-bfce-b20c3efe3845"
           }
         ],
         "period": {
-          "start": "2026-10-21T06:28:59.754693Z"
+          "start": "2026-10-28T06:48:09.481407Z"
         },
         "reasonCode": [
           {
-            "text": "Suicidal intent with a plan"
+            "text": "Wants to end his life; stopped drinking two days ago"
           }
         ]
       }
     },
     {
-      "fullUrl": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "fullUrl": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
       "resource": {
         "resourceType": "QuestionnaireResponse",
-        "id": "dc80d638-2a2b-4856-b429-7974b89a139e",
+        "id": "fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
         "status": "completed",
         "subject": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "encounter": {
-          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
         },
-        "authored": "2026-10-21T06:28:59.847985Z",
+        "authored": "2026-10-28T06:48:09.620057Z",
         "item": [
+          {
+            "linkId": "acvpu",
+            "answer": [
+              {
+                "valueString": "A"
+              }
+            ]
+          },
+          {
+            "linkId": "b_encounter_type",
+            "answer": [
+              {
+                "valueString": "walk_in"
+              }
+            ]
+          },
+          {
+            "linkId": "b_informant",
+            "answer": [
+              {
+                "valueString": "client"
+              }
+            ]
+          },
+          {
+            "linkId": "b_present",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
           {
             "linkId": "c_concern",
             "answer": [
               {
-                "valueString": "Suicidal intent with a plan"
+                "valueString": "Wants to end his life; stopped drinking two days ago"
+              }
+            ]
+          },
+          {
+            "linkId": "c_onset",
+            "answer": [
+              {
+                "valueString": "past_24h"
+              }
+            ]
+          },
+          {
+            "linkId": "consent_obs",
+            "answer": [
+              {
+                "valueString": "consented"
               }
             ]
           },
@@ -124,6 +182,30 @@
             "answer": [
               {
                 "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "d_attempt",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "d_means",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "d_safety",
+            "answer": [
+              {
+                "valueString": "uncertain"
               }
             ]
           },
@@ -144,10 +226,85 @@
             ]
           },
           {
+            "linkId": "f_behaviour",
+            "answer": [
+              {
+                "valueString": "anxious"
+              }
+            ]
+          },
+          {
             "linkId": "f_change",
             "answer": [
               {
                 "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "f_orientation",
+            "answer": [
+              {
+                "valueString": "oriented"
+              }
+            ]
+          },
+          {
+            "linkId": "g_alcohol_amount",
+            "answer": [
+              {
+                "valueString": "a bottle of spirits daily"
+              }
+            ]
+          },
+          {
+            "linkId": "g_alcohol_concern",
+            "answer": [
+              {
+                "valueString": "withdrawal"
+              }
+            ]
+          },
+          {
+            "linkId": "g_alcohol_last",
+            "answer": [
+              {
+                "valueString": "yesterday evening"
+              }
+            ]
+          },
+          {
+            "linkId": "g_seizure_hx",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "g_stopped",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "g_use",
+            "answer": [
+              {
+                "valueString": "yes"
+              }
+            ]
+          },
+          {
+            "linkId": "g_withdrawal",
+            "answer": [
+              {
+                "valueString": "tremor"
+              },
+              {
+                "valueString": "sweating"
               }
             ]
           },
@@ -174,50 +331,765 @@
                 "valueString": "no"
               }
             ]
+          },
+          {
+            "linkId": "m_decision",
+            "answer": [
+              {
+                "valueString": "CONFIRM"
+              }
+            ]
+          },
+          {
+            "linkId": "m_final_priority",
+            "answer": [
+              {
+                "valueString": "RED"
+              }
+            ]
+          },
+          {
+            "linkId": "safety_location",
+            "answer": [
+              {
+                "valueString": "QUIET_ROOM"
+              }
+            ]
+          },
+          {
+            "linkId": "safety_obs",
+            "answer": [
+              {
+                "valueString": "ARMS_LENGTH"
+              }
+            ]
+          },
+          {
+            "linkId": "safety_observer",
+            "answer": [
+              {
+                "valueString": "L. Wambui"
+              }
+            ]
+          },
+          {
+            "linkId": "schema",
+            "answer": [
+              {
+                "valueString": "v5"
+              }
+            ]
+          },
+          {
+            "linkId": "v_dbp",
+            "answer": [
+              {
+                "valueString": "94"
+              }
+            ]
+          },
+          {
+            "linkId": "v_hr",
+            "answer": [
+              {
+                "valueString": "112"
+              }
+            ]
+          },
+          {
+            "linkId": "v_o2",
+            "answer": [
+              {
+                "valueString": "room_air"
+              }
+            ]
+          },
+          {
+            "linkId": "v_rr",
+            "answer": [
+              {
+                "valueString": "20"
+              }
+            ]
+          },
+          {
+            "linkId": "v_sbp",
+            "answer": [
+              {
+                "valueString": "152"
+              }
+            ]
+          },
+          {
+            "linkId": "v_spo2",
+            "answer": [
+              {
+                "valueString": "97"
+              }
+            ]
+          },
+          {
+            "linkId": "v_temp",
+            "answer": [
+              {
+                "valueString": "37.6"
+              }
+            ]
           }
         ]
       }
     },
     {
-      "fullUrl": "urn:citramac:riskassessment:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "fullUrl": "urn:citramac:riskassessment:fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
       "resource": {
         "resourceType": "RiskAssessment",
-        "id": "dc80d638-2a2b-4856-b429-7974b89a139e",
+        "id": "fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
         "status": "final",
         "subject": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "encounter": {
-          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
         },
-        "occurrenceDateTime": "2026-10-21T06:28:59.847985Z",
+        "occurrenceDateTime": "2026-10-28T06:48:09.620057Z",
         "basis": [
           {
-            "reference": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e"
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
           }
         ],
         "note": [
           {
-            "text": "suicidal thoughts present · Alerts: Suicide risk"
+            "text": "Thinking about acting on suicidal thoughts now · Current thoughts of suicide / serious self-harm · Suicidal thoughts + access to means of serious self-harm · Uncertain whether the client can maintain own safety · Alcohol / sedative (or unknown) withdrawal — can be life-threatening · Previous withdrawal seizure / DTs with current withdrawal risk"
           }
         ]
       }
     },
     {
-      "fullUrl": "urn:citramac:provenance:dc80d638-2a2b-4856-b429-7974b89a139e",
+      "fullUrl": "urn:citramac:observation:9b69582c-f03a-49e3-939b-68e68bb351c8",
       "resource": {
-        "resourceType": "Provenance",
-        "id": "prov-dc80d638-2a2b-4856-b429-7974b89a139e",
-        "target": [
+        "resourceType": "Observation",
+        "id": "9b69582c-f03a-49e3-939b-68e68bb351c8",
+        "status": "final",
+        "category": [
           {
-            "reference": "urn:citramac:questionnaireresponse:dc80d638-2a2b-4856-b429-7974b89a139e"
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "FUNCTIONAL"
+              }
+            ]
           }
         ],
-        "recorded": "2026-10-21T06:28:59.847985Z",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "FUNCTIONAL"
+            }
+          ],
+          "text": "Immediate functional safety"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "ABSENT",
+              "display": "Not present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "cannot meet basic needs: no"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:f1323bca-e0e1-4427-875c-b1d1aec5d0ac",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "f1323bca-e0e1-4427-875c-b1d1aec5d0ac",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "HARM_TO_OTHERS"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "HARM_TO_OTHERS"
+            }
+          ],
+          "text": "Risk of harm to others"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "ABSENT",
+              "display": "Not present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "current thoughts: no"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:5a41c196-5c30-4b13-a5c3-81fa224007ee",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "5a41c196-5c30-4b13-a5c3-81fa224007ee",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "MEDICAL"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "MEDICAL"
+            }
+          ],
+          "text": "Urgent medical concern"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "ABSENT",
+              "display": "Not present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "immediate concern: no"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:97e6486a-45f4-4a3e-8815-3c0ffaf780c5",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "97e6486a-45f4-4a3e-8815-3c0ffaf780c5",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "MENTAL_STATE"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "MENTAL_STATE"
+            }
+          ],
+          "text": "Acute mental state"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "ABSENT",
+              "display": "Not present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "major change: no"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:eba55f56-58c7-4e86-9506-7b0e80677c99",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "eba55f56-58c7-4e86-9506-7b0e80677c99",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "MENTAL_STATE"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "MENTAL_STATE_OBSERVATION"
+            }
+          ],
+          "text": "Mental state — observation"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:practitioner:7f4d3c38-8bd2-4b41-a7dc-f9cb731dd1f5",
+            "display": "Jane Njoroge"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "ACVPU A · orientation: appears oriented · behaviour: anxious/distressed"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:8f8b2990-0fbd-4d01-9034-fca1df292038",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "8f8b2990-0fbd-4d01-9034-fca1df292038",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "PRESENTING_CONCERN"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "PRESENTING_CONCERN"
+            }
+          ],
+          "text": "Presenting concern"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Wants to end his life; stopped drinking two days ago · began / worse: past 24 hours"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:53d6519c-91e2-4b53-bf50-f720e4d92227",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "53d6519c-91e2-4b53-bf50-f720e4d92227",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "SAFEGUARDING"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "SAFEGUARDING"
+            }
+          ],
+          "text": "Safeguarding & vulnerability"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "ABSENT",
+              "display": "Not present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "feels safe: yes"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:0313bbfa-6f4a-49c3-8012-c494fac820ed",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "0313bbfa-6f4a-49c3-8012-c494fac820ed",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "SUBSTANCE"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "SUBSTANCE:alcohol"
+            }
+          ],
+          "text": "Substance — Alcohol"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "last use yesterday evening · a bottle of spirits daily · concern: withdrawal"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:96cb3fb0-c9b2-4c22-ba23-1d4905b33397",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "96cb3fb0-c9b2-4c22-ba23-1d4905b33397",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "SUBSTANCE_USE"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "SUBSTANCE_USE"
+            }
+          ],
+          "text": "Alcohol & other substances"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "recent use: yes · recently stopped heavy use: yes · withdrawal: tremor, sweating · previous withdrawal seizure: yes"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:ce754a3b-10da-4409-9fd8-fe25ac5eb013",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "ce754a3b-10da-4409-9fd8-fe25ac5eb013",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "SUICIDE_SELF_HARM"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "SUICIDE_SELF_HARM"
+            }
+          ],
+          "text": "Suicide / self-harm"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:09.620057Z",
+        "performer": [
+          {
+            "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "current thoughts: yes · acting now: yes · recent attempt: no · access to means: yes · can maintain own safety: uncertain"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-fdb4884c-9a6c-4aca-87e8-3f5de7f18976",
+        "target": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:fdb4884c-9a6c-4aca-87e8-3f5de7f18976"
+          },
+          {
+            "reference": "urn:citramac:observation:9b69582c-f03a-49e3-939b-68e68bb351c8"
+          },
+          {
+            "reference": "urn:citramac:observation:f1323bca-e0e1-4427-875c-b1d1aec5d0ac"
+          },
+          {
+            "reference": "urn:citramac:observation:5a41c196-5c30-4b13-a5c3-81fa224007ee"
+          },
+          {
+            "reference": "urn:citramac:observation:97e6486a-45f4-4a3e-8815-3c0ffaf780c5"
+          },
+          {
+            "reference": "urn:citramac:observation:eba55f56-58c7-4e86-9506-7b0e80677c99"
+          },
+          {
+            "reference": "urn:citramac:observation:8f8b2990-0fbd-4d01-9034-fca1df292038"
+          },
+          {
+            "reference": "urn:citramac:observation:53d6519c-91e2-4b53-bf50-f720e4d92227"
+          },
+          {
+            "reference": "urn:citramac:observation:0313bbfa-6f4a-49c3-8012-c494fac820ed"
+          },
+          {
+            "reference": "urn:citramac:observation:96cb3fb0-c9b2-4c22-ba23-1d4905b33397"
+          },
+          {
+            "reference": "urn:citramac:observation:ce754a3b-10da-4409-9fd8-fe25ac5eb013"
+          }
+        ],
+        "recorded": "2026-10-28T06:48:09.620057Z",
         "agent": [
           {
             "who": {
-              "reference": "urn:citramac:practitioner:9e6b35cb-a1c1-4ad6-9fc7-74c7031ab5ff",
+              "reference": "urn:citramac:practitioner:7f4d3c38-8bd2-4b41-a7dc-f9cb731dd1f5",
               "display": "Jane Njoroge"
             }
           }
@@ -225,10 +1097,10 @@
       }
     },
     {
-      "fullUrl": "urn:citramac:flag:c5e4c7d6-2e5c-4140-b458-4fc913da203f",
+      "fullUrl": "urn:citramac:flag:5a406bf9-5cab-433f-bb52-447a3dd8510a",
       "resource": {
         "resourceType": "Flag",
-        "id": "c5e4c7d6-2e5c-4140-b458-4fc913da203f",
+        "id": "5a406bf9-5cab-433f-bb52-447a3dd8510a",
         "status": "active",
         "code": {
           "coding": [
@@ -240,21 +1112,75 @@
           ]
         },
         "subject": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "period": {
-          "start": "2026-10-21T06:28:59.847985Z"
+          "start": "2026-10-28T06:48:09.620057Z"
         },
         "encounter": {
-          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
         }
       }
     },
     {
-      "fullUrl": "urn:citramac:task:ea06391f-cd98-4c78-ba6e-ffef42acf65b",
+      "fullUrl": "urn:citramac:flag:8fc923a3-ba86-497f-a172-6b3276ff75ed",
+      "resource": {
+        "resourceType": "Flag",
+        "id": "8fc923a3-ba86-497f-a172-6b3276ff75ed",
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-alert",
+              "code": "WITHDRAWAL_RISK",
+              "display": "Withdrawal risk"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "period": {
+          "start": "2026-10-28T06:48:09.620057Z"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:task:e0258f08-7445-407f-bd08-a2c2144f82a6",
       "resource": {
         "resourceType": "Task",
-        "id": "ea06391f-cd98-4c78-ba6e-ffef42acf65b",
+        "id": "e0258f08-7445-407f-bd08-a2c2144f82a6",
+        "status": "requested",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-action",
+              "code": "suicide_risk_assessment",
+              "display": "Suicide Risk Assessment"
+            }
+          ]
+        },
+        "for": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "authoredOn": "2026-10-28T06:48:09.553307Z",
+        "owner": {
+          "display": "Psychiatry on call"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:task:09c655b7-8922-47be-8f89-5aa1d793dadd",
+      "resource": {
+        "resourceType": "Task",
+        "id": "09c655b7-8922-47be-8f89-5aa1d793dadd",
         "status": "requested",
         "intent": "order",
         "code": {
@@ -267,14 +1193,42 @@
           ]
         },
         "for": {
-          "reference": "urn:citramac:patient:171b6e6e-db59-49bc-8f5d-96fa15018f44"
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
         },
         "encounter": {
-          "reference": "urn:citramac:encounter:b3c3fac0-44de-47b0-9aa8-88a485fe05f7"
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
         },
-        "authoredOn": "2026-10-21T06:29:00.010014Z",
+        "authoredOn": "2026-10-28T06:48:09.560188Z",
         "owner": {
-          "display": "Psychiatry / Nursing"
+          "display": "Psychiatry on call"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:task:02a6c814-a108-4949-83b4-dea88228e520",
+      "resource": {
+        "resourceType": "Task",
+        "id": "02a6c814-a108-4949-83b4-dea88228e520",
+        "status": "requested",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-action",
+              "code": "ciwa_ar",
+              "display": "CIWA-Ar — alcohol withdrawal scale"
+            }
+          ]
+        },
+        "for": {
+          "reference": "urn:citramac:patient:08cb0712-6079-4780-95ee-87fb27b07b06"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:e0ea96da-1774-4abb-83ce-82ea19ef000f"
+        },
+        "authoredOn": "2026-10-28T06:48:09.569820Z",
+        "owner": {
+          "display": "Psychiatry on call"
         }
       }
     }

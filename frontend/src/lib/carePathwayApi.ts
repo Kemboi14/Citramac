@@ -347,8 +347,8 @@ export interface TriageEncounterDetail {
   clinician: string;
   tenant_location: string;
   defaults: TriageAnswers;
-  /** "v4" for new / in-progress triages; "v3" for a record signed under the v3 rules. */
-  schema?: "v3" | "v4";
+  /** "v5" for new / in-progress triages; "v4" / "v3" for a record signed under those rules. */
+  schema?: "v3" | "v4" | "v5";
   draft: TriageAssessmentRecord | null;
   signed: TriageAssessmentRecord | null;
   evaluation: TriageEvaluation;

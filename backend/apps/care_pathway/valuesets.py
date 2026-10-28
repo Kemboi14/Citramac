@@ -428,6 +428,11 @@ VALUESETS = {
             ("outpatient_appointment", "Outpatient appointment"),
             ("admission_assessment", "Admission assessment"),
             ("other", "Other"),
+            # Triage v5 withdrawal triggers (spec section G); the instruments are
+            # tools.py / instruments.py PAWSS, CIWA and COWS.
+            ("pawss", "PAWSS — alcohol withdrawal-risk predictor"),
+            ("ciwa_ar", "CIWA-Ar — alcohol withdrawal scale"),
+            ("cows", "COWS — opioid withdrawal scale"),
         ],
     ),
     "task-status": (

@@ -147,6 +147,8 @@ def _withdrawal(patient, sections):
     signs = [x for x in (answers.get("g_withdrawal") or []) if str(x).lower() != "none"]
     if answers.get("subst_withdrawal_signs") == "yes" or answers.get("r_stopped_heavy") == "yes":
         signs.append("withdrawal signs / recent cessation (triage v4)")
+    if answers.get("schema") == "v5" and answers.get("g_stopped") == "yes":
+        signs.append("recently stopped heavy / frequent use (triage)")
     subs = sections.get("subs", {})
     kind = subs.get("kind")
     features = set(subs.get("features", []) or [])

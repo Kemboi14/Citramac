@@ -205,6 +205,16 @@ urlpatterns = [
         name="care-client-tools",
     ),
     path(
+        "care/clients/<uuid:patient_id>/findings/",
+        views.ClientFindingsView.as_view(),
+        name="care-client-findings",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/findings/review/",
+        views.ClientFindingReviewView.as_view(),
+        name="care-client-finding-review",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/tools/<str:tool>/decision/",
         views.ToolDecisionView.as_view(),
         name="care-client-tool-decision",

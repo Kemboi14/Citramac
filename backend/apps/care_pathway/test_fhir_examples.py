@@ -85,8 +85,9 @@ class FhirR4ConformanceDischargeExamplesTests(SimpleTestCase):
 
 class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
     """Triage bundles: routine (GREEN), edge (RED with a suicide-risk alert and a
-    safety-plan task) and omission (unidentified, not yet triaged — nothing is
-    sent for an assessment that never happened)."""
+    safety-plan task), telephone / third-party (findings sourced to the caller)
+    and omission (unidentified, not yet triaged — nothing is sent for an
+    assessment that never happened)."""
 
     def test_every_example_is_valid_r4_and_there_are_at_least_three(self):
         paths = sorted(EXAMPLES.glob("triage-*.json"))
@@ -112,6 +113,22 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
         types = _types(_load("triage-edge-red-suicide-risk"))
         self.assertIn("Flag", types)
         self.assertIn("Task", types)
+
+    def test_findings_are_observations_with_their_source(self):
+        # Triage v5: one Observation per shared clinical finding, derived from the
+        # QuestionnaireResponse and covered by the signature's Provenance.
+        bundle = _load("triage-routine-green")
+        observations = [r for r in (e["resource"] for e in bundle["entry"]) if r["resourceType"] == "Observation"]
+        self.assertTrue(observations)
+        for obs in observations:
+            self.assertTrue(obs["derivedFrom"] and obs["encounter"] and obs["performer"])
+        phone = _load("triage-telephone-third-party")
+        reported = next(
+            r
+            for r in (e["resource"] for e in phone["entry"])
+            if r["resourceType"] == "Observation" and r["code"]["coding"][0]["code"] == "SUICIDE_SELF_HARM"
+        )
+        self.assertIn("Third-party report", reported["performer"][0]["display"])
 
     def test_omission_example_sends_no_assessment(self):
         bundle = _load("triage-omission-unidentified-not-yet-triaged")

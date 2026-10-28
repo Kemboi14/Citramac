@@ -1,0 +1,510 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "ec914a2c-dad2-4a00-ac5b-14284b6f8b57",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202610ORG--003"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Otieno",
+            "given": [
+              "Grace",
+              "Achieng"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1999-11-20"
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:episodeofcare:7c34cb44-c2c1-4de2-8dc7-c5fc40930c06",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "7c34cb44-c2c1-4de2-8dc7-c5fc40930c06",
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-10-28T06:48:09.991862Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "period": {
+          "start": "2026-10-28T06:48:09.991862Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "51116ff5-86d0-413e-8819-b8cf652693ec",
+        "status": "finished",
+        "class": {
+          "display": "triage"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:triage-encounter-type",
+                "code": "telephone"
+              }
+            ]
+          }
+        ],
+        "priority": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-priority",
+              "code": "ORANGE"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:7c34cb44-c2c1-4de2-8dc7-c5fc40930c06"
+          }
+        ],
+        "period": {
+          "start": "2026-10-28T06:48:09.970217Z"
+        },
+        "reasonCode": [
+          {
+            "text": "Not eating for three days and talking about dying"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:questionnaireresponse:9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+      "resource": {
+        "resourceType": "QuestionnaireResponse",
+        "id": "9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+        "status": "completed",
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        },
+        "authored": "2026-10-28T06:48:10.046837Z",
+        "item": [
+          {
+            "linkId": "b_encounter_type",
+            "answer": [
+              {
+                "valueString": "telephone"
+              }
+            ]
+          },
+          {
+            "linkId": "b_informant",
+            "answer": [
+              {
+                "valueString": "family"
+              }
+            ]
+          },
+          {
+            "linkId": "b_present",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "b_third_party",
+            "answer": [
+              {
+                "valueString": "Mother — Rose Otieno"
+              }
+            ]
+          },
+          {
+            "linkId": "c_concern",
+            "answer": [
+              {
+                "valueString": "Not eating for three days and talking about dying"
+              }
+            ]
+          },
+          {
+            "linkId": "k_alone",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "k_bring",
+            "answer": [
+              {
+                "valueString": "uncertain"
+              }
+            ]
+          },
+          {
+            "linkId": "k_cause",
+            "answer": [
+              {
+                "valueString": "Said she would be better off dead; has not eaten since Sunday"
+              }
+            ]
+          },
+          {
+            "linkId": "k_emergency",
+            "answer": [
+              {
+                "valueString": "no"
+              }
+            ]
+          },
+          {
+            "linkId": "k_flags",
+            "answer": [
+              {
+                "valueString": "suicide_concern"
+              }
+            ]
+          },
+          {
+            "linkId": "k_last_seen",
+            "answer": [
+              {
+                "valueString": "Now — calling from the house"
+              }
+            ]
+          },
+          {
+            "linkId": "k_where",
+            "answer": [
+              {
+                "valueString": "At home, Kisumu"
+              }
+            ]
+          },
+          {
+            "linkId": "k_with",
+            "answer": [
+              {
+                "valueString": "Mother"
+              }
+            ]
+          },
+          {
+            "linkId": "m_decision",
+            "answer": [
+              {
+                "valueString": "CONFIRM"
+              }
+            ]
+          },
+          {
+            "linkId": "m_final_priority",
+            "answer": [
+              {
+                "valueString": "ORANGE"
+              }
+            ]
+          },
+          {
+            "linkId": "r_advice",
+            "answer": [
+              {
+                "valueString": "Stay with her, remove medicines and sharp objects, call 999 if she tries to harm herself"
+              }
+            ]
+          },
+          {
+            "linkId": "r_callback_at",
+            "answer": [
+              {
+                "valueString": "2026-10-28T15:00"
+              }
+            ]
+          },
+          {
+            "linkId": "r_callback_owner",
+            "answer": [
+              {
+                "valueString": "triage_nurse"
+              }
+            ]
+          },
+          {
+            "linkId": "r_disposition",
+            "answer": [
+              {
+                "valueString": "callback"
+              }
+            ]
+          },
+          {
+            "linkId": "schema",
+            "answer": [
+              {
+                "valueString": "v5"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:riskassessment:9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+      "resource": {
+        "resourceType": "RiskAssessment",
+        "id": "9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+        "status": "final",
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        },
+        "occurrenceDateTime": "2026-10-28T06:48:10.046837Z",
+        "basis": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:9c3f5b9f-9a56-4e89-a497-f3e9566f751a"
+          }
+        ],
+        "note": [
+          {
+            "text": "Suicide / self-harm concern reported · Unable to determine: Can the person be brought safely"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:1a5d0250-01d7-4726-945d-a3ee9cbeff85",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "1a5d0250-01d7-4726-945d-a3ee9cbeff85",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "PRESENTING_CONCERN"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "PRESENTING_CONCERN"
+            }
+          ],
+          "text": "Presenting concern"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:10.046837Z",
+        "performer": [
+          {
+            "display": "Third-party report (family) — Mother — Rose Otieno"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Not eating for three days and talking about dying"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:9c3f5b9f-9a56-4e89-a497-f3e9566f751a"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:observation:dc8feb23-b231-4232-b538-fccad1cea114",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "dc8feb23-b231-4232-b538-fccad1cea114",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:clinical-finding-domain",
+                "code": "SUICIDE_SELF_HARM"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding",
+              "code": "SUICIDE_SELF_HARM"
+            }
+          ],
+          "text": "Suicide / self-harm"
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        },
+        "effectiveDateTime": "2026-10-28T06:48:10.046837Z",
+        "performer": [
+          {
+            "display": "Third-party report (family) — Mother — Rose Otieno"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-finding-status",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Suicide/self-harm concern"
+          }
+        ],
+        "derivedFrom": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:9c3f5b9f-9a56-4e89-a497-f3e9566f751a"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:provenance:9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "prov-9c3f5b9f-9a56-4e89-a497-f3e9566f751a",
+        "target": [
+          {
+            "reference": "urn:citramac:questionnaireresponse:9c3f5b9f-9a56-4e89-a497-f3e9566f751a"
+          },
+          {
+            "reference": "urn:citramac:observation:1a5d0250-01d7-4726-945d-a3ee9cbeff85"
+          },
+          {
+            "reference": "urn:citramac:observation:dc8feb23-b231-4232-b538-fccad1cea114"
+          }
+        ],
+        "recorded": "2026-10-28T06:48:10.046837Z",
+        "agent": [
+          {
+            "who": {
+              "reference": "urn:citramac:practitioner:7f4d3c38-8bd2-4b41-a7dc-f9cb731dd1f5",
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:flag:bde92de9-5358-46a3-ad05-4eb018f2128e",
+      "resource": {
+        "resourceType": "Flag",
+        "id": "bde92de9-5358-46a3-ad05-4eb018f2128e",
+        "status": "active",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:clinical-alert",
+              "code": "SUICIDE_RISK",
+              "display": "Suicide risk"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "period": {
+          "start": "2026-10-28T06:48:10.046837Z"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:citramac:task:34a769fc-4efc-477c-afe6-d8c53c527036",
+      "resource": {
+        "resourceType": "Task",
+        "id": "34a769fc-4efc-477c-afe6-d8c53c527036",
+        "status": "requested",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:triage-action",
+              "code": "triage_callback",
+              "display": "Call back (Family/parent) — telephone triage"
+            }
+          ]
+        },
+        "for": {
+          "reference": "urn:citramac:patient:ec914a2c-dad2-4a00-ac5b-14284b6f8b57"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:51116ff5-86d0-413e-8819-b8cf652693ec"
+        },
+        "authoredOn": "2026-10-28T06:48:10.176646Z",
+        "owner": {
+          "display": "Triage nurse"
+        }
+      }
+    }
+  ]
+}

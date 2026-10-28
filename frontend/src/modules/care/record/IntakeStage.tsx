@@ -16,6 +16,7 @@ import {
   type IntakeSections,
   type ToolRow,
 } from "../../../lib/carePathwayApi";
+import { FindingsPanel } from "../shared/FindingsPanel";
 import { formatDateTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL } from "../shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, Tag } from "../shared/ui";
@@ -135,6 +136,31 @@ export function IntakeStage(props: RecordViewProps) {
       onNewVersion={() => setReload((n) => n + 1)}
     />
   );
+}
+
+// Intake risk-register rows → the shared finding each confirms (mirrors
+// backend intake.CARRIED_FINDING_KEYS): those are confirmed in Section 3 when
+// the intake is signed, so the findings panel does not ask a second time.
+const CARRIED_FINDING_KEYS: Record<string, string> = {
+  suicide: "SUICIDE_SELF_HARM",
+  violence: "HARM_TO_OTHERS",
+  safeguarding: "SAFEGUARDING",
+  neglect: "SAFEGUARDING",
+  medical: "MEDICAL",
+};
+
+function reviewedInIntake(sections: IntakeSections): Map<string, string> {
+  // The presenting concern is carried into Section 1 with its source.
+  const where = new Map([["PRESENTING_CONCERN", "Confirm or update in Section 1"]]);
+  const risk = (sections.risk ?? {}) as { carried?: Record<string, unknown> };
+  for (const item of Object.keys(risk.carried ?? {})) {
+    const key =
+      item === "neglect:Difficulty with self-care"
+        ? "FUNCTIONAL"
+        : CARRIED_FINDING_KEYS[item.split(":")[0]];
+    if (key) where.set(key, "Confirm in Section 3 Risk");
+  }
+  return where;
 }
 
 function IntakeWorkspace({
@@ -336,6 +362,13 @@ function IntakeWorkspace({
           )}
         </Card>
       )}
+
+      <FindingsPanel
+        patientId={patientId}
+        stage="INTAKE"
+        readOnly={Boolean(signed)}
+        reviewedElsewhere={reviewedInIntake(sections)}
+      />
 
       <div
         className={`grid grid-cols-1 items-start gap-4 lg:grid-cols-[250px_1fr] ${

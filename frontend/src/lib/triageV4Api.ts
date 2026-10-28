@@ -34,7 +34,7 @@ export interface EwsResult {
 
 /** The v4 evaluation is the v3 shape plus these fields. */
 export interface TriageV4Evaluation extends TriageEvaluation {
-  schema?: "v4";
+  schema?: "v4" | "v5";
   ruleset_label?: string;
   reason_list?: V4Reason[];
   finding_items?: V4FindingItem[];

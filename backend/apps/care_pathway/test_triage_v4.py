@@ -166,10 +166,12 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             reverse("care-triage-sign", args=[te_id or self.te_id]), body, format="json", **(auth or self.auth)
         )
 
-    def test_detail_serves_v4_defaults_for_a_new_triage(self):
+    def test_new_triage_opens_on_v5_and_a_v4_draft_still_signs_on_v4(self):
+        # Since 2026-10-28 new triages use the v5 rule set (test_triage_v5.py);
+        # an answer set still marked v4 is signed by the v4 rules (this file).
         data = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
-        self.assertEqual(data["schema"], "v4")
-        self.assertEqual(data["evaluation"]["rules_version"], "v4-demo")
+        self.assertEqual(data["schema"], "v5")
+        self.assertEqual(data["evaluation"]["rules_version"], "2026-10-28.1")
         config = self.client.get(reverse("care-triage-v4-config"), **self.auth).data
         self.assertEqual(len(config["flags"]), 24)
 

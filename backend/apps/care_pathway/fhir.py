@@ -28,6 +28,7 @@ from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
 from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 from fhir.resources.R4B.flag import Flag
 from fhir.resources.R4B.narrative import Narrative
+from fhir.resources.R4B.observation import Observation
 from fhir.resources.R4B.period import Period
 from fhir.resources.R4B.provenance import Provenance, ProvenanceAgent
 from fhir.resources.R4B.questionnaireresponse import (
@@ -46,6 +47,8 @@ from apps.dha_interop.fhir_mapper import (
     build_medication_request_resource,
     build_patient_resource,
 )
+
+from .models import ClinicalFinding
 
 _ENCOUNTER_STATUS = {
     "AWAITING": "arrived",
@@ -113,6 +116,7 @@ def build_triage_bundle(triage_encounter):
             ),
         )
     )
+    latest = te.assessments.filter(status="COMPLETED").order_by("-version").first()
     resources.append(
         (
             encounter_ref,
@@ -120,6 +124,7 @@ def build_triage_bundle(triage_encounter):
                 id=str(te.encounter_id),
                 status=_ENCOUNTER_STATUS.get(te.status, "unknown"),
                 class_fhir=Coding(display="triage"),
+                type=_encounter_type(latest.answers if latest else {}),
                 priority=_local("triage-priority", te.priority) if te.priority else None,
                 subject=Reference(reference=patient_ref),
                 episodeOfCare=[Reference(reference=episode_ref)],
@@ -163,13 +168,22 @@ def build_triage_bundle(triage_encounter):
                 ),
             )
         )
+        observation_refs = []
+        for finding in ClinicalFinding.objects.filter(
+            source_type="TriageAssessment", source_id=assessment.id
+        ).select_related("recorded_by"):
+            ref = _urn("Observation", finding.id)
+            observation_refs.append(Reference(reference=ref))
+            resources.append(
+                (ref, _finding_observation(finding, patient_ref, encounter_ref, qr_ref))
+            )
         if assessment.signed_by:
             resources.append(
                 (
                     _urn("Provenance", assessment.id),
                     Provenance(
                         id=f"prov-{assessment.id}",
-                        target=[Reference(reference=qr_ref)],
+                        target=[Reference(reference=qr_ref), *observation_refs],
                         recorded=assessment.signed_at.isoformat(),
                         agent=[ProvenanceAgent(who=_actor(assessment.signed_by))],
                     ),
@@ -212,6 +226,58 @@ def build_triage_bundle(triage_encounter):
         entry=[BundleEntry(fullUrl=url, resource=resource) for url, resource in resources],
     )
     return json.loads(bundle.json())
+
+
+def _encounter_type(answers):
+    """Encounter type from the triage answers; "Other" keeps the clinician's own
+    words as CodeableConcept.text beside the local code (no repurposed element)."""
+    code = answers.get("b_encounter_type")
+    if not code:
+        return None
+    concept = _local("triage-encounter-type", code)
+    if code == "other" and answers.get("b_encounter_type_other"):
+        concept.text = answers["b_encounter_type_other"]
+    return [concept]
+
+
+def _finding_performer(finding, patient_ref):
+    """Who the finding is from (spec §18 SHOW SOURCE): the client for a client
+    report, the named third party for a third-party report, else the clinician
+    who observed or measured it. Who *recorded* it is the Provenance agent."""
+    if finding.source_code == "CLIENT_REPORT":
+        return [Reference(reference=patient_ref)]
+    if finding.source_code == "THIRD_PARTY_REPORT":
+        display = finding.source_label + (
+            f" — {finding.source_detail}" if finding.source_detail else ""
+        )
+        return [Reference(display=display)]
+    return [_actor(finding.recorded_by)] if finding.recorded_by else None
+
+
+def _finding_observation(finding, patient_ref, encounter_ref, qr_ref):
+    """One shared clinical finding (findings.py) as an Observation. Local codes
+    only: VERIFY LOINC / SNOMED CT equivalents before any are emitted."""
+    notes = [finding.summary, finding.note]
+    return Observation(
+        id=str(finding.id),
+        status="final",
+        category=[_local("clinical-finding-domain", finding.domain)],
+        code=CodeableConcept(
+            coding=[
+                Coding(system="urn:citramac:codesystem:clinical-finding", code=finding.key)
+            ],
+            text=finding.title,
+        ),
+        subject=Reference(reference=patient_ref),
+        encounter=Reference(reference=encounter_ref),
+        effectiveDateTime=finding.recorded_at.isoformat(),
+        performer=_finding_performer(finding, patient_ref),
+        valueCodeableConcept=_local(
+            "clinical-finding-status", finding.status, finding.get_status_display()
+        ),
+        note=[Annotation(text=n) for n in notes if n] or None,
+        derivedFrom=[Reference(reference=qr_ref)],
+    )
 
 
 def _narrative(text):

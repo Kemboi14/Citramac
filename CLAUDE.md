@@ -281,3 +281,23 @@ Open items for the owner: confirm the VERIFY list in `hie_spec/SOURCE.md` agains
 with DHA that its public FHIR server reports 4.3.0 (R4B) while Kenya Core is R4; decide whether
 referrals should capture a destination FR code; complete Form HMIS 4 certification (Digital
 Health (HIM Procedures) Regulations 2025, regs 37–42).
+
+### 2026-10-28 — Triage v5 (the triage developer specification) and the shared finding store
+
+After QA, on the owner's confirmation: new triages use **v5** (`apps/care_pathway/triage_v5.py`,
+`frontend/src/modules/care/triage/TriageFormV5.tsx`) — the "Comprehensive Triage & Initial Risk
+Screen" specification's sections A–N on the v3 answer keys and value sets, keeping v4's vital signs /
+EWS, waiting-area safety, overdose / duty-to-protect / GBV blocks and telephone call-back. Questions
+v4 asked twice were removed. Signed v3 and v4 triages stay on the form and rules they were signed
+with. The v5 rule set (`RULES_VERSION` "2026-10-28.1"), the coded per-substance "current
+concern" list included, was approved for clinical use by the project owner on 2026-10-28.
+
+§4 "one shared store" for findings: `ClinicalFinding` (`apps/care_pathway/findings.py`) holds one
+versioned finding per client per domain. A signed v5 triage records it. Intake confirms it — in the
+Section 3 risk register for carried risk items (written back when the intake is signed), in the
+findings panel for the rest. Every change is a new version; nothing is overwritten. FHIR: each finding
+is an `Observation` (local `urn:citramac:codesystem:clinical-finding` codes — VERIFY LOINC/SNOMED CT
+before any are emitted), `derivedFrom` the triage QuestionnaireResponse, with `performer` = the source
+(client / third party / clinician), and covered by the signature's Provenance. Reversibility: cheap.
+The store is additive, and signed triage and intake records are unchanged. Like `ClinicalAlert`, a
+finding follows the client and is not branch-scoped.

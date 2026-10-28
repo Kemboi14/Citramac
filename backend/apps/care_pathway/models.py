@@ -345,6 +345,73 @@ class ClinicalAlert(TenantScopedModel):
         ordering = ["raised_at"]
 
 
+class ClinicalFinding(TenantScopedModel):
+    """One version of a clinical finding (triage spec §17): e.g. the client's
+    suicide / self-harm finding, read and extended by Triage, Intake, Risk, Care
+    Plan and Follow-up instead of each stage keeping its own copy.
+
+    Append-only: confirming or updating a finding writes a new version that
+    supersedes the previous one, so the earlier value, who recorded it and when
+    stay in the history (spec §18 "update, do not re-enter"). The current finding
+    for a `key` is its highest version. FHIR Observation (+ Provenance)."""
+
+    STATUS_CHOICES = [
+        ("PRESENT", "Present"),
+        ("ABSENT", "Not present"),
+        ("UNKNOWN", "Unable to determine"),
+    ]
+    ACTION_CHOICES = [
+        ("RECORDED", "Recorded"),
+        ("CONFIRMED", "Confirmed unchanged"),
+        ("UPDATED", "Updated"),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="clinical_findings")
+    episode = models.ForeignKey(
+        EpisodeOfCare, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    encounter = models.ForeignKey(
+        Encounter, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    # e.g. "SUICIDE_SELF_HARM", "SUBSTANCE:alcohol" — one current finding per key.
+    key = models.CharField(max_length=60)
+    # Code from the `clinical-finding-domain` LocalValueSet.
+    domain = models.CharField(max_length=30)
+    title = models.CharField(max_length=120)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    summary = models.TextField(blank=True)
+    # The coded answers this version rests on (answer key → code(s)).
+    values = models.JSONField(default=dict, blank=True)
+    note = models.TextField(blank=True)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES, default="RECORDED")
+    # Workflow stage that wrote this version: TRIAGE, INTAKE, …
+    stage = models.CharField(max_length=20)
+    # Source (spec §18 SHOW SOURCE): CLIENT_REPORT, THIRD_PARTY_REPORT,
+    # CLINICIAN_OBSERVATION, MEASUREMENT, PREVIOUS_RECORD, ASSESSMENT.
+    source_code = models.CharField(max_length=30)
+    source_label = models.CharField(max_length=120)
+    source_detail = models.CharField(max_length=200, blank=True)
+    # The signed record this version came from, e.g. ("TriageAssessment", id).
+    source_type = models.CharField(max_length=40, blank=True)
+    source_id = models.UUIDField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    supersedes = models.OneToOneField(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["key", "-version"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["patient", "key", "version"], name="uniq_clinical_finding_version"
+            )
+        ]
+
+
 class CareTask(TenantScopedModel):
     """Trackable immediate action from triage section N. FHIR Task."""
 

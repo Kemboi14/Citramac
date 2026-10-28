@@ -14,6 +14,7 @@ import { EncounterContext } from "./triage/EncounterContext";
 import { QuickRecheck } from "./triage/QuickRecheck";
 import { TriageForm } from "./triage/TriageForm";
 import { TriageFormV4 } from "./triage/TriageFormV4";
+import { TriageFormV5 } from "./triage/TriageFormV5";
 import { errorText } from "./triage/helpers";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 
@@ -114,9 +115,22 @@ export function TriageEncounterPage() {
     );
   }
 
-  // New and in-progress triages use the v4 model; a record signed under the v3
-  // rules is shown on the v3 form exactly as it was signed.
-  if (detail.schema !== "v3") {
+  // New and in-progress triages use the v5 model (the triage developer
+  // specification); a record signed under the v4 or v3 rules is shown on the
+  // form it was signed with, exactly as it was signed.
+  if (detail.schema === "v5") {
+    return (
+      <TriageFormV5
+        key={`${detail.id}:${formKey}`}
+        detail={detail}
+        banner={banner}
+        bannerError={bannerError}
+        onSigned={() => setReloadKey((k) => k + 1)}
+      />
+    );
+  }
+
+  if (detail.schema === "v4") {
     return (
       <TriageFormV4
         key={`${detail.id}:${formKey}`}

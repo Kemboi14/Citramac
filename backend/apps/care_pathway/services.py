@@ -707,14 +707,15 @@ def _record_vitals(
 @transaction.atomic
 def sign_triage(triage_encounter, user, payload):
     answers = payload.get("answers") or {}
-    from . import triage_v4
+    from . import triage_v4, triage_v5
 
-    if triage_v4.is_v4(answers):
-        # New triages use the v4 rule set (triage_v4.py); a v3-shaped answer set
-        # is still signed by the v3 rules below.
+    if triage_v5.is_v5(answers) or triage_v4.is_v4(answers):
+        # New triages use the v5 rule set (triage_v5.py); a draft still shaped
+        # for v4 is signed by v4, and a v3-shaped answer set by the v3 rules below.
         from .triage_sign_v4 import sign_triage_v4
 
-        return sign_triage_v4(triage_encounter, user, payload)
+        rules = triage_v5 if triage_v5.is_v5(answers) else triage_v4
+        return sign_triage_v4(triage_encounter, user, payload, rules)
     merged = {**triage_rules.DEFAULT_ANSWERS, **answers}
     missing_keys = [key for key, _ in triage_rules.CORE_SCREENS if not merged.get(key)]
     missing = [name for key, name in triage_rules.CORE_SCREENS if key in missing_keys]

@@ -51,8 +51,10 @@ def _error(problems):
 
 
 @transaction.atomic
-def sign_triage_v4(triage_encounter, user, payload):
-    from . import services
+def sign_triage_v4(triage_encounter, user, payload, rules=v4):
+    """`rules` is the rule-set module: triage_v4, or triage_v5 (same interface;
+    a v5 signature also writes the shared clinical finding store)."""
+    from . import findings, services
 
     if triage_encounter.status not in (
         TriageEncounter.STATUS_AWAITING,
@@ -60,9 +62,9 @@ def sign_triage_v4(triage_encounter, user, payload):
     ):
         raise ValidationError({"detail": "This triage has already been signed."})
     raw = payload.get("answers") or {}
-    answers = v4.clean_answers(raw)  # X-08: hidden fields are never stored
+    answers = rules.clean_answers(raw)  # X-08: hidden fields are never stored
     labels = services.concept_labels()
-    result = v4.evaluate(answers, labels)
+    result = rules.evaluate(answers, labels)
     recommended = result["priority"]
     final = payload.get("final_priority") or answers.get("m_final_priority") or recommended
     if final not in PRIORITY_ORDER:
@@ -70,10 +72,10 @@ def sign_triage_v4(triage_encounter, user, payload):
     override = final != recommended
     reason = (payload.get("override_reason") or answers.get("m_override_reason") or "").strip()
 
-    problems = v4.required_problems(answers) + v4.safety_problems(answers, final)
+    problems = rules.required_problems(answers) + rules.safety_problems(answers, final)
     if problems:
         raise _error(problems)
-    if override and len(reason) < v4.OVERRIDE_REASON_MIN:
+    if override and len(reason) < rules.OVERRIDE_REASON_MIN:
         # TRI-M-05 / AT-05: an override is blocked without a reason.
         raise _error(
             [
@@ -97,14 +99,14 @@ def sign_triage_v4(triage_encounter, user, payload):
         answers.pop("m_cosign", None)
 
     assessment = services.save_triage_draft(triage_encounter, user, answers)
-    assessment.findings = v4.stamp_findings(result["finding_items"], now.isoformat(), by)
+    assessment.findings = rules.stamp_findings(result["finding_items"], now.isoformat(), by)
     assessment.alerts = result["alerts"]
     assessment.recommendation = result["recommendation"]
     assessment.recommendation_reasons = result["reasons"]
     assessment.final_priority = final
     assessment.decision = answers["m_decision"]
     assessment.override_reason = answers["m_override_reason"]
-    assessment.rules_version = v4.RULES_VERSION
+    assessment.rules_version = rules.RULES_VERSION
     assessment.tasks_snapshot = [
         {**t, "created_at": t["created_at"].isoformat()}
         for t in triage_encounter.tasks.values("action_label", "owner", "status", "created_at")
@@ -115,7 +117,7 @@ def sign_triage_v4(triage_encounter, user, payload):
     assessment.save()
 
     patient = triage_encounter.patient
-    present = v4.present_of(answers) == "yes"
+    present = rules.present_of(answers) == "yes"
     triage_encounter.priority = final
     concern = (answers.get("c_concern") or "").strip()
     if concern:
@@ -154,6 +156,10 @@ def sign_triage_v4(triage_encounter, user, payload):
                 raised_by=user,
             )
 
+    if hasattr(rules, "domain_findings"):
+        findings.record_from_triage(
+            assessment, rules.domain_findings(answers, labels), user, now
+        )
     if present:
         _record_vitals(encounter, user, answers, now)
         _record_observation(patient, user, answers, assessment.version, labels)
@@ -182,7 +188,7 @@ def sign_triage_v4(triage_encounter, user, payload):
                 "system_priority": recommended,
                 "final_priority": final,
                 "reason": reason,
-                "rules_version": v4.RULES_VERSION,
+                "rules_version": rules.RULES_VERSION,
                 "clinician": by,
                 "at": now.isoformat(),
                 "cosign": answers.get("m_cosign", ""),
@@ -280,6 +286,9 @@ def _task(te, user, focus, label, owner, due, priority="urgent"):
 
 def _create_tasks(te, user, answers, assessment, labels):
     flags = answers.get("flags") or []
+    # v4 flags, or the v5 answers that open the same detail blocks.
+    gbv = "gbv_72h" in flags or answers.get("i_sv_recent") == "yes"
+    duty = "homicidal_named" in flags or answers.get("e_named") == "yes"
     if v4.present_of(answers) == "no" and answers.get("r_disposition") == "callback":
         due = v4.parse_local_datetime(answers.get("r_callback_at"))
         owner = CALLBACK_OWNER_LABELS.get(answers.get("r_callback_owner"), "Triage nurse")
@@ -289,7 +298,7 @@ def _create_tasks(te, user, answers, assessment, labels):
         _task(
             te, user, "TRIAGE_CALLBACK", f"Call back ({informant}) — telephone triage", owner, due
         )
-    if "gbv_72h" in flags:
+    if gbv:
         closes = v4.pep_deadline(answers)
         _task(
             te,
@@ -301,7 +310,7 @@ def _create_tasks(te, user, answers, assessment, labels):
             closes,
             "asap",
         )
-    if "homicidal_named" in flags:
+    if duty:
         _task(
             te,
             user,

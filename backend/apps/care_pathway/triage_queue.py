@@ -23,6 +23,7 @@ from apps.triage.models import VitalSigns
 
 from . import ews, triage_rules
 from . import triage_v4 as v4
+from . import triage_v5 as v5
 from .models import (
     PRIORITY_ORDER,
     CareTask,
@@ -33,6 +34,10 @@ from .models import (
 )
 
 TIMED_TASKS = ("TRIAGE_CALLBACK", "PEP_EC_DECISION", "DUTY_TO_PROTECT")
+
+
+def _modern(answers):
+    return v4.is_v4(answers) or v5.is_v5(answers)
 
 
 def _initials(name):
@@ -117,7 +122,8 @@ def te_items(te, now, signed=None, include_queue=True):
         return items
     signed = signed if signed is not None else _signed(te)
     answers = signed.answers if signed else {}
-    is_v4 = v4.is_v4(answers)
+    # v4 and v5 answer sets share the presence, vital-sign and safety keys.
+    is_v4 = _modern(answers)
     present = (answers.get("b_present") != "no") if is_v4 else True
     seen = te.psychiatry_review_started_at is not None
     colour, name = te.priority, v4.PRIORITY_NAME.get(te.priority, "")
@@ -150,7 +156,12 @@ def te_items(te, now, signed=None, include_queue=True):
         triage_encounter=te, focus_type__in=TIMED_TASKS, status__in=("INITIATED", "PENDING")
     ):
         add(f"task:{task.id}", task.action_label, task.due_at, "escalate")
-    if is_v4 and not seen and "minor" in (answers.get("flags") or []):
+    minor = (
+        te.patient.age_years is not None and te.patient.age_years < 18
+        if v5.is_v5(answers)
+        else "minor" in (answers.get("flags") or [])
+    )
+    if is_v4 and not seen and minor:
         add("minor", "Minor — record the guardian and offer time alone with the young person")
     items.sort(
         key=lambda i: (
@@ -196,7 +207,7 @@ def attention_chips(te, now, lane, wait, signed, alerts, proposals):
                 "sev": 1,
             }
         )
-    if v4.is_v4(answers) and answers.get("b_present") == "no":
+    if _modern(answers) and answers.get("b_present") == "no":
         chips.append({"key": "telephone", "label": "Telephone triage", "tone": "info", "sev": 4})
     if proposals:
         chips.append({"key": "proposal", "label": "Risk proposal", "tone": "warn", "sev": 2})
@@ -208,7 +219,7 @@ def _obs(signed, labels, lane):
     if not signed or lane in ("awaiting", "discharged"):
         return None
     a = signed.answers
-    if not v4.is_v4(a):
+    if not _modern(a):
         return None
     if a.get("b_present") == "no":
         return {"off_site": True, "level": "", "location": "", "observer": ""}

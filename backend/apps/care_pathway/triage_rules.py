@@ -62,6 +62,10 @@ ALERT_LABELS = {
     "ABNORMAL_VITALS": "Abnormal vital signs",
     "SAFEGUARDING": "Safeguarding concern",
     "TELEPHONE_EMERGENCY": "Telephone screen: emergency assistance required",
+    # Triage v5 (spec sections F and H flags).
+    "MENTAL_STATE_CHANGE": "Acute mental state change",
+    "PSYCHOSIS_AGITATION": "Psychosis / severe agitation",
+    "MEDICAL_CONCERN": "Acute medical concern",
 }
 
 # Defaults match the mockup's pre-selected options. The core screens start

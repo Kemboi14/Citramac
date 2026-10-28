@@ -71,6 +71,7 @@ PATIENT_PATHS = {
     "care_pathway.TriageAssessment": "triage_encounter__patient",
     "care_pathway.TriageRecheck": "triage_encounter__patient",
     "care_pathway.ClinicalAlert": "patient",
+    "care_pathway.ClinicalFinding": "patient",
     "care_pathway.CareTask": "patient",
     "care_pathway.IntakeAssessment": "patient",
     "care_pathway.MedicationHistoryEntry": "patient",

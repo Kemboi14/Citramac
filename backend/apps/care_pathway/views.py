@@ -22,7 +22,7 @@ from apps.triage.models import MentalStatusExam, VitalSigns
 
 from . import ews, facility_time, instruments, tools
 from . import intake as intake_service
-from . import intake_schema, services, triage_rules, triage_v4
+from . import findings, intake_schema, services, triage_rules, triage_v4, triage_v5
 from .models import (
     PRIORITY_ORDER,
     BillingService,
@@ -320,8 +320,10 @@ def _worklist_row(item):
 
 
 def _evaluate(answers, labels):
-    """v4 answer sets (`"schema": "v4"`) use the v4 rule set; anything else is
-    v3-shaped and keeps the v3 rules (triage_rules.py)."""
+    """Each answer set is evaluated by the rule set of its schema: v5, v4, or
+    (anything else) the v3 rules (triage_rules.py)."""
+    if triage_v5.is_v5(answers):
+        return triage_v5.evaluate(answers, labels)
     if triage_v4.is_v4(answers):
         return triage_v4.evaluate(answers, labels)
     return triage_rules.evaluate(answers, labels)
@@ -389,11 +391,21 @@ class TriageEncounterView(APIView):
         labels = services.concept_labels()
         answers = draft.answers if draft else {}
         editable = te.status in (TriageEncounter.STATUS_AWAITING, TriageEncounter.STATUS_IN_TRIAGE)
-        # New and in-progress triages use the v4 rule set; a signed record keeps the
-        # rule set it was signed under (the screen reads its stored result).
-        v4 = editable or triage_v4.is_v4(signed.answers if signed else answers)
-        if v4:
-            answers = {**triage_v4.DEFAULT_ANSWERS, **answers, "schema": triage_v4.SCHEMA}
+        # New and in-progress triages use the v5 rule set (a draft started on v4
+        # opens on v5: what the two share is kept, v4-only answers are not); a
+        # signed record keeps the rule set it was signed under (the screen reads
+        # its stored result).
+        record = signed.answers if signed else answers
+        if editable:
+            rules = triage_v5
+        elif triage_v5.is_v5(record):
+            rules = triage_v5
+        elif triage_v4.is_v4(record):
+            rules = triage_v4
+        else:
+            rules = None
+        if rules is not None:
+            answers = {**rules.DEFAULT_ANSWERS, **answers, "schema": rules.SCHEMA}
         return Response(
             {
                 "id": str(te.id),
@@ -415,8 +427,8 @@ class TriageEncounterView(APIView):
                 "triage_started_at": _iso(te.triage_started_at),
                 "clinician": user_display(request.user),
                 "tenant_location": request.user.organization.name,
-                "defaults": triage_v4.DEFAULT_ANSWERS if v4 else triage_rules.DEFAULT_ANSWERS,
-                "schema": triage_v4.SCHEMA if v4 else "v3",
+                "defaults": rules.DEFAULT_ANSWERS if rules else triage_rules.DEFAULT_ANSWERS,
+                "schema": rules.SCHEMA if rules else "v3",
                 "draft": _assessment_payload(draft),
                 "signed": _assessment_payload(signed),
                 "evaluation": _evaluate(answers, labels),
@@ -1101,6 +1113,39 @@ class ToolDecisionView(APIView):
             patient, request.user, tool, request.data.get("status"), request.data.get("reason", "")
         )
         return Response({"results": tools.overview(patient)}, status=status.HTTP_201_CREATED)
+
+
+class ClientFindingsView(APIView):
+    """The shared clinical finding store (findings.py): the current finding per
+    domain with its source, time and recorder, and (with ?key=) its history."""
+
+    def get(self, request, patient_id):
+        patient = _patient(patient_id)
+        log_view(patient)
+        key = request.query_params.get("key")
+        if key:
+            return Response({"results": [findings.payload(f) for f in findings.history(patient, key)]})
+        return Response({"results": [findings.payload(f) for f in findings.current(patient)]})
+
+
+class ClientFindingReviewView(APIView):
+    """Confirm a finding unchanged, or update it — a new version; the previous
+    value stays in the history."""
+
+    def post(self, request, patient_id):
+        patient = _patient(patient_id)
+        data = request.data
+        stage = str(data.get("stage") or "INTAKE").upper()[:20]
+        finding = findings.review(
+            patient,
+            str(data.get("key") or ""),
+            request.user,
+            action=data.get("action"),
+            stage=stage,
+            status=data.get("status"),
+            note=data.get("note", ""),
+        )
+        return Response(findings.payload(finding), status=status.HTTP_201_CREATED)
 
 
 class ClientAssessmentsView(APIView):
