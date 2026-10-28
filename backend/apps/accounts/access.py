@@ -119,6 +119,27 @@ def active_roles(user):
     return Role.objects.filter(Q(assignments__user=user) & at_branch).distinct()
 
 
+def has_permission(user, codename):
+    """Whether a role the user holds at the working branch carries this
+    permission (apps.accounts.catalogue). Super Admin is platform staff and holds
+    no organisation permission."""
+    if not (user and user.is_authenticated) or user.is_superuser:
+        return False
+    return active_roles(user).filter(permissions__codename=codename).exists()
+
+
+def users_with_permission(codenames, organization_id):
+    """Active staff of an organisation holding any of these permissions (any
+    branch) — for pickers such as the senior-review list."""
+    from .models import User
+
+    return User.objects.filter(
+        organization_id=organization_id,
+        is_active=True,
+        roles__permissions__codename__in=list(codenames),
+    ).distinct()
+
+
 def has_active_role(user, *names):
     query = Q()
     for name in names:

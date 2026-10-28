@@ -60,18 +60,12 @@ ACTION_PERMISSION = {
 # ── RBAC ──
 
 
-def role_names(user):
-    if not (user and user.is_authenticated):
-        return set()
-    return {name.lower() for name in active_roles(user).values_list("name", flat=True)}
-
-
 def in_groups(user, groups):
     """Superusers get no clinical document rights (they are platform staff)."""
     if not (user and user.is_authenticated) or user.is_superuser:
         return False
-    wanted = {name.lower() for g in groups for name in catalogue.role_group(g)}
-    return bool(role_names(user) & wanted)
+    wanted = {catalogue.group_permission(g) for g in groups}
+    return active_roles(user).filter(permissions__codename__in=wanted).exists()
 
 
 def can(user, spec, action):

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
-import { SaveButton } from "../../components/SaveButton";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { PermissionChangeDialog, PermissionMatrix } from "../../components/PermissionMatrix";
 import {
   createRole,
   listPermissions,
@@ -21,6 +22,9 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
+// Built-in administrator roles: their access is fixed in code (backend
+// apps/accounts/catalogue.py), so their permissions are not edited here.
+const BUILT_IN_ADMIN_ROLES = new Set(["org admin", "auditor"]);
 
 /**
  * Org Admin's branch-level RBAC console — defines what each staff role can
@@ -48,6 +52,13 @@ export function OrgRolesPermissionsPage() {
   const [staffRoleBusyId, setStaffRoleBusyId] = useState<string | null>(null);
   const [staffRoleError, setStaffRoleError] = useState<string | null>(null);
 
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pendingStaffRole, setPendingStaffRole] = useState<{
+    staff: Staff;
+    roleId: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!accessToken) return;
     void Promise.resolve().then(() => {
@@ -73,7 +84,15 @@ export function OrgRolesPermissionsPage() {
   }, [accessToken]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
-  const editable = selectedRole ? selectedRole.organization !== null : false;
+  const builtIn = selectedRole
+    ? BUILT_IN_ADMIN_ROLES.has(selectedRole.name.trim().toLowerCase())
+    : false;
+  const editable = selectedRole ? selectedRole.organization !== null && !builtIn : false;
+  const savedIds = new Set(selectedRole?.permissions ?? []);
+  const dirty =
+    selectedRole !== null &&
+    (savedIds.size !== draftPermissionIds.size ||
+      [...draftPermissionIds].some((id) => !savedIds.has(id)));
 
   // Resets the local draft when the selected role changes — a same-component
   // local-state reset, not synchronizing with an external system, so the
@@ -100,14 +119,17 @@ export function OrgRolesPermissionsPage() {
   const saveRolePermissions = async () => {
     if (!accessToken || !selectedRole) return;
     setSaveError(null);
+    setSaving(true);
     try {
       const updated = await updateRole(accessToken, selectedRole.id, {
         permissions: Array.from(draftPermissionIds),
       });
       setRoles((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setConfirmSave(false);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : "Couldn't save permission changes.");
-      throw err;
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -135,19 +157,23 @@ export function OrgRolesPermissionsPage() {
     }
   };
 
-  const reassignStaffRole = async (staffId: string, roleId: string) => {
-    if (!accessToken || !roleId) return;
-    setStaffRoleBusyId(staffId);
+  const reassignStaffRole = async () => {
+    if (!accessToken || !pendingStaffRole) return;
+    const { staff: member, roleId } = pendingStaffRole;
+    setStaffRoleBusyId(member.id);
     setStaffRoleError(null);
     try {
-      const updated = await updateStaff(accessToken, staffId, { roles: [Number(roleId)] });
-      setStaff((prev) => prev.map((s) => (s.id === staffId ? updated : s)));
+      const updated = await updateStaff(accessToken, member.id, { roles: [Number(roleId)] });
+      setStaff((prev) => prev.map((s) => (s.id === member.id ? updated : s)));
+      setPendingStaffRole(null);
     } catch (err) {
       setStaffRoleError(err instanceof ApiError ? err.message : "Couldn't reassign this role.");
     } finally {
       setStaffRoleBusyId(null);
     }
   };
+  const roleName = (id: number | string | undefined) =>
+    roles.find((r) => String(r.id) === String(id))?.name ?? "no role";
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -257,59 +283,58 @@ export function OrgRolesPermissionsPage() {
                   </div>
                 )}
 
-                {!editable && (
+                {builtIn ? (
                   <p className="text-xs text-ink-500">
-                    This is a shared platform role template. It can&apos;t be edited here — create a
-                    custom role for your organization instead.
+                    {selectedRole.name} is a built-in administrator role. Its access (facility
+                    administration
+                    {selectedRole.name.trim().toLowerCase() === "auditor"
+                      ? ", the audit trail"
+                      : ""}
+                    ) is fixed and can&apos;t be changed here.
                   </p>
+                ) : (
+                  !editable && (
+                    <p className="text-xs text-ink-500">
+                      This is a shared role template. It can&apos;t be edited here — create a custom
+                      role for your organisation instead.
+                    </p>
+                  )
                 )}
 
-                <div className="overflow-x-auto rounded-md border border-surface-border">
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
-                      <tr>
-                        <th className="px-4 py-2 w-10"></th>
-                        <th className="px-4 py-2">Permission</th>
-                        <th className="px-4 py-2">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {permissions.map((p) => (
-                        <tr key={p.id} className="border-b border-surface-border last:border-0">
-                          <td className="px-4 py-2">
-                            <input
-                              type="checkbox"
-                              checked={draftPermissionIds.has(p.id)}
-                              disabled={!editable}
-                              onChange={() => togglePermission(p.id)}
-                            />
-                          </td>
-                          <td className="px-4 py-2 font-mono text-xs text-ink-900">{p.codename}</td>
-                          <td className="px-4 py-2 text-ink-700">{p.description}</td>
-                        </tr>
-                      ))}
-                      {permissions.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-6 text-center text-ink-500">
-                            No permissions found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {saveError && (
-                  <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
-                    {saveError}
-                  </p>
-                )}
+                <PermissionMatrix
+                  permissions={permissions}
+                  selected={draftPermissionIds}
+                  disabled={!editable}
+                  onToggle={togglePermission}
+                />
 
                 {editable && (
                   <div>
-                    <SaveButton onSave={saveRolePermissions}>Save Changes</SaveButton>
+                    <button
+                      type="button"
+                      className={BUTTON_CLASS}
+                      disabled={!dirty}
+                      onClick={() => {
+                        setSaveError(null);
+                        setConfirmSave(true);
+                      }}
+                    >
+                      Save Changes
+                    </button>
                   </div>
                 )}
+                <PermissionChangeDialog
+                  open={confirmSave}
+                  roleName={selectedRole.name}
+                  userCount={selectedRole.user_count ?? null}
+                  permissions={permissions}
+                  before={savedIds}
+                  after={draftPermissionIds}
+                  busy={saving}
+                  error={saveError}
+                  onConfirm={saveRolePermissions}
+                  onCancel={() => setConfirmSave(false)}
+                />
               </div>
             )}
           </div>
@@ -345,7 +370,10 @@ export function OrgRolesPermissionsPage() {
                           className={FIELD_CLASS}
                           value={s.roles[0] ?? ""}
                           disabled={staffRoleBusyId === s.id}
-                          onChange={(e) => reassignStaffRole(s.id, e.target.value)}
+                          onChange={(e) =>
+                            e.target.value &&
+                            setPendingStaffRole({ staff: s, roleId: e.target.value })
+                          }
                         >
                           <option value="">No role</option>
                           {roles.map((r) => (
@@ -368,6 +396,25 @@ export function OrgRolesPermissionsPage() {
               </table>
             </div>
           </div>
+          <ConfirmDialog
+            open={pendingStaffRole !== null}
+            title="Change this person's role?"
+            confirmLabel="Yes, change role"
+            busyLabel="Saving…"
+            busy={staffRoleBusyId !== null}
+            error={staffRoleError}
+            onConfirm={reassignStaffRole}
+            onCancel={() => setPendingStaffRole(null)}
+          >
+            {pendingStaffRole && (
+              <p className="text-sm text-ink-700">
+                {pendingStaffRole.staff.first_name} {pendingStaffRole.staff.last_name} will change
+                from <strong>{roleName(pendingStaffRole.staff.roles[0])}</strong> to{" "}
+                <strong>{roleName(pendingStaffRole.roleId)}</strong>, and from their next action
+                will have exactly that role&apos;s permissions.
+              </p>
+            )}
+          </ConfirmDialog>
         </>
       )}
     </div>

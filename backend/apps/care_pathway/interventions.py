@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.accounts.access import active_roles
+from apps.accounts.access import has_permission, users_with_permission
 
 from . import ews as ews_module
 from . import facility_time, mental_state
@@ -254,23 +254,12 @@ FREQUENCIES = ["Once daily", "Mane", "Nocte", "BD", "TDS", "QDS", "Stat (once)"]
 PRESCRIBING_LOCKED = ("UNKNOWN", "")
 
 
-def _has_role(user, names):
-    from django.db.models import Q
-
-    if not (user and user.is_authenticated) or user.is_superuser:
-        return False
-    query = Q()
-    for name in names:
-        query |= Q(name__iexact=name)
-    return active_roles(user).filter(query).exists()
-
-
 def can_prescribe(user):
-    return _has_role(user, settings.PRESCRIBER_ROLES)
+    return has_permission(user, "clinical.medication.prescribe")
 
 
 def is_clinical_staff(user):
-    return _has_role(user, settings.DOC_ROLE_GROUPS["CLINICAL_STAFF"])
+    return has_permission(user, "clinical.care.record")
 
 
 def _current_admission(patient):
@@ -667,14 +656,9 @@ def record_restrictive_episode(patient, user, data):
 def restrictive_authorisers(organization_id):
     """Who may be named as authoriser: prescribers and senior (co-signing)
     clinicians. One who is not senior triggers a co-signature request."""
-    from django.db.models import Q
-
-    from apps.accounts.models import User
-
-    query = Q()
-    for name in [*settings.PRESCRIBER_ROLES, *settings.COSIGN_ROLES]:
-        query |= Q(roles__name__iexact=name)
-    return User.objects.filter(query, organization_id=organization_id, is_active=True).distinct()
+    return users_with_permission(
+        ["clinical.medication.prescribe", "clinical.cosign"], organization_id
+    )
 
 
 def complete_check(check, user):

@@ -1171,18 +1171,76 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertEqual(role.organization_id, self.org.id)
         self.assertEqual(role.scope, Role.SCOPE_ORG_TEMPLATE)
 
-    def test_org_admin_cannot_grant_permission_outside_any_template(self):
-        rogue_permission = Permission.objects.create(
-            codename="platform.totally_rogue.permission", description="Platform-only"
-        )
+    def test_org_admin_cannot_grant_a_platform_team_permission(self):
+        platform_permission = Permission.objects.get(codename="platform.organizations.create")
         response = self.client.post(
             reverse("role-list"),
-            {"name": "Rogue Role", "permissions": [rogue_permission.id]},
+            {"name": "Rogue Role", "permissions": [platform_permission.id]},
             format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("permissions", response.data)
+
+    def test_org_admin_can_grant_the_legal_form_authorities(self):
+        # The QA failure (2026-10-28): these sat on no template, so they could
+        # never be granted.
+        legal = list(
+            Permission.objects.filter(
+                codename__in=["clinical.admitting_officer", "clinical.identity_numbers.unmask"]
+            ).values_list("id", flat=True)
+        )
+        response = self.client.post(
+            reverse("role-list"),
+            {"name": "Admitting Psychiatrist", "permissions": legal},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_org_admin_sees_only_organisation_permissions_with_descriptions(self):
+        rows = self.client.get(
+            reverse("permission-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_access}"
+        ).data
+        self.assertTrue(rows)
+        self.assertEqual({r["scope"] for r in rows}, {"ORG"})
+        self.assertTrue(all(r["label"] and r["description"] and r["module_label"] for r in rows))
+        codenames = {r["codename"] for r in rows}
+        self.assertFalse([c for c in codenames if c.endswith(".delete") or ".ccp" in c])
+        everything = self.client.get(
+            reverse("permission-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
+        ).data
+        self.assertIn("platform.organizations.deactivate", {r["codename"] for r in everything})
+        self.assertFalse([r for r in everything if r["codename"].endswith((".delete", ".suspend"))])
+
+    def test_built_in_administrator_role_permissions_are_fixed(self):
+        with platform_admin_context():
+            own_admin = Role.objects.create(name="Org Admin", organization=self.org)
+        response = self.client.patch(
+            reverse("role-detail", args=[own_admin.id]),
+            {"permissions": []},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_catalogue_kept_who_could_do_what(self):
+        with platform_admin_context():
+            held = lambda name: set(  # noqa: E731
+                Role.objects.get(name=name, organization__isnull=True).permissions.values_list(
+                    "codename", flat=True
+                )
+            )
+            psychiatrist, therapist, clerk = held("Psychiatrist"), held("Therapist"), held("Billing Clerk")
+            org_admin = held("Org Admin")
+        self.assertTrue(
+            {"clinical.medication.prescribe", "clinical.cosign", "clinical.care.record",
+             "clinical.restricted_content.view", "documents.senior"} <= psychiatrist
+        )
+        self.assertNotIn("clinical.medication.prescribe", therapist)
+        self.assertIn("clinical.restricted_content.view", therapist)
+        self.assertEqual(clerk & {"finance.manage", "documents.financial"}, {"finance.manage", "documents.financial"})
+        self.assertFalse([c for c in org_admin if c.startswith("platform.")])
 
     def test_staff_invite_creates_inactive_user_with_role_and_activation_invite(self):
         response = self.client.post(

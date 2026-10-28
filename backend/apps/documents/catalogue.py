@@ -18,7 +18,6 @@ of record data and cannot be submitted, signed or released until the
 facility supplies approved wording.
 """
 
-from django.conf import settings
 
 CATALOGUE_VERSION = "2026-10-17.1"
 
@@ -340,8 +339,8 @@ REFERRAL_DESTINATION_FIELDS = {
 }
 
 # ── Authorization profiles (DOC-GOV-02 / 07 / 08) ──
-# Each names role groups; groups resolve to role names from settings so a
-# facility can re-map them without a release (X-02 RBAC).
+# Each names authorisation groups; each group is a permission (group_permission)
+# that the Org Admin grants to roles in Roles & Permissions (X-02 RBAC).
 AUTH_PROFILES = {
     "clinical": {
         "generate": ["CLINICAL_STAFF"],
@@ -407,12 +406,14 @@ AUTH_PROFILES = {
 }
 
 
-def role_group(name):
-    """Role names in a group. PRESCRIBERS is always settings.PRESCRIBER_ROLES
-    (DOC-GOV-08), so prescribing documents follow the one prescribing policy."""
-    if name == "PRESCRIBERS":
-        return list(settings.PRESCRIBER_ROLES)
-    return list(settings.DOC_ROLE_GROUPS.get(name, []))
+def group_permission(name):
+    """The permission that puts a person in an authorisation group
+    (apps.accounts.catalogue.DOCUMENT_GROUP_PERMISSIONS). PRESCRIBERS is the
+    prescribing permission itself (DOC-GOV-08), so prescribing documents follow
+    the one prescribing policy."""
+    from apps.accounts.catalogue import DOCUMENT_GROUP_PERMISSIONS
+
+    return DOCUMENT_GROUP_PERMISSIONS[name]
 
 
 # ── User-entered fields (DOC-SPEC #5): only what cannot be derived ──

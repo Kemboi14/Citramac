@@ -1,12 +1,10 @@
 """Safety plan, MDT review and senior co-signature (mockup v4 stage 4)."""
 
-from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.accounts.access import active_roles
+from apps.accounts.access import has_permission
 
 from .models import CosignRequest, MdtReview, NursingCarePlanEntry, SafetyPlan
 
@@ -149,12 +147,7 @@ def evaluate_nursing_problem(entry, user, data):
 
 
 def can_cosign(user):
-    if not (user and user.is_authenticated) or user.is_superuser:
-        return False
-    query = Q()
-    for name in settings.COSIGN_ROLES:
-        query |= Q(name__iexact=name)
-    return active_roles(user).filter(query).exists()
+    return has_permission(user, "clinical.cosign")
 
 
 def request_cosign(patient, user, kind, what, subject_type="", subject_id=""):

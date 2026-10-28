@@ -20,6 +20,7 @@ from apps.accounts.permissions import (
 )
 from apps.ipd_ward.models import Bed
 from apps.notifications.sms import resolve_credentials_with_overrides, test_sms_connection
+from apps.retention.mixins import NoHardDeleteMixin
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.crypto import decrypt_value
 from config.errors import error_response
@@ -790,8 +791,11 @@ def _license_status_filter(status):
     raise ValidationError({"license_status": "Expected MISSING, VALID, EXPIRING or EXPIRED."})
 
 
-class BranchViewSet(viewsets.ModelViewSet):
+class BranchViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
+    A branch is deactivated (is_active), never deleted: its clients, episodes
+    and audit trail stay attached to it.
+
     Super Admin: every branch across every tenant (Branches screen). Org
     Admin: their own organization's branches, including creating new ones
     (Branches & Departments screen) — docs/04-MULTI-TENANCY.md §4.1: "Org

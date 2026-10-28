@@ -23,11 +23,19 @@ class Permission(models.Model):
     which the built-in model doesn't support.
     """
 
+    SCOPE_CHOICES = [("ORG", "Organisation"), ("PLATFORM", "Platform team")]
+
     codename = models.CharField(max_length=150, unique=True)
-    description = models.CharField(max_length=255, blank=True)
+    # Plain-language name and what it allows (apps.accounts.catalogue).
+    label = models.CharField(max_length=150, blank=True)
+    description = models.CharField(max_length=500, blank=True)
+    module = models.CharField(max_length=40, blank=True)
+    # ORG: an Org Admin may grant it to their roles. PLATFORM: the platform
+    # team's console only — never on an organisation's role.
+    scope = models.CharField(max_length=10, choices=SCOPE_CHOICES, default="ORG")
 
     class Meta:
-        ordering = ["codename"]
+        ordering = ["module", "codename"]
 
     def __str__(self):
         return self.codename

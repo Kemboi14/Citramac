@@ -1,7 +1,5 @@
 """Care plan, safety plan, MDT and co-signature endpoints (mockup v4 stage 4)."""
 
-from django.conf import settings
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -9,6 +7,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import users_with_permission
 from apps.accounts.models import User
 
 from . import care_plan, plan_extras, services
@@ -274,10 +273,7 @@ class SeniorsView(APIView):
     """Users who may co-sign, for the 'senior review' picker."""
 
     def get(self, request):
-        query = Q()
-        for name in settings.COSIGN_ROLES:
-            query |= Q(roles__name__iexact=name)
-        users = User.objects.filter(query, organization_id=request.user.organization_id).distinct()
+        users = users_with_permission(["clinical.cosign"], request.user.organization_id)
         return Response({"results": [{"id": str(u.pk), "name": _user_name(u)} for u in users]})
 
 

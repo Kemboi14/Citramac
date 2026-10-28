@@ -35,13 +35,19 @@ INVITE_TTL_DAYS = 7
 
 
 class PermissionListView(generics.ListAPIView):
-    """Read-only catalog backing the permission matrix checkboxes on both
-    Roles & Permissions screens."""
+    """Read-only catalogue (apps.accounts.catalogue) backing both Roles &
+    Permissions screens. An organisation's staff see only the permissions an
+    organisation can grant; the platform team's own appear for Super Admin."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = PermissionSerializer
-    queryset = Permission.objects.all()
     pagination_class = None
+
+    def get_queryset(self):
+        queryset = Permission.objects.all()
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(scope="ORG")
+        return queryset
 
 
 class RoleViewSet(viewsets.ModelViewSet):

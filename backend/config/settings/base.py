@@ -501,19 +501,10 @@ FHIR_NATIONAL_IDENTIFIER_SYSTEMS = {
         "CLIENT_REGISTRY_ID",
     )
 }
-# Roles that may read restricted intake content (trauma detail). Everyone
-# else — front desk, billing, org admin, auditors — never receives it.
-INTAKE_RESTRICTED_VIEW_ROLES = env.list(
-    "INTAKE_RESTRICTED_VIEW_ROLES",
-    default=[
-        "Psychiatrist",
-        "Doctor",
-        "Nurse",
-        "Ward Nurse",
-        "Clinical Psychologist/Therapist",
-        "Therapist",
-    ],
-)
+# Who may do what clinically (prescribe, co-sign, see restricted content,
+# manage finance, authorise documents, …) is no longer a settings role list: each
+# ability is a permission in apps/accounts/catalogue.py, granted to roles by the
+# Org Admin in Roles & Permissions.
 # Psychotherapy session note dictation (master prompt X-12). The browser Web
 # Speech API sends audio to the browser vendor's speech service in most
 # browsers. This is the platform kill switch only: dictation is off for every
@@ -537,40 +528,10 @@ ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 PSYCHOTHERAPY_AI_MODEL = env("PSYCHOTHERAPY_AI_MODEL", default="claude-opus-5-5")
 # Per-request timeout (seconds) for the background translation / rewording task.
 PSYCHOTHERAPY_AI_TIMEOUT = env.int("PSYCHOTHERAPY_AI_TIMEOUT", default=60)
-# Roles whose members may co-sign (senior review). The requester can never be
-# the decider.
-COSIGN_ROLES = env.list("COSIGN_ROLES", default=["Psychiatrist"])
-# Roles that may place medication orders and acknowledge abnormal lab results.
-# VERIFY: the facility's prescribing policy (e.g. whether clinical officers
-# prescribe) — a role missing here can still request a psychiatrist review.
-PRESCRIBER_ROLES = env.list("PRESCRIBER_ROLES", default=["Psychiatrist", "Doctor"])
-# Document generation (master prompt §6 DOC-GOV-02, X-02): role groups the
-# document catalogue's authorization profiles refer to. PRESCRIBERS is always
-# PRESCRIBER_ROLES above. VERIFY each group against the facility's policy —
-# which staff are "credentialed" to authorize which documents.
-DOC_ROLE_GROUPS = {
-    "CLINICAL_STAFF": env.list("DOC_CLINICAL_STAFF_ROLES", default=[
-        "Psychiatrist", "Doctor", "Nurse", "Ward Nurse", "Clinical Psychologist/Therapist",
-        "Therapist", "Clinical Supervisor", "Supervisor",
-    ]),
-    "CREDENTIALED": env.list("DOC_CREDENTIALED_ROLES", default=[
-        "Psychiatrist", "Doctor", "Clinical Psychologist/Therapist", "Therapist",
-        "Clinical Supervisor",
-    ]),
-    "MEDICAL": env.list("DOC_MEDICAL_ROLES", default=["Psychiatrist", "Doctor"]),
-    "SENIOR": env.list("DOC_SENIOR_ROLES", default=["Psychiatrist", "Clinical Supervisor"]),
-    "NURSING": env.list("DOC_NURSING_ROLES", default=["Nurse", "Ward Nurse"]),
-    "RELEASE_OFFICERS": env.list("DOC_RELEASE_ROLES", default=["Records Officer"]),
-    "ADMIN_STAFF": env.list("DOC_ADMIN_ROLES", default=["Front Desk", "Records Officer"]),
-    "BILLING": env.list("DOC_BILLING_ROLES", default=["Billing Clerk", "Cashier/Billing Clerk"]),
-}
 # DOC-CI-07: investigations per medication, {"<national drug index code>":
 # ["<LOINC code>", ...]}. Facility configuration only — no monitoring schedule
 # ships in code (CLAUDE.md §6). Empty = the clinician selects the tests.
 DOC_MEDICATION_MONITORING = env.json("DOC_MEDICATION_MONITORING", default={})
-# Roles that may create/submit payer claims, request pre-authorisation, issue
-# invoices and record payments. Everyone else sees the client's billing read-only.
-FINANCE_ROLES = env.list("FINANCE_ROLES", default=["Billing Clerk", "Cashier/Billing Clerk"])
 # Interventions — VERIFY every value against the facility's own policy; these
 # are the owner's mockup defaults, labelled illustrative there.
 # Continuous-observation maximum minutes per observer before rotation.

@@ -88,7 +88,14 @@ class LogoutSerializer(serializers.Serializer):
 class PermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Permission
-        fields = ["id", "codename", "description"]
+        fields = ["id", "codename", "label", "description", "module", "module_label", "scope"]
+
+    module_label = serializers.SerializerMethodField()
+
+    def get_module_label(self, obj):
+        from .catalogue import MODULES
+
+        return MODULES.get(obj.module, obj.module)
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -117,32 +124,32 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def validate_permissions(self, value):
         """
-        docs/09-SECURITY-COMPLIANCE.md §9.3: "Org Admin cannot grant
-        permissions the platform template doesn't allow." When editing an
-        org-scoped role, every requested permission must already appear on
-        at least one platform ORG_TEMPLATE role — i.e. an org can narrow a
-        template's permission set but never invent new grants.
+        docs/09-SECURITY-COMPLIANCE.md §9.3: an organisation grants only
+        organisation permissions (catalogue scope ORG — every one of them, the
+        legal-form authorities included). Platform-team permissions belong on
+        platform-team roles only, whoever is editing.
         """
-        request = self.context.get("request")
         instance = self.instance
-        organization = (instance.organization_id if instance else None) or (
-            request.user.organization_id if request and not request.user.is_superuser else None
-        )
-        if organization is None:
-            return value  # platform-scoped role edits — Super Admin only, no ceiling to enforce.
-
-        allowed = set(
-            Permission.objects.filter(
-                roles__organization__isnull=True, roles__scope=Role.SCOPE_ORG_TEMPLATE
-            ).values_list("id", flat=True)
-        )
-        requested = {perm.id for perm in value}
-        disallowed = requested - allowed
-        if disallowed:
+        platform_role = instance is not None and instance.scope == Role.SCOPE_PLATFORM
+        if platform_role:
+            return value
+        wrong = sorted(p.label or p.codename for p in value if p.scope != "ORG")
+        if wrong:
             raise serializers.ValidationError(
-                "Cannot grant a permission no platform role template allows."
+                "These are platform-team permissions and can't be given to an "
+                "organisation's role: " + ", ".join(wrong) + "."
             )
         return value
+
+    def validate(self, attrs):
+        """Org Admin and Auditor are the built-in administrator roles; their
+        access is fixed in code, so their permissions are not edited here."""
+        if self.instance is not None and "permissions" in attrs:
+            if self.instance.name.strip().lower() in TENANT_HELD_PLATFORM_ROLES:
+                raise serializers.ValidationError(
+                    {"permissions": f"{self.instance.name} is a built-in administrator role; its access is fixed."}
+                )
+        return attrs
 
 
 class RoleAssignmentSerializer(serializers.Serializer):

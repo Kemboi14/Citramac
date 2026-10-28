@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.accounts.access import active_roles
+from apps.accounts.access import has_permission
 from apps.triage.models import MentalStatusExam
 
 from . import intake_schema as schema
@@ -26,16 +26,9 @@ from .models import IntakeAssessment, MedicationHistoryEntry, OutcomeScore, Tria
 
 
 def can_view_restricted(user):
-    """Restricted fields (trauma detail) reach treating clinicians only."""
-    from django.conf import settings
-    from django.db.models import Q
-
-    if not (user and user.is_authenticated) or user.is_superuser:
-        return False
-    query = Q()
-    for name in settings.INTAKE_RESTRICTED_VIEW_ROLES:
-        query |= Q(name__iexact=name)
-    return active_roles(user).filter(query).exists()
+    """Restricted fields (trauma detail) reach treating clinicians only — roles
+    with the clinical.restricted_content.view permission."""
+    return has_permission(user, "clinical.restricted_content.view")
 
 
 def latest_signed(patient):

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
-import { SaveButton } from "../../components/SaveButton";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { PermissionChangeDialog, PermissionMatrix } from "../../components/PermissionMatrix";
 import {
   invitePlatformStaff,
   listPermissions,
@@ -53,6 +54,11 @@ export function GlobalRolesPage() {
   const [busy, setBusy] = useState(false);
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingStaffRole, setPendingStaffRole] = useState<{ staff: Staff; roleId: string } | null>(
+    null,
+  );
   const [invite, setInvite] = useState<StaffInvitePayload>(EMPTY_INVITE);
 
   const refresh = async (organizationId = selectedOrganizationId) => {
@@ -136,36 +142,54 @@ export function GlobalRolesPage() {
     (selectedPermissionIds.length !== selectedRole.permissions.length ||
       selectedPermissionIds.some((id) => !selectedRole.permissions.includes(id)));
 
+  // A platform-team role takes platform permissions; every other role takes
+  // the organisation permissions (the server refuses any other mix).
+  const rolePermissions = selectedRole
+    ? permissions.filter((p) =>
+        selectedRole.scope === "PLATFORM" && selectedRole.organization === null
+          ? p.scope === "PLATFORM" || p.scope === "ORG"
+          : p.scope === "ORG",
+      )
+    : [];
+
+  const builtIn =
+    selectedRole !== null &&
+    ["org admin", "auditor"].includes(selectedRole.name.trim().toLowerCase());
+
   const saveRolePermissions = async () => {
     if (!accessToken || !selectedRole) return;
-    setError(null);
+    setSaveError(null);
     setBusy(true);
     try {
       await updateRole(accessToken, selectedRole.id, { permissions: selectedPermissionIds });
       const refreshed = await refresh();
       const updated = refreshed?.find((r) => r.id === selectedRole.id);
       if (updated) setSelectedPermissionIds(updated.permissions);
+      setConfirmSave(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't save role permissions.");
-      throw err;
+      setSaveError(err instanceof ApiError ? err.message : "Couldn't save role permissions.");
     } finally {
       setBusy(false);
     }
   };
 
-  const assignStaffRole = async (staffId: string, roleId: string) => {
-    if (!accessToken || !roleId) return;
+  const assignStaffRole = async () => {
+    if (!accessToken || !pendingStaffRole) return;
+    const { staff: member, roleId } = pendingStaffRole;
     setError(null);
     setBusy(true);
     try {
-      const updated = await updateStaff(accessToken, staffId, { roles: [Number(roleId)] });
-      setStaff((current) => current.map((member) => (member.id === staffId ? updated : member)));
+      const updated = await updateStaff(accessToken, member.id, { roles: [Number(roleId)] });
+      setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
+      setPendingStaffRole(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't assign this role.");
     } finally {
       setBusy(false);
     }
   };
+  const roleName = (id: number | string | undefined) =>
+    roles.find((r) => String(r.id) === String(id))?.name ?? "no role";
 
   const handleUnlock = async (member: Staff) => {
     if (!accessToken) return;
@@ -286,52 +310,44 @@ export function GlobalRolesPage() {
                 </div>
               )}
 
-              <div className="overflow-x-auto rounded-lg border border-surface-border">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
-                    <tr>
-                      <th className="px-4 py-3">Permission</th>
-                      <th className="w-16 px-4 py-3 text-center">Granted</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {permissions.map((permission) => (
-                      <tr
-                        key={permission.id}
-                        className="border-b border-surface-border last:border-0"
-                      >
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-ink-900">{permission.codename}</div>
-                          {permission.description && (
-                            <div className="text-xs text-ink-500">{permission.description}</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-brand-green"
-                            checked={selectedPermissionIds.includes(permission.id)}
-                            onChange={() => togglePermission(permission.id)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                    {permissions.length === 0 && (
-                      <tr>
-                        <td colSpan={2} className="px-4 py-6 text-center text-ink-500">
-                          No permissions defined.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PermissionMatrix
+                permissions={rolePermissions}
+                selected={new Set(selectedPermissionIds)}
+                disabled={builtIn}
+                onToggle={togglePermission}
+              />
+              {builtIn && (
+                <p className="text-xs text-ink-500">
+                  {selectedRole.name} is a built-in administrator role; its access is fixed in code
+                  and can&apos;t be changed here.
+                </p>
+              )}
 
               <div>
-                <SaveButton onSave={saveRolePermissions} disabled={busy || !permissionsDirty}>
+                <button
+                  type="button"
+                  className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
+                  disabled={busy || builtIn || !permissionsDirty}
+                  onClick={() => {
+                    setSaveError(null);
+                    setConfirmSave(true);
+                  }}
+                >
                   Save Changes
-                </SaveButton>
+                </button>
               </div>
+              <PermissionChangeDialog
+                open={confirmSave}
+                roleName={selectedRole.name}
+                userCount={selectedRole.user_count ?? null}
+                permissions={permissions}
+                before={new Set(selectedRole.permissions)}
+                after={new Set(selectedPermissionIds)}
+                busy={busy}
+                error={saveError}
+                onConfirm={saveRolePermissions}
+                onCancel={() => setConfirmSave(false)}
+              />
             </div>
           )}
         </div>
@@ -429,7 +445,10 @@ export function GlobalRolesPage() {
                     className={FIELD_CLASS}
                     value={s.roles[0] ?? ""}
                     disabled={busy || visibleRoles.length === 0}
-                    onChange={(event) => void assignStaffRole(s.id, event.target.value)}
+                    onChange={(event) =>
+                      event.target.value &&
+                      setPendingStaffRole({ staff: s, roleId: event.target.value })
+                    }
                   >
                     <option value="">No role</option>
                     {visibleRoles.map((role) => (
@@ -484,6 +503,25 @@ export function GlobalRolesPage() {
           </tbody>
         </table>
       </div>
+      <ConfirmDialog
+        open={pendingStaffRole !== null}
+        title="Change this person's role?"
+        confirmLabel="Yes, change role"
+        busyLabel="Saving…"
+        busy={busy}
+        error={error}
+        onConfirm={assignStaffRole}
+        onCancel={() => setPendingStaffRole(null)}
+      >
+        {pendingStaffRole && (
+          <p className="text-sm text-ink-700">
+            {pendingStaffRole.staff.first_name} {pendingStaffRole.staff.last_name} will change from{" "}
+            <strong>{roleName(pendingStaffRole.staff.roles[0])}</strong> to{" "}
+            <strong>{roleName(pendingStaffRole.roleId)}</strong>, and from their next action will
+            have exactly that role&apos;s permissions.
+          </p>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

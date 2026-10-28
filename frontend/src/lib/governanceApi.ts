@@ -8,7 +8,14 @@ import type { Paginated } from "./organizationsApi";
 export interface Permission {
   id: number;
   codename: string;
+  /** Plain-language name (backend apps/accounts/catalogue.py). */
+  label: string;
+  /** What the permission allows. */
   description: string;
+  module: string;
+  module_label: string;
+  /** ORG: an organisation may grant it. PLATFORM: the platform team's console only. */
+  scope: "ORG" | "PLATFORM";
 }
 
 export type RoleScope = "PLATFORM" | "ORG_TEMPLATE";

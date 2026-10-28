@@ -271,3 +271,12 @@ class FacilityLicenceReminderTests(BranchIdentifierTestBase):
         with platform_admin_context():
             Branch.objects.filter(pk=self.branch.pk).update(is_active=False)
         self.assertEqual(remind_all(self.today), {})
+
+
+class BranchNeverDeletedTests(BranchIdentifierTestBase):
+    def test_a_branch_is_deactivated_not_deleted(self):
+        refused = self.client.delete(
+            reverse("branch-detail", args=[self.branch.id]), **self._auth(self.super_admin)
+        )
+        self.assertEqual(refused.status_code, 405)
+        self.assertEqual(self._patch({"is_active": False}).status_code, 200)
