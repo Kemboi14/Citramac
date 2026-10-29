@@ -125,7 +125,6 @@ interface RegForm {
   allergyStatus: string;
   allergyDetails: string;
   payer: string;
-  reason: string;
   // Emergency — identity unknown
   apparentSex: string;
   foundLocation: string;
@@ -171,7 +170,6 @@ const EMPTY_FORM: RegForm = {
   allergyStatus: "",
   allergyDetails: "",
   payer: "",
-  reason: "",
   apparentSex: "",
   foundLocation: "",
   arrivalReferralInfo: "",
@@ -349,7 +347,6 @@ export function RegistrationPage() {
   const firstNameRef = useRef<HTMLInputElement>(null);
   const lastNameRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
-  const reasonRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const resolving = Boolean(resolveId);
@@ -510,7 +507,6 @@ export function RegistrationPage() {
     setForm(formFromRow(row, vs.options("next-of-kin-relationship")));
     setSelectedLabel(true);
     setRequestId(newRequestId());
-    window.setTimeout(() => reasonRef.current?.focus(), 0);
   }
 
   /** A temporary record found by search: confirm its identity in place. */
@@ -624,10 +620,7 @@ export function RegistrationPage() {
         return;
       }
       setSelected(row);
-      setForm((prev) => ({
-        ...formFromRow(row, vs.options("next-of-kin-relationship")),
-        reason: prev.reason,
-      }));
+      setForm(formFromRow(row, vs.options("next-of-kin-relationship")));
       setConsent(EMPTY_CONSENT);
       setSaved(`Details saved for ${row.name}. No triage encounter was opened.`);
     } catch (err) {
@@ -695,7 +688,6 @@ export function RegistrationPage() {
         identity_status: mode,
         allergy_status: allergyStatus || undefined,
         allergy_details: showAllergyDetails ? form.allergyDetails.trim() || undefined : undefined,
-        reason: form.reason.trim() || undefined,
       };
       const payload: RegistrationPayload = emergency
         ? {
@@ -1449,28 +1441,6 @@ export function RegistrationPage() {
                 </RegSection>
               )}
             </>
-          )}
-
-          {!resolving && !editing && (
-            <div className="mt-3">
-              <RegField
-                id="reg-reason"
-                label={
-                  emergency
-                    ? "Reason for attending (as reported)"
-                    : "Reason for attending (in the client’s words)"
-                }
-              >
-                <textarea
-                  ref={reasonRef}
-                  id="reg-reason"
-                  rows={3}
-                  className={`${REG_INPUT} resize-y`}
-                  value={form.reason}
-                  onChange={(e) => set("reason")(e.target.value)}
-                />
-              </RegField>
-            </div>
           )}
 
           {dupMatches && (

@@ -286,6 +286,26 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         self.assertIn("PAWSS", why)
         self.assertIn("SRA", why)
 
+    def test_the_episode_takes_its_presenting_problems_from_the_triage(self):
+        # Registration no longer asks the reason for attending (QA, 2026-10-29).
+        with platform_admin_context():
+            te = TriageEncounter.objects.get(pk=self.te_id)
+            te.presenting_concern = ""
+            te.save(update_fields=["presenting_concern"])
+            te.episode.presenting_problems = ""
+            te.episode.save(update_fields=["presenting_problems"])
+        self.assertEqual(self.sign_v5(BASE).status_code, 201)
+        with platform_admin_context():
+            te.episode.refresh_from_db()
+        self.assertEqual(te.episode.presenting_problems, "Low mood, drinking more")
+
+    def test_the_triage_does_not_overwrite_the_episodes_presenting_problems(self):
+        self.assertEqual(self.sign_v5({**BASE, "c_concern": "Hearing voices"}).status_code, 201)
+        with platform_admin_context():
+            te = TriageEncounter.objects.select_related("episode").get(pk=self.te_id)
+        self.assertEqual(te.presenting_concern, "Hearing voices")
+        self.assertEqual(te.episode.presenting_problems, "Low mood, drinking more")
+
     def test_retriage_and_review_keep_the_history(self):
         self.assertEqual(
             self.sign_v5({**BASE, **SAFETY, "d_suicidal": "yes", "d_act_now": "no"}).status_code,

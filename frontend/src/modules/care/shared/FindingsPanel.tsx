@@ -29,6 +29,8 @@ function recorded(f: ClinicalFinding) {
  * or updates it — a new version; the earlier value stays in the history.
  * `reviewedElsewhere` maps a finding key to where this stage already confirms
  * it (e.g. the Intake risk register): shown, not offered for review twice.
+ * Collapsed by default so the stage's own sections come first (QA, 2026-10-29);
+ * the header still counts the findings left to review here.
  */
 export function FindingsPanel({
   patientId,
@@ -49,6 +51,7 @@ export function FindingsPanel({
   const [draft, setDraft] = useState<{ status: string; note: string }>({ status: "", note: "" });
   const [history, setHistory] = useState<Record<string, ClinicalFinding[]>>({});
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -112,14 +115,41 @@ export function FindingsPanel({
     }
   }
 
+  const toReview = readOnly
+    ? 0
+    : rows.filter((f) => !reviewedElsewhere?.has(f.key) && f.stage !== stage).length;
+
   return (
-    <Card title="Clinical findings already recorded" className="mb-4" bodyClassName="p-0">
+    <Card
+      title={
+        <button
+          type="button"
+          className="flex items-center gap-2 text-left"
+          aria-expanded={open}
+          aria-controls="findings-panel-body"
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span aria-hidden="true" className="w-3 text-ink-500">
+            {open ? "▾" : "▸"}
+          </span>
+          Clinical findings already recorded
+        </button>
+      }
+      aside={
+        <span className="text-[12px] font-normal text-ink-500">
+          {rows.length} {rows.length === 1 ? "finding" : "findings"}
+          {toReview > 0 && ` · ${toReview} to review`}
+        </span>
+      }
+      className="mb-4"
+      bodyClassName="p-0"
+    >
       {error && (
-        <div className="px-[18px] pt-3">
+        <div className="px-[18px] py-3">
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      <div className="overflow-x-auto">
+      <div id="findings-panel-body" hidden={!open} className="overflow-x-auto">
         <table className={TABLE}>
           <thead>
             <tr>

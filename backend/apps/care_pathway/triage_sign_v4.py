@@ -122,6 +122,12 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
     concern = (answers.get("c_concern") or "").strip()
     if concern:
         triage_encounter.presenting_concern = concern
+        # Registration no longer asks the reason (QA, 2026-10-29): the episode's
+        # presenting problems come from the first signed triage instead.
+        episode = triage_encounter.episode
+        if episode and not episode.presenting_problems:
+            episode.presenting_problems = concern
+            episode.save(update_fields=["presenting_problems"])
     triage_encounter.triage_version += 1
     triage_encounter.status = TriageEncounter.STATUS_COMPLETED
     triage_encounter.last_triaged_at = now
