@@ -207,15 +207,36 @@ class RegistrationTests(CarePathwayApiTestCase):
     def test_search_returns_registration_details_only(self):
         self.register(phone="+254712345678")
         response = self.client.get(
-            reverse("care-registration-search"), {"q": "0712345"}, **self.auth
-        )
-        self.assertEqual(response.data["results"], [])
-        response = self.client.get(
             reverse("care-registration-search"), {"q": "712345"}, **self.auth
         )
         row = response.data["results"][0]
         self.assertEqual(row["name"], "Amina Wanjiku Kamau")
         self.assertNotIn("diagnosis", row)
+
+    def test_search_finds_a_client_by_full_name_or_phone_in_any_format(self):
+        self.register(phone="+254712345678")
+        self.register(full_name="Brian Otieno", phone="0733 111 222", sex="MALE")
+
+        def names(q):
+            response = self.client.get(reverse("care-registration-search"), {"q": q}, **self.auth)
+            self.assertEqual(response.status_code, 200)
+            return [row["name"] for row in response.data["results"]]
+
+        for q in (
+            "Amina Kamau",
+            "kamau amina",
+            "  Amina   Wanjiku  ",
+            "0712345678",
+            "0712 345 678",
+            "+254 712 345 678",
+            "254712345678",
+            "Kamau 0712345678",
+        ):
+            with self.subTest(q=q):
+                self.assertEqual(names(q), ["Amina Wanjiku Kamau"])
+        self.assertEqual(names("+254733111222"), ["Brian Otieno"])
+        self.assertEqual(names("Amina Otieno"), [])  # every word must match
+        self.assertEqual(names("0799000000"), [])
 
 
 

@@ -3,10 +3,11 @@ Care pathway API — docs/15-CLINICAL-WORKSPACE-V3.md. Every screen of the
 approved 2026-10-07 clinical workspace mockup reads and writes through here.
 """
 
+import re
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import F, Func, Q, Value
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -192,26 +193,65 @@ def _registration_row(patient):
     }
 
 
+# A phone number compared on its digits, without the 0 / 254 prefix, so
+# "0712 345 678", "+254712345678" and "712345678" are the same number.
+_PHONE_PREFIX = re.compile(r"^(?:254|0)")
+_PHONE_MIN_DIGITS = 6
+
+
+def _phone_core(text):
+    digits = re.sub(r"\D", "", text)
+    return _PHONE_PREFIX.sub("", digits) if len(digits) >= _PHONE_MIN_DIGITS else ""
+
+
+def _search_term(term):
+    """One word of the search, against every registration field."""
+    match = (
+        Q(identifiers__value__iexact=term)
+        | Q(first_name__icontains=term)
+        | Q(last_name__icontains=term)
+        | Q(middle_other_names__icontains=term)
+        | Q(preferred_name__icontains=term)
+        | Q(identity_description__icontains=term)
+        | Q(contact_phone__icontains=term)
+        | Q(national_id__icontains=term)
+        | Q(id_document_number__icontains=term)
+        | Q(citramac_number__icontains=term)
+        | Q(uhid_number__icontains=term)
+    )
+    core = _phone_core(term)
+    return match | Q(phone_digits__contains=core) if core else match
+
+
 class RegistrationSearchView(APIView):
+    """Find an existing client from Registration: name (any words, any order),
+    phone in any format, national ID, document number, CITRAMAC / UHID number
+    or a registry identifier. Every word must match some field; the whole query
+    also matches an identifier exactly. Registration details only."""
+
     def get(self, request):
-        q = (request.query_params.get("q") or "").strip()
+        q = " ".join((request.query_params.get("q") or "").split())
         if not q:
             return Response({"results": []})
+        words = Q()
+        for term in q.split(" "):
+            words &= _search_term(term)
+        whole = Q(identifiers__value__iexact=q) | Q(national_id__iexact=q)
+        core = _phone_core(q)
+        if core:
+            whole |= Q(phone_digits__contains=core)
         patients = (
             Patient.objects.filter(archived_at__isnull=True, merged_into__isnull=True)
-            .filter(
-                Q(identifiers__value__iexact=q)
-                | Q(first_name__icontains=q)
-                | Q(last_name__icontains=q)
-                | Q(middle_other_names__icontains=q)
-                | Q(preferred_name__icontains=q)
-                | Q(identity_description__icontains=q)
-                | Q(contact_phone__icontains=q)
-                | Q(national_id__icontains=q)
-                | Q(id_document_number__icontains=q)
-                | Q(citramac_number__icontains=q)
-                | Q(uhid_number__icontains=q)
+            .annotate(
+                phone_digits=Func(
+                    F("contact_phone"),
+                    Value(r"\D"),
+                    Value(""),
+                    Value("g"),
+                    function="regexp_replace",
+                )
             )
+            .filter(words | whole)
             .select_related("next_of_kin")
             .distinct()
             .order_by("-registered_at")[:6]

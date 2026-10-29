@@ -889,8 +889,9 @@ export function RegistrationPage() {
                 <div className="mb-3 rounded-sm border border-surface-border bg-surface-bg p-2.5">
                   <h3 className="text-xs font-bold text-ink-900">Find an existing client</h3>
                   <p className="mt-1 text-xs text-ink-500">
-                    Search by name, phone, national ID or CITRAMAC ID. Front Desk sees registration
-                    details only — never clinical notes or medical records.
+                    Search by name (first and last, any order), phone in any format (07…, +254…),
+                    national ID or CITRAMAC ID. Front Desk sees registration details only — never
+                    clinical notes or medical records.
                   </p>
                   <div className="mt-[5px] flex min-w-0 flex-col gap-1">
                     <label
