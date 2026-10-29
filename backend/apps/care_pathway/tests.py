@@ -235,6 +235,11 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertEqual(tasks[1]["owner"], me["name"])
         with platform_admin_context():
             self.assertEqual(CareTask.objects.get(pk=tasks[1]["id"]).assignee_id, self.nurse.pk)
+        # The live queue shows who the open triage tasks went to (not "Unassigned").
+        lanes = self.client.get(reverse("care-live-queue"), **self.auth).data["lanes"]
+        row = next(r for lane in lanes.values() for r in lane if r["id"] == te_id)
+        self.assertEqual(row["owner"]["name"], me["name"])
+        self.assertEqual(row["team"], "Nurse")
         stranger = self.client.post(
             url, {**body, "assignee": str(uuid.uuid4())}, format="json", **self.auth
         )

@@ -249,7 +249,17 @@ def _row(te, lane, now, labels):
     owner = te.episode.care_manager if te.episode_id else None
     if owner is None and te.psychiatry_encounter_id:
         owner = te.psychiatry_encounter.opened_by
+    # Otherwise whoever the open triage tasks (section N) were given to: a
+    # person as the owner, a team as the team.
+    open_tasks = te.tasks.filter(status__in=("INITIATED", "PENDING")).order_by("-created_at")
+    if owner is None:
+        assigned = open_tasks.filter(assignee__isnull=False).select_related("assignee").first()
+        owner = assigned.assignee if assigned else None
     admission = current_admission(patient) if lane == "in_care" else None
+    team = admission.primary_care_team if admission else ""
+    if not team:
+        to_team = open_tasks.filter(assignee__isnull=True).exclude(owner="").first()
+        team = to_team.owner if to_team else ""
     items = te_items(te, now, signed) if lane != "discharged" else []
     next_follow_up = None
     if lane == "discharged":
@@ -282,7 +292,7 @@ def _row(te, lane, now, labels):
         "next_follow_up": next_follow_up,
         "observation": _obs(signed, labels, lane),
         "owner": {"id": str(owner.pk), "name": user_display(owner)} if owner else None,
-        "team": admission.primary_care_team if admission else "",
+        "team": team,
         "attention": attention_chips(te, now, lane, wait, signed, alerts, proposals),
         "seen_at": te.psychiatry_review_started_at.isoformat()
         if te.psychiatry_review_started_at

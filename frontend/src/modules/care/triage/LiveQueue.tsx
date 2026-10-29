@@ -188,7 +188,7 @@ export function LiveQueue({
             </>
           )}
         </td>
-        <td className={`${TD} text-[12.5px]`}>{row.owner ? row.owner.name : <span className="text-ink-500">Unassigned</span>}</td>
+        <td className={`${TD} text-[12.5px]`}>{row.owner ? row.owner.name : row.team ? row.team : <span className="text-ink-500">Unassigned</span>}</td>
         <td className={TD}>
           <div className="flex flex-wrap gap-1">
             {show.map((c) => (
