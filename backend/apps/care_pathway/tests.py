@@ -21,6 +21,7 @@ from apps.triage.models import VitalSigns
 from . import triage_rules
 from .models import (
     BillingService,
+    CareTask,
     ChargeItem,
     ClinicalAlert,
     EpisodeStatusHistory,
@@ -212,6 +213,32 @@ class RegistrationTests(CarePathwayApiTestCase):
         row = response.data["results"][0]
         self.assertEqual(row["name"], "Amina Wanjiku Kamau")
         self.assertNotIn("diagnosis", row)
+
+    def test_triage_tasks_go_to_a_team_or_a_person_from_the_staff_list(self):
+        with platform_admin_context():
+            role, _ = Role.objects.get_or_create(
+                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
+            self.nurse.roles.add(role)
+        te_id = self.register().data["triage_encounter_id"]
+        owners = self.client.get(reverse("care-task-owners"), **self.auth).data
+        self.assertIn("Nurse", owners["teams"])
+        me = next(p for p in owners["people"] if p["id"] == str(self.nurse.pk))
+        url = reverse("care-triage-tasks", args=[te_id])
+        body = {"actions": ["comprehensive_intake"], "status": "PENDING"}
+        tasks = self.client.post(url, {**body, "owner": "Nurse"}, format="json", **self.auth)
+        self.assertEqual(tasks.status_code, 201)
+        self.assertEqual(tasks.data[0]["owner"], "Nurse")
+        tasks = self.client.post(
+            url, {**body, "assignee": str(self.nurse.pk)}, format="json", **self.auth
+        ).data
+        self.assertEqual(tasks[1]["owner"], me["name"])
+        with platform_admin_context():
+            self.assertEqual(CareTask.objects.get(pk=tasks[1]["id"]).assignee_id, self.nurse.pk)
+        stranger = self.client.post(
+            url, {**body, "assignee": str(uuid.uuid4())}, format="json", **self.auth
+        )
+        self.assertEqual(stranger.status_code, 400)
 
     def test_search_finds_a_client_by_full_name_or_phone_in_any_format(self):
         self.register(phone="+254712345678")

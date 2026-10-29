@@ -5,6 +5,7 @@ import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
   lookupTriageFacility,
+  getTaskOwners,
   registerTriageTasks,
   saveTriageDraft,
   signTriage,
@@ -85,6 +86,9 @@ const SUBSTANCE_ROWS = [
   "other",
 ];
 const DRAFT_FAILED = "Draft not saved — check your connection";
+// Section N responsible person / team values.
+const TEAM = "team:";
+const PERSON = "person:";
 const VITAL_KEYS = ["v_sbp", "v_dbp", ...VITALS.map((v) => v.key)];
 /** What the early-warning score is computed from, to tell whether the shown score is current. */
 const ewsInput = (answers: TriageAnswers) =>
@@ -410,6 +414,7 @@ export function TriageFormV5({
   const stored = editable ? detail.draft : detail.signed;
 
   const [config, setConfig] = useState<TriageV4Config | null>(null);
+  const [owners, setOwners] = useState<Awaited<ReturnType<typeof getTaskOwners>> | null>(null);
   const [answers, setAnswers] = useState<TriageAnswers>(() => {
     const base: TriageAnswers = { ...detail.defaults, ...(stored?.answers ?? {}), schema: "v5" };
     if (!str(base, "c_concern")) base.c_concern = detail.presenting_concern;
@@ -458,6 +463,9 @@ export function TriageFormV5({
     let cancelled = false;
     getTriageV4Config(accessToken)
       .then((c) => !cancelled && setConfig(c))
+      .catch(() => undefined);
+    getTaskOwners(accessToken)
+      .then((o) => !cancelled && setOwners(o))
       .catch(() => undefined);
     // Section A: findings already on record (an earlier triage or intake).
     getClientFindings(accessToken, detail.patient_id)
@@ -665,11 +673,15 @@ export function TriageFormV5({
     const actions = list(answers, "n_actions");
     if (!actions.length) return;
     setTaskError(null);
+    // n_owner is "team:<role>" or "person:<user id>" (an older draft may hold free text).
+    const owner = a("n_owner");
+    const person = owner.startsWith(PERSON) ? owner.slice(PERSON.length) : undefined;
     try {
       setTasks(
         await registerTriageTasks(accessToken, detail.id, {
           actions,
-          owner: a("n_owner").trim(),
+          owner: person ? "" : owner.replace(TEAM, "").trim(),
+          assignee: person,
           status: (a("n_status") || "INITIATED") as CareTask["status"],
         }),
       );
@@ -1496,11 +1508,44 @@ export function TriageFormV5({
                   </div>
                 </fieldset>
                 <div className={`${FIELDGRID} mt-3 items-end`}>
-                  <Txt k="n_owner" label="Responsible person / team" />
-                  <Sel k="n_status" label="Task status" set="task-status" />
+                  <Field label="Responsible person / team" htmlFor={fid("n_owner")}>
+                    <select
+                      id={fid("n_owner")}
+                      className={INPUT}
+                      value={a("n_owner")}
+                      onChange={(e) => set("n_owner", e.target.value)}
+                    >
+                      <option value="">— select —</option>
+                      {a("n_owner") &&
+                        !a("n_owner").startsWith(TEAM) &&
+                        !a("n_owner").startsWith(PERSON) && (
+                          <option value={a("n_owner")}>{a("n_owner")}</option>
+                        )}
+                      {owners && owners.teams.length > 0 && (
+                        <optgroup label="Teams">
+                          {owners.teams.map((team) => (
+                            <option key={team} value={`${TEAM}${team}`}>
+                              {team}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {owners && owners.people.length > 0 && (
+                        <optgroup label="People">
+                          {owners.people.map((p) => (
+                            <option key={p.id} value={`${PERSON}${p.id}`}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </Field>
+                  <Sel k="n_status" label="Triage task status" set="task-status" />
                   <button
                     type="button"
                     className={`${BTN} justify-self-start`}
+                    disabled={!list(answers, "n_actions").length || !a("n_owner")}
                     onClick={onRegisterTasks}
                   >
                     Register as tasks

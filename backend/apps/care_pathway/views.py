@@ -541,13 +541,48 @@ class TriageSignView(APIView):
         return Response(_assessment_payload(assessment), status=status.HTTP_201_CREATED)
 
 
+def task_owner_choices(organization_id):
+    """Section N "Responsible person / team": the organisation's clinical staff
+    as people, and the clinical roles they hold as teams — both what Org Admin
+    already maintains (Staff, Roles & Permissions), never a list of our own."""
+    from apps.accounts.access import users_with_permission
+    from apps.accounts.models import Role
+
+    codename = "clinical.care.record"
+    staff = users_with_permission([codename], organization_id).order_by(
+        "first_name", "last_name"
+    )
+    held = Role.objects.filter(permissions__codename=codename, users__in=staff.values("pk"))
+    teams = sorted(set(held.values_list("name", flat=True)))
+    people = [{"id": str(u.pk), "name": user_display(u)} for u in staff]
+    return {"teams": teams, "people": people}
+
+
+class TaskOwnersView(APIView):
+    def get(self, request):
+        return Response(task_owner_choices(request.user.organization_id))
+
+
 class TriageTasksView(APIView):
-    """Section N "Register as trackable tasks" — one Task per ticked action."""
+    """Section N "Register as trackable tasks" — one Task per ticked action,
+    owned by a team (a clinical role) or assigned to a person (clinical staff)."""
 
     def post(self, request, pk):
         te = _triage(pk)
         codes = request.data.get("actions") or []
         owner = (request.data.get("owner") or "").strip() or "Psychiatry / Nursing"
+        assignee = None
+        if request.data.get("assignee"):
+            choices = task_owner_choices(te.organization_id)
+            person = next(
+                (p for p in choices["people"] if p["id"] == str(request.data["assignee"])), None
+            )
+            if person is None:
+                return Response(
+                    {"assignee": "Choose a member of the clinical staff."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            assignee, owner = person["id"], person["name"]
         task_status = request.data.get("status") or "INITIATED"
         if task_status not in dict(CareTask.STATUS_CHOICES):
             return Response({"status": "Unknown status."}, status=status.HTTP_400_BAD_REQUEST)
@@ -564,7 +599,8 @@ class TriageTasksView(APIView):
                     triage_encounter=te,
                     action_code=code,
                     action_label=label,
-                    owner=owner,
+                    owner=owner[:150],
+                    assignee_id=assignee,
                     status=task_status,
                     created_by=request.user,
                 )

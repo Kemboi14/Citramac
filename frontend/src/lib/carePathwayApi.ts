@@ -416,13 +416,22 @@ export function signTriage(
 export function registerTriageTasks(
   accessToken: string,
   id: string,
-  payload: { actions: string[]; owner: string; status: CareTask["status"] },
+  payload: { actions: string[]; owner: string; assignee?: string; status: CareTask["status"] },
 ) {
   return apiRequest<CareTask[]>(`/care/triage/${id}/tasks/`, {
     method: "POST",
     body: payload,
     accessToken,
   });
+}
+
+/** Section N "Responsible person / team": the organisation's clinical roles
+ * (teams) and clinical staff (people). */
+export function getTaskOwners(accessToken: string) {
+  return apiRequest<{ teams: string[]; people: { id: string; name: string }[] }>(
+    "/care/task-owners/",
+    { accessToken },
+  );
 }
 
 /** Complete a psychiatric review with its coded outcome (and an optional note). */
