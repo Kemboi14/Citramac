@@ -115,8 +115,6 @@ interface RegForm {
   unhcrNumber: string;
   shaMemberNumber: string;
   referral: string;
-  language: string;
-  interpreter: string;
   disability: string;
   disabilityDetails: string;
   employment: string;
@@ -160,8 +158,6 @@ const EMPTY_FORM: RegForm = {
   unhcrNumber: "",
   shaMemberNumber: "",
   referral: "",
-  language: "English",
-  interpreter: "",
   disability: "",
   disabilityDetails: "",
   employment: "",
@@ -233,8 +229,6 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
     shaMemberNumber:
       row.identifiers?.find((i) => i.kind === "SHA_MEMBER" && !i.superseded)?.value || "",
     referral: row.referral_source || "",
-    language: row.preferred_language || "English",
-    interpreter: row.interpreter || "",
     disability: row.living_with_disability || "",
     disabilityDetails: row.disability_details || "",
     employment: row.employment_status || "",
@@ -433,7 +427,6 @@ export function RegistrationPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const firstCode = (id: string) => vs.options(id)[0]?.code ?? "";
-  const interpreter = form.interpreter || firstCode("interpreter");
   const allergyValueSet = emergency ? "emergency-allergy-status" : "registration-allergy-status";
   const allergyStatus = form.allergyStatus || firstCode(allergyValueSet);
   const showAllergyDetails = allergyStatus === "ACTIVE_ALLERGIES";
@@ -539,8 +532,6 @@ export function RegistrationPage() {
       id_document_number: form.documentNumber.trim() || undefined,
       unhcr_number: form.unhcrNumber.trim() || undefined,
       sha_member_number: form.shaMemberNumber.trim() || undefined,
-      preferred_language: form.language.trim() || undefined,
-      interpreter: interpreter || undefined,
       living_with_disability: form.disability || undefined,
       disability_details: showDisabilityDetails
         ? form.disabilityDetails.trim() || undefined
@@ -582,8 +573,6 @@ export function RegistrationPage() {
       id_document_number: form.documentNumber.trim(),
       unhcr_number: form.unhcrNumber.trim() || undefined,
       sha_member_number: form.shaMemberNumber.trim() || undefined,
-      preferred_language: form.language.trim(),
-      interpreter: interpreter || "",
       living_with_disability: form.disability,
       disability_details: showDisabilityDetails ? form.disabilityDetails.trim() : "",
       employment_status: form.employment,
@@ -1366,17 +1355,6 @@ export function RegistrationPage() {
                     placeholder="— select —"
                     value={form.marital}
                     onChange={set("marital")}
-                  />
-                </RegField>
-                <RegField id="reg-language" label="Preferred language">
-                  {textInput("reg-language", "language")}
-                </RegField>
-                <RegField id="reg-interpreter" label="Interpreter">
-                  <SelectChoices
-                    id="reg-interpreter"
-                    options={vs.options("interpreter")}
-                    value={interpreter}
-                    onChange={set("interpreter")}
                   />
                 </RegField>
               </RegSection>
