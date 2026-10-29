@@ -211,6 +211,11 @@ def concern_of(a, code):
     return _text(a, substance_cell(code, "concern"))
 
 
+def concern_other_key(code):
+    """The description a "Current concern" of "Other" asks for."""
+    return substance_cell(code, "concern_other")
+
+
 REFER_OUT_KEYS = ("h_refer_fr", "h_refer_facility", "h_refer_reason")
 REFERRAL_IN_KEYS = ("h_ref_fr", "h_ref_facility", "h_ref_note")
 
@@ -282,9 +287,12 @@ def clean_answers(answers):
         if _text(a, "f_behaviour") != "other":
             drop.add("f_behaviour_other")
         if _text(a, "g_use") != "yes":
-            drop |= {
-                substance_cell(code, col) for code in SUBSTANCE_ROWS for col in SUBSTANCE_COLUMNS
-            } | {"g_other_name"}
+            drop |= (
+                {substance_cell(code, col) for code in SUBSTANCE_ROWS for col in SUBSTANCE_COLUMNS}
+                | {concern_other_key(code) for code in SUBSTANCE_ROWS}
+                | {"g_other_name"}
+            )
+        drop |= {concern_other_key(c) for c in SUBSTANCE_ROWS if concern_of(a, c) != "other"}
         if _text(a, "g_use") not in ("yes", "unknown"):
             drop.add("g_intoxication")
         if _text(a, "h_concern") != "yes":
@@ -373,6 +381,14 @@ def required_problems(a):
                 out.append(("Substances: fill the row for each substance used", "g_alcohol_last"))
             if "other" in used_substances(a) and not _text(a, "g_other_name"):
                 out.append(("Substances: name the “Other” substance", "g_other_name"))
+            for code in used_substances(a):
+                if concern_of(a, code) == "other" and not _text(a, concern_other_key(code)):
+                    out.append(
+                        (
+                            "Substances: describe the “Other” current concern",
+                            concern_other_key(code),
+                        )
+                    )
         if "suspected_overdose" in _list(a, "h_flags") and any(
             not _text(a, k)
             for k in ("od_substance", "od_amount", "od_time", "od_coingest", "od_intent")
@@ -1452,6 +1468,11 @@ def domain_findings(a, labels=None):
             else L("triage-v4-substance", code)
         )
         cells = {col: _text(a, substance_cell(code, col)) for col in SUBSTANCE_COLUMNS}
+        concern = (
+            _text(a, concern_other_key(code)) or "other"
+            if cells["concern"] == "other"
+            else L("triage-substance-concern", cells["concern"]).lower()
+        )
         add(
             f"SUBSTANCE:{code}",
             "SUBSTANCE",
@@ -1459,14 +1480,11 @@ def domain_findings(a, labels=None):
             join(
                 f"last use {cells['last']}" if cells["last"] else "",
                 cells["amount"],
-                (
-                    f"concern: {L('triage-substance-concern', cells['concern']).lower()}"
-                    if cells["concern"]
-                    else ""
-                ),
+                f"concern: {concern}" if cells["concern"] else "",
             ),
             pick(
                 *(substance_cell(code, c) for c in SUBSTANCE_COLUMNS),
+                concern_other_key(code),
                 *(("g_other_name",) if code == "other" else ()),
             ),
             title=f"Substance — {name}",

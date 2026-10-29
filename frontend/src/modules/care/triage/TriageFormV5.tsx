@@ -86,6 +86,9 @@ const SUBSTANCE_ROWS = [
 ];
 const DRAFT_FAILED = "Draft not saved — check your connection";
 const VITAL_KEYS = ["v_sbp", "v_dbp", ...VITALS.map((v) => v.key)];
+/** What the early-warning score is computed from, to tell whether the shown score is current. */
+const ewsInput = (answers: TriageAnswers) =>
+  JSON.stringify([...VITAL_KEYS, "v_o2", "acvpu"].map((k) => str(answers, k)));
 
 /** Now, as a datetime-local value. */
 function nowLocalInput() {
@@ -413,6 +416,7 @@ export function TriageFormV5({
     return base;
   });
   const answersRef = useRef(answers);
+  const [evaluatedEws, setEvaluatedEws] = useState(() => ewsInput(answers));
   const [evaluation, setEvaluation] = useState<TriageV4Evaluation>(() =>
     !editable && detail.signed
       ? {
@@ -488,10 +492,12 @@ export function TriageFormV5({
     if (!accessToken || closed.current) return;
     pending.current = false;
     const mine = ++seq.current;
-    saveTriageDraft(accessToken, detail.id, answersRef.current)
+    const sent = answersRef.current;
+    saveTriageDraft(accessToken, detail.id, sent)
       .then((result) => {
         if (mine !== seq.current || closed.current) return;
         setEvaluation(result.evaluation);
+        setEvaluatedEws(ewsInput(sent));
         setDraftStatus(`Draft saved ${formatTime(result.draft_saved_at)}`);
       })
       .catch(() => {
@@ -527,6 +533,9 @@ export function TriageFormV5({
   const downgrade = RANK[chosen] < RANK[recommended];
   const safetyRequired = present === "yes" && (chosen === "RED" || chosen === "ORANGE");
   const ews = evaluation.ews;
+  // The score comes back with each draft save; until the latest vitals are saved
+  // the one on screen is for earlier values and must not read as current.
+  const ewsCurrent = readOnly || ewsInput(answers) === evaluatedEws;
   const reasonMin = config?.override_reason_min ?? 10;
   const vconf = list(answers, "vconf");
 
@@ -733,7 +742,9 @@ export function TriageFormV5({
 
       <FormCtx.Provider value={ctx}>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <form onSubmit={(e) => e.preventDefault()} aria-label="Triage">
+          {/* No browser autofill or form history: a remembered value is another
+              client's clinical data, and an autofilled one may never reach the form. */}
+          <form onSubmit={(e) => e.preventDefault()} aria-label="Triage" autoComplete="off">
             <fieldset disabled={readOnly} className="min-w-0">
               <Section title="A — On record">
                 <p className="text-[13px] text-ink-900">
@@ -1038,6 +1049,18 @@ export function TriageFormV5({
                                       placeholder="—"
                                       onChange={(value) => set(`g_${code}_concern`, value)}
                                     />
+                                    {a(`g_${code}_concern`) === "other" && (
+                                      <input
+                                        id={fid(`g_${code}_concern_other`)}
+                                        aria-label={`${label} — describe the concern`}
+                                        placeholder="Describe the concern"
+                                        className={`${INPUT} mt-1.5 min-w-[140px]`}
+                                        value={a(`g_${code}_concern_other`)}
+                                        onChange={(e) =>
+                                          set(`g_${code}_concern_other`, e.target.value)
+                                        }
+                                      />
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -1170,7 +1193,18 @@ export function TriageFormV5({
                       <Sel k="v_o2" label="Oxygen" set="triage-v4-oxygen" />
                       <Sel k="acvpu" label="Consciousness (ACVPU)" set="triage-v4-acvpu" />
                     </div>
-                    {ews && (
+                    {ews && !ewsCurrent && (
+                      <p
+                        className="mt-3 rounded-lg border border-priority-orange px-3 py-2 text-[13px]"
+                        role="status"
+                      >
+                        <strong>EWS not yet updated</strong>
+                        {draftStatus === DRAFT_FAILED
+                          ? " — the latest vital signs have not saved; check your connection"
+                          : " — saving the latest vital signs…"}
+                      </p>
+                    )}
+                    {ews && ewsCurrent && (
                       <p
                         className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${ews.complete ? "border-surface-border" : "border-priority-orange"}`}
                         role="status"

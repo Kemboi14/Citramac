@@ -209,6 +209,30 @@ class CleaningAndRequiredTests(SimpleTestCase):
         self.assertEqual(third["SUICIDE_SELF_HARM"]["source_code"], "THIRD_PARTY_REPORT")
         self.assertNotIn("HARM_TO_OTHERS", third)  # a caller's silence is not a negative
 
+    def test_an_other_substance_concern_is_described(self):
+        other = {**BASE, **ALCOHOL_WD, "g_alcohol_concern": "other"}
+        problems = {key for _m, key in v5.required_problems(v5.clean_answers(other))}
+        self.assertIn("g_alcohol_concern_other", problems)
+        described = {**other, "g_alcohol_concern_other": "Drinking before driving the school bus"}
+        cleaned = v5.clean_answers(described)
+        self.assertEqual(
+            cleaned["g_alcohol_concern_other"], "Drinking before driving the school bus"
+        )
+        self.assertNotIn(
+            "g_alcohol_concern_other",
+            {key for _m, key in v5.required_problems(cleaned)},
+        )
+        items = {f["key"]: f for f in v5.domain_findings(described)}
+        self.assertIn(
+            "concern: Drinking before driving the school bus", items["SUBSTANCE:alcohol"]["summary"]
+        )
+        # Kept only while "Other" is the concern and substance use is recorded.
+        for answers in (
+            {**described, "g_alcohol_concern": "withdrawal"},
+            {**described, "g_use": "no"},
+        ):
+            self.assertNotIn("g_alcohol_concern_other", v5.clean_answers(answers))
+
 
 class FindingStoreApiTests(CarePathwayApiTestCase):
     def setUp(self):
