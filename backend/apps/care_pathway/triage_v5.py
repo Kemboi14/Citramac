@@ -59,8 +59,8 @@ from .triage_v4 import (  # noqa: F401 — shared with v4, re-exported for calle
     vitals_text,
 )
 
-RULES_VERSION = "2026-10-28.2"
-RULESET_LABEL = "Approved by the project owner, 2026-10-28"
+RULES_VERSION = "2026-10-29.1"
+RULESET_LABEL = "Approved by the project owner, 2026-10-29"
 SCHEMA = "v5"
 
 # Section G table rows, in the spec's order; Khat (miraa) kept as its own row
@@ -821,7 +821,9 @@ def _facts(a):
     }
 
 
-def evaluate(answers, labels=None):
+def evaluate(answers, labels=None, approved=None):
+    """`approved`: approved_assessments.names() — the organisation's approved
+    assessments, named in the AUTO-TRIGGER banner."""
     labels = labels or {}
     a = clean_answers(answers)
     present = present_of(a)
@@ -897,7 +899,7 @@ def evaluate(answers, labels=None):
         "safety_required": present == "yes" and level in ("RED", "ORANGE"),
         "medical_escalation": escalation_needed(a),
         "referral_in_asked": referral_in_asked(a),
-        "auto_triggers": auto_triggers(a, alerts, labels),
+        "auto_triggers": auto_triggers(a, alerts, labels, approved),
     }
 
 
@@ -1007,6 +1009,30 @@ def withdrawal_tools(a):
         out.append("ciwa_ar")
     if concern_of(a, "opioids") == "withdrawal":
         out.append("cows")
+    # 2026-10-29.1 (spec item 9) — the organisation's approved benzodiazepine
+    # withdrawal assessment (approved_assessments.py); never CIWA-Ar by default.
+    if concern_of(a, "sedatives") == "withdrawal":
+        out.append("benzo")
+    return out
+
+
+def withdrawal_reasons(a):
+    """Spec item 10: withdrawal from any substance, suspected or identified —
+    a "withdrawal" current concern, current withdrawal symptoms, or recently
+    stopped heavy use. Each reason in words; [] when there is none."""
+    if present_of(a) != "yes":
+        return []
+    names = dict(v4.SUBSTANCES)
+    out = [
+        f"{_text(a, 'g_other_name') or 'other substance' if code == 'other' else names[code]}"
+        " withdrawal"
+        for code in used_substances(a)
+        if concern_of(a, code) == "withdrawal"
+    ]
+    if withdrawal_symptoms(a):
+        out.append("withdrawal symptoms")
+    if _text(a, "g_stopped") == "yes":
+        out.append("recently stopped heavy use")
     return out
 
 
@@ -1014,16 +1040,19 @@ TOOL_ALERTS = {
     "pawss": "Alcohol withdrawal risk",
     "ciwa_ar": "Alcohol withdrawal",
     "cows": "Opioid withdrawal",
+    "benzo": "Benzodiazepine / sedative withdrawal",
 }
 
 
-def auto_triggers(a, alerts, labels=None):
+def auto_triggers(a, alerts, labels=None, approved=None):
     """The AUTO-TRIGGER banner under each section: [{code, section, alert,
     pathway}] for every tool or pathway the answers have started. Only what the
     rules above already raise or recommend; nothing is decided here. An alert
     that starts nothing (it only goes on the client record) is not listed (QA,
-    2026-10-29). `a` is the cleaned answer set."""
+    2026-10-29). `a` is the cleaned answer set;
+    `approved` is approved_assessments.names()."""
     labels = labels or {}
+    approved = approved or {}
 
     def act(code):
         return _label(labels, "triage-action", code).split(" — ")[0]
@@ -1068,7 +1097,27 @@ def auto_triggers(a, alerts, labels=None):
     if "WITHDRAWAL_RISK" in alerts:
         add("WITHDRAWAL_RISK", "g", alert("WITHDRAWAL_RISK"), act("withdrawal_monitoring"))
     for tool in withdrawal_tools(a):
-        add(f"TOOL:{tool}", "g", TOOL_ALERTS[tool], act(tool))
+        if tool == "benzo":
+            name = approved.get("BENZO_WITHDRAWAL")
+            add(
+                "TOOL:benzo",
+                "g",
+                TOOL_ALERTS[tool],
+                (
+                    f"{name} (approved by this organisation)"
+                    if name
+                    else "No benzodiazepine withdrawal assessment approved for this organisation"
+                ),
+            )
+        else:
+            add(f"TOOL:{tool}", "g", TOOL_ALERTS[tool], act(tool))
+    if withdrawal_reasons(a):
+        add(
+            "PSYCHIATRIC_REVIEW",
+            "g",
+            "Withdrawal suspected or identified",
+            act("psychiatric_review_withdrawal"),
+        )
     if "suspected_overdose" in _list(a, "h_flags"):
         add("OVERDOSE", "h", "Suspected overdose", "Medical emergency first")
     if "MEDICAL_CONCERN" in alerts:
@@ -1087,9 +1136,9 @@ def auto_triggers(a, alerts, labels=None):
     return out
 
 
-def trigger_texts(answers, labels=None):
+def trigger_texts(answers, labels=None, approved=None):
     """{code: "alert → pathway"} for the audit trail of raises and clears."""
-    result = evaluate(answers, labels)
+    result = evaluate(answers, labels, approved)
     return {t["code"]: f"{t['alert']} → {t['pathway']}" for t in result["auto_triggers"]}
 
 

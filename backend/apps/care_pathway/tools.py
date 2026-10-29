@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from . import facility_time, instruments, mental_state
+from . import approved_assessments, facility_time, instruments, mental_state
 from .intake import latest_signed
 from .intake_schema import RISK_ROWS, _code
 from .models import AssessmentToolDecision, LocalConcept, OutcomeScore
@@ -163,6 +163,10 @@ def status_of(patient, key, why, sections):
         return "Completed"
     if key in instruments.INSTRUMENTS and OutcomeScore.objects.filter(patient=patient, instrument=key).exists():
         return "Completed"
+    # Spec 6.1: a tool that needs the organisation's approval is shown, never
+    # started, until an Org Admin approves it (approved_assessments.py).
+    if not approved_assessments.is_approved(key):
+        return "Not approved"
     if decision and decision.status == "ACCEPTED":
         return "In progress"
     return "Recommended" if key in why else "Not indicated"
@@ -188,6 +192,12 @@ def overview(patient):
                 "status": status,
                 "why": why.get(key, []),
                 "later": key in LATER_TOOLS,
+                "note": (
+                    "Not approved for this organisation — use clinical judgement. An Org Admin "
+                    "approves a trauma assessment under Clinical Assessments."
+                    if status == "Not approved"
+                    else ""
+                ),
                 "decision": (
                     {
                         "status": decision.status,
@@ -209,7 +219,14 @@ def overview(patient):
                 ),
             }
         )
-    rank = {"Recommended": 0, "In progress": 1, "Completed": 2, "Declined": 3, "Not indicated": 4}
+    rank = {
+        "Recommended": 0,
+        "In progress": 1,
+        "Completed": 2,
+        "Declined": 3,
+        "Not approved": 4,
+        "Not indicated": 5,
+    }
     return sorted(out, key=lambda row: rank[row["status"]])
 
 
@@ -228,6 +245,8 @@ def decide(patient, user, key, status, reason=""):
     reason = (reason or "").strip()
     if status == "DECLINED" and len(reason) < 5:
         raise ValidationError({"reason": "Give a reason for declining (clinical judgement)."})
+    if status == "ACCEPTED" and not approved_assessments.is_approved(key):
+        raise ValidationError({"tool": "Not approved for this organisation."})
     return AssessmentToolDecision.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -245,6 +264,8 @@ def record_assessment(patient, user, instrument, *, answers=None, total=None, po
     if instrument not in instruments.INSTRUMENTS:
         raise ValidationError({"instrument": "Unknown instrument."})
     spec = instruments.INSTRUMENTS[instrument]
+    if not approved_assessments.is_approved(instrument):
+        raise ValidationError({"instrument": "Not approved for this organisation."})
     if timepoint and not LocalConcept.objects.filter(
         valueset_id="assessment-timepoint", code=timepoint, active=True
     ).exists():

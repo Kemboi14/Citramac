@@ -22,6 +22,7 @@ const TONE: Record<ToolRow["status"], string> = {
   Recommended: "border-transparent bg-priority-orange-tint text-priority-orange",
   "In progress": "bg-surface-bg text-ink-900 border-surface-border",
   Declined: "bg-surface-bg text-ink-900 border-surface-border",
+  "Not approved": "bg-surface-bg text-ink-900 border-surface-border",
   "Not indicated": "bg-surface-bg text-ink-900 border-surface-border",
 };
 

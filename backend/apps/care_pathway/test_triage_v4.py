@@ -171,7 +171,7 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         # an answer set still marked v4 is signed by the v4 rules (this file).
         data = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
         self.assertEqual(data["schema"], "v5")
-        self.assertEqual(data["evaluation"]["rules_version"], "2026-10-28.2")
+        self.assertEqual(data["evaluation"]["rules_version"], "2026-10-29.1")
         config = self.client.get(reverse("care-triage-v4-config"), **self.auth).data
         self.assertEqual(len(config["flags"]), 24)
 

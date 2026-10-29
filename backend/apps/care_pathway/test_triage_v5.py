@@ -67,8 +67,8 @@ class RulesTests(SimpleTestCase):
     def test_completed_negative_screen_is_green_and_owner_approved(self):
         result = rec()
         self.assertEqual(result["recommendation"], "GREEN")
-        self.assertEqual(result["rules_version"], "2026-10-28.2")
-        self.assertEqual(result["ruleset_label"], "Approved by the project owner, 2026-10-28")
+        self.assertEqual(result["rules_version"], "2026-10-29.1")
+        self.assertEqual(result["ruleset_label"], "Approved by the project owner, 2026-10-29")
 
     def test_section_d_suicide_self_harm(self):
         self.assertEqual(rec(d_suicidal="yes", d_act_now="no")["priority"], "ORANGE")
@@ -271,7 +271,7 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         }
         response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["rules_version"], "2026-10-28.2")
+        self.assertEqual(response.data["rules_version"], "2026-10-29.1")
         self.assertEqual(response.data["final_priority"], "ORANGE")
         with platform_admin_context():
             codes = set(

@@ -306,6 +306,11 @@ export interface CareTask {
   /** Triage v4 timed tasks (TRIAGE_CALLBACK, PEP_EC_DECISION, DUTY_TO_PROTECT). */
   focus_type?: string;
   due_at?: string | null;
+  priority?: string;
+  /** A psychiatric review's outcome (`psychiatric-review-outcome` code). */
+  outcome?: string;
+  outcome_note?: string;
+  completed_at?: string | null;
 }
 
 export type ObservationStatus = "NOT_REPEATED" | "MEASURED" | "NOT_MEASURED";
@@ -420,6 +425,20 @@ export function registerTriageTasks(
   });
 }
 
+/** Complete a psychiatric review with its coded outcome (and an optional note). */
+export function completePsychiatricReview(
+  accessToken: string,
+  id: string,
+  outcome: string,
+  outcomeNote: string,
+) {
+  return apiRequest<CareTask>(`/care/tasks/${id}/`, {
+    method: "PATCH",
+    body: { status: "COMPLETED", outcome, outcome_note: outcomeNote },
+    accessToken,
+  });
+}
+
 export function updateCareTask(accessToken: string, id: string, status: CareTask["status"]) {
   return apiRequest<CareTask>(`/care/tasks/${id}/`, {
     method: "PATCH",
@@ -481,6 +500,19 @@ export interface PsychiatryQueueRow {
   wait_minutes: number | null;
   target_minutes: number | null;
   over_target: boolean;
+  /** The psychiatric review raised by withdrawal (triage spec item 10), if any. */
+  withdrawal_review: WithdrawalReview | null;
+}
+
+export interface WithdrawalReview {
+  id: string;
+  label: string;
+  status: CareTask["status"];
+  priority: string;
+  outcome: string;
+  outcome_label: string;
+  outcome_note: string;
+  completed_at: string | null;
 }
 
 export function getPsychiatryQueue(accessToken: string) {
@@ -899,9 +931,12 @@ export interface ToolRow {
   key: string;
   name: string;
   kind: "link" | "score";
-  status: "Recommended" | "In progress" | "Completed" | "Declined" | "Not indicated";
+  status:
+    "Recommended" | "In progress" | "Completed" | "Declined" | "Not approved" | "Not indicated";
   why: string[];
   later: boolean;
+  /** Why a "Not approved" tool cannot be started. */
+  note: string;
   decision: { status: string; reason: string; at: string; by: string } | null;
   last: { score: number; band: string; at: string } | null;
 }
@@ -973,10 +1008,13 @@ export interface WithdrawalScale {
 }
 
 export function getWithdrawal(accessToken: string, patientId: string) {
-  return apiRequest<{ scales: WithdrawalScale[]; recommended: string | null; substance: string }>(
-    `/care/clients/${patientId}/withdrawal/`,
-    { accessToken },
-  );
+  return apiRequest<{
+    scales: WithdrawalScale[];
+    recommended: string | null;
+    substance: string;
+    /** Intake's main substance is benzodiazepines (only an approved scale is suggested). */
+    benzodiazepine: boolean;
+  }>(`/care/clients/${patientId}/withdrawal/`, { accessToken });
 }
 
 export function recordUnableToScore(
@@ -2432,3 +2470,42 @@ export interface WardBoardRow {
 }
 export const getWardBoardTable = (t: string) =>
   apiRequest<{ results: WardBoardRow[] }>("/care/ward-board/", { accessToken: t });
+
+/** The organisation's approved assessments (trauma, benzodiazepine withdrawal). */
+export interface ApprovedAssessmentPurpose {
+  purpose: "TRAUMA" | "BENZO_WITHDRAWAL";
+  title: string;
+  what: string;
+  options: { code: string; name: string; confirm: string }[];
+  instrument: string;
+  clinical_lead: string;
+  approved_by: string;
+  approved_at: string | null;
+}
+
+export interface ApprovedAssessments {
+  purposes: ApprovedAssessmentPurpose[];
+  attest: string;
+  can_edit: boolean;
+}
+
+export function getApprovedAssessments(accessToken: string) {
+  return apiRequest<ApprovedAssessments>("/care/approved-assessments/", { accessToken });
+}
+
+export function approveAssessment(
+  accessToken: string,
+  body: {
+    purpose: string;
+    instrument: string;
+    clinical_lead?: string;
+    attest?: boolean;
+    confirm?: boolean;
+  },
+) {
+  return apiRequest<ApprovedAssessments>("/care/approved-assessments/", {
+    method: "PUT",
+    body,
+    accessToken,
+  });
+}

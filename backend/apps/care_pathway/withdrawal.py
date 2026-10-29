@@ -142,6 +142,16 @@ def substance_display(patient):
     return concept.display if concept else code
 
 
+def is_benzodiazepine(patient):
+    return main_substance(patient) == _code("Benzodiazepines")
+
+
 def recommended_scale(patient):
-    """CIWA-Ar for alcohol, COWS for opioids — a suggestion; the clinician chooses."""
+    """CIWA-Ar for alcohol, COWS for opioids — a suggestion; the clinician
+    chooses. Benzodiazepines: only the scale the organisation has approved for
+    them (spec item 9 — CIWA-Ar is never the default)."""
+    from . import approved_assessments
+
+    if is_benzodiazepine(patient):
+        return approved_assessments.instrument_for("BENZO_WITHDRAWAL") or None
     return {_code("Alcohol"): "CIWA", _code("Opioids"): "COWS"}.get(main_substance(patient))

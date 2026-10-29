@@ -32,6 +32,7 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
   const [scales, setScales] = useState<WithdrawalScale[]>([]);
   const [recommended, setRecommended] = useState<string | null>(null);
   const [substance, setSubstance] = useState("");
+  const [benzodiazepine, setBenzodiazepine] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [scoring, setScoring] = useState<string | null>(null);
   const [unable, setUnable] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
 
   const load = useCallback(() => {
     if (!accessToken) return;
-    getWithdrawal(accessToken, patientId).then((r) => { setScales(r.scales); setRecommended(r.recommended); setSubstance(r.substance); }).catch((e) => setError(errorText(e, "Couldn't load the withdrawal chart.")));
+    getWithdrawal(accessToken, patientId).then((r) => { setScales(r.scales); setRecommended(r.recommended); setSubstance(r.substance); setBenzodiazepine(r.benzodiazepine); }).catch((e) => setError(errorText(e, "Couldn't load the withdrawal chart.")));
   }, [accessToken, patientId]);
   useEffect(() => {
     load();
@@ -63,7 +64,14 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <ErrorNote>{error}</ErrorNote>
-      {!recommended && (
+      {benzodiazepine && (
+        <Callout tone="warning">
+          {recommended
+            ? "Benzodiazepine withdrawal: the scale shown is the one your organisation has approved for benzodiazepines. A psychiatric review is flagged on the psychiatry queue."
+            : "Benzodiazepine withdrawal: no withdrawal assessment is approved for benzodiazepines in your organisation (an Org Admin approves one under Clinical Assessments). Use clinical review — a psychiatric review is flagged on the psychiatry queue. CIWA-Ar is an alcohol scale and is not suggested by default."}
+        </Callout>
+      )}
+      {!recommended && !benzodiazepine && (
         <Callout>
           {substance ? `Main substance recorded as “${substance}”.` : "No main substance is recorded yet."} Set alcohol or opioids in Intake → Substance use to open the matching scale; you can still choose a scale below.
         </Callout>

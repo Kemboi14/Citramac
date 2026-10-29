@@ -49,7 +49,7 @@ from fhir.resources.R4B.questionnaireresponse import (
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
 from fhir.resources.R4B.servicerequest import ServiceRequest
-from fhir.resources.R4B.task import Task
+from fhir.resources.R4B.task import Task, TaskOutput
 
 from apps.dha_interop.fhir_mapper import (
     _urn,
@@ -59,6 +59,7 @@ from apps.dha_interop.fhir_mapper import (
     build_patient_resource,
 )
 
+from . import psychiatric_review
 from .models import ClinicalFinding
 
 _ENCOUNTER_STATUS = {
@@ -231,9 +232,40 @@ def build_triage_bundle(triage_encounter):
                     encounter=Reference(reference=encounter_ref),
                     authoredOn=task.created_at.isoformat(),
                     owner=Reference(display=task.owner),
+                    priority=task.priority or None,
+                    lastModified=(task.completed_at or task.updated_at).isoformat(),
+                    # A psychiatric review's outcome (psychiatric_review.py).
+                    output=(
+                        [
+                            TaskOutput(
+                                type=_local("task-output", "psychiatric-review-outcome"),
+                                valueCodeableConcept=_local(
+                                    "psychiatric-review-outcome",
+                                    task.outcome,
+                                    psychiatric_review.OUTCOMES.get(task.outcome),
+                                ),
+                            )
+                        ]
+                        if task.outcome
+                        else None
+                    ),
+                    note=[Annotation(text=task.outcome_note)] if task.outcome_note else None,
                 ),
             )
         )
+        if task.outcome and task.completed_by:
+            # Whose review the outcome is (CLAUDE.md §4 provenance on every assertion).
+            resources.append(
+                (
+                    _urn("Provenance", f"task-{task.id}"),
+                    Provenance(
+                        id=f"prov-task-{task.id}",
+                        target=[Reference(reference=_urn("Task", task.id))],
+                        recorded=task.completed_at.isoformat(),
+                        agent=[ProvenanceAgent(who=_actor(task.completed_by))],
+                    ),
+                )
+            )
 
     bundle = Bundle(
         type="collection",

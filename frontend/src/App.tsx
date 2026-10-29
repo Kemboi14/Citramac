@@ -119,6 +119,10 @@ const OrgAuditLogPage = lazyNamed(
   () => import("./modules/org-admin/AuditLogPage"),
   "OrgAuditLogPage",
 );
+const ClinicalAssessmentsPage = lazyNamed(
+  () => import("./modules/org-admin/ClinicalAssessmentsPage"),
+  "ClinicalAssessmentsPage",
+);
 const ConsentWordingPage = lazyNamed(
   () => import("./modules/org-admin/ConsentWordingPage"),
   "ConsentWordingPage",
@@ -347,6 +351,7 @@ function App() {
               <Route path="subscription" element={<SubscriptionPage />} />
               <Route path="service-tariff" element={<ServiceTariffPage />} />
               <Route path="consent-wording" element={<ConsentWordingPage />} />
+              <Route path="clinical-assessments" element={<ClinicalAssessmentsPage />} />
               <Route path="breach-incidents" element={<BreachIncidentsPage />} />
               <Route path="support-access" element={<SupportAccessPage />} />
               <Route path="data-protection" element={<DataProtectionPage />} />

@@ -1,0 +1,220 @@
+{
+ "resourceType": "Bundle",
+ "type": "collection",
+ "entry": [
+  {
+   "fullUrl": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "7f5170de-c546-5341-9eaf-81f612a8a887",
+    "meta": {
+     "security": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+       "code": "R"
+      }
+     ]
+    },
+    "identifier": [
+     {
+      "use": "usual",
+      "type": {
+       "text": "CITRAMAC number"
+      },
+      "system": "urn:citramac:citramac-number",
+      "value": "202610ORG--011"
+     }
+    ],
+    "active": true,
+    "name": [
+     {
+      "use": "official",
+      "family": "Omondi",
+      "given": [
+       "Kevin",
+       "Otieno"
+      ]
+     }
+    ],
+    "gender": "male",
+    "birthDate": "1995-02-11"
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:episodeofcare:dea35db5-8164-5f2b-9f01-f8b772225dce",
+   "resource": {
+    "resourceType": "EpisodeOfCare",
+    "id": "dea35db5-8164-5f2b-9f01-f8b772225dce",
+    "status": "waitlist",
+    "statusHistory": [
+     {
+      "status": "waitlist",
+      "period": {
+       "start": "2026-10-29T05:12:40Z"
+      }
+     }
+    ],
+    "patient": {
+     "reference": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887"
+    },
+    "period": {
+     "start": "2026-10-29T05:12:40Z"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:encounter:01051e56-2510-5143-b798-ae97f84dc537",
+   "resource": {
+    "resourceType": "Encounter",
+    "id": "01051e56-2510-5143-b798-ae97f84dc537",
+    "status": "finished",
+    "class": {
+     "display": "triage"
+    },
+    "type": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:triage-encounter-type",
+        "code": "walk_in"
+       }
+      ]
+     }
+    ],
+    "priority": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-priority",
+       "code": "ORANGE"
+      }
+     ]
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887"
+    },
+    "episodeOfCare": [
+     {
+      "reference": "urn:citramac:episodeofcare:dea35db5-8164-5f2b-9f01-f8b772225dce"
+     }
+    ],
+    "period": {
+     "start": "2026-10-29T05:12:40Z"
+    },
+    "reasonCode": [
+     {
+      "text": "Wants to stop heroin; aching and cannot sleep"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:observation:265589b0-ff95-51cf-aa46-806a67b80e48",
+   "resource": {
+    "resourceType": "Observation",
+    "id": "265589b0-ff95-51cf-aa46-806a67b80e48",
+    "status": "final",
+    "category": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:clinical-finding-domain",
+        "code": "SUBSTANCE"
+       }
+      ]
+     }
+    ],
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding",
+       "code": "SUBSTANCE:opioids"
+      }
+     ],
+     "text": "Substance — Opioids"
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:01051e56-2510-5143-b798-ae97f84dc537"
+    },
+    "effectiveDateTime": "2026-10-29T05:31:02Z",
+    "performer": [
+     {
+      "reference": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887"
+     }
+    ],
+    "valueCodeableConcept": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding-status",
+       "code": "PRESENT",
+       "display": "Present"
+      }
+     ]
+    },
+    "note": [
+     {
+      "text": "last use this morning · heroin, smoked daily · concern: withdrawal"
+     }
+    ],
+    "derivedFrom": [
+     {
+      "reference": "urn:citramac:questionnaireresponse:92352c7c-59c0-5e00-b5e0-c76a1566d88b"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:provenance:92352c7c-59c0-5e00-b5e0-c76a1566d88b",
+   "resource": {
+    "resourceType": "Provenance",
+    "id": "prov-92352c7c-59c0-5e00-b5e0-c76a1566d88b",
+    "target": [
+     {
+      "reference": "urn:citramac:observation:265589b0-ff95-51cf-aa46-806a67b80e48"
+     }
+    ],
+    "recorded": "2026-10-29T05:31:02Z",
+    "agent": [
+     {
+      "who": {
+       "reference": "urn:citramac:practitioner:8bec1283-0764-5bc4-b5d6-58d715b2b6f3",
+       "display": "Grace Achieng"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:task:30bd3988-bd00-5fd6-a8de-e9ff49c556ac",
+   "resource": {
+    "resourceType": "Task",
+    "id": "30bd3988-bd00-5fd6-a8de-e9ff49c556ac",
+    "status": "requested",
+    "intent": "order",
+    "priority": "urgent",
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-action",
+       "code": "psychiatric_review_withdrawal",
+       "display": "Psychiatric review — withdrawal (Opioids withdrawal; withdrawal symptoms)"
+      }
+     ]
+    },
+    "for": {
+     "reference": "urn:citramac:patient:7f5170de-c546-5341-9eaf-81f612a8a887"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:01051e56-2510-5143-b798-ae97f84dc537"
+    },
+    "authoredOn": "2026-10-29T05:31:02Z",
+    "lastModified": "2026-10-29T05:31:02Z",
+    "owner": {
+     "display": "Psychiatry"
+    }
+   }
+  }
+ ]
+}

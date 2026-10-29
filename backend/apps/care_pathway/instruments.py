@@ -200,7 +200,7 @@ INSTRUMENTS = {
         "higher_is_worse": True, "approval": "illustrative",
     },
     "PCL5": {
-        "name": "PCL-5", "title": "Trauma assessment (PCL-5 — tenant-approved)", "kind": "total",
+        "name": "PCL-5", "title": "Trauma assessment (PCL-5)", "kind": "total",
         "max": 80,
         "bands": [(32, "Below threshold"), (80, "Probable PTSD — clinical review")],
         "higher_is_worse": True, "threshold": 33, "approval": "illustrative",

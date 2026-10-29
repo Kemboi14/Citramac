@@ -3,18 +3,22 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
+  completePsychiatricReview,
   getPsychiatryQueue,
   openPsychiatryReview,
   type PsychiatryQueueRow,
+  type WithdrawalReview,
 } from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
-import { BTN_GHOST, BTN_SM, PRIORITY_EDGE, TABLE, TD, TH } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, INPUT, PRIORITY_EDGE, TABLE, TD, TH } from "./shared/styles";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
-import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
+import { Card, ErrorNote, PageHeader, PriorityPill, SelectChoices, Tag } from "./shared/ui";
+import { useValueSets } from "./shared/useValueSets";
+import { errorText } from "./triage/helpers";
 import { useRecordData } from "./record/useRecordData";
 import { LiveQueue } from "./triage/LiveQueue";
 
@@ -167,6 +171,12 @@ export function PsychiatryQueuePage() {
                             {opening === row.id ? "Opening…" : "Open review"}
                           </button>
                           {row.review_started_at && <Tag tone="brand">Review started</Tag>}
+                          {row.withdrawal_review && (
+                            <WithdrawalReviewCell
+                              review={row.withdrawal_review}
+                              onSaved={() => setTick((t) => t + 1)}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -190,6 +200,99 @@ export function PsychiatryQueuePage() {
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+const REVIEW_STATUS: Record<WithdrawalReview["status"], string> = {
+  INITIATED: "requested",
+  PENDING: "in progress",
+  COMPLETED: "completed",
+};
+
+/** Triage spec item 10: the psychiatric review withdrawal raised — its status,
+ * and, to complete it, the coded outcome (served `psychiatric-review-outcome`). */
+function WithdrawalReviewCell({
+  review,
+  onSaved,
+}: {
+  review: WithdrawalReview;
+  onSaved: () => void;
+}) {
+  const { accessToken } = useAuth();
+  const vs = useValueSets();
+  const [open, setOpen] = useState(false);
+  const [outcome, setOutcome] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const save = async () => {
+    if (!accessToken || !outcome) return;
+    setBusy(true);
+    setSaveError(null);
+    try {
+      await completePsychiatricReview(accessToken, review.id, outcome, note.trim());
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setSaveError(errorText(err, "Couldn't record the outcome."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex max-w-[260px] flex-col items-start gap-1.5" title={review.label}>
+      <Tag tone={review.status === "COMPLETED" ? "neutral" : "risk"}>
+        Withdrawal — psychiatric review {REVIEW_STATUS[review.status]}
+        {review.priority === "urgent" && review.status !== "COMPLETED" ? " · urgent" : ""}
+      </Tag>
+      {review.status === "COMPLETED" ? (
+        <span className="text-[11px] text-ink-500">
+          {review.outcome_label}
+          {review.outcome_note ? ` — ${review.outcome_note}` : ""}
+        </span>
+      ) : !open ? (
+        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setOpen(true)}>
+          Record outcome…
+        </button>
+      ) : (
+        <div className="flex w-full flex-col gap-1.5">
+          <ErrorNote>{saveError}</ErrorNote>
+          <SelectChoices
+            id={`review-outcome-${review.id}`}
+            options={vs.options("psychiatric-review-outcome")}
+            placeholder="— outcome —"
+            value={outcome}
+            onChange={setOutcome}
+          />
+          <input
+            className={INPUT}
+            aria-label="Outcome note (optional)"
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              className={`${BTN} ${BTN_SM}`}
+              disabled={!outcome || busy}
+              onClick={() => void save()}
+            >
+              Save outcome
+            </button>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

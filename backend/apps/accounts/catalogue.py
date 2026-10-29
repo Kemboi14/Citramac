@@ -45,8 +45,8 @@ PERMISSIONS = [
         "clinical",
         "Record clinical care",
         "Start a triage from the client's record, draft clinical and medical documents "
-        "(letters, reports, certificates) for a credentialed clinician to sign, and record "
-        "a client's authorisation for a document.",
+        "(letters, reports, certificates) for a credentialed clinician to sign, record "
+        "a client's authorisation for a document, and record a psychiatric review's outcome.",
         SCOPE_ORG,
         CLINICAL_STAFF,
     ),

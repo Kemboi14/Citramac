@@ -17,6 +17,7 @@ const TONE: Record<ToolRow["status"], "neutral" | "warn" | "brand" | "risk"> = {
   "In progress": "brand",
   Completed: "brand",
   Declined: "neutral",
+  "Not approved": "neutral",
   "Not indicated": "neutral",
 };
 
@@ -96,6 +97,7 @@ export function ToolsSection({
                 <strong>Reason triggered:</strong> {tool.why.join(" · ")}
               </p>
             )}
+            {tool.note && <p className="mt-1 text-[12px] text-ink-500">{tool.note}</p>}
             {tool.decision?.status === "DECLINED" && (
               <p className="mt-1 text-[12px] text-ink-500">
                 Declined by {tool.decision.by} — “{tool.decision.reason}”

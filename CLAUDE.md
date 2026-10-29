@@ -315,3 +315,28 @@ measured and their source (`VitalSigns.recorded_at`, `.source`). Each section sh
 and tools its answers have started (AUTO-TRIGGER); every raise and clear is a `TriageAutoTrigger`
 audit entry. Reversibility: cheap. Everything is additive, and signed triages keep the rules
 version they were signed under.
+
+### 2026-10-29 — organisation-approved assessments; psychiatric review on withdrawal
+
+On the project owner's instruction ("do as you recommend") after QA, rules `2026-10-29.1`:
+
+1. **Approved assessments** (`apps/care_pathway/approved_assessments.py`, Org Admin → Clinical
+   Assessments). Per organisation, append-only, audited. Approving names the clinical lead and needs
+   the attestation. None is approved by default. *Trauma* (spec 6.1): trauma symptoms recommend PCL-5
+   only once it is approved. Otherwise the tool shows "Not approved" and cannot be started or scored.
+   *Benzodiazepine withdrawal* (spec item 9): the triage row "Sedatives" is now labelled
+   "Benzodiazepines / sedatives" (code unchanged). Its withdrawal concern names the approved
+   assessment, or says none is approved, and the withdrawal chart suggests only that one. CIWA-Ar can
+   be approved for this use only behind an explicit confirmation, and is never the default.
+   Configuration, not patient data, so it has no FHIR resource.
+2. **Psychiatric review on withdrawal** (spec item 10, `psychiatric_review.py`). Withdrawal from any
+   substance (a "withdrawal" concern, withdrawal symptoms, or recently stopped heavy use) at a signed
+   v5 triage, or first at a signed intake, raises one review per triage encounter. It is a `CareTask`
+   → FHIR `Task`, urgent for RED/ORANGE and routine otherwise. Opening the psychiatry review puts it
+   in progress. It is completed only with a coded outcome (`psychiatric-review-outcome`), which goes
+   in `Task.output`, with a `Provenance` for who recorded it. Every raise, start and outcome is
+   audited. Examples: `fhir_examples/psychiatric-review-*.json`. VERIFY: a SNOMED CT code for the
+   review. The Task code stays local until one is confirmed.
+
+Reversibility: cheap. Everything is additive. Signed triages keep the rules version they were signed
+under, and no signed record changes.

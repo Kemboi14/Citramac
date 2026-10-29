@@ -1,0 +1,266 @@
+{
+ "resourceType": "Bundle",
+ "type": "collection",
+ "entry": [
+  {
+   "fullUrl": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "16f76773-be5f-5929-9c68-fda1f4851f19",
+    "meta": {
+     "security": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+       "code": "R"
+      }
+     ]
+    },
+    "identifier": [
+     {
+      "use": "usual",
+      "type": {
+       "text": "CITRAMAC number"
+      },
+      "system": "urn:citramac:citramac-number",
+      "value": "202610ORG--013"
+     }
+    ],
+    "active": true,
+    "name": [
+     {
+      "use": "official",
+      "family": "Chebet",
+      "given": [
+       "Faith"
+      ]
+     }
+    ],
+    "gender": "female",
+    "birthDate": "2001-12-04"
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:episodeofcare:56686d74-e08c-5f31-a3c0-c442db75cb16",
+   "resource": {
+    "resourceType": "EpisodeOfCare",
+    "id": "56686d74-e08c-5f31-a3c0-c442db75cb16",
+    "status": "waitlist",
+    "statusHistory": [
+     {
+      "status": "waitlist",
+      "period": {
+       "start": "2026-10-29T07:10:05Z"
+      }
+     }
+    ],
+    "patient": {
+     "reference": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19"
+    },
+    "period": {
+     "start": "2026-10-29T07:10:05Z"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:encounter:0598eb82-5e0b-5a35-b2b4-e4ee82b97499",
+   "resource": {
+    "resourceType": "Encounter",
+    "id": "0598eb82-5e0b-5a35-b2b4-e4ee82b97499",
+    "status": "finished",
+    "class": {
+     "display": "triage"
+    },
+    "type": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:triage-encounter-type",
+        "code": "walk_in"
+       }
+      ]
+     }
+    ],
+    "priority": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-priority",
+       "code": "ORANGE"
+      }
+     ]
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19"
+    },
+    "episodeOfCare": [
+     {
+      "reference": "urn:citramac:episodeofcare:56686d74-e08c-5f31-a3c0-c442db75cb16"
+     }
+    ],
+    "period": {
+     "start": "2026-10-29T07:10:05Z"
+    },
+    "reasonCode": [
+     {
+      "text": "Brought by sister; stopped drinking yesterday"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:observation:32c91adb-5539-50e1-9539-48714a3fbd88",
+   "resource": {
+    "resourceType": "Observation",
+    "id": "32c91adb-5539-50e1-9539-48714a3fbd88",
+    "status": "final",
+    "category": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:clinical-finding-domain",
+        "code": "SUBSTANCE"
+       }
+      ]
+     }
+    ],
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding",
+       "code": "SUBSTANCE:alcohol"
+      }
+     ],
+     "text": "Substance — Alcohol"
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:0598eb82-5e0b-5a35-b2b4-e4ee82b97499"
+    },
+    "effectiveDateTime": "2026-10-29T07:24:33Z",
+    "performer": [
+     {
+      "reference": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19"
+     }
+    ],
+    "valueCodeableConcept": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding-status",
+       "code": "PRESENT",
+       "display": "Present"
+      }
+     ]
+    },
+    "note": [
+     {
+      "text": "last use yesterday evening · half a bottle of spirits daily · concern: withdrawal"
+     }
+    ],
+    "derivedFrom": [
+     {
+      "reference": "urn:citramac:questionnaireresponse:9e70e0a4-f0ea-5f26-a717-8fc50d4d0984"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:provenance:9e70e0a4-f0ea-5f26-a717-8fc50d4d0984",
+   "resource": {
+    "resourceType": "Provenance",
+    "id": "prov-9e70e0a4-f0ea-5f26-a717-8fc50d4d0984",
+    "target": [
+     {
+      "reference": "urn:citramac:observation:32c91adb-5539-50e1-9539-48714a3fbd88"
+     }
+    ],
+    "recorded": "2026-10-29T07:24:33Z",
+    "agent": [
+     {
+      "who": {
+       "reference": "urn:citramac:practitioner:c96ba883-04bb-5a79-86fa-2cc1b8429494",
+       "display": "Grace Achieng"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:task:4d62e686-7063-5bc8-8cad-ae99cc61576c",
+   "resource": {
+    "resourceType": "Task",
+    "id": "4d62e686-7063-5bc8-8cad-ae99cc61576c",
+    "status": "completed",
+    "intent": "order",
+    "priority": "urgent",
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-action",
+       "code": "psychiatric_review_withdrawal",
+       "display": "Psychiatric review — withdrawal (Alcohol withdrawal; recently stopped heavy use)"
+      }
+     ]
+    },
+    "for": {
+     "reference": "urn:citramac:patient:16f76773-be5f-5929-9c68-fda1f4851f19"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:0598eb82-5e0b-5a35-b2b4-e4ee82b97499"
+    },
+    "authoredOn": "2026-10-29T07:24:33Z",
+    "lastModified": "2026-10-29T09:02:51Z",
+    "owner": {
+     "display": "Psychiatry"
+    },
+    "output": [
+     {
+      "type": {
+       "coding": [
+        {
+         "system": "urn:citramac:codesystem:task-output",
+         "code": "psychiatric-review-outcome"
+        }
+       ]
+      },
+      "valueCodeableConcept": {
+       "coding": [
+        {
+         "system": "urn:citramac:codesystem:psychiatric-review-outcome",
+         "code": "not_reviewed",
+         "display": "Not reviewed — client left / declined"
+        }
+       ]
+      }
+     }
+    ],
+    "note": [
+     {
+      "text": "Left the waiting area before review; sister informed of withdrawal danger signs by phone."
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:provenance:task-4d62e686-7063-5bc8-8cad-ae99cc61576c",
+   "resource": {
+    "resourceType": "Provenance",
+    "id": "prov-task-4d62e686-7063-5bc8-8cad-ae99cc61576c",
+    "target": [
+     {
+      "reference": "urn:citramac:task:4d62e686-7063-5bc8-8cad-ae99cc61576c"
+     }
+    ],
+    "recorded": "2026-10-29T09:02:51Z",
+    "agent": [
+     {
+      "who": {
+       "reference": "urn:citramac:practitioner:12309663-d61a-59e8-9951-94543714f210",
+       "display": "Dr Peter Mwangi"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

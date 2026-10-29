@@ -448,9 +448,33 @@ class CareTask(TenantScopedModel):
     completed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # A psychiatric review's result (served `psychiatric-review-outcome` code;
+    # psychiatric_review.py). FHIR Task.output.
+    outcome = models.CharField(max_length=40, blank=True)
+    outcome_note = models.CharField(max_length=500, blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]
+
+
+class ApprovedAssessment(TenantScopedModel):
+    """The assessment an organisation has approved for a purpose (trauma,
+    benzodiazepine withdrawal) — append-only; the latest row per purpose is
+    current, and an empty `instrument` means none is approved. Configuration,
+    not clinical data (approved_assessments.py)."""
+
+    purpose = models.CharField(max_length=24)
+    instrument = models.CharField(max_length=24, blank=True)
+    clinical_lead = models.CharField(max_length=150, blank=True)
+    # The Org Admin's confirmation, in the words shown when it was given.
+    attestation = models.CharField(max_length=500, blank=True)
+    approved_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    approved_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-approved_at"]
 
 
 # ── Client journey ──

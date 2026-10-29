@@ -324,7 +324,9 @@ def _evaluate(answers, labels):
     """Each answer set is evaluated by the rule set of its schema: v5, v4, or
     (anything else) the v3 rules (triage_rules.py)."""
     if triage_v5.is_v5(answers):
-        return triage_v5.evaluate(answers, labels)
+        from . import approved_assessments
+
+        return triage_v5.evaluate(answers, labels, approved_assessments.names())
     if triage_v4.is_v4(answers):
         return triage_v4.evaluate(answers, labels)
     return triage_rules.evaluate(answers, labels)
@@ -534,7 +536,21 @@ class TriageTasksView(APIView):
 
 class CareTaskView(APIView):
     def patch(self, request, pk):
+        from . import psychiatric_review
+
         task = get_object_or_404(CareTask, pk=pk)
+        if task.focus_type == psychiatric_review.FOCUS:
+            # A psychiatric review is completed with its outcome, never by a bare status.
+            from apps.accounts.access import has_permission
+
+            if not has_permission(request.user, "clinical.care.record"):
+                raise PermissionDenied("Only clinical staff record a psychiatric review outcome.")
+            if request.data.get("status") != "COMPLETED":
+                raise ValidationError({"status": "Record the outcome to complete this review."})
+            psychiatric_review.complete(
+                task, request.user, request.data.get("outcome"), request.data.get("outcome_note")
+            )
+            return Response(CareTaskSerializer(task).data)
         serializer = CareTaskSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -584,6 +600,8 @@ class PsychiatryQueueView(APIView):
     def get(self, request):
         from django.conf import settings
 
+        from . import psychiatric_review
+
         targets = getattr(settings, "SEEN_BY_CLINICIAN_TARGET_MINUTES", None) or {}
         now = timezone.now()
         rows = []
@@ -609,6 +627,7 @@ class PsychiatryQueueView(APIView):
                     "signed_at": _iso(te.last_triaged_at),
                     "signed_by": user_display(te.last_triaged_by),
                     "review_started_at": _iso(te.psychiatry_review_started_at),
+                    "withdrawal_review": psychiatric_review.row(psychiatric_review.for_triage(te)),
                 }
             )
         return Response({"results": rows})
@@ -810,6 +829,32 @@ def _ai_consent(patient):
         "captured_by": user_display(record.captured_by) if record else "",
         "consent_text_version": record.consent_text_version if record else "",
     }
+
+
+class ApprovedAssessmentsView(APIView):
+    """The organisation's approved assessments (approved_assessments.py). GET
+    for anyone in the organisation; PUT by its Org Admin, with the clinical
+    lead named and the attestation given."""
+
+    def get(self, request):
+        from . import approved_assessments
+
+        return Response(approved_assessments.payload(_is_org_admin(request.user)))
+
+    def put(self, request):
+        from . import approved_assessments
+
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin can approve assessments.")
+        approved_assessments.approve(
+            request.user,
+            request.data.get("purpose"),
+            request.data.get("instrument"),
+            clinical_lead=request.data.get("clinical_lead"),
+            attest=request.data.get("attest"),
+            confirm=request.data.get("confirm"),
+        )
+        return Response(approved_assessments.payload(True))
 
 
 class PsychotherapyAssistSettingsView(APIView):
@@ -1210,6 +1255,7 @@ class ClientWithdrawalView(APIView):
             "scales": withdrawal.overview(patient),
             "recommended": withdrawal.recommended_scale(patient),
             "substance": withdrawal.substance_display(patient),
+            "benzodiazepine": withdrawal.is_benzodiazepine(patient),
         })
 
     def post(self, request, patient_id):

@@ -435,6 +435,8 @@ VALUESETS = {
             ("cows", "COWS — opioid withdrawal scale"),
             # Triage v5 H, next step for an acute medical concern (2026-10-28.2).
             ("external_referral", "Refer to another facility"),
+            # Spec item 10 (2026-10-29.1): withdrawal → psychiatric review (psychiatric_review.py).
+            ("psychiatric_review_withdrawal", "Psychiatric review — withdrawal"),
         ],
     ),
     "task-status": (

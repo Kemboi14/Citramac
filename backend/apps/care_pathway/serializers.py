@@ -28,8 +28,23 @@ class CareTaskSerializer(serializers.ModelSerializer):
             "created_by_name",
             "focus_type",
             "due_at",
+            "priority",
+            "outcome",
+            "outcome_note",
+            "completed_at",
         ]
-        read_only_fields = ["action_code", "action_label", "owner", "created_at", "focus_type", "due_at"]
+        read_only_fields = [
+            "action_code",
+            "action_label",
+            "owner",
+            "created_at",
+            "focus_type",
+            "due_at",
+            "priority",
+            "outcome",
+            "outcome_note",
+            "completed_at",
+        ]
 
     def get_created_by_name(self, obj):
         return user_display(obj.created_by)

@@ -64,7 +64,12 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
     raw = payload.get("answers") or {}
     answers = rules.clean_answers(raw)  # X-08: hidden fields are never stored
     labels = services.concept_labels()
-    result = rules.evaluate(answers, labels)
+    if hasattr(rules, "withdrawal_reasons"):  # v5: names the approved assessments
+        from . import approved_assessments
+
+        result = rules.evaluate(answers, labels, approved_assessments.names())
+    else:
+        result = rules.evaluate(answers, labels)
     recommended = result["priority"]
     final = payload.get("final_priority") or answers.get("m_final_priority") or recommended
     if final not in PRIORITY_ORDER:
@@ -170,6 +175,12 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
         _record_vitals(encounter, user, answers, now)
         _record_observation(patient, user, answers, assessment.version, labels)
     _create_tasks(triage_encounter, user, answers, assessment, labels)
+    if hasattr(rules, "withdrawal_reasons"):
+        from . import psychiatric_review
+
+        psychiatric_review.request(
+            triage_encounter, user, rules.withdrawal_reasons(answers), final, "triage"
+        )
     services.apply_triage_allergies(patient, answers, user)
 
     if downgrade and not senior:

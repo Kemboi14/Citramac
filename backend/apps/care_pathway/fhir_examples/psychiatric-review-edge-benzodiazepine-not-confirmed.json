@@ -1,0 +1,267 @@
+{
+ "resourceType": "Bundle",
+ "type": "collection",
+ "entry": [
+  {
+   "fullUrl": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55",
+   "resource": {
+    "resourceType": "Patient",
+    "id": "63b68b9f-0d6f-579b-ae19-10fa58ef3b55",
+    "meta": {
+     "security": [
+      {
+       "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+       "code": "R"
+      }
+     ]
+    },
+    "identifier": [
+     {
+      "use": "usual",
+      "type": {
+       "text": "CITRAMAC number"
+      },
+      "system": "urn:citramac:citramac-number",
+      "value": "202610ORG--012"
+     }
+    ],
+    "active": true,
+    "name": [
+     {
+      "use": "official",
+      "family": "Wairimu",
+      "given": [
+       "Esther",
+       "Njeri"
+      ]
+     }
+    ],
+    "gender": "female",
+    "birthDate": "1979-09-23"
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:episodeofcare:c0574b9b-031a-5d13-b435-a29dac1a0cbf",
+   "resource": {
+    "resourceType": "EpisodeOfCare",
+    "id": "c0574b9b-031a-5d13-b435-a29dac1a0cbf",
+    "status": "waitlist",
+    "statusHistory": [
+     {
+      "status": "waitlist",
+      "period": {
+       "start": "2026-10-29T06:02:15Z"
+      }
+     }
+    ],
+    "patient": {
+     "reference": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55"
+    },
+    "period": {
+     "start": "2026-10-29T06:02:15Z"
+    }
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:encounter:f335a08f-934d-51d4-a94b-e3aa6782ed5d",
+   "resource": {
+    "resourceType": "Encounter",
+    "id": "f335a08f-934d-51d4-a94b-e3aa6782ed5d",
+    "status": "finished",
+    "class": {
+     "display": "triage"
+    },
+    "type": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:triage-encounter-type",
+        "code": "walk_in"
+       }
+      ]
+     }
+    ],
+    "priority": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-priority",
+       "code": "YELLOW"
+      }
+     ]
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55"
+    },
+    "episodeOfCare": [
+     {
+      "reference": "urn:citramac:episodeofcare:c0574b9b-031a-5d13-b435-a29dac1a0cbf"
+     }
+    ],
+    "period": {
+     "start": "2026-10-29T06:02:15Z"
+    },
+    "reasonCode": [
+     {
+      "text": "Ran out of diazepam three days ago; anxious and shaky"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:observation:799092f6-0bfd-5701-a59a-c811bb4bc319",
+   "resource": {
+    "resourceType": "Observation",
+    "id": "799092f6-0bfd-5701-a59a-c811bb4bc319",
+    "status": "final",
+    "category": [
+     {
+      "coding": [
+       {
+        "system": "urn:citramac:codesystem:clinical-finding-domain",
+        "code": "SUBSTANCE"
+       }
+      ]
+     }
+    ],
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding",
+       "code": "SUBSTANCE:sedatives"
+      }
+     ],
+     "text": "Substance — Benzodiazepines / sedatives"
+    },
+    "subject": {
+     "reference": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:f335a08f-934d-51d4-a94b-e3aa6782ed5d"
+    },
+    "effectiveDateTime": "2026-10-29T06:20:48Z",
+    "performer": [
+     {
+      "reference": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55"
+     }
+    ],
+    "valueCodeableConcept": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:clinical-finding-status",
+       "code": "PRESENT",
+       "display": "Present"
+      }
+     ]
+    },
+    "note": [
+     {
+      "text": "last use three days ago · diazepam 30 mg daily for a year · concern: withdrawal"
+     }
+    ],
+    "derivedFrom": [
+     {
+      "reference": "urn:citramac:questionnaireresponse:d9342b03-f335-503d-9b3e-de62981731b3"
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:provenance:d9342b03-f335-503d-9b3e-de62981731b3",
+   "resource": {
+    "resourceType": "Provenance",
+    "id": "prov-d9342b03-f335-503d-9b3e-de62981731b3",
+    "target": [
+     {
+      "reference": "urn:citramac:observation:799092f6-0bfd-5701-a59a-c811bb4bc319"
+     }
+    ],
+    "recorded": "2026-10-29T06:20:48Z",
+    "agent": [
+     {
+      "who": {
+       "reference": "urn:citramac:practitioner:e7b75102-d151-507c-b590-02a01158cea2",
+       "display": "Grace Achieng"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:task:2cc410b5-7b0c-5e66-8414-3789ece1bec1",
+   "resource": {
+    "resourceType": "Task",
+    "id": "2cc410b5-7b0c-5e66-8414-3789ece1bec1",
+    "status": "completed",
+    "intent": "order",
+    "priority": "routine",
+    "code": {
+     "coding": [
+      {
+       "system": "urn:citramac:codesystem:triage-action",
+       "code": "psychiatric_review_withdrawal",
+       "display": "Psychiatric review — withdrawal (Benzodiazepines / sedatives withdrawal)"
+      }
+     ]
+    },
+    "for": {
+     "reference": "urn:citramac:patient:63b68b9f-0d6f-579b-ae19-10fa58ef3b55"
+    },
+    "encounter": {
+     "reference": "urn:citramac:encounter:f335a08f-934d-51d4-a94b-e3aa6782ed5d"
+    },
+    "authoredOn": "2026-10-29T06:20:48Z",
+    "lastModified": "2026-10-29T08:45:10Z",
+    "owner": {
+     "display": "Psychiatry"
+    },
+    "output": [
+     {
+      "type": {
+       "coding": [
+        {
+         "system": "urn:citramac:codesystem:task-output",
+         "code": "psychiatric-review-outcome"
+        }
+       ]
+      },
+      "valueCodeableConcept": {
+       "coding": [
+        {
+         "system": "urn:citramac:codesystem:psychiatric-review-outcome",
+         "code": "withdrawal_not_confirmed",
+         "display": "Reviewed — withdrawal not confirmed"
+        }
+       ]
+      }
+     }
+    ],
+    "note": [
+     {
+      "text": "Tremor and anxiety pre-date the last dose; no autonomic signs. Continue taper plan with GP."
+     }
+    ]
+   }
+  },
+  {
+   "fullUrl": "urn:citramac:provenance:task-2cc410b5-7b0c-5e66-8414-3789ece1bec1",
+   "resource": {
+    "resourceType": "Provenance",
+    "id": "prov-task-2cc410b5-7b0c-5e66-8414-3789ece1bec1",
+    "target": [
+     {
+      "reference": "urn:citramac:task:2cc410b5-7b0c-5e66-8414-3789ece1bec1"
+     }
+    ],
+    "recorded": "2026-10-29T08:45:10Z",
+    "agent": [
+     {
+      "who": {
+       "reference": "urn:citramac:practitioner:08f6918a-edc0-5bc3-9e42-18726051e4d8",
+       "display": "Dr Peter Mwangi"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

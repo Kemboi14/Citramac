@@ -166,7 +166,8 @@ SUBSTANCES = [
     ("opioids", "Opioids"),
     ("cannabis", "Cannabis"),
     ("stimulants", "Stimulants"),
-    ("sedatives", "Sedatives"),
+    # Label "Benzodiazepines / sedatives" since 2026-10-29 (spec item 9); the code is unchanged.
+    ("sedatives", "Benzodiazepines / sedatives"),
     ("khat", "Khat (miraa)"),
     ("other", "Other"),
 ]

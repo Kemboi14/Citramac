@@ -115,6 +115,11 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
       { label: "Subscription", to: "/org-admin/subscription", icon: CreditCard },
       { label: "Service Tariff", to: "/org-admin/service-tariff", icon: Landmark },
       { label: "Consent Wording", to: "/org-admin/consent-wording", icon: FileText },
+      {
+        label: "Clinical Assessments",
+        to: "/org-admin/clinical-assessments",
+        icon: ClipboardCheck,
+      },
     ],
   },
   {

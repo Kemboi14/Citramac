@@ -680,13 +680,14 @@ def save_triage_draft(triage_encounter, user, answers):
 def _audit_auto_triggers(triage_encounter, draft, before, after):
     """Triage v5 AUTO-TRIGGER banners: every alert / tool an answer starts or
     stops is an audit entry, naming what was raised or cleared."""
-    from . import triage_v5
+    from . import approved_assessments, triage_v5
 
     if not triage_v5.is_v5(after):
         return
     labels = concept_labels()
-    old = triage_v5.trigger_texts(before, labels) if triage_v5.is_v5(before) else {}
-    new = triage_v5.trigger_texts(after, labels)
+    approved = approved_assessments.names()
+    old = triage_v5.trigger_texts(before, labels, approved) if triage_v5.is_v5(before) else {}
+    new = triage_v5.trigger_texts(after, labels, approved)
     raised = [text for code, text in new.items() if code not in old]
     cleared = [text for code, text in old.items() if code not in new]
     if raised or cleared:
@@ -1002,6 +1003,9 @@ def open_psychiatry_review(triage_encounter, user):
             update_fields=["psychiatry_encounter", "psychiatry_review_started_at", "updated_at"]
         )
         triage_encounter.episode.transition("active", user=user, at=now)
+    from . import psychiatric_review
+
+    psychiatric_review.start(triage_encounter)
     return triage_encounter
 
 

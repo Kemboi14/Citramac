@@ -8,7 +8,7 @@ from apps.triage.models import VitalSigns
 
 from . import ews, instruments
 from .intake_schema import _code
-from .models import OutcomeScore
+from .models import ApprovedAssessment, OutcomeScore
 from .test_intake import IntakeTestCase
 
 
@@ -192,6 +192,10 @@ class ToolsApiTests(IntakeTestCase):
     def test_summary_reports_baseline_latest_band_and_change_in_words(self):
         for answers in ([2, 2, 2, 2, 2, 1, 1, 1, 1], [1, 1, 1, 1, 1, 0, 0, 0, 0]):  # 14 then 5
             self.assess(instrument="PHQ9", answers=answers)
+        with platform_admin_context():  # PCL-5 needs the organisation's approval
+            ApprovedAssessment.objects.create(
+                organization=self.org, purpose="TRAUMA", instrument="PCL5", clinical_lead="Dr A"
+            )
         self.assess(instrument="PCL5", total=40)
         data = self.client.get(reverse("care-client-outcomes", args=[self.pid]), **self.auth).data
         phq = next(s for s in data["summary"] if s["instrument"] == "PHQ9")

@@ -579,7 +579,32 @@ def sign_intake(draft, user, completeness, data=None):
     draft.signed_by = user
     _mirror_legacy_columns(draft)
     draft.save()
+    _request_withdrawal_review(draft, user)
     return draft
+
+
+def _request_withdrawal_review(draft, user):
+    """Spec item 10: withdrawal identified at intake flags the client for
+    psychiatric review — unless the triage already did (one per triage)."""
+    from . import psychiatric_review
+    from .models import TriageEncounter
+
+    features = (draft.sections.get("subs") or {}).get("features") or []
+    if schema._code("Withdrawal") not in features:
+        return
+    triage_encounter = (
+        TriageEncounter.objects.filter(patient=draft.patient, episode=draft.episode)
+        .exclude(triage_version=0)
+        .order_by("-last_triaged_at")
+        .first()
+    )
+    psychiatric_review.request(
+        triage_encounter,
+        user,
+        ["withdrawal identified at intake"],
+        triage_encounter.priority if triage_encounter else "",
+        "intake",
+    )
 
 
 # Intake risk-register rows → the shared finding each one confirms (findings.py).

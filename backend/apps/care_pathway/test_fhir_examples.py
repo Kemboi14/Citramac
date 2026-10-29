@@ -152,3 +152,54 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
         bundle = _load("triage-omission-unidentified-not-yet-triaged")
         self.assertEqual(_types(bundle), ["Patient", "EpisodeOfCare", "Encounter"])
         self.assertEqual(bundle["entry"][0]["resource"]["name"][0]["use"], "temp")
+
+
+class FhirR4ConformancePsychiatricReviewExamplesTests(SimpleTestCase):
+    """The psychiatric review on withdrawal (rules 2026-10-29.1): requested
+    (routine), completed — withdrawal not confirmed (edge), and not reviewed
+    because the client left (omission). A completed review carries its coded
+    outcome and the Provenance of who recorded it."""
+
+    def test_every_example_is_valid_r4_and_hangs_off_the_episode(self):
+        paths = sorted(EXAMPLES.glob("psychiatric-review-*.json"))
+        self.assertGreaterEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(example=path.name):
+                bundle = json.loads(path.read_text())
+                self.assertEqual(validate_bundle(bundle), {})
+                resources = [e["resource"] for e in bundle["entry"]]
+                encounter = next(r for r in resources if r["resourceType"] == "Encounter")
+                self.assertTrue(encounter["episodeOfCare"])
+                task = next(r for r in resources if r["resourceType"] == "Task")
+                self.assertEqual(task["code"]["coding"][0]["code"], "psychiatric_review_withdrawal")
+                self.assertIn(task["priority"], ("urgent", "routine"))
+
+    def test_a_completed_review_has_an_outcome_and_its_provenance(self):
+        for name, outcome in (
+            ("psychiatric-review-edge-benzodiazepine-not-confirmed", "withdrawal_not_confirmed"),
+            ("psychiatric-review-omission-client-left-not-reviewed", "not_reviewed"),
+        ):
+            with self.subTest(example=name):
+                bundle = _load(name)
+                task_entry = next(
+                    e for e in bundle["entry"] if e["resource"]["resourceType"] == "Task"
+                )
+                task = task_entry["resource"]
+                self.assertEqual(task["status"], "completed")
+                coded = task["output"][0]["valueCodeableConcept"]["coding"][0]["code"]
+                self.assertEqual(coded, outcome)
+                targets = [
+                    t["reference"]
+                    for e in bundle["entry"]
+                    if e["resource"]["resourceType"] == "Provenance"
+                    for t in e["resource"]["target"]
+                ]
+                self.assertIn(task_entry["fullUrl"], targets)
+
+    def test_a_requested_review_has_no_outcome_yet(self):
+        bundle = _load("psychiatric-review-routine-opioid-withdrawal-requested")
+        task = next(
+            e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Task"
+        )
+        self.assertEqual(task["status"], "requested")
+        self.assertNotIn("output", task)
