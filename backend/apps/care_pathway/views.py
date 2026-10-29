@@ -261,7 +261,9 @@ class RegistrationSearchView(APIView):
 
 class DuplicateCheckView(APIView):
     """Pre-submit duplicate check: exact identifier hits and probable matches.
-    Registration details only, so Front Desk may call it."""
+    Registration details only, so Front Desk may call it. With
+    `exclude_patient_id` (a temporary record being identified) only identified
+    clients are offered — the records it can be merged into."""
 
     def post(self, request):
         from apps.client_registry import identity as identity_service
@@ -282,7 +284,14 @@ class DuplicateCheckView(APIView):
             date_of_birth=data.get("date_of_birth") or None,
             gender=data.get("sex") or "",
             phone=data.get("phone") or "",
+            exclude_patient_id=data.get("exclude_patient_id") or None,
         )
+        if data.get("exclude_patient_id"):
+            matches = [
+                m
+                for m in matches
+                if m["patient"].identity_status == Patient.IDENTITY_IDENTIFIED
+            ]
         return Response(
             {
                 "matches": [

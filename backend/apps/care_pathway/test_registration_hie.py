@@ -104,6 +104,51 @@ class MergeTests(CarePathwayApiTestCase):
             old = PatientIdentifier.objects.get(patient_id=permanent.data["patient_id"], kind="TEMPORARY")
             self.assertIsNotNone(old.superseded_at)
 
+    def test_a_recognised_client_without_a_document_match_can_be_merged(self):
+        # Spec 3.2: identifying a temporary record never leaves two records for
+        # one person — a probable match (name, date of birth, sex) is offered.
+        permanent = self.register(phone="0712000111")
+        other_temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        details = {
+            "first_name": "Amina",
+            "last_name": "Kamau",
+            "date_of_birth": "1992-03-14",
+            "sex": "FEMALE",
+            "phone": "0712000111",
+        }
+        check = self.client.post(
+            reverse("care-registration-duplicate-check"),
+            {**details, "exclude_patient_id": temp.data["patient_id"]},
+            format="json",
+            **self.auth,
+        )
+        offered = [m["client"]["id"] for m in check.data["matches"]]
+        self.assertEqual(offered, [permanent.data["patient_id"]])  # identified clients only
+        url = reverse("care-resolve-identity", args=[temp.data["patient_id"]])
+        merged = self.client.post(
+            url,
+            {**details, "merge_into_patient_id": permanent.data["patient_id"]},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(merged.status_code, 200, merged.data)
+        with platform_admin_context():
+            temp_patient = Patient.objects.get(pk=temp.data["patient_id"])
+            self.assertEqual(str(temp_patient.merged_into_id), permanent.data["patient_id"])
+            visit = TriageEncounter.objects.get(pk=temp.data["triage_encounter_id"])
+            self.assertEqual(str(visit.patient_id), permanent.data["patient_id"])
+        # Never into another temporary record.
+        third_temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        url = reverse("care-resolve-identity", args=[other_temp.data["patient_id"]])
+        refused = self.client.post(
+            url,
+            {**details, "merge_into_patient_id": third_temp.data["patient_id"]},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(refused.status_code, 400)
+
     def test_unique_document_resolution_upgrades_in_place(self):
         temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
         url = reverse("care-resolve-identity", args=[temp.data["patient_id"]])

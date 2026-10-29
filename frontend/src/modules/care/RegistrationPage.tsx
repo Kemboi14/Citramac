@@ -641,6 +641,23 @@ export function RegistrationPage() {
     setSubmitting(true);
     try {
       if (resolving && resolveId) {
+        // Spec 3.2: identifying a temporary record must not leave the person
+        // with two records — a probable existing client is offered for merging.
+        if (!mergeTarget && !confirmedNew) {
+          const { matches } = await checkRegistrationDuplicates(accessToken, {
+            first_name: form.firstName.trim(),
+            last_name: form.lastName.trim(),
+            date_of_birth: form.dob || undefined,
+            sex: form.sex || undefined,
+            phone: form.phone.trim() || undefined,
+            exclude_patient_id: resolveId,
+          });
+          if (matches.length) {
+            setDupMatches(matches);
+            setSubmitting(false);
+            return;
+          }
+        }
         await resolveIdentity(accessToken, resolveId, {
           ...identityDetails(),
           merge_into_patient_id: mergeTarget?.id,
@@ -741,13 +758,24 @@ export function RegistrationPage() {
 
   function chooseExistingClient(match: DuplicateMatch) {
     setDupMatches(null);
+    if (resolving) {
+      // Merge the temporary record into this client on submit.
+      const label = `${match.client.name} · ${match.client.citramac_number}`;
+      setMergeTarget({ id: match.client.id, label });
+      setFeedback(
+        `Submit to merge this temporary record into ${label}. Its encounters and notes move to that client, and the emergency number stays linked to them.`,
+      );
+      return;
+    }
     selectClient(match.client);
   }
 
   const submitText = editing
     ? "Save changes"
     : resolving
-      ? "Confirm identity"
+      ? mergeTarget
+        ? "Merge into existing client"
+        : "Confirm identity"
       : selected && selectedLabel
         ? SELECTED_SUBMIT
         : modeInfo.submit;
@@ -1429,7 +1457,9 @@ export function RegistrationPage() {
                   <strong>
                     {dupMatches.some((m) => m.match === "exact")
                       ? "This person is already registered."
-                      : "Possible existing client."}
+                      : resolving
+                        ? "This person may already be registered — merge rather than keep two records."
+                        : "Possible existing client."}
                   </strong>
                   <ul className="mt-1.5 space-y-1">
                     {dupMatches.map((m) => (
@@ -1442,7 +1472,7 @@ export function RegistrationPage() {
                           className={BTN_SM}
                           onClick={() => chooseExistingClient(m)}
                         >
-                          Use this record
+                          {resolving ? "Merge into this client" : "Use this record"}
                         </button>
                       </li>
                     ))}

@@ -139,6 +139,8 @@ export function checkRegistrationDuplicates(
     id_document_number?: string;
     unhcr_number?: string;
     sha_member_number?: string;
+    /** A temporary record being identified: only identified clients are offered. */
+    exclude_patient_id?: string;
   },
 ) {
   return apiRequest<{ matches: DuplicateMatch[] }>("/care/registrations/duplicate-check/", {
