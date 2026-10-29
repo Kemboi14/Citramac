@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Zap } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
+  lookupTriageFacility,
   registerTriageTasks,
   saveTriageDraft,
   signTriage,
@@ -16,6 +18,7 @@ import {
 import { getClientFindings, type ClinicalFinding } from "../../../lib/findingsApi";
 import {
   getTriageV4Config,
+  type AutoTrigger,
   type TriageV4Config,
   type TriageV4Evaluation,
 } from "../../../lib/triageV4Api";
@@ -82,6 +85,14 @@ const SUBSTANCE_ROWS = [
   "other",
 ];
 const DRAFT_FAILED = "Draft not saved — check your connection";
+const VITAL_KEYS = ["v_sbp", "v_dbp", ...VITALS.map((v) => v.key)];
+
+/** Now, as a datetime-local value. */
+function nowLocalInput() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
 
 function str(answers: TriageAnswers, key: string): string {
   const value = new Map(Object.entries(answers)).get(key);
@@ -102,6 +113,9 @@ interface Ctx {
   set: (key: string, value: string | string[]) => void;
   vs: ValueSetsApi;
   invalid: Set<string>;
+  triggers: AutoTrigger[];
+  triageId: string;
+  readOnly: boolean;
 }
 const FormCtx = createContext<Ctx | null>(null);
 function useCtx() {
@@ -171,12 +185,15 @@ function Txt({
   label,
   placeholder,
   rows,
+  grow,
   type,
 }: {
   k: string;
   label: string;
   placeholder?: string;
   rows?: number;
+  /** The box grows with its text so the whole entry stays readable. */
+  grow?: boolean;
   type?: "datetime-local";
 }) {
   const { answers, set: setAnswer, invalid } = useCtx();
@@ -192,7 +209,7 @@ function Txt({
         <textarea
           {...common}
           rows={rows}
-          className={`${INPUT} resize-y`}
+          className={`${INPUT} resize-y ${grow ? "[field-sizing:content] min-h-[4.5rem]" : ""}`}
           onChange={(e) => setAnswer(k, e.target.value)}
         />
       ) : (
@@ -257,12 +274,118 @@ function NotMeasured({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * What this section's answers have started — an alert, a tool or a pathway.
+ * Computed by the server rules; it clears when the answer changes, and every
+ * raise and clear is in the audit trail.
+ */
+function AutoTriggers({ section }: { section: string }) {
+  const { triggers } = useCtx();
+  const mine = triggers.filter((t) => t.section === section);
+  if (!mine.length) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-3 flex items-start gap-3 rounded-lg border border-brand-green-tint-2 border-l-[3px] border-l-brand-green bg-brand-green-tint px-3.5 py-2.5"
+    >
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-green text-on-primary">
+        <Zap size={13} strokeWidth={2.5} aria-hidden="true" />
+      </span>
+      <ul className="min-w-0 space-y-1">
+        {mine.map((t) => (
+          <li key={t.code} className="text-[13px] leading-snug text-ink-900">
+            <span className="mr-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-brand-green">
+              Auto-trigger
+            </span>
+            <strong className="font-semibold">{t.alert}</strong>
+            <span className="mx-1.5 text-ink-500" aria-label="starts">
+              →
+            </span>
+            {t.pathway}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  section,
+  children,
+}: {
+  title: string;
+  section?: string;
+  children: ReactNode;
+}) {
   return (
     <section className="mb-2.5 rounded-lg border border-surface-border bg-surface-card px-[18px] py-4 shadow-sm">
       <h2 className="mb-2 text-[13px] font-bold text-ink-900">{title}</h2>
       {children}
+      {section && <AutoTriggers section={section} />}
     </section>
+  );
+}
+
+/**
+ * A facility named in a referral: its SHA FR code, looked up in the DHA Facility
+ * Registry, and its name. If the registry can't be reached the name is typed and
+ * the screen says it was not verified.
+ */
+function FacilityFields({ prefix, label }: { prefix: string; label: string }) {
+  const { answers, set, triageId, readOnly } = useCtx();
+  const { accessToken } = useAuth();
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fr = str(answers, `${prefix}_fr`);
+
+  async function lookUp() {
+    if (!accessToken || !fr.trim()) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const { match } = await lookupTriageFacility(accessToken, triageId, fr.trim());
+      if (match) {
+        set(`${prefix}_facility`, match.official_name);
+        setNote("Name from the DHA Facility Registry.");
+      } else {
+        setNote("Not found in the DHA Facility Registry — check the code, or type the name.");
+      }
+    } catch (err) {
+      setNote(
+        `${errorText(err, "The registry couldn't be reached.")} Type the name — it is recorded as entered, not verified.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={FIELDGRID}>
+      <Field label={`${label} — FR code (optional)`} htmlFor={fid(`${prefix}_fr`)}>
+        <div className="flex items-center gap-1.5">
+          <input
+            id={fid(`${prefix}_fr`)}
+            className={INPUT}
+            value={fr}
+            onChange={(e) => set(`${prefix}_fr`, e.target.value)}
+          />
+          {!readOnly && (
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM} shrink-0`}
+              disabled={busy || !fr.trim()}
+              onClick={lookUp}
+            >
+              {busy ? "Looking up…" : "Look up"}
+            </button>
+          )}
+        </div>
+        {note && <p className="mt-1 text-[12px] text-ink-500">{note}</p>}
+      </Field>
+      <Txt k={`${prefix}_facility`} label={label} />
+    </div>
   );
 }
 
@@ -442,6 +565,13 @@ export function TriageFormV5({
     );
   };
 
+  // The first value entered stamps the time measured (editable) and its source.
+  function setVital(values: TriageAnswers) {
+    const stamp: TriageAnswers = a("v_measured_at") ? {} : { v_measured_at: nowLocalInput() };
+    setMany({ ...stamp, v_source: a("v_source") || "here", ...values });
+  }
+  const vitalsEntered = VITAL_KEYS.some((k) => a(k));
+
   function markNotMeasured(keys: string[], reason: string) {
     setMany(Object.fromEntries(keys.map((x) => [x, reason])));
   }
@@ -465,7 +595,7 @@ export function TriageFormV5({
           className={INPUT}
           value={a(k)}
           aria-invalid={Boolean(check.error) || undefined}
-          onChange={(e) => setMany({ [k]: e.target.value, vconf: vconf.filter((x) => x !== k) })}
+          onChange={(e) => setVital({ [k]: e.target.value, vconf: vconf.filter((x) => x !== k) })}
         />
         {confirmBox(k)}
         {!a(k) && (
@@ -540,7 +670,15 @@ export function TriageFormV5({
     }
   }
 
-  const ctx: Ctx = { answers, set, vs, invalid };
+  const ctx: Ctx = {
+    answers,
+    set,
+    vs,
+    invalid,
+    triggers: evaluation.auto_triggers ?? [],
+    triageId: detail.id,
+    readOnly,
+  };
   const recActions = new Set(evaluation.recommended_actions ?? []);
   const findings = signed?.findings ?? evaluation.findings;
   const reasonList = evaluation.reason_list ?? [];
@@ -713,13 +851,15 @@ export function TriageFormV5({
                     label="When did this begin or become worse?"
                     set="triage-onset"
                   />
-                  <Txt k="c_description" label="Brief description" />
+                </div>
+                <div className="mt-3">
+                  <Txt k="c_description" label="Brief description" rows={3} grow />
                 </div>
               </Section>
 
               {present === "yes" && (
                 <>
-                  <Section title="D — Immediate safety: suicide / self-harm">
+                  <Section title="D — Immediate safety: suicide / self-harm" section="d">
                     <Ask
                       k="d_suicidal"
                       q="Are you currently having thoughts of killing yourself or seriously harming yourself?"
@@ -756,7 +896,7 @@ export function TriageFormV5({
                     />
                   </Section>
 
-                  <Section title="E — Risk of harm to others">
+                  <Section title="E — Risk of harm to others" section="e">
                     <Ask
                       k="e_thoughts"
                       q="Current thoughts of seriously harming someone else?"
@@ -816,7 +956,7 @@ export function TriageFormV5({
                     />
                   </Section>
 
-                  <Section title="F — Acute mental state">
+                  <Section title="F — Acute mental state" section="f">
                     <Ask k="f_change" q="Major change in mental state now?" set="no-yes-unable" />
                     {a("f_change") === "yes" && (
                       <Detail>
@@ -839,7 +979,7 @@ export function TriageFormV5({
                     </div>
                   </Section>
 
-                  <Section title="G — Alcohol & other substances">
+                  <Section title="G — Alcohol & other substances" section="g">
                     <Ask
                       k="g_use"
                       q="Recent alcohol or other substance use?"
@@ -941,7 +1081,7 @@ export function TriageFormV5({
                     )}
                   </Section>
 
-                  <Section title="H — Urgent medical screen">
+                  <Section title="H — Urgent medical screen" section="h">
                     <Ask
                       k="h_concern"
                       q="Immediate physical / medical concern?"
@@ -994,7 +1134,7 @@ export function TriageFormV5({
                             className={INPUT}
                             value={a("v_sbp")}
                             onChange={(e) =>
-                              setMany({
+                              setVital({
                                 v_sbp: e.target.value,
                                 vconf: vconf.filter((x) => x !== "v_sbp"),
                               })
@@ -1008,7 +1148,7 @@ export function TriageFormV5({
                             className={INPUT}
                             value={a("v_dbp")}
                             onChange={(e) =>
-                              setMany({
+                              setVital({
                                 v_dbp: e.target.value,
                                 vconf: vconf.filter((x) => x !== "v_dbp"),
                               })
@@ -1039,15 +1179,76 @@ export function TriageFormV5({
                         {ews.complete ? ` — ${ews.response.text}` : " — partial score"}
                       </p>
                     )}
+                    {vitalsEntered && (
+                      <div className={`${FIELDGRID} mt-3`}>
+                        <Txt k="v_measured_at" label="Time measured" type="datetime-local" />
+                        <Sel
+                          k="v_source"
+                          label="Source of the measurements"
+                          set="triage-vitals-source"
+                        />
+                      </div>
+                    )}
+                    {(evaluation.medical_escalation || evaluation.referral_in_asked) && (
+                      <div className="mt-3 rounded-lg border border-surface-border px-3.5 py-3">
+                        <div className={`${GROUP_LABEL} !mt-0`}>Medical escalation</div>
+                        {evaluation.medical_escalation && (
+                          <>
+                            <div className={FIELDGRID}>
+                              <Sel
+                                k="h_next"
+                                label="Next step for this medical concern"
+                                set="triage-medical-escalation"
+                              />
+                            </div>
+                            {a("h_next") === "refer_out" && (
+                              <Detail>
+                                <FacilityFields prefix="h_refer" label="Facility referred to" />
+                                <div className="mt-2">
+                                  <Txt
+                                    k="h_refer_reason"
+                                    label="Reason for referral"
+                                    rows={2}
+                                    grow
+                                  />
+                                </div>
+                              </Detail>
+                            )}
+                          </>
+                        )}
+                        {evaluation.referral_in_asked && (
+                          <>
+                            <Ask
+                              k="h_referred_in"
+                              q="Did the client arrive with a referral from another facility?"
+                              set="no-yes"
+                            />
+                            {a("h_referred_in") === "yes" && (
+                              <Detail>
+                                <FacilityFields prefix="h_ref" label="Referring facility" />
+                                <div className="mt-2">
+                                  <Txt
+                                    k="h_ref_note"
+                                    label="Referral note from the referring facility"
+                                    rows={4}
+                                    grow
+                                  />
+                                </div>
+                              </Detail>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </Section>
 
-                  <Section title="I — Safeguarding & vulnerability">
+                  <Section title="I — Safeguarding & vulnerability" section="i">
                     <Ask
                       k="i_safe"
                       q="Do you feel safe where you currently live / stay?"
                       set="triage-feels-safe"
                     />
-                    <Checks k="i_flags" set="triage-safeguarding-concern" />
+                    <Checks k="i_flags" legend="Concerns for" set="triage-safeguarding-concern" />
                     {list(answers, "i_flags").includes("sexual_violence") && (
                       <Detail>
                         <Ask
@@ -1147,7 +1348,7 @@ export function TriageFormV5({
               )}
 
               {present === "no" && (
-                <Section title="K — Telephone / third-party safety screen">
+                <Section title="K — Telephone / third-party safety screen" section="k">
                   <div className={FIELDGRID}>
                     <Txt k="k_where" label="Where is the client now?" />
                     <Txt k="k_with" label="Who is physically with them?" />

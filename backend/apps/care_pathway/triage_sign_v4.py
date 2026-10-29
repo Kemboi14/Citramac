@@ -214,11 +214,14 @@ def _record_vitals(encounter, user, answers, now):
     o2 = answers.get("v_o2")
     if not values and not acvpu:
         return None
+    # v5 records when they were measured and where they come from.
+    measured = v4.parse_local_datetime(answers.get("v_measured_at"))
     return VitalSigns.objects.create(
         organization_id=encounter.organization_id,
         encounter=encounter,
         recorded_by=user,
-        recorded_at=now,
+        recorded_at=measured or now,
+        source=answers.get("v_source") or "",
         consciousness=acvpu,
         supplemental_o2=(o2 == "supplemental") if o2 else None,
         **values,
@@ -308,6 +311,38 @@ def _create_tasks(te, user, answers, assessment, labels):
             f"{timezone.localtime(closes).strftime('%Y-%m-%d %H:%M') if closes else '—'}",
             "Clinician on duty",
             closes,
+            "asap",
+        )
+    # v5 H — the next step chosen for an acute medical concern.
+    step = answers.get("h_next")
+    if step == "urgent_medical_review":
+        _task(
+            te,
+            user,
+            "URGENT_MEDICAL_REVIEW",
+            "Urgent medical review — acute medical concern",
+            "Medical officer on duty",
+            None,
+            "asap",
+        )
+    elif step == "psychiatric_review":
+        _task(
+            te,
+            user,
+            "URGENT_PSYCHIATRIC_REVIEW",
+            "Psychiatric review — acute medical concern",
+            "Psychiatry on duty",
+            None,
+        )
+    elif step == "refer_out":
+        _task(
+            te,
+            user,
+            "EXTERNAL_REFERRAL",
+            f"Refer to {answers.get('h_refer_facility') or 'another facility'} — acute medical "
+            "concern",
+            "Triage clinician",
+            None,
             "asap",
         )
     if duty:

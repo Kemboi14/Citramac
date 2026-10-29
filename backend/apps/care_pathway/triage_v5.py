@@ -24,7 +24,20 @@ its recommendation and is never re-evaluated.
 Each signed v5 triage also writes the shared clinical finding store
 (findings.py): one finding per domain (spec §17), which Intake and the later
 stages confirm or update instead of re-asking.
+
+2026-10-28.2 (approved by the project owner, 2026-10-28, after QA): a critical
+measurement (early-warning score at the urgent / emergency threshold, or
+hypoglycaemia) raises the "Acute medical concern" alert as well as "Abnormal vital
+signs"; an acute medical concern asks for the next step (medical review, psychiatric
+review or referral out) and whether the client arrived with a referral from another
+facility, whose note is recorded; vital signs carry the time they were measured and
+their source; and each alert or tool an answer starts is named per section
+(auto_triggers), every raise and clear written to the audit trail.
 """
+
+from datetime import timedelta
+
+from django.utils import timezone
 
 from . import ews, triage_rules
 from . import triage_v4 as v4
@@ -46,7 +59,7 @@ from .triage_v4 import (  # noqa: F401 — shared with v4, re-exported for calle
     vitals_text,
 )
 
-RULES_VERSION = "2026-10-28.1"
+RULES_VERSION = "2026-10-28.2"
 RULESET_LABEL = "Approved by the project owner, 2026-10-28"
 SCHEMA = "v5"
 
@@ -88,7 +101,29 @@ VALUESETS = {
             ("other", "Other"),
         ],
     ),
+    # Section H — what happens next for an acute medical concern (owner, 2026-10-28).
+    "triage-medical-escalation": (
+        "Medical concern — next step",
+        [
+            ("managed_here", "Managed here — no escalation needed"),
+            ("urgent_medical_review", "Urgent medical review here"),
+            ("psychiatric_review", "Psychiatric review"),
+            ("refer_out", "Refer to another facility"),
+        ],
+    ),
+    # Where the recorded vital signs come from (owner, 2026-10-28).
+    "triage-vitals-source": (
+        "Source of the measurements",
+        [
+            ("here", "Measured here"),
+            ("referring_facility", "Referring facility's record"),
+            ("client_record", "Client-held record"),
+        ],
+    ),
 }
+
+# A measured time more than this far ahead of the server clock is a typing error.
+MEASURED_AT_SKEW_MINUTES = 5
 
 DEFAULT_ANSWERS = {
     "schema": SCHEMA,
@@ -176,6 +211,33 @@ def concern_of(a, code):
     return _text(a, substance_cell(code, "concern"))
 
 
+REFER_OUT_KEYS = ("h_refer_fr", "h_refer_facility", "h_refer_reason")
+REFERRAL_IN_KEYS = ("h_ref_fr", "h_ref_facility", "h_ref_note")
+
+
+def vitals_entered(a):
+    return any(_text(a, key) for key in VITALS)
+
+
+def critical_vitals(a):
+    """A measurement at the early-warning urgent / emergency threshold, or hypoglycaemia."""
+    if present_of(a) != "yes":
+        return False
+    facts = _facts(a)
+    return facts["ews_urgent"] or facts["ews_emergency"] or facts["glucose_low"]
+
+
+def escalation_needed(a):
+    """An acute medical concern: one reported in H, or a critical measurement."""
+    return present_of(a) == "yes" and (_text(a, "h_concern") == "yes" or critical_vitals(a))
+
+
+def referral_in_asked(a):
+    return escalation_needed(a) or (
+        present_of(a) == "yes" and _text(a, "v_source") == "referring_facility"
+    )
+
+
 # ── Hidden fields are not submitted (X-08) ──
 
 
@@ -246,6 +308,16 @@ def clean_answers(answers):
         for key in VITALS:
             if _text(a, key):
                 drop.add("nm_" + key[2:])
+        if not vitals_entered(a):
+            drop |= {"v_measured_at", "v_source"}
+        if not escalation_needed(a):
+            drop |= {"h_next", *REFER_OUT_KEYS}
+        elif _text(a, "h_next") != "refer_out":
+            drop |= set(REFER_OUT_KEYS)
+        if not referral_in_asked(a):
+            drop |= {"h_referred_in", *REFERRAL_IN_KEYS}
+        elif _text(a, "h_referred_in") != "yes":
+            drop |= set(REFERRAL_IN_KEYS)
     else:
         drop |= present_keys | remote_keys
     return {k: v for k, v in a.items() if k not in drop}
@@ -319,6 +391,37 @@ def required_problems(a):
         ):
             out.append(("Duty to protect: named person and who has been informed", "duty_victim"))
         out += vital_problems(a)
+        if vitals_entered(a):
+            measured = parse_local_datetime(_text(a, "v_measured_at"))
+            if not measured:
+                out.append(("Vital signs: time measured", "v_measured_at"))
+            elif measured > timezone.now() + timedelta(minutes=MEASURED_AT_SKEW_MINUTES):
+                out.append(("Vital signs: time measured is in the future", "v_measured_at"))
+            if not _text(a, "v_source"):
+                out.append(("Vital signs: source of the measurements", "v_source"))
+        if escalation_needed(a):
+            if not _text(a, "h_next"):
+                out.append(("Medical concern: next step", "h_next"))
+            elif _text(a, "h_next") == "refer_out":
+                if not _text(a, "h_refer_facility"):
+                    out.append(("Referral: facility referred to", "h_refer_facility"))
+                if not _text(a, "h_refer_reason"):
+                    out.append(("Referral: reason for referral", "h_refer_reason"))
+        if referral_in_asked(a):
+            if not _text(a, "h_referred_in"):
+                out.append(("Did the client arrive with a referral?", "h_referred_in"))
+            elif _text(a, "h_referred_in") == "yes":
+                if not _text(a, "h_ref_facility"):
+                    out.append(("Referral received: referring facility", "h_ref_facility"))
+                if not _text(a, "h_ref_note"):
+                    out.append(("Referral received: the referral note", "h_ref_note"))
+            if _text(a, "v_source") == "referring_facility" and _text(a, "h_referred_in") == "no":
+                out.append(
+                    (
+                        "Vital signs come from the referring facility — record the referral",
+                        "h_referred_in",
+                    )
+                )
     elif present == "no":
         needs_next = _text(a, "k_emergency") == "no" and _text(a, "k_bring") in ("no", "uncertain")
         if needs_next and not _text(a, "r_disposition"):
@@ -776,6 +879,9 @@ def evaluate(answers, labels=None):
         "ews": score if present == "yes" else None,
         "recommended_actions": _recommended_actions(level, alerts, a),
         "safety_required": present == "yes" and level in ("RED", "ORANGE"),
+        "medical_escalation": escalation_needed(a),
+        "referral_in_asked": referral_in_asked(a),
+        "auto_triggers": auto_triggers(a, alerts, labels),
     }
 
 
@@ -822,9 +928,11 @@ def _alerts(a, facts):
             add("ALTERED_CONSCIOUSNESS")
         if facts["withdrawal"] or _text(a, "g_stopped") == "yes":
             add("WITHDRAWAL_RISK")
-        if _text(a, "h_concern") == "yes":
+        critical = facts["ews_urgent"] or facts["ews_emergency"] or facts["glucose_low"]
+        # 2026-10-28.2 — a critical measurement is an acute medical concern too.
+        if _text(a, "h_concern") == "yes" or critical:
             add("MEDICAL_CONCERN")
-        if facts["ews_urgent"] or facts["ews_emergency"] or facts["glucose_low"]:
+        if critical:
             add("ABNORMAL_VITALS")
         if facts["safeguarding"]:
             add("SAFEGUARDING")
@@ -884,6 +992,96 @@ def withdrawal_tools(a):
     if concern_of(a, "opioids") == "withdrawal":
         out.append("cows")
     return out
+
+
+TOOL_ALERTS = {
+    "pawss": "Alcohol withdrawal risk",
+    "ciwa_ar": "Alcohol withdrawal",
+    "cows": "Opioid withdrawal",
+}
+ON_RECORD = "Alert on the client record"
+
+
+def auto_triggers(a, alerts, labels=None):
+    """The AUTO-TRIGGER banner under each section: [{code, section, alert,
+    pathway}] for every alert, tool or pathway the answers have started. Only
+    what the rules above already raise or recommend; nothing is decided here.
+    `a` is the cleaned answer set."""
+    labels = labels or {}
+
+    def act(code):
+        return _label(labels, "triage-action", code).split(" — ")[0]
+
+    out = []
+
+    def add(code, section, alert, *pathway):
+        out.append(
+            {
+                "code": code,
+                "section": section,
+                "alert": alert,
+                "pathway": " + ".join(pathway) or ON_RECORD,
+            }
+        )
+
+    def alert(code):
+        return triage_rules.ALERT_LABELS[code]
+
+    present = present_of(a)
+    if present == "no":
+        for code in alerts:
+            add(code, "k", alert(code))
+        if _text(a, "r_disposition") == "callback":
+            add("TRIAGE_CALLBACK", "k", "Telephone triage", "Timed call-back task")
+        return out
+    if present != "yes":
+        return out
+    if "SUICIDE_RISK" in alerts:
+        add(
+            "SUICIDE_RISK",
+            "d",
+            alert("SUICIDE_RISK"),
+            act("suicide_risk_assessment"),
+            act("safety_plan"),
+        )
+    if "AGGRESSION_RISK" in alerts:
+        add("AGGRESSION_RISK", "e", alert("AGGRESSION_RISK"))
+    if _text(a, "e_named") == "yes":
+        add(
+            "DUTY_TO_PROTECT",
+            "e",
+            "Identifiable person at risk",
+            "Duty to protect — senior decision",
+        )
+    for code in ("MENTAL_STATE_CHANGE", "PSYCHOSIS_AGITATION", "ALTERED_CONSCIOUSNESS"):
+        if code in alerts:
+            add(code, "f", alert(code))
+    if "WITHDRAWAL_RISK" in alerts:
+        add("WITHDRAWAL_RISK", "g", alert("WITHDRAWAL_RISK"), act("withdrawal_monitoring"))
+    for tool in withdrawal_tools(a):
+        add(f"TOOL:{tool}", "g", TOOL_ALERTS[tool], act(tool))
+    if "suspected_overdose" in _list(a, "h_flags"):
+        add("OVERDOSE", "h", "Suspected overdose", "Medical emergency first")
+    if "MEDICAL_CONCERN" in alerts:
+        add("MEDICAL_CONCERN", "h", alert("MEDICAL_CONCERN"), act("urgent_medical_review"))
+    if "ABNORMAL_VITALS" in alerts:
+        add("ABNORMAL_VITALS", "h", alert("ABNORMAL_VITALS"), act("urgent_medical_review"))
+    if "SAFEGUARDING" in alerts:
+        add("SAFEGUARDING", "i", alert("SAFEGUARDING"), act("safeguarding_intervention"))
+    if _text(a, "i_sv_recent") == "yes":
+        add(
+            "PEP_EC",
+            "i",
+            "Sexual violence in the last 72 hours",
+            "PEP & emergency-contraception decision",
+        )
+    return out
+
+
+def trigger_texts(answers, labels=None):
+    """{code: "alert → pathway"} for the audit trail of raises and clears."""
+    result = evaluate(answers, labels)
+    return {t["code"]: f"{t['alert']} → {t['pathway']}" for t in result["auto_triggers"]}
 
 
 def _recommended_actions(level, alerts, a):
@@ -1013,10 +1211,44 @@ def _findings(a, labels, score):
             "Triage decision",
             "",
         )
-    add("Vital signs", vitals_text(a, labels, score), "MEASUREMENT", "Measurement", "")
+    vitals = vitals_text(a, labels, score)
+    measured = parse_local_datetime(_text(a, "v_measured_at"))
+    if measured:
+        vitals += f" · measured {timezone.localtime(measured).strftime('%Y-%m-%d %H:%M')}"
+    vitals_source = _text(a, "v_source")
+    add(
+        "Vital signs",
+        vitals,
+        "MEASUREMENT",
+        (
+            f"Measurement — {L('triage-vitals-source', vitals_source).lower()}"
+            if vitals_source and vitals_source != "here"
+            else "Measurement"
+        ),
+        "",
+    )
+    if _text(a, "h_next"):
+        step = L("triage-medical-escalation", _text(a, "h_next"))
+        if _text(a, "h_next") == "refer_out":
+            step += f" → {_facility(a, 'h_refer')} · reason: {_text(a, 'h_refer_reason') or '—'}"
+        add("Medical concern — next step", step, "CLINICIAN_OBSERVATION", "Triage decision", "")
+    if _text(a, "h_referred_in") == "yes":
+        add(
+            "Referral received",
+            f"{_facility(a, 'h_ref')} · {_text(a, 'h_ref_note') or '—'}",
+            "REFERRAL",
+            "Referral note",
+            "",
+        )
     if _text(a, "safety_obs") or _text(a, "safety_location"):
         observed("Waiting-room safety", safety_text(a, labels))
     return items
+
+
+def _facility(a, prefix):
+    name = _text(a, f"{prefix}_facility") or "—"
+    fr = _text(a, f"{prefix}_fr")
+    return f"{name} (FR {fr})" if fr else name
 
 
 # ── The shared finding store (spec §17): one finding per domain ──
@@ -1247,8 +1479,12 @@ def domain_findings(a, labels=None):
         "MEDICAL",
         "MEDICAL",
         _status(_text(a, "h_concern"), unknown=("unknown",)),
-        join(yn("no-yes-unknown", "h_concern", "immediate concern"), ", ".join(medical)),
-        pick("h_concern", "h_flags", "h_flags_other"),
+        join(
+            yn("no-yes-unknown", "h_concern", "immediate concern"),
+            ", ".join(medical),
+            yn("triage-medical-escalation", "h_next", "next step"),
+        ),
+        pick("h_concern", "h_flags", "h_flags_other", "h_next"),
     )
 
     concerns = [L("triage-safeguarding-concern", f) for f in _list(a, "i_flags") if f != "other"]

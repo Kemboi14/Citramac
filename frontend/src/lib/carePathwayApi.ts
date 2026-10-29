@@ -375,6 +375,14 @@ export function saveTriageDraft(accessToken: string, id: string, answers: Triage
   );
 }
 
+/** Section H referral: a facility's official name from the DHA Facility Registry. */
+export function lookupTriageFacility(accessToken: string, id: string, frCode: string) {
+  return apiRequest<{ match: { fr_code: string; official_name: string } | null }>(
+    `/care/triage/${id}/facility-lookup/?fr_code=${encodeURIComponent(frCode)}`,
+    { accessToken },
+  );
+}
+
 export function evaluateTriage(accessToken: string, id: string, answers: TriageAnswers) {
   return apiRequest<TriageEvaluation>(`/care/triage/${id}/evaluate/`, {
     method: "POST",

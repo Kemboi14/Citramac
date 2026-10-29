@@ -48,6 +48,11 @@ urlpatterns = [
         name="care-triage-evaluate",
     ),
     path("care/triage/<uuid:pk>/sign/", views.TriageSignView.as_view(), name="care-triage-sign"),
+    path(
+        "care/triage/<uuid:pk>/facility-lookup/",
+        views.TriageFacilityLookupView.as_view(),
+        name="care-triage-facility-lookup",
+    ),
     path("care/triage/<uuid:pk>/tasks/", views.TriageTasksView.as_view(), name="care-triage-tasks"),
     path(
         "care/triage/<uuid:pk>/recheck/draft/",

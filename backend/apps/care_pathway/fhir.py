@@ -9,12 +9,17 @@ VERIFY: our canonical base URL for local CodeSystems once the national IG
 publishes one. VERIFY: Encounter.class code for an outpatient triage
 encounter (v3 ActCode) — carried as display text only until confirmed.
 No LOINC codes are emitted for vital signs or instruments until verified.
+VERIFY: the LOINC document type for a received referral note — carried as
+DocumentReference.type text only until confirmed.
 """
 
+import base64
 import json
+import uuid
 from html import escape
 
 from fhir.resources.R4B.annotation import Annotation
+from fhir.resources.R4B.attachment import Attachment
 from fhir.resources.R4B.bundle import Bundle, BundleEntry
 from fhir.resources.R4B.codeableconcept import CodeableConcept
 from fhir.resources.R4B.coding import Coding
@@ -25,6 +30,11 @@ from fhir.resources.R4B.composition import (
     CompositionSection,
 )
 from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
+from fhir.resources.R4B.documentreference import (
+    DocumentReference,
+    DocumentReferenceContent,
+    DocumentReferenceContext,
+)
 from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 from fhir.resources.R4B.flag import Flag
 from fhir.resources.R4B.narrative import Narrative
@@ -38,6 +48,7 @@ from fhir.resources.R4B.questionnaireresponse import (
 )
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
+from fhir.resources.R4B.servicerequest import ServiceRequest
 from fhir.resources.R4B.task import Task
 
 from apps.dha_interop.fhir_mapper import (
@@ -177,6 +188,9 @@ def build_triage_bundle(triage_encounter):
             resources.append(
                 (ref, _finding_observation(finding, patient_ref, encounter_ref, qr_ref))
             )
+        referrals = _referrals(assessment, patient_ref, encounter_ref)
+        resources += referrals
+        observation_refs += [Reference(reference=url) for url, _r in referrals]
         if assessment.signed_by:
             resources.append(
                 (
@@ -278,6 +292,90 @@ def _finding_observation(finding, patient_ref, encounter_ref, qr_ref):
         note=[Annotation(text=n) for n in notes if n] or None,
         derivedFrom=[Reference(reference=qr_ref)],
     )
+
+
+def _facility(answers, prefix):
+    name = answers.get(f"{prefix}_facility") or "Unnamed facility"
+    fr = answers.get(f"{prefix}_fr")
+    # VERIFY: the FR code identifier system URI — carried in the display until
+    # the Kenya Core / Facility Registry system is confirmed.
+    return Reference(display=f"{name} (FR code {fr})" if fr else name)
+
+
+def _referrals(assessment, patient_ref, encounter_ref):
+    """Triage v5 H: the referral the client arrived with (a ServiceRequest from
+    the referring facility, its note a DocumentReference) and a referral out
+    (a ServiceRequest from the signing clinician). Ids are derived from the
+    signed assessment so a rebuilt bundle names the same resources."""
+    answers = assessment.answers or {}
+    subject = Reference(reference=patient_ref)
+    encounter = Reference(reference=encounter_ref)
+    signed_at = assessment.signed_at.isoformat()
+    out = []
+    if answers.get("h_referred_in") == "yes":
+        doc_id = uuid.uuid5(assessment.id, "referral-in-note")
+        request_id = uuid.uuid5(assessment.id, "referral-in")
+        doc_ref = _urn("DocumentReference", doc_id)
+        note = answers.get("h_ref_note") or ""
+        out.append(
+            (
+                doc_ref,
+                DocumentReference(
+                    id=str(doc_id),
+                    status="current",
+                    type=CodeableConcept(text="Referral note from the referring facility"),
+                    subject=subject,
+                    date=signed_at,
+                    author=[_facility(answers, "h_ref")],
+                    content=[
+                        DocumentReferenceContent(
+                            attachment=Attachment(
+                                contentType="text/plain; charset=utf-8",
+                                data=base64.b64encode(note.encode()).decode(),
+                            )
+                        )
+                    ],
+                    context=DocumentReferenceContext(encounter=[encounter]),
+                ),
+            )
+        )
+        out.append(
+            (
+                _urn("ServiceRequest", request_id),
+                ServiceRequest(
+                    id=str(request_id),
+                    status="active",
+                    intent="order",
+                    subject=subject,
+                    encounter=encounter,
+                    requester=_facility(answers, "h_ref"),
+                    supportingInfo=[Reference(reference=doc_ref)],
+                ),
+            )
+        )
+    if answers.get("h_next") == "refer_out":
+        request_id = uuid.uuid5(assessment.id, "referral-out")
+        reason = answers.get("h_refer_reason") or ""
+        out.append(
+            (
+                _urn("ServiceRequest", request_id),
+                ServiceRequest(
+                    id=str(request_id),
+                    status="active",
+                    intent="order",
+                    code=_local(
+                        "triage-medical-escalation", "refer_out", "Refer to another facility"
+                    ),
+                    subject=subject,
+                    encounter=encounter,
+                    authoredOn=signed_at,
+                    requester=_actor(assessment.signed_by) if assessment.signed_by else None,
+                    performer=[_facility(answers, "h_refer")],
+                    reasonCode=[CodeableConcept(text=reason)] if reason else None,
+                ),
+            )
+        )
+    return out
 
 
 def _narrative(text):

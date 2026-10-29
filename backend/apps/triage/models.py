@@ -49,7 +49,11 @@ class VitalSigns(TenantScopedModel):
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # When the measurements were taken (triage v5 asks; may precede the entry).
     recorded_at = models.DateTimeField(default=timezone.now)
+    # Where they come from: a `triage-vitals-source` code (care_pathway.triage_v5);
+    # blank on records made before it was asked.
+    source = models.CharField(max_length=30, blank=True)
 
     def save(self, *args, **kwargs):
         if self.height_cm and self.weight_kg:

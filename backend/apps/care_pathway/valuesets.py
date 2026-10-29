@@ -433,6 +433,8 @@ VALUESETS = {
             ("pawss", "PAWSS — alcohol withdrawal-risk predictor"),
             ("ciwa_ar", "CIWA-Ar — alcohol withdrawal scale"),
             ("cows", "COWS — opioid withdrawal scale"),
+            # Triage v5 H, next step for an acute medical concern (2026-10-28.2).
+            ("external_referral", "Refer to another facility"),
         ],
     ),
     "task-status": (

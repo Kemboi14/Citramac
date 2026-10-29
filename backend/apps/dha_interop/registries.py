@@ -106,6 +106,32 @@ def verify_branch_facility(branch):
     return branch
 
 
+def lookup_facility(organization_id, fr_code):
+    """Another facility by its SHA FR code (a triage referral, in or out):
+    {"fr_code", "official_name"}, or None when the registry has no such code."""
+    fr_code = (fr_code or "").strip()
+    if not fr_code:
+        raise RegistryError("Enter the facility's FR code.", field="fr_code")
+    try:
+        record = hie_api.call(
+            "GET",
+            "/facilities/search",
+            transaction_type="FACILITY_LOOKUP",
+            organization_id=organization_id,
+            platform=True,
+            params={"identifier": fr_code, "identifier-type": "fr-code"},
+        )
+    except hie_api.HieError as exc:
+        if exc.http_status == 404:
+            return None
+        _fail(exc)
+    except hie_api.HieNotConfigured as exc:
+        _fail(exc)
+    if not isinstance(record, dict) or record.get("frCode") != fr_code:
+        return None
+    return {"fr_code": fr_code, "official_name": record.get("officialName", "")}
+
+
 def facility_summary(branch):
     """What Branch Settings shows: the registry's own words, uninterpreted."""
     record = branch.registry_record or {}

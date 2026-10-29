@@ -17,6 +17,8 @@ from apps.client_registry.models import AllergyRecord, Appointment, EmergencyCon
 from apps.clinical_encounter.models import DiagnosisCode, Encounter, PrescriptionItem
 from apps.dha_interop.models import NationalDrugIndex
 from apps.ipd_ward.models import Admission, MedicationAdministration
+from apps.sysadmin_audit.audit import write_event
+from apps.sysadmin_audit.models import AuditLogEntry
 from apps.triage.models import VitalSigns
 
 from . import facility_time, triage_rules
@@ -667,10 +669,39 @@ def save_triage_draft(triage_encounter, user, answers):
             version=triage_encounter.triage_version + 1,
             author=user,
         )
+    previous = draft.answers or {}
     draft.answers = answers or {}
     draft.draft_saved_at = timezone.now()
     draft.save()
+    _audit_auto_triggers(triage_encounter, draft, previous, draft.answers)
     return draft
+
+
+def _audit_auto_triggers(triage_encounter, draft, before, after):
+    """Triage v5 AUTO-TRIGGER banners: every alert / tool an answer starts or
+    stops is an audit entry, naming what was raised or cleared."""
+    from . import triage_v5
+
+    if not triage_v5.is_v5(after):
+        return
+    labels = concept_labels()
+    old = triage_v5.trigger_texts(before, labels) if triage_v5.is_v5(before) else {}
+    new = triage_v5.trigger_texts(after, labels)
+    raised = [text for code, text in new.items() if code not in old]
+    cleared = [text for code, text in old.items() if code not in new]
+    if raised or cleared:
+        write_event(
+            triage_encounter.organization_id,
+            AuditLogEntry.ACTION_UPDATE,
+            "TriageAutoTrigger",
+            triage_encounter.id,
+            {
+                "triage_version": draft.version,
+                "raised": raised,
+                "cleared": cleared,
+                "rules_version": triage_v5.RULES_VERSION,
+            },
+        )
 
 
 def _record_vitals(

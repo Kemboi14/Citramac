@@ -85,8 +85,9 @@ class FhirR4ConformanceDischargeExamplesTests(SimpleTestCase):
 
 class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
     """Triage bundles: routine (GREEN), edge (RED with a suicide-risk alert and a
-    safety-plan task), telephone / third-party (findings sourced to the caller)
-    and omission (unidentified, not yet triaged — nothing is sent for an
+    safety-plan task), edge (critical vitals → medical escalation, with the
+    referral received and a referral out), telephone / third-party (findings
+    sourced to the caller) and omission (unidentified, not yet triaged — nothing is sent for an
     assessment that never happened)."""
 
     def test_every_example_is_valid_r4_and_there_are_at_least_three(self):
@@ -129,6 +130,23 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
             if r["resourceType"] == "Observation" and r["code"]["coding"][0]["code"] == "SUICIDE_SELF_HARM"
         )
         self.assertIn("Third-party report", reported["performer"][0]["display"])
+
+    def test_medical_escalation_example_records_both_referrals(self):
+        # Rules 2026-10-28.2: a critical measurement is an acute medical concern; the
+        # referral received (ServiceRequest + its note) and the referral out.
+        bundle = _load("triage-edge-medical-escalation-referral")
+        resources = [e["resource"] for e in bundle["entry"]]
+        flags = {r["code"]["coding"][0]["code"] for r in resources if r["resourceType"] == "Flag"}
+        self.assertTrue({"MEDICAL_CONCERN", "ABNORMAL_VITALS"} <= flags)
+        requests = [r for r in resources if r["resourceType"] == "ServiceRequest"]
+        self.assertEqual(len(requests), 2)
+        note = next(r for r in resources if r["resourceType"] == "DocumentReference")
+        self.assertTrue(note["author"] and note["content"][0]["attachment"]["data"])
+        provenance = next(r for r in resources if r["resourceType"] == "Provenance")
+        targets = {t["reference"] for t in provenance["target"]}
+        for entry in bundle["entry"]:
+            if entry["resource"]["resourceType"] in ("ServiceRequest", "DocumentReference"):
+                self.assertIn(entry["fullUrl"], targets)
 
     def test_omission_example_sends_no_assessment(self):
         bundle = _load("triage-omission-unidentified-not-yet-triaged")

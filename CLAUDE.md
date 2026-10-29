@@ -301,3 +301,17 @@ before any are emitted), `derivedFrom` the triage QuestionnaireResponse, with `p
 (client / third party / clinician), and covered by the signature's Provenance. Reversibility: cheap.
 The store is additive, and signed triage and intake records are unchanged. Like `ClinicalAlert`, a
 finding follows the client and is not branch-scoped.
+
+Rules 2026-10-28.2, approved by the owner the same day after a second QA pass: a critical
+measurement (early-warning score at the urgent / emergency threshold, or hypoglycaemia) also
+raises "Acute medical concern". An acute medical concern asks for the next step (managed here,
+urgent medical review, psychiatric review, refer out) and whether the client arrived with a
+referral. FHIR: the referral received is a `ServiceRequest` (requester = the referring facility)
+with its note as a `DocumentReference`, and a referral out is a `ServiceRequest` plus a `Task`.
+Both hang off the triage `Encounter` and are covered by the signature's `Provenance`. They are
+never sent to the SHR. VERIFY: the FR-code identifier system and the referral-note LOINC type.
+Until they are confirmed, both are carried as display text. Vital signs record when they were
+measured and their source (`VitalSigns.recorded_at`, `.source`). Each section shows the alerts
+and tools its answers have started (AUTO-TRIGGER); every raise and clear is a `TriageAutoTrigger`
+audit entry. Reversibility: cheap. Everything is additive, and signed triages keep the rules
+version they were signed under.

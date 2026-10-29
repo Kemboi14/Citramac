@@ -67,7 +67,7 @@ class RulesTests(SimpleTestCase):
     def test_completed_negative_screen_is_green_and_owner_approved(self):
         result = rec()
         self.assertEqual(result["recommendation"], "GREEN")
-        self.assertEqual(result["rules_version"], "2026-10-28.1")
+        self.assertEqual(result["rules_version"], "2026-10-28.2")
         self.assertEqual(result["ruleset_label"], "Approved by the project owner, 2026-10-28")
 
     def test_section_d_suicide_self_harm(self):
@@ -247,7 +247,7 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         }
         response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["rules_version"], "2026-10-28.1")
+        self.assertEqual(response.data["rules_version"], "2026-10-28.2")
         self.assertEqual(response.data["final_priority"], "ORANGE")
         with platform_admin_context():
             codes = set(
@@ -369,3 +369,171 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         self.assertEqual(set(keys), {"PRESENTING_CONCERN", "SUICIDE_SELF_HARM"})
         self.assertEqual(keys["SUICIDE_SELF_HARM"]["source_code"], "THIRD_PARTY_REPORT")
         self.assertEqual(keys["SUICIDE_SELF_HARM"]["source_detail"], "Sister — Jane")
+
+
+GLUCOSE_LOW = {"v_glucose": "3.1", "v_measured_at": "2026-10-28T09:30", "v_source": "here"}
+OPIOID_WD = {
+    "g_use": "yes",
+    "g_opioids_last": "this morning",
+    "g_opioids_amount": "heroin, daily",
+    "g_opioids_concern": "withdrawal",
+}
+
+
+class MedicalEscalationRulesTests(SimpleTestCase):
+    """Rules 2026-10-28.2 (owner, after QA): critical measurements, the next step
+    for an acute medical concern, the referral received, vitals time and source,
+    and the per-section AUTO-TRIGGER list."""
+
+    def test_a_critical_measurement_is_an_acute_medical_concern(self):
+        result = rec(**GLUCOSE_LOW)
+        codes = {a["code"] for a in result["alerts"]}
+        self.assertTrue({"MEDICAL_CONCERN", "ABNORMAL_VITALS"} <= codes)
+        self.assertTrue(result["medical_escalation"])
+        self.assertIn("urgent_medical_review", result["recommended_actions"])
+        normal = rec(v_hr="80", v_measured_at="2026-10-28T09:30", v_source="here")
+        self.assertFalse(normal["medical_escalation"])
+        self.assertNotIn("MEDICAL_CONCERN", {a["code"] for a in normal["alerts"]})
+
+    def test_escalation_asks_the_next_step_and_the_referral(self):
+        a = v5.clean_answers({**BASE, **GLUCOSE_LOW})
+        keys = {key for _m, key in v5.required_problems(a)}
+        self.assertTrue({"h_next", "h_referred_in"} <= keys)
+        a = v5.clean_answers({**BASE, **GLUCOSE_LOW, "h_next": "refer_out", "h_referred_in": "yes"})
+        keys = {key for _m, key in v5.required_problems(a)}
+        self.assertTrue(
+            {"h_refer_facility", "h_refer_reason", "h_ref_facility", "h_ref_note"} <= keys
+        )
+
+    def test_no_escalation_drops_the_escalation_answers(self):
+        a = v5.clean_answers(
+            {**BASE, "h_next": "refer_out", "h_refer_facility": "X", "h_referred_in": "yes"}
+        )
+        for key in ("h_next", "h_refer_facility", "h_referred_in"):
+            self.assertNotIn(key, a)
+
+    def test_vitals_need_a_measured_time_and_source(self):
+        keys = {key for _m, key in v5.required_problems(v5.clean_answers({**BASE, "v_hr": "80"}))}
+        self.assertTrue({"v_measured_at", "v_source"} <= keys)
+        future = v5.clean_answers(
+            {**BASE, "v_hr": "80", "v_measured_at": "2099-01-01T00:00", "v_source": "here"}
+        )
+        self.assertIn("v_measured_at", {key for _m, key in v5.required_problems(future)})
+        self.assertNotIn("v_measured_at", v5.clean_answers({**BASE, "v_measured_at": "x"}))
+
+    def test_vitals_from_the_referring_facility_need_the_referral(self):
+        answers = {**BASE, "v_hr": "80", "v_measured_at": "2026-10-28T09:30"}
+        result = rec(**{**answers, "v_source": "referring_facility"})
+        self.assertTrue(result["referral_in_asked"])
+        self.assertFalse(result["medical_escalation"])
+        a = v5.clean_answers({**answers, "v_source": "referring_facility", "h_referred_in": "no"})
+        self.assertIn("h_referred_in", {key for _m, key in v5.required_problems(a)})
+
+    def test_auto_triggers_name_the_alert_and_the_tool_per_section(self):
+        from .valuesets import VALUESETS
+
+        labels = {(vs, c): d for vs, (_t, concepts) in VALUESETS.items() for c, d in concepts}
+        triggers = v5.evaluate({**BASE, **OPIOID_WD}, labels)["auto_triggers"]
+        cows = next(t for t in triggers if t["code"] == "TOOL:cows")
+        self.assertEqual((cows["section"], cows["alert"]), ("g", "Opioid withdrawal"))
+        self.assertTrue(cows["pathway"].startswith("COWS"))
+        self.assertIn("WITHDRAWAL_RISK", {t["code"] for t in triggers})
+        cleared = rec(**{**OPIOID_WD, "g_opioids_concern": "none"})["auto_triggers"]
+        self.assertNotIn("TOOL:cows", {t["code"] for t in cleared})
+        medical = {t["code"]: t["section"] for t in rec(**GLUCOSE_LOW)["auto_triggers"]}
+        self.assertEqual(medical["MEDICAL_CONCERN"], "h")
+        self.assertEqual(rec()["auto_triggers"], [])
+
+
+class MedicalEscalationApiTests(FindingStoreApiTests):
+    def test_each_trigger_raised_and_cleared_is_audited(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        url = reverse("care-triage-draft", args=[self.te_id])
+        for answers in ({**BASE, **OPIOID_WD}, {**BASE, **OPIOID_WD}, BASE):
+            response = self.client.put(url, {"answers": answers}, format="json", **self.auth)
+            self.assertEqual(response.status_code, 200, response.data)
+        with platform_admin_context():
+            entries = list(
+                AuditLogEntry.objects.filter(
+                    model="TriageAutoTrigger", object_id=self.te_id
+                ).order_by("timestamp")
+            )
+        # The unchanged second save writes nothing.
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(
+            any(t.startswith("Opioid withdrawal → COWS") for t in entries[0].field_diff["raised"])
+        )
+        self.assertEqual(entries[0].field_diff["cleared"], [])
+        self.assertTrue(
+            any(t.startswith("Opioid withdrawal → COWS") for t in entries[1].field_diff["cleared"])
+        )
+        self.assertEqual(entries[1].field_diff["rules_version"], v5.RULES_VERSION)
+
+    def test_signing_records_the_referrals_tasks_and_measured_vitals(self):
+        from apps.triage.models import VitalSigns
+
+        answers = {
+            **BASE,
+            **SAFETY,
+            "v_glucose": "3.1",
+            "v_measured_at": "2026-10-28T08:15",
+            "v_source": "referring_facility",
+            "h_next": "refer_out",
+            "h_refer_facility": "County Referral Hospital",
+            "h_refer_fr": "FR-0001",
+            "h_refer_reason": "Hypoglycaemia not responding to oral glucose",
+            "h_referred_in": "yes",
+            "h_ref_facility": "Kibera Health Centre",
+            "h_ref_note": "Found confused at home; glucose 2.9 at 07:50; given oral glucose.",
+        }
+        response = self.sign_v5(answers, priority="RED")
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            vitals = VitalSigns.objects.get(encounter__triage_encounter__id=self.te_id)
+            tasks = set(
+                TriageEncounter.objects.get(pk=self.te_id).tasks.values_list(
+                    "focus_type", flat=True
+                )
+            )
+        self.assertEqual(vitals.source, "referring_facility")
+        # When measured (facility time), not when signed.
+        self.assertEqual(vitals.recorded_at, v5.parse_local_datetime("2026-10-28T08:15"))
+        self.assertIn("EXTERNAL_REFERRAL", tasks)
+
+        bundle = self.client.get(reverse("care-triage-fhir", args=[self.te_id]), **self.auth).data
+        self.assertEqual(validate_bundle(bundle), {})
+        resources = [e["resource"] for e in bundle["entry"]]
+        requests = [r for r in resources if r["resourceType"] == "ServiceRequest"]
+        self.assertEqual(len(requests), 2)
+        incoming = next(r for r in requests if "supportingInfo" in r)
+        self.assertIn("Kibera Health Centre", incoming["requester"]["display"])
+        outgoing = next(r for r in requests if "performer" in r)
+        self.assertIn("FR code FR-0001", outgoing["performer"][0]["display"])
+        note = next(r for r in resources if r["resourceType"] == "DocumentReference")
+        self.assertEqual(
+            note["context"]["encounter"][0]["reference"], incoming["encounter"]["reference"]
+        )
+        provenance = next(r for r in resources if r["resourceType"] == "Provenance")
+        targets = {t["reference"] for t in provenance["target"]}
+        self.assertTrue(
+            all(
+                e["fullUrl"] in targets
+                for e in bundle["entry"]
+                if e["resource"]["resourceType"] in ("ServiceRequest", "DocumentReference")
+            )
+        )
+
+    def test_facility_lookup_says_when_the_registry_cannot_answer(self):
+        from unittest import mock
+
+        url = reverse("care-triage-facility-lookup", args=[self.te_id])
+        self.assertEqual(self.client.get(url, **self.auth).status_code, 400)
+        unreachable = self.client.get(url, {"fr_code": "FR-0001"}, **self.auth)
+        self.assertEqual(unreachable.status_code, 503)
+        with mock.patch(
+            "apps.dha_interop.registries.lookup_facility",
+            return_value={"fr_code": "FR-0001", "official_name": "County Referral Hospital"},
+        ):
+            found = self.client.get(url, {"fr_code": "FR-0001"}, **self.auth)
+        self.assertEqual(found.data["match"]["official_name"], "County Referral Hospital")

@@ -19,6 +19,7 @@ from apps.clinical_encounter.models import DiagnosisCode
 from apps.ipd_ward.models import Admission, Bed
 from apps.sysadmin_audit.audit import log_view
 from apps.triage.models import MentalStatusExam, VitalSigns
+from config.errors import error_response
 
 from . import ews, facility_time, instruments, tools
 from . import intake as intake_service
@@ -456,6 +457,33 @@ class TriageDraftView(APIView):
                 "evaluation": _evaluate(answers, services.concept_labels()),
             }
         )
+
+
+class TriageFacilityLookupView(APIView):
+    """Section H referral, in or out: the facility's official name from the DHA
+    Facility Registry by FR code. When the registry can't be reached the
+    clinician types the name, and the screen says it was not verified."""
+
+    def get(self, request, pk):
+        from apps.dha_interop import registries
+
+        te = _triage(pk)
+        fr_code = request.query_params.get("fr_code")
+        try:
+            found = registries.lookup_facility(te.organization_id, fr_code)
+        except registries.RegistryError as exc:
+            return error_response(
+                "registry_refused",
+                exc.message,
+                # A missing code is the clinician's to fix; anything else is the registry.
+                http_status=(
+                    status.HTTP_400_BAD_REQUEST
+                    if exc.field
+                    else status.HTTP_503_SERVICE_UNAVAILABLE
+                ),
+                fields={exc.field: [exc.message]} if exc.field else None,
+            )
+        return Response({"match": found})
 
 
 class TriageEvaluateView(APIView):

@@ -41,6 +41,20 @@ export interface TriageV4Evaluation extends TriageEvaluation {
   ews?: EwsResult | null;
   recommended_actions?: string[];
   safety_required?: boolean;
+  /** v5: an acute medical concern (reported, or a critical measurement) asks for the next step. */
+  medical_escalation?: boolean;
+  /** v5: ask whether the client arrived with a referral from another facility. */
+  referral_in_asked?: boolean;
+  /** v5: what the answers have started, shown under their section. */
+  auto_triggers?: AutoTrigger[];
+}
+
+export interface AutoTrigger {
+  code: string;
+  /** Section letter, d–k. */
+  section: string;
+  alert: string;
+  pathway: string;
 }
 
 export interface VitalRange {
