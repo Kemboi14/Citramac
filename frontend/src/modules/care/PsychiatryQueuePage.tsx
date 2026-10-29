@@ -46,9 +46,9 @@ const searchText = (row: PsychiatryQueueRow) =>
     .toLowerCase();
 
 /**
- * Psychiatry — priority queue: one card per client with a signed triage,
+ * Psychiatry — priority queue: one row per client with a signed triage,
  * grouped RED → GREEN (longest wait first within a priority, server order).
- * Each card says who, how long they have waited, why, the active alerts, who
+ * Each row says who, how long they have waited, why, the active alerts, who
  * is responsible and what to do next. The four-lane live queue is kept behind
  * "Show all lanes".
  */
@@ -108,7 +108,7 @@ export function PsychiatryQueuePage() {
       <PageHeader
         eyebrow="Clinical workflow"
         title="Psychiatry queue"
-        subtitle="Clients with a signed triage, most urgent first. Open a card to start or continue the review."
+        subtitle="Clients with a signed triage, most urgent first. Open a client to start or continue the review."
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
 
@@ -170,17 +170,29 @@ export function PsychiatryQueuePage() {
                 {group.length} {group.length === 1 ? "client" : "clients"}
               </span>
             </h2>
-            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {group.map((row) => (
-                <QueueCard
-                  key={row.id}
-                  row={row}
-                  opening={opening}
-                  onOpen={() => void openReview(row)}
-                  onSaved={() => setTick((t) => t + 1)}
-                />
-              ))}
-            </ul>
+            <div className="overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm">
+              <div
+                aria-hidden
+                className={`${ROW_GRID} hidden border-b border-surface-border bg-surface-bg px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500 lg:grid`}
+              >
+                <span>Client</span>
+                <span>Concern & alerts</span>
+                <span>Waiting</span>
+                <span>Responsible</span>
+                <span className="sr-only">Action</span>
+              </div>
+              <ul className="divide-y divide-surface-border">
+                {group.map((row) => (
+                  <QueueRow
+                    key={row.id}
+                    row={row}
+                    opening={opening}
+                    onOpen={() => void openReview(row)}
+                    onSaved={() => setTick((t) => t + 1)}
+                  />
+                ))}
+              </ul>
+            </div>
           </section>
         );
       })}
@@ -211,6 +223,10 @@ export function PsychiatryQueuePage() {
   );
 }
 
+// One row per client: client · concern & alerts · waiting · responsible · action.
+const ROW_GRID =
+  "lg:grid lg:grid-cols-[minmax(170px,1.1fr)_minmax(0,2.2fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_auto] lg:items-start lg:gap-4";
+
 function waitText(row: PsychiatryQueueRow) {
   if (row.review_started_at) return `Review started ${formatDateTime(row.review_started_at)}`;
   if (row.wait_minutes === null) return `Triage signed ${formatDateTime(row.signed_at)}`;
@@ -219,7 +235,7 @@ function waitText(row: PsychiatryQueueRow) {
   return `Waiting ${h ? `${h} h ` : ""}${m} min`;
 }
 
-function QueueCard({
+function QueueRow({
   row,
   opening,
   onOpen,
@@ -238,69 +254,65 @@ function QueueCard({
   const responsible = row.owner?.name || row.team;
   return (
     <li
-      className={`flex flex-col gap-2.5 rounded-lg border border-l-4 border-surface-border bg-surface-card p-3.5 shadow-sm ${PRIORITY_EDGE[row.priority]}`}
+      className={`${ROW_GRID} flex flex-col gap-2 border-l-4 px-3.5 py-3 hover:bg-surface-bg ${PRIORITY_EDGE[row.priority]}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <strong className="block truncate text-[14px] text-ink-900">
-            {row.name || "Unknown client"}
-          </strong>
-          <span className="text-[11.5px] text-ink-500">{details.join(" · ")}</span>
-        </div>
-        <span
-          className={`shrink-0 whitespace-nowrap text-[12px] font-semibold ${
-            row.over_target ? "text-priority-red" : "text-ink-700"
-          }`}
-        >
-          {waitText(row)}
-          {row.over_target && row.target_minutes !== null
-            ? ` · over ${row.target_minutes} min`
-            : ""}
-        </span>
+      <div className="min-w-0">
+        <strong className="block truncate text-[14px] text-ink-900">
+          {row.name || "Unknown client"}
+        </strong>
+        <span className="text-[11.5px] text-ink-500">{details.join(" · ")}</span>
       </div>
 
-      <p className="line-clamp-2 text-[13px] text-ink-900">
-        {row.presenting_concern || <span className="text-ink-500">Concern not recorded</span>}
-      </p>
-
-      {row.alerts.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {row.alerts.slice(0, 3).map((alert) => (
-            <Tag key={alert} tone="risk">
-              {alert}
-            </Tag>
-          ))}
-          {row.alerts.length > 3 && <Tag>+{row.alerts.length - 3} more</Tag>}
-        </div>
-      )}
-
-      {row.withdrawal_review && (
-        <WithdrawalReviewCell review={row.withdrawal_review} onSaved={onSaved} />
-      )}
-
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-2.5">
-        <span className="text-[12px] text-ink-700">
-          Responsible:{" "}
-          {responsible ? (
-            <strong>{responsible}</strong>
-          ) : (
-            <span className="text-ink-500">not yet assigned</span>
-          )}
-        </span>
-        <button
-          type="button"
-          className={`${row.review_started_at ? BTN_GHOST : BTN} ${BTN_SM}`}
-          disabled={opening !== null}
-          aria-label={`${row.review_started_at ? "Continue" : "Open"} review for ${row.name || "unknown client"}`}
-          onClick={onOpen}
-        >
-          {opening === row.id
-            ? "Opening…"
-            : row.review_started_at
-              ? "Continue review"
-              : "Open review"}
-        </button>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <p className="line-clamp-2 text-[13px] text-ink-900">
+          {row.presenting_concern || <span className="text-ink-500">Concern not recorded</span>}
+        </p>
+        {row.alerts.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {row.alerts.slice(0, 3).map((alert) => (
+              <Tag key={alert} tone="risk">
+                {alert}
+              </Tag>
+            ))}
+            {row.alerts.length > 3 && <Tag>+{row.alerts.length - 3} more</Tag>}
+          </div>
+        )}
+        {row.withdrawal_review && (
+          <WithdrawalReviewCell review={row.withdrawal_review} onSaved={onSaved} />
+        )}
       </div>
+
+      <span
+        className={`text-[12.5px] font-semibold ${
+          row.over_target ? "text-priority-red" : "text-ink-700"
+        }`}
+      >
+        {waitText(row)}
+        {row.over_target && row.target_minutes !== null ? ` · over ${row.target_minutes} min` : ""}
+      </span>
+
+      <span className="text-[12.5px] text-ink-900">
+        <span className="text-ink-500 lg:hidden">Responsible: </span>
+        {responsible ? (
+          <strong>{responsible}</strong>
+        ) : (
+          <span className="text-ink-500">Not yet assigned</span>
+        )}
+      </span>
+
+      <button
+        type="button"
+        className={`${row.review_started_at ? BTN_GHOST : BTN} ${BTN_SM} self-start whitespace-nowrap`}
+        disabled={opening !== null}
+        aria-label={`${row.review_started_at ? "Continue" : "Open"} review for ${row.name || "unknown client"}`}
+        onClick={onOpen}
+      >
+        {opening === row.id
+          ? "Opening…"
+          : row.review_started_at
+            ? "Continue review"
+            : "Open review"}
+      </button>
     </li>
   );
 }
