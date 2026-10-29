@@ -107,7 +107,11 @@ class ApprovedAssessmentApiTests(IntakeTestCase):
         self.assertEqual(self.current()["TRAUMA"]["instrument"], "")
         with platform_admin_context():
             self.assertEqual(
-                AuditLogEntry.objects.filter(model="care_pathway.approvedassessment").count(), 3
+                AuditLogEntry.objects.filter(
+                    model="care_pathway.approvedassessment",
+                    action=AuditLogEntry.ACTION_UPDATE,
+                ).count(),
+                3,
             )
 
     def test_trauma_symptoms_recommend_pcl5_only_once_approved(self):
@@ -191,6 +195,7 @@ class PsychiatricReviewApiTests(FindingStoreApiTests):
                 for e in AuditLogEntry.objects.filter(
                     model="care_pathway.caretask", object_id=str(task.id)
                 ).order_by("timestamp")
+                if "event" in e.field_diff  # beside the generic create / update rows
             ]
         self.assertEqual(events, ["RAISED", "STARTED", "COMPLETED"])
 

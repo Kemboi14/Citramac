@@ -111,7 +111,10 @@ class ToolsApiTests(IntakeTestCase):
         )
 
     def test_nothing_is_recommended_without_findings(self):
-        self.assertEqual({t["status"] for t in self.tools().values()}, {"Not indicated"})
+        # PCL-5 is "Not approved" until the organisation approves it (approved_assessments.py).
+        self.assertEqual(
+            {t["status"] for t in self.tools().values()}, {"Not indicated", "Not approved"}
+        )
 
     def test_findings_recommend_tools_with_the_reason_shown(self):
         self.draft()
