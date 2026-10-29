@@ -1015,14 +1015,14 @@ TOOL_ALERTS = {
     "ciwa_ar": "Alcohol withdrawal",
     "cows": "Opioid withdrawal",
 }
-ON_RECORD = "Alert on the client record"
 
 
 def auto_triggers(a, alerts, labels=None):
     """The AUTO-TRIGGER banner under each section: [{code, section, alert,
-    pathway}] for every alert, tool or pathway the answers have started. Only
-    what the rules above already raise or recommend; nothing is decided here.
-    `a` is the cleaned answer set."""
+    pathway}] for every tool or pathway the answers have started. Only what the
+    rules above already raise or recommend; nothing is decided here. An alert
+    that starts nothing (it only goes on the client record) is not listed (QA,
+    2026-10-29). `a` is the cleaned answer set."""
     labels = labels or {}
 
     def act(code):
@@ -1036,7 +1036,7 @@ def auto_triggers(a, alerts, labels=None):
                 "code": code,
                 "section": section,
                 "alert": alert,
-                "pathway": " + ".join(pathway) or ON_RECORD,
+                "pathway": " + ".join(pathway),
             }
         )
 
@@ -1045,8 +1045,6 @@ def auto_triggers(a, alerts, labels=None):
 
     present = present_of(a)
     if present == "no":
-        for code in alerts:
-            add(code, "k", alert(code))
         if _text(a, "r_disposition") == "callback":
             add("TRIAGE_CALLBACK", "k", "Telephone triage", "Timed call-back task")
         return out
@@ -1060,8 +1058,6 @@ def auto_triggers(a, alerts, labels=None):
             act("suicide_risk_assessment"),
             act("safety_plan"),
         )
-    if "AGGRESSION_RISK" in alerts:
-        add("AGGRESSION_RISK", "e", alert("AGGRESSION_RISK"))
     if _text(a, "e_named") == "yes":
         add(
             "DUTY_TO_PROTECT",
@@ -1069,9 +1065,6 @@ def auto_triggers(a, alerts, labels=None):
             "Identifiable person at risk",
             "Duty to protect — senior decision",
         )
-    for code in ("MENTAL_STATE_CHANGE", "PSYCHOSIS_AGITATION", "ALTERED_CONSCIOUSNESS"):
-        if code in alerts:
-            add(code, "f", alert(code))
     if "WITHDRAWAL_RISK" in alerts:
         add("WITHDRAWAL_RISK", "g", alert("WITHDRAWAL_RISK"), act("withdrawal_monitoring"))
     for tool in withdrawal_tools(a):

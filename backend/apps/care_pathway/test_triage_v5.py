@@ -487,6 +487,13 @@ class MedicalEscalationRulesTests(SimpleTestCase):
         medical = {t["code"]: t["section"] for t in rec(**GLUCOSE_LOW)["auto_triggers"]}
         self.assertEqual(medical["MEDICAL_CONCERN"], "h")
         self.assertEqual(rec()["auto_triggers"], [])
+        # An alert that only goes on the client record is raised, not listed.
+        psychosis = rec(f_change="yes", f_features=["psychotic_symptoms"])
+        self.assertTrue(
+            {"MENTAL_STATE_CHANGE", "PSYCHOSIS_AGITATION"}
+            <= {x["code"] for x in psychosis["alerts"]}
+        )
+        self.assertEqual(psychosis["auto_triggers"], [])
 
 
 class MedicalEscalationApiTests(FindingStoreApiTests):
