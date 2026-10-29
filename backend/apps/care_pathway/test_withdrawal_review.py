@@ -176,8 +176,12 @@ class PsychiatricReviewApiTests(FindingStoreApiTests):
         self.assertIn("Opioids withdrawal", task.action_label)
         self.assertEqual(self.queue_row()["withdrawal_review"]["status"], "INITIATED")
 
+        row = self.queue_row()
+        self.assertTrue(row["alerts"])  # the withdrawal alert, shown on the card
+        self.assertIsNone(row["owner"])
         self.client.post(reverse("care-open-review", args=[self.te_id]), **self.auth)
         self.assertEqual(self.review().status, "PENDING")
+        self.assertEqual(self.queue_row()["owner"]["id"], str(self.nurse.pk))  # the reviewer
 
         self.assertEqual(self.complete(status="COMPLETED").status_code, 400)  # no outcome
         self.assertEqual(self.complete(status="PENDING").status_code, 400)

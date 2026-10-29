@@ -677,11 +677,13 @@ class PsychiatryQueueView(APIView):
         from django.conf import settings
 
         from . import psychiatric_review
+        from .triage_queue import responsible
 
         targets = getattr(settings, "SEEN_BY_CLINICIAN_TARGET_MINUTES", None) or {}
         now = timezone.now()
         rows = []
         for te in services.psychiatry_queue():
+            owner, team = responsible(te)
             waited = (
                 int((now - te.arrival_at).total_seconds() // 60)
                 if not te.psychiatry_review_started_at
@@ -704,6 +706,17 @@ class PsychiatryQueueView(APIView):
                     "signed_by": user_display(te.last_triaged_by),
                     "review_started_at": _iso(te.psychiatry_review_started_at),
                     "withdrawal_review": psychiatric_review.row(psychiatric_review.for_triage(te)),
+                    "age": te.patient.age_years,
+                    "sex": te.patient.gender,
+                    "alerts": list(
+                        ClinicalAlert.objects.filter(
+                            patient=te.patient, status="ACTIVE"
+                        ).values_list("label", flat=True)
+                    ),
+                    "owner": (
+                        {"id": str(owner.pk), "name": user_display(owner)} if owner else None
+                    ),
+                    "team": team,
                 }
             )
         return Response({"results": rows})

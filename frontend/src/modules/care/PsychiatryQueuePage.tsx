@@ -1,47 +1,64 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   completePsychiatricReview,
   getPsychiatryQueue,
   openPsychiatryReview,
+  type Priority,
   type PsychiatryQueueRow,
   type WithdrawalReview,
 } from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
-import { BTN, BTN_GHOST, BTN_SM, INPUT, PRIORITY_EDGE, TABLE, TD, TH } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, INPUT, PRIORITY_EDGE } from "./shared/styles";
 import { EmptyState } from "../../components/EmptyState";
-import { TableSkeletonRows } from "../../components/Skeleton";
-import { SortHeader, TableFilter } from "./shared/TableControls";
-import { useTableControls } from "./shared/useTableControls";
-import { Card, ErrorNote, PageHeader, PriorityPill, SelectChoices, Tag } from "./shared/ui";
+import { ErrorNote, PageHeader, PriorityPill, SelectChoices, Tag } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
 import { errorText } from "./triage/helpers";
 import { useRecordData } from "./record/useRecordData";
 import { LiveQueue } from "./triage/LiveQueue";
 
 const REFRESH_MS = 60_000;
+const PRIORITIES: Priority[] = ["RED", "ORANGE", "YELLOW", "GREEN"];
 
-const PRIORITY_RANK: Record<string, number> = { RED: 0, ORANGE: 1, YELLOW: 2, GREEN: 3 };
-const SORTS = {
-  client: (row: PsychiatryQueueRow) => row.name || "",
-  priority: (row: PsychiatryQueueRow) => PRIORITY_RANK[row.priority] ?? 9,
-  signed: (row: PsychiatryQueueRow) => new Date(row.signed_at).getTime() || null,
-};
+type View = "waiting" | "in_review" | "mine" | "all";
+const VIEWS: { key: View; label: string }[] = [
+  { key: "waiting", label: "Waiting for review" },
+  { key: "in_review", label: "In review" },
+  { key: "mine", label: "Mine" },
+  { key: "all", label: "All" },
+];
+
 const searchText = (row: PsychiatryQueueRow) =>
-  [row.name, row.mrn, row.citramac_number, row.presenting_concern, row.priority].join(" ");
+  [
+    row.name,
+    row.mrn,
+    row.citramac_number,
+    row.presenting_concern,
+    row.owner?.name,
+    row.team,
+    ...row.alerts,
+  ]
+    .join(" ")
+    .toLowerCase();
 
 /**
- * Psychiatry — priority queue. docs/15-CLINICAL-WORKSPACE-V3.md §1.8 (mapping
- * M4); mockup `psychiatry(true)`. Every client with a signed triage, RED →
- * GREEN, most recently signed first within a priority (ordered server-side).
+ * Psychiatry — priority queue: one card per client with a signed triage,
+ * grouped RED → GREEN (longest wait first within a priority, server order).
+ * Each card says who, how long they have waited, why, the active alerts, who
+ * is responsible and what to do next. The four-lane live queue is kept behind
+ * "Show all lanes".
  */
 export function PsychiatryQueuePage() {
-  const { accessToken } = useAuth();
+  const { accessToken, claims } = useAuth();
   const navigate = useNavigate();
   const [tick, setTick] = useState(0);
+  const [view, setView] = useState<View>("waiting");
+  const [query, setQuery] = useState("");
+  const [lanes, setLanes] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -56,9 +73,22 @@ export function PsychiatryQueuePage() {
     (token) => getPsychiatryQueue(token),
     "Couldn't load the psychiatry queue.",
   );
-  const rows: PsychiatryQueueRow[] = data?.results ?? [];
-  // Starts in the server's order (RED → GREEN, longest wait first); headers re-sort.
-  const controls = useTableControls(data ? rows : null, { sorts: SORTS, searchText });
+  const rows = useMemo(() => data?.results ?? [], [data]);
+  const me = claims?.user_id;
+
+  const inView = (row: PsychiatryQueueRow, v: View) =>
+    v === "waiting"
+      ? !row.review_started_at
+      : v === "in_review"
+        ? Boolean(row.review_started_at)
+        : v === "mine"
+          ? row.owner?.id === me
+          : true;
+  const counts = Object.fromEntries(
+    VIEWS.map((v) => [v.key, rows.filter((r) => inView(r, v.key)).length]),
+  ) as Record<View, number>;
+  const needle = query.trim().toLowerCase();
+  const shown = rows.filter((r) => inView(r, view) && (!needle || searchText(r).includes(needle)));
 
   const openReview = async (row: PsychiatryQueueRow) => {
     if (!accessToken) return;
@@ -74,133 +104,204 @@ export function PsychiatryQueuePage() {
   };
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       <PageHeader
         eyebrow="Clinical workflow"
-        title="Psychiatry — priority queue"
-        subtitle="Signed triage referrals · highest priority first"
+        title="Psychiatry queue"
+        subtitle="Clients with a signed triage, most urgent first. Open a card to start or continue the review."
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
-      {/* v4 live queue (mockup renderQueue): all four lanes; the table below is the
-          sortable list of signed triage referrals. */}
-      <Card className="mb-5 mt-3" title="Live queue" bodyClassName="p-4">
-        <LiveQueue
-          opening={opening}
-          onOpenReview={(row) => {
-            const match = rows.find((r) => r.id === row.id);
-            if (match) void openReview(match);
-            else navigate(`/clinical/triage/${row.id}`);
-          }}
-        />
-      </Card>
-      <Card
-        className="mb-5 mt-3"
-        title="Clients queued for psychiatric review · RED → ORANGE → YELLOW → GREEN"
-        aside={
-          <Tag>
-            {rows.length} {rows.length === 1 ? "client" : "clients"}
-          </Tag>
-        }
-        bodyClassName="p-0"
-      >
-        <TableFilter
-          controls={controls}
-          label="Filter the psychiatry queue"
-          placeholder="Filter by name, number or concern…"
-        />
-        <div className="overflow-x-auto">
-          <table
-            className={`${TABLE} min-w-[720px]`}
-            aria-label="Clients queued for psychiatric review"
-          >
-            <thead>
-              <tr>
-                <SortHeader controls={controls} sortKey="client">
-                  Client
-                </SortHeader>
-                <SortHeader controls={controls} sortKey="priority">
-                  Triage priority
-                </SortHeader>
-                <th className={TH}>Presenting concern</th>
-                <SortHeader controls={controls} sortKey="signed">
-                  Triage signed
-                </SortHeader>
-                <th className={TH}>
-                  <span className="sr-only">Open psychiatric review</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {!data && loading && <TableSkeletonRows columns={5} />}
-              {controls.rows.length > 0
-                ? controls.rows.map((row) => (
-                    <tr key={row.id}>
-                      <td className={`${TD} border-l-4 ${PRIORITY_EDGE[row.priority]}`}>
-                        <strong>{row.name || "Unknown client"}</strong>
-                        <br />
-                        <span className="break-all font-mono text-[11px] text-ink-500">
-                          {row.citramac_number || "CITRAMAC ID not recorded"} · MRN{" "}
-                          {row.mrn || "not recorded"}
-                        </span>
-                      </td>
-                      <td className={TD}>
-                        <PriorityPill priority={row.priority} long />
-                      </td>
-                      <td className={TD}>{row.presenting_concern || "Not recorded"}</td>
-                      <td className={`${TD} whitespace-nowrap`}>
-                        {formatDateTime(row.signed_at)}
-                        {row.wait_minutes !== null && (
-                          <Tag tone={row.over_target ? "risk" : "neutral"}>
-                            {row.over_target ? `Over target (${row.target_minutes} min) · ` : ""}waiting {row.wait_minutes} min
-                          </Tag>
-                        )}
-                        <br />
-                        <span className="text-[11px] text-ink-500">
-                          {row.signed_by || "Clinician not recorded"}
-                        </span>
-                      </td>
-                      <td className={TD}>
-                        <div className="flex flex-col items-start gap-1.5">
-                          <button
-                            type="button"
-                            className={`${BTN_GHOST} ${BTN_SM}`}
-                            disabled={opening !== null}
-                            aria-label={`Open review for ${row.name || "unknown client"}`}
-                            onClick={() => void openReview(row)}
-                          >
-                            {opening === row.id ? "Opening…" : "Open review"}
-                          </button>
-                          {row.review_started_at && <Tag tone="brand">Review started</Tag>}
-                          {row.withdrawal_review && (
-                            <WithdrawalReviewCell
-                              review={row.withdrawal_review}
-                              onSaved={() => setTick((t) => t + 1)}
-                            />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                : data && (
-                    <tr>
-                      <td colSpan={5}>
-                        <EmptyState
-                          title={
-                            rows.length === 0 ? "The queue is empty" : "No one matches that filter"
-                          }
-                        >
-                          {rows.length === 0
-                            ? "Signed triage assessments will appear here for psychiatric review."
-                            : "Clear the filter to see the whole queue."}
-                        </EmptyState>
-                      </td>
-                    </tr>
-                  )}
-            </tbody>
-          </table>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-surface-border bg-surface-card p-3 shadow-sm sm:flex-row sm:items-center">
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Find a client</span>
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500"
+          />
+          <input
+            type="search"
+            autoComplete="off"
+            className={`${INPUT} pl-8`}
+            placeholder="Find by name, number, concern, alert or who is responsible"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <div role="tablist" aria-label="Show" className="flex flex-wrap gap-1.5">
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              role="tab"
+              aria-selected={view === v.key}
+              onClick={() => setView(v.key)}
+              className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                view === v.key
+                  ? "border-brand-green bg-brand-green text-on-primary"
+                  : "border-surface-border bg-surface-card text-ink-900 hover:bg-surface-bg"
+              }`}
+            >
+              {v.label} <span className="opacity-80">({counts[v.key]})</span>
+            </button>
+          ))}
         </div>
-      </Card>
+      </div>
+
+      {!data && loading && <p className="text-[13px] text-ink-500">Loading the queue…</p>}
+      {data && shown.length === 0 && (
+        <EmptyState title={rows.length === 0 ? "The queue is empty" : "No one here"}>
+          {rows.length === 0
+            ? "Clients appear here once their triage is signed."
+            : needle
+              ? "No client matches that search."
+              : "No client in this view — try “All”."}
+        </EmptyState>
+      )}
+
+      {PRIORITIES.map((priority) => {
+        const group = shown.filter((r) => r.priority === priority);
+        if (!group.length) return null;
+        return (
+          <section key={priority} aria-label={`${priority} priority`}>
+            <h2 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-ink-900">
+              <PriorityPill priority={priority} long />
+              <span className="text-ink-500">
+                {group.length} {group.length === 1 ? "client" : "clients"}
+              </span>
+            </h2>
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {group.map((row) => (
+                <QueueCard
+                  key={row.id}
+                  row={row}
+                  opening={opening}
+                  onOpen={() => void openReview(row)}
+                  onSaved={() => setTick((t) => t + 1)}
+                />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+
+      <div>
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          aria-expanded={lanes}
+          onClick={() => setLanes((v) => !v)}
+        >
+          {lanes ? "Hide all lanes" : "Show all lanes (awaiting triage, in care, discharged)"}
+        </button>
+        {lanes && (
+          <div className="mt-3 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
+            <LiveQueue
+              opening={opening}
+              onOpenReview={(lane) => {
+                const match = rows.find((r) => r.id === lane.id);
+                if (match) void openReview(match);
+                else navigate(`/clinical/triage/${lane.id}`);
+              }}
+            />
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function waitText(row: PsychiatryQueueRow) {
+  if (row.review_started_at) return `Review started ${formatDateTime(row.review_started_at)}`;
+  if (row.wait_minutes === null) return `Triage signed ${formatDateTime(row.signed_at)}`;
+  const h = Math.floor(row.wait_minutes / 60);
+  const m = row.wait_minutes % 60;
+  return `Waiting ${h ? `${h} h ` : ""}${m} min`;
+}
+
+function QueueCard({
+  row,
+  opening,
+  onOpen,
+  onSaved,
+}: {
+  row: PsychiatryQueueRow;
+  opening: string | null;
+  onOpen: () => void;
+  onSaved: () => void;
+}) {
+  const details = [
+    row.citramac_number,
+    row.age !== null ? `${row.age} y` : "",
+    row.sex ? row.sex.charAt(0) + row.sex.slice(1).toLowerCase() : "",
+  ].filter(Boolean);
+  const responsible = row.owner?.name || row.team;
+  return (
+    <li
+      className={`flex flex-col gap-2.5 rounded-lg border border-l-4 border-surface-border bg-surface-card p-3.5 shadow-sm ${PRIORITY_EDGE[row.priority]}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <strong className="block truncate text-[14px] text-ink-900">
+            {row.name || "Unknown client"}
+          </strong>
+          <span className="text-[11.5px] text-ink-500">{details.join(" · ")}</span>
+        </div>
+        <span
+          className={`shrink-0 whitespace-nowrap text-[12px] font-semibold ${
+            row.over_target ? "text-priority-red" : "text-ink-700"
+          }`}
+        >
+          {waitText(row)}
+          {row.over_target && row.target_minutes !== null
+            ? ` · over ${row.target_minutes} min`
+            : ""}
+        </span>
+      </div>
+
+      <p className="line-clamp-2 text-[13px] text-ink-900">
+        {row.presenting_concern || <span className="text-ink-500">Concern not recorded</span>}
+      </p>
+
+      {row.alerts.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {row.alerts.slice(0, 3).map((alert) => (
+            <Tag key={alert} tone="risk">
+              {alert}
+            </Tag>
+          ))}
+          {row.alerts.length > 3 && <Tag>+{row.alerts.length - 3} more</Tag>}
+        </div>
+      )}
+
+      {row.withdrawal_review && (
+        <WithdrawalReviewCell review={row.withdrawal_review} onSaved={onSaved} />
+      )}
+
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-2.5">
+        <span className="text-[12px] text-ink-700">
+          Responsible:{" "}
+          {responsible ? (
+            <strong>{responsible}</strong>
+          ) : (
+            <span className="text-ink-500">not yet assigned</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className={`${row.review_started_at ? BTN_GHOST : BTN} ${BTN_SM}`}
+          disabled={opening !== null}
+          aria-label={`${row.review_started_at ? "Continue" : "Open"} review for ${row.name || "unknown client"}`}
+          onClick={onOpen}
+        >
+          {opening === row.id
+            ? "Opening…"
+            : row.review_started_at
+              ? "Continue review"
+              : "Open review"}
+        </button>
+      </div>
+    </li>
   );
 }
 

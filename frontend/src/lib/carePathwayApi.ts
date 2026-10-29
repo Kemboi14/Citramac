@@ -511,6 +511,13 @@ export interface PsychiatryQueueRow {
   over_target: boolean;
   /** The psychiatric review raised by withdrawal (triage spec item 10), if any. */
   withdrawal_review: WithdrawalReview | null;
+  age: number | null;
+  sex: string;
+  /** Active clinical alert labels. */
+  alerts: string[];
+  /** Who is responsible: a person, else the team the triage tasks went to. */
+  owner: { id: string; name: string } | null;
+  team: string;
 }
 
 export interface WithdrawalReview {
