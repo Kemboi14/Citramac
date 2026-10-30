@@ -26,8 +26,10 @@ import {
   ErrorNote,
   Field,
   PageHeader,
+  PriorityPill,
   RadioChoices,
   SelectChoices,
+  StatusPill,
   Tag,
 } from "../shared/ui";
 import { useValueSets, type ValueSetsApi } from "../shared/useValueSets";
@@ -55,20 +57,11 @@ const CORE: [string, string, string][] = [
   ["j", "t-j-concern", "j_concern"],
 ];
 
-const SUMMARY_EDGE: Record<Priority | "pending", string> = {
-  RED: "border-l-priority-red",
-  ORANGE: "border-l-priority-orange",
-  YELLOW: "border-l-priority-yellow",
-  GREEN: "border-l-priority-green",
-  pending: "border-l-priority-orange",
-};
-
 const PRIORITY_GUIDE: {
   key: Priority;
   title: string;
   meaning: string;
   action: string;
-  card: string;
   tone: string;
 }[] = [
   {
@@ -77,7 +70,6 @@ const PRIORITY_GUIDE: {
     meaning: "Immediate or potentially life-threatening safety, medical or behavioural concern.",
     action:
       "Do not wait for routine intake. Begin immediate safety/medical action and emergency assessment or transfer where required.",
-    card: "border-l-priority-red bg-priority-red-tint",
     tone: "text-priority-red",
   },
   {
@@ -85,7 +77,6 @@ const PRIORITY_GUIDE: {
     title: "ORANGE — Urgent",
     meaning: "Significant concern that could deteriorate or requires prompt clinician assessment.",
     action: "Place ahead of routine work; review as soon as possible under the urgent process.",
-    card: "border-l-priority-orange bg-priority-orange-tint",
     tone: "text-priority-orange",
   },
   {
@@ -93,7 +84,6 @@ const PRIORITY_GUIDE: {
     title: "YELLOW — Priority",
     meaning: "Currently stable but should not simply wait through the normal routine pathway.",
     action: "Arrange timely assessment; escalate if the condition changes.",
-    card: "border-l-priority-yellow bg-priority-yellow-tint",
     tone: "text-priority-yellow",
   },
   {
@@ -101,7 +91,6 @@ const PRIORITY_GUIDE: {
     title: "GREEN — Routine",
     meaning: "Stable; no immediate safety or medical concern identified.",
     action: "Proceed through the normal intake or appointment pathway.",
-    card: "border-l-priority-green bg-priority-green-tint",
     tone: "text-priority-green",
   },
 ];
@@ -607,9 +596,6 @@ export function TriageForm({
   const previouslySigned = detail.triage_version > 0 || Boolean(detail.last_triaged_at);
 
   const summaryLabel = touched ? evaluation.recommendation : "Screen in progress";
-  const summaryEdge = touched ? evaluation.summary_priority : "pending";
-  // eslint-disable-next-line security/detect-object-injection -- `summaryEdge` is a typed union.
-  const summaryEdgeClass = SUMMARY_EDGE[summaryEdge];
   const findingsTime = formatTime(evaluatedAt);
   const clinicianLine = signed
     ? `${signed.signed_by} · ${formatDateTime(signed.signed_at)}`
@@ -645,10 +631,16 @@ export function TriageForm({
         id="triage-live-summary"
         role="status"
         aria-live="polite"
-        className={`mb-3.5 rounded-lg border border-l-4 border-surface-border bg-surface-bg px-3.5 py-3 ${summaryEdgeClass}`}
+        className="mb-3.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 shadow-sm"
       >
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[13px] font-bold text-ink-900">
-          Live safety summary <span>{summaryLabel}</span>
+          Live safety summary{" "}
+          {touched && evaluation.summary_priority !== "pending" ? (
+            <PriorityPill priority={evaluation.summary_priority} />
+          ) : (
+            <StatusPill>{summaryLabel}</StatusPill>
+          )}
+          {touched && <span>{summaryLabel}</span>}
         </div>
         <p className="text-xs text-ink-500">{evaluation.reasons}</p>
       </div>
@@ -1177,7 +1169,7 @@ export function TriageForm({
                 {PRIORITY_GUIDE.map((card) => (
                   <article
                     key={card.key}
-                    className={`min-w-0 rounded-[10px] border border-l-4 border-surface-border px-3.5 py-[13px] ${card.card}`}
+                    className="min-w-0 rounded-xl border border-surface-border bg-surface-card px-3.5 py-[13px] shadow-sm"
                   >
                     <h3 className={`mb-[7px] text-xs font-bold tracking-[.03em] ${card.tone}`}>
                       {card.title}

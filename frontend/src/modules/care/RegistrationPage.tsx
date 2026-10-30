@@ -42,20 +42,20 @@ import { REQUIRED_MARK, errorText } from "./triage/helpers";
 // Each registration type has its own colour — the selected tab, the hint under
 // it, focused fields and the submit button — so the type in use is recognisable
 // at a glance (QA 2026-10-30; client mockup citramac-registration).
-const MODE_TONE: Record<IdentityStatus, { solid: string; hint: string; accent: string }> = {
+const MODE_TONE: Record<IdentityStatus, { solid: string; dot: string; accent: string }> = {
   IDENTIFIED: {
     solid: "bg-brand-green text-on-primary",
-    hint: "border-brand-green bg-brand-green-tint text-ink-900",
+    dot: "bg-brand-green",
     accent: "var(--green)",
   },
   UNIDENTIFIED: {
     solid: "bg-priority-orange-solid text-on-status",
-    hint: "border-priority-orange-solid bg-priority-orange-tint text-ink-900",
+    dot: "bg-priority-orange-solid",
     accent: "var(--pri-orange-solid)",
   },
   UNKNOWN: {
     solid: "bg-priority-red-solid text-on-status",
-    hint: "border-priority-red-solid bg-priority-red-tint text-ink-900",
+    dot: "bg-priority-red-solid",
     accent: "var(--pri-red-solid)",
   },
 };
@@ -957,8 +957,12 @@ export function RegistrationPage() {
           })}
         </div>
         {!editing && (
-          <p className={`mb-5 rounded-lg border-l-4 px-3 py-2 text-[13px] ${tone.hint}`}>
-            {resolving ? MODES[0].hint : modeInfo.hint}
+          <p className="mb-5 flex items-start gap-2 text-[13px] text-ink-700">
+            <span
+              aria-hidden="true"
+              className={`mt-[6px] h-2 w-2 flex-none rounded-full ${tone.dot}`}
+            />
+            <span>{resolving ? MODES[0].hint : modeInfo.hint}</span>
           </p>
         )}
         {vs.error && <ErrorNote>{vs.error}</ErrorNote>}

@@ -7,6 +7,7 @@ import {
   type ConsentTemplate,
   type ConsentType,
 } from "../../lib/carePathwayApi";
+import { Callout, StatusPill } from "../care/shared/ui";
 
 // Org Admin — the facility's consent wording: data sharing (HIE) and
 // AI-assisted processing of psychotherapy notes, each versioned separately. The legal
@@ -183,11 +184,14 @@ function NewVersionForm({
           <div
             role="alertdialog"
             aria-labelledby="consent-confirm-title"
-            className="grid gap-3 rounded-lg border border-l-[3px] border-priority-orange bg-priority-orange-tint px-3.5 py-3 text-[12.5px] text-ink-900"
+            className="grid gap-3 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 text-[12.5px] text-ink-900 shadow-sm"
           >
-            <p id="consent-confirm-title" className="font-semibold">
-              Publish version &ldquo;{version.trim()}&rdquo; as the consent wording?
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p id="consent-confirm-title" className="font-semibold">
+                Publish version &ldquo;{version.trim()}&rdquo; as the consent wording?
+              </p>
+              <StatusPill tone="warning">Confirm</StatusPill>
+            </div>
             <p>
               From now on clinicians will record {subject} against this exact wording.
               {hasActive && " The current version will be retired."} Published wording cannot be
@@ -334,12 +338,10 @@ export function ConsentWordingPage() {
                   <Wording text={active.text} />
                 </div>
               ) : (
-                <div className="flex gap-2.5 rounded-lg border border-l-[3px] border-priority-orange bg-priority-orange-tint px-3.5 py-3 text-[12.5px] text-priority-orange">
-                  <div>
-                    <strong>No consent wording is set.</strong> Clinicians can&rsquo;t record a
-                    client&rsquo;s {kind.subject} until your facility publishes a version below.
-                  </div>
-                </div>
+                <Callout tone="warning" label="Not set">
+                  <strong>No consent wording is set.</strong> Clinicians can&rsquo;t record a
+                  client&rsquo;s {kind.subject} until your facility publishes a version below.
+                </Callout>
               )}
             </div>
           </section>

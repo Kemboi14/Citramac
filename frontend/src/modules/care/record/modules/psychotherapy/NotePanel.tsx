@@ -374,7 +374,7 @@ function Transcript({ config, note }: { config: PsyConfig; note: PsyNote }) {
           </div>
           <p className="mt-1 whitespace-pre-wrap text-[13px]">{t.text || <span className="text-ink-500">Not answered.</span>}</p>
           {t.translation && (
-            <div className="mt-1.5 rounded-md border-l-[3px] border-brand-green bg-surface-bg px-2.5 py-1.5">
+            <div className="mt-1.5 rounded-md border border-surface-border bg-surface-bg px-2.5 py-1.5">
               <div className={FIELD_LABEL}>English translation</div>
               {t.translation.status === "done" && (
                 <>

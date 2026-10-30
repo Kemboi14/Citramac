@@ -1,5 +1,4 @@
 // Class names shared by the v3 clinical workspace screens (mockup .btn, .field, .data-table…).
-import type { Priority } from "../../../lib/carePathwayApi";
 
 export const BTN =
   "inline-flex items-center justify-center gap-1.5 rounded-[9px] border border-brand-green bg-brand-green px-4 py-2 text-[13px] font-semibold text-on-primary transition-colors duration-150 hover:border-brand-green-dark hover:bg-brand-green-dark disabled:cursor-not-allowed disabled:opacity-60";
@@ -19,9 +18,3 @@ export const TD = "border-b border-surface-border px-3.5 py-2.5 align-top text-[
 export const TABLE = "w-full border-collapse";
 
 /** Left-edge colour for a priority-striped row or card. */
-export const PRIORITY_EDGE: Record<Priority, string> = {
-  RED: "border-l-priority-red",
-  ORANGE: "border-l-priority-orange",
-  YELLOW: "border-l-priority-yellow",
-  GREEN: "border-l-priority-green",
-};

@@ -76,7 +76,7 @@ function PendingRequest({ grant, onDecided }: { grant: SupportGrant; onDecided: 
   return (
     <section
       aria-label={`Support access request from ${grant.requested_by_email}`}
-      className="rounded-lg border border-l-[3px] border-priority-orange border-l-priority-orange bg-surface-card p-3.5"
+      className="rounded-xl border border-surface-border bg-surface-card p-3.5 shadow-sm"
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-[13px] font-bold text-ink-900">

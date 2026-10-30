@@ -294,7 +294,7 @@ function AutoTriggers({ section }: { section: string }) {
     <div
       role="status"
       aria-live="polite"
-      className="mt-3 flex items-start gap-3 rounded-lg border border-brand-green-tint-2 border-l-[3px] border-l-brand-green bg-brand-green-tint px-3.5 py-2.5"
+      className="mt-3 flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 shadow-sm"
     >
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-green text-on-primary">
         <Zap size={13} strokeWidth={2.5} aria-hidden="true" />

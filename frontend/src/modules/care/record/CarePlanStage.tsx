@@ -16,6 +16,7 @@ import {
   Field,
   PageHeader,
   SelectChoices,
+  StatusPill,
   Tag,
   Timeline,
 } from "../shared/ui";
@@ -274,11 +275,14 @@ export function DocumentedActions({ patientId }: RecordViewProps) {
       </Card>
 
       {plan?.recommendation && (
-        <div className="flex gap-2.5 rounded-lg border border-l-[3px] border-surface-border border-l-brand-green bg-surface-bg px-3.5 py-3 text-[12.5px] text-ink-900">
+        <div className="flex gap-2.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 text-[12.5px] text-ink-900 shadow-sm">
           <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-green" aria-hidden="true" />
-          <div>
+          <div className="min-w-0 flex-1">
             <strong>System recommendation:</strong> {plan.recommendation}
           </div>
+          <StatusPill tone="info" className="self-start">
+            Suggested
+          </StatusPill>
         </div>
       )}
     </div>

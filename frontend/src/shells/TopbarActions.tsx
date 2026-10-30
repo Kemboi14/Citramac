@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { NotificationIcon } from "../components/NotificationIcon";
-import { severityAccent, timeAgo } from "../lib/notificationFormat";
+import { timeAgo } from "../lib/notificationFormat";
 import { useAuth } from "../auth/useAuth";
 import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
 import {
@@ -143,9 +143,7 @@ export function TopbarActions({
                   key={n.id}
                   type="button"
                   onClick={() => openNotification(n)}
-                  className={`flex w-full gap-2.5 border-b border-l-2 border-surface-border px-3.5 py-2.5 text-left last:border-b-0 hover:bg-surface-bg ${severityAccent(
-                    n.severity,
-                  )} ${n.is_read ? "" : "bg-brand-green-tint-2"}`}
+                  className={`flex w-full gap-2.5 border-b border-surface-border px-3.5 py-2.5 text-left last:border-b-0 hover:bg-surface-bg ${n.is_read ? "" : "bg-brand-green-tint-2"}`}
                 >
                   <NotificationIcon notification={n} className="mt-0.5 h-4 w-4 flex-shrink-0" />
                   <span className="flex min-w-0 flex-col gap-0.5">

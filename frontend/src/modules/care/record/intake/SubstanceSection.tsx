@@ -156,7 +156,7 @@ export function SubstanceSection({
       />
       {triggers}
       {alcohol && (
-        <section aria-labelledby="intake-thiamine" className="rounded-lg border border-l-4 border-surface-border border-l-priority-red bg-surface-card p-3">
+        <section aria-labelledby="intake-thiamine" className="rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h3 id="intake-thiamine" className="text-[13px] font-bold text-ink-900">
               Thiamine — give promptly

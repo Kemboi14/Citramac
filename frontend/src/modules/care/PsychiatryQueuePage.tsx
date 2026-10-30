@@ -14,7 +14,7 @@ import {
 } from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
-import { BTN, BTN_GHOST, BTN_SM, INPUT, PRIORITY_EDGE } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
 import { EmptyState } from "../../components/EmptyState";
 import { ErrorNote, PageHeader, PriorityPill, SelectChoices, Tag } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
@@ -256,7 +256,7 @@ function QueueRow({
   const responsible = row.owner?.name || row.team;
   return (
     <li
-      className={`${ROW_GRID} grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 last:rounded-b-[14px] hover:bg-surface-bg max-lg:border-l-4 max-lg:pl-6 ${PRIORITY_EDGE[row.priority]}`}
+      className={`${ROW_GRID} grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 last:rounded-b-[14px] hover:bg-surface-bg`}
     >
       <div className="min-w-0">
         <strong className="block truncate text-[15px] font-semibold text-ink-900">

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { NotificationIcon } from "../components/NotificationIcon";
 import { ApiError } from "../lib/apiClient";
-import { severityAccent, timeAgo } from "../lib/notificationFormat";
+import { timeAgo } from "../lib/notificationFormat";
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -181,9 +181,7 @@ export function NotificationsPage() {
                 <button
                   type="button"
                   onClick={() => open(n)}
-                  className={`flex w-full gap-3 border-b border-l-2 border-surface-border px-4 py-3.5 text-left last:border-b-0 hover:bg-surface-bg ${severityAccent(
-                    n.severity,
-                  )} ${n.is_read ? "" : "bg-brand-green-tint-2"}`}
+                  className={`flex w-full gap-3 border-b border-surface-border px-4 py-3.5 text-left last:border-b-0 hover:bg-surface-bg ${n.is_read ? "" : "bg-brand-green-tint-2"}`}
                 >
                   <NotificationIcon
                     notification={n}

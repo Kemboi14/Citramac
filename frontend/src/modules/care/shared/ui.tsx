@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Info } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { PRIORITY_LABEL, type Priority, type PriorityOrBlank } from "../../../lib/carePathwayApi";
 import type { ValueSetConcept } from "../../../lib/carePathwayApi";
 import { FIELD_LABEL, INPUT } from "./styles";
@@ -156,32 +156,77 @@ export function PriorityPill({
   );
 }
 
+export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
+
+const STATUS_PILL: Record<StatusTone, string> = {
+  info: "bg-accent-info-tint text-accent-info",
+  success: "bg-brand-green-tint text-brand-green-dark",
+  warning: "bg-status-amber-tint text-status-amber",
+  danger: "bg-status-red-tint text-status-red",
+  neutral: "bg-surface-bg text-ink-500",
+};
+
+/** A small dot + label that carries a card's state, so the card itself stays
+ * neutral — no coloured edge, no tinted fill (design note 2026-10-30). */
+export function StatusPill({
+  tone = "neutral",
+  children,
+  className = "",
+}: {
+  tone?: StatusTone;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      // eslint-disable-next-line security/detect-object-injection -- `tone` is a fixed prop union.
+      className={`inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold ${STATUS_PILL[tone]} ${className}`}
+    >
+      <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-current" />
+      {children}
+    </span>
+  );
+}
+
+const CALLOUT_TONE = {
+  info: { Icon: Info, icon: "text-accent-info", label: "Info" },
+  success: { Icon: CheckCircle2, icon: "text-brand-green", label: "Done" },
+  warning: { Icon: AlertTriangle, icon: "text-status-amber", label: "Attention" },
+  danger: { Icon: AlertCircle, icon: "text-status-red", label: "Important" },
+} as const;
+
+/**
+ * A message card: neutral surface, a tone icon and a status pill — the pill's
+ * word, not a coloured edge or tint, says what kind of message it is.
+ * `label` replaces the pill's default word; `label={null}` hides the pill.
+ */
 export function Callout({
   children,
   tone = "info",
   role,
+  label,
   className = "",
 }: {
   children: ReactNode;
   tone?: "info" | "success" | "danger" | "warning";
   role?: "status" | "alert";
+  label?: ReactNode | null;
   className?: string;
 }) {
-  const tones = {
-    info: "border-surface-border border-l-brand-green bg-surface-bg text-ink-900",
-    success: "border-brand-green border-l-brand-green bg-brand-green-tint text-brand-green-dark",
-    danger: "border-priority-red border-l-priority-red bg-priority-red-tint text-priority-red",
-    warning:
-      "border-priority-orange border-l-priority-orange bg-priority-orange-tint text-priority-orange",
-  };
+  // eslint-disable-next-line security/detect-object-injection -- `tone` is a fixed prop union.
+  const t = CALLOUT_TONE[tone];
   return (
     <div
       role={role}
-      // eslint-disable-next-line security/detect-object-injection -- `tone` is a fixed prop union.
-      className={`flex gap-2.5 rounded-lg border border-l-[3px] px-3.5 py-3 text-[12.5px] ${tones[tone]} ${className}`}
+      className={`flex gap-2.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 text-[12.5px] text-ink-900 shadow-sm ${className}`}
     >
-      {tone === "info" && <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-green" />}
+      <t.Icon aria-hidden="true" className={`mt-0.5 h-4 w-4 flex-shrink-0 ${t.icon}`} />
       <div className="min-w-0 flex-1">{children}</div>
+      {label !== null && (
+        <StatusPill tone={tone} className="self-start">
+          {label ?? t.label}
+        </StatusPill>
+      )}
     </div>
   );
 }

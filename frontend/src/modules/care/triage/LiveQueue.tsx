@@ -9,7 +9,7 @@ import {
 } from "../../../lib/triageV4Api";
 import { formatDateTime, formatTime } from "../shared/format";
 import { clientRecordPath } from "../shared/recordRoutes";
-import { BTN_GHOST, BTN_SM, PRIORITY_EDGE, TABLE, TD, TH } from "../shared/styles";
+import { BTN_GHOST, BTN_SM, TABLE, TD, TH } from "../shared/styles";
 import { ErrorNote, PriorityPill, Tag } from "../shared/ui";
 import { errorText } from "./helpers";
 
@@ -119,7 +119,7 @@ export function LiveQueue({
     const obs = row.observation;
     return (
       <tr key={row.id} className={w.over && !row.seen_at ? "bg-priority-red-tint/30" : ""}>
-        <td className={`${TD} border-l-4 ${row.priority ? PRIORITY_EDGE[row.priority] : "border-l-surface-border"}`}>
+        <td className={TD}>
           <PriorityPill priority={row.priority} />
         </td>
         <td className={TD}>
