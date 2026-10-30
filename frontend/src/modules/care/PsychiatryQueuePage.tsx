@@ -7,6 +7,7 @@ import {
   completePsychiatricReview,
   getPsychiatryQueue,
   openPsychiatryReview,
+  PRIORITY_LABEL,
   type Priority,
   type PsychiatryQueueRow,
   type WithdrawalReview,
@@ -38,6 +39,8 @@ const searchText = (row: PsychiatryQueueRow) =>
     row.mrn,
     row.citramac_number,
     row.presenting_concern,
+    row.signed_by,
+    row.signed_at ? formatDateTime(row.signed_at) : "",
     row.owner?.name,
     row.team,
     ...row.alerts,
@@ -89,6 +92,8 @@ export function PsychiatryQueuePage() {
   ) as Record<View, number>;
   const needle = query.trim().toLowerCase();
   const shown = rows.filter((r) => inView(r, view) && (!needle || searchText(r).includes(needle)));
+  // Most urgent first; within a priority the server's order (longest wait first).
+  const sorted = PRIORITIES.flatMap((p) => shown.filter((r) => r.priority === p));
 
   const openReview = async (row: PsychiatryQueueRow) => {
     if (!accessToken) return;
@@ -112,37 +117,40 @@ export function PsychiatryQueuePage() {
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-surface-border bg-surface-card p-3 shadow-sm sm:flex-row sm:items-center">
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">Find a client</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="relative min-w-[240px] flex-1">
+          <span className="sr-only">Find in queue</span>
           <Search
             aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-ink-500"
           />
           <input
             type="search"
             autoComplete="off"
-            className={`${INPUT} pl-8`}
-            placeholder="Find by name, number, concern, alert or who is responsible"
+            className={`${INPUT} !h-11 !rounded-xl !bg-surface-card !pl-11 !text-[14px]`}
+            placeholder="Find by name, presenting concern or who signed the triage"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
-        <div role="tablist" aria-label="Show" className="flex flex-wrap gap-1.5">
+        <div
+          role="group"
+          aria-label="Queue filter"
+          className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-surface-border bg-surface-card p-1"
+        >
           {VIEWS.map((v) => (
             <button
               key={v.key}
               type="button"
-              role="tab"
-              aria-selected={view === v.key}
+              aria-pressed={view === v.key}
               onClick={() => setView(v.key)}
-              className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              className={`whitespace-nowrap rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors ${
                 view === v.key
-                  ? "border-brand-green bg-brand-green text-on-primary"
-                  : "border-surface-border bg-surface-card text-ink-900 hover:bg-surface-bg"
+                  ? "bg-brand-green text-on-primary"
+                  : "text-ink-900 hover:bg-surface-bg"
               }`}
             >
-              {v.label} <span className="opacity-80">({counts[v.key]})</span>
+              {v.label} ({counts[v.key]})
             </button>
           ))}
         </div>
@@ -159,43 +167,37 @@ export function PsychiatryQueuePage() {
         </EmptyState>
       )}
 
-      {PRIORITIES.map((priority) => {
-        const group = shown.filter((r) => r.priority === priority);
-        if (!group.length) return null;
-        return (
-          <section key={priority} aria-label={`${priority} priority`}>
-            <h2 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-ink-900">
-              <PriorityPill priority={priority} long />
-              <span className="text-ink-500">
-                {group.length} {group.length === 1 ? "client" : "clients"}
-              </span>
-            </h2>
-            <div className="overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm">
-              <div
-                aria-hidden
-                className={`${ROW_GRID} hidden border-b border-surface-border bg-surface-bg px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500 lg:grid`}
-              >
-                <span>Client</span>
-                <span>Concern & alerts</span>
-                <span>Waiting</span>
-                <span>Responsible</span>
-                <span className="sr-only">Action</span>
-              </div>
-              <ul className="divide-y divide-surface-border">
-                {group.map((row) => (
-                  <QueueRow
-                    key={row.id}
-                    row={row}
-                    opening={opening}
-                    onOpen={() => void openReview(row)}
-                    onSaved={() => setTick((t) => t + 1)}
-                  />
-                ))}
-              </ul>
+      {sorted.length > 0 && (
+        <section aria-label="Psychiatry queue">
+          <p className="mb-2.5 text-[13.5px] font-semibold text-ink-500">
+            {sorted.length} {sorted.length === 1 ? "client" : "clients"}
+          </p>
+          <div className="rounded-[14px] border border-surface-border bg-surface-card">
+            <div
+              aria-hidden
+              className={`${ROW_GRID} hidden h-[42px] rounded-t-[14px] border-b border-surface-border bg-surface-bg px-5 text-[11.5px] font-semibold uppercase tracking-[.07em] text-ink-500 lg:grid`}
+            >
+              <span>Client name</span>
+              <span>Priority</span>
+              <span>Presenting concern</span>
+              <span>Triage signed</span>
+              <span>Waiting time</span>
+              <span className="sr-only">Action</span>
             </div>
-          </section>
-        );
-      })}
+            <ul className="divide-y divide-surface-border">
+              {sorted.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  row={row}
+                  opening={opening}
+                  onOpen={() => void openReview(row)}
+                  onSaved={() => setTick((t) => t + 1)}
+                />
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       <div>
         <button
@@ -223,16 +225,16 @@ export function PsychiatryQueuePage() {
   );
 }
 
-// One row per client: client · concern & alerts · waiting · responsible · action.
+// One row per client: client · priority · concern · triage signed · waiting · action.
 const ROW_GRID =
-  "lg:grid lg:grid-cols-[minmax(170px,1.1fr)_minmax(0,2.2fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_auto] lg:items-start lg:gap-4";
+  "lg:grid lg:grid-cols-[minmax(170px,1.3fr)_150px_minmax(200px,1.3fr)_minmax(190px,1.2fr)_120px_170px] lg:items-center lg:gap-4";
 
 function waitText(row: PsychiatryQueueRow) {
-  if (row.review_started_at) return `Review started ${formatDateTime(row.review_started_at)}`;
-  if (row.wait_minutes === null) return `Triage signed ${formatDateTime(row.signed_at)}`;
+  if (row.review_started_at) return "In review";
+  if (row.wait_minutes === null) return "—";
   const h = Math.floor(row.wait_minutes / 60);
   const m = row.wait_minutes % 60;
-  return `Waiting ${h ? `${h} h ` : ""}${m} min`;
+  return `${h ? `${h} h ` : ""}${String(m).padStart(h ? 2 : 1, "0")} min`;
 }
 
 function QueueRow({
@@ -247,72 +249,87 @@ function QueueRow({
   onSaved: () => void;
 }) {
   const details = [
-    row.citramac_number,
-    row.age !== null ? `${row.age} y` : "",
+    row.age !== null ? `${row.age} yrs` : "",
     row.sex ? row.sex.charAt(0) + row.sex.slice(1).toLowerCase() : "",
   ].filter(Boolean);
+  const longLabel = row.priority === "RED" ? "Emergency / Immediate" : PRIORITY_LABEL[row.priority];
   const responsible = row.owner?.name || row.team;
   return (
     <li
-      className={`${ROW_GRID} flex flex-col gap-2 border-l-4 px-3.5 py-3 hover:bg-surface-bg ${PRIORITY_EDGE[row.priority]}`}
+      className={`${ROW_GRID} grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 last:rounded-b-[14px] hover:bg-surface-bg max-lg:border-l-4 max-lg:pl-6 ${PRIORITY_EDGE[row.priority]}`}
     >
       <div className="min-w-0">
-        <strong className="block truncate text-[14px] text-ink-900">
+        <strong className="block truncate text-[15px] font-semibold text-ink-900">
           {row.name || "Unknown client"}
         </strong>
-        <span className="text-[11.5px] text-ink-500">{details.join(" · ")}</span>
+        {details.length > 0 && (
+          <span className="block text-[13px] text-ink-500">{details.join(" · ")}</span>
+        )}
+      </div>
+
+      <div>
+        <PriorityPill priority={row.priority} />
+        <span className="mt-0.5 block text-[13px] text-ink-500">{longLabel}</span>
       </div>
 
       <div className="flex min-w-0 flex-col gap-1.5">
-        <p className="line-clamp-2 text-[13px] text-ink-900">
-          {row.presenting_concern || <span className="text-ink-500">Concern not recorded</span>}
-        </p>
-        {row.alerts.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {row.alerts.slice(0, 3).map((alert) => (
-              <Tag key={alert} tone="risk">
-                {alert}
-              </Tag>
-            ))}
-            {row.alerts.length > 3 && <Tag>+{row.alerts.length - 3} more</Tag>}
-          </div>
+        {row.presenting_concern ? (
+          <p
+            className="line-clamp-2 text-[14px] font-medium text-ink-900"
+            title={row.presenting_concern}
+          >
+            {row.presenting_concern}
+          </p>
+        ) : (
+          <p className="text-[13px] text-ink-500">Concern not recorded</p>
         )}
         {row.withdrawal_review && (
           <WithdrawalReviewCell review={row.withdrawal_review} onSaved={onSaved} />
         )}
       </div>
 
-      <span
-        className={`text-[12.5px] font-semibold ${
-          row.over_target ? "text-priority-red" : "text-ink-700"
-        }`}
-      >
-        {waitText(row)}
-        {row.over_target && row.target_minutes !== null ? ` · over ${row.target_minutes} min` : ""}
-      </span>
+      <div className="min-w-0">
+        <span className="block font-medium tabular-nums text-ink-900">
+          {formatDateTime(row.signed_at)}
+        </span>
+        <span className="block text-[13px] text-ink-500">{row.signed_by || "—"}</span>
+      </div>
 
-      <span className="text-[12.5px] text-ink-900">
-        <span className="text-ink-500 lg:hidden">Responsible: </span>
-        {responsible ? (
-          <strong>{responsible}</strong>
-        ) : (
-          <span className="text-ink-500">Not yet assigned</span>
+      <div>
+        <span
+          className={`block font-semibold tabular-nums ${
+            row.over_target || row.priority === "RED" ? "text-priority-red" : "text-ink-900"
+          }`}
+        >
+          {waitText(row)}
+        </span>
+        {row.over_target && row.target_minutes !== null && (
+          <span className="block text-[12px] text-priority-red">
+            over the {row.target_minutes} min target
+          </span>
         )}
-      </span>
+        {responsible && (
+          <span className="block text-[12px] text-ink-500" title="Responsible">
+            {responsible}
+          </span>
+        )}
+      </div>
 
-      <button
-        type="button"
-        className={`${row.review_started_at ? BTN_GHOST : BTN} ${BTN_SM} self-start whitespace-nowrap`}
-        disabled={opening !== null}
-        aria-label={`${row.review_started_at ? "Continue" : "Open"} review for ${row.name || "unknown client"}`}
-        onClick={onOpen}
-      >
-        {opening === row.id
-          ? "Opening…"
-          : row.review_started_at
-            ? "Continue review"
-            : "Open review"}
-      </button>
+      <div className="col-span-2 flex lg:col-span-1 lg:justify-end">
+        <button
+          type="button"
+          className={`${BTN} !rounded-full !px-4 !py-2 !text-[13.5px] whitespace-nowrap`}
+          disabled={opening !== null}
+          aria-label={`${row.review_started_at ? "Continue" : "Open"} review for ${row.name || "unknown client"}`}
+          onClick={onOpen}
+        >
+          {opening === row.id
+            ? "Opening…"
+            : row.review_started_at
+              ? "Continue review"
+              : "Open review"}
+        </button>
+      </div>
     </li>
   );
 }
