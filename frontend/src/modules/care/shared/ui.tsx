@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { PRIORITY_LABEL, type Priority, type PriorityOrBlank } from "../../../lib/carePathwayApi";
 import type { ValueSetConcept } from "../../../lib/carePathwayApi";
@@ -152,6 +152,53 @@ export function PriorityPill({
       <span className="h-2 w-2 flex-shrink-0 rounded-full bg-current" />
       {priority}
       {long && ` · ${longLabel}`}
+    </span>
+  );
+}
+
+/** The dark hover bubble — hidden until its `group/tip` is hovered or reached by
+ * keyboard. Exported for fields that show it from their own label. */
+export const TIP_BUBBLE =
+  "pointer-events-none invisible absolute left-0 z-30 w-max max-w-[280px] rounded-[10px] bg-[#16221d] px-3 py-[9px] text-left text-[13px] font-normal normal-case leading-[1.45] tracking-normal text-white opacity-0 shadow-[0_8px_24px_rgba(0,0,0,.18)] transition-[opacity,transform] duration-150 motion-reduce:transition-none";
+export const TIP_SHOW =
+  "group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:delay-300 group-focus-visible/tip:visible group-focus-visible/tip:opacity-100 group-has-[:focus-visible]/tip:visible group-has-[:focus-visible]/tip:opacity-100";
+/** Marks text that has an explanation on hover. */
+export const TIP_CUE =
+  "cursor-help underline decoration-ink-400 decoration-dotted underline-offset-4";
+
+/**
+ * An explanation shown on hover (after a short delay) or keyboard focus, so a
+ * screen stays clean without losing its guidance. `focusable` makes plain text
+ * reachable by Tab; leave it off when the child is already a control.
+ */
+export function Tip({
+  tip,
+  children,
+  placement = "below",
+  focusable = true,
+  className = "",
+}: {
+  tip: ReactNode;
+  children: ReactNode;
+  placement?: "below" | "above";
+  focusable?: boolean;
+  className?: string;
+}) {
+  const id = useId();
+  return (
+    <span
+      className={`group/tip relative inline-flex max-w-full items-center outline-none ${className}`}
+      tabIndex={focusable ? 0 : undefined}
+      aria-describedby={id}
+    >
+      {children}
+      <span
+        id={id}
+        role="tooltip"
+        className={`${TIP_BUBBLE} ${TIP_SHOW} ${placement === "below" ? "top-full mt-2" : "bottom-full mb-2"}`}
+      >
+        {tip}
+      </span>
     </span>
   );
 }

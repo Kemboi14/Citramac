@@ -1,5 +1,7 @@
 import { Search } from "lucide-react";
 import {
+  cloneElement,
+  isValidElement,
   useEffect,
   useRef,
   useState,
@@ -29,7 +31,17 @@ import {
 import { formatDateTime, newRequestId } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
-import { Callout, Card, ErrorNote, PageHeader, SelectChoices, Tag } from "./shared/ui";
+import {
+  Callout,
+  Card,
+  ErrorNote,
+  PageHeader,
+  SelectChoices,
+  Tag,
+  Tip,
+  TIP_BUBBLE,
+  TIP_CUE,
+} from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
 import { REQUIRED_MARK, errorText } from "./triage/helpers";
 
@@ -323,26 +335,46 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
   };
 }
 
-/** `.registration-stage .field` — compact label + control. */
+/** `.registration-stage .field` — label + control. `tip` explains the field on
+ * hovering its label or focusing the field, above the label so it never covers
+ * what is being typed. */
 function RegField({
   id,
   label,
+  tip,
   className = "",
   children,
   error,
 }: {
   id: string;
   label: ReactNode;
+  tip?: string;
   className?: string;
   children: ReactNode;
   error?: string | null;
 }) {
+  const control =
+    tip && isValidElement<{ "aria-describedby"?: string }>(children)
+      ? cloneElement(children, { "aria-describedby": `${id}-tip` })
+      : children;
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-[13px] font-semibold text-ink-900">
+    <div className={`group/field relative flex min-w-0 flex-col gap-1 ${className}`}>
+      <label
+        htmlFor={id}
+        className={`peer/label w-fit text-[13px] font-semibold text-ink-900 ${tip ? TIP_CUE : ""}`}
+      >
         {label}
       </label>
-      {children}
+      {tip && (
+        <span
+          id={`${id}-tip`}
+          role="tooltip"
+          className={`${TIP_BUBBLE} bottom-full mb-1 peer-hover/label:visible peer-hover/label:opacity-100 peer-hover/label:delay-300 group-has-[:focus-visible]/field:visible group-has-[:focus-visible]/field:opacity-100`}
+        >
+          {tip}
+        </span>
+      )}
+      {control}
       {error && (
         <p role="alert" className="text-[11px] font-medium text-priority-red">
           {error}
@@ -355,17 +387,33 @@ function RegField({
 /** A titled group of fields on the registration grid. */
 function RegSection({
   title,
-  intro,
+  tip,
+  optional,
   children,
 }: {
   title: string;
-  intro?: ReactNode;
+  /** Guidance for the section, on hovering its title. */
+  tip?: ReactNode;
+  optional?: boolean;
   children: ReactNode;
 }) {
+  const heading = tip ? (
+    <Tip tip={tip}>
+      <span className={TIP_CUE}>{title}</span>
+    </Tip>
+  ) : (
+    title
+  );
   return (
     <section className="mt-6 border-t border-surface-border pt-6 first:mt-0 first:border-t-0 first:pt-0">
-      <h3 className="mb-4 text-base font-semibold text-ink-900">{title}</h3>
-      {intro}
+      <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-ink-900">
+        {heading}
+        {optional && (
+          <span className="rounded-full border border-surface-border bg-surface-bg px-2 py-0.5 text-xs font-semibold text-ink-500">
+            Optional
+          </span>
+        )}
+      </h3>
       <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 min-[561px]:grid-cols-2 min-[901px]:grid-cols-3">
         {children}
       </div>
@@ -904,7 +952,8 @@ export function RegistrationPage() {
   const ageField = (
     <RegField
       id="reg-age"
-      label="Age (years) — Calculated from date of birth, or enter an estimate"
+      label="Age (years)"
+      tip="Calculated from date of birth, or enter an estimate."
     >
       <input
         id="reg-age"
@@ -931,7 +980,7 @@ export function RegistrationPage() {
 
       <Card className="!rounded-2xl" bodyClassName="p-5 min-[721px]:p-7">
         <div
-          className="mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-surface-border bg-surface-bg p-1"
+          className="mb-6 inline-flex flex-wrap gap-1 rounded-xl border border-surface-border bg-surface-bg p-1"
           role="group"
           aria-label="Registration type"
         >
@@ -939,32 +988,24 @@ export function RegistrationPage() {
             const pressed = (resolving ? "IDENTIFIED" : mode) === m.status;
             const locked = editing ? m.status !== mode : resolving && m.status !== "IDENTIFIED";
             return (
-              <button
-                key={m.status}
-                type="button"
-                aria-pressed={pressed}
-                disabled={locked}
-                onClick={() => changeMode(m.status)}
-                className={`rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  pressed
-                    ? `${MODE_TONE[m.status].solid} shadow-[0_2px_6px_rgba(0,0,0,0.18)]`
-                    : "text-ink-900 hover:bg-surface-card"
-                }`}
-              >
-                {m.label}
-              </button>
+              <Tip key={m.status} tip={m.hint} focusable={false}>
+                <button
+                  type="button"
+                  aria-pressed={pressed}
+                  disabled={locked}
+                  onClick={() => changeMode(m.status)}
+                  className={`rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    pressed
+                      ? `${MODE_TONE[m.status].solid} shadow-[0_2px_6px_rgba(0,0,0,0.18)]`
+                      : "text-ink-900 hover:bg-surface-card"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              </Tip>
             );
           })}
         </div>
-        {!editing && (
-          <p className="mb-5 flex items-start gap-2 text-[13px] text-ink-700">
-            <span
-              aria-hidden="true"
-              className={`mt-[6px] h-2 w-2 flex-none rounded-full ${tone.dot}`}
-            />
-            <span>{resolving ? MODES[0].hint : modeInfo.hint}</span>
-          </p>
-        )}
         {vs.error && <ErrorNote>{vs.error}</ErrorNote>}
 
         <form ref={formRef} noValidate onSubmit={onSubmit}>
@@ -1010,12 +1051,11 @@ export function RegistrationPage() {
             <>
               {!emergency && (
                 <div className="mb-6">
-                  <h3 className="text-base font-semibold text-ink-900">Find an existing client</h3>
-                  <p className="mt-1 text-[13px] text-ink-500">
-                    Search by name (first and last, any order), phone in any format (07…, +254…),
-                    national ID or CITRAMAC ID. Front Desk sees registration details only — never
-                    clinical notes or medical records.
-                  </p>
+                  <h3 className="text-base font-semibold text-ink-900">
+                    <Tip tip="Search first to avoid a duplicate record. Names in any order; phone in any format (07…, +254…), national ID or CITRAMAC ID. Front Desk sees registration details only, never clinical notes.">
+                      <span className={TIP_CUE}>Find an existing client</span>
+                    </Tip>
+                  </h3>
                   <div className="relative mt-3 min-w-0">
                     <label htmlFor="client-search" className="sr-only">
                       Search client registry
@@ -1113,19 +1153,7 @@ export function RegistrationPage() {
           {emergency ? (
             <RegSection
               title="Emergency — identity unknown"
-              intro={
-                <div className="mb-2 space-y-1 text-xs text-ink-500">
-                  <p>
-                    Use when distress, altered consciousness, confusion, intoxication, psychosis,
-                    injury or another emergency prevents normal registration. Record what is
-                    available; never delay urgent care.
-                  </p>
-                  <p>
-                    A temporary client ID is assigned automatically. When identity becomes known,
-                    update this record so all encounters remain connected.
-                  </p>
-                </div>
-              }
+              tip="Use when distress, altered consciousness, confusion, intoxication, psychosis, injury or another emergency prevents normal registration. Record what is available; never delay urgent care. A temporary client ID is assigned automatically; when identity becomes known, update this record so all encounters stay connected."
             >
               {ageField}
               <RegField id="reg-apparent-sex" label="Apparent sex">
@@ -1444,11 +1472,8 @@ export function RegistrationPage() {
 
               <RegSection
                 title="Social & personal details"
-                intro={
-                  <p className="mb-2 text-xs text-ink-500">
-                    Optional — ask only what the client is comfortable sharing.
-                  </p>
-                }
+                tip="Ask only what the client is comfortable sharing."
+                optional
               >
                 <RegField id="reg-disability" label="Living with a disability">
                   <SelectChoices
@@ -1503,7 +1528,8 @@ export function RegistrationPage() {
                   </RegField>
                   <RegField
                     id="reg-allergy-status"
-                    label="Allergies & reaction, if known (client report — confirmed clinically later)"
+                    label="Allergies & reaction"
+                    tip="Client-reported. A clinician confirms allergies at intake before any prescribing."
                   >
                     <SelectChoices
                       className={REG_SELECT}
@@ -1518,7 +1544,11 @@ export function RegistrationPage() {
                       {textInput("reg-allergy-details", "allergyDetails")}
                     </RegField>
                   )}
-                  <RegField id="reg-payer" label="Payer / insurance (optional — never blocks care)">
+                  <RegField
+                    id="reg-payer"
+                    label="Payer / insurance"
+                    tip="Optional. Never blocks care."
+                  >
                     <SelectChoices
                       className={REG_SELECT}
                       id="reg-payer"
@@ -1530,11 +1560,12 @@ export function RegistrationPage() {
                   </RegField>
                   <fieldset className={`min-w-0 ${FULL_ROW}`}>
                     <legend className="text-base font-semibold text-ink-900">
-                      Privacy &amp; sharing
+                      <Tip
+                        tip={`Explain each option, then record the client’s choice. ${CONSENT_TEXT}`}
+                      >
+                        <span className={TIP_CUE}>Privacy &amp; sharing</span>
+                      </Tip>
                     </legend>
-                    <p className="mt-1 text-[13px] text-ink-500">
-                      Explain each option, then record the client’s choice. {CONSENT_TEXT}
-                    </p>
                     <div className="mt-4 overflow-hidden rounded-[14px] border border-surface-border">
                       <div className="grid min-[701px]:grid-cols-2">
                         {CONSENT_FIELDS.map(({ key, title, label, sensitive }, index) => {
@@ -1564,14 +1595,15 @@ export function RegistrationPage() {
                                     id={`reg-consent-${key}`}
                                     className="text-[14px] font-semibold text-ink-900"
                                   >
-                                    {title}
+                                    <Tip tip={label}>
+                                      <span className={TIP_CUE}>{title}</span>
+                                    </Tip>
                                     {sensitive && (
                                       <span className="ml-1.5 rounded-full bg-status-amber-tint px-[7px] py-px text-[11px] font-semibold text-status-amber">
                                         Sensitive
                                       </span>
                                     )}
                                   </h4>
-                                  <p className="text-xs text-ink-500">{label}</p>
                                 </div>
                                 <span
                                   className={`flex-none whitespace-nowrap rounded-full px-2.5 py-[3px] text-xs font-semibold ${status.tone}`}
@@ -1707,10 +1739,6 @@ export function RegistrationPage() {
               {submitText}
             </button>
           </div>
-          <p className="mt-2.5 flex items-center gap-1.5 text-xs text-ink-500">
-            ⚠ Allergies recorded here are client-reported; a clinician confirms them at intake
-            before any prescribing.
-          </p>
         </form>
       </Card>
     </div>
