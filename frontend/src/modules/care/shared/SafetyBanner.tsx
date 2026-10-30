@@ -1,4 +1,5 @@
 import { AlertTriangle, Check } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   PRIORITY_LABEL,
   type ClientBanner,
@@ -25,11 +26,19 @@ export interface BannerOverrides {
   status?: string;
 }
 
+/** How many allergy / alert chips the banner shows before "+N more". */
+const SHOWN = 2;
+
 /**
  * Persistent client safety banner — docs/15-CLINICAL-WORKSPACE-V3.md §1.2.
  * Four cells: identity, allergy (known / none / unknown), setting + triage
  * priority, critical alerts + responsible clinician / team. Sticky at the top
  * of the content area.
+ *
+ * Its height is fixed (QA 2026-10-30, client mockup "client banner"): chips stay
+ * on one line, the first two allergies and alerts (most severe first, server
+ * order) are shown, and the rest open in a popover from "+N more" — so a client
+ * with many alerts no longer pushes the page down.
  */
 export function SafetyBanner({
   banner,
@@ -109,7 +118,7 @@ export function SafetyBanner({
             {initials}
           </div>
           <div className="min-w-0">
-            <div className="break-words font-display text-xl font-extrabold leading-tight tracking-[-.4px] text-ink-900">
+            <div className="line-clamp-2 break-words font-display text-xl font-extrabold leading-tight tracking-[-.4px] text-ink-900">
               {name}{" "}
               {banner.identity_label && (
                 <span className="ml-1 inline-block rounded-md border border-priority-orange/40 bg-priority-orange-tint px-[7px] py-px align-[3px] text-[10px] font-semibold text-priority-orange">
@@ -123,15 +132,11 @@ export function SafetyBanner({
               <span>MRN {banner.mrn || "Not recorded"}</span>
             </div>
             {demographics.length > 0 && (
-              <div className="mt-[9px] flex flex-wrap gap-1.5">
-                {demographics.map((item) => (
-                  <span
-                    key={item}
-                    className="inline-flex min-h-[25px] items-center rounded-full border border-surface-border bg-surface-bg px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-700"
-                  >
-                    {item}
-                  </span>
-                ))}
+              <div
+                className="mt-1.5 truncate text-[13px] text-ink-500"
+                title={demographics.join(" · ")}
+              >
+                {demographics.join(" · ")}
               </div>
             )}
           </div>
@@ -154,24 +159,32 @@ export function SafetyBanner({
               )}
               {allergyTitle}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               {allergy.items.length > 0 ? (
-                allergy.items.map((item) => (
-                  <span
-                    key={item.substance}
-                    title={
-                      item.verification_status === "UNCONFIRMED"
-                        ? "Client-reported — not yet confirmed by a clinician"
-                        : undefined
-                    }
-                    className="inline-flex max-w-full items-center gap-1 break-words rounded-lg border border-priority-red/40 bg-surface-card px-[9px] py-[3px] text-xs font-bold text-ink-900"
-                  >
-                    {item.substance}
-                    {item.verification_status === "UNCONFIRMED" && (
-                      <span className="text-[10px] font-semibold text-ink-500">(reported)</span>
-                    )}
-                  </span>
-                ))
+                <ChipOverflow
+                  title="All allergies"
+                  items={allergy.items.map((item) => ({
+                    key: item.substance,
+                    text: item.substance,
+                    chip: (
+                      <span
+                        title={
+                          item.verification_status === "UNCONFIRMED"
+                            ? `${item.substance} — client-reported, not yet confirmed by a clinician`
+                            : item.substance
+                        }
+                        className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-priority-red/40 bg-surface-card px-[9px] py-[3px] text-xs font-bold text-ink-900"
+                      >
+                        <span className="truncate">{item.substance}</span>
+                        {item.verification_status === "UNCONFIRMED" && (
+                          <span className="flex-none text-[10px] font-semibold text-ink-500">
+                            (reported)
+                          </span>
+                        )}
+                      </span>
+                    ),
+                  }))}
+                />
               ) : (
                 <span className={`text-xs font-semibold ${allergyTone}`}>
                   {allergy.state === "none"
@@ -225,26 +238,38 @@ export function SafetyBanner({
 
         <div className={`${cell} flex flex-col gap-3.5`} aria-label="Clinical alerts and care team">
           <div>
-            <div className={label}>Critical clinical alerts</div>
+            <div className={`${label} flex items-center gap-2`}>
+              Critical clinical alerts
+              {banner.alerts.length > 0 && (
+                <span className="rounded-full bg-priority-red-solid px-2 py-px text-[11px] font-bold text-on-status">
+                  {banner.alerts.length}
+                </span>
+              )}
+            </div>
             {banner.alerts.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {banner.alerts.map((alert) => (
-                  <span
-                    key={alert.id}
-                    className="inline-flex max-w-full items-center gap-1.5 break-words rounded-[9px] border border-priority-orange/40 bg-priority-orange-tint px-2.5 py-1 text-xs font-bold text-priority-orange"
-                  >
-                    <AlertTriangle className="h-[15px] w-[15px] flex-none" />
-                    {alert.label}
-                  </span>
-                ))}
-              </div>
+              <ChipOverflow
+                title="All critical alerts"
+                items={banner.alerts.map((alert) => ({
+                  key: alert.id,
+                  text: alert.label,
+                  chip: (
+                    <span
+                      title={alert.label}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-[9px] border border-priority-orange/40 bg-priority-orange-tint px-2.5 py-1 text-xs font-bold text-priority-orange"
+                    >
+                      <AlertTriangle className="h-[15px] w-[15px] flex-none" />
+                      <span className="truncate">{alert.label}</span>
+                    </span>
+                  ),
+                }))}
+              />
             ) : (
               <span className="text-xs font-semibold text-ink-400">No critical alerts</span>
             )}
           </div>
           <div>
             <div className={label}>Responsible clinician / team</div>
-            <div className="break-words text-sm font-bold leading-snug text-ink-900">
+            <div className="line-clamp-2 break-words text-sm font-bold leading-snug text-ink-900">
               {banner.clinician}
               {banner.team && (
                 <>
@@ -257,6 +282,75 @@ export function SafetyBanner({
         </div>
       </div>
     </section>
+  );
+}
+
+interface OverflowItem {
+  key: string;
+  text: string;
+  chip: ReactNode;
+}
+
+/** One line of chips — the first SHOWN, then "+N more" opening every item in a
+ * popover (closed by Escape, a click outside, or the button again). */
+function ChipOverflow({ title, items }: { title: string; items: OverflowItem[] }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const rest = items.length - SHOWN;
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={box} className="relative flex min-w-0 items-center gap-1.5">
+      {items.slice(0, SHOWN).map((item) => (
+        <span key={item.key} className="flex min-w-0">
+          {item.chip}
+        </span>
+      ))}
+      {rest > 0 && (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={`${title}: ${rest} more`}
+          onClick={() => setOpen((v) => !v)}
+          className="flex-none whitespace-nowrap rounded-full border border-surface-border bg-surface-card px-2.5 py-1 text-xs font-semibold text-ink-900 hover:bg-surface-bg aria-expanded:bg-surface-bg"
+        >
+          +{rest} more
+        </button>
+      )}
+      {open && (
+        <div
+          role="dialog"
+          aria-label={title}
+          className="absolute right-0 top-full z-30 mt-2 max-h-[340px] w-[min(340px,calc(100vw-32px))] overflow-auto rounded-[14px] border border-surface-border bg-surface-card p-3.5 shadow-[0_12px_32px_rgba(16,34,29,.16)]"
+        >
+          <div className="mb-3 text-[11.5px] font-semibold uppercase tracking-[.07em] text-ink-500">
+            {title} ({items.length})
+          </div>
+          <ul className="flex flex-wrap gap-2">
+            {items.map((item) => (
+              <li key={item.key} className="flex min-w-0 max-w-full">
+                {item.chip}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
