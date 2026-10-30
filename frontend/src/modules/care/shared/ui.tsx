@@ -162,9 +162,10 @@ export const TIP_BUBBLE =
   "pointer-events-none invisible absolute left-0 z-30 w-max max-w-[280px] rounded-[10px] bg-[#16221d] px-3 py-[9px] text-left text-[13px] font-normal normal-case leading-[1.45] tracking-normal text-white opacity-0 shadow-[0_8px_24px_rgba(0,0,0,.18)] transition-[opacity,transform] duration-150 motion-reduce:transition-none";
 export const TIP_SHOW =
   "group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:delay-300 group-focus-visible/tip:visible group-focus-visible/tip:opacity-100 group-has-[:focus-visible]/tip:visible group-has-[:focus-visible]/tip:opacity-100";
-/** Marks text that has an explanation on hover. */
+/** Marks text that has an explanation on hover — the cursor only, no underline
+ * (QA 2026-10-30). */
 export const TIP_CUE =
-  "cursor-help underline decoration-ink-400 decoration-dotted underline-offset-4";
+  "cursor-help";
 
 /**
  * An explanation shown on hover (after a short delay) or keyboard focus, so a
