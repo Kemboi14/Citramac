@@ -682,7 +682,7 @@ export function TriageFormV5({
           actions,
           owner: person ? "" : owner.replace(TEAM, "").trim(),
           assignee: person,
-          status: (a("n_status") || "INITIATED") as CareTask["status"],
+          status: "INITIATED",
         }),
       );
       set("n_actions", []);
@@ -690,6 +690,15 @@ export function TriageFormV5({
       setTaskError(errorText(err, "Tasks not registered — check your connection."));
     }
   }
+
+  // Before 2026-10-30 a task's status could be picked when it was registered, and
+  // completing one did not record when — such a "done" says so.
+  const taskStatusText = (t: CareTask) =>
+    t.status !== "COMPLETED"
+      ? vs.label("task-status", t.status)
+      : t.completed_at
+        ? `${vs.label("task-status", t.status)} ${formatDateTime(t.completed_at)}`
+        : `${vs.label("task-status", t.status)} (no completion recorded)`;
 
   const ctx: Ctx = {
     answers,
@@ -1541,7 +1550,6 @@ export function TriageFormV5({
                       )}
                     </select>
                   </Field>
-                  <Sel k="n_status" label="Triage task status" set="task-status" />
                   <button
                     type="button"
                     className={`${BTN} justify-self-start`}
@@ -1553,15 +1561,20 @@ export function TriageFormV5({
                 </div>
                 {taskError && <ErrorNote>{taskError}</ErrorNote>}
                 {tasks.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-[13px]">
-                    {tasks.map((t) => (
-                      <li key={t.id}>
-                        <strong>{t.action_label}</strong> · {t.owner} ·{" "}
-                        {vs.label("task-status", t.status)}
-                        {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="mt-3">
+                    <p className="text-[12px] text-ink-500">
+                      Tasks requested — each is done later by the person or team it was assigned to.
+                    </p>
+                    <ul className="mt-1 space-y-1 text-[13px]">
+                      {tasks.map((t) => (
+                        <li key={t.id}>
+                          <strong>{t.action_label}</strong> · assigned to {t.owner} ·{" "}
+                          {taskStatusText(t)}
+                          {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </Section>
             </fieldset>

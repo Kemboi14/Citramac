@@ -593,8 +593,12 @@ class TriageTasksView(APIView):
                 )
             assignee, owner = person["id"], person["name"]
         task_status = request.data.get("status") or "INITIATED"
-        if task_status not in dict(CareTask.STATUS_CHOICES):
-            return Response({"status": "Unknown status."}, status=status.HTTP_400_BAD_REQUEST)
+        if task_status not in ("INITIATED", "PENDING"):
+            # A registered task is work still to do; whoever does it marks it done.
+            return Response(
+                {"status": "A new task is not started or in progress, never already done."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         labels = services.concept_labels()
         created = []
         for code in codes:
@@ -614,6 +618,12 @@ class TriageTasksView(APIView):
                     created_by=request.user,
                 )
             )
+        from . import task_notify
+
+        team = "" if assignee else owner
+        if team and team not in task_owner_choices(te.organization_id)["teams"]:
+            team = ""  # free text from an older draft names no one we can tell
+        task_notify.tasks_assigned(te, created, request.user, assignee_id=assignee, team=team)
         return Response(
             CareTaskSerializer(te.tasks.all(), many=True).data, status=status.HTTP_201_CREATED
         )
@@ -638,7 +648,13 @@ class CareTaskView(APIView):
             return Response(CareTaskSerializer(task).data)
         serializer = CareTaskSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        done = serializer.validated_data.get("status", task.status) == "COMPLETED"
+        if done and task.status != "COMPLETED":
+            serializer.save(completed_at=timezone.now(), completed_by=request.user)
+        elif not done and task.status == "COMPLETED":
+            serializer.save(completed_at=None, completed_by=None)
+        else:
+            serializer.save()
         return Response(serializer.data)
 
 

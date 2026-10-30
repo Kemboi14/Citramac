@@ -1220,7 +1220,7 @@ export function TriageForm({
                 <Field label="Status" htmlFor="t-n-status">
                   <SelectChoices
                     id="t-n-status"
-                    options={vs.options("task-status")}
+                    options={vs.options("task-status").filter((o) => o.code !== "COMPLETED")}
                     value={taskStatus}
                     onChange={(value) => setAnswer("n_status", value)}
                   />

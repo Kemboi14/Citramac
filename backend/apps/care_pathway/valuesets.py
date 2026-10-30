@@ -441,7 +441,7 @@ VALUESETS = {
     ),
     "task-status": (
         "Status",
-        [("INITIATED", "Initiated"), ("PENDING", "Pending"), ("COMPLETED", "Completed")],
+        [("INITIATED", "Not started"), ("PENDING", "In progress"), ("COMPLETED", "Done")],
     ),
     "clinical-alert": ("Critical clinical alerts", list(ALERT_LABELS.items())),
     # ── Re-check (§1.7) ──

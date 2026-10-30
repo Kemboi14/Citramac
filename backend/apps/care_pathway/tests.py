@@ -245,6 +245,69 @@ class RegistrationTests(CarePathwayApiTestCase):
         )
         self.assertEqual(stranger.status_code, 400)
 
+    def test_assigned_triage_tasks_notify_the_person_or_team_never_as_done(self):
+        from apps.notifications.models import Notification
+
+        with platform_admin_context():
+            role, _ = Role.objects.get_or_create(
+                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
+            colleague = User.objects.create_user(
+                email=f"colleague-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name="Evan",
+                last_name="Kabagi",
+            )
+            for user in (self.nurse, colleague):
+                user.roles.add(role)
+        te_id = self.register().data["triage_encounter_id"]
+        url = reverse("care-triage-tasks", args=[te_id])
+        done = self.client.post(
+            url, {"actions": ["safety_plan"], "owner": "Nurse", "status": "COMPLETED"},
+            format="json", **self.auth,
+        )
+        self.assertEqual(done.status_code, 400)
+
+        def told(user):
+            with platform_admin_context():
+                return list(
+                    Notification.objects.filter(recipient=user, category="CARE_TASK")
+                    .order_by("created_at").values_list("title", "body", "link")
+                )
+
+        self.client.post(
+            url, {"actions": ["safety_plan", "comprehensive_intake"], "owner": "Nurse"},
+            format="json", **self.auth,
+        )
+        self.client.post(
+            url, {"actions": ["safety_plan"], "assignee": str(colleague.pk)},
+            format="json", **self.auth,
+        )
+        titles = [t for t, _, _ in told(colleague)]
+        self.assertEqual(
+            titles, ["2 triage tasks assigned to the Nurse team", "Triage task assigned to you"]
+        )
+        self.assertIn("Safety Plan", told(colleague)[1][1])
+        self.assertIn("Assigned by Jane Njoroge", told(colleague)[1][1])
+        self.assertEqual(told(colleague)[1][2], f"/clinical/triage/{te_id}")
+        # Whoever registers the tasks is not told about their own action.
+        self.assertEqual(told(self.nurse), [])
+        # Marking a task done records when and by whom; reopening clears it.
+        with platform_admin_context():
+            task = CareTask.objects.filter(triage_encounter_id=te_id).first()
+        done = self.client.patch(
+            reverse("care-task", args=[task.pk]), {"status": "COMPLETED"}, format="json", **self.auth
+        )
+        self.assertIsNotNone(done.data["completed_at"])
+        with platform_admin_context():
+            self.assertEqual(CareTask.objects.get(pk=task.pk).completed_by_id, self.nurse.pk)
+        reopened = self.client.patch(
+            reverse("care-task", args=[task.pk]), {"status": "PENDING"}, format="json", **self.auth
+        )
+        self.assertIsNone(reopened.data["completed_at"])
+
     def test_search_finds_a_client_by_full_name_or_phone_in_any_format(self):
         self.register(phone="+254712345678")
         self.register(full_name="Brian Otieno", phone="0733 111 222", sex="MALE")
