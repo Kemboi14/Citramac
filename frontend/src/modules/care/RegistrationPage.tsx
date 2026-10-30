@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Search } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
@@ -30,6 +38,27 @@ import { REQUIRED_MARK, errorText } from "./triage/helpers";
 // and beginIdentityResolution, with the client's v4 registration mockup (split
 // name, social & personal details, emergency arrival). Every option list is a
 // served value set; nothing is held in browser storage (CLAUDE.md §5).
+
+// Each registration type has its own colour — the selected tab, the hint under
+// it, focused fields and the submit button — so the type in use is recognisable
+// at a glance (QA 2026-10-30; client mockup citramac-registration).
+const MODE_TONE: Record<IdentityStatus, { solid: string; hint: string; accent: string }> = {
+  IDENTIFIED: {
+    solid: "bg-brand-green text-on-primary",
+    hint: "border-brand-green bg-brand-green-tint text-ink-900",
+    accent: "var(--green)",
+  },
+  UNIDENTIFIED: {
+    solid: "bg-priority-orange-solid text-on-status",
+    hint: "border-priority-orange-solid bg-priority-orange-tint text-ink-900",
+    accent: "var(--pri-orange-solid)",
+  },
+  UNKNOWN: {
+    solid: "bg-priority-red-solid text-on-status",
+    hint: "border-priority-red-solid bg-priority-red-tint text-ink-900",
+    accent: "var(--pri-red-solid)",
+  },
+};
 
 const MODES: { status: IdentityStatus; label: string; hint: string; submit: string }[] = [
   {
@@ -70,12 +99,66 @@ const CONSENT_TEXT = [
   "You can change your mind at any time. Saying no will never stop you getting care.",
 ].join(" ");
 
-const CONSENT_FIELDS: { key: keyof ConsentForm; label: string }[] = [
-  { key: "general", label: "Share my general health information on the national HIE" },
-  { key: "mental_health", label: "Share my mental-health information on the HIE" },
-  { key: "substance_use", label: "Share my substance-use information on the HIE" },
-  { key: "family", label: "Family / next of kin may be told about my care" },
+const CONSENT_FIELDS: {
+  key: keyof ConsentForm;
+  title: string;
+  label: string;
+  sensitive?: boolean;
+}[] = [
+  {
+    key: "general",
+    title: "General health",
+    label: "Share my general health information on the national HIE",
+  },
+  {
+    key: "mental_health",
+    title: "Mental health",
+    label: "Share my mental-health information on the HIE",
+    sensitive: true,
+  },
+  {
+    key: "substance_use",
+    title: "Substance use",
+    label: "Share my substance-use information on the HIE",
+    sensitive: true,
+  },
+  {
+    key: "family",
+    title: "Family / next of kin",
+    label: "Family / next of kin may be told about my care",
+  },
 ];
+
+/** What each recorded decision means, as the status pill and selected segment show it. */
+const CONSENT_STATUS: Record<
+  string,
+  { label: string; family: string; tone: string; solid: string }
+> = {
+  NOT_ASKED: {
+    label: "Not asked",
+    family: "Not asked",
+    tone: "bg-surface-bg text-ink-500",
+    solid: "",
+  },
+  YES: {
+    label: "Shared",
+    family: "May be told",
+    tone: "bg-brand-green-tint text-brand-green",
+    solid: "bg-brand-green text-on-primary",
+  },
+  RESTRICTED: {
+    label: "This facility only",
+    family: "This facility only",
+    tone: "bg-status-amber-tint text-status-amber",
+    solid: "bg-status-amber text-on-status",
+  },
+  NO: {
+    label: "Not shared",
+    family: "Not to be told",
+    tone: "bg-status-red-tint text-status-red",
+    solid: "bg-status-red text-on-status",
+  },
+};
 
 interface ConsentForm {
   general: ConsentDecision;
@@ -256,7 +339,7 @@ function RegField({
 }) {
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-[10.5px] font-medium text-ink-900">
+      <label htmlFor={id} className="text-[13px] font-semibold text-ink-900">
         {label}
       </label>
       {children}
@@ -280,17 +363,19 @@ function RegSection({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-3 first:mt-0">
-      <h3 className="mb-1 text-xs font-bold text-ink-900">{title}</h3>
+    <section className="mt-6 border-t border-surface-border pt-6 first:mt-0 first:border-t-0 first:pt-0">
+      <h3 className="mb-4 text-base font-semibold text-ink-900">{title}</h3>
       {intro}
-      <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 min-[561px]:grid-cols-2 min-[901px]:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 min-[561px]:grid-cols-2 min-[901px]:grid-cols-3">
         {children}
       </div>
     </section>
   );
 }
 
-const REG_INPUT = `${INPUT} !bg-surface-card !px-[9px] !py-[7px] !text-xs`;
+// Focus follows the registration type's colour (--reg-accent on the card).
+const REG_INPUT = `${INPUT} !h-[42px] !rounded-[10px] !bg-surface-card !px-3 !py-0 !text-[14px] focus:!border-[var(--reg-accent)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--reg-accent)_18%,transparent)]`;
+const REG_SELECT = `${REG_INPUT} !pr-8`;
 const FULL_ROW = "min-[561px]:col-span-2 min-[901px]:col-span-3";
 
 export function RegistrationPage() {
@@ -346,6 +431,7 @@ export function RegistrationPage() {
   const resolving = Boolean(resolveId);
   const editing = Boolean(editId);
   const modeInfo = MODES.find((m) => m.status === mode) ?? MODES[0];
+  const tone = MODE_TONE[resolving ? "IDENTIFIED" : mode];
   const identified = mode === "IDENTIFIED";
   const emergency = mode === "UNKNOWN" && !resolving;
   // A returning client whose stored name is one word can still be registered.
@@ -834,15 +920,18 @@ export function RegistrationPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1360px]">
+    <div
+      className="mx-auto max-w-[1360px]"
+      style={{ "--reg-accent": tone.accent } as CSSProperties}
+    >
       <PageHeader
         eyebrow="Client registry"
         title={editing ? "Edit client details" : "New arrival"}
       />
 
-      <Card bodyClassName="p-4">
+      <Card className="!rounded-2xl" bodyClassName="p-5 min-[721px]:p-7">
         <div
-          className="mb-3 inline-flex flex-wrap gap-0.5 rounded-lg border border-surface-border bg-surface-bg p-[3px]"
+          className="mb-4 inline-flex flex-wrap gap-1 rounded-xl border border-surface-border bg-surface-bg p-1"
           role="group"
           aria-label="Registration type"
         >
@@ -856,8 +945,10 @@ export function RegistrationPage() {
                 aria-pressed={pressed}
                 disabled={locked}
                 onClick={() => changeMode(m.status)}
-                className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  pressed ? "bg-surface-card text-ink-900 shadow-sm" : "text-ink-500"
+                className={`rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  pressed
+                    ? `${MODE_TONE[m.status].solid} shadow-[0_2px_6px_rgba(0,0,0,0.18)]`
+                    : "text-ink-900 hover:bg-surface-card"
                 }`}
               >
                 {m.label}
@@ -866,7 +957,7 @@ export function RegistrationPage() {
           })}
         </div>
         {!editing && (
-          <p className="-mt-1.5 mb-3 text-xs text-ink-500">
+          <p className={`mb-5 rounded-lg border-l-4 px-3 py-2 text-[13px] ${tone.hint}`}>
             {resolving ? MODES[0].hint : modeInfo.hint}
           </p>
         )}
@@ -914,26 +1005,27 @@ export function RegistrationPage() {
           ) : (
             <>
               {!emergency && (
-                <div className="mb-3 rounded-sm border border-surface-border bg-surface-bg p-2.5">
-                  <h3 className="text-xs font-bold text-ink-900">Find an existing client</h3>
-                  <p className="mt-1 text-xs text-ink-500">
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-ink-900">Find an existing client</h3>
+                  <p className="mt-1 text-[13px] text-ink-500">
                     Search by name (first and last, any order), phone in any format (07…, +254…),
                     national ID or CITRAMAC ID. Front Desk sees registration details only — never
                     clinical notes or medical records.
                   </p>
-                  <div className="mt-[5px] flex min-w-0 flex-col gap-1">
-                    <label
-                      htmlFor="client-search"
-                      className="text-[10.5px] font-medium text-ink-900"
-                    >
+                  <div className="relative mt-3 min-w-0">
+                    <label htmlFor="client-search" className="sr-only">
                       Search client registry
                     </label>
+                    <Search
+                      aria-hidden
+                      className="pointer-events-none absolute left-3.5 top-3 h-[18px] w-[18px] text-ink-500"
+                    />
                     <input
                       id="client-search"
                       type="search"
                       autoComplete="off"
                       placeholder="Name, phone, national ID or CITRAMAC ID"
-                      className={REG_INPUT}
+                      className={`${REG_INPUT} !h-[46px] !bg-surface-bg !pl-11`}
                       value={query}
                       onChange={(e) => onSearch(e.target.value)}
                       onKeyDown={(e) => {
@@ -1034,6 +1126,7 @@ export function RegistrationPage() {
               {ageField}
               <RegField id="reg-apparent-sex" label="Apparent sex">
                 <SelectChoices
+                  className={REG_SELECT}
                   id="reg-apparent-sex"
                   options={vs.options("apparent-sex")}
                   placeholder="— select —"
@@ -1081,6 +1174,7 @@ export function RegistrationPage() {
               </RegField>
               <RegField id="reg-brought-by-relationship" label="Relationship to client">
                 <SelectChoices
+                  className={REG_SELECT}
                   id="reg-brought-by-relationship"
                   options={vs.options("brought-by-relationship")}
                   placeholder="— select —"
@@ -1131,6 +1225,7 @@ export function RegistrationPage() {
               </RegField>
               <RegField id="reg-allergy-status" label="Allergy status">
                 <SelectChoices
+                  className={REG_SELECT}
                   id="reg-allergy-status"
                   options={vs.options("emergency-allergy-status")}
                   value={allergyStatus}
@@ -1241,6 +1336,7 @@ export function RegistrationPage() {
                 </RegField>
                 <RegField id="reg-pronouns" label="Pronouns">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-pronouns"
                     options={vs.options("pronouns")}
                     placeholder="— select —"
@@ -1261,6 +1357,7 @@ export function RegistrationPage() {
                 {ageField}
                 <RegField id="reg-sex" label="Sex">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-sex"
                     options={vs.options("sex")}
                     placeholder="— select —"
@@ -1273,6 +1370,7 @@ export function RegistrationPage() {
                 </RegField>
                 <RegField id="reg-id-type" label="ID / passport (where available)">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-id-type"
                     options={vs.options("id-document-type")}
                     placeholder="— select —"
@@ -1306,6 +1404,7 @@ export function RegistrationPage() {
                   </RegField>
                   <RegField id="reg-nok-relationship" label="Next of kin — relationship">
                     <SelectChoices
+                      className={REG_SELECT}
                       id="reg-nok-relationship"
                       options={vs.options("next-of-kin-relationship")}
                       placeholder="— select —"
@@ -1349,6 +1448,7 @@ export function RegistrationPage() {
               >
                 <RegField id="reg-disability" label="Living with a disability">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-disability"
                     options={vs.options("disability-status")}
                     placeholder="— select —"
@@ -1367,6 +1467,7 @@ export function RegistrationPage() {
                 )}
                 <RegField id="reg-employment" label="Employment status">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-employment"
                     options={vs.options("employment-status")}
                     placeholder="— select —"
@@ -1379,6 +1480,7 @@ export function RegistrationPage() {
                 </RegField>
                 <RegField id="reg-marital" label="Marital status">
                   <SelectChoices
+                    className={REG_SELECT}
                     id="reg-marital"
                     options={vs.options("marital-status")}
                     placeholder="— select —"
@@ -1400,6 +1502,7 @@ export function RegistrationPage() {
                     label="Allergies & reaction, if known (client report — confirmed clinically later)"
                   >
                     <SelectChoices
+                      className={REG_SELECT}
                       id="reg-allergy-status"
                       options={vs.options("registration-allergy-status")}
                       value={allergyStatus}
@@ -1413,6 +1516,7 @@ export function RegistrationPage() {
                   )}
                   <RegField id="reg-payer" label="Payer / insurance (optional — never blocks care)">
                     <SelectChoices
+                      className={REG_SELECT}
                       id="reg-payer"
                       options={vs.options("payer")}
                       placeholder="— select —"
@@ -1420,30 +1524,100 @@ export function RegistrationPage() {
                       onChange={set("payer")}
                     />
                   </RegField>
-                  <fieldset
-                    className={`min-w-0 rounded-sm border border-surface-border bg-surface-bg p-2.5 ${FULL_ROW}`}
-                  >
-                    <legend className="px-1 text-[10.5px] font-semibold uppercase text-ink-500">
-                      Privacy &amp; sharing — explain, then record the client’s choice
+                  <fieldset className={`min-w-0 ${FULL_ROW}`}>
+                    <legend className="text-base font-semibold text-ink-900">
+                      Privacy &amp; sharing
                     </legend>
-                    <p className="mb-2 text-xs text-ink-500">{CONSENT_TEXT}</p>
-                    <div className="grid gap-2 min-[701px]:grid-cols-2">
-                      {CONSENT_FIELDS.map(({ key, label }) => (
-                        <RegField key={key} id={`reg-consent-${key}`} label={label}>
-                          <SelectChoices
-                            id={`reg-consent-${key}`}
-                            options={vs.options("hie-consent-decision")}
-                            value={consent[key]}
-                            onChange={(value) =>
-                              setConsent((prev) => ({ ...prev, [key]: value as ConsentDecision }))
-                            }
-                          />
-                        </RegField>
-                      ))}
-                    </div>
-                    <p className="mt-1.5 text-[11px] text-ink-500">
-                      Until the client explicitly says yes, nothing is sent to the HIE.
+                    <p className="mt-1 text-[13px] text-ink-500">
+                      Explain each option, then record the client’s choice. {CONSENT_TEXT}
                     </p>
+                    <div className="mt-4 overflow-hidden rounded-[14px] border border-surface-border">
+                      <div className="grid min-[701px]:grid-cols-2">
+                        {CONSENT_FIELDS.map(({ key, title, label, sensitive }, index) => {
+                          const value = consent[key];
+                          const status = CONSENT_STATUS[value] ?? CONSENT_STATUS.NOT_ASKED;
+                          const options = vs
+                            .options("hie-consent-decision")
+                            .filter(
+                              (o) =>
+                                o.code !== "NOT_ASKED" &&
+                                !(key === "family" && o.code === "RESTRICTED"),
+                            );
+                          return (
+                            <div
+                              key={key}
+                              role="radiogroup"
+                              aria-labelledby={`reg-consent-${key}`}
+                              className={`flex flex-col gap-3 border-surface-border px-[18px] py-4 ${
+                                index < CONSENT_FIELDS.length - 1 ? "border-b" : ""
+                              } ${index % 2 === 0 ? "min-[701px]:border-r" : ""} ${
+                                index >= CONSENT_FIELDS.length - 2 ? "min-[701px]:border-b-0" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2.5">
+                                <div className="min-w-0">
+                                  <h4
+                                    id={`reg-consent-${key}`}
+                                    className="text-[14px] font-semibold text-ink-900"
+                                  >
+                                    {title}
+                                    {sensitive && (
+                                      <span className="ml-1.5 rounded-full bg-status-amber-tint px-[7px] py-px text-[11px] font-semibold text-status-amber">
+                                        Sensitive
+                                      </span>
+                                    )}
+                                  </h4>
+                                  <p className="text-xs text-ink-500">{label}</p>
+                                </div>
+                                <span
+                                  className={`flex-none whitespace-nowrap rounded-full px-2.5 py-[3px] text-xs font-semibold ${status.tone}`}
+                                >
+                                  {key === "family" ? status.family : status.label}
+                                </span>
+                              </div>
+                              <div className="flex overflow-hidden rounded-[10px] border border-surface-border">
+                                {options.map((o) => {
+                                  const checked = value === o.code;
+                                  return (
+                                    <label
+                                      key={o.code}
+                                      className="relative flex-1 cursor-pointer border-r border-surface-border last:border-r-0"
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`reg-consent-${key}`}
+                                        value={o.code}
+                                        checked={checked}
+                                        onChange={() =>
+                                          setConsent((prev) => ({
+                                            ...prev,
+                                            [key]: o.code as ConsentDecision,
+                                          }))
+                                        }
+                                        className="peer absolute inset-0 cursor-pointer opacity-0"
+                                      />
+                                      <span
+                                        className={`block px-1.5 py-[9px] text-center text-[13px] font-medium peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-brand-green ${
+                                          checked
+                                            ? CONSENT_STATUS[o.code].solid
+                                            : "text-ink-500 hover:bg-surface-bg"
+                                        }`}
+                                      >
+                                        {o.code === "RESTRICTED" ? "This facility only" : o.display}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="border-t border-surface-border bg-surface-bg px-[18px] py-3 text-[13px] text-ink-500">
+                        Nothing is sent to the HIE until the client says Yes. Saying No never
+                        affects their care.
+                      </p>
+                    </div>
                   </fieldset>
                 </RegSection>
               )}
@@ -1499,10 +1673,10 @@ export function RegistrationPage() {
           <div role="status" aria-live="polite" className={saved ? "mt-3" : ""}>
             {saved && <Callout tone="success">{saved}</Callout>}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-surface-border pt-6">
             <button
               type="button"
-              className={BTN_GHOST}
+              className={`${BTN_GHOST} !rounded-full !px-6 !py-[11px] !text-[14px]`}
               onClick={() =>
                 navigate(editing && editId ? clientRecordPath(editId, "snapshot") : "/clinical")
               }
@@ -1512,7 +1686,7 @@ export function RegistrationPage() {
             {!editing && !resolving && selected && selected.identity_status === "IDENTIFIED" && (
               <button
                 type="button"
-                className={BTN_GHOST}
+                className={`${BTN_GHOST} !rounded-full !px-6 !py-[11px] !text-[14px]`}
                 disabled={submitting}
                 onClick={() => void saveDetails()}
               >
@@ -1521,7 +1695,9 @@ export function RegistrationPage() {
             )}
             <button
               type="submit"
-              className={`${BTN} !rounded-[20px]`}
+              className={`${BTN} !rounded-full !border-[var(--reg-accent)] !bg-[var(--reg-accent)] !px-6 !py-[11px] !text-[14px] hover:brightness-90 ${
+                mode === "IDENTIFIED" || resolving ? "" : "!text-on-status"
+              }`}
               disabled={submitting || (resolving && !resolveTarget) || (editing && !selected)}
             >
               {submitText}

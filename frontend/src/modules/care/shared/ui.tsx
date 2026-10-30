@@ -288,6 +288,7 @@ export function SelectChoices({
   placeholder,
   disabled,
   required,
+  className = "",
 }: {
   id?: string;
   options: ValueSetConcept[];
@@ -296,11 +297,12 @@ export function SelectChoices({
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  className?: string;
 }) {
   return (
     <select
       id={id}
-      className={INPUT}
+      className={`${INPUT} ${className}`}
       value={value}
       disabled={disabled}
       required={required}
