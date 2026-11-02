@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from apps.notifications.models import NotificationDelivery
 from apps.security.models import SecurityPolicy
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
@@ -82,30 +83,38 @@ class FullActivationAndLoginFlowTests(APITestCase):
         access = self._login_super_admin()
 
         # 1. Super Admin creates an Organization + invites its Org Admin.
-        create_response = self.client.post(
-            reverse("platform-organizations"),
-            {
-                "name": "Amani Wellness Centre",
-                "slug": "amani-wellness",
-                "facility_type": "MENTAL_HEALTH_MHP",
-                "org_admin": {
-                    "email": "admin@amaniwellness.co.ke",
-                    "first_name": "Judy",
-                    "last_name": "Mwikali",
+        # The invite goes through the durable NotificationDelivery outbox and
+        # is enqueued on commit, so the commit callbacks have to run here.
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(
+                reverse("platform-organizations"),
+                {
+                    "name": "Amani Wellness Centre",
+                    "slug": "amani-wellness",
+                    "facility_type": "MENTAL_HEALTH_MHP",
+                    "org_admin": {
+                        "email": "admin@amaniwellness.co.ke",
+                        "first_name": "Judy",
+                        "last_name": "Mwikali",
+                    },
                 },
-            },
-            HTTP_AUTHORIZATION=f"Bearer {access}",
-        )
+                HTTP_AUTHORIZATION=f"Bearer {access}",
+            )
         self.assertEqual(create_response.status_code, 201, create_response.data)
 
         with platform_admin_context():
             org = Organization.objects.get(slug="amani-wellness")
             org_admin = User.objects.get(email="admin@amaniwellness.co.ke")
             invite = ActivationInvite.objects.get(user=org_admin)
+            delivery = NotificationDelivery.objects.get(
+                organization=org, address="admin@amaniwellness.co.ke"
+            )
         self.assertEqual(org_admin.organization_id, org.id)
         self.assertFalse(org_admin.is_active)
+        self.assertEqual(delivery.status, NotificationDelivery.STATUS_SENT)
 
         invite_email = mail.outbox[-1]
+        self.assertEqual(invite_email.to, ["admin@amaniwellness.co.ke"])
         self.assertIn(invite.token, invite_email.body)
 
         # 2. Screen A — identify.
