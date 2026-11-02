@@ -54,13 +54,12 @@ export function SaveButton({
       window.setTimeout(() => {
         if (mountedRef.current) setStatus("idle");
       }, 1400);
-    } catch (error) {
+    } catch {
       if (!mountedRef.current) return;
       setStatus("error");
       window.setTimeout(() => {
         if (mountedRef.current) setStatus("idle");
       }, 900);
-      throw error;
     }
   };
 

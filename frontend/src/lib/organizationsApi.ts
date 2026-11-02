@@ -251,6 +251,7 @@ export function updatePlatformEmailSettings(
     method: "PATCH",
     body: payload,
     accessToken,
+    timeoutMs: 30_000,
   });
 }
 

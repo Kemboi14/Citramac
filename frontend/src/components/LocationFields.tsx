@@ -9,9 +9,13 @@ interface LocationFieldsProps {
   onSubCountyChange: (value: string) => void;
   labelClassName: string;
   fieldClassName: string;
+  errors?: { country?: string; county?: string; subCounty?: string };
+  errorIdPrefix?: string;
   /** Wraps the County + Sub-county pair; defaults to a two-up flex row. */
   rowClassName?: string;
 }
+
+const SUB_COUNTIES_BY_COUNTY = new Map(Object.entries(KENYA_SUB_COUNTIES_BY_COUNTY));
 
 /**
  * Country / County / Sub-county trio for Organization and Branch address
@@ -30,14 +34,24 @@ export function LocationFields({
   onSubCountyChange,
   labelClassName,
   fieldClassName,
+  errors,
+  errorIdPrefix = "location",
   rowClassName = "flex flex-wrap gap-4",
 }: LocationFieldsProps) {
   const isKenya = country === "Kenya";
-  const subCountyOptions = isKenya ? KENYA_SUB_COUNTIES_BY_COUNTY[county] ?? [] : [];
+  const subCountyOptions = isKenya ? (SUB_COUNTIES_BY_COUNTY.get(county) ?? []) : [];
+  const fieldClass = (error?: string) =>
+    error ? `${fieldClassName} border-status-red focus:border-status-red` : fieldClassName;
+  const fieldError = (field: string, message?: string) =>
+    message ? (
+      <span id={`${errorIdPrefix}-${field}-error`} className="text-xs font-medium text-status-red">
+        {message}
+      </span>
+    ) : null;
 
   const handleCountyChange = (value: string) => {
     onCountyChange(value);
-    if (isKenya && !(KENYA_SUB_COUNTIES_BY_COUNTY[value] ?? []).includes(subCounty)) {
+    if (isKenya && !(SUB_COUNTIES_BY_COUNTY.get(value) ?? []).includes(subCounty)) {
       onSubCountyChange("");
     }
   };
@@ -47,7 +61,9 @@ export function LocationFields({
       <label className={labelClassName}>
         Country
         <select
-          className={fieldClassName}
+          className={fieldClass(errors?.country)}
+          aria-invalid={Boolean(errors?.country)}
+          aria-describedby={errors?.country ? `${errorIdPrefix}-country-error` : undefined}
           value={country}
           onChange={(e) => {
             onCountryChange(e.target.value);
@@ -63,12 +79,19 @@ export function LocationFields({
             </option>
           ))}
         </select>
+        {fieldError("country", errors?.country)}
       </label>
       <div className={rowClassName}>
         <label className={`${labelClassName} flex-1`}>
           County
           {isKenya ? (
-            <select className={fieldClassName} value={county} onChange={(e) => handleCountyChange(e.target.value)}>
+            <select
+              className={fieldClass(errors?.county)}
+              aria-invalid={Boolean(errors?.county)}
+              aria-describedby={errors?.county ? `${errorIdPrefix}-county-error` : undefined}
+              value={county}
+              onChange={(e) => handleCountyChange(e.target.value)}
+            >
               <option value="">Select…</option>
               {KENYA_COUNTIES.map((c) => (
                 <option key={c} value={c}>
@@ -78,17 +101,22 @@ export function LocationFields({
             </select>
           ) : (
             <input
-              className={fieldClassName}
+              className={fieldClass(errors?.county)}
+              aria-invalid={Boolean(errors?.county)}
+              aria-describedby={errors?.county ? `${errorIdPrefix}-county-error` : undefined}
               value={county}
               onChange={(e) => onCountyChange(e.target.value)}
             />
           )}
+          {fieldError("county", errors?.county)}
         </label>
         <label className={`${labelClassName} flex-1`}>
           Sub-county
           {isKenya ? (
             <select
-              className={fieldClassName}
+              className={fieldClass(errors?.subCounty)}
+              aria-invalid={Boolean(errors?.subCounty)}
+              aria-describedby={errors?.subCounty ? `${errorIdPrefix}-subCounty-error` : undefined}
               value={county ? subCounty : ""}
               disabled={!county}
               onChange={(e) => onSubCountyChange(e.target.value)}
@@ -102,11 +130,14 @@ export function LocationFields({
             </select>
           ) : (
             <input
-              className={fieldClassName}
+              className={fieldClass(errors?.subCounty)}
+              aria-invalid={Boolean(errors?.subCounty)}
+              aria-describedby={errors?.subCounty ? `${errorIdPrefix}-subCounty-error` : undefined}
               value={subCounty}
               onChange={(e) => onSubCountyChange(e.target.value)}
             />
           )}
+          {fieldError("subCounty", errors?.subCounty)}
         </label>
       </div>
     </>

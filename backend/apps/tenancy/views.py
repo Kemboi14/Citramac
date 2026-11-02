@@ -1,3 +1,5 @@
+import hashlib
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -60,6 +62,7 @@ from .serializers import (
 )
 
 INVITE_TTL_DAYS = 7
+logger = logging.getLogger(__name__)
 
 
 def _reject_if_organization_suspended(organization):
@@ -1211,6 +1214,35 @@ class OrgDashboardStatsView(APIView):
 
 
 def _dispatch_invite_email(email, organization_name, token, organization_id=None):
-    from apps.notifications.tasks import send_invite_email
+    from apps.notifications.models import NotificationDelivery
+    from apps.notifications.tasks import deliver_notification
 
-    send_invite_email.delay(email, organization_name, token, organization_id=organization_id)
+    activation_link = f"{settings.FRONTEND_URL}/activate?token={token}"
+    delivery = NotificationDelivery.objects.create(
+        organization_id=organization_id,
+        dedupe_key=f"activation-invite:{hashlib.sha256(token.encode()).hexdigest()}",
+        channel=NotificationDelivery.CHANNEL_EMAIL,
+        address=email,
+        subject=f"You've been invited to CITRAMAC — {organization_name}",
+        body_text=(
+            f"You've been invited to set up {organization_name} on CITRAMAC. "
+            f"Activate your account: {activation_link}"
+        ),
+        html_template="notifications/emails/invite_email.html",
+        html_context={
+            "organization_name": organization_name,
+            "activation_token": token,
+            "activation_link": activation_link,
+        },
+    )
+
+    def enqueue_delivery():
+        try:
+            deliver_notification.delay(str(delivery.id))
+        except Exception:
+            logger.exception(
+                "Could not enqueue organization invite email; delivery remains pending",
+                extra={"delivery_id": str(delivery.id)},
+            )
+
+    transaction.on_commit(enqueue_delivery)

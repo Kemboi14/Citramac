@@ -549,7 +549,6 @@ class SubjectRequestsView(APIView):
         )
         return Response(_request_payload(dsr), status=status.HTTP_201_CREATED)
 
-
 class SubjectRequestDecisionView(APIView):
     """POST {decision: APPROVE|DECLINE|FULFIL, identity_verification, notes}."""
 

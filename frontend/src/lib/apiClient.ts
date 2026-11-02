@@ -7,7 +7,9 @@
 
 import { workingBranchHeader } from "./workingBranch";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000/api/v1" : "/api/v1");
 
 export interface ApiErrorBody {
   error: {
@@ -58,6 +60,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   accessToken?: string | null;
+  timeoutMs?: number;
 }
 
 /**
@@ -97,7 +100,11 @@ function parseValidationErrorBody(data: unknown): ApiErrorBody | null {
   return { error: { code: "VALIDATION_ERROR", message: parts.join(" "), fields } };
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function performApiRequest<T>(
+  path: string,
+  options: RequestOptions,
+  signal?: AbortSignal,
+): Promise<T> {
   const isFormData = options.body instanceof FormData;
   const response = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
@@ -115,31 +122,36 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         : isFormData
           ? (options.body as FormData)
           : JSON.stringify(options.body),
+    signal,
   });
 
   const text = await response.text();
   let data: unknown = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (err) {
-    // A 500/502 arrives as an HTML page. It is still an answer from the
-    // server, so it must become an ApiError — never look like "offline".
-    if (response.ok) throw err;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const message =
+        response.status >= 500
+          ? `The server returned an HTML error (HTTP ${response.status}). Check the backend logs for the cause.`
+          : `The API returned a non-JSON response (HTTP ${response.status}). ` +
+            "Check the API base URL and ensure the reverse proxy routes /api/ requests to the backend.";
+      throw new ApiError(response.status, {
+        error: {
+          code: "INVALID_API_RESPONSE",
+          message,
+        },
+      });
+    }
   }
 
   if (!response.ok) {
-    const body: ApiErrorBody = (data as ApiErrorBody | null)?.error
-      ? (data as ApiErrorBody)
-      : (parseValidationErrorBody(data) ?? {
-          error:
-            response.status >= 500
-              ? {
-                  code: "SERVER_ERROR",
-                  message:
-                    "The server hit an error and nothing was saved. Try again; if it keeps happening, tell your administrator.",
-                }
-              : { code: "UNKNOWN_ERROR", message: response.statusText || "Request failed" },
-        });
+    const body: ApiErrorBody =
+      data && typeof data === "object" && "error" in data
+        ? (data as ApiErrorBody)
+        : (parseValidationErrorBody(data) ?? {
+            error: { code: "UNKNOWN_ERROR", message: response.statusText || "Request failed" },
+          });
     const error = new ApiError(response.status, body);
 
     if (options.accessToken && SESSION_INVALIDATING_CODES.has(error.code)) {
@@ -149,6 +161,35 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   return data as T;
+}
+
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!options.timeoutMs) return performApiRequest<T>(path, options);
+
+  const controller = new AbortController();
+  let timeoutId = 0;
+  const timeoutError = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      controller.abort();
+      reject(
+        new ApiError(0, {
+          error: {
+            code: "REQUEST_TIMEOUT",
+            message: "The server did not respond in time. Check your connection and try again.",
+          },
+        }),
+      );
+    }, options.timeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      performApiRequest<T>(path, options, controller.signal),
+      timeoutError,
+    ]);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 /** Authenticated file download (e.g. compliance evidence) — never a public

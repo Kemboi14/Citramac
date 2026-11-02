@@ -8,14 +8,30 @@ import { ApiError } from "./apiClient";
  */
 export function fieldErrorsFrom(err: unknown): Record<string, string> {
   if (!(err instanceof ApiError) || !err.fields) return {};
-  return Object.fromEntries(
-    Object.entries(err.fields)
-      .map(([field, value]) => [
-        field,
-        Array.isArray(value) ? value.map(String).join(" ") : String(value),
-      ])
-      .filter(([, message]) => message),
-  );
+  const entries: [string, string][] = [];
+  const collect = (field: string, value: unknown) => {
+    if (Array.isArray(value)) {
+      if (value.every((item) => item === null || typeof item !== "object")) {
+        const message = value.map(String).join(" ");
+        if (message) entries.push([field, message]);
+        return;
+      }
+      value.forEach((item, index) => collect(`${field}.${index}`, item));
+      return;
+    }
+    if (value && typeof value === "object") {
+      Object.entries(value).forEach(([key, nested]) =>
+        collect(field ? `${field}.${key}` : key, nested),
+      );
+      return;
+    }
+    if (value !== undefined && value !== null && String(value)) {
+      entries.push([field, String(value)]);
+    }
+  };
+
+  Object.entries(err.fields).forEach(([field, value]) => collect(field, value));
+  return Object.fromEntries(entries);
 }
 
 /** The message to show above a form: the whole message unless every part is shown inline. */

@@ -39,14 +39,14 @@ anything clinical.
 ```bash
 cp .env.example .env   # fill in real values
 cd infra
-docker compose up
+docker compose --env-file ../.env up
 ```
 
 - Backend (Django admin): http://localhost:8000/admin/
 - API schema / docs: http://localhost:8000/api/v1/docs/
 - Health check: http://localhost:8000/healthz
 - Frontend (Vite dev server): http://localhost:5173
-- Mailhog (captures OTP/auth emails in dev): http://localhost:8025
+- Mailhog (default OTP/auth email sink when no SMTP host is configured): http://localhost:8025
 
 ### Without Docker
 
@@ -63,6 +63,14 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Standalone development runs Celery tasks inline, so OTP delivery does not
+require a separate worker. Configure `EMAIL_HOST`, `EMAIL_PORT`, and any
+required SMTP credentials/TLS settings to deliver mail to an inbox. Without
+an `EMAIL_HOST`, development prints the message (including the OTP) in the
+backend console instead. Docker Compose keeps asynchronous delivery through
+Celery and defaults to Mailhog. If `EMAIL_HOST` and `EMAIL_PORT` are set in
+the repository `.env`, Compose uses those values instead of Mailhog.
 
 ### FHIR conformance check
 

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
+import { fieldErrorsFrom, formErrorSummary } from "../../lib/formErrors";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { Drawer } from "../../components/Drawer";
 import { WideModal } from "../../components/WideModal";
@@ -48,6 +49,30 @@ const FIELD_CLASS =
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_PRIMARY =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
+const FIELD_ERROR_CLASS = "text-xs font-medium text-status-red";
+const ORGANIZATION_INLINE_FIELDS = [
+  "name",
+  "slug",
+  "org_type",
+  "facility_type",
+  "ownership_type",
+  "dha_facility_code",
+  "country",
+  "county",
+  "sub_county",
+  "subscription_plan_code",
+  "billing_cycle",
+  "logo_url",
+  "tagline",
+  "primary_color",
+  "support_email",
+  "support_phone",
+  "website",
+  "org_admin.email",
+  "org_admin.first_name",
+  "org_admin.last_name",
+  "org_admin.phone",
+];
 
 // Matches DRF's default PageNumberPagination (REST_FRAMEWORK.PAGE_SIZE in
 // config/settings/base.py) — the organizations endpoint is genuinely
@@ -390,6 +415,8 @@ function OrganizationDrawer({
   const [form, setForm] = useState<OrgFormState>(EMPTY_FORM);
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const fieldErrorMap = useMemo(() => new Map(Object.entries(fieldErrors)), [fieldErrors]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -439,6 +466,7 @@ function OrganizationDrawer({
     // OrganizationsPage's own refresh effect below).
     void Promise.resolve().then(() => {
       setError(null);
+      setFieldErrors({});
       setLogoFile(null);
       setSlugTouched(Boolean(organization));
       setForm(organization ? organizationToFormState(organization) : EMPTY_FORM);
@@ -485,8 +513,39 @@ function OrganizationDrawer({
     };
   }, [logoPreviewUrl]);
 
-  const setField = <K extends keyof OrgFormState>(field: K, value: OrgFormState[K]) =>
+  const clearFieldError = (field: string) => {
+    setFieldErrors((current) => {
+      if (!Object.hasOwn(current, field)) return current;
+      return Object.fromEntries(Object.entries(current).filter(([key]) => key !== field));
+    });
+  };
+
+  const setField = <K extends keyof OrgFormState>(field: K, value: OrgFormState[K]) => {
     setForm((f) => ({ ...f, [field]: value }));
+    clearFieldError(String(field));
+  };
+
+  const fieldInputClass = (field: string) =>
+    fieldErrorMap.has(field)
+      ? `${FIELD_CLASS} border-status-red focus:border-status-red`
+      : FIELD_CLASS;
+
+  const fieldError = (field: string) => {
+    const message = fieldErrorMap.get(field);
+    return message ? (
+      <span id={`${formId}-${field.replaceAll(".", "-")}-error`} className={FIELD_ERROR_CLASS}>
+        {message}
+      </span>
+    ) : null;
+  };
+
+  const setOrgAdminField = (field: keyof OrgFormState["org_admin"], value: string) => {
+    setForm((current) => ({
+      ...current,
+      org_admin: { ...current.org_admin, [field]: value },
+    }));
+    clearFieldError(`org_admin.${field}`);
+  };
 
   const handleNameChange = (value: string) => {
     setField("name", value);
@@ -497,6 +556,7 @@ function OrganizationDrawer({
     event.preventDefault();
     if (!accessToken) return;
     setError(null);
+    setFieldErrors({});
     setIsSubmitting(true);
     try {
       let saved: Organization;
@@ -541,10 +601,21 @@ function OrganizationDrawer({
       }
       onSaved();
     } catch (err) {
+      setFieldErrors(fieldErrorsFrom(err));
       setError(
-        err instanceof ApiError
-          ? err.message
-          : `Couldn't ${isEdit ? "update" : "create"} the organization.`,
+        formErrorSummary(
+          err,
+          err instanceof Error && err.message
+            ? `Couldn't ${isEdit ? "update" : "create"} the organization: ${err.message}`
+            : `Couldn't ${isEdit ? "update" : "create"} the organization.`,
+          ORGANIZATION_INLINE_FIELDS,
+        ),
+      );
+      window.requestAnimationFrame(() =>
+        document
+          .getElementById(formId)
+          ?.querySelector('[aria-invalid="true"]')
+          ?.scrollIntoView?.({ block: "center" }),
       );
     } finally {
       setIsSubmitting(false);
@@ -646,30 +717,41 @@ function OrganizationDrawer({
           Organization Name <span className="text-status-red">*</span>
           <input
             required
-            className={FIELD_CLASS}
+            className={fieldInputClass("name")}
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={fieldErrors.name ? `${formId}-name-error` : undefined}
             value={form.name}
             onChange={(e) => handleNameChange(e.target.value)}
           />
+          {fieldError("name")}
         </label>
         <label className={LABEL_CLASS}>
           Slug <span className="text-status-red">*</span>
           <input
             required
-            className={FIELD_CLASS}
+            className={fieldInputClass("slug")}
+            aria-invalid={Boolean(fieldErrors.slug)}
+            aria-describedby={fieldErrors.slug ? `${formId}-slug-error` : undefined}
             value={form.slug}
             onChange={(e) => {
               setSlugTouched(true);
               setField("slug", e.target.value);
             }}
           />
+          {fieldError("slug")}
         </label>
         <label className={LABEL_CLASS}>
           Organization Type <span className="text-status-red">*</span>
           <select
             required
-            className={FIELD_CLASS}
+            className={fieldInputClass("org_type")}
+            aria-invalid={Boolean(fieldErrors.org_type)}
+            aria-describedby={fieldErrors.org_type ? `${formId}-org_type-error` : undefined}
             value={form.org_type}
-            onChange={(e) => setField("org_type", e.target.value as OrgType)}
+            onChange={(e) => {
+              setField("org_type", e.target.value as OrgType);
+              clearFieldError("facility_type");
+            }}
           >
             {(Object.keys(ORG_TYPE_LABEL) as OrgType[]).map((type) => (
               <option key={type} value={type}>
@@ -678,12 +760,17 @@ function OrganizationDrawer({
               </option>
             ))}
           </select>
+          {fieldError("org_type")}
         </label>
         <label className={LABEL_CLASS}>
           Ownership Type <span className="text-status-red">*</span>
           <select
             required
-            className={FIELD_CLASS}
+            className={fieldInputClass("ownership_type")}
+            aria-invalid={Boolean(fieldErrors.ownership_type)}
+            aria-describedby={
+              fieldErrors.ownership_type ? `${formId}-ownership_type-error` : undefined
+            }
             value={form.ownership_type}
             onChange={(e) => setField("ownership_type", e.target.value as OwnershipType)}
           >
@@ -693,6 +780,7 @@ function OrganizationDrawer({
               </option>
             ))}
           </select>
+          {fieldError("ownership_type")}
         </label>
 
         {form.org_type === "HOSPITAL" && (
@@ -700,7 +788,11 @@ function OrganizationDrawer({
             Facility Type <span className="text-status-red">*</span>
             <select
               required
-              className={FIELD_CLASS}
+              className={fieldInputClass("facility_type")}
+              aria-invalid={Boolean(fieldErrors.facility_type)}
+              aria-describedby={
+                fieldErrors.facility_type ? `${formId}-facility_type-error` : undefined
+              }
               value={form.facility_type}
               onChange={(e) => setField("facility_type", e.target.value)}
             >
@@ -711,6 +803,7 @@ function OrganizationDrawer({
                 </option>
               ))}
             </select>
+            {fieldError("facility_type")}
           </label>
         )}
 
@@ -718,11 +811,16 @@ function OrganizationDrawer({
           <label className={LABEL_CLASS}>
             {IDENTITY_CODE_LABEL[form.org_type]}
             <input
-              className={FIELD_CLASS}
+              className={fieldInputClass("dha_facility_code")}
+              aria-invalid={Boolean(fieldErrors.dha_facility_code)}
+              aria-describedby={
+                fieldErrors.dha_facility_code ? `${formId}-dha_facility_code-error` : undefined
+              }
               placeholder={IDENTITY_CODE_PLACEHOLDER[form.org_type]}
               value={form.dha_facility_code}
               onChange={(e) => setField("dha_facility_code", e.target.value)}
             />
+            {fieldError("dha_facility_code")}
           </label>
           <IdentityCodeStatus orgType={form.org_type} value={form.dha_facility_code} />
         </div>
@@ -736,6 +834,12 @@ function OrganizationDrawer({
           onCountryChange={(v) => setField("country", v)}
           onCountyChange={(v) => setField("county", v)}
           onSubCountyChange={(v) => setField("sub_county", v)}
+          errors={{
+            country: fieldErrorMap.get("country"),
+            county: fieldErrorMap.get("county"),
+            subCounty: fieldErrorMap.get("sub_county"),
+          }}
+          errorIdPrefix={`${formId}-location`}
         />
 
         {!isEdit && (
@@ -745,9 +849,18 @@ function OrganizationDrawer({
               <label className={LABEL_CLASS}>
                 Subscription Plan
                 <select
-                  className={FIELD_CLASS}
+                  className={fieldInputClass("subscription_plan_code")}
+                  aria-invalid={Boolean(fieldErrors.subscription_plan_code)}
+                  aria-describedby={
+                    fieldErrors.subscription_plan_code
+                      ? `${formId}-subscription_plan_code-error`
+                      : undefined
+                  }
                   value={form.subscription_plan_code}
-                  onChange={(e) => setField("subscription_plan_code", e.target.value)}
+                  onChange={(e) => {
+                    setField("subscription_plan_code", e.target.value);
+                    clearFieldError("billing_cycle");
+                  }}
                 >
                   <option value="">No plan (assign later)</option>
                   {plans.map((plan) => (
@@ -759,12 +872,17 @@ function OrganizationDrawer({
                     </option>
                   ))}
                 </select>
+                {fieldError("subscription_plan_code")}
               </label>
               {form.subscription_plan_code && (
                 <label className={LABEL_CLASS}>
                   Billing Cycle
                   <select
-                    className={FIELD_CLASS}
+                    className={fieldInputClass("billing_cycle")}
+                    aria-invalid={Boolean(fieldErrors.billing_cycle)}
+                    aria-describedby={
+                      fieldErrors.billing_cycle ? `${formId}-billing_cycle-error` : undefined
+                    }
                     value={form.billing_cycle}
                     onChange={(e) =>
                       setField("billing_cycle", e.target.value as "MONTHLY" | "ANNUAL")
@@ -773,6 +891,7 @@ function OrganizationDrawer({
                     <option value="MONTHLY">Monthly</option>
                     <option value="ANNUAL">Annual</option>
                   </select>
+                  {fieldError("billing_cycle")}
                 </label>
               )}
               {selectedPlan && (
@@ -808,46 +927,62 @@ function OrganizationDrawer({
                 <input
                   required
                   type="email"
-                  className={FIELD_CLASS}
-                  value={form.org_admin.email}
-                  onChange={(e) =>
-                    setField("org_admin", { ...form.org_admin, email: e.target.value })
+                  className={fieldInputClass("org_admin.email")}
+                  aria-invalid={Boolean(fieldErrors["org_admin.email"])}
+                  aria-describedby={
+                    fieldErrors["org_admin.email"] ? `${formId}-org_admin-email-error` : undefined
                   }
+                  value={form.org_admin.email}
+                  onChange={(e) => setOrgAdminField("email", e.target.value)}
                 />
+                {fieldError("org_admin.email")}
               </label>
               <label className={LABEL_CLASS}>
                 First Name <span className="text-status-red">*</span>
                 <input
                   required
-                  className={FIELD_CLASS}
-                  value={form.org_admin.first_name}
-                  onChange={(e) =>
-                    setField("org_admin", { ...form.org_admin, first_name: e.target.value })
+                  className={fieldInputClass("org_admin.first_name")}
+                  aria-invalid={Boolean(fieldErrors["org_admin.first_name"])}
+                  aria-describedby={
+                    fieldErrors["org_admin.first_name"]
+                      ? `${formId}-org_admin-first_name-error`
+                      : undefined
                   }
+                  value={form.org_admin.first_name}
+                  onChange={(e) => setOrgAdminField("first_name", e.target.value)}
                 />
+                {fieldError("org_admin.first_name")}
               </label>
               <label className={LABEL_CLASS}>
                 Last Name <span className="text-status-red">*</span>
                 <input
                   required
-                  className={FIELD_CLASS}
-                  value={form.org_admin.last_name}
-                  onChange={(e) =>
-                    setField("org_admin", { ...form.org_admin, last_name: e.target.value })
+                  className={fieldInputClass("org_admin.last_name")}
+                  aria-invalid={Boolean(fieldErrors["org_admin.last_name"])}
+                  aria-describedby={
+                    fieldErrors["org_admin.last_name"]
+                      ? `${formId}-org_admin-last_name-error`
+                      : undefined
                   }
+                  value={form.org_admin.last_name}
+                  onChange={(e) => setOrgAdminField("last_name", e.target.value)}
                 />
+                {fieldError("org_admin.last_name")}
               </label>
               <label className={LABEL_CLASS}>
                 Phone
                 <input
                   type="tel"
-                  className={FIELD_CLASS}
+                  className={fieldInputClass("org_admin.phone")}
+                  aria-invalid={Boolean(fieldErrors["org_admin.phone"])}
+                  aria-describedby={
+                    fieldErrors["org_admin.phone"] ? `${formId}-org_admin-phone-error` : undefined
+                  }
                   placeholder="+254 7XX XXX XXX"
                   value={form.org_admin.phone}
-                  onChange={(e) =>
-                    setField("org_admin", { ...form.org_admin, phone: e.target.value })
-                  }
+                  onChange={(e) => setOrgAdminField("phone", e.target.value)}
                 />
+                {fieldError("org_admin.phone")}
               </label>
             </div>
           </div>
@@ -911,11 +1046,14 @@ function OrganizationDrawer({
               Logo URL
               <input
                 type="url"
-                className={FIELD_CLASS}
+                className={fieldInputClass("logo_url")}
+                aria-invalid={Boolean(fieldErrors.logo_url)}
+                aria-describedby={fieldErrors.logo_url ? `${formId}-logo_url-error` : undefined}
                 placeholder="https://…/logo.png"
                 value={form.logo_url}
                 onChange={(e) => setField("logo_url", e.target.value)}
               />
+              {fieldError("logo_url")}
               <span className="mt-1 block text-[11px] font-normal text-ink-400">
                 Only used if no file is uploaded above.
               </span>
@@ -923,10 +1061,13 @@ function OrganizationDrawer({
             <label className={LABEL_CLASS}>
               Tagline
               <input
-                className={FIELD_CLASS}
+                className={fieldInputClass("tagline")}
+                aria-invalid={Boolean(fieldErrors.tagline)}
+                aria-describedby={fieldErrors.tagline ? `${formId}-tagline-error` : undefined}
                 value={form.tagline}
                 onChange={(e) => setField("tagline", e.target.value)}
               />
+              {fieldError("tagline")}
             </label>
             <label className={LABEL_CLASS}>
               Primary Color
@@ -938,11 +1079,16 @@ function OrganizationDrawer({
                   onChange={(e) => setField("primary_color", e.target.value)}
                 />
                 <input
-                  className={`${FIELD_CLASS} flex-1`}
+                  className={`${fieldInputClass("primary_color")} flex-1`}
+                  aria-invalid={Boolean(fieldErrors.primary_color)}
+                  aria-describedby={
+                    fieldErrors.primary_color ? `${formId}-primary_color-error` : undefined
+                  }
                   value={form.primary_color}
                   onChange={(e) => setField("primary_color", e.target.value)}
                 />
               </span>
+              {fieldError("primary_color")}
               <span className="mt-1 block text-[11px] font-normal text-ink-400">
                 Only recolors this tenant&rsquo;s pre-login screen.
               </span>
@@ -1008,28 +1154,41 @@ function OrganizationDrawer({
               Support Email
               <input
                 type="email"
-                className={FIELD_CLASS}
+                className={fieldInputClass("support_email")}
+                aria-invalid={Boolean(fieldErrors.support_email)}
+                aria-describedby={
+                  fieldErrors.support_email ? `${formId}-support_email-error` : undefined
+                }
                 value={form.support_email}
                 onChange={(e) => setField("support_email", e.target.value)}
               />
+              {fieldError("support_email")}
             </label>
             <label className={LABEL_CLASS}>
               Support Phone
               <input
                 type="tel"
-                className={FIELD_CLASS}
+                className={fieldInputClass("support_phone")}
+                aria-invalid={Boolean(fieldErrors.support_phone)}
+                aria-describedby={
+                  fieldErrors.support_phone ? `${formId}-support_phone-error` : undefined
+                }
                 value={form.support_phone}
                 onChange={(e) => setField("support_phone", e.target.value)}
               />
+              {fieldError("support_phone")}
             </label>
             <label className={LABEL_CLASS}>
               Website
               <input
                 type="url"
-                className={FIELD_CLASS}
+                className={fieldInputClass("website")}
+                aria-invalid={Boolean(fieldErrors.website)}
+                aria-describedby={fieldErrors.website ? `${formId}-website-error` : undefined}
                 value={form.website}
                 onChange={(e) => setField("website", e.target.value)}
               />
+              {fieldError("website")}
             </label>
           </div>
         </div>
