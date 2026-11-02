@@ -8,3 +8,18 @@ spec:
   ports:
     - port: 8000
       targetPort: 8000
+---
+# Alias for frontend/nginx.conf's `proxy_pass http://backend:8000` (the
+# docker-compose service name). The ingress sends /api straight to
+# citramac-backend, so this only lets nginx resolve the name at start-up;
+# without it the frontend pod exits with "host not found in upstream".
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: citramac-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
