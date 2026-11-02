@@ -1556,11 +1556,7 @@ export function RegistrationPage() {
                   </RegField>
                   <fieldset className={`min-w-0 ${FULL_ROW}`}>
                     <legend className="text-base font-semibold text-ink-900">
-                      <Tip
-                        tip={`Explain each option, then record the client’s choice. ${CONSENT_TEXT}`}
-                      >
-                        <span className={TIP_CUE}>Privacy &amp; sharing</span>
-                      </Tip>
+                      Privacy &amp; sharing
                     </legend>
                     <div className="mt-4 overflow-hidden rounded-[14px] border border-surface-border">
                       <div className="grid min-[701px]:grid-cols-2">
