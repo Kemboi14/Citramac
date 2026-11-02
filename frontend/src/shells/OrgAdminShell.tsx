@@ -7,15 +7,18 @@ import { initialsAndLabel } from "./userDisplay";
 
 /** docs/03-DESIGN-SYSTEM.md §3.5 — mockups/citramac_ORG-admin.html. */
 export function OrgAdminShell() {
-  const { claims } = useAuth();
+  const { claims, profile } = useAuth();
   const { initials, name } = initialsAndLabel(claims);
   // An Auditor reaches this shell for the audit log only (roleRouting.ts).
   const isAuditor = claims?.role === "Auditor";
+  const brandSub = isAuditor
+    ? "Auditor"
+    : `${profile?.organization_name ?? "Org"} Admin`;
 
   return (
     <AppShell
       brandName="CITRAMAC"
-      brandSub={isAuditor ? "Auditor" : "Org Admin"}
+      brandSub={brandSub}
       navGroups={isAuditor ? AUDITOR_NAV : ORG_ADMIN_NAV}
       userInitials={initials}
       userName={name}
