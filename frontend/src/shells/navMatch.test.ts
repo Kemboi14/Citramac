@@ -30,6 +30,10 @@ describe("clinical nav matching", () => {
     expect(groupContainsActive(group("Laboratory"), "/clinical/discharge")).toBe(false);
   });
 
+  it("keeps all clinical menu groups collapsed by default", () => {
+    expect(groups.every((item) => !item.defaultOpen)).toBe(true);
+  });
+
   it("gives every nav destination a single owner", () => {
     const paths = everyLeaf.map((item) => item.to);
     expect(new Set(paths).size).toBe(paths.length);

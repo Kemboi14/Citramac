@@ -146,9 +146,8 @@ export const AUDITOR_NAV: NavGroup[] = [
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — the owner-approved grouped clinical
 // sidebar (mockups/citramac_clinical_workspace.html), item for item and in
-// order. Clinical and Psychotherapy start open; every other group starts
-// collapsed and opens itself when the current route is inside it. Screens the
-// mockup has no slot for (Client Registry, Client History, SOAP, Triage & MSE,
+// order. Every group starts collapsed and opens when the current route is
+// inside it. Screens the mockup has no slot for (Client Registry, Client History, SOAP, Triage & MSE,
 // Clinical Review, Attachments, MHP sessions) are no longer in the sidebar but
 // keep their routes. The Audit log is deliberately absent here: it is an Org
 // Admin / Auditor screen (ORG_ADMIN_NAV).
@@ -161,7 +160,6 @@ export const CLINICAL_NAV: NavGroup[] = [
       {
         label: "Clinical",
         icon: Stethoscope,
-        defaultOpen: true,
         children: [
           { label: "Registration", to: "/clinical/registration", icon: FileText },
           { label: "Triage", to: "/clinical/triage", icon: Activity, matchPrefix: true },
@@ -181,7 +179,6 @@ export const CLINICAL_NAV: NavGroup[] = [
       {
         label: "Psychotherapy",
         icon: HeartPulse,
-        defaultOpen: true,
         children: [
           {
             label: "Individual Psychotherapy",
