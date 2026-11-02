@@ -51,9 +51,9 @@ import { REQUIRED_MARK, errorText } from "./triage/helpers";
 // name, social & personal details, emergency arrival). Every option list is a
 // served value set; nothing is held in browser storage (CLAUDE.md §5).
 
-// Each registration type has its own colour — the selected tab, the hint under
-// it, focused fields and the submit button — so the type in use is recognisable
-// at a glance (QA 2026-10-30; client mockup citramac-registration).
+// Each registration type has its own colour — the selected tab, focused fields
+// and submit button — so the type in use is recognisable at a glance (QA
+// 2026-10-30; client mockup citramac-registration).
 const MODE_TONE: Record<IdentityStatus, { solid: string; dot: string; accent: string }> = {
   IDENTIFIED: {
     solid: "bg-brand-green text-on-primary",
@@ -72,23 +72,20 @@ const MODE_TONE: Record<IdentityStatus, { solid: string; dot: string; accent: st
   },
 };
 
-const MODES: { status: IdentityStatus; label: string; hint: string; submit: string }[] = [
+const MODES: { status: IdentityStatus; label: string; submit: string }[] = [
   {
     status: "IDENTIFIED",
     label: "Tier 1 registration",
-    hint: "Identified arrival. Search first to avoid creating a duplicate record.",
     submit: "Register & send to triage",
   },
   {
     status: "UNIDENTIFIED",
     label: "Unidentified person",
-    hint: "The person is present but their name has not been confirmed. Add a brief description or alias so they can be safely identified later.",
     submit: "Register unidentified person & send to triage",
   },
   {
     status: "UNKNOWN",
     label: "Emergency — identity unknown",
-    hint: "Emergency — identity unknown. Capture only what is available; registration must never delay urgent care.",
     submit: "Create emergency record & send to triage",
   },
 ];
@@ -988,21 +985,20 @@ export function RegistrationPage() {
             const pressed = (resolving ? "IDENTIFIED" : mode) === m.status;
             const locked = editing ? m.status !== mode : resolving && m.status !== "IDENTIFIED";
             return (
-              <Tip key={m.status} tip={m.hint} focusable={false}>
-                <button
-                  type="button"
-                  aria-pressed={pressed}
-                  disabled={locked}
-                  onClick={() => changeMode(m.status)}
-                  className={`rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    pressed
-                      ? `${MODE_TONE[m.status].solid} shadow-[0_2px_6px_rgba(0,0,0,0.18)]`
-                      : "text-ink-900 hover:bg-surface-card"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              </Tip>
+              <button
+                key={m.status}
+                type="button"
+                aria-pressed={pressed}
+                disabled={locked}
+                onClick={() => changeMode(m.status)}
+                className={`rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  pressed
+                    ? `${MODE_TONE[m.status].solid} shadow-[0_2px_6px_rgba(0,0,0,0.18)]`
+                    : "text-ink-900 hover:bg-surface-card"
+                }`}
+              >
+                {m.label}
+              </button>
             );
           })}
         </div>
