@@ -44,13 +44,14 @@ const PAGE_TITLES: Record<string, string> = {
 
 /** docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — mockups/citramac_clinical_workspace.html. */
 export function ClinicalWorkspaceShell() {
-  const { claims } = useAuth();
+  const { claims, profile } = useAuth();
   const { initials, name } = initialsAndLabel(claims);
+  const brandSub = `${profile?.organization_name ?? "Organization"} Clinical Workspace`;
 
   return (
     <AppShell
       brandName="CITRAMAC"
-      brandSub="HMIS v2.0"
+      brandSub={brandSub}
       navGroups={CLINICAL_NAV}
       userInitials={initials}
       userName={name}
