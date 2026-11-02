@@ -40,12 +40,15 @@ export class ApiError extends Error {
 // (a bare login attempt failing with one of these is handled inline by the
 // login form itself, not by force-logging-out a session that never existed).
 const SESSION_INVALIDATING_CODES = new Set([
+  "TOKEN_NOT_VALID",
   "ORGANIZATION_SUSPENDED",
   "BRANCH_INACTIVE",
   "DEPARTMENT_INACTIVE",
   "USER_INACTIVE",
   "ACCESS_WINDOW_CLOSED",
 ]);
+const INVALID_SESSION_MESSAGE =
+  "Your session has expired! Please sign in again";
 
 type SessionInvalidatedHandler = (message: string) => void;
 let sessionInvalidatedHandler: SessionInvalidatedHandler | null = null;
@@ -155,7 +158,9 @@ async function performApiRequest<T>(
     const error = new ApiError(response.status, body);
 
     if (options.accessToken && SESSION_INVALIDATING_CODES.has(error.code)) {
-      sessionInvalidatedHandler?.(error.message);
+      sessionInvalidatedHandler?.(
+        error.code === "TOKEN_NOT_VALID" ? INVALID_SESSION_MESSAGE : error.message,
+      );
     }
     throw error;
   }

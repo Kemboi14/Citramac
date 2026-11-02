@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiRequest } from "./apiClient";
+import { ApiError, apiRequest, setSessionInvalidatedHandler } from "./apiClient";
 
 afterEach(() => {
+  setSessionInvalidatedHandler(null);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -69,6 +70,36 @@ describe("apiRequest", () => {
       status: 400,
       fields: { name: ["Invalid"] },
     });
+  });
+
+  it("signs out with a clear message when an access token is no longer valid", async () => {
+    const onSessionInvalidated = vi.fn();
+    setSessionInvalidatedHandler(onSessionInvalidated);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              code: "TOKEN_NOT_VALID",
+              message: "Given token not valid for any token type",
+            },
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    await expect(
+      apiRequest("/care/dashboard/", { accessToken: "expired-access-token" }),
+    ).rejects.toMatchObject({
+      code: "TOKEN_NOT_VALID",
+      message: "Given token not valid for any token type",
+    });
+
+    expect(onSessionInvalidated).toHaveBeenCalledWith(
+      "Your session has expired! Please sign in again",
+    );
   });
 
   it("fails with a clear timeout error when a timed request never responds", async () => {
