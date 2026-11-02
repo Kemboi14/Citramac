@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Clock3, Info } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { getTriageWorklist, type WorklistRow } from "../../lib/carePathwayApi";
 import { formatDateTime, formatTime } from "./shared/format";
@@ -8,7 +9,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
-import { Card, ErrorNote, PageHeader, Tag } from "./shared/ui";
+import { Card, ErrorNote, PageHeader, Tip } from "./shared/ui";
 import { errorText } from "./triage/helpers";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.5 — mockup triageWorklist(). The server
@@ -73,24 +74,50 @@ export function TriageWorklistPage() {
 
   const items = rows ?? [];
   const overdue = items.filter((row) => row.is_overdue).length;
-  const count = rows
-    ? `${items.length} ${items.length === 1 ? "item" : "items"} · ${overdue} overdue`
-    : "Loading…";
-
   return (
     <div className="mx-auto max-w-[1360px]">
       <PageHeader
         eyebrow="Clinical workflow"
         title="Triage — awaiting and re-checks due"
         subtitle={
-          <>
-            <p>{count}</p>
-            <p>
-              Overdue first, then due time. Priority is assigned after triage.
-              {updatedAt &&
-                ` Updated ${formatTime(updatedAt.toISOString())}, refreshes every minute.`}
-            </p>
-          </>
+          <div className="mt-2 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-surface-border bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-ink-700">
+                {rows
+                  ? `${items.length} ${items.length === 1 ? "item" : "items"}`
+                  : "Loading queue"}
+              </span>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  overdue > 0
+                    ? "border-status-red/20 bg-status-red-tint text-status-red"
+                    : "border-surface-border bg-surface-card text-ink-500"
+                }`}
+              >
+                {rows ? `${overdue} overdue` : "Overdue count pending"}
+              </span>
+              <Tip
+                tip={
+                  <>
+                    Overdue cases first, then by due time.
+                    <br />
+                    Priority is assigned during triage.
+                  </>
+                }
+                className="ml-0.5 text-ink-500"
+              >
+                <Info aria-hidden className="h-4 w-4" />
+              </Tip>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-500">
+              {updatedAt && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock3 aria-hidden className="h-3 w-3" />
+                  Updated {formatTime(updatedAt.toISOString())} · refreshes every minute
+                </span>
+              )}
+            </div>
+          </div>
         }
       />
       {error && (
@@ -99,8 +126,6 @@ export function TriageWorklistPage() {
         </div>
       )}
       <Card
-        title="Triage — awaiting and re-checks due"
-        aside={<Tag>{count}</Tag>}
         bodyClassName="overflow-x-auto"
         className="overflow-hidden"
       >

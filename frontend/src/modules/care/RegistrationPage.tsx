@@ -863,15 +863,9 @@ export function RegistrationPage() {
             referral_source: form.referral.trim() || undefined,
             payer: form.payer || undefined,
           };
-      const { triage_encounter_id, open_triage } = await registerArrival(accessToken, payload);
-      setRequestId(newRequestId());
-      // Opening an encounter starts triage under the viewer, so only clinical
-      // staff land on it; front desk goes back to the worklist.
-      navigate(
-        triage_encounter_id && open_triage
-          ? `/clinical/triage/${encodeURIComponent(triage_encounter_id)}`
-          : "/clinical/triage",
-      );
+      await registerArrival(accessToken, payload);
+      clearSelection();
+      setSaved("Client registered and queued for triage.");
     } catch (err) {
       const duplicateOf = (err as { fields?: Record<string, unknown> })?.fields?.duplicate_of;
       if (resolving && Array.isArray(duplicateOf) && duplicateOf[0]) {
