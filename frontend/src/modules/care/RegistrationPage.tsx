@@ -76,17 +76,17 @@ const MODES: { status: IdentityStatus; label: string; submit: string }[] = [
   {
     status: "IDENTIFIED",
     label: "Tier 1 registration",
-    submit: "Register & send to triage",
+    submit: "Register & queue to triage",
   },
   {
     status: "UNIDENTIFIED",
     label: "Unidentified person",
-    submit: "Register unidentified person & send to triage",
+    submit: "Register unidentified person & queue to triage",
   },
   {
     status: "UNKNOWN",
     label: "Emergency — identity unknown",
-    submit: "Create emergency record & send to triage",
+    submit: "Create emergency record & queue to triage",
   },
 ];
 
