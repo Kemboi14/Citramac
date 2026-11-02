@@ -144,14 +144,19 @@ def build_patient_resource(patient):
     address = None
     if patient.address or patient.county:
         address = [Address(text=patient.address or None, district=patient.county or None)]
-    links = None
+    links = []
     if patient.merged_into_id:
-        links = [
+        links.append(
             PatientLink(
                 other=Reference(reference=f"Patient/{patient.merged_into_id}"),
                 type="replaced-by",
             )
-        ]
+        )
+    # The surviving record names each temporary record it absorbed.
+    for merged_id in patient.merged_from.order_by("merged_at").values_list("id", flat=True):
+        links.append(
+            PatientLink(other=Reference(reference=f"Patient/{merged_id}"), type="replaces")
+        )
     security = [
         Coding(
             system=CONFIDENTIALITY_SYSTEM,
@@ -174,7 +179,7 @@ def build_patient_resource(patient):
         birthDate=patient.date_of_birth,
         address=address,
         contact=contacts or None,
-        link=links,
+        link=links or None,
     )
     return resource, omitted
 
@@ -220,6 +225,32 @@ def build_hie_consent(record):
             type="permit" if permit else "deny",
             period=period,
         ),
+    )
+
+
+def build_merge_provenance(merge):
+    """Who merged a temporary record into an identified client, when, and why
+    (CLAUDE.md §3 item 4). Both Patients are targets: the stub that now says
+    replaced-by and the survivor that now holds its rows. VERIFY: a coded
+    Provenance.activity for a record merge (hl7.org/fhir/R4/valueset-provenance-activity-type.html)
+    — until one is confirmed the activity and reason are text only."""
+    user = merge.merged_by
+    name = (user.get_full_name() if hasattr(user, "get_full_name") else "") or str(user)
+    return Provenance(
+        id=f"prov-merge-{merge.id}",
+        target=[
+            Reference(reference=f"Patient/{merge.temporary_id}"),
+            Reference(reference=f"Patient/{merge.surviving_id}"),
+        ],
+        recorded=merge.merged_at.isoformat(),
+        activity=CodeableConcept(text="Temporary record merged into an identified client"),
+        reason=[CodeableConcept(text=merge.reason)],
+        agent=[
+            ProvenanceAgent(
+                type=CodeableConcept(text="author"),
+                who=Reference(display=name),
+            )
+        ],
     )
 
 

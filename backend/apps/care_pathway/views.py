@@ -57,7 +57,12 @@ from .services import EFFECTIVE_STATUS_LABELS, user_display
 
 
 def _patient(pk):
-    return get_object_or_404(Patient, pk=pk)
+    """The client's record. A temporary record merged into an identified client
+    opens that client (Patient.link replaced-by): the old emergency number
+    still reaches the person, and nothing is written to the merged stub."""
+    from apps.client_registry.identity import current_record
+
+    return current_record(get_object_or_404(Patient, pk=pk))
 
 
 def _triage(pk):
@@ -338,9 +343,76 @@ class RegistrationDetailsView(APIView):
 
 class ResolveIdentityView(APIView):
     def post(self, request, patient_id):
-        patient = services.resolve_identity(request.user, _patient(patient_id), request.data)
+        patient = get_object_or_404(Patient, pk=patient_id)
+        if patient.merged_into_id:
+            raise ValidationError({"detail": "This temporary record has already been merged."})
+        patient = services.resolve_identity(request.user, patient, request.data)
         patient.refresh_from_db()  # typed values (dates) for the row, not request strings
         return Response(_registration_row(patient))
+
+
+def _merge_row(merge, user):
+    from apps.client_registry.identity import may_unmerge
+
+    reversal = getattr(merge, "reversal", None)
+    return {
+        "id": str(merge.id),
+        "temporary": {
+            "id": str(merge.temporary_id),
+            "citramac_number": merge.temporary.citramac_number,
+            "description": merge.temporary.identity_description,
+        },
+        "surviving": {
+            "id": str(merge.surviving_id),
+            "name": merge.surviving.get_full_name(),
+            "citramac_number": merge.surviving.citramac_number,
+        },
+        "merged_by": user_display(merge.merged_by),
+        "merged_at": _iso(merge.merged_at),
+        "reason": merge.reason,
+        "records_moved": len(merge.moved_rows),
+        "reversed": (
+            {
+                "by": user_display(reversal.reversed_by),
+                "at": _iso(reversal.reversed_at),
+                "reason": reversal.reason,
+                "not_restored": len(reversal.not_restored),
+            }
+            if reversal
+            else None
+        ),
+        "can_reverse": reversal is None and may_unmerge(user),
+    }
+
+
+class PatientMergesView(APIView):
+    """Merges into or out of this record (apps.client_registry PatientMerge)."""
+
+    def get(self, request, patient_id):
+        from apps.client_registry.models import PatientMerge
+
+        patient = get_object_or_404(Patient, pk=patient_id)
+        merges = (
+            PatientMerge.objects.filter(Q(temporary=patient) | Q(surviving=patient))
+            .select_related("temporary", "surviving", "merged_by", "reversal__reversed_by")
+        )
+        return Response({"results": [_merge_row(m, request.user) for m in merges]})
+
+
+class ReverseMergeView(APIView):
+    """Org Admin: put a wrong merge back — every row it moved returns to the
+    temporary record (apps.client_registry.identity.unmerge_patients)."""
+
+    def post(self, request, merge_id):
+        from apps.client_registry import identity as identity_service
+        from apps.client_registry.models import PatientMerge
+
+        merge = get_object_or_404(PatientMerge, pk=merge_id)
+        identity_service.unmerge_patients(request.user, merge, request.data.get("reason"))
+        merge = PatientMerge.objects.select_related(
+            "temporary", "surviving", "merged_by", "reversal__reversed_by"
+        ).get(pk=merge.pk)
+        return Response(_merge_row(merge, request.user))
 
 
 # ── Triage (doc 15 §1.5–§1.7) ──
@@ -803,7 +875,11 @@ class ClientBannerView(APIView):
     def get(self, request, patient_id):
         patient = _patient(patient_id)
         log_view(patient)
-        return Response(services.banner_for(patient))
+        banner = services.banner_for(patient)
+        if str(patient.pk) != str(patient_id):
+            # Opened by a merged temporary record's id: the page moves to the client.
+            banner["opened_as"] = str(patient_id)
+        return Response(banner)
 
 
 class ClientTimelineView(APIView):

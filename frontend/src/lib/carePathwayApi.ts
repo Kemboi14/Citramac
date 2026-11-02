@@ -219,11 +219,39 @@ export function updateRegistration(
 export function resolveIdentity(
   accessToken: string,
   patientId: string,
-  payload: IdentityDetails & { merge_into_patient_id?: string },
+  payload: IdentityDetails & { merge_into_patient_id?: string; merge_reason?: string },
 ) {
   return apiRequest<RegistrationRow>(`/care/patients/${patientId}/resolve-identity/`, {
     method: "POST",
     body: payload,
+    accessToken,
+  });
+}
+
+/** A temporary record merged into an identified client (the PatientMerge ledger). */
+export type PatientMerge = {
+  id: string;
+  temporary: { id: string; citramac_number: string; description: string };
+  surviving: { id: string; name: string; citramac_number: string };
+  merged_by: string;
+  merged_at: string | null;
+  reason: string;
+  records_moved: number;
+  reversed: { by: string; at: string | null; reason: string; not_restored: number } | null;
+  can_reverse: boolean;
+};
+
+export function getPatientMerges(accessToken: string, patientId: string) {
+  return apiRequest<{ results: PatientMerge[] }>(`/care/patients/${patientId}/merges/`, {
+    accessToken,
+  });
+}
+
+/** Org Admin: every row the merge moved goes back to the temporary record. */
+export function reverseMerge(accessToken: string, mergeId: string, reason: string) {
+  return apiRequest<PatientMerge>(`/care/merges/${mergeId}/reverse/`, {
+    method: "POST",
+    body: { reason },
     accessToken,
   });
 }
@@ -566,6 +594,8 @@ export function getSignedAssessment(accessToken: string, id: string) {
 
 export interface ClientBanner {
   patient_id: string;
+  /** Set when opened by a merged temporary record's id — the page moves to `patient_id`. */
+  opened_as?: string;
   name: string;
   preferred_name: string;
   identity_status: IdentityStatus;

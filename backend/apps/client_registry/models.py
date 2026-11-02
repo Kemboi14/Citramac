@@ -197,6 +197,7 @@ class Patient(TenantScopedModel):
     # Temporary → permanent merge (CLAUDE.md §4: identifiers are sliced, never
     # overwritten). The surviving record keeps every clinical row; the merged
     # record stays addressable and maps to FHIR `Patient.link` (replaced-by).
+    # PatientMerge holds who merged, why, and what moved.
     merged_into = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="merged_from"
     )
@@ -386,6 +387,61 @@ class PatientIdentifier(TenantScopedModel):
 
     def __str__(self):
         return f"{self.kind}: {self.value}"
+
+
+class _AppendOnly(TenantScopedModel):
+    class Meta(TenantScopedModel.Meta):
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise PermissionError(f"{type(self).__name__} rows are append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError(f"{type(self).__name__} rows are append-only.")
+
+
+class PatientMerge(_AppendOnly):
+    """
+    One temporary → identified merge (apps.client_registry.identity.merge_patients).
+    The ledger of exactly which rows and identifiers moved, from where, so a
+    wrong merge — one person's mental-health record in a stranger's chart — can
+    be put back row for row (`PatientMergeReversal`). Identity administration,
+    not clinical content: in FHIR the merge itself is `Patient.link`
+    (replaced-by / replaces) plus a `Provenance` naming who merged and why.
+    """
+
+    temporary = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="merges_away")
+    surviving = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="merges_in")
+    merged_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
+    merged_at = models.DateTimeField()
+    reason = models.TextField()
+    # [[app_label.Model, field, pk], …] — every row re-pointed to `surviving`.
+    moved_rows = models.JSONField(default=list)
+    # [{"id", "superseded_at"}, …] — each identifier moved, with the
+    # superseded_at it had before, so a reversal restores it exactly.
+    moved_identifiers = models.JSONField(default=list)
+    previous_next_of_kin_id = models.UUIDField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-merged_at"]
+
+    def __str__(self):
+        return f"{self.temporary_id} → {self.surviving_id}"
+
+
+class PatientMergeReversal(_AppendOnly):
+    """An unmerge: every row the merge moved, and nothing else, goes back to
+    the temporary record. Org Admin only (apps.care_pathway.views)."""
+
+    merge = models.OneToOneField(PatientMerge, on_delete=models.PROTECT, related_name="reversal")
+    reversed_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
+    reversed_at = models.DateTimeField()
+    reason = models.TextField()
+    # Rows the merge moved that had since been re-pointed elsewhere, so were
+    # left where they are — [[app_label.Model, field, pk], …].
+    not_restored = models.JSONField(default=list)
 
 
 class IdentifierSequence(models.Model):

@@ -93,6 +93,8 @@ const MODES: { status: IdentityStatus; label: string; submit: string }[] = [
 const SELECTED_SUBMIT = "Register & send new encounter to triage";
 const NAME_REQUIRED =
   "Enter the client’s first and last name, or change Identity status to Unidentified or Unknown to register without one.";
+const MERGE_REASON_REQUIRED =
+  "Say how you know this is the same person. The reason is kept with the merge.";
 const DESCRIPTION_REQUIRED =
   "Add a brief description or reported temporary alias so this unidentified arrival can be distinguished safely.";
 const OFFLINE =
@@ -463,6 +465,9 @@ export function RegistrationPage() {
   const [dupMatches, setDupMatches] = useState<DuplicateMatch[] | null>(null);
   const [confirmedNew, setConfirmedNew] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<{ id: string; label: string } | null>(null);
+  const [mergeReason, setMergeReason] = useState("");
+  const [mergeReasonError, setMergeReasonError] = useState<string | null>(null);
+  const mergeReasonRef = useRef<HTMLTextAreaElement>(null);
 
   const [resolveTarget, setResolveTarget] = useState<ClientBanner | null>(null);
   const [resolveRow, setResolveRow] = useState<RegistrationRow | null>(null);
@@ -638,6 +643,8 @@ export function RegistrationPage() {
     closeSearch();
     clearSelection();
     setMergeTarget(null);
+    setMergeReason("");
+    setMergeReasonError(null);
     setResolveTarget(null);
     setResolveRow(null);
     navigate(`/clinical/registration?resolve=${encodeURIComponent(row.id)}`);
@@ -789,9 +796,16 @@ export function RegistrationPage() {
             return;
           }
         }
+        if (mergeTarget && !mergeReason.trim()) {
+          setMergeReasonError(MERGE_REASON_REQUIRED);
+          setSubmitting(false);
+          mergeReasonRef.current?.focus();
+          return;
+        }
         await resolveIdentity(accessToken, resolveId, {
           ...identityDetails(),
           merge_into_patient_id: mergeTarget?.id,
+          merge_reason: mergeTarget ? mergeReason.trim() : undefined,
         });
         navigate("/clinical/triage");
         return;
@@ -1692,6 +1706,33 @@ export function RegistrationPage() {
           <div role="alert" aria-live="polite" className={feedback ? "mt-3" : ""}>
             {feedback && <Callout>{feedback}</Callout>}
           </div>
+          {resolving && mergeTarget && (
+            <RegField
+              id="reg-merge-reason"
+              label={
+                <>
+                  How do you know this is the same person?{" "}
+                  <span className={REQUIRED_MARK}>REQUIRED</span>
+                </>
+              }
+              error={mergeReasonError}
+              className="mt-3"
+            >
+              <textarea
+                id="reg-merge-reason"
+                ref={mergeReasonRef}
+                rows={2}
+                required
+                placeholder="e.g. National ID card seen, matches the existing record; recognised by their sister"
+                className={`${REG_INPUT} !h-auto resize-y !py-2`}
+                value={mergeReason}
+                onChange={(e) => {
+                  setMergeReason(e.target.value);
+                  setMergeReasonError(null);
+                }}
+              />
+            </RegField>
+          )}
           <div role="status" aria-live="polite" className={saved ? "mt-3" : ""}>
             {saved && <Callout tone="success">{saved}</Callout>}
           </div>

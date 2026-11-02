@@ -63,6 +63,9 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(archived_at__isnull=False)
             elif archived != "include":
                 queryset = queryset.filter(archived_at__isnull=True)
+            # A temporary record merged into an identified client is not a
+            # second client; opening it by id still works (Patient.link).
+            queryset = queryset.filter(merged_into__isnull=True)
             if params.get("legal_hold") == "true":
                 queryset = queryset.filter(legal_hold=True)
             q = (params.get("q") or "").strip()

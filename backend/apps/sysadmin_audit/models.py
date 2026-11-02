@@ -53,6 +53,10 @@ class AuditLogEntry(models.Model):
     ACTION_EXPORT = "EXPORT"
     # Clinical content sent to the national Shared Health Record (DHA HIE).
     ACTION_HIE_DISCLOSURE = "HIE_DISCLOSURE"
+    # A temporary record merged into an identified client, and its reversal
+    # (apps.client_registry.identity — the PatientMerge ledger holds the detail).
+    ACTION_IDENTITY_MERGE = "IDENTITY_MERGE"
+    ACTION_IDENTITY_UNMERGE = "IDENTITY_UNMERGE"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -69,6 +73,8 @@ class AuditLogEntry(models.Model):
         (ACTION_SUPPORT_ACCESS, "Platform Support Access (tenant-approved)"),
         (ACTION_EXPORT, "Patient Record Exported (data subject request)"),
         (ACTION_HIE_DISCLOSURE, "Disclosed to the national Shared Health Record"),
+        (ACTION_IDENTITY_MERGE, "Temporary record merged into an identified client"),
+        (ACTION_IDENTITY_UNMERGE, "Identity merge reversed"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

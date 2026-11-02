@@ -539,7 +539,9 @@ def resolve_identity(user, patient, data):
     temporary record is merged into it; without, the request is refused and
     names that record. With no document match, `merge_into_patient_id` merges
     it into the client the clerk recognised (a probable match by name, date of
-    birth or phone — spec 3.2: never a second disconnected record). Otherwise
+    birth or phone — spec 3.2: never a second disconnected record). A merge
+    needs `records.identity.merge` and a `merge_reason`, and is recorded in the
+    PatientMerge ledger so an Org Admin can reverse it. Otherwise
     the temporary record is upgraded in place —
     same patient, same encounters — and keeps its emergency number as its
     CITRAMAC ID (a TEMPORARY identifier)."""
@@ -562,7 +564,7 @@ def resolve_identity(user, patient, data):
                     "registered. Merge this temporary record into theirs to keep one history.",
                 }
             )
-        identity_service.merge_patients(user, patient, target)
+        identity_service.merge_patients(user, patient, target, data.get("merge_reason"))
         return target
     chosen = data.get("merge_into_patient_id")
     if chosen:
@@ -571,7 +573,7 @@ def resolve_identity(user, patient, data):
         ).first()
         if target is None:
             raise ValidationError({"merge_into_patient_id": "That client record was not found."})
-        identity_service.merge_patients(user, patient, target)
+        identity_service.merge_patients(user, patient, target, data.get("merge_reason"))
         return target
 
     _set_names(patient, first_name, middle_names, last_name)

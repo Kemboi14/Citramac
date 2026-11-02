@@ -64,6 +64,9 @@ _ACTION = {
     AuditLogEntry.ACTION_ARCHIVE: "U",
     AuditLogEntry.ACTION_RESTORE: "U",
     AuditLogEntry.ACTION_LEGAL_HOLD: "U",
+    # Which person the record is about changed; nothing was created or removed.
+    AuditLogEntry.ACTION_IDENTITY_MERGE: "U",
+    AuditLogEntry.ACTION_IDENTITY_UNMERGE: "U",
     AuditLogEntry.ACTION_DELETE: "D",
     AuditLogEntry.ACTION_ERASURE: "D",
 }

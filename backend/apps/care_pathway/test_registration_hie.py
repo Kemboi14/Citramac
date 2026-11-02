@@ -23,6 +23,17 @@ from .models import TriageEncounter
 from .tests import CarePathwayApiTestCase
 
 NATIONAL_SYSTEM = "https://example.test/national-id"  # test value only
+REASON = "National ID card seen; matches the existing record"
+
+
+def give_role(org, user, name, *codenames):
+    from apps.accounts.models import Permission, Role
+
+    with platform_admin_context():
+        role = Role.objects.create(name=name, organization=org)
+        role.permissions.add(*Permission.objects.filter(codename__in=codenames))
+        user.roles.add(role)
+    return role
 
 
 class IdentifierTests(CarePathwayApiTestCase):
@@ -74,6 +85,10 @@ class IdentifierTests(CarePathwayApiTestCase):
 
 
 class MergeTests(CarePathwayApiTestCase):
+    def setUp(self):
+        super().setUp()
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+
     def test_resolving_to_an_existing_document_requires_an_explicit_merge(self):
         permanent = self.register(id_document_type="NATIONAL_ID", id_document_number="111222")
         temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
@@ -89,7 +104,7 @@ class MergeTests(CarePathwayApiTestCase):
 
         merged = self.client.post(
             url,
-            {**body, "merge_into_patient_id": permanent.data["patient_id"]},
+            {**body, "merge_into_patient_id": permanent.data["patient_id"], "merge_reason": REASON},
             format="json",
             **self.auth,
         )
@@ -128,7 +143,7 @@ class MergeTests(CarePathwayApiTestCase):
         url = reverse("care-resolve-identity", args=[temp.data["patient_id"]])
         merged = self.client.post(
             url,
-            {**details, "merge_into_patient_id": permanent.data["patient_id"]},
+            {**details, "merge_into_patient_id": permanent.data["patient_id"], "merge_reason": REASON},
             format="json",
             **self.auth,
         )
@@ -143,7 +158,7 @@ class MergeTests(CarePathwayApiTestCase):
         url = reverse("care-resolve-identity", args=[other_temp.data["patient_id"]])
         refused = self.client.post(
             url,
-            {**details, "merge_into_patient_id": third_temp.data["patient_id"]},
+            {**details, "merge_into_patient_id": third_temp.data["patient_id"], "merge_reason": REASON},
             format="json",
             **self.auth,
         )
@@ -163,6 +178,185 @@ class MergeTests(CarePathwayApiTestCase):
             patient = Patient.objects.get(pk=temp.data["patient_id"])
             self.assertEqual(patient.passport_number, "A1")
             self.assertEqual(patient.identity_status, "IDENTIFIED")
+
+
+class IdentityMergeLedgerTests(CarePathwayApiTestCase):
+    """A merge is permitted, reasoned, ledgered, audited and reversible
+    (George Langat, 2026-11-02: update or merge the temporary record — never a
+    second disconnected clinical record)."""
+
+    DETAILS = {"full_name": "Brian Otieno", "date_of_birth": "1987-06-02", "sex": "MALE"}
+
+    def setUp(self):
+        super().setUp()
+        self.permanent = self.register(full_name="Brian Otieno", date_of_birth="1987-06-02", sex="MALE")
+        self.temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+
+    def merge(self, **extra):
+        return self.client.post(
+            reverse("care-resolve-identity", args=[self.temp.data["patient_id"]]),
+            {
+                **self.DETAILS,
+                "merge_into_patient_id": self.permanent.data["patient_id"],
+                "merge_reason": REASON,
+                **extra,
+            },
+            format="json",
+            **self.auth,
+        )
+
+    def org_admin(self):
+        import uuid
+
+        from apps.accounts.models import User
+        from apps.accounts.tokens import issue_tokens
+
+        with platform_admin_context():
+            admin = User.objects.create_user(
+                email=f"admin-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
+                organization=self.org, is_active=True, first_name="Org", last_name="Admin",
+            )
+        give_role(self.org, admin, "Org Admin")
+        return {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(admin)[0]}"}
+
+    def temp_patient(self):
+        with platform_admin_context():
+            return Patient.objects.get(pk=self.temp.data["patient_id"])
+
+    def test_merging_needs_the_permission(self):
+        response = self.merge()
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(self.temp_patient().merged_into_id)
+
+    def test_merging_needs_a_reason(self):
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        response = self.merge(merge_reason="  ")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("merge_reason", response.data)
+        self.assertIsNone(self.temp_patient().merged_into_id)
+
+    def test_merge_is_ledgered_and_audited_on_both_records(self):
+        from apps.client_registry.models import PatientMerge
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        self.assertEqual(self.merge().status_code, 200)
+        with platform_admin_context():
+            merge = PatientMerge.objects.get(temporary_id=self.temp.data["patient_id"])
+            self.assertEqual(str(merge.surviving_id), self.permanent.data["patient_id"])
+            self.assertEqual(merge.reason, REASON)
+            self.assertEqual(merge.merged_by, self.nurse)
+            self.assertIn(
+                ["care_pathway.TriageEncounter", "patient", self.temp.data["triage_encounter_id"]],
+                merge.moved_rows,
+            )
+            entries = AuditLogEntry.objects.filter(action="IDENTITY_MERGE")
+            self.assertEqual(
+                sorted(entries.values_list("object_id", flat=True)),
+                sorted([self.temp.data["patient_id"], self.permanent.data["patient_id"]]),
+            )
+            self.assertTrue(all(e.field_diff["reason"] == REASON for e in entries))
+            self.assertTrue(all(e.actor_user_id == self.nurse.id for e in entries))
+            with self.assertRaises(PermissionError):
+                merge.save()
+
+    def test_a_verified_registry_id_on_the_temporary_record_stays_active(self):
+        from django.utils import timezone
+
+        from apps.dha_interop.registries import client_registry_id
+
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        with platform_admin_context():
+            PatientIdentifier.objects.create(
+                organization=self.org, patient_id=self.temp.data["patient_id"],
+                kind="CLIENT_REGISTRY_ID", value="CR-000123", verified_at=timezone.now(),
+            )
+        self.assertEqual(self.merge().status_code, 200)
+        with platform_admin_context():
+            survivor = Patient.objects.get(pk=self.permanent.data["patient_id"])
+            self.assertEqual(client_registry_id(survivor), "CR-000123")
+            temporary = PatientIdentifier.objects.get(patient=survivor, kind="TEMPORARY")
+            self.assertIsNotNone(temporary.superseded_at)
+
+    def test_an_org_admin_reverses_a_merge_exactly(self):
+        from apps.client_registry.models import PatientMerge
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        self.assertEqual(self.merge().status_code, 200)
+        # Written against the identified client after the merge: stays with them.
+        later = self.register(
+            patient_id=self.permanent.data["patient_id"], full_name="Brian Otieno",
+            date_of_birth="1987-06-02", sex="MALE",
+        )
+        self.assertEqual(later.status_code, 201, later.data)
+        with platform_admin_context():
+            merge = PatientMerge.objects.get(temporary_id=self.temp.data["patient_id"])
+        url = reverse("care-merge-reverse", args=[merge.pk])
+
+        self.assertEqual(
+            self.client.post(url, {"reason": "Wrong man"}, format="json", **self.auth).status_code,
+            403,
+        )
+        admin = self.org_admin()
+        self.assertEqual(self.client.post(url, {"reason": ""}, format="json", **admin).status_code, 400)
+        response = self.client.post(url, {"reason": "Wrong man"}, format="json", **admin)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["reversed"]["reason"], "Wrong man")
+        self.assertFalse(response.data["can_reverse"])
+
+        with platform_admin_context():
+            temp = Patient.objects.get(pk=self.temp.data["patient_id"])
+            self.assertIsNone(temp.merged_into_id)
+            self.assertEqual(temp.identity_status, "UNKNOWN")
+            visit = TriageEncounter.objects.get(pk=self.temp.data["triage_encounter_id"])
+            self.assertEqual(visit.patient_id, temp.pk)
+            kept = TriageEncounter.objects.get(pk=later.data["triage_encounter_id"])
+            self.assertEqual(str(kept.patient_id), self.permanent.data["patient_id"])
+            number = PatientIdentifier.objects.get(kind="TEMPORARY", value=temp.citramac_number)
+            self.assertEqual(number.patient_id, temp.pk)
+            self.assertIsNone(number.superseded_at)
+            self.assertEqual(
+                AuditLogEntry.objects.filter(action="IDENTITY_UNMERGE").count(), 2
+            )
+        again = self.client.post(url, {"reason": "Again"}, format="json", **admin)
+        self.assertEqual(again.status_code, 400)
+        # The temporary record can now be identified as the right person.
+        history = self.client.get(
+            reverse("care-patient-merges", args=[self.permanent.data["patient_id"]]), **self.auth
+        )
+        self.assertEqual(len(history.data["results"]), 1)
+        self.assertIsNotNone(history.data["results"][0]["reversed"])
+
+    def test_a_merged_record_opens_the_client_and_leaves_the_registry_list(self):
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        self.assertEqual(self.merge().status_code, 200)
+        banner = self.client.get(
+            reverse("care-client-banner", args=[self.temp.data["patient_id"]]), **self.auth
+        )
+        self.assertEqual(banner.status_code, 200)
+        self.assertEqual(banner.data["patient_id"], self.permanent.data["patient_id"])
+        self.assertEqual(banner.data["opened_as"], self.temp.data["patient_id"])
+        listed = self.client.get(reverse("patient-list"), **self.org_admin())
+        self.assertEqual(listed.status_code, 200, listed.data)
+        rows = listed.data.get("results", listed.data)
+        ids = {str(row["id"]) for row in rows}
+        self.assertIn(self.permanent.data["patient_id"], ids)
+        self.assertNotIn(self.temp.data["patient_id"], ids)
+
+    def test_a_merged_record_cannot_be_resolved_again(self):
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
+        self.assertEqual(self.merge().status_code, 200)
+        again = self.client.post(
+            reverse("care-resolve-identity", args=[self.temp.data["patient_id"]]),
+            {"full_name": "Someone Else"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(again.status_code, 400)
+        with platform_admin_context():
+            survivor = Patient.objects.get(pk=self.permanent.data["patient_id"])
+        self.assertEqual(survivor.first_name, "Brian")
 
 
 class ConsentGateTests(CarePathwayApiTestCase):
@@ -303,6 +497,7 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         self.assertTrue(any("NATIONAL_ID" in item for item in omitted))
 
     def test_merged_record_links_to_the_survivor(self):
+        give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
         permanent = self.patient(id_document_type="NATIONAL_ID", id_document_number="5550001")
         temp = self.patient(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
         self.client.post(
@@ -312,6 +507,7 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
                 "id_document_type": "NATIONAL_ID",
                 "id_document_number": "5550001",
                 "merge_into_patient_id": str(permanent.pk),
+                "merge_reason": REASON,
             },
             format="json",
             **self.auth,
@@ -322,6 +518,25 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         self.assertFalse(payload["active"])
         self.assertEqual(payload["link"][0]["type"], "replaced-by")
         self.assertEqual(payload["link"][0]["other"]["reference"], f"Patient/{permanent.pk}")
+        # The survivor names the record it replaced, and the merge has a Provenance.
+        survivor, _ = self.build(permanent)
+        self.assertTrue(survivor["active"])
+        self.assertEqual(
+            survivor["link"], [{"other": {"reference": f"Patient/{temp.pk}"}, "type": "replaces"}]
+        )
+        from apps.client_registry.models import PatientMerge
+        from apps.dha_interop.fhir_patient import build_merge_provenance
+
+        with platform_admin_context():
+            merge = PatientMerge.objects.get(temporary=temp)
+            provenance = build_merge_provenance(merge).model_dump(mode="json", exclude_none=True)
+        self.assertEqual(validate_resource(provenance), [], provenance)
+        self.assertEqual(
+            [t["reference"] for t in provenance["target"]],
+            [f"Patient/{temp.pk}", f"Patient/{permanent.pk}"],
+        )
+        self.assertEqual(provenance["reason"][0]["text"], REASON)
+        self.assertTrue(provenance["agent"][0]["who"]["display"])
 
     def test_consent_related_person_and_provenance_are_valid(self):
         patient = self.patient(next_of_kin_name="Joan Kamau", next_of_kin_is_guardian=True)

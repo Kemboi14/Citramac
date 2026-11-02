@@ -41,6 +41,16 @@ urlpatterns = [
         views.ResolveIdentityView.as_view(),
         name="care-resolve-identity",
     ),
+    path(
+        "care/patients/<uuid:patient_id>/merges/",
+        views.PatientMergesView.as_view(),
+        name="care-patient-merges",
+    ),
+    path(
+        "care/merges/<uuid:merge_id>/reverse/",
+        views.ReverseMergeView.as_view(),
+        name="care-merge-reverse",
+    ),
     path("care/triage/worklist/", views.TriageWorklistView.as_view(), name="care-triage-worklist"),
     path("care/triage/v4/config/", triage_v4_views.TriageV4ConfigView.as_view(), name="care-triage-v4-config"),
     path("care/queue/live/", triage_v4_views.LiveQueueView.as_view(), name="care-live-queue"),

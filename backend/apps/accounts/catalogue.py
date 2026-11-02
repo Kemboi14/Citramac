@@ -25,6 +25,7 @@ SCOPE_PLATFORM = "PLATFORM"
 
 MODULES = {
     "clinical": "Clinical care",
+    "records": "Client records & identity",
     "legal": "Mental health law & legal forms",
     "laboratory": "Laboratory",
     "finance": "Billing, claims & payments",
@@ -161,6 +162,18 @@ PERMISSIONS = [
         "Prepare, review and sign the medication administration record document.",
         SCOPE_ORG,
         ["Nurse", "Ward Nurse"],
+    ),
+    (
+        "records.identity.merge",
+        "records",
+        "Merge a temporary record into an identified client",
+        "When an unidentified or unknown client is identified as someone already "
+        "registered, merge the temporary record into theirs so the person keeps one "
+        "history. Everything recorded under the temporary number moves to the client, "
+        "the reason is recorded, and an Org Admin can reverse it. Org Admin can always "
+        "merge.",
+        SCOPE_ORG,
+        ["Front Desk", "Records Officer"] + CLINICAL_STAFF,
     ),
     (
         "documents.release",

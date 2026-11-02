@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
+import { MergeHistory } from "./shared/MergeHistory";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
@@ -84,6 +85,10 @@ export function ClientRecordPage() {
   }, [bannerId, bannerName, selectedId, selectPatient]);
 
   if (!VIEWS.has(view)) return <Navigate to={clientRecordPath(patientId, "intake")} replace />;
+  if (banner && banner.opened_as === patientId) {
+    // A temporary record merged into an identified client: open the client.
+    return <Navigate to={clientRecordPath(banner.patient_id, view as RecordView)} replace />;
+  }
   const active = view as RecordView;
   const loadedBanner = banner && banner.patient_id === patientId ? banner : null;
 
@@ -150,6 +155,7 @@ export function ClientRecordPage() {
       />
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} />
+      {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}
       {body}
     </div>

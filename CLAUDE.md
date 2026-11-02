@@ -340,3 +340,30 @@ On the project owner's instruction ("do as you recommend") after QA, rules `2026
 
 Reversibility: cheap. Everything is additive. Signed triages keep the rules version they were signed
 under, and no signed record changes.
+
+### 2026-11-02 — temporary record identified: merge, never a second record
+
+From QA (George Langat): when an unidentified or unknown client's identity becomes known, update or
+merge the temporary record; never leave a second, disconnected clinical record. Upgrade-in-place and
+merge already existed. On the owner's instruction ("continue and deploy everything"), merges are now
+safe to make:
+
+1. **Permitted and reasoned.** A merge needs `records.identity.merge` (Front Desk, Records Officer and
+   clinical staff by default, because anyone could merge before this; Org Admin always can) and a
+   stated reason ("how do you know this is the same person?").
+2. **Ledgered and reversible.** `client_registry.PatientMerge` (append-only) records who merged, when,
+   why, and every row and identifier the merge moved, with each one's prior state. An Org Admin can
+   reverse a merge (`PatientMergeReversal`, reason required). Every row the merge moved goes back;
+   rows written on the client after the merge stay. Both actions write `IDENTITY_MERGE` /
+   `IDENTITY_UNMERGE` audit entries on both records, mapped to AuditEvent action U.
+3. **Signed records move with the merge.** Their content is unchanged; who they are about changes.
+   That is the §3 item 7 case, so the ledger is what makes it reversible. Merges made before
+   2026-11-02 have no ledger and cannot be reversed automatically.
+4. **One record afterwards.** The merged stub is hidden from the registry list. Opening its id opens
+   the client. A verified national identifier the client lacks (a Client Registry ID, say) stays
+   active on them; everything else from the stub is kept as `use=old`.
+
+FHIR: the stub is `Patient.active=false` with `link` replaced-by, and the client has `link` replaces.
+A `Provenance` targets both, with the reason. VERIFY: a coded `Provenance.activity` for a merge;
+until one is confirmed it stays text. Example: `dha_interop/fhir_examples/registration-merged-temporary-record.json`.
+The ledger is identity administration, not clinical content, so it is not a second clinical store.

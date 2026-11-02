@@ -28,6 +28,8 @@ PATIENT_PATHS = {
     "client_registry.ConsentRecord": "patient",
     "client_registry.ErasureRequest": "patient",
     "client_registry.PatientIdentifier": "patient",
+    "client_registry.PatientMerge": "surviving",
+    "client_registry.PatientMergeReversal": "merge__surviving",
     "clinical_encounter.Encounter": "patient",
     "clinical_encounter.SoapNote": "encounter__patient",
     "clinical_encounter.DiagnosisCode": "encounter__patient",
@@ -195,6 +197,8 @@ ADMINISTRATIVE_MODELS = {
     "client_registry.Appointment",
     "client_registry.ConsentRecord",
     "client_registry.ErasureRequest",
+    "client_registry.PatientMerge",
+    "client_registry.PatientMergeReversal",
     "mhp_program.CareTeamMembership",
 }
 
