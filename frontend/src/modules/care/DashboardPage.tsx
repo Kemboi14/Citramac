@@ -5,8 +5,9 @@ import { ApiError } from "../../lib/apiClient";
 import { getCareDashboard, type CareDashboard } from "../../lib/carePathwayApi";
 import { EmptyState } from "../../components/EmptyState";
 import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
+import { DashboardWelcome } from "../../components/DashboardWelcome";
 import { formatTime } from "./shared/format";
-import { Card, ErrorNote, PageHeader, Tag, Timeline } from "./shared/ui";
+import { Card, ErrorNote, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 import { DecisionInbox } from "./DecisionInbox";
 import { MyTasks } from "./MyTasks";
@@ -226,32 +227,29 @@ export function DashboardPage() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader
-        title="Dashboard"
+      <DashboardWelcome
+        eyebrow="Clinical dashboard"
         subtitle={`System overview — ${TODAY_LABEL()}${updatedAt ? ` · Updated ${formatTime(updatedAt.toISOString())}` : ""}`}
-        actions={
-          <>
-            <button
-              type="button"
-              className={BTN_GHOST}
-              disabled={refreshing}
-              onClick={() => {
-                setRefreshing(true);
-                load(() => false);
-              }}
-            >
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
-            <button
-              type="button"
-              className={BTN}
-              onClick={() => navigate("/clinical/registration")}
-            >
-              + New Registration
-            </button>
-          </>
-        }
-      />
+      >
+        <button
+          type="button"
+          className={BTN_GHOST}
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true);
+            load(() => false);
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+        <button
+          type="button"
+          className={BTN}
+          onClick={() => navigate("/clinical/registration")}
+        >
+          + New Registration
+        </button>
+      </DashboardWelcome>
 
       {error && (
         <div className="mb-4">

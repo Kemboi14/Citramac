@@ -4,6 +4,7 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getOrgDashboardStats, type OrgDashboardStats } from "../../lib/organizationsApi";
 import { listStaff, type Staff } from "../../lib/governanceApi";
+import { DashboardWelcome } from "../../components/DashboardWelcome";
 
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
 
@@ -69,12 +70,10 @@ export function OrgDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
-          Overview
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">Dashboard</h1>
-      </div>
+      <DashboardWelcome
+        eyebrow="Organisation dashboard"
+        subtitle="Here’s your organisation’s operational overview."
+      />
 
       {loading && <p className="text-sm text-ink-500">Loading…</p>}
 
