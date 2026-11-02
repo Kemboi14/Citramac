@@ -113,7 +113,7 @@ export function PsychiatryQueuePage() {
       <PageHeader
         eyebrow="Clinical workflow"
         title="Psychiatry queue"
-        subtitle="Clients with a signed triage, most urgent first. Open a client to start or continue the review."
+        titleTooltip="Clients with a signed triage, most urgent first. Open a client to start or continue the review."
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
 

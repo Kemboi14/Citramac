@@ -11,11 +11,13 @@ import { FIELD_LABEL, INPUT } from "./styles";
 export function PageHeader({
   eyebrow,
   title,
+  titleTooltip,
   subtitle,
   actions,
 }: {
   eyebrow?: string;
   title: string;
+  titleTooltip?: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
 }) {
@@ -27,7 +29,9 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 className="font-display text-xl font-semibold text-ink-900">{title}</h1>
+        <h1 title={titleTooltip} className="font-display text-xl font-semibold text-ink-900">
+          {title}
+        </h1>
         {subtitle && <div className="mt-0.5 text-[12.5px] text-ink-500">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
