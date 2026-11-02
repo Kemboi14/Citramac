@@ -3,7 +3,7 @@ import { useAuth } from "../auth/useAuth";
 
 function greetingForHour(hour: number) {
   if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
+  if (hour < 16) return "Good afternoon";
   return "Good evening";
 }
 
