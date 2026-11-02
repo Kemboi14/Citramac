@@ -312,7 +312,10 @@ export function AppShell({
             }`}
           >
             <div className="font-display text-base font-bold">{brandName}</div>
-            <div className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-sidebar-muted">
+            <div
+              className="mt-0.5 max-w-[160px] truncate text-[10.5px] font-semibold uppercase tracking-wide text-sidebar-muted"
+              title={brandSub}
+            >
               {brandSub}
             </div>
           </div>
