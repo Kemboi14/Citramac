@@ -64,10 +64,13 @@ const MEANING: Record<Priority, { title: string; action: string }> = {
   GREEN: { title: "Routine", action: "Proceed through the normal intake / appointment pathway." },
 };
 const CHIP_TONE: Record<Priority, string> = {
-  RED: "border-priority-red text-priority-red",
-  ORANGE: "border-priority-orange text-priority-orange",
-  YELLOW: "border-priority-yellow text-priority-yellow",
-  GREEN: "border-priority-green text-priority-green",
+  RED: "border-priority-red/40 bg-priority-red-tint/35 text-priority-red hover:bg-priority-red-tint/60",
+  ORANGE:
+    "border-priority-orange/40 bg-priority-orange-tint/35 text-priority-orange hover:bg-priority-orange-tint/60",
+  YELLOW:
+    "border-priority-yellow/40 bg-priority-yellow-tint/35 text-priority-yellow hover:bg-priority-yellow-tint/60",
+  GREEN:
+    "border-priority-green/40 bg-priority-green-tint/35 text-priority-green hover:bg-priority-green-tint/60",
 };
 const VITALS: { key: string; label: string }[] = [
   { key: "v_hr", label: "Pulse" },
@@ -1621,13 +1624,21 @@ export function TriageFormV5({
                           key={p}
                           type="button"
                           aria-pressed={chosen === p}
-                          className={`rounded-lg border-2 px-2 py-2 text-left text-[12px] font-bold ${CHIP_TONE[p]} ${chosen === p ? "bg-surface-bg ring-2 ring-current" : "bg-surface-card"}`}
+                          className={`min-h-[68px] rounded-xl border px-3 py-2.5 text-left text-[12px] font-bold shadow-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 focus-visible:ring-offset-surface-card ${
+                            chosen === p
+                              ? `${CHIP_TONE[p]} border-2 ring-2 ring-current ring-offset-2 ring-offset-surface-card`
+                              : `${CHIP_TONE[p]} hover:-translate-y-px hover:shadow-md`
+                          }`}
                           onClick={() => set("m_final_priority", p === recommended ? "" : p)}
                         >
-                          {p}
-                          <span className="block font-medium">{MEANING[p].title}</span>
+                          <span className="block text-[11px] uppercase tracking-wide">{p}</span>
+                          <span className="mt-0.5 block text-[13px] font-semibold">
+                            {MEANING[p].title}
+                          </span>
                           {p === recommended && (
-                            <span className="text-[10.5px] font-normal">recommended</span>
+                            <span className="mt-1 inline-flex rounded-full bg-surface-card/80 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal">
+                              Recommended
+                            </span>
                           )}
                         </button>
                       ))}
