@@ -1,7 +1,10 @@
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+
+from apps.accounts.permissions import _has_org_admin_role
 
 from apps.retention.mixins import NoHardDeleteMixin
 
@@ -15,8 +18,24 @@ from .serializers import (
 )
 
 
+def _require_org_admin_for_layout_change(request, changed_fields, what):
+    """Renaming a ward or bed, or moving a bed, is facility administration —
+    the Org Admin's (apps.accounts.catalogue). Every save is audited with its
+    before/after values by apps.sysadmin_audit's signals."""
+    if changed_fields and not _has_org_admin_role(request.user):
+        raise PermissionDenied(
+            f"Only an Org Admin can change {what} details.", code="org_admin_required"
+        )
+
+
 class WardViewSet(viewsets.ModelViewSet):
     serializer_class = WardSerializer
+
+    def perform_update(self, serializer):
+        _require_org_admin_for_layout_change(
+            self.request, set(serializer.validated_data) & {"name", "ward_type", "branch"}, "ward"
+        )
+        serializer.save()
 
     def get_queryset(self):
         # Not `queryset = Ward.objects.all()` as a class attribute — that
@@ -59,6 +78,14 @@ class WardViewSet(viewsets.ModelViewSet):
 
 class BedViewSet(viewsets.ModelViewSet):
     serializer_class = BedSerializer
+
+    def perform_update(self, serializer):
+        # Status (vacant / reserved / maintenance) stays with ward staff, as
+        # before; the bed's number and ward are Org Admin changes.
+        _require_org_admin_for_layout_change(
+            self.request, set(serializer.validated_data) & {"bed_number", "ward"}, "bed"
+        )
+        serializer.save()
 
     def get_queryset(self):
         queryset = (

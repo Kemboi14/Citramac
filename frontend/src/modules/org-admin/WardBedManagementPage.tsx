@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BedDouble, Plus } from "lucide-react";
+import { BedDouble, Pencil, Plus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -9,6 +9,7 @@ import {
   getWardSummary,
   listBeds,
   updateBed,
+  updateWard,
   type Bed,
   type BedStatus,
   type WardBedSummary,
@@ -20,6 +21,9 @@ const FIELD_CLASS =
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "inline-flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
+
+const SECONDARY_BUTTON_CLASS =
+  "inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60 transition-colors duration-150";
 
 const STATUS_LEGEND: { key: BedStatus; label: string; dot: string }[] = [
   { key: "AVAILABLE", label: "Vacant", dot: "bg-brand-green" },
@@ -65,6 +69,12 @@ export function WardBedManagementPage() {
   const [wardType, setWardType] = useState("");
 
   const [bedNumber, setBedNumber] = useState("");
+
+  // Editing — one ward or one bed at a time.
+  const [wardEdit, setWardEdit] = useState<{ name: string; ward_type: string } | null>(null);
+  const [bedEdit, setBedEdit] = useState<{ id: string; bed_number: string; ward: string } | null>(
+    null,
+  );
 
   const refreshSummary = async (branchId: string) => {
     if (!accessToken) return;
@@ -171,6 +181,50 @@ export function WardBedManagementPage() {
     }
   };
 
+  const saveWardEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !branch || !selectedWardId || !wardEdit || !wardEdit.name.trim()) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await updateWard(accessToken, selectedWardId, {
+        name: wardEdit.name.trim(),
+        ward_type: wardEdit.ward_type.trim(),
+      });
+      setWardEdit(null);
+      await refreshSummary(branch.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save the ward.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveBedEdit = async (event: React.FormEvent, bed: Bed) => {
+    event.preventDefault();
+    if (!accessToken || !bedEdit || !bedEdit.bed_number.trim()) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const payload: { bed_number: string; ward?: string } = {
+        bed_number: bedEdit.bed_number.trim(),
+      };
+      // Only send the ward when it changes: the server refuses moving a bed
+      // that has admission history.
+      if (bedEdit.ward !== bed.ward) payload.ward = bedEdit.ward;
+      await updateBed(accessToken, bed.id, payload);
+      setBedEdit(null);
+      await Promise.all([
+        selectedWardId ? refreshBeds(selectedWardId) : undefined,
+        branch && refreshSummary(branch.id),
+      ]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save the bed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const selectedWard = summary?.wards.find((w) => w.id === selectedWardId) ?? null;
 
   return (
@@ -256,7 +310,11 @@ export function WardBedManagementPage() {
                   <button
                     key={ward.id}
                     type="button"
-                    onClick={() => setSelectedWardId(ward.id)}
+                    onClick={() => {
+                      setSelectedWardId(ward.id);
+                      setWardEdit(null);
+                      setBedEdit(null);
+                    }}
                     className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                       ward.id === selectedWardId
                         ? "bg-brand-green text-on-primary"
@@ -272,10 +330,70 @@ export function WardBedManagementPage() {
 
           {selectedWard && (
             <div className={CARD_CLASS}>
+              {wardEdit ? (
+                <form
+                  onSubmit={saveWardEdit}
+                  className="mb-4 flex flex-wrap items-end gap-3 border-b border-surface-border pb-4"
+                >
+                  <label className={LABEL_CLASS}>
+                    Ward Name
+                    <input
+                      className={FIELD_CLASS}
+                      value={wardEdit.name}
+                      onChange={(e) => setWardEdit({ ...wardEdit, name: e.target.value })}
+                      required
+                      autoFocus
+                    />
+                  </label>
+                  <label className={LABEL_CLASS}>
+                    Ward Type (optional)
+                    <input
+                      className={FIELD_CLASS}
+                      value={wardEdit.ward_type}
+                      onChange={(e) => setWardEdit({ ...wardEdit, ward_type: e.target.value })}
+                    />
+                  </label>
+                  <button type="submit" disabled={busy} className={BUTTON_CLASS}>
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={SECONDARY_BUTTON_CLASS}
+                    onClick={() => setWardEdit(null)}
+                  >
+                    Cancel
+                  </button>
+                  <p className="basis-full text-xs text-ink-500">
+                    Current and past admissions in this ward will show the new name.
+                  </p>
+                </form>
+              ) : null}
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-display text-base font-semibold text-ink-900">
-                  {selectedWard.name} · Beds
-                </h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="font-display text-base font-semibold text-ink-900">
+                    {selectedWard.name} · Beds
+                  </h2>
+                  {selectedWard.ward_type && (
+                    <span className="text-xs text-ink-500">{selectedWard.ward_type}</span>
+                  )}
+                  {!wardEdit && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={SECONDARY_BUTTON_CLASS}
+                      onClick={() =>
+                        setWardEdit({
+                          name: selectedWard.name,
+                          ward_type: selectedWard.ward_type ?? "",
+                        })
+                      }
+                    >
+                      <Pencil size={13} />
+                      Edit Ward
+                    </button>
+                  )}
+                </div>
                 <form onSubmit={submitBed} className="flex flex-wrap items-end gap-2">
                   <label className={LABEL_CLASS}>
                     Bed Number
@@ -302,36 +420,94 @@ export function WardBedManagementPage() {
 
               {!bedsLoading && beds.length > 0 && (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-3">
-                  {beds.map((bed) => (
-                    <div
-                      key={bed.id}
-                      className={`flex flex-col gap-1 rounded-md p-3 text-xs ${BED_TILE_CLASS[bed.status]}`}
-                    >
-                      <div className="flex items-center gap-1.5 font-display text-sm font-bold">
-                        <BedDouble size={14} />
-                        {bed.bed_number}
-                      </div>
-                      <div className="font-medium">{STATUS_LABEL[bed.status]}</div>
-                      {bed.status === "OCCUPIED" && bed.occupant_name && (
-                        <div className="truncate" title={bed.occupant_name}>
-                          {bed.occupant_name}
-                        </div>
-                      )}
-                      <select
-                        className="mt-1 rounded-sm border border-surface-border bg-surface-card px-1 py-0.5 text-[11px] text-ink-900 outline-none"
-                        value={bed.status}
-                        disabled={busy}
-                        onChange={(e) => changeBedStatus(bed, e.target.value as BedStatus)}
+                  {beds.map((bed) =>
+                    bedEdit?.id === bed.id ? (
+                      <form
+                        key={bed.id}
+                        onSubmit={(e) => saveBedEdit(e, bed)}
+                        className="col-span-2 flex flex-col gap-2 rounded-md border border-surface-border bg-surface-card p-3 text-xs"
                       >
-                        {BED_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {/* eslint-disable-next-line security/detect-object-injection -- `status` is iterated from the fixed `BED_STATUSES` const array, not user input. */}
-                            {STATUS_LABEL[status]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                        <label className="flex flex-col gap-1 font-medium text-ink-700">
+                          Bed Number
+                          <input
+                            className={FIELD_CLASS}
+                            value={bedEdit.bed_number}
+                            onChange={(e) => setBedEdit({ ...bedEdit, bed_number: e.target.value })}
+                            required
+                            autoFocus
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 font-medium text-ink-700">
+                          Ward
+                          <select
+                            className={FIELD_CLASS}
+                            value={bedEdit.ward}
+                            onChange={(e) => setBedEdit({ ...bedEdit, ward: e.target.value })}
+                          >
+                            {summary.wards.map((ward) => (
+                              <option key={ward.id} value={ward.id}>
+                                {ward.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="submit" disabled={busy} className={BUTTON_CLASS}>
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className={SECONDARY_BUTTON_CLASS}
+                            onClick={() => setBedEdit(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div
+                        key={bed.id}
+                        className={`flex flex-col gap-1 rounded-md p-3 text-xs ${BED_TILE_CLASS[bed.status]}`}
+                      >
+                        <div className="flex items-center gap-1.5 font-display text-sm font-bold">
+                          <BedDouble size={14} />
+                          {bed.bed_number}
+                        </div>
+                        <div className="font-medium">{STATUS_LABEL[bed.status]}</div>
+                        {bed.status === "OCCUPIED" && bed.occupant_name && (
+                          <div className="truncate" title={bed.occupant_name}>
+                            {bed.occupant_name}
+                          </div>
+                        )}
+                        <select
+                          className="mt-1 rounded-sm border border-surface-border bg-surface-card px-1 py-0.5 text-[11px] text-ink-900 outline-none"
+                          value={bed.status}
+                          disabled={busy}
+                          onChange={(e) => changeBedStatus(bed, e.target.value as BedStatus)}
+                        >
+                          {BED_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {/* eslint-disable-next-line security/detect-object-injection -- `status` is iterated from the fixed `BED_STATUSES` const array, not user input. */}
+                              {STATUS_LABEL[status]}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="mt-1 inline-flex items-center gap-1 self-start text-[11px] font-semibold text-ink-700 hover:underline"
+                          onClick={() =>
+                            setBedEdit({ id: bed.id, bed_number: bed.bed_number, ward: bed.ward })
+                          }
+                          aria-label={`Edit bed ${bed.bed_number}`}
+                        >
+                          <Pencil size={11} />
+                          Edit
+                        </button>
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </div>

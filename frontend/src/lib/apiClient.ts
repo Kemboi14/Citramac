@@ -40,15 +40,12 @@ export class ApiError extends Error {
 // (a bare login attempt failing with one of these is handled inline by the
 // login form itself, not by force-logging-out a session that never existed).
 const SESSION_INVALIDATING_CODES = new Set([
-  "TOKEN_NOT_VALID",
   "ORGANIZATION_SUSPENDED",
   "BRANCH_INACTIVE",
   "DEPARTMENT_INACTIVE",
   "USER_INACTIVE",
   "ACCESS_WINDOW_CLOSED",
 ]);
-const INVALID_SESSION_MESSAGE =
-  "Your session has expired! Please sign in again";
 
 type SessionInvalidatedHandler = (message: string) => void;
 let sessionInvalidatedHandler: SessionInvalidatedHandler | null = null;
@@ -57,6 +54,78 @@ let sessionInvalidatedHandler: SessionInvalidatedHandler | null = null;
  * logout + explain why, however deep in the app the request happened. */
 export function setSessionInvalidatedHandler(handler: SessionInvalidatedHandler | null) {
   sessionInvalidatedHandler = handler;
+}
+
+/**
+ * What AuthContext's refresher reports back: a fresh access token, "expired"
+ * (the session itself has ended — the refresh cookie is gone, expired, or the
+ * user has been inactive past the organisation's session timeout), or
+ * "unavailable" (the network or server couldn't be reached, which must never
+ * sign a clinician out — they may be working offline).
+ */
+export type TokenRefreshResult = { access: string } | "expired" | "unavailable";
+type TokenRefresher = () => Promise<TokenRefreshResult>;
+let tokenRefresher: TokenRefresher | null = null;
+type SessionExpiredHandler = () => void;
+let sessionExpiredHandler: SessionExpiredHandler | null = null;
+
+/**
+ * Registered once by AuthContext. An authenticated call that comes back 401
+ * (the short-lived access token ran out) asks for one fresh token and is
+ * re-sent once with it; a 401 means the server rejected the request before
+ * acting on it, so re-sending is safe even for a POST. When the session
+ * itself has ended, `onExpired` sends the user to sign in again with a plain
+ * explanation instead of the token library's own wording ("Given token not
+ * valid for any token type").
+ */
+export function setTokenRefresher(
+  refresher: TokenRefresher | null,
+  onExpired: SessionExpiredHandler | null,
+) {
+  tokenRefresher = refresher;
+  sessionExpiredHandler = onExpired;
+}
+
+export const SESSION_EXPIRED_MESSAGE = "Your session has ended. Please sign in again to carry on.";
+export const NETWORK_ERROR_MESSAGE =
+  "We couldn't reach the server. Check your internet connection and try again.";
+
+function networkError(): ApiError {
+  return new ApiError(0, { error: { code: "NETWORK_ERROR", message: NETWORK_ERROR_MESSAGE } });
+}
+
+function sessionExpiredError(): ApiError {
+  return new ApiError(401, {
+    error: { code: "SESSION_EXPIRED", message: SESSION_EXPIRED_MESSAGE },
+  });
+}
+
+/** fetch() rejects with a bare TypeError ("Failed to fetch") when the
+ * request never reached the server — reworded so no screen shows that. An
+ * abort (our own timeout) is left alone; the timeout race reports it. */
+async function fetchOrNetworkError(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw networkError();
+  }
+}
+
+/**
+ * A 401 on a call that carried a token: get a fresh one and hand it back for
+ * a single retry, or end the session. Deactivation codes are not a timeout
+ * and keep their own handling (SESSION_INVALIDATING_CODES).
+ */
+async function recoverFromUnauthorized(): Promise<string> {
+  if (!tokenRefresher) throw sessionExpiredError();
+  const result = await tokenRefresher();
+  if (result === "unavailable") throw networkError();
+  if (result === "expired") {
+    sessionExpiredHandler?.();
+    throw sessionExpiredError();
+  }
+  return result.access;
 }
 
 interface RequestOptions {
@@ -107,9 +176,10 @@ async function performApiRequest<T>(
   path: string,
   options: RequestOptions,
   signal?: AbortSignal,
+  isRetry = false,
 ): Promise<T> {
   const isFormData = options.body instanceof FormData;
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchOrNetworkError(`${BASE_URL}${path}`, {
     method: options.method ?? "GET",
     credentials: "include",
     headers: {
@@ -134,11 +204,15 @@ async function performApiRequest<T>(
     try {
       data = JSON.parse(text);
     } catch {
+      // A proxy or gateway page instead of the API's JSON (a 502 while the
+      // server restarts, a captive portal, ...). The status stays in the
+      // message so support can tell these apart; the wording is for staff.
       const message =
         response.status >= 500
-          ? `The server returned an HTML error (HTTP ${response.status}). Check the backend logs for the cause.`
-          : `The API returned a non-JSON response (HTTP ${response.status}). ` +
-            "Check the API base URL and ensure the reverse proxy routes /api/ requests to the backend.";
+          ? `The server is having a problem right now (error ${response.status}). ` +
+            "Wait a moment and try again; if it keeps happening, contact your system administrator."
+          : `The server sent back something we didn't expect (error ${response.status}). ` +
+            "Try again; if it keeps happening, contact your system administrator.";
       throw new ApiError(response.status, {
         error: {
           code: "INVALID_API_RESPONSE",
@@ -158,9 +232,15 @@ async function performApiRequest<T>(
     const error = new ApiError(response.status, body);
 
     if (options.accessToken && SESSION_INVALIDATING_CODES.has(error.code)) {
-      sessionInvalidatedHandler?.(
-        error.code === "TOKEN_NOT_VALID" ? INVALID_SESSION_MESSAGE : error.message,
-      );
+      sessionInvalidatedHandler?.(error.message);
+    } else if (options.accessToken && response.status === 401) {
+      if (isRetry) {
+        // A brand-new token was rejected too — the session can't continue.
+        sessionExpiredHandler?.();
+        throw sessionExpiredError();
+      }
+      const fresh = await recoverFromUnauthorized();
+      return performApiRequest<T>(path, { ...options, accessToken: fresh }, signal, true);
     }
     throw error;
   }
@@ -199,11 +279,22 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 /** Authenticated file download (e.g. compliance evidence) — never a public
  * media URL. Returns the file as a Blob held in memory only. */
-export async function apiDownload(path: string, accessToken: string): Promise<Blob> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+export async function apiDownload(
+  path: string,
+  accessToken: string,
+  isRetry = false,
+): Promise<Blob> {
+  const response = await fetchOrNetworkError(`${BASE_URL}${path}`, {
     credentials: "include",
     headers: { Authorization: `Bearer ${accessToken}`, ...workingBranchHeader() },
   });
+  if (response.status === 401) {
+    if (isRetry) {
+      sessionExpiredHandler?.();
+      throw sessionExpiredError();
+    }
+    return apiDownload(path, await recoverFromUnauthorized(), true);
+  }
   if (!response.ok) {
     let body: ApiErrorBody = {
       error: { code: "DOWNLOAD_FAILED", message: "The file could not be downloaded." },

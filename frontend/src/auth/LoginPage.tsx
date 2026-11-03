@@ -36,7 +36,13 @@ type LoginFlowState =
  * organization=None account (see LoginView.post).
  */
 export function LoginPage() {
-  const { login, loginVerifyOtp, sessionEndedMessage, clearSessionEndedMessage } = useAuth();
+  const {
+    login,
+    loginVerifyOtp,
+    sessionEndedMessage,
+    sessionEndedEmail,
+    clearSessionEndedMessage,
+  } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const routeToast = (location.state as { toast?: string } | null)?.toast;
@@ -47,6 +53,7 @@ export function LoginPage() {
   // exists so a *later*, unrelated visit to /login — e.g. after a normal
   // logout — doesn't still show a stale "you were signed out" message).
   const [sessionToast] = useState(sessionEndedMessage);
+  const [sessionEmail] = useState(sessionEndedEmail ?? "");
   useEffect(() => {
     if (sessionEndedMessage) clearSessionEndedMessage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,6 +73,7 @@ export function LoginPage() {
       case "discovery":
         return (
           <TenantDiscoveryStep
+            initialEmail={sessionEmail}
             toast={toast}
             toastVariant={sessionToast ? "warning" : "success"}
             onSuccess={(email, tenant) => setState({ step: "password", email, tenant })}

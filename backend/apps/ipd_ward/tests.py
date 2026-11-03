@@ -306,3 +306,87 @@ class IpdWardTests(APITestCase):
         )
         self.assertEqual(notes_response.status_code, 200)
         self.assertEqual(notes_response.data["count"], 1)
+
+
+class WardBedEditTests(APITestCase):
+    """Org Admin can correct ward and bed details; past admissions stay in
+    the ward they happened in."""
+
+    def setUp(self):
+        from apps.accounts.models import Role
+
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-edit", facility_type="MENTAL_HEALTH_MHP"
+            )
+            self.admin = User.objects.create_user(
+                email="admin@org-edit.test", password="Password123!",
+                organization=self.org, is_active=True,
+            )
+            self.admin.roles.add(Role.objects.get(name="Org Admin", organization__isnull=True))
+            self.nurse = User.objects.create_user(
+                email="nurse@org-edit.test", password="Password123!",
+                organization=self.org, is_active=True,
+            )
+            self.patient = Patient.objects.create(
+                organization=self.org, first_name="Faith", last_name="Mwangi",
+                gender="FEMALE", date_of_birth="1997-03-14",
+            )
+            self.ward = Ward.objects.create(organization=self.org, name="SAWA 1")
+            self.other_ward = Ward.objects.create(organization=self.org, name="SAWA 2")
+            self.bed = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="S1")
+            self.bed_2 = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="S2")
+        self.admin_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.admin)[0]}"}
+        self.nurse_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.nurse)[0]}"}
+
+    def patch(self, name, pk, body, auth):
+        return self.client.patch(reverse(name, args=[pk]), body, format="json", **auth)
+
+    def test_org_admin_renames_ward_and_bed(self):
+        response = self.patch(
+            "ipd-ward-detail", self.ward.id, {"name": " Sawa One ", "ward_type": "ACUTE"},
+            self.admin_auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["name"], "Sawa One")
+        response = self.patch("ipd-bed-detail", self.bed.id, {"bed_number": "B-12"}, self.admin_auth)
+        self.assertEqual(response.status_code, 200, response.data)
+        with platform_admin_context():
+            self.bed.refresh_from_db()
+        self.assertEqual(self.bed.bed_number, "B-12")
+
+    def test_other_staff_cannot_rename_but_can_still_set_status(self):
+        response = self.patch("ipd-ward-detail", self.ward.id, {"name": "X"}, self.nurse_auth)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Org Admin", response.data["error"]["message"])
+        response = self.patch("ipd-bed-detail", self.bed.id, {"bed_number": "X"}, self.nurse_auth)
+        self.assertEqual(response.status_code, 403)
+        response = self.patch(
+            "ipd-bed-detail", self.bed.id, {"status": "MAINTENANCE"}, self.nurse_auth
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_duplicate_names_are_refused_in_plain_words(self):
+        response = self.patch("ipd-ward-detail", self.ward.id, {"name": "sawa 2"}, self.admin_auth)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already a ward", str(response.data["name"]))
+        response = self.patch("ipd-bed-detail", self.bed.id, {"bed_number": "s2"}, self.admin_auth)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already has a bed", str(response.data["bed_number"]))
+
+    def test_bed_with_admission_history_cannot_move_ward(self):
+        with platform_admin_context():
+            Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed, admitted_by=self.admin,
+                status="DISCHARGED",
+            )
+        response = self.patch(
+            "ipd-bed-detail", self.bed.id, {"ward": str(self.other_ward.id)}, self.admin_auth
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("admission history", str(response.data["ward"]))
+        response = self.patch(
+            "ipd-bed-detail", self.bed_2.id, {"ward": str(self.other_ward.id)}, self.admin_auth
+        )
+        self.assertEqual(response.status_code, 200, response.data)

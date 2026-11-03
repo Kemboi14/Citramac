@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { shellPathForRole } from "../lib/roleRouting";
 import { useAuth } from "./useAuth";
@@ -31,9 +32,21 @@ export function ProtectedRoute({ allowedRoles }: { allowedRoles?: string[] }) {
 }
 
 export function RootRedirect() {
-  const { accessToken, claims, isLoading } = useAuth();
+  const { accessToken, claims, isLoading, resumeAfterSignIn, clearResumeAfterSignIn } = useAuth();
+  const signedInUserId = accessToken ? claims?.user_id : undefined;
+
+  // Used once, by whoever signs in next: the same person goes back to the
+  // page they were on; anyone else gets their own home screen, and the
+  // previous user's page is forgotten. (Navigate's own effect runs first.)
+  useEffect(() => {
+    if (signedInUserId && resumeAfterSignIn) clearResumeAfterSignIn();
+  }, [signedInUserId, resumeAfterSignIn, clearResumeAfterSignIn]);
 
   if (isLoading) return <FullPageSpinner />;
   if (!accessToken || !claims) return <Navigate to="/login" replace />;
-  return <Navigate to={shellPathForRole(claims.role)} replace />;
+  const resumePath =
+    resumeAfterSignIn && resumeAfterSignIn.userId === claims.user_id
+      ? resumeAfterSignIn.path
+      : null;
+  return <Navigate to={resumePath ?? shellPathForRole(claims.role)} replace />;
 }

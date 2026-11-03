@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiRequest, setSessionInvalidatedHandler } from "./apiClient";
+import {
+  ApiError,
+  SESSION_EXPIRED_MESSAGE,
+  apiRequest,
+  setSessionInvalidatedHandler,
+  setTokenRefresher,
+} from "./apiClient";
 
 afterEach(() => {
   setSessionInvalidatedHandler(null);
+  setTokenRefresher(null, null);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -23,11 +30,12 @@ describe("apiRequest", () => {
       name: "Error",
       code: "INVALID_API_RESPONSE",
       status: 404,
-      message: expect.stringContaining("reverse proxy"),
+      // Written for staff; the status stays in the text for support.
+      message: expect.stringContaining("(error 404)"),
     });
   });
 
-  it("directs server errors to backend logs instead of blaming the proxy", async () => {
+  it("reports a server error in plain words without blaming the connection", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -41,7 +49,7 @@ describe("apiRequest", () => {
     await expect(apiRequest("/platform/email-settings/")).rejects.toMatchObject({
       code: "INVALID_API_RESPONSE",
       status: 500,
-      message: expect.stringContaining("backend logs"),
+      message: expect.stringContaining("server is having a problem right now (error 500)"),
     });
   });
 
@@ -55,12 +63,20 @@ describe("apiRequest", () => {
   it("keeps structured API errors as ApiError instances", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json(
-          { error: { code: "VALIDATION_ERROR", message: "Invalid name", fields: { name: ["Invalid"] } } },
-          { status: 400 },
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            {
+              error: {
+                code: "VALIDATION_ERROR",
+                message: "Invalid name",
+                fields: { name: ["Invalid"] },
+              },
+            },
+            { status: 400 },
+          ),
         ),
-      ),
     );
 
     const request = apiRequest("/platform/organizations/", { method: "POST", body: {} });
@@ -72,9 +88,12 @@ describe("apiRequest", () => {
     });
   });
 
-  it("signs out with a clear message when an access token is no longer valid", async () => {
-    const onSessionInvalidated = vi.fn();
-    setSessionInvalidatedHandler(onSessionInvalidated);
+  it("signs out with a clear message when an expired session can't be renewed", async () => {
+    // An expired access token is first renewed (apiClient.session.test.ts);
+    // only when the session itself has ended is the user signed out, and
+    // never with the token library's own wording.
+    const onExpired = vi.fn();
+    setTokenRefresher(async () => "expired", onExpired);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -92,19 +111,16 @@ describe("apiRequest", () => {
 
     await expect(
       apiRequest("/care/dashboard/", { accessToken: "expired-access-token" }),
-    ).rejects.toMatchObject({
-      code: "TOKEN_NOT_VALID",
-      message: "Given token not valid for any token type",
-    });
-
-    expect(onSessionInvalidated).toHaveBeenCalledWith(
-      "Your session has expired! Please sign in again",
-    );
+    ).rejects.toMatchObject({ code: "SESSION_EXPIRED", message: SESSION_EXPIRED_MESSAGE });
+    expect(onExpired).toHaveBeenCalledOnce();
   });
 
   it("fails with a clear timeout error when a timed request never responds", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise(() => {})));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => new Promise(() => {})),
+    );
 
     const request = apiRequest("/platform/email-settings/", { timeoutMs: 30_000 });
     const assertion = expect(request).rejects.toMatchObject({

@@ -50,6 +50,15 @@ export function createWard(
   return apiRequest<Ward>("/ipd/wards/", { method: "POST", body: payload, accessToken });
 }
 
+/** Org Admin only — renaming is audited with the previous values. */
+export function updateWard(
+  accessToken: string,
+  wardId: string,
+  payload: { name?: string; ward_type?: string },
+) {
+  return apiRequest<Ward>(`/ipd/wards/${wardId}/`, { method: "PATCH", body: payload, accessToken });
+}
+
 export type BedStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED" | "MAINTENANCE";
 
 export interface Bed {
@@ -73,7 +82,13 @@ export function createBed(
   return apiRequest<Bed>("/ipd/beds/", { method: "POST", body: payload, accessToken });
 }
 
-export function updateBed(accessToken: string, bedId: string, payload: Partial<Bed>) {
+/** Status is open to ward staff; bed number and ward are Org Admin changes,
+ * and a bed with admission history can't be moved to another ward. */
+export function updateBed(
+  accessToken: string,
+  bedId: string,
+  payload: Partial<Pick<Bed, "status" | "bed_number" | "ward">>,
+) {
   return apiRequest<Bed>(`/ipd/beds/${bedId}/`, { method: "PATCH", body: payload, accessToken });
 }
 

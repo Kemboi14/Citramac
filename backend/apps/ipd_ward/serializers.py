@@ -13,6 +13,30 @@ class WardSerializer(serializers.ModelSerializer):
     def get_bed_count(self, obj):
         return getattr(obj, "bed_count", None) or obj.beds.count()
 
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter a ward name.")
+        return value
+
+    def validate_ward_type(self, value):
+        return value.strip()
+
+    def validate(self, attrs):
+        # Two wards with the same name at one branch can't be told apart on
+        # the bed board or in an admission's "Ward · Bed" label.
+        instance = self.instance
+        name = attrs.get("name", instance.name if instance else "")
+        branch = attrs.get("branch", instance.branch if instance else None)
+        clash = Ward.objects.filter(name__iexact=name, branch=branch)
+        if instance:
+            clash = clash.exclude(pk=instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError(
+                {"name": [f"There is already a ward called \"{name}\" at this branch."]}
+            )
+        return attrs
+
 
 class BedSerializer(serializers.ModelSerializer):
     occupant_name = serializers.SerializerMethodField()
@@ -20,6 +44,45 @@ class BedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bed
         fields = ["id", "ward", "bed_number", "status", "occupant_name"]
+        # The ward + bed number uniqueness is checked in validate() with a
+        # message staff can read; the database constraint still backs it.
+        validators = []
+
+    def validate_bed_number(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter a bed number.")
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        ward = attrs.get("ward", instance.ward if instance else None)
+        bed_number = attrs.get("bed_number", instance.bed_number if instance else "")
+
+        # Admissions show their ward and bed through this row, so moving a bed
+        # that has ever held an admission would relocate those past stays to
+        # the other ward. Renaming in place (a typo, new signage) is fine.
+        if instance and "ward" in attrs and attrs["ward"].pk != instance.ward_id:
+            if instance.admissions.exists():
+                raise serializers.ValidationError(
+                    {
+                        "ward": [
+                            f"Bed {instance.bed_number} has admission history, so it can't be "
+                            "moved to another ward: its past admissions would then show the "
+                            "wrong ward. Add a new bed in the other ward instead."
+                        ]
+                    }
+                )
+
+        if ward is not None:
+            clash = Bed.objects.filter(ward=ward, bed_number__iexact=bed_number)
+            if instance:
+                clash = clash.exclude(pk=instance.pk)
+            if clash.exists():
+                raise serializers.ValidationError(
+                    {"bed_number": [f"{ward.name} already has a bed {bed_number}."]}
+                )
+        return attrs
 
     def get_occupant_name(self, obj):
         if obj.status != "OCCUPIED":

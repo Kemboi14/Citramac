@@ -39,6 +39,8 @@ login/deactivation error-handling work calls for.
 """
 
 from django.db.models import ProtectedError, RestrictedError
+from django.http import Http404
+from rest_framework import exceptions as drf_exceptions
 from rest_framework import status
 from rest_framework.views import exception_handler as drf_exception_handler
 
@@ -56,6 +58,56 @@ _STATUS_FALLBACK_CODES = {
     429: "RATE_LIMITED",
     500: "SERVER_ERROR",
 }
+
+
+SESSION_ENDED_MESSAGE = "Your session has ended. Please sign in again to carry on."
+
+# Library default wording, replaced with something staff can act on. Only
+# the *default* text is replaced: a view that raises e.g.
+# PermissionDenied("Only this client's care team ...") keeps its own message.
+_FRIENDLY_DEFAULTS = {
+    drf_exceptions.NotAuthenticated: SESSION_ENDED_MESSAGE,
+    drf_exceptions.AuthenticationFailed: SESSION_ENDED_MESSAGE,
+    drf_exceptions.PermissionDenied: (
+        "You don't have permission to do this. If you need it for your work, "
+        "ask your organisation's administrator."
+    ),
+    drf_exceptions.NotFound: (
+        "We couldn't find that record. It may have been removed, or you may not have access to it."
+    ),
+    drf_exceptions.MethodNotAllowed: "That action isn't available here.",
+    drf_exceptions.UnsupportedMediaType: "That file or data format isn't supported here.",
+}
+
+
+def _friendly_message(exc, detail, code):
+    """Plain-language replacement for a library's default message, else None."""
+    # simplejwt: an expired/invalid access token ("Given token not valid for
+    # any token type", "Token is invalid or expired", ...). Always a session
+    # timeout from the user's point of view.
+    if str(code).lower() in ("token_not_valid", "user_not_found", "user_inactive_token"):
+        return SESSION_ENDED_MESSAGE
+    if isinstance(exc, Http404):
+        # get_object_or_404's "No Patient matches the given query." names
+        # the model, not the thing the user was looking at.
+        return _FRIENDLY_DEFAULTS[drf_exceptions.NotFound]
+    if isinstance(exc, drf_exceptions.Throttled):
+        wait = getattr(exc, "wait", None)
+        if wait:
+            seconds = max(1, int(round(wait)))
+            unit = "second" if seconds == 1 else "seconds"
+            return (
+                f"Too many requests in a short time. Please wait {seconds} {unit} and try again."
+            )
+        return "Too many requests in a short time. Please wait a moment and try again."
+    for exc_class, friendly in _FRIENDLY_DEFAULTS.items():
+        if type(exc) is exc_class and str(detail) == str(exc_class.default_detail):
+            return friendly
+    if isinstance(exc, drf_exceptions.MethodNotAllowed):
+        return _FRIENDLY_DEFAULTS[drf_exceptions.MethodNotAllowed]
+    if isinstance(exc, drf_exceptions.UnsupportedMediaType):
+        return _FRIENDLY_DEFAULTS[drf_exceptions.UnsupportedMediaType]
+    return None
 
 
 def custom_exception_handler(exc, context):
@@ -90,5 +142,6 @@ def custom_exception_handler(exc, context):
         or getattr(detail, "code", None)
         or _STATUS_FALLBACK_CODES.get(response.status_code, "ERROR")
     )
-    response.data = {"error": {"code": str(code).upper(), "message": str(detail)}}
+    message = _friendly_message(exc, detail, code) or str(detail)
+    response.data = {"error": {"code": str(code).upper(), "message": message}}
     return response

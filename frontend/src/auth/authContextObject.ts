@@ -39,7 +39,19 @@ export interface AuthContextValue {
    * error (the account/org/branch/department was deactivated mid-session) —
    * LoginPage reads this once to explain why the user landed back here. */
   sessionEndedMessage: string | null;
+  /** The signed-out user's email, pre-filled on the sign-in screen after an
+   * inactivity sign-out so they only need their password. */
+  sessionEndedEmail: string | null;
   clearSessionEndedMessage: () => void;
+  /** Where to return after an inactivity sign-out — honoured only when the
+   * same user signs back in (RootRedirect), never for someone else. */
+  resumeAfterSignIn: ResumeAfterSignIn | null;
+  clearResumeAfterSignIn: () => void;
+}
+
+export interface ResumeAfterSignIn {
+  userId: string;
+  path: string;
 }
 
 // Split from AuthContext.tsx (the `AuthProvider` component) and useAuth.ts
