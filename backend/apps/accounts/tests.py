@@ -260,17 +260,18 @@ class FullActivationAndLoginFlowTests(APITestCase):
         with platform_admin_context():
             role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
 
-        create_response = self.client.post(
-            reverse("platform-staff-list"),
-            {
-                "email": "platform.hire@softlink.test",
-                "first_name": "Amina",
-                "last_name": "Yusuf",
-                "role": role.id,
-            },
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(
+                reverse("platform-staff-list"),
+                {
+                    "email": "platform.hire@softlink.test",
+                    "first_name": "Amina",
+                    "last_name": "Yusuf",
+                    "role": role.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {access}",
+            )
         self.assertEqual(create_response.status_code, 201, create_response.data)
 
         with platform_admin_context():
@@ -284,33 +285,37 @@ class FullActivationAndLoginFlowTests(APITestCase):
         self.assertIn(invite.token, invite_email.body)
 
         # Screen A — identify.
-        identify_response = self.client.post(
-            reverse("auth-identify"),
-            {"activation_token": invite.token, "name": "Amina Yusuf"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            identify_response = self.client.post(
+                reverse("auth-identify"),
+                {"activation_token": invite.token, "name": "Amina Yusuf"},
+            )
         self.assertEqual(identify_response.status_code, 200, identify_response.data)
 
         # Screen B — confirm email, dispatches OTP.
-        confirm_response = self.client.post(
-            reverse("auth-confirm-email"),
-            {"activation_token": invite.token, "email": "platform.hire@softlink.test"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            confirm_response = self.client.post(
+                reverse("auth-confirm-email"),
+                {"activation_token": invite.token, "email": "platform.hire@softlink.test"},
+            )
         self.assertEqual(confirm_response.status_code, 200, confirm_response.data)
         otp_token = confirm_response.data["otp_token"]
         code = _extract_code(mail.outbox[-1].body)
 
         # Screen C — verify OTP.
-        verify_response = self.client.post(
-            reverse("auth-verify-otp"), {"otp_token": otp_token, "otp": code}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            verify_response = self.client.post(
+                reverse("auth-verify-otp"), {"otp_token": otp_token, "otp": code}
+            )
         self.assertEqual(verify_response.status_code, 200, verify_response.data)
         password_setup_token = verify_response.data["password_setup_token"]
 
         # Screen D — set password.
-        set_password_response = self.client.post(
-            reverse("auth-set-password"),
-            {"password_setup_token": password_setup_token, "password": "Amina!StrongPass77"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            set_password_response = self.client.post(
+                reverse("auth-set-password"),
+                {"password_setup_token": password_setup_token, "password": "Amina!StrongPass77"},
+            )
         self.assertEqual(set_password_response.status_code, 200, set_password_response.data)
 
         with platform_admin_context():
@@ -321,18 +326,20 @@ class FullActivationAndLoginFlowTests(APITestCase):
         self.assertIsNotNone(invite.used_at)
 
         # Returning-user login, with 2FA since mfa_enabled defaults True.
-        login_response = self.client.post(
-            reverse("auth-login"),
-            {"email": "platform.hire@softlink.test", "password": "Amina!StrongPass77"},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            login_response = self.client.post(
+                reverse("auth-login"),
+                {"email": "platform.hire@softlink.test", "password": "Amina!StrongPass77"},
+            )
         self.assertEqual(login_response.status_code, 200, login_response.data)
         self.assertTrue(login_response.data["requires_otp"])
         login_code = _extract_code(mail.outbox[-1].body)
 
-        login_otp_response = self.client.post(
-            reverse("auth-login-verify-otp"),
-            {"otp_token": login_response.data["otp_token"], "otp": login_code},
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            login_otp_response = self.client.post(
+                reverse("auth-login-verify-otp"),
+                {"otp_token": login_response.data["otp_token"], "otp": login_code},
+            )
         self.assertEqual(login_otp_response.status_code, 200, login_otp_response.data)
         self.assertIn("access", login_otp_response.data)
 
@@ -1379,10 +1386,11 @@ class RolesAndStaffConsoleApiTests(APITestCase):
                 is_active=False,
             )
         self.assertEqual(ActivationInvite.all_objects.filter(user=staff).count(), 0)
-        response = self.client.post(
-            reverse("staff-resend-invite", args=[staff.id]),
-            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("staff-resend-invite", args=[staff.id]),
+                HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            )
         self.assertEqual(response.status_code, 200, response.data)
         with platform_admin_context():
             self.assertEqual(ActivationInvite.all_objects.filter(user=staff).count(), 1)
@@ -1390,26 +1398,28 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertEqual(invite_email.to, ["noinvite@amani.test"])
 
     def test_resend_invite_reuses_a_still_valid_invite(self):
-        response = self.client.post(
-            reverse("staff-list"),
-            {
-                "email": "pending@amani.test",
-                "first_name": "Grace",
-                "last_name": "Njeri",
-                "role": self.org_admin_role.id,
-            },
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("staff-list"),
+                {
+                    "email": "pending@amani.test",
+                    "first_name": "Grace",
+                    "last_name": "Njeri",
+                    "role": self.org_admin_role.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            )
         self.assertEqual(response.status_code, 201, response.data)
         staff_id = response.data["id"]
         with platform_admin_context():
             original_token = ActivationInvite.all_objects.get(user_id=staff_id).token
 
-        resend_response = self.client.post(
-            reverse("staff-resend-invite", args=[staff_id]),
-            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            resend_response = self.client.post(
+                reverse("staff-resend-invite", args=[staff_id]),
+                HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            )
         self.assertEqual(resend_response.status_code, 200, resend_response.data)
         with platform_admin_context():
             self.assertEqual(ActivationInvite.all_objects.filter(user_id=staff_id).count(), 1)
@@ -1713,17 +1723,18 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self,
     ):
         role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
-        response = self.client.post(
-            reverse("platform-staff-list"),
-            {
-                "email": "support@softlink.test",
-                "first_name": "Joy",
-                "last_name": "Mwangi",
-                "role": role.id,
-            },
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("platform-staff-list"),
+                {
+                    "email": "support@softlink.test",
+                    "first_name": "Joy",
+                    "last_name": "Mwangi",
+                    "role": role.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             staff = User.objects.get(email="support@softlink.test")
@@ -1736,24 +1747,125 @@ class RolesAndStaffConsoleApiTests(APITestCase):
 
     def test_super_admin_can_resend_invite_for_platform_staff(self):
         role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
-        create_response = self.client.post(
-            reverse("platform-staff-list"),
-            {
-                "email": "resend-target@softlink.test",
-                "first_name": "Resend",
-                "last_name": "Target",
-                "role": role.id,
-            },
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            create_response = self.client.post(
+                reverse("platform-staff-list"),
+                {
+                    "email": "resend-target@softlink.test",
+                    "first_name": "Resend",
+                    "last_name": "Target",
+                    "role": role.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
         staff_id = create_response.data["id"]
-        response = self.client.post(
-            reverse("platform-staff-resend-invite", args=[staff_id]),
-            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("platform-staff-resend-invite", args=[staff_id]),
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(mail.outbox[-1].subject, "Welcome to CITRAMAC")
+
+    def test_invite_is_saved_and_queued_when_the_mail_queue_is_unreachable(self):
+        """The bug a Super Admin hit: with the mail queue down the invite
+        returned a 500 and the new account was rolled back. Now the account
+        and its email are saved, and the email waits as PENDING for the
+        outbox sweep."""
+        from unittest import mock
+
+        from apps.notifications.models import NotificationDelivery
+
+        with mock.patch(
+            "apps.notifications.tasks.deliver_notification.apply_async",
+            side_effect=ConnectionError("broker down"),
+        ), self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("staff-list"),
+                {
+                    "email": "queued@amani.test",
+                    "first_name": "Queue",
+                    "last_name": "Down",
+                    "role": self.psychiatrist_template.id,
+                    "organization": str(self.org.id),
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["invite_email"]["status"], "PENDING")
+        with platform_admin_context():
+            self.assertTrue(User.all_objects.filter(email="queued@amani.test").exists())
+            delivery = NotificationDelivery.objects.get(address="queued@amani.test")
+        self.assertEqual(delivery.status, NotificationDelivery.STATUS_PENDING)
+
+    def test_staff_roster_shows_whether_the_invite_email_went(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("staff-list"),
+                {
+                    "email": "sent@amani.test",
+                    "first_name": "Sent",
+                    "last_name": "Invite",
+                    "role": self.psychiatrist_template.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            )
+        self.assertEqual(response.status_code, 201, response.data)
+        roster = self.client.get(
+            reverse("staff-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_access}"
+        )
+        row = next(r for r in roster.data["results"] if r["email"] == "sent@amani.test")
+        self.assertEqual(row["invite_email"]["status"], "SENT")
+        self.assertEqual(mail.outbox[-1].to, ["sent@amani.test"])
+
+    def test_platform_staff_invite_refuses_an_organisation_role(self):
+        for role in (self.psychiatrist_template, self.org_admin_role):
+            response = self.client.post(
+                reverse("platform-staff-list"),
+                {
+                    "email": f"wrong-{role.id}@softlink.test",
+                    "first_name": "Wrong",
+                    "last_name": "Role",
+                    "role": role.id,
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
+            self.assertEqual(response.status_code, 400, role.name)
+            with platform_admin_context():
+                self.assertFalse(
+                    User.all_objects.filter(email=f"wrong-{role.id}@softlink.test").exists()
+                )
+
+    def test_super_admin_changes_a_platform_staff_role_to_platform_roles_only(self):
+        with platform_admin_context():
+            support = Role.objects.get(name="Support Agent", organization__isnull=True)
+            billing = Role.objects.get(name="Billing Admin", organization__isnull=True)
+            staff = User.objects.create_user(
+                email="rolechange@softlink.test", organization=None, is_staff=True
+            )
+            staff.roles.add(support)
+        url = reverse("platform-staff-change-role", args=[staff.id])
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {self.super_access}"}
+        response = self.client.post(url, {"role": billing.id}, format="json", **auth)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["role_names"], ["Billing Admin"])
+
+        refused = self.client.post(
+            url, {"role": self.psychiatrist_template.id}, format="json", **auth
+        )
+        self.assertEqual(refused.status_code, 400)
+        with platform_admin_context():
+            self.assertEqual(list(staff.roles.values_list("name", flat=True)), ["Billing Admin"])
+
+        org_admin_refused = self.client.post(
+            url, {"role": billing.id}, format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(org_admin_refused.status_code, 403)
 
     def test_super_admin_can_retrieve_and_update_a_platform_staff_member(self):
         """

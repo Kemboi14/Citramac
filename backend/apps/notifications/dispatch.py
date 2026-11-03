@@ -214,3 +214,74 @@ def notify(
         new_in_app=created,
     )
     return created
+
+
+def _invite_key(token):
+    import hashlib
+
+    return f"activation-invite:{hashlib.sha256(token.encode()).hexdigest()}"
+
+
+def queue_activation_invite(invite, *, resend=False):
+    """
+    The "activate your account" email for one ActivationInvite, through the
+    outbox like every other notice: saved with the account in the same
+    transaction, sent after it commits, retried, and its outcome recorded.
+    An unreachable mail queue therefore never loses the new account (it used
+    to roll the whole invite back), and a mail server that refuses it shows
+    as FAILED / NOT_CONFIGURED on the staff list, never as sent.
+
+    A resend is a person asking for another copy, so it is a new delivery
+    rather than being de-duplicated against the first one.
+    """
+    from django.conf import settings
+    from django.utils import timezone
+
+    organization = invite.organization
+    token = invite.token
+    activation_link = f"{settings.FRONTEND_URL}/activate?token={token}"
+    if organization is not None:
+        subject = f"You've been invited to CITRAMAC — {organization.name}"
+        body_text = (
+            f"You've been invited to set up {organization.name} on CITRAMAC. "
+            f"Activate your account: {activation_link}"
+        )
+    else:
+        subject = "Welcome to CITRAMAC"
+        body_text = (
+            "You've been invited to join the CITRAMAC platform team. "
+            f"Activate your account: {activation_link}"
+        )
+    dedupe_key = _invite_key(token)
+    if resend:
+        dedupe_key = f"{dedupe_key}:resend:{timezone.now().isoformat()}"
+    return _queue_delivery(
+        organization.id if organization is not None else None,
+        None,
+        dedupe_key,
+        NotificationDelivery.CHANNEL_EMAIL,
+        invite.user.email,
+        subject=subject,
+        body_text=body_text,
+        html_template="notifications/emails/invite_email.html",
+        html_context={
+            "organization_name": organization.name if organization is not None else None,
+            "activation_token": token,
+            "activation_link": activation_link,
+        },
+    )
+
+
+def latest_invite_delivery(user):
+    """The most recent activation-invite email for a not-yet-activated user,
+    or None when none has been queued through the outbox."""
+    from apps.accounts.models import ActivationInvite
+
+    invite = ActivationInvite.all_objects.filter(user=user).order_by("-created_at").first()
+    if invite is None:
+        return None
+    return (
+        NotificationDelivery.objects.filter(dedupe_key__startswith=_invite_key(invite.token))
+        .order_by("-created_at")
+        .first()
+    )

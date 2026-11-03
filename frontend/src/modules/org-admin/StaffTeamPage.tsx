@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { InviteEmailPill } from "../../components/InviteEmailPill";
 import { Printer, UserPlus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
@@ -270,8 +271,9 @@ export function StaffTeamPage() {
     setNotice(null);
     setResendingId(s.id);
     try {
-      await resendStaffInvite(accessToken, s.id);
-      setNotice(`Invite resent to ${s.email}.`);
+      const updated = await resendStaffInvite(accessToken, s.id);
+      setStaff((prev) => prev.map((row) => (row.id === s.id ? updated : row)));
+      setNotice(`A new invite email to ${s.email} is queued. Its status shows on their row.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't resend the invite.");
     } finally {
@@ -445,6 +447,7 @@ export function StaffTeamPage() {
               {ACCESS_STATUS_LABEL[s.access_status]}
             </span>
           )}
+          <InviteEmailPill invite={s.invite_email} />
           {s.nacada_status && (
             <span
               className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${NACADA_BADGE[s.nacada_status].tint}`}

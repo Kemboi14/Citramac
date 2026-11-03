@@ -16,6 +16,7 @@ from apps.accounts.permissions import (
     IsPlatformSuperAdmin,
     IsPlatformSuperAdminOrOrgAdmin,
 )
+from apps.notifications.dispatch import queue_activation_invite
 from apps.tenancy.context import platform_admin_context
 from config.errors import error_response
 
@@ -26,6 +27,7 @@ from .serializers import (
     PermissionSerializer,
     RoleSerializer,
     StaffInviteSerializer,
+    TENANT_HELD_PLATFORM_ROLES,
     StaffSerializer,
     _covers_branch,
     validate_assignments,
@@ -236,7 +238,7 @@ class StaffViewSet(viewsets.ModelViewSet):
                 created_by=request.user,
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
-            _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
+            queue_activation_invite(invite)
 
         return staff
 
@@ -274,7 +276,7 @@ class StaffViewSet(viewsets.ModelViewSet):
         with platform_admin_context() if request.user.is_superuser else contextlib.nullcontext():
             invite = (
                 ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
-                .order_by("-id")
+                .order_by("-created_at")
                 .first()
             )
             if invite is None or not invite.is_valid():
@@ -284,7 +286,7 @@ class StaffViewSet(viewsets.ModelViewSet):
                     created_by=request.user,
                     expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
                 )
-        _dispatch_invite_email(staff.email, organization.name, invite.token, organization.id)
+            queue_activation_invite(invite, resend=True)
         return Response(StaffSerializer(staff).data)
 
     @action(detail=True, methods=["post"])
@@ -328,6 +330,31 @@ class StaffViewSet(viewsets.ModelViewSet):
             otp, code = OneTimePassword.issue(staff, OneTimePassword.PURPOSE_RESET)
         _dispatch_otp_email(staff, code, otp.purpose)
         return Response({"detail": "A password reset code has been emailed to this user."})
+
+
+def _require_platform_role(role):
+    """A platform account holds a platform-team role only. Before this check
+    the console's role list offered every role, so a Softlink account could
+    be created holding "Psychiatrist" — with no organisation, and so no
+    clinical record it could legitimately open."""
+    if (
+        role is None
+        or role.scope != Role.SCOPE_PLATFORM
+        or role.organization_id is not None
+        or role.name.strip().lower() in TENANT_HELD_PLATFORM_ROLES
+        # Super Admin is the is_superuser flag, never a role a person can be
+        # handed here — holding a "Super Admin" role grants nothing.
+        or role.name.strip().lower() == "super admin"
+    ):
+        raise ValidationError(
+            {
+                "role": (
+                    "Choose a platform-team role. Organisation staff are added to "
+                    "their organisation."
+                )
+            }
+        )
+    return role
 
 
 class PlatformStaffViewSet(viewsets.ModelViewSet):
@@ -376,6 +403,7 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         serializer = StaffInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        role = _require_platform_role(data.get("role"))
 
         with platform_admin_context(), transaction.atomic():
             staff = User.objects.create_user(
@@ -387,7 +415,7 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                 is_staff=True,
                 is_active=False,
             )
-            staff.roles.add(data["role"])
+            staff.roles.add(role)
 
             invite = ActivationInvite.objects.create(
                 organization=None,
@@ -395,9 +423,24 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                 created_by=request.user,
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
-            _dispatch_invite_email(staff.email, None, invite.token, organization_id=None)
+            queue_activation_invite(invite)
 
         return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def change_role(self, request, pk=None):
+        """Give a platform-team member a different platform-team role. (The
+        console used to PATCH `roles` on the organisation staff endpoint,
+        which ignored it — role changes there silently did nothing.)"""
+        staff = self.get_object()
+        role_id = request.data.get("role")
+        with platform_admin_context():
+            role = Role.objects.filter(pk=role_id).first() if str(role_id).isdigit() else None
+            role = _require_platform_role(role)
+            staff.roles.set([role])
+            staff.refresh_from_db()
+            data = StaffSerializer(staff).data
+        return Response(data)
 
     @action(detail=True, methods=["post"])
     def resend_invite(self, request, pk=None):
@@ -412,7 +455,7 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         with platform_admin_context():
             invite = (
                 ActivationInvite.objects.filter(user=staff, used_at__isnull=True)
-                .order_by("-id")
+                .order_by("-created_at")
                 .first()
             )
             if invite is None or not invite.is_valid():
@@ -422,7 +465,7 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                     created_by=request.user,
                     expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
                 )
-        _dispatch_invite_email(staff.email, None, invite.token, organization_id=None)
+            queue_activation_invite(invite, resend=True)
         return Response(StaffSerializer(staff).data)
 
     @action(detail=True, methods=["post"])
@@ -484,8 +527,3 @@ class MyProfileView(APIView):
         serializer.save()
         return Response(serializer.data)
 
-
-def _dispatch_invite_email(email, organization_name, token, organization_id=None):
-    from apps.notifications.tasks import send_invite_email
-
-    send_invite_email.delay(email, organization_name, token, organization_id=organization_id)

@@ -102,11 +102,9 @@ class Command(BaseCommand):
                 expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
             )
 
-            from apps.notifications.tasks import send_invite_email
+            from apps.notifications.dispatch import queue_activation_invite
 
-            send_invite_email.delay(
-                user.email, organization.name, invite.token, organization_id=organization.id
-            )
+            queue_activation_invite(invite)
 
         self.stdout.write(
             self.style.SUCCESS(

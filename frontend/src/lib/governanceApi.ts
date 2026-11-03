@@ -72,6 +72,15 @@ export interface Staff {
   access_status: StaffAccessStatus;
   assignments: RoleAssignment[];
   nacada_status: NacadaStatus;
+  /** Never signed in: what happened to their latest activation email (from the outbox). */
+  invite_email: InviteEmail | null;
+}
+
+export type InviteEmailStatus = "PENDING" | "SENT" | "FAILED" | "NOT_CONFIGURED";
+
+export interface InviteEmail {
+  status: InviteEmailStatus;
+  queued_at: string;
 }
 
 export interface StaffInvitePayload {
@@ -176,6 +185,18 @@ export function listPlatformStaff(accessToken: string) {
 
 export function invitePlatformStaff(accessToken: string, payload: StaffInvitePayload) {
   return apiRequest<Staff>("/platform/staff/", { method: "POST", body: payload, accessToken });
+}
+
+export function resendPlatformStaffInvite(accessToken: string, id: string) {
+  return apiRequest<Staff>(`/platform/staff/${id}/resend_invite/`, { method: "POST", accessToken });
+}
+
+export function changePlatformStaffRole(accessToken: string, id: string, role: number) {
+  return apiRequest<Staff>(`/platform/staff/${id}/change_role/`, {
+    method: "POST",
+    body: { role },
+    accessToken,
+  });
 }
 
 export function unlockPlatformStaff(accessToken: string, id: string) {

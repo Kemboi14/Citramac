@@ -233,6 +233,7 @@ class StaffSerializer(serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
     access_status = serializers.SerializerMethodField()
     nacada_status = serializers.SerializerMethodField()
+    invite_email = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -262,6 +263,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "access_ends_at",
             "access_status",
             "nacada_status",
+            "invite_email",
         ]
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
@@ -281,6 +283,23 @@ class StaffSerializer(serializers.ModelSerializer):
         lockout_key = f"login-lockout:{obj.email.strip().casefold()}"
         max_attempts = SecurityPolicy.get_solo().max_failed_login_attempts
         return cache.get(lockout_key, 0) >= max_attempts
+
+    def get_invite_email(self, obj):
+        """
+        For someone who has never signed in: what happened to their latest
+        activation email — PENDING, SENT, FAILED or NOT_CONFIGURED, from the
+        outbox row itself, so the roster never claims an invite went when
+        it did not. None once they have signed in, or for an invite queued
+        before invites went through the outbox.
+        """
+        if obj.is_active or obj.last_login is not None:
+            return None
+        from apps.notifications.dispatch import latest_invite_delivery
+
+        delivery = latest_invite_delivery(obj)
+        if delivery is None:
+            return None
+        return {"status": delivery.status, "queued_at": delivery.created_at}
 
     def get_access_status(self, obj):
         """

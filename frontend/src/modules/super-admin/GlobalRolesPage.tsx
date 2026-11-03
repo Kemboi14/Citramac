@@ -3,15 +3,19 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { PermissionChangeDialog, PermissionMatrix } from "../../components/PermissionMatrix";
+import { InviteEmailPill } from "../../components/InviteEmailPill";
 import {
+  changePlatformStaffRole,
   invitePlatformStaff,
+  inviteStaff,
+  resendPlatformStaffInvite,
+  resendStaffInvite,
   listPermissions,
   listPlatformStaff,
   listRoles,
   listStaff,
   unlockPlatformStaff,
   unlockStaff,
-  updateStaff,
   updateRole,
   type Permission,
   type Role,
@@ -60,6 +64,9 @@ export function GlobalRolesPage() {
     null,
   );
   const [invite, setInvite] = useState<StaffInvitePayload>(EMPTY_INVITE);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const refresh = async (organizationId = selectedOrganizationId) => {
     if (!accessToken) return;
@@ -102,6 +109,26 @@ export function GlobalRolesPage() {
     ? roles.filter((role) => role.organization === selectedOrganizationId)
     : roles;
 
+  // Who the invite form (and a platform member's role picker) may offer:
+  // with an organisation selected, that organisation's roles plus the
+  // standard templates; otherwise only the platform team's own roles — never
+  // an organisation's clinical role, and never the per-organisation
+  // administrator roles (Org Admin, Auditor).
+  const inviteRoles = selectedOrganizationId
+    ? roles.filter(
+        (role) =>
+          role.organization === selectedOrganizationId ||
+          (role.organization === null && role.scope === "ORG_TEMPLATE"),
+      )
+    : roles.filter(
+        (role) =>
+          role.organization === null &&
+          role.scope === "PLATFORM" &&
+          !["org admin", "auditor", "super admin"].includes(role.name.trim().toLowerCase()),
+      );
+  const selectedOrganizationName =
+    organizations.find((org) => org.id === selectedOrganizationId)?.name ?? "this organisation";
+
   const selectRole = (role: Role) => {
     setSelectedRoleId(role.id);
     setSelectedPermissionIds(role.permissions);
@@ -113,6 +140,9 @@ export function GlobalRolesPage() {
     setSelectedOrganizationId(organizationId);
     setSelectedRoleId(null);
     setSelectedPermissionIds([]);
+    setInvite(EMPTY_INVITE);
+    setInviteError(null);
+    setNotice(null);
     setIsLoading(true);
     setError(null);
     void refresh(organizationId)
@@ -179,7 +209,7 @@ export function GlobalRolesPage() {
     setError(null);
     setBusy(true);
     try {
-      const updated = await updateStaff(accessToken, member.id, { roles: [Number(roleId)] });
+      const updated = await changePlatformStaffRole(accessToken, member.id, Number(roleId));
       setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
       setPendingStaffRole(null);
     } catch (err) {
@@ -212,18 +242,46 @@ export function GlobalRolesPage() {
 
   const submitInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!accessToken || !invite.role) return;
-    setError(null);
+    if (!accessToken) return;
+    if (!invite.role) {
+      setInviteError("Choose a role for this person.");
+      return;
+    }
+    setInviteError(null);
+    setNotice(null);
     setBusy(true);
     try {
-      await invitePlatformStaff(accessToken, invite);
+      const created = selectedOrganizationId
+        ? await inviteStaff(accessToken, { ...invite, organization: selectedOrganizationId })
+        : await invitePlatformStaff(accessToken, invite);
       setInvite(EMPTY_INVITE);
       setShowInviteForm(false);
+      setNotice(
+        `${created.first_name} ${created.last_name} was added. Their invite email is queued — its status shows on their row.`,
+      );
       await refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't invite the staff member.");
+      setInviteError(err instanceof ApiError ? err.message : "Couldn't add this person.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleResendInvite = async (member: Staff) => {
+    if (!accessToken) return;
+    setError(null);
+    setNotice(null);
+    setResendingId(member.id);
+    try {
+      const updated = selectedOrganizationId
+        ? await resendStaffInvite(accessToken, member.id)
+        : await resendPlatformStaffInvite(accessToken, member.id);
+      setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
+      setNotice(`A new invite email to ${member.email} is queued.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't resend the invite.");
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -356,22 +414,39 @@ export function GlobalRolesPage() {
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex items-center justify-between px-6 pt-6">
           <h2 className="font-display text-base font-semibold text-ink-900">
-            {selectedOrganizationId ? "Organization Staff" : "Platform Staff"}
+            {selectedOrganizationId ? `${selectedOrganizationName} staff` : "Platform team"}
           </h2>
           <button
             type="button"
-            onClick={() => setShowInviteForm((prev) => !prev)}
+            onClick={() => {
+              setShowInviteForm((prev) => !prev);
+              setInviteError(null);
+            }}
             className={SECONDARY_BUTTON_CLASS}
           >
             {showInviteForm ? "Cancel" : "Add Staff"}
           </button>
         </div>
 
+        {notice && (
+          <p
+            role="status"
+            className="mx-6 mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark"
+          >
+            {notice}
+          </p>
+        )}
+
         {showInviteForm && (
           <form
             onSubmit={submitInvite}
             className="mx-6 mt-4 flex flex-wrap items-end gap-3 rounded-md border border-surface-border bg-surface-bg p-4"
           >
+            <p className="w-full text-sm text-ink-500">
+              {selectedOrganizationId
+                ? `Adds a staff member to ${selectedOrganizationName}, with access to every branch. Their Org Admin can narrow it to particular branches.`
+                : "Adds a member of the Softlink Options platform team. To add someone to an organisation, choose the organisation above first."}
+            </p>
             <label className={LABEL_CLASS}>
               First name
               <input
@@ -409,7 +484,7 @@ export function GlobalRolesPage() {
                 required
               >
                 <option value="">Select a role…</option>
-                {visibleRoles.map((role) => (
+                {inviteRoles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
                   </option>
@@ -417,8 +492,21 @@ export function GlobalRolesPage() {
               </select>
             </label>
             <button type="submit" disabled={busy} className={BUTTON_CLASS}>
-              Send Invite
+              {busy ? "Adding…" : "Add and send invite"}
             </button>
+            {inviteRoles.length === 0 && (
+              <p className="w-full text-sm text-status-amber">
+                There are no roles to offer here yet.
+              </p>
+            )}
+            {inviteError && (
+              <p
+                role="alert"
+                className="w-full rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red"
+              >
+                {inviteError}
+              </p>
+            )}
           </form>
         )}
 
@@ -441,22 +529,39 @@ export function GlobalRolesPage() {
                 </td>
                 <td className="px-6 py-3 text-ink-700">{s.email}</td>
                 <td className="px-6 py-3">
-                  <select
-                    className={FIELD_CLASS}
-                    value={s.roles[0] ?? ""}
-                    disabled={busy || visibleRoles.length === 0}
-                    onChange={(event) =>
-                      event.target.value &&
-                      setPendingStaffRole({ staff: s, roleId: event.target.value })
-                    }
-                  >
-                    <option value="">No role</option>
-                    {visibleRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
+                  {selectedOrganizationId ? (
+                    // An organisation member's roles are held per branch, so
+                    // they are changed in that organisation's Staff screen
+                    // (which keeps the branch), not overwritten from here.
+                    <span className="text-ink-700">
+                      {s.assignments.length
+                        ? s.assignments
+                            .map(
+                              (a) =>
+                                `${a.role_name ?? "Role"}${a.branch_name ? ` · ${a.branch_name}` : ""}`,
+                            )
+                            .join(", ")
+                        : s.role_names.join(", ") || "No role"}
+                    </span>
+                  ) : (
+                    <select
+                      className={FIELD_CLASS}
+                      aria-label={`Role for ${s.first_name} ${s.last_name}`}
+                      value={s.roles[0] ?? ""}
+                      disabled={busy || inviteRoles.length === 0}
+                      onChange={(event) =>
+                        event.target.value &&
+                        setPendingStaffRole({ staff: s, roleId: event.target.value })
+                      }
+                    >
+                      <option value="">No role</option>
+                      {inviteRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -467,36 +572,51 @@ export function GlobalRolesPage() {
                           : "bg-status-red-tint text-status-red"
                       }`}
                     >
-                      {s.is_active ? "Active" : "Inactive"}
+                      {s.is_active ? "Active" : s.last_login ? "Inactive" : "Invite pending"}
                     </span>
                     {s.is_locked && (
                       <span className="rounded-full bg-status-red-tint px-2 py-0.5 text-xs font-semibold text-status-red">
                         Locked
                       </span>
                     )}
+                    <InviteEmailPill invite={s.invite_email} />
                   </div>
                 </td>
                 <td className="px-6 py-3 text-ink-700">
                   {s.last_login ? new Date(s.last_login).toLocaleString() : "Never"}
                 </td>
                 <td className="px-6 py-3">
-                  {s.is_locked && (
-                    <button
-                      type="button"
-                      disabled={unlockingId === s.id}
-                      className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
-                      onClick={() => handleUnlock(s)}
-                    >
-                      {unlockingId === s.id ? "Unlocking…" : "Unlock"}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {!s.is_active && !s.last_login && (
+                      <button
+                        type="button"
+                        disabled={resendingId === s.id}
+                        className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                        onClick={() => handleResendInvite(s)}
+                      >
+                        {resendingId === s.id ? "Sending…" : "Resend invite"}
+                      </button>
+                    )}
+                    {s.is_locked && (
+                      <button
+                        type="button"
+                        disabled={unlockingId === s.id}
+                        className="text-sm font-semibold text-brand-green hover:underline disabled:opacity-60"
+                        onClick={() => handleUnlock(s)}
+                      >
+                        {unlockingId === s.id ? "Unlocking…" : "Unlock"}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
             {staff.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-6 py-6 text-center text-ink-500">
-                  No platform staff yet.
+                  {selectedOrganizationId
+                    ? "No staff in this organisation yet."
+                    : "No platform team members yet."}
                 </td>
               </tr>
             )}
