@@ -231,7 +231,7 @@ class AT17RegistryTests(PsyNoteTestCase):
         with platform_admin_context():
             admin = User.objects.create_user(email=f"admin-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
                                              organization=self.org, is_active=True)
-            role, _ = Role.objects.get_or_create(name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            role, _ = Role.objects.get_or_create(organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
             admin.roles.add(role)
         admin_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(admin)[0]}"}
         body = {"name": "Acceptance and Commitment Therapy", "aliases": ["ACT"],

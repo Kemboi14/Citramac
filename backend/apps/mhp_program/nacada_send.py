@@ -14,7 +14,7 @@ status, never assumed.
 from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.accounts.access import has_active_role, has_permission
+from apps.accounts.access import has_permission, is_org_admin
 from apps.notifications.dispatch import EmailContent, queue_email
 from apps.sysadmin_audit.audit import write_event
 from apps.sysadmin_audit.models import AuditLogEntry
@@ -27,11 +27,11 @@ TEMPLATE = "notifications/emails/nacada_report_email.html"
 
 
 def may_send(user):
-    return has_active_role(user, "Org Admin") or has_permission(user, SEND_PERMISSION)
+    return is_org_admin(user) or has_permission(user, SEND_PERMISSION)
 
 
 def may_edit_settings(user):
-    return has_active_role(user, "Org Admin")
+    return is_org_admin(user)
 
 
 def _email(report, sender, test_copy):

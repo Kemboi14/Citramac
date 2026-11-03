@@ -13,7 +13,7 @@ same User/Role/ActivationInvite pattern as onboard_tenant's own
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.accounts.models import ActivationInvite, Role, User
+from apps.accounts.models import ActivationInvite, User
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.models import Branch, Organization
 
@@ -55,9 +55,13 @@ class Command(BaseCommand):
             if organization is None:
                 raise CommandError(f"No Organization with slug '{options['org_slug']}' exists")
 
-            role = Role.objects.filter(name=options["role"], organization__isnull=True).first()
+            from apps.accounts.roles import organization_role_named
+
+            role = organization_role_named(organization, options["role"])
             if role is None:
-                raise CommandError(f"No platform template Role named '{options['role']}' exists")
+                raise CommandError(
+                    f"'{organization.name}' has no role named '{options['role']}'"
+                )
 
             branch = None
             if options["branch_name"]:

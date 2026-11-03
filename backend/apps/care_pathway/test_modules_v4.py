@@ -35,7 +35,7 @@ class ModulesTestCase(RecordsTestCase):
                 organization=self.org, is_active=True, first_name=first, last_name=last,
             )
             if role_name:
-                role, _ = Role.objects.get_or_create(name=role_name, defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+                role, _ = Role.objects.get_or_create(organization=None, name=role_name, defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
                 user.roles.add(role)
         return user, {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(user)[0]}"}
 

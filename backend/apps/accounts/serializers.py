@@ -99,11 +99,20 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    """
+    A platform-team role or one organisation's role (apps.accounts.catalogue,
+    "Roles"). `holder_count` is the number of people holding it; `kind` is how
+    the screens group it: "built_in" (locked administrator role), "standard"
+    (the organisation's copy of a standard role) or "custom".
+    """
+
     permissions = serializers.PrimaryKeyRelatedField(
         queryset=Permission.objects.all(), many=True, required=False
     )
     user_count = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    is_locked = serializers.BooleanField(read_only=True)
+    kind = serializers.SerializerMethodField()
 
     class Meta:
         model = Role
@@ -113,43 +122,81 @@ class RoleSerializer(serializers.ModelSerializer):
             "organization",
             "organization_name",
             "scope",
+            "system_key",
+            "kind",
+            "is_locked",
+            "is_active",
             "description",
             "permissions",
             "user_count",
         ]
-        read_only_fields = ["organization", "scope"]
+        read_only_fields = ["organization", "scope", "system_key", "is_active"]
 
     def get_user_count(self, obj):
-        return getattr(obj, "user_count", None) or obj.users.count()
+        count = getattr(obj, "user_count", None)
+        return count if count is not None else obj.users.count()
+
+    def get_kind(self, obj):
+        if obj.is_locked:
+            return "built_in"
+        return "standard" if obj.system_key else "custom"
+
+    def _owner(self):
+        """(organization_id, is_platform) the role being written belongs to."""
+        if self.instance is not None:
+            return self.instance.organization_id, self.instance.scope == Role.SCOPE_PLATFORM
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and user.is_superuser:
+            return None, True
+        return getattr(user, "organization_id", None), False
+
+    def validate_name(self, value):
+        from .roles import name_problem
+
+        if self.instance is not None and self.instance.is_locked:
+            if value.strip() != self.instance.name:
+                raise serializers.ValidationError(
+                    f"{self.instance.name} is a built-in role; its name can't be changed."
+                )
+            return self.instance.name
+        organization_id, _ = self._owner()
+        problem = name_problem(value, organization_id, getattr(self.instance, "pk", None))
+        if problem:
+            raise serializers.ValidationError(problem)
+        return value.strip()
 
     def validate_permissions(self, value):
         """
-        docs/09-SECURITY-COMPLIANCE.md §9.3: an organisation grants only
-        organisation permissions (catalogue scope ORG — every one of them, the
-        legal-form authorities included). Platform-team permissions belong on
-        platform-team roles only, whoever is editing.
+        Platform-team roles take platform permissions only; organisation roles
+        organisation permissions only. Nobody edits a locked role's access.
         """
-        instance = self.instance
-        platform_role = instance is not None and instance.scope == Role.SCOPE_PLATFORM
-        if platform_role:
-            return value
-        wrong = sorted(p.label or p.codename for p in value if p.scope != "ORG")
-        if wrong:
+        if self.instance is not None and self.instance.is_locked:
             raise serializers.ValidationError(
-                "These are platform-team permissions and can't be given to an "
-                "organisation's role: " + ", ".join(wrong) + "."
+                f"{self.instance.name} is a built-in role; its access is fixed."
+            )
+        _, is_platform = self._owner()
+        wanted = "PLATFORM" if is_platform else "ORG"
+        wrong = sorted(p.label or p.codename for p in value if p.scope != wanted)
+        if wrong:
+            kind = "an organisation" if is_platform else "a platform-team"
+            raise serializers.ValidationError(
+                f"These are {kind} permissions and can't be given to this role: "
+                + ", ".join(wrong)
+                + "."
             )
         return value
 
-    def validate(self, attrs):
-        """Org Admin and Auditor are the built-in administrator roles; their
-        access is fixed in code, so their permissions are not edited here."""
-        if self.instance is not None and "permissions" in attrs:
-            if self.instance.name.strip().lower() in TENANT_HELD_PLATFORM_ROLES:
-                raise serializers.ValidationError(
-                    {"permissions": f"{self.instance.name} is a built-in administrator role; its access is fixed."}
-                )
-        return attrs
+
+class RoleMemberSerializer(serializers.Serializer):
+    """Who holds a role, and where."""
+
+    id = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    email = serializers.EmailField()
+    is_active = serializers.BooleanField()
+    branches = serializers.ListField(child=serializers.CharField())
 
 
 class RoleAssignmentSerializer(serializers.Serializer):
@@ -165,28 +212,33 @@ class RoleAssignmentSerializer(serializers.Serializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
 
 
-# Seeded with PLATFORM scope (accounts migration 0007) but held by a
-# facility's own staff — every other PLATFORM role is Softlink's own team.
-TENANT_HELD_PLATFORM_ROLES = ("org admin", "auditor")
-
-
 def validate_assignments(assignments, organization):
     """
-    Every role must be one this organization may hand out (its own, or a
-    platform ORG_TEMPLATE — never a platform-staff role), every branch one of
-    its active branches. Returns [(Role, Branch|None)].
+    Every role must be one of this organisation's own active roles (a standard
+    definition's id stands for the organisation's copy of it), every branch one
+    of its active branches. Returns [(Role, Branch|None)].
     """
+    from .roles import own_role
+
     if not assignments:
         raise serializers.ValidationError({"assignments": "Give the staff member at least one role."})
     pairs = []
     for item in assignments:
         role, branch = item["role"], item.get("branch")
-        assignable = role.scope == Role.SCOPE_ORG_TEMPLATE or role.name.strip().lower() in (
-            TENANT_HELD_PLATFORM_ROLES
-        )
-        if not assignable or role.organization_id not in (None, organization.id):
+        if role.scope == Role.SCOPE_ORG_TEMPLATE:
+            role = own_role(organization, role)
+        if (
+            role is None
+            or role.scope != Role.SCOPE_ORG_TEMPLATE
+            or role.organization_id != organization.id
+        ):
+            name = getattr(item["role"], "name", "This role")
             raise serializers.ValidationError(
-                {"assignments": f"“{role.name}” can't be given to this organisation's staff."}
+                {"assignments": f"“{name}” isn't one of this organisation's roles."}
+            )
+        if not role.is_active:
+            raise serializers.ValidationError(
+                {"assignments": f"“{role.name}” has been retired and can't be given to anyone."}
             )
         if branch is not None and branch.organization_id != organization.id:
             raise serializers.ValidationError(
@@ -256,6 +308,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "department_name",
             "branch_access",
             "is_active",
+            "is_superuser",
             "is_on_duty",
             "last_login",
             "is_locked",
@@ -268,7 +321,7 @@ class StaffSerializer(serializers.ModelSerializer):
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
         # roster view just displays whatever the staff member has set.
-        read_only_fields = ["last_login", "avatar"]
+        read_only_fields = ["last_login", "avatar", "is_superuser"]
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]

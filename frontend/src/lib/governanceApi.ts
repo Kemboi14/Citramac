@@ -18,7 +18,15 @@ export interface Permission {
   scope: "ORG" | "PLATFORM";
 }
 
+/** PLATFORM: the platform team's own roles. ORG_TEMPLATE: an organisation's role. */
 export type RoleScope = "PLATFORM" | "ORG_TEMPLATE";
+
+/**
+ * built_in: a locked administrator role (Org Admin, Auditor, Super Admin) —
+ * name and access fixed. standard: the organisation's own copy of a standard
+ * role. custom: a role the organisation (or platform) made itself.
+ */
+export type RoleKind = "built_in" | "standard" | "custom";
 
 export interface Role {
   id: number;
@@ -26,9 +34,27 @@ export interface Role {
   organization: string | null;
   organization_name: string | null;
   scope: RoleScope;
+  /** Which built-in role this is ("org_admin", "psychiatrist", …); "" for a custom role. */
+  system_key: string;
+  kind: RoleKind;
+  is_locked: boolean;
+  /** False once retired: kept on record, but can't be given to anyone. */
+  is_active: boolean;
   description: string;
   permissions: number[];
   user_count: number;
+}
+
+export const ORG_ADMIN_KEY = "org_admin";
+
+/** Someone holding a role, and the branches they hold it at. */
+export interface RoleMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  is_active: boolean;
+  branches: string[];
 }
 
 export type StaffAccessStatus = "not_started" | "active" | "expired" | null;
@@ -62,6 +88,8 @@ export interface Staff {
   department_name: string | null;
   branch_access: string[];
   is_active: boolean;
+  /** A Super Admin account (platform console), whatever roles it holds. */
+  is_superuser: boolean;
   is_on_duty: boolean;
   last_login: string | null;
   /** True while this account is inside LoginView's failed-attempt lockout window. */
@@ -101,25 +129,25 @@ export interface StaffInvitePayload {
   access_ends_at?: string | null;
 }
 
-export function listPermissions(accessToken: string) {
-  return apiRequest<Permission[]>("/permissions/", { accessToken });
+export function listPermissions(accessToken: string, scope?: "ORG" | "PLATFORM") {
+  return apiRequest<Permission[]>(`/permissions/${scope ? `?scope=${scope}` : ""}`, {
+    accessToken,
+  });
 }
 
 /**
- * `organizationId` lets a Super Admin fetch a specific org's roles (its
- * custom roles + the ORG_TEMPLATE platform templates — the same set that
- * org's own Org Admin sees) instead of the platform-only role set they'd
- * otherwise get. Ignored for a non-superuser caller, who always sees their
- * own org's roles regardless.
+ * The caller's roles: an Org Admin gets their organisation's roles; a Super
+ * Admin the platform team's. `organizationId` lets a Super Admin list one
+ * organisation's roles instead (read-only — to add staff to it).
  */
 export function listRoles(accessToken: string, organizationId?: string) {
   const query = organizationId ? `?organization=${organizationId}` : "";
-  return apiRequest<Paginated<Role>>(`/roles/${query}`, { accessToken });
+  return apiRequest<Role[]>(`/roles/${query}`, { accessToken });
 }
 
 export function createRole(
   accessToken: string,
-  payload: { name: string; description?: string; permissions: number[] },
+  payload: { name: string; description?: string; permissions?: number[]; copy_from?: number },
 ) {
   return apiRequest<Role>("/roles/", { method: "POST", body: payload, accessToken });
 }
@@ -130,6 +158,18 @@ export function updateRole(
   payload: { name?: string; description?: string; permissions?: number[] },
 ) {
   return apiRequest<Role>(`/roles/${id}/`, { method: "PATCH", body: payload, accessToken });
+}
+
+export function listRoleMembers(accessToken: string, id: number) {
+  return apiRequest<RoleMember[]>(`/roles/${id}/members/`, { accessToken });
+}
+
+export function retireRole(accessToken: string, id: number) {
+  return apiRequest<Role>(`/roles/${id}/retire/`, { method: "POST", accessToken });
+}
+
+export function reactivateRole(accessToken: string, id: number) {
+  return apiRequest<Role>(`/roles/${id}/reactivate/`, { method: "POST", accessToken });
 }
 
 /** Every staff member — all pages, so filtering and printing never miss anyone past the first 25. */

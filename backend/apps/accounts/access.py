@@ -22,12 +22,34 @@ from rest_framework.exceptions import PermissionDenied
 
 from apps.tenancy.context import get_active_branch_id, get_branch_scope, platform_admin_context
 
-ORG_ADMIN_ROLE = "Org Admin"
+from .catalogue import ROLE_KEY_AUDITOR, ROLE_KEY_ORG_ADMIN
+
 ALL_BRANCHES = "all"
 
 
 def is_org_admin_role(role):
-    return role.name.strip().lower() == ORG_ADMIN_ROLE.lower()
+    return role.system_key == ROLE_KEY_ORG_ADMIN
+
+
+def holds_role_key(user, *keys):
+    """Whether the user holds a built-in role (by key, never by name) at any branch."""
+    if not (user and user.is_authenticated) or user.is_superuser or not user.organization_id:
+        return False
+    with platform_admin_context():
+        return (
+            user.roles.filter(system_key__in=keys)
+            .filter(Q(organization_id=user.organization_id) | Q(organization__isnull=True))
+            .exists()
+        )
+
+
+def is_org_admin(user):
+    """The organisation's administrator (built-in Org Admin role). Not Super Admin."""
+    return holds_role_key(user, ROLE_KEY_ORG_ADMIN)
+
+
+def is_org_auditor(user):
+    return holds_role_key(user, ROLE_KEY_AUDITOR)
 
 
 def _assignments(user):
@@ -125,7 +147,11 @@ def has_permission(user, codename):
     no organisation permission."""
     if not (user and user.is_authenticated) or user.is_superuser:
         return False
-    return active_roles(user).filter(permissions__codename=codename).exists()
+    # Read regardless of the ambient tenant context: the query is already
+    # confined to this user's own roles, and outside a request (Celery, a
+    # management command) RLS would otherwise hide the organisation's roles.
+    with platform_admin_context():
+        return active_roles(user).filter(permissions__codename=codename).exists()
 
 
 def users_with_permission(codenames, organization_id):
@@ -138,13 +164,6 @@ def users_with_permission(codenames, organization_id):
         is_active=True,
         roles__permissions__codename__in=list(codenames),
     ).distinct()
-
-
-def has_active_role(user, *names):
-    query = Q()
-    for name in names:
-        query |= Q(name__iexact=name)
-    return active_roles(user).filter(query).exists()
 
 
 def sync_role_cache(user):

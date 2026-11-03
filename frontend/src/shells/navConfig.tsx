@@ -81,7 +81,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
   {
     label: "Governance",
     items: [
-      { label: "Roles & Permissions", to: "/super-admin/roles", icon: ShieldCheck },
+      { label: "Platform Roles & Team", to: "/super-admin/roles", icon: ShieldCheck },
       { label: "Audit Log", to: "/super-admin/audit-log", icon: ClipboardList },
       { label: "Security Dashboard", to: "/super-admin/security-dashboard", icon: ShieldCheck },
       { label: "Security Policies", to: "/super-admin/security-policies", icon: KeyRound },

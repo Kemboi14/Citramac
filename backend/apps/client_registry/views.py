@@ -32,12 +32,16 @@ from .serializers import (
 
 
 def _is_org_admin(user):
-    return user.is_superuser or user.roles.filter(name="Org Admin").exists()
+    from apps.accounts.access import is_org_admin
+
+    return user.is_superuser or is_org_admin(user)
 
 
 def _is_compliance_officer(user):
     """docs/09 §9.5's "compliance officer" sign-off maps to the Auditor role."""
-    return user.is_superuser or user.roles.filter(name="Auditor").exists()
+    from apps.accounts.access import is_org_auditor
+
+    return user.is_superuser or is_org_auditor(user)
 
 
 def _generate_citramac_number(organization, temporary=False):

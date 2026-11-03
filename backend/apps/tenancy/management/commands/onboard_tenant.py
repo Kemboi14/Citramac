@@ -13,7 +13,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.accounts.models import ActivationInvite, Role, User
+from apps.accounts.models import ActivationInvite, User
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.models import Branch, Organization
 
@@ -236,9 +236,11 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Created inactive User '{email}'")
 
-        role = Role.objects.filter(name=role_name, organization__isnull=True).first()
+        from apps.accounts.roles import organization_role_named
+
+        role = organization_role_named(organization, role_name)
         if role is None:
-            raise CommandError(f"No platform template Role named '{role_name}' exists")
+            raise CommandError(f"'{organization.name}' has no role named '{role_name}'")
         from apps.accounts.access import set_assignments
 
         existing = [(a.role, a.branch) for a in user.role_assignments.all()]

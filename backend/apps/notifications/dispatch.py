@@ -38,6 +38,7 @@ class EmailContent:
 
 def org_admins(organization_id):
     """Active Org Admins of one organization."""
+    from apps.accounts.catalogue import ROLE_KEY_ORG_ADMIN
     from apps.accounts.models import User
     from apps.tenancy.context import platform_admin_context
 
@@ -45,7 +46,7 @@ def org_admins(organization_id):
         return list(
             User.all_objects.filter(
                 organization_id=organization_id,
-                roles__name__iexact="Org Admin",
+                roles__system_key=ROLE_KEY_ORG_ADMIN,
                 is_active=True,
             ).distinct()
         )

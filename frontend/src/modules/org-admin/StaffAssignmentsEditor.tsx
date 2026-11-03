@@ -1,6 +1,6 @@
 import { Plus, X } from "lucide-react";
 import type { Branch } from "../../lib/branchesApi";
-import type { Role, RoleAssignment } from "../../lib/governanceApi";
+import { ORG_ADMIN_KEY, type Role, type RoleAssignment } from "../../lib/governanceApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -11,7 +11,6 @@ export interface AssignmentRow {
   branch: string;
 }
 
-export const ORG_ADMIN_ROLE = "Org Admin";
 
 export function rowsFromAssignments(assignments: RoleAssignment[]): AssignmentRow[] {
   return assignments.map((a) => ({ role: String(a.role), branch: a.branch ?? "" }));
@@ -29,7 +28,7 @@ export function coveredBranches(rows: AssignmentRow[], roles: Role[]): Set<strin
   for (const row of rows) {
     if (!row.role) continue;
     const role = roles.find((r) => String(r.id) === row.role);
-    if (!row.branch || role?.name === ORG_ADMIN_ROLE) return null;
+    if (!row.branch || role?.system_key === ORG_ADMIN_KEY) return null;
     covered.add(row.branch);
   }
   return covered;
@@ -58,7 +57,8 @@ export function StaffAssignmentsEditor({
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row, index) => {
-        const isOrgAdmin = roles.find((r) => String(r.id) === row.role)?.name === ORG_ADMIN_ROLE;
+        const isOrgAdmin =
+          roles.find((r) => String(r.id) === row.role)?.system_key === ORG_ADMIN_KEY;
         return (
           <div key={index} className="flex flex-wrap items-center gap-2">
             <select

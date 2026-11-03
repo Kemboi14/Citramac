@@ -15,6 +15,8 @@ def has_full_mhp_access(user, patient):
     """
     if user.is_superuser:
         return True
-    if user.roles.filter(name="Org Admin").exists():
+    from apps.accounts.access import is_org_admin
+
+    if is_org_admin(user):
         return True
     return CareTeamMembership.objects.filter(patient=patient, user=user).exists()

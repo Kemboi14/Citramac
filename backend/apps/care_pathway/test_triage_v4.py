@@ -154,7 +154,7 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
                 email=f"psych-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
                 organization=self.org, is_active=True, first_name="Dr", last_name="Senior",
             )
-            role, _ = Role.objects.get_or_create(name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            role, _ = Role.objects.get_or_create(organization=None, name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
             self.psych.roles.add(role)
         self.psych_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.psych)[0]}"}
 

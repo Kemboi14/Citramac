@@ -56,7 +56,9 @@ def _name(user):
 
 
 def _is_org_admin(user):
-    return user.roles.filter(name="Org Admin").exists()
+    from apps.accounts.access import is_org_admin
+
+    return is_org_admin(user)
 
 
 def _require_org_admin(user):

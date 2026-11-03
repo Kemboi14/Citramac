@@ -238,7 +238,7 @@ class AssistGatingTests(ChatTestCase):
         self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
                                          **self.auth).status_code, 403)
         with platform_admin_context():
-            role, _ = Role.objects.get_or_create(name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            role, _ = Role.objects.get_or_create(organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
             self.nurse.roles.add(role)
         self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
                                          **self.auth).status_code, 400)  # not allowed by Super Admin

@@ -2,27 +2,18 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { PermissionChangeDialog, PermissionMatrix } from "../../components/PermissionMatrix";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
+import { RolesWorkspace } from "../../components/RolesWorkspace";
 import {
   changePlatformStaffRole,
   invitePlatformStaff,
-  inviteStaff,
-  resendPlatformStaffInvite,
-  resendStaffInvite,
-  listPermissions,
   listPlatformStaff,
-  listRoles,
-  listStaff,
+  resendPlatformStaffInvite,
   unlockPlatformStaff,
-  unlockStaff,
-  updateRole,
-  type Permission,
   type Role,
   type Staff,
   type StaffInvitePayload,
 } from "../../lib/governanceApi";
-import { listOrganizations, type Organization } from "../../lib/organizationsApi";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -40,26 +31,19 @@ const EMPTY_INVITE: StaffInvitePayload = {
 };
 
 /**
- * "Global Roles & Permissions" — platform-level RBAC for Softlink's own
- * console users, plus the Platform Staff roster who get assigned into those
- * roles. citramac_SUPER-ADMIN.html "Global Roles & Permissions".
+ * Super Admin → Platform Roles & Team: Softlink Options' own team only — its
+ * roles (platform permissions only) and the people in it. Organisations'
+ * roles are theirs, in each organisation's own Roles & Permissions; staff are
+ * added to an organisation from the Organizations screen.
  */
 export function GlobalRolesPage() {
   const { accessToken } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
-  const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [showInviteForm, setShowInviteForm] = useState(false);
-  const [confirmSave, setConfirmSave] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingStaffRole, setPendingStaffRole] = useState<{ staff: Staff; roleId: string } | null>(
     null,
   );
@@ -68,140 +52,24 @@ export function GlobalRolesPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  const refresh = async (organizationId = selectedOrganizationId) => {
+  const refreshStaff = async () => {
     if (!accessToken) return;
-    const [roleRes, permissionRes, staffRes] = await Promise.all([
-      listRoles(accessToken, organizationId || undefined),
-      listPermissions(accessToken),
-      organizationId ? listStaff(accessToken) : listPlatformStaff(accessToken),
-    ]);
-    setRoles(roleRes.results);
-    setPermissions(permissionRes);
-    setStaff(
-      organizationId
-        ? staffRes.results.filter((member) => member.organization === organizationId)
-        : staffRes.results,
-    );
-    return roleRes.results;
+    const res = await listPlatformStaff(accessToken);
+    setStaff(res.results);
   };
 
   useEffect(() => {
     if (!accessToken) return;
     void Promise.resolve().then(() =>
-      Promise.all([refresh(), listOrganizations(accessToken)])
-        .then(([loadedRoles, organizationRes]) => {
-          setOrganizations(organizationRes.results);
-          const initialRole = loadedRoles?.[0];
-          if (initialRole) {
-            setSelectedRoleId(initialRole.id);
-            setSelectedPermissionIds(initialRole.permissions);
-          }
-        })
-        .catch((err) =>
-          setError(err instanceof ApiError ? err.message : "Couldn't load roles and permissions."),
-        )
-        .finally(() => setIsLoading(false)),
+      refreshStaff().catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Couldn't load the platform team."),
+      ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  const visibleRoles = selectedOrganizationId
-    ? roles.filter((role) => role.organization === selectedOrganizationId)
-    : roles;
-
-  // Who the invite form (and a platform member's role picker) may offer:
-  // with an organisation selected, that organisation's roles plus the
-  // standard templates; otherwise only the platform team's own roles — never
-  // an organisation's clinical role, and never the per-organisation
-  // administrator roles (Org Admin, Auditor).
-  const inviteRoles = selectedOrganizationId
-    ? roles.filter(
-        (role) =>
-          role.organization === selectedOrganizationId ||
-          (role.organization === null && role.scope === "ORG_TEMPLATE"),
-      )
-    : roles.filter(
-        (role) =>
-          role.organization === null &&
-          role.scope === "PLATFORM" &&
-          !["org admin", "auditor", "super admin"].includes(role.name.trim().toLowerCase()),
-      );
-  const selectedOrganizationName =
-    organizations.find((org) => org.id === selectedOrganizationId)?.name ?? "this organisation";
-
-  const selectRole = (role: Role) => {
-    setSelectedRoleId(role.id);
-    setSelectedPermissionIds(role.permissions);
-  };
-
-  const selectedRole = visibleRoles.find((role) => role.id === selectedRoleId) ?? null;
-
-  const changeOrganization = (organizationId: string) => {
-    setSelectedOrganizationId(organizationId);
-    setSelectedRoleId(null);
-    setSelectedPermissionIds([]);
-    setInvite(EMPTY_INVITE);
-    setInviteError(null);
-    setNotice(null);
-    setIsLoading(true);
-    setError(null);
-    void refresh(organizationId)
-      .then((loadedRoles) => {
-        const nextRole = loadedRoles?.[0];
-        if (nextRole) {
-          setSelectedRoleId(nextRole.id);
-          setSelectedPermissionIds(nextRole.permissions);
-        }
-      })
-      .catch((err) =>
-        setError(err instanceof ApiError ? err.message : "Couldn't load organization roles."),
-      )
-      .finally(() => setIsLoading(false));
-  };
-
-  const togglePermission = (permissionId: number) => {
-    setSelectedPermissionIds((prev) =>
-      prev.includes(permissionId)
-        ? prev.filter((id) => id !== permissionId)
-        : [...prev, permissionId],
-    );
-  };
-
-  const permissionsDirty =
-    selectedRole !== null &&
-    (selectedPermissionIds.length !== selectedRole.permissions.length ||
-      selectedPermissionIds.some((id) => !selectedRole.permissions.includes(id)));
-
-  // A platform-team role takes platform permissions; every other role takes
-  // the organisation permissions (the server refuses any other mix).
-  const rolePermissions = selectedRole
-    ? permissions.filter((p) =>
-        selectedRole.scope === "PLATFORM" && selectedRole.organization === null
-          ? p.scope === "PLATFORM" || p.scope === "ORG"
-          : p.scope === "ORG",
-      )
-    : [];
-
-  const builtIn =
-    selectedRole !== null &&
-    ["org admin", "auditor"].includes(selectedRole.name.trim().toLowerCase());
-
-  const saveRolePermissions = async () => {
-    if (!accessToken || !selectedRole) return;
-    setSaveError(null);
-    setBusy(true);
-    try {
-      await updateRole(accessToken, selectedRole.id, { permissions: selectedPermissionIds });
-      const refreshed = await refresh();
-      const updated = refreshed?.find((r) => r.id === selectedRole.id);
-      if (updated) setSelectedPermissionIds(updated.permissions);
-      setConfirmSave(false);
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : "Couldn't save role permissions.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // Super Admin comes with a Super Admin account; it is never handed out.
+  const inviteRoles = roles.filter((role) => role.is_active && role.system_key !== "super_admin");
 
   const assignStaffRole = async () => {
     if (!accessToken || !pendingStaffRole) return;
@@ -226,12 +94,7 @@ export function GlobalRolesPage() {
     setError(null);
     setUnlockingId(member.id);
     try {
-      // Mirrors refresh()'s org-vs-platform split: StaffViewSet never
-      // includes organization=None rows, so an org-scoped call would 404
-      // on a platform-staff row and vice versa.
-      const updated = selectedOrganizationId
-        ? await unlockStaff(accessToken, member.id)
-        : await unlockPlatformStaff(accessToken, member.id);
+      const updated = await unlockPlatformStaff(accessToken, member.id);
       setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't unlock this account.");
@@ -251,15 +114,13 @@ export function GlobalRolesPage() {
     setNotice(null);
     setBusy(true);
     try {
-      const created = selectedOrganizationId
-        ? await inviteStaff(accessToken, { ...invite, organization: selectedOrganizationId })
-        : await invitePlatformStaff(accessToken, invite);
+      const created = await invitePlatformStaff(accessToken, invite);
       setInvite(EMPTY_INVITE);
       setShowInviteForm(false);
       setNotice(
         `${created.first_name} ${created.last_name} was added. Their invite email is queued — its status shows on their row.`,
       );
-      await refresh();
+      await refreshStaff();
     } catch (err) {
       setInviteError(err instanceof ApiError ? err.message : "Couldn't add this person.");
     } finally {
@@ -273,9 +134,7 @@ export function GlobalRolesPage() {
     setNotice(null);
     setResendingId(member.id);
     try {
-      const updated = selectedOrganizationId
-        ? await resendStaffInvite(accessToken, member.id)
-        : await resendPlatformStaffInvite(accessToken, member.id);
+      const updated = await resendPlatformStaffInvite(accessToken, member.id);
       setStaff((current) => current.map((row) => (row.id === member.id ? updated : row)));
       setNotice(`A new invite email to ${member.email} is queued.`);
     } catch (err) {
@@ -291,130 +150,23 @@ export function GlobalRolesPage() {
         <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
           Platform Console
         </div>
-        <h1 className="font-display text-2xl font-bold text-ink-900">
-          Global Roles &amp; Permissions
-        </h1>
+        <h1 className="font-display text-2xl font-bold text-ink-900">Platform Roles &amp; Team</h1>
+        <p className="mt-1 text-sm text-ink-500">
+          Softlink Options&apos; own team and its roles. Each organisation manages its own roles in
+          its Roles &amp; Permissions; add staff to an organisation from Organizations.
+        </p>
       </div>
+
+      <RolesWorkspace mode="platform" onRolesChange={setRoles} />
 
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
 
-      {isLoading && visibleRoles.length === 0 && <p className="text-sm text-ink-500">Loading…</p>}
-
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-surface-border bg-surface-card p-4 shadow-sm">
-        <label className={LABEL_CLASS}>
-          Role scope
-          <select
-            className={FIELD_CLASS}
-            value={selectedOrganizationId}
-            onChange={(event) => changeOrganization(event.target.value)}
-          >
-            <option value="">All roles</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name} roles
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="text-sm text-ink-500">
-          {selectedOrganizationId
-            ? "Showing this organization's custom roles and available templates."
-            : "Showing all platform and organization roles."}
-        </p>
-      </div>
-
-      {!isLoading && visibleRoles.length === 0 && (
-        <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <p className="text-sm text-ink-500">No roles have been configured for this scope.</p>
-        </div>
-      )}
-
-      {visibleRoles.length > 0 && (
-        <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Roles</h2>
-
-          <div className="flex flex-wrap gap-2">
-            {visibleRoles.map((role) => (
-              <button
-                key={role.id}
-                type="button"
-                onClick={() => selectRole(role)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  role.id === selectedRoleId
-                    ? "bg-brand-green text-on-primary"
-                    : "border border-surface-border text-ink-700 hover:bg-surface-bg"
-                }`}
-              >
-                {role.name}
-                {role.organization_name ? ` · ${role.organization_name}` : " · Platform"}
-                <span
-                  className={`ml-1.5 text-xs ${
-                    role.id === selectedRoleId ? "text-on-primary opacity-80" : "text-ink-500"
-                  }`}
-                >
-                  ({role.user_count})
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {selectedRole && (
-            <div className="mt-5 flex flex-col gap-4">
-              {selectedRole.description && (
-                <div className="rounded-md border border-surface-border bg-brand-green-tint-2 p-3 text-sm text-ink-700">
-                  {selectedRole.description}
-                </div>
-              )}
-
-              <PermissionMatrix
-                permissions={rolePermissions}
-                selected={new Set(selectedPermissionIds)}
-                disabled={builtIn}
-                onToggle={togglePermission}
-              />
-              {builtIn && (
-                <p className="text-xs text-ink-500">
-                  {selectedRole.name} is a built-in administrator role; its access is fixed in code
-                  and can&apos;t be changed here.
-                </p>
-              )}
-
-              <div>
-                <button
-                  type="button"
-                  className="rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark disabled:opacity-60"
-                  disabled={busy || builtIn || !permissionsDirty}
-                  onClick={() => {
-                    setSaveError(null);
-                    setConfirmSave(true);
-                  }}
-                >
-                  Save Changes
-                </button>
-              </div>
-              <PermissionChangeDialog
-                open={confirmSave}
-                roleName={selectedRole.name}
-                userCount={selectedRole.user_count ?? null}
-                permissions={permissions}
-                before={new Set(selectedRole.permissions)}
-                after={new Set(selectedPermissionIds)}
-                busy={busy}
-                error={saveError}
-                onConfirm={saveRolePermissions}
-                onCancel={() => setConfirmSave(false)}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex items-center justify-between px-6 pt-6">
           <h2 className="font-display text-base font-semibold text-ink-900">
-            {selectedOrganizationId ? `${selectedOrganizationName} staff` : "Platform team"}
+            Platform team
           </h2>
           <button
             type="button"
@@ -443,9 +195,8 @@ export function GlobalRolesPage() {
             className="mx-6 mt-4 flex flex-wrap items-end gap-3 rounded-md border border-surface-border bg-surface-bg p-4"
           >
             <p className="w-full text-sm text-ink-500">
-              {selectedOrganizationId
-                ? `Adds a staff member to ${selectedOrganizationName}, with access to every branch. Their Org Admin can narrow it to particular branches.`
-                : "Adds a member of the Softlink Options platform team. To add someone to an organisation, choose the organisation above first."}
+              Adds a member of the Softlink Options platform team. To add someone to an
+              organisation, use Add Staff on the Organizations screen.
             </p>
             <label className={LABEL_CLASS}>
               First name
@@ -529,20 +280,8 @@ export function GlobalRolesPage() {
                 </td>
                 <td className="px-6 py-3 text-ink-700">{s.email}</td>
                 <td className="px-6 py-3">
-                  {selectedOrganizationId ? (
-                    // An organisation member's roles are held per branch, so
-                    // they are changed in that organisation's Staff screen
-                    // (which keeps the branch), not overwritten from here.
-                    <span className="text-ink-700">
-                      {s.assignments.length
-                        ? s.assignments
-                            .map(
-                              (a) =>
-                                `${a.role_name ?? "Role"}${a.branch_name ? ` · ${a.branch_name}` : ""}`,
-                            )
-                            .join(", ")
-                        : s.role_names.join(", ") || "No role"}
-                    </span>
+                  {s.is_superuser ? (
+                    <span className="text-ink-700">Super Admin</span>
                   ) : (
                     <select
                       className={FIELD_CLASS}
@@ -555,6 +294,12 @@ export function GlobalRolesPage() {
                       }
                     >
                       <option value="">No role</option>
+                      {s.roles[0] !== undefined &&
+                        !inviteRoles.some((role) => role.id === s.roles[0]) && (
+                          <option value={s.roles[0]} disabled>
+                            {roleName(s.roles[0])}
+                          </option>
+                        )}
                       {inviteRoles.map((role) => (
                         <option key={role.id} value={role.id}>
                           {role.name}
@@ -614,9 +359,7 @@ export function GlobalRolesPage() {
             {staff.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-6 py-6 text-center text-ink-500">
-                  {selectedOrganizationId
-                    ? "No staff in this organisation yet."
-                    : "No platform team members yet."}
+                  No platform team members yet.
                 </td>
               </tr>
             )}

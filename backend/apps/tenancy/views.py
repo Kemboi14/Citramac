@@ -12,7 +12,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import ActivationInvite, Role, User
+from apps.accounts.models import ActivationInvite, User
 from apps.accounts.permissions import (
     IsOwnOrganizationMember,
     IsPlatformSuperAdmin,
@@ -174,9 +174,10 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
             # it by hand in Django admin.
             organization.register_email_domain(org_admin.email)
 
-            org_admin_role = Role.objects.filter(
-                name="Org Admin", organization__isnull=True
-            ).first()
+            from apps.accounts.catalogue import ROLE_KEY_ORG_ADMIN
+            from apps.accounts.roles import organization_role
+
+            org_admin_role = organization_role(organization, ROLE_KEY_ORG_ADMIN)
             if org_admin_role:
                 from apps.accounts.access import set_assignments
 

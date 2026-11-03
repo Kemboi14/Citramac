@@ -24,6 +24,7 @@ class CarePlanTestCase(IntakeTestCase):
                 organization=self.org, is_active=True, first_name="Dr", last_name="Senior",
             )
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.psych.roles.add(role)

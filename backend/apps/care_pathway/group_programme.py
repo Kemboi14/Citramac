@@ -90,7 +90,9 @@ RISK_OVERRIDE_MIN = 5
 
 def can_configure_categories(user):
     """Category changes are an administrator workflow (Org Admin, or Super Admin)."""
-    return user.is_superuser or user.roles.filter(name__iexact="Org Admin").exists()
+    from apps.accounts.access import is_org_admin
+
+    return user.is_superuser or is_org_admin(user)
 
 
 def categories(organization_id):

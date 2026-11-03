@@ -110,17 +110,16 @@ def send_otp_email(email, code, purpose, organization_id=None):
 def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
     """
     Positive suicide/homicide-ideation flags escalate to a supervisor alert
-    — docs/07-CLINICAL-MODULES-SPEC.md §7.14.2. Runs with platform_admin_context()
+    — docs/07-CLINICAL-MODULES-SPEC.md §7.14.2 — sent to everyone whose role
+    carries clinical.risk_alerts.receive (any branch). Runs with platform_admin_context()
     since Celery tasks have no request-bound tenant context of their own
     (see apps.tenancy.context module docstring).
     """
-    from apps.accounts.models import User
+    from apps.accounts.access import users_with_permission
 
     with platform_admin_context():
         supervisors = list(
-            User.objects.filter(
-                organization_id=organization_id, roles__name="Supervisor", is_active=True
-            )
+            users_with_permission(["clinical.risk_alerts.receive"], organization_id)
         )
     if not supervisors:
         return

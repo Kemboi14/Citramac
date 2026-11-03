@@ -43,30 +43,32 @@ class Permission(models.Model):
 
 class Role(TimestampedModel):
     """
-    organization=None is a platform-level template role (curated by Super
-    Admin); Org Admin assigns/customizes permission subsets within their
-    org from those templates but cannot grant permissions the platform
-    template doesn't allow. See docs/09-SECURITY-COMPLIANCE.md §9.3.
+    A set of permissions given to people. Two kinds, never mixed
+    (apps.accounts.catalogue, "Roles"):
+
+    - PLATFORM (organization=None): Softlink Options' own team. Held only by
+      platform accounts; carries only platform permissions.
+    - ORG_TEMPLATE, i.e. an organisation role. With an organization it is that
+      organisation's own role — a copy of a standard role (system_key set) or
+      one it created (system_key blank) — and only its staff can hold it. With
+      organization=None it is the standard definition new organisations are
+      copied from (apps.accounts.roles.provision_organization_roles); nobody
+      is given those rows.
 
     Deliberately uses the plain default manager, not TenantScopedManager:
-    its visibility rule is "your org's roles OR the platform templates",
+    its visibility rule is "your org's roles OR the organization=None rows",
     which TenantScopedManager's single organization_id match can't express.
     The Postgres RLS policy (accounts_role, see migration 0002) enforces
     that exact rule at the database layer regardless.
     """
 
-    # PLATFORM: governs the Super Admin console itself (Softlink Options'
-    # own staff — Super Admin, Support Agent, Billing Admin, Auditor, MFL
-    # Verifier). ORG_TEMPLATE: what an Org Admin assigns their own clinical/
-    # operational staff into (Psychiatrist, Ward Nurse, Therapist, ...) —
-    # these are the only ones an Org Admin's Roles & Permissions screen
-    # ever lists or lets an org customize, per docs/09-SECURITY-COMPLIANCE.md
-    # §9.3's "cannot grant permissions the platform template doesn't allow."
     SCOPE_PLATFORM = "PLATFORM"
+    # Stored value kept from when organisation roles were shared templates.
     SCOPE_ORG_TEMPLATE = "ORG_TEMPLATE"
+    SCOPE_ORGANISATION = SCOPE_ORG_TEMPLATE
     SCOPE_CHOICES = [
-        (SCOPE_PLATFORM, "Platform staff"),
-        (SCOPE_ORG_TEMPLATE, "Organization template"),
+        (SCOPE_PLATFORM, "Platform team role"),
+        (SCOPE_ORG_TEMPLATE, "Organisation role"),
     ]
 
     name = models.CharField(max_length=100)
@@ -80,13 +82,36 @@ class Role(TimestampedModel):
     scope = models.CharField(max_length=16, choices=SCOPE_CHOICES, default=SCOPE_ORG_TEMPLATE)
     description = models.CharField(max_length=255, blank=True)
     permissions = models.ManyToManyField(Permission, blank=True, related_name="roles")
+    # Which built-in role this is (apps.accounts.catalogue PLATFORM_ROLES /
+    # ORGANISATION_ROLES), blank for a role an organisation made itself. Code
+    # recognises built-in roles by this, never by name.
+    system_key = models.CharField(max_length=40, blank=True, default="")
+    # Retired roles stay on record (and on the assignments history) but can't be
+    # given to anyone. Only a role nobody holds can be retired.
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["name", "organization"], name="unique_role_name_per_org"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "system_key"],
+                condition=~models.Q(system_key=""),
+                name="unique_role_system_key_per_org",
+            ),
+            models.UniqueConstraint(
+                fields=["system_key"],
+                condition=~models.Q(system_key="") & models.Q(organization__isnull=True),
+                name="unique_role_system_key_definition",
+            ),
         ]
+
+    @property
+    def is_locked(self):
+        from .catalogue import LOCKED_ROLE_KEYS
+
+        return self.system_key in LOCKED_ROLE_KEYS
 
     def __str__(self):
         scope = self.organization.name if self.organization_id else "platform template"

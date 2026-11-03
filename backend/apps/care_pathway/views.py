@@ -76,7 +76,9 @@ def _iso(value):
 
 
 def _is_org_admin(user):
-    return user.is_superuser or user.roles.filter(name="Org Admin").exists()
+    from apps.accounts.access import is_org_admin
+
+    return user.is_superuser or is_org_admin(user)
 
 
 # ── Terminology ──

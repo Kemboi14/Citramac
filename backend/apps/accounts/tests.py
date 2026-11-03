@@ -1157,21 +1157,27 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.super_access, _ = issue_tokens(self.super_admin)
         self.org_access, _ = issue_tokens(self.org_admin)
 
-    def test_org_admin_sees_org_template_roles_but_not_platform_ones(self):
+    def test_org_admin_sees_only_their_own_organisations_roles(self):
         response = self.client.get(
             reverse("role-list"), HTTP_AUTHORIZATION=f"Bearer {self.org_access}"
         )
-        names = {row["name"] for row in response.data["results"]}
+        self.assertEqual(response.status_code, 200, response.data)
+        names = {row["name"] for row in response.data}
         self.assertIn("Psychiatrist", names)
+        self.assertIn("Org Admin", names)
         self.assertNotIn("Support Agent", names)
+        self.assertEqual({row["organization"] for row in response.data}, {self.org.id})
 
-    def test_super_admin_sees_all_roles(self):
+    def test_super_admin_sees_only_platform_team_roles(self):
         response = self.client.get(
             reverse("role-list"), HTTP_AUTHORIZATION=f"Bearer {self.super_access}"
         )
-        names = {row["name"] for row in response.data["results"]}
+        names = {row["name"] for row in response.data}
         self.assertIn("Support Agent", names)
-        self.assertIn("Psychiatrist", names)
+        self.assertIn("Platform Auditor", names)
+        self.assertNotIn("Psychiatrist", names)
+        self.assertNotIn("Org Admin", names)
+        self.assertEqual({row["scope"] for row in response.data}, {"PLATFORM"})
 
     def test_org_admin_can_create_custom_role_within_template_ceiling(self):
         allowed_permission = self.psychiatrist_template.permissions.first()
@@ -1231,14 +1237,15 @@ class RolesAndStaffConsoleApiTests(APITestCase):
 
     def test_built_in_administrator_role_permissions_are_fixed(self):
         with platform_admin_context():
-            own_admin = Role.objects.create(name="Org Admin", organization=self.org)
-        response = self.client.patch(
-            reverse("role-detail", args=[own_admin.id]),
-            {"permissions": []},
-            format="json",
-            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
-        )
-        self.assertEqual(response.status_code, 400)
+            own_admin = Role.objects.get(organization=self.org, system_key="org_admin")
+        for payload in ({"permissions": []}, {"name": "Chief Admin"}):
+            response = self.client.patch(
+                reverse("role-detail", args=[own_admin.id]),
+                payload,
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+            )
+            self.assertEqual(response.status_code, 400, payload)
 
     def test_catalogue_kept_who_could_do_what(self):
         with platform_admin_context():
@@ -1370,13 +1377,26 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
 
-    def test_super_admin_can_scope_roles_to_a_chosen_organization(self):
+    def test_super_admin_can_list_an_organisations_roles_to_add_staff(self):
         response = self.client.get(
             f"{reverse('role-list')}?organization={self.org.id}",
             HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
         )
-        names = {row["name"] for row in response.data["results"]}
+        names = {row["name"] for row in response.data}
         self.assertIn("Psychiatrist", names)
+        self.assertNotIn("Support Agent", names)
+        self.assertEqual({row["organization"] for row in response.data}, {self.org.id})
+
+    def test_super_admin_cannot_edit_an_organisations_role(self):
+        with platform_admin_context():
+            psychiatrist = Role.objects.get(organization=self.org, system_key="psychiatrist")
+        response = self.client.patch(
+            reverse("role-detail", args=[psychiatrist.id]),
+            {"permissions": []},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 404)
 
     def test_resend_invite_self_heals_a_staff_row_with_no_activation_invite(self):
         with platform_admin_context():
@@ -2172,7 +2192,7 @@ class SecurityPolicyEnforcementTests(APITestCase):
         from apps.tenancy.models import Branch
 
         with platform_admin_context():
-            role = Role.objects.create(name="Ward Nurse", organization=self.org)
+            role = Role.objects.get(organization=self.org, system_key="ward_nurse")
             self.user.roles.add(role)
             branch = Branch.objects.create(
                 organization=self.org, name="Main Branch", facility_level="L4"

@@ -9,19 +9,21 @@ from .access import branches_for
 
 # Which shell a multi-role user lands in first: Org Admin's console, then the
 # Auditor's audit log, then the Clinical Workspace. They switch shells from
-# the sidebar (`roles` carries everything they hold).
-_LANDING_PRIORITY = ("org admin", "auditor")
+# the sidebar (`roles` carries everything they hold). Recognised by key; the
+# `role` claim carries the role's name, which for these locked roles is fixed
+# (and no other role may take it), so the frontend's routing on it holds.
+_LANDING_PRIORITY = ("org_admin", "auditor")
 
 
 def _primary_role_name(user):
     if user.is_superuser:
         return "SUPER_ADMIN"
-    names = sorted(user.roles.values_list("name", flat=True))
+    roles = sorted(user.roles.values_list("name", "system_key"))
     for wanted in _LANDING_PRIORITY:
-        for name in names:
-            if name.lower() == wanted:
+        for name, key in roles:
+            if key == wanted:
                 return name
-    return names[0] if names else ""
+    return roles[0][0] if roles else ""
 
 
 def apply_identity_claims(token, user):

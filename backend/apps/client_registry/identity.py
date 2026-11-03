@@ -210,15 +210,15 @@ MERGE_PERMISSION = "records.identity.merge"
 
 
 def may_merge(user):
-    from apps.accounts.access import has_active_role, has_permission
+    from apps.accounts.access import has_permission, is_org_admin
 
-    return has_active_role(user, "Org Admin") or has_permission(user, MERGE_PERMISSION)
+    return is_org_admin(user) or has_permission(user, MERGE_PERMISSION)
 
 
 def may_unmerge(user):
-    from apps.accounts.access import has_active_role
+    from apps.accounts.access import is_org_admin
 
-    return has_active_role(user, "Org Admin")
+    return is_org_admin(user)
 
 
 def _patient_foreign_keys():

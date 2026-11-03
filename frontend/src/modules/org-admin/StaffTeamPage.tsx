@@ -149,7 +149,7 @@ export function StaffTeamPage() {
       ])
         .then(([staffRes, roleRes, branchRes, deptRes]) => {
           setStaff(staffRes.results);
-          setRoles(roleRes.results);
+          setRoles(roleRes.filter((r) => r.is_active));
           setBranches(branchRes.results);
           setDepartments(deptRes.results);
         })

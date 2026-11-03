@@ -1333,7 +1333,7 @@ function OrgStaffInviteDrawer({
       setForm(EMPTY_STAFF_INVITE);
       Promise.all([listRoles(accessToken, orgId), listBranches(accessToken)])
         .then(([roleRes, branchRes]) => {
-          setRoles(roleRes.results);
+          setRoles(roleRes.filter((r) => r.is_active));
           setBranches(branchRes.results.filter((b) => b.organization === orgId));
         })
         .catch(() => {

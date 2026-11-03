@@ -12,10 +12,11 @@ Facility administration (staff, roles, branches, settings, retention, tariffs)
 and the audit trail belong to the built-in administrator roles — Org Admin and
 Auditor — and Super Admin for the platform. Those roles are fixed and are not
 expressed as permissions, so an organisation can never lock its own
-administrator out.
+administrator out. Code recognises them by their `key` (ROLE_KEY_*), never by
+name.
 
 `default_roles` is who held the ability before permissions were enforced
-(the former settings role lists); migration accounts 0019 granted each
+(the former settings role lists); migration accounts 0016 granted each
 permission to exactly those roles, so nobody gained or lost access when the
 switch was made.
 """
@@ -177,6 +178,15 @@ PERMISSIONS = [
         ["Front Desk", "Records Officer"] + CLINICAL_STAFF,
     ),
     (
+        "clinical.risk_alerts.receive",
+        "clinical",
+        "Receive risk alerts",
+        "Be notified straight away when a Mental Status Exam flags suicidal or "
+        "homicidal ideation, so a senior clinician reviews the client.",
+        SCOPE_ORG,
+        ["Supervisor", "Clinical Supervisor"],
+    ),
+    (
         "reports.nacada.send",
         "reports",
         "Send the NACADA NDO report",
@@ -224,7 +234,7 @@ PLATFORM_AREAS = [
     ("organizations", "organisations"),
     ("branches", "branches"),
     ("subscriptions", "subscriptions"),
-    ("roles", "role templates"),
+    ("roles", "platform-team roles"),
 ]
 for _area, _words in PLATFORM_AREAS:
     PERMISSIONS += [
@@ -232,7 +242,12 @@ for _area, _words in PLATFORM_AREAS:
             f"platform.{_area}.view",
             "platform",
             f"View {_words}",
-            f"See every organisation's {_words} in the platform console.",
+            (
+                {
+                    "roles": "See the platform team's roles in the platform console.",
+                    "organizations": "See every organisation in the platform console.",
+                }.get(_area, f"See every organisation's {_words} in the platform console.")
+            ),
             SCOPE_PLATFORM,
             [],
         ),
@@ -274,6 +289,209 @@ PERMISSIONS.append(
 )
 
 CODENAMES = {p[0] for p in PERMISSIONS}
+
+
+# ─── Roles ──────────────────────────────────────────────────────────────────
+#
+# Two separate catalogues, never mixed:
+#
+# - PLATFORM_ROLES: Softlink Options' own team. Held only by platform accounts
+#   (no organisation), carry only platform permissions, and are managed on the
+#   Super Admin console's Platform Roles & Team screen.
+# - ORGANISATION_ROLES: the standard roles every organisation starts with.
+#   Each organisation gets its OWN copy of each one (apps.accounts.roles), which
+#   its Org Admin may rename and whose permissions it may change. The rows with
+#   organization=None are only the starting definitions; nobody is given them.
+#   An organisation may add its own custom roles as well.
+#
+# `key` is how code recognises a built-in role — never its name, which an
+# organisation may change. `locked` roles keep their name and their access is
+# fixed in code (the administrator tiers). `legacy` roles are kept for the staff
+# who already hold them but are not given to new organisations: each duplicates
+# another standard role.
+
+ROLE_KEY_SUPER_ADMIN = "super_admin"
+ROLE_KEY_ORG_ADMIN = "org_admin"
+ROLE_KEY_AUDITOR = "auditor"
+
+# (key, name, description, locked, legacy)
+PLATFORM_ROLES = [
+    (
+        ROLE_KEY_SUPER_ADMIN,
+        "Super Admin",
+        "Runs the platform: organisations, subscriptions, platform settings and the "
+        "platform team. Comes with a Super Admin account, not given as a role.",
+        True,
+        False,
+    ),
+    (
+        "support_agent",
+        "Support Agent",
+        "Helps organisations with support tickets: views organisations and branches, "
+        "but cannot change billing or roles.",
+        False,
+        False,
+    ),
+    (
+        "billing_admin",
+        "Billing Admin",
+        "Manages subscriptions and plans. Can view organisations and branches but not "
+        "change them.",
+        False,
+        False,
+    ),
+    (
+        "mfl_verifier",
+        "MFL Verifier",
+        "Checks pending organisations against the DHA Master Facility List and approves "
+        "them. Has no access to billing or roles.",
+        False,
+        False,
+    ),
+    (
+        "platform_auditor",
+        "Platform Auditor",
+        "Reads the audit trail across every organisation. Changes nothing.",
+        False,
+        False,
+    ),
+]
+
+ORGANISATION_ROLES = [
+    (
+        ROLE_KEY_ORG_ADMIN,
+        "Org Admin",
+        "Administers the organisation: staff and their roles, branches, settings, "
+        "tariffs, retention and the audit trail. Always covers every branch.",
+        True,
+        False,
+    ),
+    (
+        ROLE_KEY_AUDITOR,
+        "Auditor",
+        "Independent oversight: reads the audit trail and signs off compliance "
+        "requests. Changes no clinical record.",
+        True,
+        False,
+    ),
+    (
+        "psychiatrist",
+        "Psychiatrist",
+        "Consultant psychiatrist: assesses and diagnoses, prescribes, co-signs as the "
+        "senior clinician and approves high-risk documents.",
+        False,
+        False,
+    ),
+    (
+        "doctor",
+        "Doctor",
+        "Medical officer: assesses clients, prescribes and authorises medical documents.",
+        False,
+        False,
+    ),
+    (
+        "clinical_psychologist",
+        "Clinical Psychologist/Therapist",
+        "Psychological assessment and psychotherapy: individual, family and group "
+        "sessions and their restricted notes.",
+        False,
+        False,
+    ),
+    (
+        "nurse",
+        "Nurse",
+        "Nursing care: triage, vital signs, medication administration and nursing "
+        "documents.",
+        False,
+        False,
+    ),
+    (
+        "ward_nurse",
+        "Ward Nurse",
+        "Inpatient nursing on the wards: observations, medication administration and "
+        "nursing documents.",
+        False,
+        False,
+    ),
+    (
+        "clinical_supervisor",
+        "Clinical Supervisor",
+        "Clinical supervision: approves credentialed and senior documents and receives "
+        "the risk alerts raised in Mental Status Exams.",
+        False,
+        False,
+    ),
+    (
+        "front_desk",
+        "Front Desk",
+        "Registration, appointments and check-in, and administrative letters.",
+        False,
+        False,
+    ),
+    (
+        "records_officer",
+        "Records Officer",
+        "Health records: merging temporary records, releasing signed documents and "
+        "administrative documents.",
+        False,
+        False,
+    ),
+    (
+        "cashier",
+        "Cashier/Billing Clerk",
+        "Invoices, payments, SHA and other payer claims, and financial documents.",
+        False,
+        False,
+    ),
+    (
+        "lab_technician",
+        "Lab Technician",
+        "Laboratory work, including seeing results before they are validated.",
+        False,
+        False,
+    ),
+    (
+        "pharmacist",
+        "Pharmacist",
+        "Pharmacy and dispensing. Has no permissions until an Org Admin gives it some.",
+        False,
+        False,
+    ),
+    (
+        "radiologist",
+        "Radiologist",
+        "Imaging. Has no permissions until an Org Admin gives it some.",
+        False,
+        False,
+    ),
+    (
+        "therapist",
+        "Therapist",
+        "Same as Clinical Psychologist/Therapist. Kept for staff who already hold it.",
+        False,
+        True,
+    ),
+    (
+        "supervisor",
+        "Supervisor",
+        "Receives the risk alerts raised in Mental Status Exams. Kept for staff who "
+        "already hold it; new organisations use Clinical Supervisor.",
+        False,
+        True,
+    ),
+    (
+        "billing_clerk",
+        "Billing Clerk",
+        "Same as Cashier/Billing Clerk. Kept for staff who already hold it.",
+        False,
+        True,
+    ),
+]
+
+LOCKED_ROLE_KEYS = {r[0] for r in PLATFORM_ROLES + ORGANISATION_ROLES if r[3]}
+# A custom role can't take these names: they would look like an administrator
+# role while granting nothing of the kind.
+RESERVED_ROLE_NAMES = {r[1].lower() for r in PLATFORM_ROLES + ORGANISATION_ROLES if r[3]}
 
 # Document-catalogue authorisation groups → the permission that grants each.
 DOCUMENT_GROUP_PERMISSIONS = {

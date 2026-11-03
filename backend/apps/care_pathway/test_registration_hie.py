@@ -30,7 +30,7 @@ def give_role(org, user, name, *codenames):
     from apps.accounts.models import Permission, Role
 
     with platform_admin_context():
-        role = Role.objects.create(name=name, organization=org)
+        role, _ = Role.objects.get_or_create(name=name, organization=org)
         role.permissions.add(*Permission.objects.filter(codename__in=codenames))
         user.roles.add(role)
     return role

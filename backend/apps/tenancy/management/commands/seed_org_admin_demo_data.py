@@ -14,7 +14,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.accounts.models import Role, User
+from apps.accounts.models import User
 from apps.ipd_ward.models import Bed, Ward
 from apps.tenancy.context import set_tenant_context
 from apps.tenancy.models import Branch, Organization, Subscription, SubscriptionPlan
@@ -112,11 +112,13 @@ class Command(BaseCommand):
             organization=organization, email="demo.clinician@cafric.test"
         ).first()
         if clinician:
-            psychiatrist_role = Role.objects.filter(
-                name="Psychiatrist", organization__isnull=True
-            ).first()
+            from apps.accounts.access import set_assignments
+            from apps.accounts.roles import organization_role
+
+            psychiatrist_role = organization_role(organization, "psychiatrist")
             if psychiatrist_role and not clinician.roles.filter(pk=psychiatrist_role.pk).exists():
-                clinician.roles.add(psychiatrist_role)
+                held = [(a.role, a.branch) for a in clinician.role_assignments.all()]
+                set_assignments(clinician, held + [(psychiatrist_role, branch)])
             clinician.primary_branch = branch
             clinician.branch_access.add(branch)
             clinician.is_on_duty = True

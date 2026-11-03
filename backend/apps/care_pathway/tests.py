@@ -180,6 +180,7 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertFalse(front_desk.data["open_triage"])
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
@@ -217,6 +218,7 @@ class RegistrationTests(CarePathwayApiTestCase):
     def test_triage_tasks_go_to_a_team_or_a_person_from_the_staff_list(self):
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
@@ -250,6 +252,7 @@ class RegistrationTests(CarePathwayApiTestCase):
 
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             colleague = User.objects.create_user(

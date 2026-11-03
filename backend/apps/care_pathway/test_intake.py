@@ -21,6 +21,7 @@ class IntakeTestCase(CarePathwayApiTestCase):
         super().setUp()
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
@@ -223,6 +224,7 @@ class RestrictedContentTests(IntakeTestCase):
                 is_active=True,
             )
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Front Desk", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.front_desk.roles.add(role)

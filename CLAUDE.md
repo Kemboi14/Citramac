@@ -396,3 +396,33 @@ with; it is never edited, and replacing the indicators with NACADA's list does n
 
 Reversibility: cheap. Old-format reports (SudRehabPlan counts, "Mark exported") are kept as they were
 and cannot be sent. An email cannot be recalled once it has gone, which is why the send is confirmed.
+
+### 2026-11-03 — roles: platform roles on the platform, organisation roles in each organisation
+
+On the owner's instruction ("platform roles should remain platform, organisational roles on
+organisations … clean … up to 100 personnel"):
+
+1. **Two catalogues, never mixed** (`apps/accounts/catalogue.py` "Roles"). Platform-team roles
+   (Super Admin, Support Agent, Billing Admin, MFL Verifier, Platform Auditor) are held only by
+   platform accounts and carry only platform permissions; Super Admin → Platform Roles & Team shows
+   nothing else. Organisation roles are held only by that organisation's staff and carry only
+   organisation permissions. Auditor is an organisation role (it had been filed under the platform).
+2. **Each organisation owns its roles** (`apps/accounts/roles.py`). A new organisation gets its own
+   copy of each standard role; its Org Admin may rename a copy, change its permissions, copy a role
+   and add custom ones, and nothing reaches another organisation. The `organization=None` rows are
+   only the starting definitions; nobody is given them. Legacy duplicates (Therapist, Supervisor,
+   Billing Clerk) are kept only where someone holds them.
+3. **Built-in roles are recognised by `Role.system_key`, never by name.** Org Admin and Auditor are
+   locked (name and access fixed); their names, and Super Admin's, are reserved, so a custom role
+   can't look like an administrator. Roles are retired, never deleted, and only once nobody holds
+   one. Permission changes on a role are written to the audit trail.
+4. MSE risk alerts go to holders of `clinical.risk_alerts.receive` (was: roles named "Supervisor").
+
+Migration `accounts 0020` moved everyone onto their organisation's copies with identical
+permissions and admin status (checked per person before/after); it removed only roles on the wrong
+side, which granted nothing. Not clinical data, so no FHIR resource. Reversibility: cheap — the
+migration's reverse sends holders back to the shared definitions.
+
+Open for the owner: platform-team roles other than Super Admin still can't open the console (that
+needs a scoped cross-tenant read path, a security project of its own); `LEGAL_FORM_CATALOGUE`
+`signer_roles` are still role names (empty by default).

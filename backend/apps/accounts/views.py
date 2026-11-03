@@ -3,7 +3,7 @@ import contextlib
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -27,7 +27,6 @@ from .serializers import (
     PermissionSerializer,
     RoleSerializer,
     StaffInviteSerializer,
-    TENANT_HELD_PLATFORM_ROLES,
     StaffSerializer,
     _covers_branch,
     validate_assignments,
@@ -39,7 +38,8 @@ INVITE_TTL_DAYS = 7
 class PermissionListView(generics.ListAPIView):
     """Read-only catalogue (apps.accounts.catalogue) backing both Roles &
     Permissions screens. An organisation's staff see only the permissions an
-    organisation can grant; the platform team's own appear for Super Admin."""
+    organisation can grant. Super Admin sees both kinds, or one with
+    ?scope=PLATFORM / ?scope=ORG."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = PermissionSerializer
@@ -48,58 +48,175 @@ class PermissionListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = Permission.objects.all()
         if not self.request.user.is_superuser:
-            queryset = queryset.filter(scope="ORG")
+            return queryset.filter(scope="ORG")
+        scope = self.request.query_params.get("scope")
+        if scope in ("ORG", "PLATFORM"):
+            queryset = queryset.filter(scope=scope)
         return queryset
 
 
-class RoleViewSet(viewsets.ModelViewSet):
+def _permission_codenames(role):
+    return set(role.permissions.values_list("codename", flat=True))
+
+
+def _audit_permission_change(role, before):
+    """Who changed which permissions on a role — the many-to-many change the
+    generic write signals don't see."""
+    from apps.sysadmin_audit.audit import write_event
+    from apps.sysadmin_audit.models import AuditLogEntry
+
+    after = _permission_codenames(role)
+    if after == before:
+        return
+    write_event(
+        role.organization_id,
+        AuditLogEntry.ACTION_UPDATE,
+        "accounts.role",
+        role.pk,
+        {
+            "role": {"old": None, "new": role.name},
+            "permissions_added": {"old": None, "new": sorted(after - before)},
+            "permissions_removed": {"old": sorted(before - after), "new": None},
+        },
+    )
+
+
+class RoleViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
     """
-    Super Admin: platform-staff role templates (scope=PLATFORM) — "Global
-    Roles & Permissions". Org Admin: their own org's roles PLUS read access
-    to the ORG_TEMPLATE platform templates they're seeded from — "Roles &
-    Permissions". Creating a role always scopes it to the caller (Super
-    Admin -> organization=None/PLATFORM is disallowed via API, platform
-    templates are seed/admin-managed; Org Admin -> their own organization).
+    Roles, kept on two sides that never mix (apps.accounts.catalogue, "Roles"):
+
+    - Super Admin: the platform team's roles. With ?organization=<id> (the
+      Organizations screen's Add Staff drawer) the list is that organisation's
+      roles instead, read-only — they are the organisation's to change.
+    - Org Admin: their own organisation's roles — its copies of the standard
+      roles and the custom ones it made.
+
+    Nothing is deleted: a role nobody holds can be retired, and reactivated.
     """
 
     serializer_class = RoleSerializer
     permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
     org_admin_can_create = True
+    pagination_class = None
 
     def get_queryset(self):
         from django.db.models import Count
 
-        queryset = Role.objects.annotate(user_count=Count("users", distinct=True)).order_by("name")
+        queryset = (
+            Role.objects.annotate(user_count=Count("users", distinct=True))
+            .select_related("organization")
+            .prefetch_related("permissions")
+            .order_by("name")
+        )
         user = self.request.user
         if user.is_superuser:
-            # Super Admin can inspect and manage the complete role catalog.
-            # An organization filter remains available for focused staffing
-            # workflows and returns that organization's roles plus templates.
             organization_id = self.request.query_params.get("organization")
-            if organization_id:
-                return queryset.filter(models_q_org_or_template(organization_id))
-            return queryset
-        return queryset.filter(models_q_org_or_template(user.organization_id))
+            if organization_id and self.action == "list":
+                return queryset.filter(
+                    organization_id=organization_id, scope=Role.SCOPE_ORG_TEMPLATE
+                )
+            return queryset.filter(organization__isnull=True, scope=Role.SCOPE_PLATFORM)
+        return queryset.filter(
+            organization_id=user.organization_id, scope=Role.SCOPE_ORG_TEMPLATE
+        )
+
+    def _copy_source(self):
+        copy_from = self.request.data.get("copy_from")
+        if copy_from in (None, ""):
+            return None
+        source = None
+        if str(copy_from).isdigit():
+            source = self.get_queryset().filter(pk=copy_from).first()
+        if source is None:
+            raise ValidationError({"copy_from": "Choose one of your roles to copy."})
+        if source.is_locked:
+            raise ValidationError(
+                {"copy_from": f"{source.name} is a built-in role and can't be copied."}
+            )
+        return source
 
     def perform_create(self, serializer):
         user = self.request.user
+        source = self._copy_source()
         if user.is_superuser:
-            serializer.save(organization=None, scope=Role.SCOPE_PLATFORM)
+            role = serializer.save(organization=None, scope=Role.SCOPE_PLATFORM)
         else:
-            serializer.save(organization=user.organization, scope=Role.SCOPE_ORG_TEMPLATE)
+            role = serializer.save(organization=user.organization, scope=Role.SCOPE_ORG_TEMPLATE)
+        if source is not None and "permissions" not in serializer.validated_data:
+            role.permissions.set(source.permissions.all())
+        _audit_permission_change(role, set())
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context["request"] = self.request
-        return context
+    def perform_update(self, serializer):
+        before = _permission_codenames(serializer.instance)
+        role = serializer.save()
+        _audit_permission_change(role, before)
 
+    @action(detail=True, methods=["get"])
+    def members(self, request, pk=None):
+        """Everyone holding this role, with the branches they hold it at."""
+        role = self.get_object()
+        with platform_admin_context():
+            if role.scope == Role.SCOPE_PLATFORM:
+                rows = [
+                    (u, ["Platform"]) for u in role.users.all().order_by("first_name", "last_name")
+                ]
+            else:
+                by_user = {}
+                for a in (
+                    role.assignments.select_related("user", "branch")
+                    .order_by("user__first_name", "user__last_name")
+                ):
+                    held = by_user.setdefault(a.user_id, (a.user, []))[1]
+                    held.append(a.branch.name if a.branch_id else "All branches")
+                rows = list(by_user.values())
+        return Response(
+            [
+                {
+                    "id": str(u.pk),
+                    "first_name": u.first_name,
+                    "last_name": u.last_name,
+                    "email": u.email,
+                    "is_active": u.is_active,
+                    "branches": sorted(branches),
+                }
+                for u, branches in rows
+            ]
+        )
 
-def models_q_org_or_template(organization_id):
-    from django.db.models import Q
+    @action(detail=True, methods=["post"])
+    def retire(self, request, pk=None):
+        role = self.get_object()
+        if role.is_locked:
+            raise ValidationError(
+                {"detail": f"{role.name} is a built-in role and can't be retired."}
+            )
+        with platform_admin_context():
+            holders = role.users.count()
+        if holders:
+            raise ValidationError(
+                {
+                    "detail": (
+                        f"{holders} {'person holds' if holders == 1 else 'people hold'} this "
+                        "role. Give them another role first, then retire it."
+                    )
+                }
+            )
+        role.is_active = False
+        role.save(update_fields=["is_active", "updated_at"])
+        return Response(self.get_serializer(self.get_queryset().get(pk=role.pk)).data)
 
-    return Q(organization_id=organization_id) | Q(
-        organization__isnull=True, scope=Role.SCOPE_ORG_TEMPLATE
-    )
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):
+        role = self.get_object()
+        role.is_active = True
+        role.save(update_fields=["is_active", "updated_at"])
+        return Response(self.get_serializer(self.get_queryset().get(pk=role.pk)).data)
 
 
 class StaffViewSet(viewsets.ModelViewSet):
@@ -333,18 +450,17 @@ class StaffViewSet(viewsets.ModelViewSet):
 
 
 def _require_platform_role(role):
-    """A platform account holds a platform-team role only. Before this check
-    the console's role list offered every role, so a Softlink account could
-    be created holding "Psychiatrist" — with no organisation, and so no
-    clinical record it could legitimately open."""
+    """A platform account holds an active platform-team role only — never an
+    organisation's role, and never Super Admin, which comes with a Super
+    Admin account rather than being handed out."""
+    from .catalogue import ROLE_KEY_SUPER_ADMIN
+
     if (
         role is None
         or role.scope != Role.SCOPE_PLATFORM
         or role.organization_id is not None
-        or role.name.strip().lower() in TENANT_HELD_PLATFORM_ROLES
-        # Super Admin is the is_superuser flag, never a role a person can be
-        # handed here — holding a "Super Admin" role grants nothing.
-        or role.name.strip().lower() == "super admin"
+        or not role.is_active
+        or role.system_key == ROLE_KEY_SUPER_ADMIN
     ):
         raise ValidationError(
             {

@@ -239,6 +239,7 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         super().setUp()
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)

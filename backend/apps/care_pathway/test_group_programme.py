@@ -280,6 +280,7 @@ class CategoryTests(GroupProgrammeTestCase):
                 last_name="Admin",
             )
             role, _ = Role.objects.get_or_create(
+                organization=None,
                 name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             admin.roles.add(role)
