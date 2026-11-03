@@ -77,6 +77,9 @@ BRANCH_SCOPED = {
     "insurance_claims.PreAuthorization": ("encounter__branch",),
     # Pharmacy stores
     "pharmacy.Store": ("branch",),
+    # Aggregate reports compiled for one branch (facility)
+    "mhp_program.NacadaNdoReport": ("branch",),
+    "mhp_program.NacadaReportSend": ("report__branch",),
 }
 
 STAMPED = {

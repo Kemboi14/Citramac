@@ -61,7 +61,14 @@ class OrganizationEmailBackend(SMTPEmailBackend):
 
 
 def send_html_email(
-    subject, template_name, context, plain_message, from_email, recipient_list, connection
+    subject,
+    template_name,
+    context,
+    plain_message,
+    from_email,
+    recipient_list,
+    connection,
+    reply_to=None,
 ):
     """Shared HTML+plaintext sender — every notification task in the project builds
     its message with this so the multipart/alternative structure and the
@@ -72,6 +79,7 @@ def send_html_email(
         from_email=from_email,
         to=recipient_list,
         connection=connection,
+        reply_to=reply_to or None,
     )
     email.attach_alternative(
         render_to_string(template_name, {**context, "subject": subject}), "text/html"

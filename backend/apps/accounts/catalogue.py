@@ -30,6 +30,7 @@ MODULES = {
     "laboratory": "Laboratory",
     "finance": "Billing, claims & payments",
     "documents": "Clinical documents",
+    "reports": "Statutory reports",
     "platform": "Platform team (Softlink Options)",
 }
 
@@ -174,6 +175,17 @@ PERMISSIONS = [
         "merge.",
         SCOPE_ORG,
         ["Front Desk", "Records Officer"] + CLINICAL_STAFF,
+    ),
+    (
+        "reports.nacada.send",
+        "reports",
+        "Send the NACADA NDO report",
+        "Email a compiled NACADA National Drug Observatory report to the organisation's "
+        "NACADA reporting address, or a test copy to your own email. The report holds "
+        "counts only, with small numbers withheld. Every send asks for confirmation and "
+        "is recorded in the audit log. Org Admin can always send.",
+        SCOPE_ORG,
+        [],
     ),
     (
         "documents.release",

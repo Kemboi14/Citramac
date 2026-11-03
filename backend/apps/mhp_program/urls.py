@@ -1,12 +1,12 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .nacada_views import NacadaNdoReportViewSet, NacadaSettingsView
 from .views import (
     BiopsychosocialAssessmentViewSet,
     CareTeamMembershipViewSet,
     MhpTeamRosterView,
     ClinicalReviewViewSet,
-    NacadaNdoReportViewSet,
     PsychotherapySessionViewSet,
     ReviewOfSystemEntryViewSet,
     SubstanceUseEntryViewSet,
@@ -41,4 +41,5 @@ router.register("mhp/nacada-ndo-reports", NacadaNdoReportViewSet, basename="naca
 
 urlpatterns = router.urls + [
     path("mhp/team-roster/", MhpTeamRosterView.as_view(), name="mhp-team-roster"),
+    path("mhp/nacada-settings/", NacadaSettingsView.as_view(), name="nacada-settings"),
 ]

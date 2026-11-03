@@ -92,30 +92,110 @@ export function getMhpTeamRoster(accessToken: string) {
   return apiRequest<MhpTeamRosterRow[]>("/mhp/team-roster/", { accessToken });
 }
 
+// NACADA NDO report — apps/mhp_program/nacada_views.py. Counts only; small
+// numbers are already withheld in the stored snapshot.
+
+export interface NacadaCell {
+  value: number | null;
+  display: string;
+  masked: "small" | "secondary" | null;
+}
+
+export interface NacadaRow extends NacadaCell {
+  code: string;
+  label: string;
+}
+
+export interface NacadaSection {
+  code: string;
+  title: string;
+  scope: "branch" | "organization";
+  total_label: string;
+  total: NacadaCell;
+  median_days?: NacadaCell;
+  breakdowns: { code: string; title: string; rows: NacadaRow[] }[];
+  notes: string[];
+}
+
+export interface NacadaSummary {
+  definition: string;
+  definition_label: string;
+  organization_name: string;
+  branch_name: string;
+  period_start: string;
+  period_end: string;
+  sections: NacadaSection[];
+  notes: string[];
+}
+
+export type NacadaDeliveryStatus = "PENDING" | "SENT" | "FAILED" | "NOT_CONFIGURED" | null;
+
+export interface NacadaReportSend {
+  id: string;
+  target: "NACADA" | "SELF";
+  address: string;
+  sent_by_name: string;
+  sent_at: string;
+  delivery_status: NacadaDeliveryStatus;
+  delivery_error: string;
+}
+
 export interface NacadaNdoReport {
   id: string;
   period_start: string;
   period_end: string;
+  branch: string | null;
+  branch_name: string;
+  /** Blank for reports compiled in the old format, which cannot be sent. */
+  definition: string;
+  generated_by_name: string;
   generated_at: string;
-  summary_data: Record<string, unknown>;
+  summary_data: NacadaSummary | Record<string, unknown>;
   status: string;
+  sends: NacadaReportSend[];
+}
+
+export interface NacadaSettings {
+  nacada_report_email: string;
+  can_edit: boolean;
+  can_send: boolean;
+  my_email: string;
+  branches: { id: string; name: string }[];
+  /** The branch the user is working at; null when viewing all branches. */
+  working_branch: string | null;
 }
 
 export function listNacadaReports(accessToken: string) {
   return apiRequest<Paginated<NacadaNdoReport>>("/mhp/nacada-ndo-reports/", { accessToken });
 }
 
-export function generateNacadaReport(accessToken: string, periodStart: string, periodEnd: string) {
+export function compileNacadaReport(
+  accessToken: string,
+  body: { period_start: string; period_end: string; branch?: string },
+) {
   return apiRequest<NacadaNdoReport>("/mhp/nacada-ndo-reports/", {
     method: "POST",
-    body: { period_start: periodStart, period_end: periodEnd },
+    body,
     accessToken,
   });
 }
 
-export function exportNacadaReport(accessToken: string, reportId: string) {
-  return apiRequest<NacadaNdoReport>(`/mhp/nacada-ndo-reports/${reportId}/export/`, {
+export function sendNacadaReport(accessToken: string, reportId: string, target: "NACADA" | "SELF") {
+  return apiRequest<NacadaNdoReport>(`/mhp/nacada-ndo-reports/${reportId}/send/`, {
     method: "POST",
+    body: { target, confirm: true },
+    accessToken,
+  });
+}
+
+export function getNacadaSettings(accessToken: string) {
+  return apiRequest<NacadaSettings>("/mhp/nacada-settings/", { accessToken });
+}
+
+export function saveNacadaSettings(accessToken: string, nacadaReportEmail: string) {
+  return apiRequest<NacadaSettings>("/mhp/nacada-settings/", {
+    method: "PUT",
+    body: { nacada_report_email: nacadaReportEmail },
     accessToken,
   });
 }

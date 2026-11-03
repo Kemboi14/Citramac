@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ subject }}</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px; width:100%; background-color:#ffffff; border-radius:8px; overflow:hidden;">
+            <tr>
+              <td style="background-color:#006e51; padding:24px 32px;">
+                <span style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:0.5px;">CITRAMAC</span>
+              </td>
+            </tr>
+            {% if test_copy %}
+            <tr>
+              <td style="background-color:#fff6e5; padding:10px 32px;">
+                <span style="color:#8a5a00; font-size:12px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;">Test copy &mdash; not sent to NACADA</span>
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td style="padding:28px 32px 8px;">
+                <p style="margin:0 0 6px; color:#1f2933; font-size:18px; font-weight:700; line-height:1.4;">{{ heading }}</p>
+                <p style="margin:0 0 4px; color:#1f2933; font-size:14px; line-height:1.5;"><strong>{{ summary.organization_name }}</strong> &mdash; {{ summary.branch_name }}</p>
+                <p style="margin:0 0 12px; color:#1f2933; font-size:14px; line-height:1.5;">Period: {{ summary.period_start }} to {{ summary.period_end }}</p>
+                <p style="margin:0 0 12px; color:#52606d; font-size:13px; line-height:1.5;">{{ summary.definition_label }}</p>
+                <p style="margin:0 0 8px; color:#1f2933; font-size:14px; line-height:1.5;">{{ intro }}</p>
+              </td>
+            </tr>
+            {% for section in summary.sections %}
+            <tr>
+              <td style="padding:12px 32px;">
+                <p style="margin:0 0 8px; color:#1f2933; font-size:15px; font-weight:700;">{{ section.title }}{% if section.scope == "organization" %} <span style="color:#52606d; font-size:12px; font-weight:400;">(organisation-wide)</span>{% endif %}</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px; color:#1f2933;">
+                  <tr>
+                    <td style="padding:6px 8px; border-bottom:1px solid #e4e7eb; font-weight:600;">{{ section.total_label }}</td>
+                    <td style="padding:6px 8px; border-bottom:1px solid #e4e7eb; text-align:right; font-weight:600;">{{ section.total.display }}</td>
+                  </tr>
+                  {% if section.median_days %}
+                  <tr>
+                    <td style="padding:6px 8px; border-bottom:1px solid #e4e7eb;">Median wait</td>
+                    <td style="padding:6px 8px; border-bottom:1px solid #e4e7eb; text-align:right;">{{ section.median_days.display }}</td>
+                  </tr>
+                  {% endif %}
+                  {% for breakdown in section.breakdowns %}
+                  <tr>
+                    <td colspan="2" style="padding:10px 8px 4px; color:#52606d; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px;">{{ breakdown.title }}</td>
+                  </tr>
+                  {% for row in breakdown.rows %}
+                  <tr>
+                    <td style="padding:4px 8px 4px 16px; border-bottom:1px solid #f0f2f4;">{{ row.label }}</td>
+                    <td style="padding:4px 8px; border-bottom:1px solid #f0f2f4; text-align:right;">{{ row.display }}</td>
+                  </tr>
+                  {% endfor %}
+                  {% endfor %}
+                </table>
+                {% for note in section.notes %}
+                <p style="margin:6px 0 0; color:#52606d; font-size:12px; line-height:1.5;">{{ note }}</p>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+            <tr>
+              <td style="padding:16px 32px 24px; border-top:1px solid #e4e7eb;">
+                {% for note in summary.notes %}
+                <p style="margin:0 0 6px; color:#52606d; font-size:12px; line-height:1.5;">{{ note }}</p>
+                {% endfor %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

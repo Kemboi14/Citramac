@@ -90,10 +90,49 @@ def _queue_delivery(organization_id, notification, dedupe_key, channel, address,
     except IntegrityError:
         return None  # already queued (or sent) for this event
 
+    transaction.on_commit(lambda: _enqueue(delivery.id))
+    return delivery
+
+
+def _enqueue(delivery_id):
+    """Hand a committed delivery to the worker. If the broker can't be reached
+    the delivery is already saved as PENDING, so the periodic sweep
+    (tasks.retry_pending_deliveries) sends it later — the request that queued
+    it must not fail, or the person would retry and send it twice."""
     from .tasks import deliver_notification
 
-    transaction.on_commit(lambda: deliver_notification.delay(str(delivery.id)))
-    return delivery
+    # No result is ever read (the outcome is on the delivery row), so skip the
+    # result-backend subscribe and the publish retries: with Redis down each of
+    # those blocked the request ~20 s before failing over to the sweep anyway.
+    try:
+        deliver_notification.apply_async((str(delivery_id),), ignore_result=True, retry=False)
+    except Exception as exc:  # noqa: BLE001 — any broker failure leaves it to the sweep
+        logger.warning(
+            "notification_enqueue_deferred_to_sweep",
+            delivery_id=str(delivery_id),
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+
+def queue_email(organization_id, dedupe_key, address, email, reply_to=""):
+    """
+    One email to one address through the outbox, with no in-app notice — for a
+    document a person chose to send (the NACADA report). Sent after the
+    surrounding transaction commits, retried, and its outcome recorded on the
+    returned NotificationDelivery. None if this event already went there.
+    """
+    return _queue_delivery(
+        organization_id,
+        None,
+        dedupe_key,
+        NotificationDelivery.CHANNEL_EMAIL,
+        address,
+        subject=email.subject,
+        body_text=email.body_text,
+        html_template=email.template,
+        html_context=email.context,
+        reply_to=reply_to,
+    )
 
 
 def notify(

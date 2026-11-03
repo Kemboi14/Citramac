@@ -178,6 +178,7 @@ def _send_delivery_email(delivery):
         from_email=from_email,
         recipient_list=[delivery.address],
         connection=connection,
+        reply_to=[delivery.reply_to] if delivery.reply_to else None,
     )
     return NotificationDelivery.STATUS_SENT, ""
 

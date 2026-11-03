@@ -367,3 +367,32 @@ FHIR: the stub is `Patient.active=false` with `link` replaced-by, and the client
 A `Provenance` targets both, with the reason. VERIFY: a coded `Provenance.activity` for a merge;
 until one is confirmed it stays text. Example: `dha_interop/fhir_examples/registration-merged-temporary-record.json`.
 The ledger is identity administration, not clinical content, so it is not a second clinical store.
+
+### 2026-11-03 — NACADA NDO report: counts only, emailed, MeasureReport
+
+On the owner's decisions of 2026-11-03: the NACADA National Drug Observatory report is compiled per
+branch (facility) and period by `apps/mhp_program/nacada_report.py`. NACADA's NDO template has not
+been supplied, so the indicators are **facility-defined** from records the system already holds
+(episodes, triage substances, admissions, closures, OAT, naloxone, waiting time), and the report says
+so wherever it is shown or sent. Each report stores the snapshot and the `definition` it was compiled
+with; it is never edited, and replacing the indicators with NACADA's list does not touch stored reports.
+
+1. **Counts only, small numbers withheld.** No names, identifiers or free text. A count of 1–4 is
+   stored and shown as "<5"; where a breakdown adds up to its total, the next-smallest row is
+   withheld too; a median over 1–4 people is withheld. Suppression happens before the snapshot is
+   stored, so nothing more identifying than what is shown can be sent.
+2. **Sent by email, not an API.** NACADA publishes no submission endpoint. "Send to NACADA" emails
+   the organisation's NACADA reporting address (set by an Org Admin), copying the sender as reply-to;
+   "Send to myself" is a test copy. Both go through the `NotificationDelivery` outbox, so whether it
+   went is the delivery's status, never assumed. Permission `reports.nacada.send` (Org Admin always),
+   confirmation required, every send a `REPORT_SENT` audit entry and an append-only `NacadaReportSend`.
+   OAT and naloxone records carry no branch, so those two sections are organisation-wide and labelled.
+3. **FHIR.** A summary `MeasureReport`, read-time from the snapshot (`nacada_fhir.py`): `reporter` =
+   the branch, one `group` per section, one `stratifier` per breakdown, withheld counts carry the
+   `data-absent-reason` extension (`masked`), with a `Provenance` for who compiled it. No patient data,
+   so no `EpisodeOfCare` hook. Examples in `mhp_program/fhir_examples/` (routine month, small-numbers
+   edge case, no-activity omission) are checked by the CI conformance step. VERIFY with NACADA: the NDO
+   indicator codes and any Measure canonical they publish. Until then they are local `urn:citramac:` systems.
+
+Reversibility: cheap. Old-format reports (SudRehabPlan counts, "Mark exported") are kept as they were
+and cannot be sent. An email cannot be recalled once it has gone, which is why the send is confirmed.

@@ -12,7 +12,6 @@ from .models import (
     BiopsychosocialAssessment,
     CareTeamMembership,
     ClinicalReview,
-    NacadaNdoReport,
     PsychotherapySession,
     ReviewOfSystemEntry,
     SubstanceUseEntry,
@@ -27,7 +26,6 @@ from .serializers import (
     CareTeamMembershipSerializer,
     ClinicalReviewSerializer,
     MhpTeamRosterSerializer,
-    NacadaNdoReportSerializer,
     PsychotherapySessionRestrictedSerializer,
     PsychotherapySessionSerializer,
     ReviewOfSystemEntryRestrictedSerializer,
@@ -292,45 +290,6 @@ class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         supervision_request.notes = request.data.get("notes", supervision_request.notes)
         supervision_request.save(update_fields=["status", "completed_at", "notes"])
         return Response(SupervisionRequestSerializer(supervision_request).data)
-
-
-class NacadaNdoReportViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
-    """
-    NACADA National Drug Observatory report — docs/07-CLINICAL-MODULES-SPEC.md
-    §7.14.6: auto-compiled from SudRehabPlan/UrineDrugScreen; API submission
-    to NACADA itself is a Phase 6+ integration, not implemented here.
-    """
-
-    serializer_class = NacadaNdoReportSerializer
-
-    def get_queryset(self):
-        return NacadaNdoReport.objects.order_by("-generated_at")
-
-    def perform_create(self, serializer):
-        report = serializer.save(
-            organization=self.request.user.organization, generated_by=self.request.user
-        )
-        period_start, period_end = report.period_start, report.period_end
-        plans = SudRehabPlan.objects.filter(started_at__date__range=(period_start, period_end))
-        screens = UrineDrugScreen.objects.filter(
-            collected_at__date__range=(period_start, period_end)
-        )
-        phase_counts = {}
-        for phase_code, phase_label in SudRehabPlan.PHASE_CHOICES:
-            phase_counts[phase_label] = plans.filter(current_phase=phase_code).count()
-        report.summary_data = {
-            "new_rehab_plans": plans.count(),
-            "plans_by_phase": phase_counts,
-            "urine_drug_screens_conducted": screens.count(),
-        }
-        report.save(update_fields=["summary_data"])
-
-    @action(detail=True, methods=["post"])
-    def export(self, request, pk=None):
-        report = self.get_object()
-        report.status = "EXPORTED"
-        report.save(update_fields=["status"])
-        return Response(NacadaNdoReportSerializer(report).data)
 
 
 class MhpTeamRosterView(APIView):

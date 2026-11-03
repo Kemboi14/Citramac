@@ -124,6 +124,8 @@ class NotificationDelivery(models.Model):
     channel = models.CharField(max_length=8, choices=CHANNEL_CHOICES)
     address = models.CharField(max_length=255)
     subject = models.CharField(max_length=255, blank=True)
+    # Replies go to this person rather than the no-reply sender (email only).
+    reply_to = models.EmailField(blank=True)
     body_text = models.TextField()
     html_template = models.CharField(max_length=200, blank=True)
     html_context = models.JSONField(default=dict, blank=True)

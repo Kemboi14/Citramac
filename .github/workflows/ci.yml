@@ -74,7 +74,7 @@ jobs:
         run: pytest apps/tenancy/tests.py -v
 
       - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
-        run: pytest apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py -k FhirR4Conformance -v
+        run: pytest apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py -k FhirR4Conformance -v
 
       - uses: actions/setup-java@v4
         with:

@@ -308,17 +308,28 @@ class SupervisionRequest(TenantScopedModel):
 
 class NacadaNdoReport(TenantScopedModel):
     """
-    Periodic aggregated NACADA National Drug Observatory report — §7.14.6.
-    Auto-compiled from SudRehabPlan/UrineDrugScreen data at generation time;
-    submission to NACADA's own systems is a Phase 6+ integration item — this
-    stores the compiled snapshot and export status honestly as SHA-style
-    stub, not a fake "submitted" success.
+    One compiled NACADA National Drug Observatory (NDO) report for a period and
+    a branch (facility) — apps.mhp_program.nacada_report builds `summary_data`.
+
+    The snapshot holds counts only (no names, identifiers or free text), with
+    small numbers already withheld, so nothing more identifying than what is
+    shown can ever be sent. It is never edited; a new period or a correction is
+    a new report. Reports compiled before `definition` existed (SudRehabPlan
+    counts, "Mark exported") are kept as they were and cannot be sent.
+
+    FHIR: a summary MeasureReport (apps.mhp_program.nacada_fhir), read-time.
+    Sending is NacadaReportSend; there is no NACADA API to submit to.
     """
 
-    STATUS_CHOICES = [("DRAFT", "Draft"), ("EXPORTED", "Exported")]
+    STATUS_CHOICES = [("DRAFT", "Compiled"), ("EXPORTED", "Exported (old format)")]
 
     period_start = models.DateField()
     period_end = models.DateField()
+    branch = models.ForeignKey(
+        "tenancy.Branch", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    # Which indicator definition compiled the snapshot (nacada_report.DEFINITION).
+    definition = models.CharField(max_length=64, blank=True)
     generated_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
@@ -328,3 +339,40 @@ class NacadaNdoReport(TenantScopedModel):
 
     def __str__(self):
         return f"NACADA NDO report {self.period_start} to {self.period_end}"
+
+
+class NacadaReportSend(TenantScopedModel):
+    """
+    One email of a compiled report — to the organisation's NACADA reporting
+    address, or a test copy to the sender. Append-only. The email itself is a
+    NotificationDelivery (the server-side outbox), so whether it actually went
+    is the delivery's status, never assumed.
+    """
+
+    TARGET_NACADA = "NACADA"
+    TARGET_SELF = "SELF"
+    TARGET_CHOICES = [(TARGET_NACADA, "NACADA"), (TARGET_SELF, "Test copy to myself")]
+
+    report = models.ForeignKey(NacadaNdoReport, on_delete=models.PROTECT, related_name="sends")
+    target = models.CharField(max_length=8, choices=TARGET_CHOICES)
+    address = models.EmailField()
+    sent_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
+    sent_at = models.DateTimeField(default=timezone.now)
+    delivery = models.ForeignKey(
+        "notifications.NotificationDelivery",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # A NACADA send also copies the sender (who is the reply-to address).
+    copy_delivery = models.ForeignKey(
+        "notifications.NotificationDelivery",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-sent_at"]

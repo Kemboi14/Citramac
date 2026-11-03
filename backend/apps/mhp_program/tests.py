@@ -219,34 +219,6 @@ class MhpExtensionsTests(APITestCase):
         self.assertEqual(complete_response.status_code, 200)
         self.assertEqual(complete_response.data["status"], "COMPLETED")
 
-    def test_nacada_ndo_report_auto_compiles_summary_on_create(self):
-        from .models import SudRehabPlan
-
-        with platform_admin_context():
-            SudRehabPlan.objects.create(organization=self.org, patient=self.patient)
-        response = self.client.post(
-            reverse("nacada-ndo-report-list"),
-            {"period_start": "2026-01-01", "period_end": "2026-12-31"},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["summary_data"]["new_rehab_plans"], 1)
-        self.assertEqual(response.data["status"], "DRAFT")
-
-    def test_nacada_ndo_report_export_action_marks_exported(self):
-        create_response = self.client.post(
-            reverse("nacada-ndo-report-list"),
-            {"period_start": "2026-01-01", "period_end": "2026-12-31"},
-            format="json",
-            **self.auth,
-        )
-        export_response = self.client.post(
-            reverse("nacada-ndo-report-export", args=[create_response.data["id"]]), **self.auth
-        )
-        self.assertEqual(export_response.status_code, 200)
-        self.assertEqual(export_response.data["status"], "EXPORTED")
-
     def test_mhp_team_roster_reports_caseload_from_care_team_memberships(self):
         with platform_admin_context():
             CareTeamMembership.objects.create(

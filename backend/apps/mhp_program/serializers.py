@@ -4,7 +4,6 @@ from .models import (
     BiopsychosocialAssessment,
     CareTeamMembership,
     ClinicalReview,
-    NacadaNdoReport,
     PsychotherapySession,
     RehabMilestone,
     ReviewOfSystemEntry,
@@ -249,21 +248,6 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
             "completed_at",
         ]
         read_only_fields = ["requested_by", "status", "requested_at", "completed_at"]
-
-
-class NacadaNdoReportSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = NacadaNdoReport
-        fields = [
-            "id",
-            "period_start",
-            "period_end",
-            "generated_by",
-            "generated_at",
-            "summary_data",
-            "status",
-        ]
-        read_only_fields = ["generated_by", "generated_at", "summary_data", "status"]
 
 
 class MhpTeamRosterSerializer(serializers.Serializer):
