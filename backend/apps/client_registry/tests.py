@@ -974,6 +974,46 @@ class CaseloadTests(APITestCase):
         self.assertEqual(row["diagnosis"], {"code": "TEST-1", "description": "Test condition"})
         self.assertEqual(row["next_appointment"]["appointment_type"], "Medication review")
 
+    def test_client_registry_rows_combine_current_care_and_allergy_data(self):
+        from apps.client_registry.models import AllergyRecord
+        from apps.ipd_ward.models import Admission, Bed, Ward
+
+        patient = self._patient("Amina", doctor=self.clinician, allergy_status="ACTIVE_ALLERGIES")
+        with platform_admin_context():
+            ward = Ward.objects.create(organization=self.org, name="Ward A")
+            bed = Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="12", status="OCCUPIED"
+            )
+            Admission.objects.create(
+                organization=self.org,
+                patient=patient,
+                bed=bed,
+                consultant=self.clinician,
+                clinical_priority="ORANGE",
+            )
+            AllergyRecord.objects.create(
+                organization=self.org,
+                patient=patient,
+                substance="Penicillin",
+                allergy_type="ALLERGY",
+                clinical_status="ACTIVE",
+                verification_status="CONFIRMED",
+            )
+
+        response = self.client.get(reverse("patient-registry"), **self.auth)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        row = response.data["results"][0]
+        self.assertEqual(row["name"], "Amina Test")
+        self.assertEqual(row["setting"], "INPATIENT")
+        self.assertEqual(row["priority"], "ORANGE")
+        self.assertEqual(row["status"], "Inpatient")
+        self.assertEqual(row["allergies"], ["Penicillin"])
+        self.assertEqual(
+            row["responsible_team"], "clinician@org-caseload.test · Ward A team"
+        )
+
 
 class IdentifiedPatientValidationTests(APITestCase):
     """Names became optional for the unidentified/unknown tiers (docs/15 §1.4);

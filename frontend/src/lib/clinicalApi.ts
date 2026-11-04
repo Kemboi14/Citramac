@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { PriorityOrBlank } from "./carePathwayApi";
 
 // Mirrors apps/client_registry, apps/clinical_encounter, apps/triage,
 // apps/mhp_program, apps/dha_interop serializers — docs/10-API-SPECIFICATION.md.
@@ -28,6 +29,42 @@ export interface PatientListRow {
   archived_at: string | null;
   /** Read-only. A client on legal hold is never proposed for archiving. */
   legal_hold: boolean;
+}
+
+export interface ClientRegistryRow {
+  id: string;
+  name: string;
+  client_number: string;
+  age: number | null;
+  sex: string;
+  setting: string;
+  priority: PriorityOrBlank;
+  status: string;
+  allergy_status: string;
+  allergies: string[];
+  responsible_team: string;
+}
+
+export type ClientRegistryCategory =
+  | "awaiting-triage"
+  | "emergency"
+  | "INPATIENT"
+  | "OUTPATIENT"
+  | "RESIDENTIAL";
+
+export function listClientRegistry(
+  accessToken: string,
+  options?: { category?: ClientRegistryCategory; q?: string; page?: number },
+) {
+  const params = new URLSearchParams();
+  if (options?.category) params.set("category", options.category);
+  if (options?.q) params.set("q", options.q);
+  if (options?.page && options.page > 1) params.set("page", String(options.page));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return apiRequest<Paginated<ClientRegistryRow> & { total_count: number }>(
+    `/patients/registry/${query}`,
+    { accessToken },
+  );
 }
 
 export interface EmergencyContact {

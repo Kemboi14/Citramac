@@ -10,6 +10,7 @@ export const RECORD_VIEWS = [
 
 export const JOURNEY_STAGES = [
   { key: "snapshot", label: "Capture" },
+  { key: "triage", label: "Triage" },
   { key: "intake", label: "Intake" },
   { key: "care-plan", label: "Care Plan" },
   { key: "interventions", label: "Interventions" },
@@ -23,6 +24,7 @@ export type RecordView =
   | "timeline"
   | "charts"
   | "legal"
+  | "triage"
   | "intake"
   | "care-plan"
   | "interventions"
@@ -31,6 +33,7 @@ export type RecordView =
   | "follow-up";
 
 export const JOURNEY_KEYS = new Set<string>([
+  "triage",
   "intake",
   "care-plan",
   "interventions",
@@ -39,6 +42,6 @@ export const JOURNEY_KEYS = new Set<string>([
   "follow-up",
 ]);
 
-export function clientRecordPath(patientId: string, view: RecordView = "intake") {
+export function clientRecordPath(patientId: string, view: RecordView = "triage") {
   return `/clinical/clients/${patientId}/${view}`;
 }

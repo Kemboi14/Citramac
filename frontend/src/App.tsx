@@ -369,7 +369,7 @@ function App() {
             <Route path="triage" element={<TriageWorklistPage />} />
             <Route path="triage/:triageId" element={<TriageEncounterPage />} />
             <Route path="psychiatry" element={<PsychiatryQueuePage />} />
-            <Route path="clients/:patientId" element={<Navigate to="intake" replace />} />
+            <Route path="clients/:patientId" element={<Navigate to="triage" replace />} />
             <Route path="clients/:patientId/:view" element={<ClientRecordPage />} />
             <Route path="inpatient" element={<InpatientAdmissionsPage />} />
             <Route path="inpatient/ward" element={<WardBoardPage />} />

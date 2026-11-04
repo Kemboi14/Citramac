@@ -1740,9 +1740,13 @@ export function RegistrationPage() {
             <button
               type="button"
               className={`${BTN_GHOST} !rounded-full !px-6 !py-[11px] !text-[14px]`}
-              onClick={() =>
-                navigate(editing && editId ? clientRecordPath(editId, "snapshot") : "/clinical")
-              }
+              onClick={() => {
+                if (editing && editId) {
+                  navigate(clientRecordPath(editId, "snapshot"));
+                  return;
+                }
+                navigate("/clinical");
+              }}
             >
               Cancel
             </button>
