@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
@@ -292,11 +300,15 @@ export function TriageForm({
   banner,
   bannerError,
   onSigned,
+  embedded = false,
+  onSafetyBannerOverridesChange,
 }: {
   detail: TriageEncounterDetail;
   banner: ClientBanner | null;
   bannerError: string | null;
   onSigned: () => void;
+  embedded?: boolean;
+  onSafetyBannerOverridesChange?: (overrides: BannerOverrides | null) => void;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -573,21 +585,27 @@ export function TriageForm({
   const allergyEdited =
     hasAnswer(answers, "a_allergy_status") || hasAnswer(answers, "a_allergy_detail");
 
-  const overrides: BannerOverrides = {};
-  if (banner && allergyEdited) {
-    const state = (["known", "none", "unknown"] as const).find((s) => s === allergyStatus);
-    const items = splitAllergies(allergyDetail).map((substance) => {
-      const existing = banner.allergy.items.find(
-        (item) => item.substance.toLowerCase() === substance.toLowerCase(),
-      );
-      return existing ?? { substance, reaction: "", verification_status: "CONFIRMED" };
-    });
-    overrides.allergy = {
-      state: state ?? banner.allergy.state,
-      items: state === "known" ? items : [],
-    };
-  }
-  if (signed?.final_priority) overrides.priority = signed.final_priority;
+  const overrides = useMemo<BannerOverrides>(() => {
+    const next: BannerOverrides = {};
+    if (banner && allergyEdited) {
+      const state = (["known", "none", "unknown"] as const).find((s) => s === allergyStatus);
+      const items = splitAllergies(allergyDetail).map((substance) => {
+        const existing = banner.allergy.items.find(
+          (item) => item.substance.toLowerCase() === substance.toLowerCase(),
+        );
+        return existing ?? { substance, reaction: "", verification_status: "CONFIRMED" };
+      });
+      next.allergy = {
+        state: state ?? banner.allergy.state,
+        items: state === "known" ? items : [],
+      };
+    }
+    if (signed?.final_priority) next.priority = signed.final_priority;
+    return next;
+  }, [allergyDetail, allergyEdited, allergyStatus, banner, signed?.final_priority]);
+  useEffect(() => {
+    if (embedded) onSafetyBannerOverridesChange?.(overrides);
+  }, [embedded, onSafetyBannerOverridesChange, overrides]);
 
   const sexLabel = banner?.sex ? vs.label("sex", banner.sex) : "";
   const identityLine = banner
@@ -603,22 +621,32 @@ export function TriageForm({
 
   return (
     <div className="clinical-readable mx-auto max-w-[1600px]">
-      <Breadcrumbs
-        items={[
-          { label: "Triage", to: "/clinical/triage" },
-          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
-        ]}
-      />
-      <SafetyBanner banner={banner} error={bannerError} overrides={overrides} />
+      {!embedded && (
+        <>
+          <Breadcrumbs
+            items={[
+              { label: "Triage", to: "/clinical/triage" },
+              { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
+            ]}
+          />
+          <SafetyBanner banner={banner} error={bannerError} overrides={overrides} />
+        </>
+      )}
       <EncounterContext detail={detail} banner={banner} />
 
       <PageHeader
         title="Initial triage"
         subtitle="Safety screen and immediate disposition · Not the full assessment"
         actions={
-          <button type="button" className={BTN_GHOST} onClick={() => navigate("/clinical/triage")}>
-            Back to queue
-          </button>
+          !embedded && (
+            <button
+              type="button"
+              className={BTN_GHOST}
+              onClick={() => navigate("/clinical/triage")}
+            >
+              Back to queue
+            </button>
+          )
         }
       />
       {vs.error && (
@@ -1282,13 +1310,15 @@ export function TriageForm({
               )}
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 min-[561px]:w-auto [&>button]:flex-auto min-[561px]:[&>button]:flex-none">
-              <button
-                type="button"
-                className={BTN_GHOST}
-                onClick={() => navigate("/clinical/triage")}
-              >
-                Back
-              </button>
+              {!embedded && (
+                <button
+                  type="button"
+                  className={BTN_GHOST}
+                  onClick={() => navigate("/clinical/triage")}
+                >
+                  Back
+                </button>
+              )}
               <button type="button" className={BTN_GHOST} disabled={readOnly} onClick={saveNow}>
                 Save draft
               </button>

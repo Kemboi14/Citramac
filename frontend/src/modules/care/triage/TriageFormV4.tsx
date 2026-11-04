@@ -254,11 +254,13 @@ export function TriageFormV4({
   banner,
   bannerError,
   onSigned,
+  embedded = false,
 }: {
   detail: TriageEncounterDetail;
   banner: ClientBanner | null;
   bannerError: string | null;
   onSigned: () => void;
+  embedded?: boolean;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -693,13 +695,17 @@ export function TriageFormV4({
 
   return (
     <div className="clinical-readable mx-auto max-w-[1600px]">
-      <Breadcrumbs
-        items={[
-          { label: "Triage", to: "/clinical/triage" },
-          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
-        ]}
-      />
-      <SafetyBanner banner={banner} error={bannerError} />
+      {!embedded && (
+        <>
+          <Breadcrumbs
+            items={[
+              { label: "Triage", to: "/clinical/triage" },
+              { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
+            ]}
+          />
+          <SafetyBanner banner={banner} error={bannerError} />
+        </>
+      )}
       <EncounterContext detail={detail} banner={banner} />
       <PageHeader
         title="What does this person need right now, and how urgently?"
@@ -707,13 +713,15 @@ export function TriageFormV4({
         actions={
           <div className="flex items-center gap-2">
             {!readOnly && <Tag>{`${mm}:${ss} · aim 2–5 min`}</Tag>}
-            <button
-              type="button"
-              className={BTN_GHOST}
-              onClick={() => navigate("/clinical/triage")}
-            >
-              Back to queue
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                onClick={() => navigate("/clinical/triage")}
+              >
+                Back to queue
+              </button>
+            )}
           </div>
         }
       />

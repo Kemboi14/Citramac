@@ -17,10 +17,19 @@ describe("clinical nav matching", () => {
     expect(itemMatches(find("Ward board"), "/clinical/inpatient/ward")).toBe(true);
   });
 
-  it("honours matchPrefix and alsoActiveFor", () => {
-    expect(itemMatches(find("Triage"), "/clinical/triage/abc")).toBe(true);
+  it("honours alsoActiveFor and keeps triage out of the left menu", () => {
     expect(itemMatches(find("Psychiatric"), "/clinical/clients/abc/intake")).toBe(true);
     expect(itemMatches(find("Psychiatric"), "/clinical/clientsmith")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Triage")).toBe(false);
+  });
+
+  it("shows the client registry as a standalone menu item", () => {
+    expect(topLevel.find((item) => item.label === "Client Registry")?.to).toBe(
+      "/clinical/registry",
+    );
+    expect(group("Clinical").children?.some((item) => item.label === "Client Registry")).toBe(
+      false,
+    );
   });
 
   it("opens the group that holds the current route", () => {

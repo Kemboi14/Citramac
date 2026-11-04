@@ -1,244 +1,126 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
+import { ApiError } from "../../lib/apiClient";
 import {
-  getPatient,
-  listPatients,
-  type PatientDetail,
-  type PatientListRow,
+  listClientRegistry,
+  type ClientRegistryCategory,
+  type ClientRegistryRow,
 } from "../../lib/clinicalApi";
-import { PatientRegistrationModal } from "./PatientRegistrationModal";
-import { PatientDetailsModal } from "./PatientDetailsModal";
-import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
-import { PageHeader } from "../care/shared/ui";
+import { PageHeader, PriorityPill } from "../care/shared/ui";
+import { clientRecordPath } from "../care/shared/recordRoutes";
 
-const ALLERGY_BADGE: Record<string, string> = {
-  ACTIVE_ALLERGIES: "bg-status-red-tint text-status-red",
-  UNKNOWN: "bg-status-amber-tint text-status-amber",
-  NONE: "bg-brand-green-tint text-brand-green-dark",
-};
+const TABS: { label: string; category?: ClientRegistryCategory }[] = [
+  { label: "All" },
+  { label: "Awaiting triage", category: "awaiting-triage" },
+  { label: "Emergency", category: "emergency" },
+  { label: "Inpatient", category: "INPATIENT" },
+  { label: "Outpatient", category: "OUTPATIENT" },
+  { label: "Residential", category: "RESIDENTIAL" },
+];
 
-const CARE_LABEL: Record<string, string> = {
-  OUTPATIENT: "Outpatient",
-  INPATIENT: "Inpatient",
-  POSTTREATMENT_SUPPORT: "Post-treatment support",
-};
-
-type ArchivedFilter = "" | "include" | "only";
-
-const FIELD_CLASS =
-  "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-[12.6px] text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
-
-function initialsFor(patient: PatientListRow) {
-  return `${patient.first_name[0] ?? ""}${patient.last_name[0] ?? ""}`.toUpperCase() || "?";
+function sexLabel(sex: string) {
+  if (sex === "MALE") return "M";
+  if (sex === "FEMALE") return "F";
+  if (sex === "NOT_STATED" || sex === "NOT_SAID") return "—";
+  return sex ? "Other" : "—";
 }
 
-/**
- * Module 1 — Client Registry, rebuilt against the second (2026-09)
- * clinical-workspace mockup: Client/UHID combined cell (photo or initials),
- * Care/Contact/Status columns, a "Register client" modal (not a separate
- * page — see PatientRegistrationModal.tsx, which replaces the old
- * `/clinical/registry-new` route entirely), and a read-only "View details"
- * modal. "Status" has one honest simplification: the backend has no
- * registration-approval workflow, so rather than fabricate the mockup's
- * "Pending" state, it's derived from a real signal — whether any government
- * ID (UPI/IPRS or National ID) is on file yet — and labelled accordingly.
- * Archived clients (retention period ended, archived by an Org Admin) are
- * left out by default, as the backend does; the archived-records filter brings
- * them back in, badged, and they open read-only.
- */
+function settingLabel(setting: string) {
+  switch (setting) {
+    case "INPATIENT":
+      return "Inpatient";
+    case "OUTPATIENT":
+      return "Outpatient";
+    case "RESIDENTIAL":
+      return "Residential";
+    case "PARTIAL":
+      return "Partial";
+    case "POSTTREATMENT_SUPPORT":
+      return "Post-treatment support";
+    default:
+      return setting || "—";
+  }
+}
+
+function allergyLabel(patient: ClientRegistryRow) {
+  if (patient.allergies.length) return `ALLERGY: ${patient.allergies.join(", ")}`;
+  if (patient.allergy_status === "UNKNOWN") return "Unknown";
+  if (patient.allergy_status === "NONE") return "None recorded";
+  return "Active allergies on file";
+}
+
 export function ClientRegistryPage() {
   const { accessToken } = useAuth();
   const { selectPatient } = usePatientContext();
   const navigate = useNavigate();
-  const [patients, setPatients] = useState<PatientListRow[]>([]);
+  const [patients, setPatients] = useState<ClientRegistryRow[]>([]);
+  const [count, setCount] = useState(0);
+  const [category, setCategory] = useState<ClientRegistryCategory | undefined>();
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  // `?care=OUTPATIENT` (from the dashboard's Outpatients card) pre-selects the filter.
-  const [searchParams] = useSearchParams();
-  const [careFilter, setCareFilter] = useState(() => searchParams.get("care") ?? "");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>("");
-  const [showRegister, setShowRegister] = useState(false);
-  const [detailsPatient, setDetailsPatient] = useState<PatientDetail | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     if (!accessToken) return;
+    const requestId = ++requestSequence.current;
     setIsLoading(true);
     setError(null);
-    listPatients(accessToken, { archived: archivedFilter || undefined })
-      .then((data) => setPatients(data.results))
-      .catch(() => setError("Couldn't load the client registry."))
-      .finally(() => setIsLoading(false));
-  };
+    listClientRegistry(accessToken, { category, page })
+      .then((data) => {
+        if (requestId !== requestSequence.current) return;
+        setPatients(data.results);
+        setCount(data.total_count);
+        setHasNext(data.next !== null);
+        setHasPrevious(data.previous !== null);
+      })
+      .catch((err: unknown) => {
+        if (requestId === requestSequence.current) {
+          setError(err instanceof ApiError ? err.message : "Couldn't load the client registry.");
+        }
+      })
+      .finally(() => {
+        if (requestId === requestSequence.current) setIsLoading(false);
+      });
+  }, [accessToken, category, page]);
 
   useEffect(() => {
-    // Deferred one microtask so `reload`'s setState calls don't run
-    // synchronously in the effect body itself.
-    void Promise.resolve().then(reload);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` is redefined each render but only depends on `accessToken`/`archivedFilter`, already listed.
-  }, [accessToken, archivedFilter]);
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) reload();
+    });
+    return () => {
+      cancelled = true;
+      requestSequence.current += 1;
+    };
+  }, [reload]);
 
-  const openPatient = (patient: PatientListRow) => {
-    selectPatient(patient.id, `${patient.first_name} ${patient.last_name}`);
-    navigate("/clinical/patient");
+  const openPatient = (patient: ClientRegistryRow) => {
+    selectPatient(patient.id, patient.name);
+    navigate(clientRecordPath(patient.id, "triage"));
   };
 
-  const viewDetails = async (patient: PatientListRow, event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (!accessToken) return;
-    setDetailsLoading(patient.id);
-    try {
-      setDetailsPatient(await getPatient(accessToken, patient.id));
-    } finally {
-      setDetailsLoading(null);
-    }
-  };
-
-  const statusFor = (patient: PatientListRow): "Active" | "ID Pending" =>
-    patient.upi || patient.national_id ? "Active" : "ID Pending";
-
-  const query = search.trim().toLowerCase();
-  const filteredPatients = patients.filter((patient) => {
-    const matchesSearch =
-      !query ||
-      [patient.first_name, patient.last_name, patient.uhid_number, patient.citramac_number]
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
-    const matchesCare = !careFilter || patient.patient_category === careFilter;
-    const matchesStatus = !statusFilter || statusFor(patient) === statusFilter;
-    return matchesSearch && matchesCare && matchesStatus;
-  });
-
-  const registryColumns: ResponsiveTableColumn<PatientListRow>[] = [
-    {
-      key: "client",
-      header: "Client / UHID",
-      cardTitle: true,
-      cell: (patient) => (
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-green-tint text-[11px] font-bold text-brand-green-dark">
-            {patient.photo ? (
-              <img src={patient.photo} alt="" className="h-full w-full object-cover" />
-            ) : (
-              initialsFor(patient)
-            )}
-          </div>
-          <div>
-            <div className="font-semibold text-ink-900">
-              {patient.first_name} {patient.last_name}
-            </div>
-            <div className="font-mono text-[10.5px] text-ink-500">
-              {patient.uhid_number || patient.citramac_number}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "gender_dob",
-      header: "Gender / DOB",
-      cell: (patient) => (
-        <>
-          {patient.gender}
-          <div className="text-[10.5px] text-ink-500">{patient.date_of_birth}</div>
-        </>
-      ),
-    },
-    {
-      key: "care",
-      header: "Care",
-      cell: (patient) => (
-        <span className="rounded-full bg-brand-green-tint px-2.5 py-1 text-xs font-semibold text-brand-green-dark">
-          {CARE_LABEL[patient.patient_category] ?? patient.patient_category}
-        </span>
-      ),
-    },
-    {
-      key: "contact",
-      header: "Contact",
-      cell: (patient) => (
-        <>
-          {patient.contact_phone || "—"}
-          <div className="text-[10.5px] text-ink-500">Mobile · Kenya</div>
-        </>
-      ),
-    },
-    {
-      key: "allergy",
-      header: "Allergy",
-      cell: (patient) => (
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ALLERGY_BADGE[patient.allergy_status] ?? ""}`}
-        >
-          {patient.allergy_status.replace(/_/g, " ")}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cardBadge: true,
-      cell: (patient) => {
-        const status = statusFor(patient);
-        return (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {patient.archived_at ? (
-              <span
-                className="rounded-full border border-surface-border bg-surface-bg px-2.5 py-1 text-xs font-semibold text-ink-700"
-                title={`Archived ${new Date(patient.archived_at).toLocaleDateString()} — read-only`}
-              >
-                Archived
-              </span>
-            ) : (
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === "Active" ? "bg-brand-green-tint text-brand-green-dark" : "bg-status-amber-tint text-status-amber"}`}
-              >
-                {status}
-              </span>
-            )}
-            {patient.legal_hold && (
-              <span className="rounded-full bg-status-amber-tint px-2.5 py-1 text-xs font-semibold text-status-amber">
-                Legal hold
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      key: "actions",
-      header: "",
-      hideInCard: true,
-      className: "px-4 py-3 text-right",
-      cell: (patient) => (
-        <button
-          type="button"
-          onClick={(e) => viewDetails(patient, e)}
-          disabled={detailsLoading === patient.id}
-          className="text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50"
-        >
-          {detailsLoading === patient.id ? "Loading…" : "Open"}
-        </button>
-      ),
-    },
-  ];
+  const activeTab = category ?? "";
 
   return (
     <div className="animate-fade-in">
       <PageHeader
-        eyebrow="Records"
-        title="Client registry"
-        subtitle="Register, find and safely manage clients across every care pathway."
+        title="Clients"
+        subtitle={
+          <>
+            {isLoading ? "Loading" : error ? "—" : count} client records · one record per person,
+            encounters and episodes beneath it
+          </>
+        }
         actions={
           <button
             type="button"
-            onClick={() => setShowRegister(true)}
+            onClick={() => navigate("/clinical/registration")}
             className="flex items-center gap-1.5 rounded-md bg-brand-green px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-colors duration-150 hover:bg-brand-green-dark"
           >
             <Plus className="h-4 w-4" />
@@ -247,107 +129,151 @@ export function ClientRegistryPage() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400" />
-          <input
-            className={`${FIELD_CLASS} w-72 pl-8`}
-            placeholder="Search name, UHID or client number…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className={FIELD_CLASS}
-          value={careFilter}
-          onChange={(e) => setCareFilter(e.target.value)}
-        >
-          <option value="">All care</option>
-          <option value="OUTPATIENT">Outpatient</option>
-          <option value="INPATIENT">Inpatient</option>
-          <option value="POSTTREATMENT_SUPPORT">Post-treatment support</option>
-        </select>
-        <select
-          className={FIELD_CLASS}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          <option value="Active">Active</option>
-          <option value="ID Pending">ID Pending</option>
-        </select>
-        <select
-          className={FIELD_CLASS}
-          value={archivedFilter}
-          onChange={(e) => setArchivedFilter(e.target.value as ArchivedFilter)}
-          aria-label="Archived records"
-        >
-          <option value="">Active records only</option>
-          <option value="include">Include archived</option>
-          <option value="only">Archived only</option>
-        </select>
-      </div>
-
-      <div className="mb-3 flex flex-wrap gap-6 text-[11.5px] text-ink-500">
-        <span>
-          <strong className="mr-1 font-display text-base text-ink-900">
-            {filteredPatients.length}
-          </strong>
-          clients shown
-        </span>
-        <span>
-          <strong className="mr-1 font-display text-base text-ink-900">FHIR R4</strong>
-          Patient resource
-        </span>
-      </div>
-
-      {isLoading ? (
-        <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-ink-500 shadow-sm">
-          Loading…
-        </p>
-      ) : error ? (
-        <p className="rounded-lg border border-surface-border bg-surface-card px-4 py-6 text-center text-sm text-status-red shadow-sm">
-          {error}
-        </p>
-      ) : (
-        <ResponsiveTable
-          columns={registryColumns}
-          rows={filteredPatients}
-          rowKey={(patient) => patient.id}
-          onRowClick={openPatient}
-          renderCardActions={(patient) => (
+      <div
+        role="tablist"
+        aria-label="Filter clients"
+        className="mb-5 flex overflow-x-auto rounded-lg border border-surface-border bg-surface-card"
+      >
+        {TABS.map((tab) => {
+          const selected = activeTab === (tab.category ?? "");
+          return (
             <button
+              key={tab.label}
               type="button"
-              onClick={(e) => viewDetails(patient, e)}
-              disabled={detailsLoading === patient.id}
-              className="w-full text-center text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => {
+                setCategory(tab.category);
+                setPage(1);
+              }}
+              className={`shrink-0 border-r border-surface-border px-4 py-2 text-[13px] transition-colors last:border-r-0 ${
+                selected
+                  ? "bg-brand-green-tint font-semibold text-brand-green-dark"
+                  : "text-ink-700 hover:bg-surface-bg hover:text-ink-900"
+              }`}
             >
-              {detailsLoading === patient.id ? "Loading…" : "Open"}
+              {tab.label}
             </button>
-          )}
-          emptyMessage={
-            patients.length === 0
-              ? archivedFilter === "only"
-                ? "No archived clients."
-                : archivedFilter === ""
-                  ? "No active clients."
-                  : "No clients registered yet."
-              : "No clients match these filters."
-          }
-        />
-      )}
+          );
+        })}
+      </div>
 
-      <PatientRegistrationModal
-        open={showRegister}
-        onClose={() => setShowRegister(false)}
-        onRegistered={reload}
-      />
-      <PatientDetailsModal
-        open={detailsPatient !== null}
-        onClose={() => setDetailsPatient(null)}
-        patient={detailsPatient}
-        onPatientChanged={setDetailsPatient}
-      />
+      <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
+        <table className="w-full min-w-[1060px] border-collapse text-left text-[13px]">
+          <thead className="border-b border-surface-border bg-surface-bg text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            <tr>
+              <th className="px-4 py-3">Client</th>
+              <th className="px-4 py-3">Age / sex</th>
+              <th className="px-4 py-3">Setting</th>
+              <th className="px-4 py-3">Priority</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Allergies</th>
+              <th className="px-4 py-3">Responsible team</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
+                  Loading clients…
+                </td>
+              </tr>
+            )}
+            {!isLoading && error && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-status-red" role="alert">
+                  <div>{error}</div>
+                  <button
+                    type="button"
+                    onClick={reload}
+                    className="mt-2 font-semibold text-brand-green-dark underline"
+                  >
+                    Try again
+                  </button>
+                </td>
+              </tr>
+            )}
+            {!isLoading && !error && patients.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
+                  No clients in this view.
+                </td>
+              </tr>
+            )}
+            {!isLoading &&
+              !error &&
+              patients.map((patient) => (
+                <tr
+                  key={patient.id}
+                  onClick={() => openPatient(patient)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openPatient(patient);
+                    }
+                  }}
+                  tabIndex={0}
+                  className="cursor-pointer border-b border-surface-border last:border-b-0 transition-colors duration-150 hover:bg-brand-green-tint-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
+                >
+                  <td className="px-4 py-3 font-semibold text-ink-900">
+                    <span>{patient.name}</span>
+                    <span className="ml-3 font-mono font-normal text-ink-500">
+                      {patient.client_number || "—"}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink-700">
+                    {patient.age ?? "—"} · {sexLabel(patient.sex)}
+                  </td>
+                  <td className="px-4 py-3 text-ink-700">{settingLabel(patient.setting)}</td>
+                  <td className="px-4 py-3">
+                    <PriorityPill priority={patient.priority} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex rounded-full bg-brand-green-tint px-2.5 py-1 text-xs font-semibold text-brand-green-dark">
+                      {patient.status}
+                    </span>
+                  </td>
+                  <td
+                    className={`px-4 py-3 font-semibold ${
+                      patient.allergies.length || patient.allergy_status === "ACTIVE_ALLERGIES"
+                        ? "text-status-red"
+                        : "text-ink-700"
+                    }`}
+                  >
+                    {allergyLabel(patient)}
+                  </td>
+                  <td className="px-4 py-3 text-ink-700">{patient.responsible_team || "—"}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+
+      {(hasNext || hasPrevious) && (
+        <div className="mt-3 flex items-center justify-end gap-2 text-sm text-ink-700">
+          <button
+            type="button"
+            onClick={() => {
+              setPage((current) => Math.max(1, current - 1));
+            }}
+            disabled={!hasPrevious || isLoading}
+            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-ink-900 transition-colors hover:bg-surface-bg disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span>Page {page}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setPage((current) => current + 1);
+            }}
+            disabled={!hasNext || isLoading}
+            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-ink-900 transition-colors hover:bg-surface-bg disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

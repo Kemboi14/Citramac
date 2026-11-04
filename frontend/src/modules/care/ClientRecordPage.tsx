@@ -5,7 +5,7 @@ import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
 import { MergeHistory } from "./shared/MergeHistory";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
-import { SafetyBanner } from "./shared/SafetyBanner";
+import { SafetyBanner, type BannerOverrides } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
@@ -19,6 +19,7 @@ import { LegalView } from "./record/LegalView";
 import { OutcomesStage } from "./record/OutcomesStage";
 import { SnapshotView } from "./record/SnapshotView";
 import { TimelineView } from "./record/TimelineView";
+import { TriageStage } from "./record/TriageStage";
 import type { RecordViewProps } from "./record/types";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { GroupRecordEntries } from "./groupProgramme/GroupRecordEntries";
@@ -28,6 +29,7 @@ const VIEWS = new Set<string>([
   "timeline",
   "charts",
   "legal",
+  "triage",
   "intake",
   "care-plan",
   "interventions",
@@ -46,6 +48,8 @@ function renderView(view: RecordView, props: RecordViewProps) {
       return <ChartsView {...props} />;
     case "legal":
       return <LegalView {...props} />;
+    case "triage":
+      return <TriageStage {...props} />;
     case "intake":
       return <IntakeStage {...props} />;
     case "care-plan":
@@ -73,6 +77,17 @@ export function ClientRecordPage() {
   const { selected, selectPatient } = usePatientContext();
   const onRecordChanged = useCallback(() => setReloadKey((k) => k + 1), []);
   const [registryOpen, setRegistryOpen] = useState(false);
+  const [bannerOverrideState, setBannerOverrideState] = useState<{
+    patientId: string;
+    view: string;
+    overrides: BannerOverrides | null;
+  } | null>(null);
+  const onSafetyBannerOverridesChange = useCallback(
+    (overrides: BannerOverrides | null) => {
+      setBannerOverrideState({ patientId, view, overrides });
+    },
+    [patientId, view],
+  );
 
   // Keep the older clinical screens pointed at this client.
   const bannerId = banner?.patient_id;
@@ -84,7 +99,7 @@ export function ClientRecordPage() {
     }
   }, [bannerId, bannerName, selectedId, selectPatient]);
 
-  if (!VIEWS.has(view)) return <Navigate to={clientRecordPath(patientId, "intake")} replace />;
+  if (!VIEWS.has(view)) return <Navigate to={clientRecordPath(patientId, "triage")} replace />;
   if (banner && banner.opened_as === patientId) {
     // A temporary record merged into an identified client: open the client.
     return <Navigate to={clientRecordPath(banner.patient_id, view as RecordView)} replace />;
@@ -94,9 +109,15 @@ export function ClientRecordPage() {
 
   let body = null;
   if (loadedBanner) {
-    const props: RecordViewProps = { patientId, banner: loadedBanner, onRecordChanged };
+    const props: RecordViewProps = {
+      patientId,
+      banner: loadedBanner,
+      onRecordChanged,
+      onSafetyBannerOverridesChange,
+    };
     const needsSignedTriage =
       JOURNEY_KEYS.has(active) &&
+      active !== "triage" &&
       active !== "follow-up" &&
       !loadedBanner.latest_signed_triage_encounter_id;
     if (needsSignedTriage) {
@@ -153,7 +174,15 @@ export function ClientRecordPage() {
         onClose={() => setRegistryOpen(false)}
         onConfirmed={onRecordChanged}
       />
-      <SafetyBanner banner={loadedBanner} error={error} />
+      <SafetyBanner
+        banner={loadedBanner}
+        error={error}
+        overrides={
+          bannerOverrideState?.patientId === patientId && bannerOverrideState.view === view
+            ? (bannerOverrideState.overrides ?? undefined)
+            : undefined
+        }
+      />
       <ClientRecordNav patientId={patientId} view={active} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}

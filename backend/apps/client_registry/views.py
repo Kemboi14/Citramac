@@ -12,6 +12,7 @@ from .consent import capture_consent
 from .erasure import execute_erasure
 from .identity import generate_citramac_number
 from .models import (
+    AllergyRecord,
     Appointment,
     Attachment,
     ConsentRecord,
@@ -50,6 +51,154 @@ def _generate_citramac_number(organization, temporary=False):
 
 class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.4 — Module 1."""
+
+    @action(detail=False, methods=["get"], url_path="registry")
+    def registry(self, request):
+        """Read-time registry view over patients and their current care records."""
+        from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
+        from apps.ipd_ward.models import Admission
+        from apps.mhp_program.models import BiopsychosocialAssessment
+
+        patients = list(
+            self.get_queryset()
+            .filter(archived_at__isnull=True, merged_into__isnull=True)
+            .select_related("doctor")
+            .order_by("last_name", "first_name")
+        )
+        patient_ids = [patient.id for patient in patients]
+
+        admissions = {}
+        for admission in (
+            Admission.objects.filter(
+                patient_id__in=patient_ids, status__in=("ADMITTED", "TRANSFERRED")
+            )
+            .select_related("bed__ward", "consultant")
+            .order_by("admitted_at")
+        ):
+            admissions[admission.patient_id] = admission
+
+        episodes = {}
+        for episode in EpisodeOfCare.objects.filter(patient_id__in=patient_ids).select_related(
+            "care_manager"
+        ):
+            if (
+                episode.patient_id not in episodes
+                or episode.period_start > episodes[episode.patient_id].period_start
+            ):
+                episodes[episode.patient_id] = episode
+
+        latest_triage = {}
+        for triage in TriageEncounter.objects.filter(patient_id__in=patient_ids).order_by(
+            "arrival_at"
+        ):
+            latest_triage[triage.patient_id] = triage
+
+        priorities = {}
+        for triage in (
+            TriageEncounter.objects.filter(patient_id__in=patient_ids, triage_version__gt=0)
+            .order_by("last_triaged_at")
+            .values("patient_id", "priority")
+        ):
+            priorities[triage["patient_id"]] = triage["priority"]
+
+        levels_of_care = {}
+        for assessment in (
+            BiopsychosocialAssessment.objects.filter(patient_id__in=patient_ids, status="SUBMITTED")
+            .exclude(level_of_care="")
+            .order_by("created_at")
+            .values("patient_id", "level_of_care")
+        ):
+            levels_of_care[assessment["patient_id"]] = assessment["level_of_care"]
+
+        allergies = {}
+        for allergy in (
+            AllergyRecord.objects.filter(
+                patient_id__in=patient_ids,
+                clinical_status="ACTIVE",
+                allergy_type="ALLERGY",
+            )
+            .exclude(verification_status="REFUTED")
+            .order_by("noted_at")
+        ):
+            allergies.setdefault(allergy.patient_id, []).append(allergy.substance)
+
+        rows = []
+        for patient in patients:
+            admission = admissions.get(patient.id)
+            episode = episodes.get(patient.id)
+            triage = latest_triage.get(patient.id)
+            priority = priorities.get(patient.id) or (
+                admission.clinical_priority if admission else ""
+            )
+            setting = (
+                "INPATIENT"
+                if admission
+                else levels_of_care.get(patient.id) or patient.patient_category
+            )
+            if admission:
+                status_label = "Inpatient"
+            elif triage and triage.status == TriageEncounter.STATUS_AWAITING:
+                status_label = "Awaiting triage"
+            elif triage and triage.status == TriageEncounter.STATUS_IN_TRIAGE:
+                status_label = "In triage"
+            elif episode:
+                status_label = episode.get_status_display()
+            else:
+                status_label = "Active"
+
+            team_parts = []
+            clinician = (
+                (admission.consultant if admission else None)
+                or (episode.care_manager if episode else None)
+                or patient.doctor
+            )
+            if clinician:
+                team_parts.append(clinician.get_full_name())
+            if admission:
+                team_name = admission.primary_care_team or (
+                    f"{admission.bed.ward.name} team" if admission.bed_id else ""
+                )
+                if team_name:
+                    team_parts.append(team_name)
+
+            rows.append(
+                {
+                    "id": str(patient.id),
+                    "name": patient.get_full_name(),
+                    "client_number": patient.uhid_number or patient.citramac_number,
+                    "age": patient.age_years,
+                    "sex": patient.gender,
+                    "setting": setting,
+                    "priority": priority,
+                    "status": status_label,
+                    "allergy_status": patient.allergy_status,
+                    "allergies": allergies.get(patient.id, []),
+                    "responsible_team": " · ".join(team_parts),
+                }
+            )
+
+        total_client_count = len(rows)
+        query = (request.query_params.get("q") or "").strip().casefold()
+        if query:
+            rows = [
+                row
+                for row in rows
+                if query in row["name"].casefold() or query in row["client_number"].casefold()
+            ]
+        category = request.query_params.get("category")
+        if category == "awaiting-triage":
+            rows = [row for row in rows if row["status"] in ("Awaiting triage", "In triage")]
+        elif category == "emergency":
+            rows = [row for row in rows if row["priority"] in ("RED", "ORANGE")]
+        elif category in ("INPATIENT", "OUTPATIENT", "RESIDENTIAL"):
+            rows = [row for row in rows if row["setting"] == category]
+
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            response = self.get_paginated_response(page)
+            response.data["total_count"] = total_client_count
+            return response
+        return Response({"count": len(rows), "total_count": total_client_count, "results": rows})
 
     def get_serializer_class(self):
         return PatientListSerializer if self.action == "list" else PatientDetailSerializer
