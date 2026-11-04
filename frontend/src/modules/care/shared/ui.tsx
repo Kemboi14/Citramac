@@ -25,14 +25,14 @@ export function PageHeader({
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         {eyebrow && (
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+          <div className="text-xs font-semibold uppercase tracking-wider text-ink-700">
             {eyebrow}
           </div>
         )}
         <h1 title={titleTooltip} className="font-display text-xl font-semibold text-ink-900">
           {title}
         </h1>
-        {subtitle && <div className="mt-0.5 text-[12.5px] text-ink-500">{subtitle}</div>}
+        {subtitle && <div className="mt-1 text-[13px] leading-5 text-ink-700">{subtitle}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -57,7 +57,7 @@ export function Card({
       className={`rounded-lg border border-surface-border bg-surface-card shadow-sm ${className}`}
     >
       {title && (
-        <div className="flex items-center justify-between gap-2.5 border-b border-surface-border px-[18px] py-3.5 text-[13px] font-bold text-ink-900">
+        <div className="flex items-center justify-between gap-2.5 border-b border-surface-border px-[18px] py-3.5 text-sm font-bold text-ink-900">
           <span>{title}</span>
           {aside}
         </div>
@@ -97,7 +97,7 @@ export function Field({
         </p>
       ) : (
         hint && (
-          <p id={messageId} className="text-[12px] text-ink-500">
+          <p id={messageId} className="text-[12.5px] leading-5 text-ink-700">
             {hint}
           </p>
         )
@@ -122,7 +122,7 @@ export function Tag({
   return (
     <span
       // eslint-disable-next-line security/detect-object-injection -- `tone` is a fixed prop union.
-      className={`inline-block whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}
+      className={`inline-block max-w-full whitespace-normal rounded-md border px-2 py-1 text-xs font-medium leading-4 ${tones[tone]}`}
     >
       {children}
     </span>
@@ -270,7 +270,7 @@ export function Callout({
   return (
     <div
       role={role}
-      className={`flex gap-2.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 text-[12.5px] text-ink-900 shadow-sm ${className}`}
+      className={`flex gap-2.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-3 text-[13px] leading-5 text-ink-900 shadow-sm ${className}`}
     >
       <t.Icon aria-hidden="true" className={`mt-0.5 h-4 w-4 flex-shrink-0 ${t.icon}`} />
       <div className="min-w-0 flex-1">{children}</div>

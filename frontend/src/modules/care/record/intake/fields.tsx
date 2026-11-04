@@ -123,7 +123,11 @@ export function FieldControl({
   return (
     <div className={`flex min-w-0 flex-col gap-1 ${wide ? wideClass : ""}`}>
       {field.type !== "check" && (
-        <label id={`${id}-label`} htmlFor={id} className={FIELD_LABEL}>
+        <label
+          id={`${id}-label`}
+          htmlFor={id}
+          className={`${FIELD_LABEL} block text-xs leading-5 text-ink-700`}
+        >
           {labelPrefix ? `${labelPrefix} — ` : ""}
           {field.label}
           {field.required && <span className="ml-1 text-priority-red">*</span>}
@@ -136,9 +140,9 @@ export function FieldControl({
       )}
       {control}
       {carriedFrom && (
-        <p className="text-[11px] text-brand-green">✓ Pre-filled from {carriedFrom} — confirm or update</p>
+        <p className="text-xs leading-5 text-brand-green-dark">✓ Pre-filled from {carriedFrom} — confirm or update</p>
       )}
-      {field.hint && <p className="text-[11px] text-ink-500">{field.hint}</p>}
+      {field.hint && <p className="text-xs leading-5 text-ink-700">{field.hint}</p>}
     </div>
   );
 }
@@ -172,7 +176,7 @@ function PillChoices({
         return (
           <label
             key={option.code}
-            className={`inline-flex min-h-[34px] cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors ${tone}`}
+            className={`inline-flex min-h-[36px] max-w-full cursor-pointer items-center gap-2 whitespace-normal break-words rounded-full border px-3 py-1.5 text-[13px] font-medium leading-5 transition-colors ${tone}`}
           >
             <input
               type="checkbox"

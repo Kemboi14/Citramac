@@ -53,7 +53,7 @@ export function SubstanceSection({
   return (
     <div className="flex flex-col gap-3">
       <SchemaSection spec={only(["kind", "screen"])} values={values} vs={vs} onChange={onChange} sources={sources} />
-      <p className="text-[11.5px] text-ink-500">
+      <p className="text-xs leading-5 text-ink-700">
         {auditC?.last ? (
           <>
             AUDIT-C:{" "}
@@ -72,9 +72,9 @@ export function SubstanceSection({
         )}
       </p>
       <div className={GROUP_LABEL}>
-        Substances used <span className="font-normal normal-case text-ink-500">— one card per substance</span>
+        Substances used         <span className="font-normal normal-case text-ink-700">— one card per substance</span>
       </div>
-      {cards.length === 0 && <p className="text-[13px] text-ink-500">No substances recorded yet.</p>}
+      {cards.length === 0 && <p className="text-[13px] leading-5 text-ink-700">No substances recorded yet.</p>}
       {cards.map((card, index) => (
         <section key={card.substance} className="rounded-lg border border-surface-border p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -105,7 +105,7 @@ export function SubstanceSection({
         </section>
       ))}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex min-w-[220px] flex-col gap-1 text-[11px] font-semibold uppercase text-ink-500">
+        <label className="flex min-w-[220px] flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-ink-700">
           Add a substance
           <SelectChoices
             options={vs.options("intake-substance-rows").filter((o) => !shown.has(o.code))}

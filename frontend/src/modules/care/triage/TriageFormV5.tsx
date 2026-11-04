@@ -732,7 +732,7 @@ export function TriageFormV5({
     a("k_emergency") === "no" && (a("k_bring") === "no" || a("k_bring") === "uncertain");
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="clinical-readable mx-auto max-w-[1600px]">
       <Breadcrumbs
         items={[
           { label: "Triage", to: "/clinical/triage" },

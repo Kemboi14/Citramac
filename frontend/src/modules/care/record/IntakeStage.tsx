@@ -308,7 +308,7 @@ function IntakeWorkspace({
   ];
 
   return (
-    <div ref={topRef}>
+    <div ref={topRef} className="mx-auto max-w-screen-2xl space-y-4">
       <PageHeader
         title="Intake & Clinical Assessment"
         subtitle={`Version ${initial.version} · Registration and Triage data pre-populated — confirm or update, don’t re-ask`}
@@ -371,19 +371,27 @@ function IntakeWorkspace({
       />
 
       <div
-        className={`grid grid-cols-1 items-start gap-4 lg:grid-cols-[250px_1fr] ${
-          showTrail ? "2xl:grid-cols-[250px_1fr_300px]" : ""
+        className={`grid grid-cols-1 items-start gap-4 xl:grid-cols-[248px_minmax(0,1fr)] ${
+          showTrail ? "2xl:grid-cols-[248px_minmax(0,1fr)_300px]" : ""
         }`}
       >
-        <nav aria-label="Intake sections" className="flex flex-col gap-3">
+        <nav
+          aria-label="Intake sections"
+          className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
+        >
+          <div className="border-b border-surface-border px-2 pb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Assessment sections</p>
+            <p className="mt-1 text-[12px] text-ink-500">Select a section to review or update</p>
+          </div>
           {groups.map(([title, specs]) => {
             const done = specs.filter((s) => ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? "")).length;
             return (
-              <details key={title} open={title.startsWith("Core") || !spec.core}>
-                <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-ink-500">
-                  {title} · {done}/{specs.length}
+              <details key={title} open={title.startsWith("Core") || !spec.core} className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 hover:bg-surface-bg">
+                  <span>{title}</span>
+                  <span className="rounded-full bg-surface-bg px-2 py-0.5 tabular-nums">{done}/{specs.length}</span>
                 </summary>
-                <ul className="mt-1 flex flex-col gap-0.5">
+                <ul className="mt-1 flex flex-col gap-1">
                   {specs.map((s) => {
                     const st = (states[s.key] ?? meta.overview[s.key] ?? "Not started") as IntakeSectionState;
                     const mark = STATE_MARK[st];
@@ -394,12 +402,23 @@ function IntakeWorkspace({
                           aria-current={current === s.key}
                           aria-label={`${s.core ? "" : `Section ${s.n} · `}${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
                           onClick={() => go(s.key)}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] ${
-                            current === s.key ? "bg-brand-green-tint font-semibold text-brand-green-dark" : "text-ink-900 hover:bg-surface-bg"
+                          className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
+                            current === s.key
+                              ? "border-brand-green/30 bg-brand-green-tint font-semibold text-brand-green-dark"
+                              : "border-transparent text-ink-900 hover:border-surface-border hover:bg-surface-bg"
                           }`}
                         >
-                          <span aria-hidden className="w-4 text-center">{mark.glyph}</span>
-                          <span className="flex-1">
+                          <span
+                            aria-hidden
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                              st === "Complete" || st === "Not applicable"
+                                ? "bg-brand-green-tint font-semibold text-brand-green-dark"
+                                : "bg-surface-bg text-ink-500"
+                            }`}
+                          >
+                            {mark.glyph}
+                          </span>
+                          <span className="min-w-0 flex-1 leading-snug">
                             {s.title}
                             {s.required && <span className="ml-0.5 text-priority-red">*</span>}
                           </span>
@@ -415,6 +434,7 @@ function IntakeWorkspace({
 
         <div className="min-w-0">
           <Card
+            className="overflow-hidden rounded-xl"
             title={
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span>

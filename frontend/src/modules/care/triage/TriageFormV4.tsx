@@ -661,7 +661,7 @@ export function TriageFormV4({
   const ss = String(elapsed % 60).padStart(2, "0");
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="clinical-readable mx-auto max-w-[1600px]">
       <Breadcrumbs
         items={[
           { label: "Triage", to: "/clinical/triage" },

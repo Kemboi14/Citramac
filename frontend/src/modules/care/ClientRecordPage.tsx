@@ -111,7 +111,7 @@ export function ClientRecordPage() {
   }
 
   return (
-    <div>
+    <div className="clinical-readable">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <Breadcrumbs
           items={[

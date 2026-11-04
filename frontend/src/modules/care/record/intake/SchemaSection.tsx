@@ -45,7 +45,11 @@ export function SchemaSection({
     <div>
       {groups.map((group, index) => (
         <div key={`${group.name}-${index}`}>
-          {group.name && <div className={GROUP_LABEL}>{group.name}</div>}
+          {group.name && (
+            <div className={`${GROUP_LABEL} text-xs leading-5 text-ink-700`}>
+              {group.name}
+            </div>
+          )}
           <div className={GRID}>
             {group.fields.map((field) => {
               // eslint-disable-next-line security/detect-object-injection -- schema key.

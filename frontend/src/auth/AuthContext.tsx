@@ -27,11 +27,7 @@ const KEEPALIVE_EVERY_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
 
 function inactivityMessage(firstName: string | undefined): string {
-  const who = firstName?.trim() ? `${firstName.trim()}, you were` : "You were";
-  return (
-    `${who} signed out because there was no activity for a while. This keeps client ` +
-    "records safe on an unattended screen. Sign in again to carry on where you left off."
-  );
+  return "Session Timeout. Please sign in again.";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

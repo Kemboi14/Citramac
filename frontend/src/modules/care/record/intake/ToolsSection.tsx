@@ -72,7 +72,7 @@ export function ToolsSection({
 
   if (!tools) return error ? <ErrorNote>{error}</ErrorNote> : <p className="text-[13px] text-ink-500">Loading…</p>;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Callout>
         <strong>Findings recommend the tool — you confirm, start it anyway, or decline.</strong> No
         searching an assessment library. Scores are stored once and flow into the Care Plan and
@@ -82,28 +82,32 @@ export function ToolsSection({
       {tools.map((tool) => {
         const def = defs.find((d) => d.code === tool.key);
         return (
-          <div key={tool.key} className="rounded-lg border border-surface-border p-3" data-status={tool.status}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-semibold text-ink-900">{tool.name}</span>
-              <Tag tone={TONE[tool.status]}>{tool.status}</Tag>
-              {tool.last && (
-                <Tag>
-                  {tool.last.score} · {tool.last.band}
-                </Tag>
-              )}
+          <article
+            key={tool.key}
+            className="rounded-xl border border-surface-border bg-surface-card p-4 shadow-sm sm:p-5"
+            data-status={tool.status}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-[14px] font-semibold leading-5 text-ink-900">{tool.name}</h3>
+                {tool.why.length > 0 && (
+                  <p className="mt-1 text-[12px] leading-5 text-ink-500">
+                    <strong className="font-semibold text-ink-700">Reason triggered:</strong> {tool.why.join(" · ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {tool.last && <Tag>{tool.last.score} · {tool.last.band}</Tag>}
+                <Tag tone={TONE[tool.status]}>{tool.status}</Tag>
+              </div>
             </div>
-            {tool.why.length > 0 && (
-              <p className="mt-1 text-[12px] text-ink-500">
-                <strong>Reason triggered:</strong> {tool.why.join(" · ")}
-              </p>
-            )}
-            {tool.note && <p className="mt-1 text-[12px] text-ink-500">{tool.note}</p>}
+            {tool.note && <p className="mt-2 text-[12px] leading-5 text-ink-500">{tool.note}</p>}
             {tool.decision?.status === "DECLINED" && (
-              <p className="mt-1 text-[12px] text-ink-500">
+              <p className="mt-2 text-[12px] leading-5 text-ink-500">
                 Declined by {tool.decision.by} — “{tool.decision.reason}”
               </p>
             )}
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
               {["Recommended", "Not indicated"].includes(tool.status) && def && (
                 <button type="button" className={`${tool.status === "Recommended" ? BTN : BTN_GHOST} ${BTN_SM}`} onClick={() => void decide(tool.key, "ACCEPTED")}>
                   {tool.status === "Recommended" ? "Accept & open" : "Start anyway"}
@@ -131,7 +135,7 @@ export function ToolsSection({
               )}
             </div>
             {declining === tool.key && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <input className={`${INPUT} max-w-md`} aria-label="Reason for declining" placeholder="Reason for declining (required — clinical judgement)" value={reason} onChange={(e) => setReason(e.target.value)} />
                 <button type="button" className={`${BTN} ${BTN_SM}`} disabled={reason.trim().length < 5} onClick={() => void decide(tool.key, "DECLINED", reason)}>
                   Confirm decline
@@ -152,7 +156,7 @@ export function ToolsSection({
                 }}
               />
             )}
-          </div>
+          </article>
         );
       })}
     </div>

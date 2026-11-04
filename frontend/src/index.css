@@ -103,6 +103,18 @@ body {
   }
 }
 
+/* Keep dense clinical workflows readable without changing their layout or data. */
+.clinical-readable [class~="text-[10px]"],
+.clinical-readable [class~="text-[11px]"],
+.clinical-readable [class~="text-[11.5px]"] {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clinical-readable [class~="text-ink-500"] {
+  color: var(--ink-700);
+}
+
 /* Slim, theme-aware scrollbars. */
 * {
   scrollbar-width: thin;
