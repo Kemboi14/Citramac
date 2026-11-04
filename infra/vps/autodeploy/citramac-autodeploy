@@ -1,0 +1,242 @@
+#!/usr/bin/env bash
+# Citramac VPS auto-deploy.
+#
+# Run every few minutes by citramac-autodeploy.timer, as root, on the k3s VPS.
+# Deploys the newest master commit whose GitHub "CI" workflow passed. The
+# server asks GitHub (the repo is public, so no credential is involved);
+# nothing outside can log in to the server or trigger a deploy.
+#
+# One deploy, in order — any failure stops it and leaves the old version running:
+#   1. Fast-forward the checkout to the green commit (never backwards).
+#   2. Build changed images as :candidate and import them into k3s.
+#   3. Backend: if the candidate has unapplied migrations, pg_dump the
+#      database, then migrate with the migration role. A failed migration
+#      stops here; the running pods are untouched.
+#   4. Promote :candidate to :latest (the old :latest becomes :previous),
+#      kubectl apply the VPS overlay, restart, wait for the rollout.
+#   5. Health check. If the rollout or health check fails, roll back to
+#      :previous. Migrations already applied stay applied (logged loudly).
+#
+# A commit that fails is recorded and not retried; the next green commit is.
+# Manual control:  citramac-autodeploy status | pause | resume | run
+set -Eeuo pipefail
+
+CONF=/etc/citramac-autodeploy.env
+# shellcheck source=/dev/null
+[[ -f $CONF ]] && . "$CONF"
+REPO_SLUG=${REPO_SLUG:-Kemboi14/Citramac}
+CI_WORKFLOW=${CI_WORKFLOW:-ci.yml}
+APP_DIR=${APP_DIR:-/opt/citramac/app}
+APP_USER=${APP_USER:-citramac}
+NAMESPACE=${NAMESPACE:-citramac}
+API_BASE_URL=${API_BASE_URL:-https://demo.citramac.com/api/v1}
+HEALTH_URL=${HEALTH_URL:-https://demo.citramac.com/healthz}
+BACKUP_DIR=${BACKUP_DIR:-/opt/citramac}
+KEEP_BACKUPS=${KEEP_BACKUPS:-14}
+STATE_DIR=${STATE_DIR:-/var/lib/citramac-autodeploy}
+LIB_DIR=${LIB_DIR:-/usr/local/lib/citramac-autodeploy}
+LOCK_FILE=${LOCK_FILE:-/run/citramac-autodeploy.lock}
+
+mkdir -p "$STATE_DIR"
+chmod 700 "$STATE_DIR"
+
+log() { echo "[autodeploy] $*"; }
+git_app() { runuser -u "$APP_USER" -- git -C "$APP_DIR" "$@"; }
+k() { kubectl -n "$NAMESPACE" "$@"; }
+deployed_sha() { cat "$STATE_DIR/deployed" 2>/dev/null || git_app rev-parse HEAD; }
+
+record_result() { # <sha> <ok|failed|rolled-back> <message>
+  printf '%s %s %s %s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >>"$STATE_DIR/history"
+  printf '%s %s %s %s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >"$STATE_DIR/last_result"
+}
+
+case ${1:-run} in
+  status)
+    echo "deployed:    $(deployed_sha)"
+    echo "last result: $(cat "$STATE_DIR/last_result" 2>/dev/null || echo none)"
+    [[ -e $STATE_DIR/failed ]] && echo "not retried: $(cat "$STATE_DIR/failed")"
+    [[ -e $STATE_DIR/paused ]] && echo "PAUSED since $(cat "$STATE_DIR/paused")"
+    exit 0
+    ;;
+  pause)
+    date -u +%FT%TZ >"$STATE_DIR/paused"
+    log "paused — no deploys until 'citramac-autodeploy resume'"
+    exit 0
+    ;;
+  resume)
+    rm -f "$STATE_DIR/paused"
+    log "resumed"
+    exit 0
+    ;;
+  run) ;;
+  *)
+    echo "usage: citramac-autodeploy [run|status|pause|resume]" >&2
+    exit 2
+    ;;
+esac
+
+# One deploy at a time; a tick that finds one running just exits.
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+[[ -e $STATE_DIR/paused ]] && exit 0
+
+deployed=$(deployed_sha)
+
+# Cheap check first: ls-remote is not rate-limited; the API is (60/h unauthenticated).
+remote_head=$(git_app ls-remote origin refs/heads/master | cut -f1)
+[[ -n $remote_head && $remote_head != "$deployed" ]] || exit 0
+
+target=$(
+  curl -fsS --max-time 20 -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$REPO_SLUG/actions/workflows/$CI_WORKFLOW/runs?branch=master&event=push&status=success&per_page=1" |
+    python3 -c 'import json,sys; r=json.load(sys.stdin)["workflow_runs"]; print(r[0]["head_sha"] if r else "")'
+)
+[[ -n $target && $target != "$deployed" ]] || exit 0
+[[ $target != "$(cat "$STATE_DIR/failed" 2>/dev/null)" ]] || exit 0
+
+git_app fetch -q origin master
+if ! git_app merge-base --is-ancestor "$target" origin/master; then
+  log "green commit $target is not on master; skipping"
+  exit 0
+fi
+if ! git_app merge-base --is-ancestor "$deployed" "$target"; then
+  log "REFUSED: $target does not descend from the deployed $deployed (history rewritten?). Deploy by hand."
+  echo "$target" >"$STATE_DIR/failed"
+  record_result "$target" failed "not a fast-forward from $deployed"
+  exit 1
+fi
+if [[ -n $(git_app status --porcelain --untracked-files=no) ]]; then
+  log "REFUSED: $APP_DIR has local changes; not touching it"
+  exit 1
+fi
+
+on_error() {
+  log "FAILED unexpectedly at line $1 while deploying $target — check 'journalctl -u citramac-autodeploy'"
+  echo "$target" >"$STATE_DIR/failed"
+  record_result "$target" failed "unexpected error at line $1"
+}
+trap 'on_error $LINENO' ERR
+
+log "deploying $deployed -> $target ($(git_app log -1 --format=%s "$target"))"
+changed=$(git_app diff --name-only "$deployed" "$target")
+backend=false frontend=false
+grep -q '^backend/' <<<"$changed" && backend=true
+grep -q '^frontend/' <<<"$changed" && frontend=true
+components=()
+$backend && components+=(backend)
+$frontend && components+=(frontend)
+
+git_app merge -q --ff-only "$target"
+
+fail() { # <message> — before anything live changed
+  log "FAILED: $1 — the running version ($deployed) is untouched"
+  git_app reset -q --keep "$deployed" || true
+  echo "$target" >"$STATE_DIR/failed"
+  record_result "$target" failed "$1"
+  exit 1
+}
+
+import_image() { docker save "$1" | k3s ctr images import - >/dev/null; }
+
+run_pod() { # <check|migrate> -> 0 pod succeeded, 1 pod failed, 2 could not run it
+  local mode=$1 name overrides phase=""
+  name="autodeploy-$1-$(date +%s)"
+  overrides=$(k get deploy citramac-backend -o json |
+    python3 "$LIB_DIR/pod_overrides.py" citramac-backend:candidate "$mode") || return 2
+  k run "$name" --image=citramac-backend:candidate --restart=Never --overrides="$overrides" >/dev/null ||
+    return 2
+  for _ in $(seq 1 180); do # up to 15 minutes
+    phase=$(k get pod "$name" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+    [[ $phase == Succeeded || $phase == Failed ]] && break
+    sleep 5
+  done
+  k logs "$name" 2>&1 | tail -40 | sed "s/^/[$mode] /"
+  k delete pod "$name" --wait=false >/dev/null 2>&1 || true
+  case $phase in
+    Succeeded) return 0 ;;
+    Failed) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# 2. Build candidates.
+$backend && { docker build -q -t citramac-backend:candidate "$APP_DIR/backend" >/dev/null || fail "backend image build failed"; }
+$frontend && {
+  docker build -q --build-arg "VITE_API_BASE_URL=$API_BASE_URL" -t citramac-frontend:candidate "$APP_DIR/frontend" >/dev/null ||
+    fail "frontend image build failed"
+}
+for c in "${components[@]}"; do import_image "citramac-$c:candidate"; done
+
+# 3. Migrations: back up first, then migrate with the migration role.
+migrated=false
+check=0
+if $backend; then run_pod check || check=$?; fi
+[[ $check -ne 2 ]] || fail "could not run the migration check pod"
+if [[ $check -eq 1 ]]; then
+  dump="$BACKUP_DIR/backup-autodeploy-$(date +%Y%m%d-%H%M%S)-${target:0:7}.sql"
+  log "unapplied migrations — backing up the database to $dump"
+  (
+    umask 077
+    k exec deploy/citramac-postgres -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner' >"$dump"
+  ) || fail "database backup failed, so migrations were not run"
+  [[ -s $dump ]] || fail "database backup is empty, so migrations were not run"
+  run_pod migrate || fail "migration failed or could not run (backup: $dump); check django_migrations before retrying"
+  migrated=true
+  log "migrations applied"
+  # Prune only this script's own dumps; hand-made backups are never touched.
+  find "$BACKUP_DIR" -maxdepth 1 -name 'backup-autodeploy-*.sql' -printf '%T@ %p\n' | sort -rn |
+    tail -n +$((KEEP_BACKUPS + 1)) | cut -d' ' -f2- | xargs -r rm -f
+fi
+
+# 4. Promote and roll out.
+for c in "${components[@]}"; do
+  docker image inspect "citramac-$c:latest" >/dev/null 2>&1 && docker tag "citramac-$c:latest" "citramac-$c:previous"
+  docker tag "citramac-$c:candidate" "citramac-$c:latest"
+  import_image "citramac-$c:latest"
+done
+
+deployments=()
+$backend && deployments+=(citramac-backend citramac-celery-worker citramac-celery-beat)
+$frontend && deployments+=(citramac-frontend)
+
+rollout() {
+  k apply -k "$APP_DIR/infra/k8s/overlays/vps" >/dev/null || return 1
+  for d in "${deployments[@]}"; do k rollout restart "deployment/$d" >/dev/null || return 1; done
+  for d in "${deployments[@]}"; do k rollout status "deployment/$d" --timeout=5m >/dev/null || return 1; done
+}
+
+healthy() {
+  for _ in $(seq 1 12); do
+    curl -fsS --max-time 10 -o /dev/null "$HEALTH_URL" && return 0
+    sleep 5
+  done
+  return 1
+}
+
+if rollout && healthy; then
+  echo "$target" >"$STATE_DIR/deployed"
+  rm -f "$STATE_DIR/failed"
+  record_result "$target" ok "$(git_app log -1 --format=%s "$target")"
+  log "deployed $target"
+  exit 0
+fi
+
+# 5. Roll back the images; the schema cannot be rolled back automatically.
+log "ROLLOUT OR HEALTH CHECK FAILED for $target — rolling back to $deployed"
+for c in "${components[@]}"; do
+  if docker image inspect "citramac-$c:previous" >/dev/null 2>&1; then
+    docker tag "citramac-$c:previous" "citramac-$c:latest"
+    import_image "citramac-$c:latest"
+  fi
+done
+git_app reset -q --keep "$deployed" || true
+k apply -k "$APP_DIR/infra/k8s/overlays/vps" >/dev/null || true
+for d in "${deployments[@]}"; do k rollout restart "deployment/$d" >/dev/null || true; done
+for d in "${deployments[@]}"; do k rollout status "deployment/$d" --timeout=5m >/dev/null || true; done
+echo "$target" >"$STATE_DIR/failed"
+msg="rollout/health failed; rolled back to $deployed"
+$migrated && msg="$msg — MIGRATIONS FROM $target REMAIN APPLIED (backup $dump); old code is running on the new schema"
+record_result "$target" rolled-back "$msg"
+log "$msg"
+if healthy; then log "previous version is healthy"; else log "PREVIOUS VERSION IS ALSO UNHEALTHY — needs a person now"; fi
+exit 1

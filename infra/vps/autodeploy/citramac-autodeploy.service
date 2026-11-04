@@ -1,0 +1,14 @@
+[Unit]
+Description=Citramac auto-deploy (newest master commit whose CI passed)
+After=network-online.target k3s.service docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/citramac-autodeploy run
+Environment=KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# A deploy with image builds and migrations can take a while; never two at once
+# (the script also holds a lock).
+TimeoutStartSec=45min
+Nice=5

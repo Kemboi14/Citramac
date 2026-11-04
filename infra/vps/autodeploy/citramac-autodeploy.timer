@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a new green Citramac master commit every 3 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=3min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

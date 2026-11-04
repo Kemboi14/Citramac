@@ -23,7 +23,10 @@ env:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success'
+    # The AWS/EKS pipeline is not provisioned (no AWS account or secrets); the live
+    # VPS deploys itself from green CI (infra/vps/autodeploy). Set the repository
+    # variable AWS_PIPELINE_ENABLED=true once EKS exists.
+    if: vars.AWS_PIPELINE_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: staging
     steps:
