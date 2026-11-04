@@ -26,7 +26,7 @@ export type { LoginOutcome };
 const KEEPALIVE_EVERY_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
 
-function inactivityMessage(firstName: string | undefined): string {
+function inactivityMessage(_firstName: string | undefined): string {
   return "Session Timeout. Please sign in again.";
 }
 
