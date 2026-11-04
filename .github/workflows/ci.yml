@@ -36,7 +36,10 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DJANGO_SECRET_KEY: ci-test-key-not-secret # pragma: allowlist secret
-      DATABASE_URL: postgres://citramac:citramac@localhost:5432/citramac
+      # Tests connect as a NON-superuser, like production (citramac_app): Postgres
+      # superusers bypass row-level security, so the tenant-isolation tests
+      # silently passed nothing while CI ran as the container's superuser.
+      DATABASE_URL: postgres://citramac_app:citramac@localhost:5432/citramac # pragma: allowlist secret
       REDIS_URL: redis://localhost:6379/0
     defaults:
       run:
@@ -51,6 +54,15 @@ jobs:
           cache-dependency-path: backend/requirements/dev.txt
 
       - run: pip install -r requirements/dev.txt
+
+      - name: Create the non-superuser app role (RLS applies to it)
+        env:
+          PGPASSWORD: citramac # pragma: allowlist secret
+        run: |
+          psql -h localhost -U citramac -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE citramac_app LOGIN PASSWORD 'citramac' NOSUPERUSER NOBYPASSRLS CREATEDB" \
+            -c "ALTER DATABASE citramac OWNER TO citramac_app"
+          psql -h localhost -U citramac -d citramac -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO citramac_app"
 
       - name: Lint (black, isort, ruff)
         run: |
