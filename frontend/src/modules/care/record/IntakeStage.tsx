@@ -444,7 +444,7 @@ function IntakeWorkspace({
                         <button
                           type="button"
                           aria-current={current === s.key}
-                          aria-label={`${s.core ? "" : `Section ${s.n} · `}${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
+                          aria-label={`Section ${s.n} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
                           onClick={() => go(s.key)}
                           className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                             current === s.key
@@ -454,6 +454,16 @@ function IntakeWorkspace({
                         >
                           <span
                             aria-hidden
+                            className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-surface-bg px-1 text-[11px] font-semibold tabular-nums text-ink-700"
+                          >
+                            {s.n}
+                          </span>
+                          <span className="min-w-0 flex-1 leading-snug">
+                            {s.title}
+                            {s.required && <span className="ml-0.5 text-priority-red">*</span>}
+                          </span>
+                          <span
+                            aria-hidden
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
                               st === "Complete" || st === "Not applicable"
                                 ? "bg-brand-green-tint font-semibold text-brand-green-dark"
@@ -461,10 +471,6 @@ function IntakeWorkspace({
                             }`}
                           >
                             {mark.glyph}
-                          </span>
-                          <span className="min-w-0 flex-1 leading-snug">
-                            {s.title}
-                            {s.required && <span className="ml-0.5 text-priority-red">*</span>}
                           </span>
                         </button>
                       </li>
