@@ -108,7 +108,11 @@ export function MseSection({
         </label>
       </div>
       {/* Mockup `.msedom`: label | structured options | notes on one row at desktop width. */}
-      <ul className="flex flex-col divide-y divide-surface-border border-b border-surface-border">
+      <ul
+        id="intake-mse-required"
+        tabIndex={-1}
+        className="flex flex-col divide-y divide-surface-border border-b border-surface-border"
+      >
         {schema.mseDomains.map((domain) => (
           <li
             key={domain.key}

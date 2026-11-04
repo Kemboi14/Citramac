@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
@@ -199,6 +199,7 @@ function IntakeWorkspace({
     initial.status === "SIGNED" ? initial : null,
   );
   const [signing, setSigning] = useState(false);
+  const [checkingSection, setCheckingSection] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPrevious, setShowPrevious] = useState(false);
   const [listVersion, setListVersion] = useState(0);
@@ -274,23 +275,54 @@ function IntakeWorkspace({
   const stateOf = (key: string) =>
     (states[key] ?? meta.overview[key] ?? "Not started") as IntakeSectionState;
 
-  const go = (key: string) => {
+  const go = async (key: string): Promise<boolean> => {
+    if (key === current) return true;
+    if (checkingSection) return false;
+    if (!signed && (spec.required || outstandingForSection(meta.outstanding, spec).length > 0)) {
+      if (!accessToken) {
+        setError("Couldn't verify the required items. Stay in this section and try again.");
+        return false;
+      }
+      setCheckingSection(true);
+      setError(null);
+      try {
+        const latest = await saveIntakeDraft(accessToken, patientId, payload);
+        setMeta({ outstanding: latest.outstanding_now, overview: latest.section_overview });
+        autosave.markSaved(payload);
+        const missing = outstandingForSection(latest.outstanding_now, spec);
+        if (missing.length && key !== "close") return false;
+      } catch (e) {
+        setError(errorText(e, "Couldn't verify this section. Stay here and try again."));
+        return false;
+      } finally {
+        setCheckingSection(false);
+      }
+    }
     setCurrent(key);
     topRef.current?.scrollIntoView({ block: "start" });
+    return true;
+  };
+  const goToTarget = async (key: string, targetId: string) => {
+    if (!(await go(key))) return;
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
   };
   const index = schema.sections.findIndex((s) => s.key === spec.key);
   const prevSpec = index > 0 ? schema.sections[index - 1] : null;
   const nextSpec = index < schema.sections.length - 1 ? schema.sections[index + 1] : null;
   // Mark done, then move on to the next section of the same group that is not yet
   // complete (mockup: "Mark Section N done").
-  const markDone = () => {
-    setState("Complete");
+  const markDone = async () => {
     const after = schema.sections.slice(index + 1);
     const target =
       after.find(
         (s) => s.core === spec.core && !["Complete", "Not applicable"].includes(stateOf(s.key)),
       ) ?? nextSpec;
-    if (target) go(target.key);
+    if (target && !(await go(target.key))) return;
+    setState("Complete");
   };
   const sectionName = (s: IntakeSectionSpec) => `Section ${s.n}`;
   const saveState = signed
@@ -308,7 +340,12 @@ function IntakeWorkspace({
     setSigning(true);
     setError(null);
     try {
-      await saveIntakeDraft(accessToken, patientId, payload);
+      const savedDraft = await saveIntakeDraft(accessToken, patientId, payload);
+      setMeta({
+        outstanding: savedDraft.outstanding_now,
+        overview: savedDraft.section_overview,
+      });
+      autosave.markSaved(payload);
       const result = await signIntake(accessToken, patientId, completeness);
       setSigned(result);
       setListVersion((v) => v + 1);
@@ -318,6 +355,9 @@ function IntakeWorkspace({
       const outstanding = Array.isArray(fields?.outstanding)
         ? (fields?.outstanding as string[])
         : [];
+      if (outstanding.length) {
+        setMeta((previousMeta) => ({ ...previousMeta, outstanding }));
+      }
       setError(
         outstanding.length
           ? `${errorText(e, "Can't sign.")} Outstanding: ${outstanding.join("; ")}`
@@ -443,9 +483,10 @@ function IntakeWorkspace({
                       <li key={s.key}>
                         <button
                           type="button"
+                          disabled={checkingSection}
                           aria-current={current === s.key}
                           aria-label={`Section ${s.n} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
-                          onClick={() => go(s.key)}
+                          onClick={() => void go(s.key)}
                           className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                             current === s.key
                               ? "border-brand-green/30 bg-brand-green-tint font-semibold text-brand-green-dark"
@@ -532,24 +573,41 @@ function IntakeWorkspace({
               ) : undefined
             }
           >
-            <fieldset disabled={Boolean(signed)} className="min-w-0 border-0 p-0">
-              <SectionBody
-                spec={spec}
+            {checkingSection && (
+              <p role="status" aria-live="polite" className="mb-3 text-xs text-ink-500">
+                Checking required items…
+              </p>
+            )}
+            {!signed && outstandingForSection(meta.outstanding, spec).length > 0 && (
+              <OutstandingAlert
+                title="Complete these items before leaving this section"
+                items={outstandingForSection(meta.outstanding, spec)}
                 schema={schema}
-                patientId={patientId}
-                encounterId={banner.psychiatry_encounter_id}
-                values={values}
-                vs={vs}
-                onChange={onChange}
-                onPatch={(changes) => patch(spec.key, changes)}
-                draft={initial}
-                meta={meta}
-                onSign={sign}
-                signing={signing}
-                onRecordChanged={onRecordChanged}
-                toolRows={toolRows}
-                onOpenTools={() => go("tools")}
+                className="mb-2"
+                onGoToTarget={(key, targetId) => void goToTarget(key, targetId)}
               />
+            )}
+            <fieldset disabled={Boolean(signed)} className="min-w-0 border-0 p-0">
+              <div id={`intake-section-${spec.key}`} tabIndex={-1}>
+                <SectionBody
+                  spec={spec}
+                  schema={schema}
+                  patientId={patientId}
+                  encounterId={banner.psychiatry_encounter_id}
+                  values={values}
+                  vs={vs}
+                  onChange={onChange}
+                  onPatch={(changes) => patch(spec.key, changes)}
+                  draft={initial}
+                  meta={meta}
+                  onSign={sign}
+                  signing={signing}
+                  onGoToTarget={goToTarget}
+                  onRecordChanged={onRecordChanged}
+                  toolRows={toolRows}
+                  onOpenTools={() => go("tools")}
+                />
+              </div>
             </fieldset>
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
               <span role="status" className="mr-auto text-xs text-ink-500">
@@ -558,22 +616,29 @@ function IntakeWorkspace({
               {prevSpec && (
                 <button
                   type="button"
+                  disabled={checkingSection}
                   className={`${BTN_GHOST} ${BTN_SM}`}
-                  onClick={() => go(prevSpec.key)}
+                  onClick={() => void go(prevSpec.key)}
                 >
                   ← {sectionName(prevSpec)}
                 </button>
               )}
               {!signed && spec.key !== "close" && stateOf(spec.key) !== "Complete" && (
-                <button type="button" className={`${BTN} ${BTN_SM}`} onClick={markDone}>
-                  ✓ Mark Section {spec.n} done
+                <button
+                  type="button"
+                  disabled={checkingSection}
+                  className={`${BTN} ${BTN_SM}`}
+                  onClick={() => void markDone()}
+                >
+                  {checkingSection ? "Checking required items…" : `✓ Mark Section ${spec.n} done`}
                 </button>
               )}
               {nextSpec && (
                 <button
                   type="button"
+                  disabled={checkingSection}
                   className={`${BTN_GHOST} ${BTN_SM}`}
-                  onClick={() => go(nextSpec.key)}
+                  onClick={() => void go(nextSpec.key)}
                 >
                   {sectionName(nextSpec)} →
                 </button>
@@ -586,6 +651,117 @@ function IntakeWorkspace({
             <InformationTrail patientId={patientId} version={listVersion} />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function outstandingForSection(items: string[], spec: IntakeSectionSpec) {
+  return items.filter((item) => item.startsWith(`Section ${spec.n} `));
+}
+
+const OUTSTANDING_TARGETS = [
+  {
+    match: "Presenting concern in the client’s own words",
+    targetId: "intake-pres-own",
+  },
+  {
+    match: "Confirm or clear each carried-forward triage finding",
+    targetId: "intake-required-risk-carried",
+  },
+  {
+    match: "Sign the structured risk formulation",
+    targetId: "intake-required-risk-formulation",
+  },
+  {
+    match: "Medication list",
+    targetId: "intake-meds-none",
+  },
+  {
+    match: "Allergy status",
+    targetId: "intake-allergy-status",
+  },
+  {
+    match: "MSE",
+    targetId: "intake-mse-required",
+  },
+  {
+    match: "coded working diagnosis",
+    targetId: "intake-required-diagnosis",
+  },
+  {
+    match: "recommended tools",
+    targetId: "intake-required-tools",
+  },
+];
+
+function outstandingTarget(item: string, schema: IntakeSchema) {
+  const sectionNumber = /^Section (\S+)/.exec(item)?.[1];
+  const section = schema.sections.find((candidate) => candidate.n === sectionNumber);
+  const detail = OUTSTANDING_TARGETS.find((candidate) => item.includes(candidate.match));
+  return section
+    ? { sectionKey: section.key, targetId: detail?.targetId ?? `intake-section-${section.key}` }
+    : null;
+}
+
+function OutstandingAlert({
+  title,
+  items,
+  schema,
+  className = "",
+  onGoToTarget,
+}: {
+  title: string;
+  items: string[];
+  schema: IntakeSchema;
+  className?: string;
+  onGoToTarget: (key: string, targetId: string) => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className={`flex items-start gap-2 rounded-lg border border-status-amber/30 bg-status-amber-tint px-3 py-2 text-[12px] leading-5 text-ink-900 ${className}`}
+    >
+      <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-status-amber" />
+      <div className="min-w-0">
+        <p className="font-semibold">{title}</p>
+        <ul className="mt-0.5">
+          {items.map((item) => {
+            const target = outstandingTarget(item, schema);
+            return (
+              <li key={item}>
+                {target ? (
+                  <a
+                    href={`#${target.targetId}`}
+                    className="font-medium text-brand-green-dark underline decoration-brand-green/50 underline-offset-2 hover:decoration-brand-green"
+                    aria-label={`Review: ${item}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onGoToTarget(target.sectionKey, target.targetId);
+                    }}
+                  >
+                    {item}
+                  </a>
+                ) : (
+                  item
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-1 text-ink-700">
+          Unable to complete now?{" "}
+          <a
+            href="#intake-section-close"
+            className="font-medium text-brand-green-dark underline decoration-brand-green/50 underline-offset-2 hover:decoration-brand-green"
+            onClick={(event) => {
+              event.preventDefault();
+              onGoToTarget("close", "intake-section-close");
+            }}
+          >
+            Section 22 · Completion & handover
+          </a>
+        </p>
       </div>
     </div>
   );
@@ -604,6 +780,7 @@ function SectionBody({
   meta,
   onSign,
   signing,
+  onGoToTarget,
   onRecordChanged,
   toolRows,
   onOpenTools,
@@ -620,6 +797,7 @@ function SectionBody({
   meta: { outstanding: string[] };
   onSign: (completeness: "COMPLETE" | "PARTIAL" | "UNABLE") => void;
   signing: boolean;
+  onGoToTarget: (key: string, targetId: string) => void;
   onRecordChanged: () => void;
   toolRows: ToolRow[] | null;
   onOpenTools: () => void;
@@ -670,7 +848,11 @@ function SectionBody({
         />
       );
     case "tools":
-      return <ToolsSection patientId={patientId} onChanged={onRecordChanged} />;
+      return (
+        <div id="intake-required-tools" tabIndex={-1}>
+          <ToolsSection patientId={patientId} onChanged={onRecordChanged} />
+        </div>
+      );
     case "formulation":
       return (
         <div className="flex flex-col gap-4">
@@ -679,11 +861,13 @@ function SectionBody({
             predisposing, precipitating, perpetuating and protective factors, risks and strengths.
           </Callout>
           <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} />
-          <IntakeDiagnosisTab
-            patientId={patientId}
-            encounterId={encounterId}
-            onChanged={onRecordChanged}
-          />
+          <div id="intake-required-diagnosis" tabIndex={-1}>
+            <IntakeDiagnosisTab
+              patientId={patientId}
+              encounterId={encounterId}
+              onChanged={onRecordChanged}
+            />
+          </div>
         </div>
       );
     case "close":
@@ -694,6 +878,8 @@ function SectionBody({
           vs={vs}
           onChange={onChange}
           outstanding={meta.outstanding}
+          schema={schema}
+          onGoToTarget={onGoToTarget}
           onSign={onSign}
           signing={signing}
           draft={draft}
@@ -751,6 +937,8 @@ function CloseSection({
   vs,
   onChange,
   outstanding,
+  schema,
+  onGoToTarget,
   onSign,
   signing,
 }: {
@@ -759,6 +947,8 @@ function CloseSection({
   vs: ReturnType<typeof useValueSets>;
   onChange: (key: string, value: unknown) => void;
   outstanding: string[];
+  schema: IntakeSchema;
+  onGoToTarget: (key: string, targetId: string) => void;
   onSign: (c: "COMPLETE" | "PARTIAL" | "UNABLE") => void;
   signing: boolean;
   draft: IntakeDraft;
@@ -774,18 +964,22 @@ function CloseSection({
   return (
     <div className="flex flex-col gap-3">
       {outstanding.length ? (
-        <Callout tone="warning">
-          <strong>{outstanding.length} item(s) outstanding for a complete intake:</strong>
-          <ul className="mt-1 list-disc pl-5">
-            {outstanding.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </Callout>
+        <OutstandingAlert
+          title={`${outstanding.length} required item${outstanding.length === 1 ? "" : "s"} outstanding for a complete intake`}
+          items={outstanding}
+          schema={schema}
+          onGoToTarget={onGoToTarget}
+        />
       ) : (
         <Callout tone="success">
           All required items are recorded — the intake can be signed as complete.
         </Callout>
+      )}
+      {completeness === "COMPLETE" && outstanding.length > 0 && (
+        <p role="status" className="text-[12px] text-status-amber">
+          Resolve the items above before signing as complete, or document a partial / unable
+          handover if completion is not possible now.
+        </p>
       )}
       <SchemaSection
         spec={{
@@ -808,7 +1002,9 @@ function CloseSection({
         <button
           type="button"
           className={BTN}
-          disabled={!completeness || signing}
+          disabled={
+            !completeness || signing || (completeness === "COMPLETE" && outstanding.length > 0)
+          }
           onClick={() => completeness && onSign(completeness)}
         >
           {signing ? "Signing…" : "Sign intake"}

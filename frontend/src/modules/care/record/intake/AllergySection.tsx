@@ -128,6 +128,8 @@ export function AllergySection({
 
       <h3 className="text-[13px] font-bold text-ink-900">Confirm / update</h3>
       <div
+        id="intake-allergy-status"
+        tabIndex={-1}
         role="group"
         aria-label="Allergy status"
         className="grid grid-cols-1 gap-2 sm:grid-cols-3"

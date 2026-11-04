@@ -104,7 +104,7 @@ export function RiskSection({
         <strong>confirm or update each one, don’t re-document</strong>.
       </Callout>
       {Object.keys(carried).length > 0 && (
-        <div>
+        <div id="intake-required-risk-carried" tabIndex={-1}>
           <div className={GROUP_LABEL}>
             Carried forward from triage —{" "}
             {open.length ? `${open.length} awaiting confirmation` : "all confirmed"}
@@ -219,7 +219,7 @@ export function RiskSection({
       />
       {triggers}
 
-      <div>
+      <div id="intake-required-risk-formulation" tabIndex={-1}>
         <div className={GROUP_LABEL}>
           Structured risk formulation{" "}
           <span className="font-normal normal-case text-ink-500">
