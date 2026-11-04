@@ -34,6 +34,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # dev settings for manage.py steps; every pytest step passes
+      # --ds=config.settings.test (eager Celery, locmem email), because this
+      # env var would otherwise override pytest.ini.
       DJANGO_SETTINGS_MODULE: config.settings.dev
       DJANGO_SECRET_KEY: ci-test-key-not-secret # pragma: allowlist secret
       # Tests connect as a NON-superuser, like production (citramac_app): Postgres
@@ -83,10 +86,10 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
 
       - name: Tenant-isolation negative-path tests (cannot be skipped)
-        run: pytest apps/tenancy/tests.py -v
+        run: pytest --ds=config.settings.test apps/tenancy/tests.py -v
 
       - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
-        run: pytest apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py -k FhirR4Conformance -v
+        run: pytest --ds=config.settings.test apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py -k FhirR4Conformance -v
 
       - uses: actions/setup-java@v4
         with:
@@ -107,7 +110,7 @@ jobs:
           python scripts/hl7_validator_gate.py /tmp/shr-outcome.json
 
       - name: Tests (coverage)
-        run: pytest --cov=apps --cov-report=term-missing
+        run: pytest --ds=config.settings.test --cov=apps --cov-report=term-missing
 
   frontend:
     runs-on: ubuntu-latest
