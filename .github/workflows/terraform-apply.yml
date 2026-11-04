@@ -20,6 +20,10 @@ permissions:
 
 jobs:
   apply:
+    # The AWS/EKS pipeline is not provisioned (no AWS account or secrets); the live
+    # VPS deploys itself from green CI (infra/vps/autodeploy). Set the repository
+    # variable AWS_PIPELINE_ENABLED=true once EKS exists.
+    if: vars.AWS_PIPELINE_ENABLED == 'true'
     runs-on: ubuntu-latest
     strategy:
       # No fail-fast and no max-parallel: production must never start until
