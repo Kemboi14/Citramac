@@ -207,9 +207,9 @@ export function BranchesPage() {
   const updateNewBranch = (patch: Partial<NewBranchState>) =>
     setNewBranch((prev) => ({ ...prev, ...patch }));
 
-  const [newBranchErrors, setNewBranchErrors] = useState<
-    ReturnType<typeof identifierFieldErrors>
-  >({});
+  const [newBranchErrors, setNewBranchErrors] = useState<ReturnType<typeof identifierFieldErrors>>(
+    {},
+  );
 
   const [editing, setEditing] = useState<Branch | null>(null);
   const [editValues, setEditValues] = useState<BranchIdentifierValues>(EMPTY_IDENTIFIERS);
@@ -356,7 +356,9 @@ export function BranchesPage() {
       void refresh();
     } catch (err) {
       setEditErrors(identifierFieldErrors(err));
-      setEditError(err instanceof ApiError ? err.message : "Couldn't save the registration details.");
+      setEditError(
+        err instanceof ApiError ? err.message : "Couldn't save the registration details.",
+      );
       throw err;
     }
   };
@@ -473,12 +475,18 @@ export function BranchesPage() {
     { key: "level", header: "Level", cell: (b) => facilityLevelShort(b.facility_level) },
     { key: "wards", header: "Wards", cell: (b) => b.ward_count },
     { key: "beds", header: "Beds", cell: (b) => b.bed_count },
-    { key: "capacity", header: "OP Capacity/day", cell: (b) => b.outpatient_capacity_per_day ?? "—" },
+    {
+      key: "capacity",
+      header: "OP Capacity/day",
+      cell: (b) => b.outpatient_capacity_per_day ?? "—",
+    },
     {
       key: "mhp",
       header: "MHP",
       cell: (b) => (
-        <span className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${MHP_TINT[b.mhp_registration_status]}`}>
+        <span
+          className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${MHP_TINT[b.mhp_registration_status]}`}
+        >
           {b.mhp_registration_status}
         </span>
       ),
@@ -525,7 +533,9 @@ export function BranchesPage() {
           <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
             Platform · Facilities
           </div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Branches &amp; Departments</h1>
+          <h1 className="font-display text-2xl font-bold text-ink-900">
+            Branches &amp; Departments
+          </h1>
         </div>
         <button
           type="button"
@@ -570,18 +580,18 @@ export function BranchesPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded-md border border-surface-border bg-surface-card p-1">
-          {(
-            [
-              { value: "branches" as const, label: "Branches", count: totalBranches },
-              { value: "departments" as const, label: "Departments", count: departments.length },
-            ]
-          ).map((t) => (
+          {[
+            { value: "branches" as const, label: "Branches", count: totalBranches },
+            { value: "departments" as const, label: "Departments", count: departments.length },
+          ].map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => setTab(t.value)}
               className={`rounded-sm px-3 py-1.5 text-sm font-semibold transition-colors duration-150 ${
-                tab === t.value ? "bg-brand-green text-on-primary" : "text-ink-700 hover:bg-surface-bg"
+                tab === t.value
+                  ? "bg-brand-green text-on-primary"
+                  : "text-ink-700 hover:bg-surface-bg"
               }`}
             >
               {t.label} ({t.count})
@@ -602,7 +612,9 @@ export function BranchesPage() {
           <input
             className={`${FIELD_CLASS} w-72 pl-9`}
             placeholder={
-              tab === "branches" ? "Search by branch, org, or MFL code…" : "Search by department, org, or branch…"
+              tab === "branches"
+                ? "Search by branch, org, or MFL code…"
+                : "Search by department, org, or branch…"
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -660,7 +672,11 @@ export function BranchesPage() {
           </>
         }
       >
-        <form id={branchFormId} onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
+        <form
+          id={branchFormId}
+          onSubmit={(e) => e.preventDefault()}
+          className="flex flex-col gap-4"
+        >
           <label className={LABEL_CLASS}>
             Parent Organization <span className="text-status-red">*</span>
             <select
@@ -725,7 +741,9 @@ export function BranchesPage() {
                   }))
                 }
                 kmpdcRequired={
-                  newBranchOrgType ? HEALTH_PROVIDER_ORG_TYPES.includes(newBranchOrgType) : undefined
+                  newBranchOrgType
+                    ? HEALTH_PROVIDER_ORG_TYPES.includes(newBranchOrgType)
+                    : undefined
                 }
                 shaClaimsEnabled={false}
                 errors={newBranchErrors}
@@ -766,9 +784,7 @@ export function BranchesPage() {
                   min={0}
                   className={FIELD_CLASS}
                   value={newBranch.outpatient_capacity_per_day}
-                  onChange={(e) =>
-                    updateNewBranch({ outpatient_capacity_per_day: e.target.value })
-                  }
+                  onChange={(e) => updateNewBranch({ outpatient_capacity_per_day: e.target.value })}
                   placeholder="e.g. 90"
                 />
               </label>

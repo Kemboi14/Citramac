@@ -20,11 +20,8 @@ from fhir.resources.R4B.condition import Condition
 from fhir.resources.R4B.consent import Consent
 from fhir.resources.R4B.dosage import Dosage
 from fhir.resources.R4B.encounter import Encounter
-from fhir.resources.R4B.humanname import HumanName
-from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.medicationrequest import MedicationRequest
 from fhir.resources.R4B.observation import Observation
-from fhir.resources.R4B.patient import Patient as FhirPatient
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
 

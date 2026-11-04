@@ -96,20 +96,33 @@ function useMedia(query: string) {
   return match;
 }
 
-const join = (...parts: string[]) => parts.map((p) => p.trim()).filter(Boolean).join(" ");
+const join = (...parts: string[]) =>
+  parts
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join(" ");
 const maxWidth = () => Math.max(MIN_WIDTH, window.innerWidth - 64 - 380);
 const clampWidth = (w: number) => Math.min(Math.max(MIN_WIDTH, w), maxWidth());
 const ttsLang = (code: string) => (code.startsWith("en") ? code : "en-GB");
 
 function started(note: PsyNote) {
-  return note.status === "SIGNED" || !!note.safety_answer ||
-    Object.values(note.answers).some((a) => a?.text?.trim());
+  return (
+    note.status === "SIGNED" ||
+    !!note.safety_answer ||
+    Object.values(note.answers).some((a) => a?.text?.trim())
+  );
 }
 
 /** Start or resume the clinician's draft for a therapy episode, or open a saved
  * note by id — as a full-screen workspace over the page it was opened from, or
  * `inline`, filling the Psychotherapy module drawer (v4 `psyWorkflowMount`). */
-export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, inline = false }: {
+export function PsychotherapyWorkspace({
+  patientId,
+  episodeId,
+  noteId,
+  onClose,
+  inline = false,
+}: {
   patientId: string;
   episodeId?: string;
   noteId?: string;
@@ -123,8 +136,12 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, 
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!accessToken) return;
-    getPsyConfig(accessToken).then(setConfig).catch((e) => setError(errorText(e, "Couldn't load the session note settings.")));
-    const load = noteId ? getPsyNote(accessToken, noteId) : startPsyNote(accessToken, patientId, { episode: episodeId });
+    getPsyConfig(accessToken)
+      .then(setConfig)
+      .catch((e) => setError(errorText(e, "Couldn't load the session note settings.")));
+    const load = noteId
+      ? getPsyNote(accessToken, noteId)
+      : startPsyNote(accessToken, patientId, { episode: episodeId });
     load.then(setNote).catch((e) => setError(errorText(e, "Couldn't open the session note.")));
   }, [accessToken, patientId, episodeId, noteId]);
   useEffect(() => {
@@ -140,21 +157,34 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, 
     };
   }, [inline]);
   const body = (
-    <div ref={root} tabIndex={-1}
+    <div
+      ref={root}
+      tabIndex={-1}
       {...(inline
         ? { role: "region", "aria-label": "Guided individual psychotherapy session" }
         : { role: "dialog", "aria-modal": true, "aria-label": "Psychotherapy session" })}
-      className={inline
-        ? "relative flex min-h-0 flex-1 overflow-hidden bg-surface-bg text-ink-900 outline-none [transform:translateZ(0)]"
-        : "fixed inset-0 z-[100] flex bg-surface-bg text-ink-900 outline-none"}>
+      className={
+        inline
+          ? "relative flex min-h-0 flex-1 overflow-hidden bg-surface-bg text-ink-900 outline-none [transform:translateZ(0)]"
+          : "fixed inset-0 z-[100] flex bg-surface-bg text-ink-900 outline-none"
+      }
+    >
       {config && note ? (
-        <WorkspaceBody key={note.id} config={config} initial={note} patientId={patientId} onClose={onClose}
-          onReplace={setNote} />
+        <WorkspaceBody
+          key={note.id}
+          config={config}
+          initial={note}
+          patientId={patientId}
+          onClose={onClose}
+          onReplace={setNote}
+        />
       ) : (
         <div className="m-auto flex max-w-md flex-col items-center gap-3 p-6 text-center">
           <ErrorNote>{error}</ErrorNote>
           {!error && <p className="text-[13px] text-ink-500">Loading the session…</p>}
-          <button type="button" className={BTN_GHOST} onClick={onClose}>Close</button>
+          <button type="button" className={BTN_GHOST} onClick={onClose}>
+            Close
+          </button>
         </div>
       )}
     </div>
@@ -162,17 +192,43 @@ export function PsychotherapyWorkspace({ patientId, episodeId, noteId, onClose, 
   return inline ? body : createPortal(body, document.body);
 }
 
-function RailButton({ label, current, onClick, children }: { label: string; current?: boolean; onClick: () => void; children: ReactNode }) {
+function RailButton({
+  label,
+  current,
+  onClick,
+  children,
+}: {
+  label: string;
+  current?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
-    <button type="button" aria-label={label} title={label} aria-current={current ? "page" : undefined} onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center rounded-[10px] transition-colors ${current ? "bg-brand-green-tint text-brand-green" : "text-ink-700 hover:bg-surface-bg"}`}>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-current={current ? "page" : undefined}
+      onClick={onClick}
+      className={`flex h-10 w-10 items-center justify-center rounded-[10px] transition-colors ${current ? "bg-brand-green-tint text-brand-green" : "text-ink-700 hover:bg-surface-bg"}`}
+    >
       {children}
     </button>
   );
 }
 
-function StepMenu({ config, note, step, signed, onJump }: {
-  config: PsyConfig; note: PsyNote; step: number; signed: boolean; onJump: (i: number) => void;
+function StepMenu({
+  config,
+  note,
+  step,
+  signed,
+  onJump,
+}: {
+  config: PsyConfig;
+  note: PsyNote;
+  step: number;
+  signed: boolean;
+  onJump: (i: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement>(null);
@@ -184,7 +240,8 @@ function StepMenu({ config, note, step, signed, onJump }: {
       setOpen(false);
       button.current?.focus();
     };
-    const onClick = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const onClick = (e: MouseEvent) =>
+      ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
     ref.current?.querySelector<HTMLElement>("[role=menuitem]:not(:disabled)")?.focus();
@@ -193,26 +250,69 @@ function StepMenu({ config, note, step, signed, onJump }: {
       document.removeEventListener("mousedown", onClick);
     };
   }, [open]);
-  const label = signed ? "Signed" : step < QUESTION_COUNT ? `Question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step);
-  const short = signed ? "Signed" : step < QUESTION_COUNT ? `Q${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step);
+  const label = signed
+    ? "Signed"
+    : step < QUESTION_COUNT
+      ? `Question ${step + 1} of ${QUESTION_COUNT}`
+      : stepLabel(config, step);
+  const short = signed
+    ? "Signed"
+    : step < QUESTION_COUNT
+      ? `Q${step + 1} of ${QUESTION_COUNT}`
+      : stepLabel(config, step);
   return (
     <li ref={ref} className="relative flex items-center">
-      <button ref={button} type="button" aria-haspopup="menu" aria-expanded={open} aria-current="step" onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 font-semibold text-ink-900 hover:bg-surface-bg">
-        <span className="hidden sm:inline">{label}</span><span className="sm:hidden">{short}</span>
+      <button
+        ref={button}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-current="step"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 font-semibold text-ink-900 hover:bg-surface-bg"
+      >
+        <span className="hidden sm:inline">{label}</span>
+        <span className="sm:hidden">{short}</span>
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div role="menu" aria-label="Jump to step" className="absolute left-0 top-full z-30 mt-1 w-[min(320px,calc(100vw-32px))] rounded-lg border border-surface-border bg-surface-card p-1 shadow-md">
+        <div
+          role="menu"
+          aria-label="Jump to step"
+          className="absolute left-0 top-full z-30 mt-1 w-[min(320px,calc(100vw-32px))] rounded-lg border border-surface-border bg-surface-card p-1 shadow-md"
+        >
           {Array.from({ length: STEP_COUNT }, (_, i) => {
-            const status = signed && i === REVIEW_STEP ? "Done" : stepStatus(note, config, i, signed ? -1 : step);
-            const tone = status === "Done" ? "text-brand-green" : status === "Needs review" ? "text-priority-red" : status === "Current" ? "text-ink-900" : "text-ink-500";
+            const status =
+              signed && i === REVIEW_STEP
+                ? "Done"
+                : stepStatus(note, config, i, signed ? -1 : step);
+            const tone =
+              status === "Done"
+                ? "text-brand-green"
+                : status === "Needs review"
+                  ? "text-priority-red"
+                  : status === "Current"
+                    ? "text-ink-900"
+                    : "text-ink-500";
             return (
-              <button key={i} type="button" role="menuitem" disabled={status === "Not yet"} onClick={() => { setOpen(false); onJump(i); }}
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50">
-                <span className="w-6 font-mono text-[11px] text-ink-500">{i < QUESTION_COUNT ? `Q${i + 1}` : i === SAFETY_STEP ? "S" : "✓"}</span>
+              <button
+                key={i}
+                type="button"
+                role="menuitem"
+                disabled={status === "Not yet"}
+                onClick={() => {
+                  setOpen(false);
+                  onJump(i);
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="w-6 font-mono text-[11px] text-ink-500">
+                  {i < QUESTION_COUNT ? `Q${i + 1}` : i === SAFETY_STEP ? "S" : "✓"}
+                </span>
                 {/* eslint-disable-next-line security/detect-object-injection -- index within the served question list. */}
-                <span className="min-w-0 flex-1 truncate">{i < QUESTION_COUNT ? config.questions[i]?.title : stepLabel(config, i)}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {i < QUESTION_COUNT ? config.questions[i]?.title : stepLabel(config, i)}
+                </span>
                 <span className={`text-[11px] font-semibold ${tone}`}>{status}</span>
               </button>
             );
@@ -224,40 +324,89 @@ function StepMenu({ config, note, step, signed, onJump }: {
 }
 
 /** Measurement-based care score and restricted process notes for this session. */
-function SessionExtras({ note, patientId, save }: { note: PsyNote; patientId: string; save: (b: Record<string, unknown>) => Promise<boolean> }) {
+function SessionExtras({
+  note,
+  patientId,
+  save,
+}: {
+  note: PsyNote;
+  patientId: string;
+  save: (b: Record<string, unknown>) => Promise<boolean>;
+}) {
   const { accessToken } = useAuth();
   const [defs, setDefs] = useState<InstrumentDef[]>([]);
   const [instrument, setInstrument] = useState("");
   const [process, setProcess] = useState(note.session.process_notes ?? "");
   useEffect(() => {
-    if (accessToken) getInstruments(accessToken).then((r) => setDefs(r.results.filter((d) => !d.withdrawal))).catch(() => undefined);
+    if (accessToken)
+      getInstruments(accessToken)
+        .then((r) => setDefs(r.results.filter((d) => !d.withdrawal)))
+        .catch(() => undefined);
   }, [accessToken]);
   const def = defs.find((d) => d.code === instrument);
   return (
     <div className="mt-3 flex flex-col gap-2 rounded-lg border border-surface-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <select className={`${INPUT} max-w-xs`} aria-label="Measurement-based care instrument" value={instrument} onChange={(e) => setInstrument(e.target.value)}>
+        <select
+          className={`${INPUT} max-w-xs`}
+          aria-label="Measurement-based care instrument"
+          value={instrument}
+          onChange={(e) => setInstrument(e.target.value)}
+        >
           <option value="">Measurement-based care — none this session</option>
-          {defs.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+          {defs.map((d) => (
+            <option key={d.code} value={d.code}>
+              {d.name}
+            </option>
+          ))}
         </select>
-        {note.session.measure && <Tag tone="brand">{note.session.measure.name} {note.session.measure.total} — in the outcome store</Tag>}
+        {note.session.measure && (
+          <Tag tone="brand">
+            {note.session.measure.name} {note.session.measure.total} — in the outcome store
+          </Tag>
+        )}
       </div>
       {def && (
-        <AssessmentForm patientId={patientId} def={def} context="THERAPY" hasPrevious
-          onSaved={(s) => { setInstrument(""); void save({ score_id: s.id }); }} onCancel={() => setInstrument("")} />
+        <AssessmentForm
+          patientId={patientId}
+          def={def}
+          context="THERAPY"
+          hasPrevious
+          onSaved={(s) => {
+            setInstrument("");
+            void save({ score_id: s.id });
+          }}
+          onCancel={() => setInstrument("")}
+        />
       )}
       {note.session.process_notes !== null && (
         <label className="flex flex-col gap-1">
-          <span className={FIELD_LABEL}>Process notes — restricted (never shared with billing or payers)</span>
-          <textarea className={INPUT} rows={2} value={process} onChange={(e) => setProcess(e.target.value)}
-            onBlur={() => process !== (note.session.process_notes ?? "") && void save({ process_notes: process })} />
+          <span className={FIELD_LABEL}>
+            Process notes — restricted (never shared with billing or payers)
+          </span>
+          <textarea
+            className={INPUT}
+            rows={2}
+            value={process}
+            onChange={(e) => setProcess(e.target.value)}
+            onBlur={() =>
+              process !== (note.session.process_notes ?? "") &&
+              void save({ process_notes: process })
+            }
+          />
         </label>
       )}
     </div>
   );
 }
 
-function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
+function WorkspaceBody({
+  config,
+  initial,
+  patientId,
+  onClose,
+  onReplace,
+}: {
   config: PsyConfig;
   initial: PsyNote;
   patientId: string;
@@ -270,8 +419,12 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   const signed = note.status === "SIGNED";
   const locked = signed || !note.is_author;
   const [begun, setBegun] = useState(() => started(initial));
-  const [step, setStep] = useState(() => (initial.status === "SIGNED" ? REVIEW_STEP : started(initial) ? currentStep(initial, config) : 0));
-  const [awaitingReason, setAwaitingReason] = useState(() => initial.safety_answer === "NOT_ASSESSED" && !initial.not_assessed_reason);
+  const [step, setStep] = useState(() =>
+    initial.status === "SIGNED" ? REVIEW_STEP : started(initial) ? currentStep(initial, config) : 0,
+  );
+  const [awaitingReason, setAwaitingReason] = useState(
+    () => initial.safety_answer === "NOT_ASSESSED" && !initial.not_assessed_reason,
+  );
   const [acks, setAcks] = useState<Ack[]>([]);
   const [editKey, setEditKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -289,7 +442,9 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   const [notesOpen, setNotesOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [width, setWidth] = useState(() => clampWidth(Number(readPref("noteWidth")) || 420));
-  const [mode, setModeState] = useState<InputChoice>(() => (config.dictation_enabled && readPref("mode") === "dictate" ? "dictate" : "type"));
+  const [mode, setModeState] = useState<InputChoice>(() =>
+    config.dictation_enabled && readPref("mode") === "dictate" ? "dictate" : "type",
+  );
   const [language, setLanguageState] = useState(() => {
     const saved = readPref("language");
     return config.languages.some((l) => l.code === saved) ? (saved as string) : "en-GB";
@@ -312,25 +467,34 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     window.setTimeout(() => setToast((t) => (t === text ? "" : t)), 2600);
   }, []);
   const addAck = (anchor: string, text: string) => setAcks((a) => [...a, { anchor, text }]);
-  const scrollDown = () => window.requestAnimationFrame(() => {
-    const s = scroller.current;
-    if (s) s.scrollTop = s.scrollHeight;
-  });
+  const scrollDown = () =>
+    window.requestAnimationFrame(() => {
+      const s = scroller.current;
+      if (s) s.scrollTop = s.scrollHeight;
+    });
 
-  const save = useCallback(async (body: Record<string, unknown>) => {
-    if (!accessToken) return false;
-    setBusy(true);
-    setError(null);
-    try {
-      setNote(await savePsyNote(accessToken, note.id, body));
-      return true;
-    } catch (e) {
-      setError(errorText(e, "Couldn't save — your words are still in the box. Check the connection and try again."));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, [accessToken, note.id]);
+  const save = useCallback(
+    async (body: Record<string, unknown>) => {
+      if (!accessToken) return false;
+      setBusy(true);
+      setError(null);
+      try {
+        setNote(await savePsyNote(accessToken, note.id, body));
+        return true;
+      } catch (e) {
+        setError(
+          errorText(
+            e,
+            "Couldn't save — your words are still in the box. Check the connection and try again.",
+          ),
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [accessToken, note.id],
+  );
 
   async function run(work: (t: string) => Promise<PsyNote>, fallback: string) {
     if (!accessToken) return false;
@@ -366,11 +530,15 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   };
 
   // Translation / rewording run in the background on the server: refresh while pending.
-  const pending = note.processing.status === "pending" || note.transcript.some((t) => t.translation?.status === "pending");
+  const pending =
+    note.processing.status === "pending" ||
+    note.transcript.some((t) => t.translation?.status === "pending");
   useEffect(() => {
     if (!pending || !accessToken) return;
     const timer = window.setTimeout(() => {
-      getPsyNote(accessToken, note.id).then(setNote).catch(() => undefined);
+      getPsyNote(accessToken, note.id)
+        .then(setNote)
+        .catch(() => undefined);
     }, 4000);
     return () => window.clearTimeout(timer);
   }, [pending, note, accessToken]);
@@ -381,7 +549,16 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   // later changes show "Update note". A failed organise is not retried here.
   const autoFailed = useRef(false);
   useEffect(() => {
-    if (example || busy || !begun || note.status !== "DRAFT" || !note.is_author || note.generated_at || autoFailed.current) return;
+    if (
+      example ||
+      busy ||
+      !begun ||
+      note.status !== "DRAFT" ||
+      !note.is_author ||
+      note.generated_at ||
+      autoFailed.current
+    )
+      return;
     const live = !config.ai_enabled && Object.values(note.answers).some((a) => a?.text?.trim());
     const atReview = step >= REVIEW_STEP && !organisedOnce.current;
     if (!live && !atReview) return;
@@ -394,7 +571,9 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
 
   useEffect(() => {
     if (!accessToken || (view !== "history" && view !== "client")) return;
-    listPsyNotes(accessToken, patientId).then((r) => setNotes(r.results)).catch(() => setNotes([]));
+    listPsyNotes(accessToken, patientId)
+      .then((r) => setNotes(r.results))
+      .catch(() => setNotes([]));
   }, [accessToken, patientId, view]);
 
   // ── speech ──
@@ -423,9 +602,12 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   function announce(i: number, opts: { prefix?: string; force?: boolean } = {}) {
     const listen = mode === "dictate" && config.dictation_enabled && i <= SAFETY_STEP;
     // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
-    const text = i < QUESTION_COUNT ? config.questions[i]?.title ?? ""
-      : i === SAFETY_STEP ? `Safety question. ${config.safety_question} Please answer yes, no, or not assessed.`
-        : "Thank you. Your draft note is ready for review.";
+    const text =
+      i < QUESTION_COUNT
+        ? (config.questions[i]?.title ?? "")
+        : i === SAFETY_STEP
+          ? `Safety question. ${config.safety_question} Please answer yes, no, or not assessed.`
+          : "Thank you. Your draft note is ready for review.";
     setFocusSignal((n) => n + 1);
     if (!listen && !voice && !opts.force) return;
     speakThen(join(opts.prefix ?? "", text), listen, opts.force);
@@ -527,9 +709,16 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
       setError(null);
       let saved: PsyNote;
       try {
-        saved = await savePsyNote(accessToken, note.id, { answers: { [key]: { text, mode: via, language } } });
+        saved = await savePsyNote(accessToken, note.id, {
+          answers: { [key]: { text, mode: via, language } },
+        });
       } catch (e) {
-        setError(errorText(e, "Couldn't save — your words are still in the box. Check the connection and try again."));
+        setError(
+          errorText(
+            e,
+            "Couldn't save — your words are still in the box. Check the connection and try again.",
+          ),
+        );
         return false;
       } finally {
         setBusy(false);
@@ -552,7 +741,10 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
       return false;
     }
     setDraft("");
-    addAck("review", "The questions are complete. To change an answer, use Edit under it, or edit the note directly.");
+    addAck(
+      "review",
+      "The questions are complete. To change an answer, use Edit under it, or edit the note directly.",
+    );
     scrollDown();
     return false;
   }
@@ -563,10 +755,12 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     if (answer !== note.safety_answer && !(await save({ safety_answer: answer }))) return false;
     const atSafety = step === SAFETY_STEP && first;
     if (answer === "YES") {
-      if (atSafety) addAck("safety", "Concern flagged. Please record what you assessed in the risk workflow.");
+      if (atSafety)
+        addAck("safety", "Concern flagged. Please record what you assessed in the risk workflow.");
       afterSafetyModal.current = atSafety;
       if (!note.safety_detail.risk_link || atSafety) setSafetyOpen(true);
-      if (mode === "dictate" && atSafety) speakThen("Concern flagged. Please complete the risk details on screen.", false);
+      if (mode === "dictate" && atSafety)
+        speakThen("Concern flagged. Please complete the risk details on screen.", false);
     } else if (answer === "NOT_ASSESSED") {
       setAwaitingReason(true);
       const ask = "Understood. Briefly, why was safety not assessed today?";
@@ -576,7 +770,10 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     } else {
       setAwaitingReason(false);
       if (atSafety && note.detections.some((d) => !d.resolution)) {
-        addAck("safety", "Recorded as no new or changed concern. Earlier answers include flagged language; please confirm it during review.");
+        addAck(
+          "safety",
+          "Recorded as no new or changed concern. Earlier answers include flagged language; please confirm it during review.",
+        );
       }
       if (atSafety) goReview();
     }
@@ -608,7 +805,10 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     }
     window.requestAnimationFrame(() => {
       const el = document.getElementById(i < QUESTION_COUNT ? `psy-m-q${i}` : "psy-m-safety");
-      el?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      el?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
     });
   }
 
@@ -622,12 +822,18 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     quiet();
     setView("chat");
     if (!signed) {
-      flash(begun ? "Sign this session first — there is one open draft per therapy episode." : `Session ${note.session_number ?? ""} is ready to begin`);
+      flash(
+        begun
+          ? "Sign this session first — there is one open draft per therapy episode."
+          : `Session ${note.session_number ?? ""} is ready to begin`,
+      );
       return;
     }
     if (!accessToken) return;
     try {
-      onReplace(await startPsyNote(accessToken, patientId, { episode: note.therapy_episode || undefined }));
+      onReplace(
+        await startPsyNote(accessToken, patientId, { episode: note.therapy_episode || undefined }),
+      );
     } catch (e) {
       setError(errorText(e, "Couldn't start a new session."));
     }
@@ -665,67 +871,183 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     const status = signed ? "Done" : stepStatus(note, config, i, begun ? step : -1);
     // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
     const alert = i < QUESTION_COUNT && flags.some((d) => d.question === config.questions[i]?.key);
-    const tone = alert ? "bg-priority-red" : status === "Current" ? "bg-brand-green" : status === "Done" ? "bg-[color-mix(in_srgb,var(--green)_45%,var(--border))]" : "bg-surface-border";
+    const tone = alert
+      ? "bg-priority-red"
+      : status === "Current"
+        ? "bg-brand-green"
+        : status === "Done"
+          ? "bg-[color-mix(in_srgb,var(--green)_45%,var(--border))]"
+          : "bg-surface-border";
     return (
-      <button key={i} type="button" disabled={!begun || status === "Not yet"} onClick={() => jump(i)}
-        aria-label={`${stepLabel(config, i)} (${alert ? "needs review" : status.toLowerCase()})`} title={stepLabel(config, i)}
+      <button
+        key={i}
+        type="button"
+        disabled={!begun || status === "Not yet"}
+        onClick={() => jump(i)}
+        aria-label={`${stepLabel(config, i)} (${alert ? "needs review" : status.toLowerCase()})`}
+        title={stepLabel(config, i)}
         aria-current={status === "Current" ? "step" : undefined}
-        className="flex h-5 w-[22px] items-center disabled:cursor-default">
+        className="flex h-5 w-[22px] items-center disabled:cursor-default"
+      >
         <span className={`block h-1 w-full rounded-sm ${tone}`} />
       </button>
     );
   });
   const noteToggle = (wide ? panel === "closed" : true) && (
-    <button type="button" onClick={() => (wide ? setPanel("open") : setNotesOpen(true))} aria-label="Open therapy note" title="Open therapy note"
-      className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900">
+    <button
+      type="button"
+      onClick={() => (wide ? setPanel("open") : setNotesOpen(true))}
+      aria-label="Open therapy note"
+      title="Open therapy note"
+      className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900"
+    >
       <FileText className="h-[19px] w-[19px]" />
     </button>
   );
   const sessionCrumb = (
-    <><span className="hidden sm:inline">Session {note.session_number ?? ""} · </span><strong className="font-semibold text-ink-900">{note.patient.name}</strong></>
+    <>
+      <span className="hidden sm:inline">Session {note.session_number ?? ""} · </span>
+      <strong className="font-semibold text-ink-900">{note.patient.name}</strong>
+    </>
   );
-  const sep = <li aria-hidden className="mx-1 h-1.5 w-1.5 rotate-45 border-r-[1.5px] border-t-[1.5px] border-ink-500 opacity-60" />;
-  const crumb = "inline-flex items-center gap-1.5 rounded-[7px] px-1.5 py-1 hover:bg-surface-bg hover:text-ink-900";
+  const sep = (
+    <li
+      aria-hidden
+      className="mx-1 h-1.5 w-1.5 rotate-45 border-r-[1.5px] border-t-[1.5px] border-ink-500 opacity-60"
+    />
+  );
+  const crumb =
+    "inline-flex items-center gap-1.5 rounded-[7px] px-1.5 py-1 hover:bg-surface-bg hover:text-ink-900";
   const header = (
     <header className="flex min-h-[56px] flex-wrap items-center gap-x-3.5 gap-y-1.5 px-4 py-2.5 sm:flex-nowrap sm:px-5">
-      <nav aria-label="Breadcrumb" className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto">
+      <nav
+        aria-label="Breadcrumb"
+        className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto"
+      >
         <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
-          <li><button type="button" onClick={onClose} className={crumb} title="Back to Interventions"><ArrowLeft className="h-[15px] w-[15px]" /><span className="hidden sm:inline">Interventions</span></button></li>
+          <li>
+            <button type="button" onClick={onClose} className={crumb} title="Back to Interventions">
+              <ArrowLeft className="h-[15px] w-[15px]" />
+              <span className="hidden sm:inline">Interventions</span>
+            </button>
+          </li>
           {sep}
-          <li><button type="button" onClick={() => setView("history")} aria-current={view === "history" ? "page" : undefined}
-            className={`${crumb} ${view === "history" ? "font-semibold text-ink-900" : ""}`}>Psychotherapy</button></li>
+          <li>
+            <button
+              type="button"
+              onClick={() => setView("history")}
+              aria-current={view === "history" ? "page" : undefined}
+              className={`${crumb} ${view === "history" ? "font-semibold text-ink-900" : ""}`}
+            >
+              Psychotherapy
+            </button>
+          </li>
           {view !== "history" && sep}
-          {view === "past" && <li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Earlier session</span></li>}
-          {view !== "history" && view !== "past" && (
+          {view === "past" && (
             <li>
-              <button type="button" onClick={() => setView("chat")} aria-current={view === "chat" && !begun ? "page" : undefined} className={crumb}>{sessionCrumb}</button>
+              <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                Earlier session
+              </span>
             </li>
           )}
-          {view === "chat" && begun && !example && <>{sep}<StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} /></>}
-          {view === "chat" && example && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-priority-orange">Example</span></li></>}
-          {view === "client" && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Client file</span></li></>}
-          {view === "audit" && <>{sep}<li><span aria-current="page" className="px-1.5 font-semibold text-ink-900">Audit trail</span></li></>}
+          {view !== "history" && view !== "past" && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setView("chat")}
+                aria-current={view === "chat" && !begun ? "page" : undefined}
+                className={crumb}
+              >
+                {sessionCrumb}
+              </button>
+            </li>
+          )}
+          {view === "chat" && begun && !example && (
+            <>
+              {sep}
+              <StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} />
+            </>
+          )}
+          {view === "chat" && example && (
+            <>
+              {sep}
+              <li>
+                <span aria-current="page" className="px-1.5 font-semibold text-priority-orange">
+                  Example
+                </span>
+              </li>
+            </>
+          )}
+          {view === "client" && (
+            <>
+              {sep}
+              <li>
+                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                  Client file
+                </span>
+              </li>
+            </>
+          )}
+          {view === "audit" && (
+            <>
+              {sep}
+              <li>
+                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                  Audit trail
+                </span>
+              </li>
+            </>
+          )}
         </ol>
       </nav>
       {view === "chat" && !example && (
-        <div className="flex gap-[3px]" aria-label={`Session progress — ${signed ? "signed" : !begun ? "not started" : step < QUESTION_COUNT ? `question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step)}`} role="group">{segments}</div>
+        <div
+          className="flex gap-[3px]"
+          aria-label={`Session progress — ${signed ? "signed" : !begun ? "not started" : step < QUESTION_COUNT ? `question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step)}`}
+          role="group"
+        >
+          {segments}
+        </div>
       )}
       {noteToggle}
     </header>
   );
 
   const dictationOn = mode === "dictate" && config.dictation_enabled;
-  const dictState: DictationState = dict.error ? "error" : speaking ? "speaking" : dict.countdown !== null ? "countdown"
-    : dict.listening ? "listening" : dict.paused ? "paused" : "idle";
+  const dictState: DictationState = dict.error
+    ? "error"
+    : speaking
+      ? "speaking"
+      : dict.countdown !== null
+        ? "countdown"
+        : dict.listening
+          ? "listening"
+          : dict.paused
+            ? "paused"
+            : "idle";
   const composed = join(draft, dict.finalText, dict.interim);
   const questionsDone = step >= REVIEW_STEP && !editKey && !awaitingReason;
-  const placeholder = awaitingReason ? "Reason safety was not assessed…" : editKey ? "Edit your answer…"
-    : step === SAFETY_STEP ? "Type yes, no or not assessed, or use the buttons above…"
-      : questionsDone ? "Questions complete — use Edit under an answer to change it"
-        : dictationOn ? "Your dictated answer appears here…" : "Answer in your own words…";
+  const placeholder = awaitingReason
+    ? "Reason safety was not assessed…"
+    : editKey
+      ? "Edit your answer…"
+      : step === SAFETY_STEP
+        ? "Type yes, no or not assessed, or use the buttons above…"
+        : questionsDone
+          ? "Questions complete — use Edit under an answer to change it"
+          : dictationOn
+            ? "Your dictated answer appears here…"
+            : "Answer in your own words…";
   const modeMenu = (
-    <ModeMenu config={config} mode={dictationOn ? "dictate" : "type"} setMode={setMode} language={language} setLanguage={setLanguage}
-      voice={voice} setVoice={setVoice} />
+    <ModeMenu
+      config={config}
+      mode={dictationOn ? "dictate" : "type"}
+      setMode={setMode}
+      language={language}
+      setLanguage={setLanguage}
+      voice={voice}
+      setVoice={setVoice}
+    />
   );
   const finishDictation = () => {
     const text = composed;
@@ -733,20 +1055,62 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
     if (text.trim()) void submit(text, "DICTATED");
   };
   const composer = (
-    <Composer value={composed} onChange={(v) => { dict.reset(); setDraft(v); }} onSend={() => void submit(composed, dictationOn ? "DICTATED" : "TYPED")}
-      placeholder={placeholder} disabled={locked || busy || questionsDone} mode={dictationOn ? "dictate" : "type"} modeMenu={modeMenu}
+    <Composer
+      value={composed}
+      onChange={(v) => {
+        dict.reset();
+        setDraft(v);
+      }}
+      onSend={() => void submit(composed, dictationOn ? "DICTATED" : "TYPED")}
+      placeholder={placeholder}
+      disabled={locked || busy || questionsDone}
+      mode={dictationOn ? "dictate" : "type"}
+      modeMenu={modeMenu}
       editing={editKey ? `Q${config.questions.findIndex((q) => q.key === editKey) + 1}` : null}
-      onCancelEdit={() => { setEditKey(null); setDraft(""); }} focusSignal={focusSignal}
-      hint={dictationOn ? "Questions are read aloud. Say “next question” when you finish, or pause and it moves on." : "Enter to send · Shift+Enter for a new line"}
-      dictation={dictationOn ? {
-        state: dictState, countdown: dict.countdown, error: dict.error, safety: safetyListening, done: questionsDone,
-        onRepeat: repeatQuestion,
-        onPause: () => { stopSpeaking(); setSpeaking(false); dict.pause(); },
-        onDone: finishDictation, onStop: finishDictation,
-        onSkip: () => { stopSpeaking(); setSpeaking(false); if (step <= SAFETY_STEP) dict.start(); },
-        onSwitch: () => { dict.setError(null); setMode("type"); },
-        onMic: () => { stopSpeaking(); setSpeaking(false); dict.start(); },
-      } : null} />
+      onCancelEdit={() => {
+        setEditKey(null);
+        setDraft("");
+      }}
+      focusSignal={focusSignal}
+      hint={
+        dictationOn
+          ? "Questions are read aloud. Say “next question” when you finish, or pause and it moves on."
+          : "Enter to send · Shift+Enter for a new line"
+      }
+      dictation={
+        dictationOn
+          ? {
+              state: dictState,
+              countdown: dict.countdown,
+              error: dict.error,
+              safety: safetyListening,
+              done: questionsDone,
+              onRepeat: repeatQuestion,
+              onPause: () => {
+                stopSpeaking();
+                setSpeaking(false);
+                dict.pause();
+              },
+              onDone: finishDictation,
+              onStop: finishDictation,
+              onSkip: () => {
+                stopSpeaking();
+                setSpeaking(false);
+                if (step <= SAFETY_STEP) dict.start();
+              },
+              onSwitch: () => {
+                dict.setError(null);
+                setMode("type");
+              },
+              onMic: () => {
+                stopSpeaking();
+                setSpeaking(false);
+                dict.start();
+              },
+            }
+          : null
+      }
+    />
   );
 
   const welcome = (
@@ -755,8 +1119,16 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
         <h1 className="flex flex-col items-center text-center font-doc font-medium leading-tight text-ink-900">
           <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(19px,2.6vw,23px)] font-normal text-ink-500">
             Psychotherapy session {note.session_number ?? ""} done on
-            <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" maxLength={10} value={dateText}
-              aria-label="Session date (dd/mm/yyyy)" aria-describedby="psy-date-error" aria-invalid={!!dateError} disabled={locked}
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="dd/mm/yyyy"
+              maxLength={10}
+              value={dateText}
+              aria-label="Session date (dd/mm/yyyy)"
+              aria-describedby="psy-date-error"
+              aria-invalid={!!dateError}
+              disabled={locked}
               onChange={(e) => {
                 let v = e.target.value.replace(/[^\d/]/g, "").replace(/\/{2,}/g, "/");
                 const typing = v.length > dateText.length;
@@ -764,36 +1136,88 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
                 setDateText(v.slice(0, 10));
                 setDateError("");
               }}
-              onBlur={() => void commitDate()} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitDate(); } }}
-              className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`} />
+              onBlur={() => void commitDate()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void commitDate();
+                }
+              }}
+              className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`}
+            />
             with
           </span>
-          <span id="psy-date-error" role="status" className="font-sans text-[12.5px] font-normal text-priority-red">{dateError}</span>
-          <span className="mt-1 text-[clamp(38px,6vw,54px)] font-semibold tracking-[-0.01em] text-brand-green">{note.patient.name}</span>
-          <small className="mt-2 font-sans text-[14.5px] font-normal text-ink-500">{note.author}, I’ll ask five short questions and one safety question, then organise your note.</small>
+          <span
+            id="psy-date-error"
+            role="status"
+            className="font-sans text-[12.5px] font-normal text-priority-red"
+          >
+            {dateError}
+          </span>
+          <span className="mt-1 text-[clamp(38px,6vw,54px)] font-semibold tracking-[-0.01em] text-brand-green">
+            {note.patient.name}
+          </span>
+          <small className="mt-2 font-sans text-[14.5px] font-normal text-ink-500">
+            {note.author}, I’ll ask five short questions and one safety question, then organise your
+            note.
+          </small>
         </h1>
         <div className="flex items-center gap-2 rounded-[22px] border border-surface-border bg-surface-card py-2.5 pl-2.5 pr-3 shadow-md hover:border-brand-green">
-          <button type="button" disabled={locked} onClick={() => begin()} className="flex min-w-0 flex-1 items-center gap-3.5 rounded-[14px] px-2 py-2 text-left disabled:opacity-60">
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => begin()}
+            className="flex min-w-0 flex-1 items-center gap-3.5 rounded-[14px] px-2 py-2 text-left disabled:opacity-60"
+          >
             <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[12px] bg-brand-green-tint text-brand-green">
               {dictationOn ? <Mic className="h-4 w-4" /> : <Keyboard className="h-4 w-4" />}
             </span>
             <span className="min-w-0">
               <strong className="block text-[16px] font-semibold">Begin session</strong>
-              <span className="block text-[13px] text-ink-500">{dictationOn ? "Questions will be read aloud; answer by voice." : "Questions appear one at a time; type your answers."}</span>
+              <span className="block text-[13px] text-ink-500">
+                {dictationOn
+                  ? "Questions will be read aloud; answer by voice."
+                  : "Questions appear one at a time; type your answers."}
+              </span>
             </span>
           </button>
           {modeMenu}
-          <button type="button" aria-label="Begin session" disabled={locked} onClick={() => begin()}
-            className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:opacity-40">
+          <button
+            type="button"
+            aria-label="Begin session"
+            disabled={locked}
+            onClick={() => begin()}
+            className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:opacity-40"
+          >
             {dictationOn ? <Mic className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
           </button>
         </div>
         {!config.dictation_enabled && (
-          <p className="text-center text-[12px] text-ink-500">Dictation is turned off for this organisation (browser dictation sends the audio to the browser maker’s speech service). Your Org Admin can turn it on under Data Protection. Questions can still be read aloud on this device.</p>
+          <p className="text-center text-[12px] text-ink-500">
+            Dictation is turned off for this organisation (browser dictation sends the audio to the
+            browser maker’s speech service). Your Org Admin can turn it on under Data Protection.
+            Questions can still be read aloud on this device.
+          </p>
         )}
         <div className="flex flex-wrap justify-center gap-2">
-          <button type="button" className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green" onClick={() => { quiet(); setExample(true); if (wide) setPanel("open"); }}>Try an example session</button>
-          <button type="button" className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green" onClick={() => setView("client")}><User className="h-4 w-4" /> Open client file</button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green"
+            onClick={() => {
+              quiet();
+              setExample(true);
+              if (wide) setPanel("open");
+            }}
+          >
+            Try an example session
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-[7px] rounded-[11px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] text-ink-900 hover:border-brand-green"
+            onClick={() => setView("client")}
+          >
+            <User className="h-4 w-4" /> Open client file
+          </button>
         </div>
       </div>
     </div>
@@ -801,8 +1225,19 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
 
   let centre: ReactNode;
   if (view === "history") {
-    centre = <SessionHistory note={note} notes={notes} onBack={() => setView("chat")} onOpenCurrent={() => setView("chat")}
-      onOpenPast={(id) => { setPastId(id); setView("past"); }} onNew={() => void newSession()} />;
+    centre = (
+      <SessionHistory
+        note={note}
+        notes={notes}
+        onBack={() => setView("chat")}
+        onOpenCurrent={() => setView("chat")}
+        onOpenPast={(id) => {
+          setPastId(id);
+          setView("past");
+        }}
+        onNew={() => void newSession()}
+      />
+    );
   } else if (view === "past" && pastId) {
     centre = <PastNote config={config} id={pastId} onBack={() => setView("history")} />;
   } else if (view === "client") {
@@ -814,60 +1249,164 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
   const thread = example ? (
     <ExampleThread config={config} onLeave={() => setExample(false)} />
   ) : (
-    <Thread config={config} note={note} step={step} acks={acks} busy={busy}
-      reviewExtras={note.status === "DRAFT" && note.is_author ? <SessionExtras note={note} patientId={patientId} save={save} /> : null}
+    <Thread
+      config={config}
+      note={note}
+      step={step}
+      acks={acks}
+      busy={busy}
+      reviewExtras={
+        note.status === "DRAFT" && note.is_author ? (
+          <SessionExtras note={note} patientId={patientId} save={save} />
+        ) : null
+      }
       h={{
         onEdit: editAnswer,
         onReview: (key) => void save({ resolve_detection: { key } }),
-        onModel: (code, include) => void save({ model_decision: { code, decision: include ? "INCLUDE" : "EXCLUDE" } }),
-        onGoal: (index: number, decision: GoalDecision) => void save({ goal_link: { goal_index: index, decision } }),
+        onModel: (code, include) =>
+          void save({ model_decision: { code, decision: include ? "INCLUDE" : "EXCLUDE" } }),
+        onGoal: (index: number, decision: GoalDecision) =>
+          void save({ goal_link: { goal_index: index, decision } }),
         onSafety: (answer) => void chooseSafety(answer),
         onOpenRisk: () => setSafetyOpen(true),
         onOpenNotes: openNotes,
-      }} />
+      }}
+    />
   );
 
-  const ICON = "grid h-8 w-8 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900";
+  const ICON =
+    "grid h-8 w-8 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900";
   const panelControls = wide ? (
     <>
-      {panel === "expanded"
-        ? <button type="button" className={ICON} aria-label="Exit full width" title="Exit full width" onClick={() => setPanel("open")}><Minimize2 className="h-4 w-4" /></button>
-        : <button type="button" className={ICON} aria-label="Expand" title="Expand" onClick={() => setPanel("expanded")}><Maximize2 className="h-4 w-4" /></button>}
-      <button type="button" className={ICON} aria-label="Minimise" title="Minimise" onClick={() => setPanel("min")}><PanelRightClose className="h-4 w-4" /></button>
-      <button type="button" className={ICON} aria-label="Close note" title="Close" onClick={() => setPanel("closed")}><X className="h-[18px] w-[18px]" /></button>
+      {panel === "expanded" ? (
+        <button
+          type="button"
+          className={ICON}
+          aria-label="Exit full width"
+          title="Exit full width"
+          onClick={() => setPanel("open")}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={ICON}
+          aria-label="Expand"
+          title="Expand"
+          onClick={() => setPanel("expanded")}
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+      )}
+      <button
+        type="button"
+        className={ICON}
+        aria-label="Minimise"
+        title="Minimise"
+        onClick={() => setPanel("min")}
+      >
+        <PanelRightClose className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        className={ICON}
+        aria-label="Close note"
+        title="Close"
+        onClick={() => setPanel("closed")}
+      >
+        <X className="h-[18px] w-[18px]" />
+      </button>
     </>
   ) : (
     <>
-      <button type="button" className={ICON} aria-label={full ? "Exit full width" : "Expand"} title={full ? "Exit full width" : "Expand"} onClick={() => setFull((f) => !f)}>
+      <button
+        type="button"
+        className={ICON}
+        aria-label={full ? "Exit full width" : "Expand"}
+        title={full ? "Exit full width" : "Expand"}
+        onClick={() => setFull((f) => !f)}
+      >
         {full ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
       </button>
-      <button type="button" className={ICON} aria-label="Close note" title="Close" onClick={() => setNotesOpen(false)}><X className="h-[18px] w-[18px]" /></button>
+      <button
+        type="button"
+        className={ICON}
+        aria-label="Close note"
+        title="Close"
+        onClick={() => setNotesOpen(false)}
+      >
+        <X className="h-[18px] w-[18px]" />
+      </button>
     </>
   );
   const notePanel = (
-    <NotePanel config={config} note={note} save={save} organise={organise} sign={sign} amend={amend}
-      controls={panelControls} example={example} busy={busy} />
+    <NotePanel
+      config={config}
+      note={note}
+      save={save}
+      organise={organise}
+      sign={sign}
+      amend={amend}
+      controls={panelControls}
+      example={example}
+      busy={busy}
+    />
   );
 
   return (
     <>
-      <nav aria-label="Workspace" className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16">
-        <RailButton label="Back to Interventions" onClick={onClose}><ArrowLeft className="h-5 w-5" /></RailButton>
-        <div aria-hidden className="mb-3 grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-brand-green font-display text-[19px] font-semibold text-on-primary">C</div>
-        <RailButton label="New session" onClick={() => void newSession()}><Plus className="h-5 w-5" /></RailButton>
-        <RailButton label="Chat · session history" current={view === "history" || view === "past"} onClick={() => setView("history")}><MessageSquare className="h-5 w-5" /></RailButton>
-        <RailButton label="Client file" current={view === "client"} onClick={() => setView("client")}><User className="h-5 w-5" /></RailButton>
-        <RailButton label="Therapy approaches" onClick={() => setLibraryOpen(true)}><Layers className="h-5 w-5" /></RailButton>
-        <RailButton label="Audit trail" current={view === "audit"} onClick={() => setView("audit")}><Clock className="h-5 w-5" /></RailButton>
+      <nav
+        aria-label="Workspace"
+        className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16"
+      >
+        <RailButton label="Back to Interventions" onClick={onClose}>
+          <ArrowLeft className="h-5 w-5" />
+        </RailButton>
+        <div
+          aria-hidden
+          className="mb-3 grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-brand-green font-display text-[19px] font-semibold text-on-primary"
+        >
+          C
+        </div>
+        <RailButton label="New session" onClick={() => void newSession()}>
+          <Plus className="h-5 w-5" />
+        </RailButton>
+        <RailButton
+          label="Chat · session history"
+          current={view === "history" || view === "past"}
+          onClick={() => setView("history")}
+        >
+          <MessageSquare className="h-5 w-5" />
+        </RailButton>
+        <RailButton
+          label="Client file"
+          current={view === "client"}
+          onClick={() => setView("client")}
+        >
+          <User className="h-5 w-5" />
+        </RailButton>
+        <RailButton label="Therapy approaches" onClick={() => setLibraryOpen(true)}>
+          <Layers className="h-5 w-5" />
+        </RailButton>
+        <RailButton label="Audit trail" current={view === "audit"} onClick={() => setView("audit")}>
+          <Clock className="h-5 w-5" />
+        </RailButton>
       </nav>
 
       {!(wide && panel === "expanded") && (
         <section className="flex min-w-0 flex-1 flex-col" aria-label="Session">
           {header}
-          {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
+          {error && (
+            <div className="px-4 pt-2">
+              <ErrorNote>{error}</ErrorNote>
+            </div>
+          )}
           {centre ? (
             <div className="min-h-0 flex-1 overflow-y-auto">{centre}</div>
-          ) : !begun && !example ? welcome : (
+          ) : !begun && !example ? (
+            welcome
+          ) : (
             <>
               <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto w-full max-w-[760px] px-4 py-5 sm:px-6">{thread}</div>
@@ -879,40 +1418,99 @@ function WorkspaceBody({ config, initial, patientId, onClose, onReplace }: {
       )}
 
       {wide && panel === "open" && (
-        <div role="separator" aria-orientation="vertical" aria-label="Resize the therapy note" tabIndex={0}
-          aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={maxWidth()}
-          onPointerDown={startDrag} onKeyDown={resizeKey}
-          className="w-1.5 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-brand-green-tint focus-visible:bg-brand-green-tint" />
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the therapy note"
+          tabIndex={0}
+          aria-valuenow={width}
+          aria-valuemin={MIN_WIDTH}
+          aria-valuemax={maxWidth()}
+          onPointerDown={startDrag}
+          onKeyDown={resizeKey}
+          className="w-1.5 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-brand-green-tint focus-visible:bg-brand-green-tint"
+        />
       )}
       {wide && (panel === "open" || panel === "expanded") && (
-        <aside aria-label="Therapy note" style={panel === "open" ? { width } : undefined}
-          className={`min-h-0 border-l border-surface-border ${panel === "expanded" ? "min-w-0 flex-1" : "flex-shrink-0"}`}>
+        <aside
+          aria-label="Therapy note"
+          style={panel === "open" ? { width } : undefined}
+          className={`min-h-0 border-l border-surface-border ${panel === "expanded" ? "min-w-0 flex-1" : "flex-shrink-0"}`}
+        >
           {notePanel}
         </aside>
       )}
       {wide && panel === "min" && (
-        <aside aria-label="Therapy note (minimised)" className="flex w-[52px] flex-shrink-0 flex-col items-center gap-2.5 border-l border-surface-border bg-surface-card py-3">
-          <button type="button" className={ICON} onClick={() => setPanel("open")} aria-label="Restore note" title="Restore"><PanelRightOpen className="h-4 w-4" /></button>
-          <button type="button" className={ICON} onClick={() => setPanel("expanded")} aria-label="Expand note" title="Expand"><Maximize2 className="h-4 w-4" /></button>
-          <span aria-hidden className={`h-[7px] w-[7px] rounded-full ${signed ? "bg-brand-green" : "bg-priority-orange"}`} />
-          <span className="rotate-180 text-[12.5px] font-semibold tracking-[.04em] text-ink-500 [writing-mode:vertical-rl]">Therapy note · {signed ? "Signed" : "Draft"}</span>
+        <aside
+          aria-label="Therapy note (minimised)"
+          className="flex w-[52px] flex-shrink-0 flex-col items-center gap-2.5 border-l border-surface-border bg-surface-card py-3"
+        >
+          <button
+            type="button"
+            className={ICON}
+            onClick={() => setPanel("open")}
+            aria-label="Restore note"
+            title="Restore"
+          >
+            <PanelRightOpen className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className={ICON}
+            onClick={() => setPanel("expanded")}
+            aria-label="Expand note"
+            title="Expand"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          <span
+            aria-hidden
+            className={`h-[7px] w-[7px] rounded-full ${signed ? "bg-brand-green" : "bg-priority-orange"}`}
+          />
+          <span className="rotate-180 text-[12.5px] font-semibold tracking-[.04em] text-ink-500 [writing-mode:vertical-rl]">
+            Therapy note · {signed ? "Signed" : "Draft"}
+          </span>
         </aside>
       )}
       {!wide && notesOpen && (
         <>
-          <div className="fixed inset-0 z-[104] bg-surface-scrim" onClick={() => setNotesOpen(false)} />
-          <aside ref={slideOver} role="dialog" aria-modal="true" aria-label="Therapy note"
-            className={`fixed inset-y-0 right-0 z-[105] w-full shadow-md ${full ? "" : "max-w-[520px]"}`}>
+          <div
+            className="fixed inset-0 z-[104] bg-surface-scrim"
+            onClick={() => setNotesOpen(false)}
+          />
+          <aside
+            ref={slideOver}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Therapy note"
+            className={`fixed inset-y-0 right-0 z-[105] w-full shadow-md ${full ? "" : "max-w-[520px]"}`}
+          >
             {notePanel}
           </aside>
         </>
       )}
 
-      {safetyOpen && <SafetyModal config={config} note={note} onClose={closeSafety} onSave={save} />}
-      {libraryOpen && <ApproachesDialog onClose={() => setLibraryOpen(false)}
-        onChanged={() => { if (accessToken) getPsyNote(accessToken, note.id).then(setNote).catch(() => undefined); }} />}
+      {safetyOpen && (
+        <SafetyModal config={config} note={note} onClose={closeSafety} onSave={save} />
+      )}
+      {libraryOpen && (
+        <ApproachesDialog
+          onClose={() => setLibraryOpen(false)}
+          onChanged={() => {
+            if (accessToken)
+              getPsyNote(accessToken, note.id)
+                .then(setNote)
+                .catch(() => undefined);
+          }}
+        />
+      )}
       {toast && (
-        <div role="status" className="fixed bottom-24 left-1/2 z-[130] -translate-x-1/2 rounded-md bg-ink-900 px-3 py-1.5 text-[12.5px] text-surface-card shadow-md">{toast}</div>
+        <div
+          role="status"
+          className="fixed bottom-24 left-1/2 z-[130] -translate-x-1/2 rounded-md bg-ink-900 px-3 py-1.5 text-[12.5px] text-surface-card shadow-md"
+        >
+          {toast}
+        </div>
       )}
     </>
   );

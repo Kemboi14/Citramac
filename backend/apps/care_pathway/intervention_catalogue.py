@@ -34,81 +34,221 @@ GROUPS = ["Assess", "Treat", "Support", "Close-out"]
 # clinical codes. Payer codes and pre-authorisation are never written here: they
 # come from the facility's configured ServicePayerCode rows (CLAUDE.md §6).
 MODULES = [
-    {"code": "emergency_care", "display": "Emergency Care", "group": "Assess",
-     "billing_service": "Emergency Care", "unit": "episode",
-     "options": ["Stabilisation", "De-escalation first; rapid tranquillisation only if needed",
-                 "SBAR handover", "Transfer escort"]},
-    {"code": "observation_safety", "display": "Observation & Safety", "group": "Assess",
-     "billing_service": None, "unit": "day",
-     "note": "Included in the bed-day tariff — documented, not billed separately.",
-     "options": ["Observation level & reason", "Signed observation entries", "Step-down review"]},
-    {"code": "blood_work", "display": "Blood Work", "group": "Assess",
-     "billing_service": "Blood Work", "unit": "test",
-     "options": ["Order sets", "Organic work-up bundle",
-                 "Drug-level monitoring (lithium, valproate, clozapine)"]},
-    {"code": "medical_review", "display": "Medical Review", "group": "Assess",
-     "billing_service": "Medical Review", "unit": "review",
-     "options": ["Assessment of physical symptoms", "Abnormal vital-sign review", "Medical clearance",
-                 "Transfer decision"]},
-    {"code": "appointments", "display": "Appointments", "group": "Assess",
-     "billing_service": "Appointments", "unit": "visit", "options": []},
-    {"code": "psychiatry", "display": "Psychiatry", "group": "Treat",
-     "billing_service": "Psychiatry", "unit": "review",
-     "options": ["Initial consultation", "Psychiatric review", "Medication orders (allergy-checked)",
-                 "Escalation to psychiatrist (SBAR)"]},
-    {"code": "admission", "display": "Admission", "group": "Treat",
-     "billing_service": "Admission", "unit": "bed-day",
-     "note": "Legal status is decided in Legal & consent; the forms it requires are prepared there.",
-     "options": ["Statutory forms linked to legal status", "Bed allocation", "Rights information"]},
-    {"code": "withdrawal_management", "display": "Withdrawal Management (Detox)", "group": "Treat",
-     "billing_service": "Withdrawal Management (Detox)", "unit": "day",
-     "options": ["CIWA-Ar (alcohol)", "COWS (opioids)", "Symptom-triggered dosing",
-                 "Thiamine promptly; never delay glucose"]},
-    {"code": "opioid_agonist_therapy", "display": "Opioid Agonist Therapy", "group": "Treat",
-     "billing_service": "Opioid Agonist Therapy", "unit": "day",
-     "note": "Methadone or buprenorphine via a MAT clinic; naloxone kit and overdose-risk teaching at discharge.",
-     "options": ["Methadone", "Buprenorphine", "Naloxone at discharge"]},
-    {"code": "psychiatric_nursing", "display": "Psychiatric Nursing", "group": "Treat",
-     "billing_service": "Psychiatric Nursing", "unit": "day",
-     "options": ["Medication Administration Record (MAR)", "PRN effectiveness", "Physical care charts",
-                 "SBAR shift handover"]},
-    {"code": "restrictive_practice", "display": "Restrictive Practice", "group": "Treat",
-     "billing_service": None, "unit": "event",
-     "note": "Last resort. De-escalation must be documented first, and every episode ends with a "
-             "debrief with the patient.",
-     "options": ["De-escalation attempted", "Authoriser", "Circulation / airway / hydration checks",
-                 "Patient debrief"]},
+    {
+        "code": "emergency_care",
+        "display": "Emergency Care",
+        "group": "Assess",
+        "billing_service": "Emergency Care",
+        "unit": "episode",
+        "options": [
+            "Stabilisation",
+            "De-escalation first; rapid tranquillisation only if needed",
+            "SBAR handover",
+            "Transfer escort",
+        ],
+    },
+    {
+        "code": "observation_safety",
+        "display": "Observation & Safety",
+        "group": "Assess",
+        "billing_service": None,
+        "unit": "day",
+        "note": "Included in the bed-day tariff — documented, not billed separately.",
+        "options": ["Observation level & reason", "Signed observation entries", "Step-down review"],
+    },
+    {
+        "code": "blood_work",
+        "display": "Blood Work",
+        "group": "Assess",
+        "billing_service": "Blood Work",
+        "unit": "test",
+        "options": [
+            "Order sets",
+            "Organic work-up bundle",
+            "Drug-level monitoring (lithium, valproate, clozapine)",
+        ],
+    },
+    {
+        "code": "medical_review",
+        "display": "Medical Review",
+        "group": "Assess",
+        "billing_service": "Medical Review",
+        "unit": "review",
+        "options": [
+            "Assessment of physical symptoms",
+            "Abnormal vital-sign review",
+            "Medical clearance",
+            "Transfer decision",
+        ],
+    },
+    {
+        "code": "appointments",
+        "display": "Appointments",
+        "group": "Assess",
+        "billing_service": "Appointments",
+        "unit": "visit",
+        "options": [],
+    },
+    {
+        "code": "psychiatry",
+        "display": "Psychiatry",
+        "group": "Treat",
+        "billing_service": "Psychiatry",
+        "unit": "review",
+        "options": [
+            "Initial consultation",
+            "Psychiatric review",
+            "Medication orders (allergy-checked)",
+            "Escalation to psychiatrist (SBAR)",
+        ],
+    },
+    {
+        "code": "admission",
+        "display": "Admission",
+        "group": "Treat",
+        "billing_service": "Admission",
+        "unit": "bed-day",
+        "note": "Legal status is decided in Legal & consent; the forms it requires are prepared there.",
+        "options": [
+            "Statutory forms linked to legal status",
+            "Bed allocation",
+            "Rights information",
+        ],
+    },
+    {
+        "code": "withdrawal_management",
+        "display": "Withdrawal Management (Detox)",
+        "group": "Treat",
+        "billing_service": "Withdrawal Management (Detox)",
+        "unit": "day",
+        "options": [
+            "CIWA-Ar (alcohol)",
+            "COWS (opioids)",
+            "Symptom-triggered dosing",
+            "Thiamine promptly; never delay glucose",
+        ],
+    },
+    {
+        "code": "opioid_agonist_therapy",
+        "display": "Opioid Agonist Therapy",
+        "group": "Treat",
+        "billing_service": "Opioid Agonist Therapy",
+        "unit": "day",
+        "note": "Methadone or buprenorphine via a MAT clinic; naloxone kit and overdose-risk teaching at discharge.",
+        "options": ["Methadone", "Buprenorphine", "Naloxone at discharge"],
+    },
+    {
+        "code": "psychiatric_nursing",
+        "display": "Psychiatric Nursing",
+        "group": "Treat",
+        "billing_service": "Psychiatric Nursing",
+        "unit": "day",
+        "options": [
+            "Medication Administration Record (MAR)",
+            "PRN effectiveness",
+            "Physical care charts",
+            "SBAR shift handover",
+        ],
+    },
+    {
+        "code": "restrictive_practice",
+        "display": "Restrictive Practice",
+        "group": "Treat",
+        "billing_service": None,
+        "unit": "event",
+        "note": "Last resort. De-escalation must be documented first, and every episode ends with a "
+        "debrief with the patient.",
+        "options": [
+            "De-escalation attempted",
+            "Authoriser",
+            "Circulation / airway / hydration checks",
+            "Patient debrief",
+        ],
+    },
     # Not a card of its own: group sessions are documented once in the Group
     # programme and each attendee's record lands here; the Psychotherapy card
     # counts and lists them (`history_modules`).
-    {"code": "group_psychotherapy", "display": "Group Psychotherapy", "group": "Treat",
-     "billing_service": None, "unit": "session", "listed": False,
-     "options": ["Group therapy"]},
-    {"code": "psychotherapy", "display": "Psychotherapy", "group": "Treat",
-     "billing_service": "Psychotherapy", "unit": "session",
-     "history_modules": ["psychotherapy", "group_psychotherapy"],
-     "options": ["Individual", "Group", "Family therapy",
-                 "Morning Meeting Observations (inpatient)", "General Observations"]},
-    {"code": "psychosocial_support", "display": "Psychosocial Support", "group": "Support",
-     "billing_service": "Psychosocial Support", "unit": "session",
-     "options": ["Social work", "Peer support (lived experience)", "Occupational therapy",
-                 "Family psychoeducation", "Spiritual care (by choice)", "Case management",
-                 "Psychoeducation (individual / group)", "Life skills / occupational"]},
-    {"code": "nutrition_fitness", "display": "Nutrition & Fitness", "group": "Support",
-     "billing_service": "Nutrition & Fitness", "unit": "session",
-     "options": ["Fitness programme", "Nutrition assessment & counselling"]},
-    {"code": "attachments", "display": "Attachments", "group": "Support",
-     "billing_service": None, "unit": "", "options": []},
-    {"code": "discharge", "display": "Discharge", "group": "Close-out",
-     "billing_service": "Discharge", "unit": "episode",
-     "note": "For inpatients: leaving inpatient care; follow-up continues in Psychotherapy, "
-             "Psychiatry and Nursing.",
-     "options": ["Discharge teaching (teach-back)", "Discharge summary", "Counter-referral letter",
-                 "Medical report"]},
-    {"code": "follow_up_aftercare", "display": "Follow-up & After-care", "group": "Close-out",
-     "billing_service": "Follow-up & After-care", "unit": "visit",
-     "note": "Includes 72-hour post-crisis contact and missed-appointment follow-up.",
-     "options": ["72-hour contact", "Missed-appointment follow-up", "CRI repeat measure"]},
+    {
+        "code": "group_psychotherapy",
+        "display": "Group Psychotherapy",
+        "group": "Treat",
+        "billing_service": None,
+        "unit": "session",
+        "listed": False,
+        "options": ["Group therapy"],
+    },
+    {
+        "code": "psychotherapy",
+        "display": "Psychotherapy",
+        "group": "Treat",
+        "billing_service": "Psychotherapy",
+        "unit": "session",
+        "history_modules": ["psychotherapy", "group_psychotherapy"],
+        "options": [
+            "Individual",
+            "Group",
+            "Family therapy",
+            "Morning Meeting Observations (inpatient)",
+            "General Observations",
+        ],
+    },
+    {
+        "code": "psychosocial_support",
+        "display": "Psychosocial Support",
+        "group": "Support",
+        "billing_service": "Psychosocial Support",
+        "unit": "session",
+        "options": [
+            "Social work",
+            "Peer support (lived experience)",
+            "Occupational therapy",
+            "Family psychoeducation",
+            "Spiritual care (by choice)",
+            "Case management",
+            "Psychoeducation (individual / group)",
+            "Life skills / occupational",
+        ],
+    },
+    {
+        "code": "nutrition_fitness",
+        "display": "Nutrition & Fitness",
+        "group": "Support",
+        "billing_service": "Nutrition & Fitness",
+        "unit": "session",
+        "options": ["Fitness programme", "Nutrition assessment & counselling"],
+    },
+    {
+        "code": "attachments",
+        "display": "Attachments",
+        "group": "Support",
+        "billing_service": None,
+        "unit": "",
+        "options": [],
+    },
+    {
+        "code": "discharge",
+        "display": "Discharge",
+        "group": "Close-out",
+        "billing_service": "Discharge",
+        "unit": "episode",
+        "note": "For inpatients: leaving inpatient care; follow-up continues in Psychotherapy, "
+        "Psychiatry and Nursing.",
+        "options": [
+            "Discharge teaching (teach-back)",
+            "Discharge summary",
+            "Counter-referral letter",
+            "Medical report",
+        ],
+    },
+    {
+        "code": "follow_up_aftercare",
+        "display": "Follow-up & After-care",
+        "group": "Close-out",
+        "billing_service": "Follow-up & After-care",
+        "unit": "visit",
+        "note": "Includes 72-hour post-crisis contact and missed-appointment follow-up.",
+        "options": ["72-hour contact", "Missed-appointment follow-up", "CRI repeat measure"],
+    },
 ]
 BY_CODE = {m["code"]: m for m in MODULES}
 
@@ -214,7 +354,9 @@ def _facts(patient, actions, register, diagnoses, medicines):
             )
         ),
         "register": register_keys,
-        "safety_score": any(k.startswith("score:") and k.endswith(":safety") for k in register_keys),
+        "safety_score": any(
+            k.startswith("score:") and k.endswith(":safety") for k in register_keys
+        ),
         "withdrawal_chart": any(k.startswith("withdrawal:") for k in register_keys),
         "dx": " ".join(d["description"] for d in diagnoses).lower(),
         "has_dx": bool(diagnoses),
@@ -236,16 +378,22 @@ def _facts(patient, actions, register, diagnoses, medicines):
 def _signal(code, f):
     dx = f["dx"]
     if code == "emergency_care":
-        return "AGGRESSION_RISK" in f["alerts"] or bool({"risk:violence", "psychosis"} & f["register"])
+        return "AGGRESSION_RISK" in f["alerts"] or bool(
+            {"risk:violence", "psychosis"} & f["register"]
+        )
     if code == "observation_safety":
-        return bool(SAFETY_ALERTS & f["alerts"]) or bool(
-            {"risk:suicide", "risk:violence"} & f["register"]
-        ) or f["safety_score"]
+        return (
+            bool(SAFETY_ALERTS & f["alerts"])
+            or bool({"risk:suicide", "risk:violence"} & f["register"])
+            or f["safety_score"]
+        )
     if code == "blood_work":
         return f["drug_level"]
     if code == "medical_review":
         return (
-            bool(MEDICAL_ALERTS & f["alerts"]) or "ews" in f["register"] or f["withdrawal_chart"]
+            bool(MEDICAL_ALERTS & f["alerts"])
+            or "ews" in f["register"]
+            or f["withdrawal_chart"]
             or bool(re.search(r"withdrawal|detox|intoxication", dx))
         )
     if code == "appointments":
@@ -256,7 +404,8 @@ def _signal(code, f):
         return f["inpatient"]
     if code == "withdrawal_management":
         return (
-            "WITHDRAWAL_RISK" in f["alerts"] or f["withdrawal_chart"]
+            "WITHDRAWAL_RISK" in f["alerts"]
+            or f["withdrawal_chart"]
             or f["substance"] in SUBSTANCE_CODES
             or bool(re.search(r"withdrawal|detox|alcohol|opioid", dx))
         )
@@ -264,11 +413,14 @@ def _signal(code, f):
         return f["opioid"] or "opioid" in dx
     if code == "group_psychotherapy":
         return f["group"] or (
-            not f["inpatient"] and bool(re.search(r"depress|anxiety|panic|bipolar|trauma|substance", dx))
+            not f["inpatient"]
+            and bool(re.search(r"depress|anxiety|panic|bipolar|trauma|substance", dx))
         )
     if code == "psychotherapy":
-        return "therapy" in f["action_keys"] or not f["inpatient"] or bool(
-            re.search(r"depress|anxiety|panic|bipolar", dx)
+        return (
+            "therapy" in f["action_keys"]
+            or not f["inpatient"]
+            or bool(re.search(r"depress|anxiety|panic|bipolar", dx))
         )
     if code == "follow_up_aftercare":
         return "outpatient" in f["action_keys"] or f["next_appointment"]
@@ -334,8 +486,9 @@ def workspace(patient):
     register = attention.active_alerts(patient)
     diagnoses = [
         {"code": d.icd11_code.code, "description": d.icd11_code.description}
-        for d in DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-        .select_related("icd11_code")
+        for d in DiagnosisCode.objects.filter(
+            encounter__patient=patient, status="ACTIVE"
+        ).select_related("icd11_code")
     ]
     medicines = list(
         MedicationHistoryEntry.objects.filter(patient=patient, superseded_at__isnull=True)
@@ -355,27 +508,31 @@ def workspace(patient):
             linked.setdefault(code, activity)
         own = [r for r in records if r.activity_id == activity.id]
         latest = own[0] if own else None
-        action_rows.append({
-            "id": str(activity.id),
-            "title": activity.title,
-            "goal": activity.goal,
-            "modules": modules,
-            "status": activity.status,
-            "status_display": activity.get_status_display(),
-            "priority": activity.priority,
-            "instructions": activity.instructions,
-            "decision_display": activity.get_decision_display() if activity.decision else "",
-            "why": (activity.why or [""])[0] if activity.why else "",
-            "due_at": activity.due_at.isoformat() if activity.due_at else None,
-            # v4: past due, not done, and not Routine.
-            "overdue": bool(
-                activity.due_at and activity.due_at < now and activity.status != "COMPLETED"
-                and activity.priority != "GREEN"
-            ),
-            "records": len(own),
-            "latest_by": services.user_display(latest.provider) if latest else "",
-            "latest_at": latest.performed_at.isoformat() if latest else None,
-        })
+        action_rows.append(
+            {
+                "id": str(activity.id),
+                "title": activity.title,
+                "goal": activity.goal,
+                "modules": modules,
+                "status": activity.status,
+                "status_display": activity.get_status_display(),
+                "priority": activity.priority,
+                "instructions": activity.instructions,
+                "decision_display": activity.get_decision_display() if activity.decision else "",
+                "why": (activity.why or [""])[0] if activity.why else "",
+                "due_at": activity.due_at.isoformat() if activity.due_at else None,
+                # v4: past due, not done, and not Routine.
+                "overdue": bool(
+                    activity.due_at
+                    and activity.due_at < now
+                    and activity.status != "COMPLETED"
+                    and activity.priority != "GREEN"
+                ),
+                "records": len(own),
+                "latest_by": services.user_display(latest.provider) if latest else "",
+                "latest_at": latest.performed_at.isoformat() if latest else None,
+            }
+        )
 
     plan_reasons = {}
     for key, titles in from_plan.items():
@@ -399,28 +556,28 @@ def workspace(patient):
         action = linked.get(code)
         history = spec.get("history_modules", [code])
         terms = payer.get(service.id, {}) if service else {}
-        module_rows.append({
-            "code": code,
-            "name": displays[code],
-            "group": spec["group"],
-            "options": spec["options"],
-            "recommended": bool(reason),
-            "reason": reason,
-            "action_id": str(action.id) if action else None,
-            "billing_service": spec["billing_service"],
-            "billable": service is not None and code not in CHARGED_BY_WORKFLOW,
-            "charged_by": CHARGED_BY_WORKFLOW.get(code, ""),
-            "rate": str(service.rate) if service and service.rate is not None else None,
-            "delivered": sum(r.quantity for r in records if r.module in history),
-            "history_modules": history,
-            "unit": spec["unit"],
-            "note": spec.get("note", ""),
-            "linked_actions": [
-                str(a.id) for a in actions if code in modules_for_activity(a)
-            ],
-            "sha_code": terms.get("sha_code", ""),
-            "preauth": terms.get("preauth", False),
-        })
+        module_rows.append(
+            {
+                "code": code,
+                "name": displays[code],
+                "group": spec["group"],
+                "options": spec["options"],
+                "recommended": bool(reason),
+                "reason": reason,
+                "action_id": str(action.id) if action else None,
+                "billing_service": spec["billing_service"],
+                "billable": service is not None and code not in CHARGED_BY_WORKFLOW,
+                "charged_by": CHARGED_BY_WORKFLOW.get(code, ""),
+                "rate": str(service.rate) if service and service.rate is not None else None,
+                "delivered": sum(r.quantity for r in records if r.module in history),
+                "history_modules": history,
+                "unit": spec["unit"],
+                "note": spec.get("note", ""),
+                "linked_actions": [str(a.id) for a in actions if code in modules_for_activity(a)],
+                "sha_code": terms.get("sha_code", ""),
+                "preauth": terms.get("preauth", False),
+            }
+        )
 
     return {
         "has_plan": bool(actions),
@@ -457,7 +614,9 @@ def correct_record(user, record, reason):
 
     reason = (reason or "").strip()
     if len(reason) < 5:
-        raise ValidationError({"reason": "Give the reason for the correction (at least 5 characters)."})
+        raise ValidationError(
+            {"reason": "Give the reason for the correction (at least 5 characters)."}
+        )
     if record.voided_at:
         raise ValidationError({"detail": "This record has already been corrected."})
     return services.void_intervention(user, record, reason)

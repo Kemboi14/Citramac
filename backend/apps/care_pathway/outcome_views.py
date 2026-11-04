@@ -47,4 +47,6 @@ class AppointmentRebookView(APIView):
     def post(self, request, pk):
         appointment = get_object_or_404(Appointment.objects.select_related("patient"), pk=pk)
         records.rebook_missed(appointment, request.user, request.data)
-        return Response(records.client_follow_ups(appointment.patient), status=status.HTTP_201_CREATED)
+        return Response(
+            records.client_follow_ups(appointment.patient), status=status.HTTP_201_CREATED
+        )

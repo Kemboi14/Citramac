@@ -40,10 +40,20 @@ BASE = {
     "screen_safeguarding": "no",
 }
 FULL_VITALS = {
-    "v_hr": "80", "v_sbp": "120", "v_dbp": "80", "v_rr": "16",
-    "v_temp": "37", "v_spo2": "98", "acvpu": "A", "v_o2": "room_air",
+    "v_hr": "80",
+    "v_sbp": "120",
+    "v_dbp": "80",
+    "v_rr": "16",
+    "v_temp": "37",
+    "v_spo2": "98",
+    "acvpu": "A",
+    "v_o2": "room_air",
 }
-SAFETY = {"safety_obs": "ARMS_LENGTH", "safety_location": "QUIET_ROOM", "safety_observer": "L. Wambui"}
+SAFETY = {
+    "safety_obs": "ARMS_LENGTH",
+    "safety_location": "QUIET_ROOM",
+    "safety_observer": "L. Wambui",
+}
 
 
 def rec(**answers):
@@ -54,16 +64,26 @@ class RulesetTests(SimpleTestCase):
     def test_ruleset_is_labelled_and_versioned(self):
         result = rec()
         self.assertEqual(result["rules_version"], "v4-demo")
-        self.assertEqual(result["ruleset_label"], "DEMO RULESET — REQUIRES CLINICAL GOVERNANCE SIGN-OFF")
+        self.assertEqual(
+            result["ruleset_label"], "DEMO RULESET — REQUIRES CLINICAL GOVERNANCE SIGN-OFF"
+        )
         self.assertEqual(result["recommendation"], "GREEN")
 
     def test_suicidality_ladder(self):
-        expected = {"none": "GREEN", "passive": "YELLOW", "active": "ORANGE", "plan": "ORANGE", "intent": "RED"}
+        expected = {
+            "none": "GREEN",
+            "passive": "YELLOW",
+            "active": "ORANGE",
+            "plan": "ORANGE",
+            "intent": "RED",
+        }
         for level, priority in expected.items():
             self.assertEqual(rec(screen_self="yes", suic=level)["priority"], priority, level)
 
     def test_plan_with_lethal_means_is_red_and_means_alone_is_yellow(self):
-        self.assertEqual(rec(screen_self="yes", suic="plan", flags=["lethal_means"])["priority"], "RED")
+        self.assertEqual(
+            rec(screen_self="yes", suic="plan", flags=["lethal_means"])["priority"], "RED"
+        )
         self.assertEqual(rec(screen_self="yes", flags=["lethal_means"])["priority"], "YELLOW")
 
     def test_preparatory_behaviour_is_red(self):
@@ -105,15 +125,25 @@ class RulesetTests(SimpleTestCase):
 
     def test_remote_triggers_fire_with_third_party_source(self):
         """AT-08: same triggers, source THIRD_PARTY_REPORT, no vitals."""
-        result = v4.evaluate({
-            **BASE, "b_present": "no", "b_informant": "family", "b_third_party": "Sister",
-            "r_suicide": "talked", "r_means": "yes", "r_disposition": "brought",
-            "v_hr": "200", "flags": ["seizure"],
-        })
+        result = v4.evaluate(
+            {
+                **BASE,
+                "b_present": "no",
+                "b_informant": "family",
+                "b_third_party": "Sister",
+                "r_suicide": "talked",
+                "r_means": "yes",
+                "r_disposition": "brought",
+                "v_hr": "200",
+                "flags": ["seizure"],
+            }
+        )
         self.assertEqual(result["priority"], "RED")
         self.assertIn("SUICIDE_RISK", [a["code"] for a in result["alerts"]])
         self.assertIsNone(result["ews"])
-        sources = {i["source_code"] for i in result["finding_items"] if i["finding"] != "Vital signs"}
+        sources = {
+            i["source_code"] for i in result["finding_items"] if i["finding"] != "Vital signs"
+        }
         self.assertEqual(sources - {"CLINICIAN_OBSERVATION"}, {"THIRD_PARTY_REPORT"})
 
     def test_remote_post_rules(self):
@@ -124,11 +154,15 @@ class RulesetTests(SimpleTestCase):
 
     def test_hidden_fields_are_not_submitted(self):
         """X-08: present = no drops observation and vitals; screen No drops its flags."""
-        cleaned = v4.clean_answers({**BASE, "b_present": "no", "v_hr": "80", "acvpu": "A", "flags": ["seizure"]})
+        cleaned = v4.clean_answers(
+            {**BASE, "b_present": "no", "v_hr": "80", "acvpu": "A", "flags": ["seizure"]}
+        )
         self.assertNotIn("v_hr", cleaned)
         self.assertNotIn("acvpu", cleaned)
         self.assertNotIn("flags", cleaned)
-        cleaned = v4.clean_answers({**BASE, "r_suicide": "talked", "flags": ["seizure"], "suic": "plan"})
+        cleaned = v4.clean_answers(
+            {**BASE, "r_suicide": "talked", "flags": ["seizure"], "suic": "plan"}
+        )
         self.assertNotIn("r_suicide", cleaned)
         self.assertEqual(cleaned["flags"], [])
         self.assertNotIn("suic", cleaned)
@@ -151,10 +185,16 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         self.te_id = self.register().data["triage_encounter_id"]
         with platform_admin_context():
             self.psych = User.objects.create_user(
-                email=f"psych-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True, first_name="Dr", last_name="Senior",
+                email=f"psych-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name="Dr",
+                last_name="Senior",
             )
-            role, _ = Role.objects.get_or_create(organization=None, name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            role, _ = Role.objects.get_or_create(
+                organization=None, name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
             self.psych.roles.add(role)
         self.psych_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.psych)[0]}"}
 
@@ -163,7 +203,10 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         if priority:
             body["final_priority"] = priority
         return self.client.post(
-            reverse("care-triage-sign", args=[te_id or self.te_id]), body, format="json", **(auth or self.auth)
+            reverse("care-triage-sign", args=[te_id or self.te_id]),
+            body,
+            format="json",
+            **(auth or self.auth),
         )
 
     def test_new_triage_opens_on_v5_and_a_v4_draft_still_signs_on_v4(self):
@@ -190,10 +233,18 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         with platform_admin_context():
             te = TriageEncounter.objects.get(pk=self.te_id)
             vital = VitalSigns.objects.get(encounter=te.encounter)
-            self.assertEqual((vital.consciousness, vital.supplemental_o2, vital.heart_rate), ("A", False, 105))
-            self.assertEqual(ObservationLevelChange.objects.get(patient=te.patient).level, "ARMS_LENGTH")
-            self.assertIn("ABNORMAL_VITALS", ClinicalAlert.objects.filter(patient=te.patient).values_list(
-                "alert_code", flat=True))
+            self.assertEqual(
+                (vital.consciousness, vital.supplemental_o2, vital.heart_rate), ("A", False, 105)
+            )
+            self.assertEqual(
+                ObservationLevelChange.objects.get(patient=te.patient).level, "ARMS_LENGTH"
+            )
+            self.assertIn(
+                "ABNORMAL_VITALS",
+                ClinicalAlert.objects.filter(patient=te.patient).values_list(
+                    "alert_code", flat=True
+                ),
+            )
 
     def test_orange_in_person_requires_waiting_room_safety(self):
         response = self.sign_v4({**BASE, "screen_self": "yes", "suic": "active"})
@@ -209,13 +260,17 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         """AT-05."""
         answers = {**BASE, "screen_self": "yes", "suic": "passive"}  # YELLOW
         self.assertEqual(self.sign_v4(answers, priority="ORANGE").status_code, 400)
-        response = self.sign_v4({**answers, **SAFETY}, priority="ORANGE",
-                                 override_reason="Collateral history suggests rapid deterioration.")
+        response = self.sign_v4(
+            {**answers, **SAFETY},
+            priority="ORANGE",
+            override_reason="Collateral history suggests rapid deterioration.",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["decision"], "OVERRIDE")
         with platform_admin_context():
             entry = AuditLogEntry.objects.filter(
-                model="care_pathway.triageassessment", object_id=response.data["id"],
+                model="care_pathway.triageassessment",
+                object_id=response.data["id"],
                 field_diff__event="OVERRIDE",
             ).get()
             self.assertEqual(entry.field_diff["system_priority"], "YELLOW")
@@ -223,8 +278,11 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
 
     def test_downgrade_by_non_psychiatrist_requests_cosign(self):
         answers = {**BASE, "screen_self": "yes", "suic": "active"}  # ORANGE
-        response = self.sign_v4(answers, priority="YELLOW",
-                                override_reason="Long-standing thoughts, well supported at home today.")
+        response = self.sign_v4(
+            answers,
+            priority="YELLOW",
+            override_reason="Long-standing thoughts, well supported at home today.",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             req = CosignRequest.objects.get(kind="TRIAGE_DOWNGRADE")
@@ -232,8 +290,12 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
 
     def test_downgrade_by_psychiatrist_self_signs(self):
         answers = {**BASE, "screen_self": "yes", "suic": "active"}
-        response = self.sign_v4(answers, priority="YELLOW", auth=self.psych_auth,
-                                override_reason="Long-standing thoughts, well supported at home today.")
+        response = self.sign_v4(
+            answers,
+            priority="YELLOW",
+            auth=self.psych_auth,
+            override_reason="Long-standing thoughts, well supported at home today.",
+        )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["answers"]["m_cosign"], "self")
         with platform_admin_context():
@@ -242,9 +304,17 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
     def test_remote_triage_writes_third_party_alerts_and_callback_task(self):
         """AT-08: client not present — no vitals, same alerts, timed call-back task."""
         callback = (facility_time.local_now() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
-        answers = {**BASE, "b_present": "no", "b_informant": "family", "b_third_party": "Sister — Jane",
-                   "r_suicide": "talked", "r_disposition": "callback", "r_callback_at": callback,
-                   "r_callback_owner": "triage_nurse", "v_hr": "80"}
+        answers = {
+            **BASE,
+            "b_present": "no",
+            "b_informant": "family",
+            "b_third_party": "Sister — Jane",
+            "r_suicide": "talked",
+            "r_disposition": "callback",
+            "r_callback_at": callback,
+            "r_callback_owner": "triage_nurse",
+            "v_hr": "80",
+        }
         response = self.sign_v4(answers)
         self.assertEqual(response.status_code, 201, response.data)
         self.assertNotIn("v_hr", response.data["answers"])
@@ -253,21 +323,34 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             te = TriageEncounter.objects.get(pk=self.te_id)
             self.assertFalse(VitalSigns.objects.filter(encounter=te.encounter).exists())
             self.assertIsNone(te.next_recheck_at)
-            self.assertIn("SUICIDE_RISK", ClinicalAlert.objects.filter(patient=te.patient).values_list(
-                "alert_code", flat=True))
+            self.assertIn(
+                "SUICIDE_RISK",
+                ClinicalAlert.objects.filter(patient=te.patient).values_list(
+                    "alert_code", flat=True
+                ),
+            )
             task = CareTask.objects.get(triage_encounter=te, focus_type="TRIAGE_CALLBACK")
             self.assertIsNotNone(task.due_at)
 
     def test_gbv_and_duty_to_protect_tasks(self):
         incident = (facility_time.local_now() - timedelta(hours=10)).strftime("%Y-%m-%dT%H:%M")
-        answers = {**BASE, **SAFETY, "screen_others": "yes", "screen_safeguarding": "yes",
-                   "flags": ["gbv_72h", "homicidal_named"], "gbv_incident_at": incident,
-                   "duty_victim": "Neighbour", "duty_informed": "On-call psychiatrist"}
+        answers = {
+            **BASE,
+            **SAFETY,
+            "screen_others": "yes",
+            "screen_safeguarding": "yes",
+            "flags": ["gbv_72h", "homicidal_named"],
+            "gbv_incident_at": incident,
+            "duty_victim": "Neighbour",
+            "duty_informed": "On-call psychiatrist",
+        }
         response = self.sign_v4(answers)
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             pep = CareTask.objects.get(focus_type="PEP_EC_DECISION")
-            self.assertAlmostEqual((pep.due_at - timezone.now()).total_seconds() / 3600, 62, delta=0.1)
+            self.assertAlmostEqual(
+                (pep.due_at - timezone.now()).total_seconds() / 3600, 62, delta=0.1
+            )
             self.assertTrue(CareTask.objects.filter(focus_type="DUTY_TO_PROTECT").exists())
             self.assertTrue(CosignRequest.objects.filter(kind="DUTY_TO_PROTECT").exists())
 
@@ -285,9 +368,13 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
     def test_live_queue_lanes_and_order(self):
         second = self.register(full_name="Brian Otieno Mwangi")
         third = self.register(full_name="Carol Akinyi Omondi")
-        self.assertEqual(self.sign_v4({**BASE}, te_id=second.data["triage_encounter_id"]).status_code, 201)
+        self.assertEqual(
+            self.sign_v4({**BASE}, te_id=second.data["triage_encounter_id"]).status_code, 201
+        )
         red = {**BASE, **SAFETY, "screen_medical": "yes", "flags": ["seizure"]}
-        self.assertEqual(self.sign_v4(red, te_id=third.data["triage_encounter_id"]).status_code, 201)
+        self.assertEqual(
+            self.sign_v4(red, te_id=third.data["triage_encounter_id"]).status_code, 201
+        )
         data = self.client.get(reverse("care-live-queue"), **self.auth).data
         lanes = data["lanes"]
         self.assertEqual([r["id"] for r in lanes["awaiting"]], [self.te_id])
@@ -319,6 +406,8 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
     def test_intake_carries_v4_risk_items(self):
         from .intake import triage_risk_items
 
-        items = triage_risk_items({**BASE, "screen_self": "yes", "suic": "intent", "flags": ["lethal_means"]})
+        items = triage_risk_items(
+            {**BASE, "screen_self": "yes", "suic": "intent", "flags": ["lethal_means"]}
+        )
         self.assertIn(("suicide", "Intent"), items)
         self.assertIn(("suicide", "Access to means"), items)

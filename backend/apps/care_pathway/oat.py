@@ -9,13 +9,18 @@ from .models import LocalConcept, NaloxoneSupply, OatEnrolment
 
 
 def refer(patient, user, data):
-    if not LocalConcept.objects.filter(valueset_id="oat-medicine", code=data.get("medicine")).exists():
+    if not LocalConcept.objects.filter(
+        valueset_id="oat-medicine", code=data.get("medicine")
+    ).exists():
         raise ValidationError({"medicine": "Choose the medicine the OAT clinic is considering."})
     if not str(data.get("clinic", "")).strip():
         raise ValidationError({"clinic": "Name the OAT clinic or service."})
     return OatEnrolment.objects.create(
-        organization_id=patient.organization_id, patient=patient, medicine=data["medicine"],
-        clinic=data["clinic"].strip(), recorded_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        medicine=data["medicine"],
+        clinic=data["clinic"].strip(),
+        recorded_by=user,
     )
 
 
@@ -43,7 +48,11 @@ def record_naloxone(patient, user, outcome, quantity=None, training=False):
     if outcome == "SUPPLIED" and not quantity:
         raise ValidationError({"quantity": "Record how many kits were supplied."})
     return NaloxoneSupply.objects.create(
-        organization_id=patient.organization_id, patient=patient, outcome=outcome,
-        quantity=quantity if outcome == "SUPPLIED" else None, training_given=bool(training),
-        given_by=user, given_at=timezone.now(),
+        organization_id=patient.organization_id,
+        patient=patient,
+        outcome=outcome,
+        quantity=quantity if outcome == "SUPPLIED" else None,
+        training_given=bool(training),
+        given_by=user,
+        given_at=timezone.now(),
     )

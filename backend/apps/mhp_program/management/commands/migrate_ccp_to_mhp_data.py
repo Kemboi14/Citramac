@@ -48,22 +48,26 @@ class Command(BaseCommand):
                 cur.execute(f"ALTER TABLE IF EXISTS {old} RENAME TO {new}")
                 self.stdout.write(f"table: {old} -> {new} (or already renamed / never existed)")
 
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_name = 'tenancy_branch' AND column_name = 'ccp_registration_status'
-                """
-            )
+                """)
             if cur.fetchone():
                 cur.execute(
                     "ALTER TABLE tenancy_branch "
                     "RENAME COLUMN ccp_registration_status TO mhp_registration_status"
                 )
-                self.stdout.write("column: tenancy_branch.ccp_registration_status -> mhp_registration_status")
+                self.stdout.write(
+                    "column: tenancy_branch.ccp_registration_status -> mhp_registration_status"
+                )
             else:
-                self.stdout.write("column: tenancy_branch already has mhp_registration_status, skipped")
+                self.stdout.write(
+                    "column: tenancy_branch already has mhp_registration_status, skipped"
+                )
 
-            cur.execute("UPDATE django_migrations SET app = 'mhp_program' WHERE app = 'ccp_program'")
+            cur.execute(
+                "UPDATE django_migrations SET app = 'mhp_program' WHERE app = 'ccp_program'"
+            )
             self.stdout.write(f"django_migrations rows repointed: {cur.rowcount}")
 
             cur.execute(
@@ -83,11 +87,14 @@ class Command(BaseCommand):
             facility_type="MENTAL_HEALTH_MHP"
         )
         if org_updated:
-            self.stdout.write(f"Organization.facility_type: MENTAL_HEALTH_CCP -> MENTAL_HEALTH_MHP ({org_updated} rows)")
+            self.stdout.write(
+                f"Organization.facility_type: MENTAL_HEALTH_CCP -> MENTAL_HEALTH_MHP ({org_updated} rows)"
+            )
 
         for org in Organization.objects.filter(enabled_modules__contains=["ccp_program"]):
             org.enabled_modules = [
-                "mhp_program" if module == "ccp_program" else module for module in org.enabled_modules
+                "mhp_program" if module == "ccp_program" else module
+                for module in org.enabled_modules
             ]
             org.save(update_fields=["enabled_modules"])
             self.stdout.write(f"Organization({org.pk}).enabled_modules: ccp_program -> mhp_program")

@@ -55,9 +55,13 @@ export function ClientTab({
 
   useEffect(() => {
     if (!accessToken) return;
-    void listSeniors(accessToken).then((r) => setSeniors(r.results)).catch(() => undefined);
+    void listSeniors(accessToken)
+      .then((r) => setSeniors(r.results))
+      .catch(() => undefined);
     if (ws.needs_safety_plan) {
-      openSafetyPlan(accessToken, patientId).then(setPlan).catch((e) => setError(errorText(e, "Couldn't open the safety plan.")));
+      openSafetyPlan(accessToken, patientId)
+        .then(setPlan)
+        .catch((e) => setError(errorText(e, "Couldn't open the safety plan.")));
     }
   }, [accessToken, patientId, ws.needs_safety_plan]);
 
@@ -105,7 +109,10 @@ export function ClientTab({
 
   async function clientDisagrees() {
     setShowClient(false);
-    await saveDetails({ client_agreement: "PARTIAL", disagreements: [...details.disagreements, { part: "", words: "" }] });
+    await saveDetails({
+      client_agreement: "PARTIAL",
+      disagreements: [...details.disagreements, { part: "", words: "" }],
+    });
     setEditorKey((k) => k + 1);
   }
 
@@ -121,7 +128,8 @@ export function ClientTab({
         </button>
         {ws.client_ack && (
           <Tag tone="brand">
-            Client acknowledged {formatDateTime(ws.client_ack.at)} ({ws.client_ack.language === "sw" ? "Kiswahili" : "English"})
+            Client acknowledged {formatDateTime(ws.client_ack.at)} (
+            {ws.client_ack.language === "sw" ? "Kiswahili" : "English"})
           </Tag>
         )}
       </div>
@@ -137,7 +145,9 @@ export function ClientTab({
       <Card title="Agreement and what matters">
         <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
-            <span className={FIELD_LABEL}>Client agreement <span className="text-priority-red">*</span></span>
+            <span className={FIELD_LABEL}>
+              Client agreement <span className="text-priority-red">*</span>
+            </span>
             <SelectChoices
               options={vs.options("care-plan-agreement")}
               value={details.client_agreement}
@@ -151,7 +161,10 @@ export function ClientTab({
               key={`matters-${editorKey}`}
               className={INPUT}
               defaultValue={details.what_matters}
-              onBlur={(e) => e.target.value !== details.what_matters && void saveDetails({ what_matters: e.target.value })}
+              onBlur={(e) =>
+                e.target.value !== details.what_matters &&
+                void saveDetails({ what_matters: e.target.value })
+              }
             />
             {intakeMatters && intakeMatters !== details.what_matters && !disabled && (
               <span className="text-[11px] text-ink-500">
@@ -170,22 +183,38 @@ export function ClientTab({
             )}
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className={FIELD_LABEL}>Rationale — required when the plan conflicts with the client’s priority</span>
-            <textarea rows={2} className={`${INPUT} resize-y`} defaultValue={details.rationale} onBlur={(e) => void saveDetails({ rationale: e.target.value })} />
+            <span className={FIELD_LABEL}>
+              Rationale — required when the plan conflicts with the client’s priority
+            </span>
+            <textarea
+              rows={2}
+              className={`${INPUT} resize-y`}
+              defaultValue={details.rationale}
+              onBlur={(e) => void saveDetails({ rationale: e.target.value })}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Senior review (co-signs a conflicting plan)</span>
-            <select className={INPUT} value={details.senior_reviewer} onChange={(e) => void saveDetails({ senior_reviewer: e.target.value })}>
+            <select
+              className={INPUT}
+              value={details.senior_reviewer}
+              onChange={(e) => void saveDetails({ senior_reviewer: e.target.value })}
+            >
               <option value="">— none —</option>
               {seniors.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </select>
           </label>
         </fieldset>
       </Card>
 
-      <Card title="Where the client disagrees" aside={<span className="text-[11px] text-ink-500">structured — in their words</span>}>
+      <Card
+        title="Where the client disagrees"
+        aside={<span className="text-[11px] text-ink-500">structured — in their words</span>}
+      >
         <DisagreementsEditor
           key={`disagree-${editorKey}`}
           ws={ws}
@@ -195,27 +224,59 @@ export function ClientTab({
       </Card>
 
       <Card title="My goals">
-        <GoalsEditor key={`goals-${editorKey}`} ws={ws} disabled={disabled} onSave={(goals) => void saveDetails({ goal_items: goals })} />
+        <GoalsEditor
+          key={`goals-${editorKey}`}
+          ws={ws}
+          disabled={disabled}
+          onSave={(goals) => void saveDetails({ goal_items: goals })}
+        />
       </Card>
 
       <Card title="Crisis, family and advance wishes">
         <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Crisis &amp; relapse plan</span>
-            <textarea rows={3} className={`${INPUT} resize-y`} defaultValue={details.crisis_plan} onBlur={(e) => e.target.value !== details.crisis_plan && void saveDetails({ crisis_plan: e.target.value })} />
+            <textarea
+              rows={3}
+              className={`${INPUT} resize-y`}
+              defaultValue={details.crisis_plan}
+              onBlur={(e) =>
+                e.target.value !== details.crisis_plan &&
+                void saveDetails({ crisis_plan: e.target.value })
+              }
+            />
           </label>
           <label className="flex flex-col gap-1">
-            <span className={FIELD_LABEL}>Family / carer involvement (consent: {FAMILY_CONSENT[ws.family_consent]})</span>
-            <textarea rows={3} className={`${INPUT} resize-y`} defaultValue={details.family_involvement} onBlur={(e) => e.target.value !== details.family_involvement && void saveDetails({ family_involvement: e.target.value })} />
+            <span className={FIELD_LABEL}>
+              Family / carer involvement (consent: {FAMILY_CONSENT[ws.family_consent]})
+            </span>
+            <textarea
+              rows={3}
+              className={`${INPUT} resize-y`}
+              defaultValue={details.family_involvement}
+              onBlur={(e) =>
+                e.target.value !== details.family_involvement &&
+                void saveDetails({ family_involvement: e.target.value })
+              }
+            />
             {ws.family_consent === "NO" && (
               <span role="alert" className="text-[11px] font-semibold text-priority-red">
-                The client declined family involvement — record only what the client has agreed to share.
+                The client declined family involvement — record only what the client has agreed to
+                share.
               </span>
             )}
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className={FIELD_LABEL}>Advance statement &amp; treatment preferences</span>
-            <textarea rows={2} className={`${INPUT} resize-y`} defaultValue={details.advance_statement} onBlur={(e) => e.target.value !== details.advance_statement && void saveDetails({ advance_statement: e.target.value })} />
+            <textarea
+              rows={2}
+              className={`${INPUT} resize-y`}
+              defaultValue={details.advance_statement}
+              onBlur={(e) =>
+                e.target.value !== details.advance_statement &&
+                void saveDetails({ advance_statement: e.target.value })
+              }
+            />
           </label>
         </fieldset>
       </Card>
@@ -224,7 +285,11 @@ export function ClientTab({
         <Card title="Opioid safety">
           <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-[13px] sm:col-span-2">
-              <input type="checkbox" checked={details.naloxone_teaching} onChange={(e) => void saveDetails({ naloxone_teaching: e.target.checked })} />
+              <input
+                type="checkbox"
+                checked={details.naloxone_teaching}
+                onChange={(e) => void saveDetails({ naloxone_teaching: e.target.checked })}
+              />
               Naloxone kit and overdose-risk teaching at discharge (tolerance falls quickly)
             </label>
             <label className="flex flex-col gap-1">
@@ -241,24 +306,40 @@ export function ClientTab({
       )}
 
       {ws.needs_safety_plan && (
-        <Card title="Safety plan (client-held)" aside={plan && <Tag tone={plan.signed_at ? "brand" : "warn"}>{plan.signed_at ? `v${plan.version} signed` : `v${plan.version} draft`}</Tag>}>
+        <Card
+          title="Safety plan (client-held)"
+          aside={
+            plan && (
+              <Tag tone={plan.signed_at ? "brand" : "warn"}>
+                {plan.signed_at ? `v${plan.version} signed` : `v${plan.version} draft`}
+              </Tag>
+            )
+          }
+        >
           {!plan ? (
             <p className="text-[13px] text-ink-500">Loading…</p>
           ) : (
             <div className="flex flex-col gap-3">
               <Callout>
-                Written with the client, in their own words. Give them a copy; a signed plan is never edited — a revision is a new version.
+                Written with the client, in their own words. Give them a copy; a signed plan is
+                never edited — a revision is a new version.
               </Callout>
               <label className="flex max-w-[200px] flex-col gap-1">
                 <span className={FIELD_LABEL}>Language of the copy</span>
-                <select className={INPUT} disabled={locked} value={plan.language} onChange={(e) => void savePlan({ language: e.target.value as "en" | "sw" })}>
+                <select
+                  className={INPUT}
+                  disabled={locked}
+                  value={plan.language}
+                  onChange={(e) => void savePlan({ language: e.target.value as "en" | "sw" })}
+                >
                   <option value="en">English</option>
                   <option value="sw">Kiswahili</option>
                 </select>
               </label>
               {plan.language === "sw" && (
                 <Callout tone="warning">
-                  Kiswahili labels are a draft — verify with a qualified translator before clinical use.
+                  Kiswahili labels are a draft — verify with a qualified translator before clinical
+                  use.
                 </Callout>
               )}
               <h3 className="font-display text-sm font-semibold">{labels.title}</h3>
@@ -271,11 +352,16 @@ export function ClientTab({
                     className={`${INPUT} resize-y`}
                     defaultValue={plan[k]}
                     key={`${plan.id}-${k}`}
-                    onBlur={(e) => e.target.value !== plan[k] && void savePlan({ [k]: e.target.value })}
+                    onBlur={(e) =>
+                      e.target.value !== plan[k] && void savePlan({ [k]: e.target.value })
+                    }
                   />
                 </label>
               ))}
-              <p className="text-[11px] text-ink-500">VERIFY: confirm the facility crisis line number locally before giving this to the client.</p>
+              <p className="text-[11px] text-ink-500">
+                VERIFY: confirm the facility crisis line number locally before giving this to the
+                client.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {!locked && (
                   <button type="button" className={BTN} onClick={() => void signPlan()}>
@@ -283,16 +369,33 @@ export function ClientTab({
                   </button>
                 )}
                 {locked && !plan.copy_given_at && (
-                  <button type="button" className={BTN} onClick={() => accessToken && void giveSafetyPlanCopy(accessToken, patientId).then(setPlan).catch((e) => setError(errorText(e, "Couldn't record the copy.")))}>
+                  <button
+                    type="button"
+                    className={BTN}
+                    onClick={() =>
+                      accessToken &&
+                      void giveSafetyPlanCopy(accessToken, patientId)
+                        .then(setPlan)
+                        .catch((e) => setError(errorText(e, "Couldn't record the copy.")))
+                    }
+                  >
                     Record that the client was given a copy
                   </button>
                 )}
                 {locked && (
-                  <button type="button" className={BTN_GHOST} onClick={() => accessToken && void openSafetyPlan(accessToken, patientId).then(setPlan)}>
+                  <button
+                    type="button"
+                    className={BTN_GHOST}
+                    onClick={() =>
+                      accessToken && void openSafetyPlan(accessToken, patientId).then(setPlan)
+                    }
+                  >
                     Start a revision
                   </button>
                 )}
-                {plan.copy_given_at && <Tag tone="brand">Copy given {new Date(plan.copy_given_at).toLocaleString()}</Tag>}
+                {plan.copy_given_at && (
+                  <Tag tone="brand">Copy given {new Date(plan.copy_given_at).toLocaleString()}</Tag>
+                )}
               </div>
             </div>
           )}
@@ -303,16 +406,39 @@ export function ClientTab({
         <Card title="Follow-up that makes this safe">
           <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className={FIELD_LABEL}>Contact within 72 hours <span className="text-priority-red">*</span></span>
-              <input type="datetime-local" className={INPUT} defaultValue={details.contact_72h_at?.slice(0, 16) ?? ""} onBlur={(e) => void saveDetails({ contact_72h_at: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-              <span className="text-[11px] text-ink-500">Signing the plan books this contact as a follow-up appointment.</span>
+              <span className={FIELD_LABEL}>
+                Contact within 72 hours <span className="text-priority-red">*</span>
+              </span>
+              <input
+                type="datetime-local"
+                className={INPUT}
+                defaultValue={details.contact_72h_at?.slice(0, 16) ?? ""}
+                onBlur={(e) =>
+                  void saveDetails({
+                    contact_72h_at: e.target.value ? new Date(e.target.value).toISOString() : null,
+                  })
+                }
+              />
+              <span className="text-[11px] text-ink-500">
+                Signing the plan books this contact as a follow-up appointment.
+              </span>
             </label>
             <label className="flex flex-col gap-1">
-              <span className={FIELD_LABEL}>Named follow-up clinician <span className="text-priority-red">*</span></span>
-              <input className={INPUT} defaultValue={details.follow_up_clinician} onBlur={(e) => void saveDetails({ follow_up_clinician: e.target.value })} />
+              <span className={FIELD_LABEL}>
+                Named follow-up clinician <span className="text-priority-red">*</span>
+              </span>
+              <input
+                className={INPUT}
+                defaultValue={details.follow_up_clinician}
+                onBlur={(e) => void saveDetails({ follow_up_clinician: e.target.value })}
+              />
             </label>
             <label className="flex items-center gap-2 text-[13px] sm:col-span-2">
-              <input type="checkbox" checked={details.means_counselling_done} onChange={(e) => void saveDetails({ means_counselling_done: e.target.checked })} />
+              <input
+                type="checkbox"
+                checked={details.means_counselling_done}
+                onChange={(e) => void saveDetails({ means_counselling_done: e.target.checked })}
+              />
               Lethal-means counselling done
             </label>
           </fieldset>

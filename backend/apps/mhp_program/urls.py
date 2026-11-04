@@ -5,8 +5,8 @@ from .nacada_views import NacadaNdoReportViewSet, NacadaSettingsView
 from .views import (
     BiopsychosocialAssessmentViewSet,
     CareTeamMembershipViewSet,
-    MhpTeamRosterView,
     ClinicalReviewViewSet,
+    MhpTeamRosterView,
     PsychotherapySessionViewSet,
     ReviewOfSystemEntryViewSet,
     SubstanceUseEntryViewSet,

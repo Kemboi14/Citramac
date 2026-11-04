@@ -63,20 +63,18 @@ describe("apiRequest", () => {
   it("keeps structured API errors as ApiError instances", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json(
-            {
-              error: {
-                code: "VALIDATION_ERROR",
-                message: "Invalid name",
-                fields: { name: ["Invalid"] },
-              },
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Invalid name",
+              fields: { name: ["Invalid"] },
             },
-            { status: 400 },
-          ),
+          },
+          { status: 400 },
         ),
+      ),
     );
 
     const request = apiRequest("/platform/organizations/", { method: "POST", body: {} });

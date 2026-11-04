@@ -123,7 +123,7 @@ def _values(node, key):
         return []
     if key.endswith("[x]"):
         stem = key[:-3]
-        return [v for k, v in node.items() if k.startswith(stem) and k[len(stem):][:1].isupper()]
+        return [v for k, v in node.items() if k.startswith(stem) and k[len(stem) :][:1].isupper()]
     value = node.get(key)
     if value is None:
         return []

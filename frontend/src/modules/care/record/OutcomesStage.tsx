@@ -47,7 +47,9 @@ export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordView
 
   useEffect(() => {
     if (!accessToken) return;
-    void getInstruments(accessToken).then((r) => setDefs(r.results)).catch(() => undefined);
+    void getInstruments(accessToken)
+      .then((r) => setDefs(r.results))
+      .catch(() => undefined);
   }, [accessToken]);
 
   useEffect(() => {
@@ -75,7 +77,11 @@ export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordView
     <div>
       <PageHeader title="Outcomes" subtitle={`Measures, discharge and follow-up for ${name}`} />
       <ErrorNote>{error}</ErrorNote>
-      <div role="tablist" aria-label="Outcomes sections" className="mb-4 flex flex-wrap gap-1.5 border-b border-surface-border">
+      <div
+        role="tablist"
+        aria-label="Outcomes sections"
+        className="mb-4 flex flex-wrap gap-1.5 border-b border-surface-border"
+      >
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -93,9 +99,30 @@ export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordView
         <p className="text-[13px] text-ink-500">Loading…</p>
       ) : (
         <div role="tabpanel">
-          {tab === "overview" && <OverviewPanel overview={overview} checklist={checklist} followUps={followUps} onOpen={setTab} />}
-          {tab === "measures" && <MeasuresPanel patientId={patientId} overview={overview} defs={defs} onRecorded={refresh} />}
-          {tab === "discharge" && <DischargePanel patientId={patientId} overview={overview} checklist={checklist} onChanged={refresh} />}
+          {tab === "overview" && (
+            <OverviewPanel
+              overview={overview}
+              checklist={checklist}
+              followUps={followUps}
+              onOpen={setTab}
+            />
+          )}
+          {tab === "measures" && (
+            <MeasuresPanel
+              patientId={patientId}
+              overview={overview}
+              defs={defs}
+              onRecorded={refresh}
+            />
+          )}
+          {tab === "discharge" && (
+            <DischargePanel
+              patientId={patientId}
+              overview={overview}
+              checklist={checklist}
+              onChanged={refresh}
+            />
+          )}
           {tab === "followup" && (
             <FollowUpPanel
               patientId={patientId}

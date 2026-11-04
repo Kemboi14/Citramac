@@ -109,10 +109,17 @@ export function DeliveryForm({
         </Field>
         {module.options.length > 0 && (
           <div className="flex flex-col gap-1 sm:col-span-2">
-            <span id={`${id}-chips`} className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            <span
+              id={`${id}-chips`}
+              className="text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+            >
               Intervention
             </span>
-            <div role="group" aria-labelledby={`${id}-chips`} className="mt-1.5 flex flex-wrap gap-1.5">
+            <div
+              role="group"
+              aria-labelledby={`${id}-chips`}
+              className="mt-1.5 flex flex-wrap gap-1.5"
+            >
               {module.options.map((option) => {
                 const pressed = form.intervention === option;
                 return (

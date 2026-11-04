@@ -70,7 +70,14 @@ export const AFRICAN_COUNTRIES: string[] = [
 ];
 
 export const KENYA_SUB_COUNTIES_BY_COUNTY: Record<string, string[]> = {
-  Baringo: ["Tiaty", "Baringo North", "Baringo Central", "Baringo South", "Mogotio", "Eldama Ravine"],
+  Baringo: [
+    "Tiaty",
+    "Baringo North",
+    "Baringo Central",
+    "Baringo South",
+    "Mogotio",
+    "Eldama Ravine",
+  ],
   Bomet: ["Sotik", "Chepalungu", "Bomet East", "Bomet Central", "Konoin"],
   Bungoma: [
     "Mount Elgon",
@@ -155,7 +162,16 @@ export const KENYA_SUB_COUNTIES_BY_COUNTY: Record<string, string[]> = {
   Kwale: ["Msambweni", "Lunga Lunga", "Matuga", "Kinango"],
   Laikipia: ["Laikipia West", "Laikipia East", "Laikipia North"],
   Lamu: ["Lamu East", "Lamu West"],
-  Machakos: ["Masinga", "Yatta", "Kangundo", "Matungulu", "Kathiani", "Mavoko", "Machakos Town", "Mwala"],
+  Machakos: [
+    "Masinga",
+    "Yatta",
+    "Kangundo",
+    "Matungulu",
+    "Kathiani",
+    "Mavoko",
+    "Machakos Town",
+    "Mwala",
+  ],
   Makueni: ["Mbooni", "Kilome", "Kaiti", "Makueni", "Kibwezi West", "Kibwezi East"],
   Mandera: ["Mandera West", "Banissa", "Mandera North", "Mandera South", "Mandera East", "Lafey"],
   Marsabit: ["Moyale", "North Horr", "Saku", "Laisamis"],
@@ -170,7 +186,16 @@ export const KENYA_SUB_COUNTIES_BY_COUNTY: Record<string, string[]> = {
     "Central Imenti",
     "South Imenti",
   ],
-  Migori: ["Rongo", "Awendo", "Suna East", "Suna West", "Uriri", "Nyatike", "Kuria West", "Kuria East"],
+  Migori: [
+    "Rongo",
+    "Awendo",
+    "Suna East",
+    "Suna West",
+    "Uriri",
+    "Nyatike",
+    "Kuria West",
+    "Kuria East",
+  ],
   Mombasa: ["Changamwe", "Jomvu", "Kisauni", "Nyali", "Likoni", "Mvita"],
   "Murang'a": ["Kangema", "Mathioya", "Kiharu", "Kigumo", "Maragwa", "Kandara", "Gatanga"],
   Nairobi: [
@@ -216,7 +241,14 @@ export const KENYA_SUB_COUNTIES_BY_COUNTY: Record<string, string[]> = {
   "Tana River": ["Garsen", "Galole", "Bura"],
   "Tharaka-Nithi": ["Maara", "Chuka/Igambang'ombe", "Tharaka"],
   "Trans-Nzoia": ["Kwanza", "Endebess", "Saboti", "Kiminini", "Cherangany"],
-  Turkana: ["Turkana North", "Turkana West", "Turkana Central", "Loima", "Turkana South", "Turkana East"],
+  Turkana: [
+    "Turkana North",
+    "Turkana West",
+    "Turkana Central",
+    "Loima",
+    "Turkana South",
+    "Turkana East",
+  ],
   "Uasin Gishu": ["Soy", "Turbo", "Moiben", "Ainabkoi", "Kapseret", "Kesses"],
   Vihiga: ["Vihiga", "Sabatia", "Hamisi", "Luanda", "Emuhaya"],
   Wajir: ["Wajir North", "Wajir East", "Tarbaj", "Wajir West", "Eldas", "Wajir South"],

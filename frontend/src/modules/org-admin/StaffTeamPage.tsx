@@ -248,7 +248,9 @@ export function StaffTeamPage() {
       await resetStaffCredentials(accessToken, s.id);
       setNotice(`A password reset code has been emailed to ${s.email}.`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't reset this account's credentials.");
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't reset this account's credentials.",
+      );
     } finally {
       setResettingId(null);
     }
@@ -316,10 +318,7 @@ export function StaffTeamPage() {
     return staff.filter((s) => {
       if (
         search &&
-        ![s.first_name, s.last_name, s.email, s.staff_id]
-          .join(" ")
-          .toLowerCase()
-          .includes(search)
+        ![s.first_name, s.last_name, s.email, s.staff_id].join(" ").toLowerCase().includes(search)
       )
         return false;
       if (filters.role && !s.role_names.includes(filters.role)) return false;
@@ -462,14 +461,14 @@ export function StaffTeamPage() {
       key: "actions",
       header: "Actions",
       hideInCard: true,
-      cell: (s) => (
-        <div className="flex flex-wrap items-center gap-3">{staffRowActions(s)}</div>
-      ),
+      cell: (s) => <div className="flex flex-wrap items-center gap-3">{staffRowActions(s)}</div>,
     },
   ];
 
   function staffRowActions(s: Staff, cardLayout = false) {
-    const itemClass = cardLayout ? "flex-1 text-center text-sm font-semibold" : "text-sm font-semibold";
+    const itemClass = cardLayout
+      ? "flex-1 text-center text-sm font-semibold"
+      : "text-sm font-semibold";
     return (
       <>
         {s.is_active ? (
@@ -812,7 +811,9 @@ export function StaffTeamPage() {
         open={accessDrawer.open}
         title="Roles, Branches & Access"
         subtitle={
-          accessDrawer.staff ? `${accessDrawer.staff.first_name} ${accessDrawer.staff.last_name}` : undefined
+          accessDrawer.staff
+            ? `${accessDrawer.staff.first_name} ${accessDrawer.staff.last_name}`
+            : undefined
         }
         onClose={() => setAccessDrawer({ open: false, staff: null })}
         footer={
@@ -908,7 +909,11 @@ function AccessWindowFields({
   limited: boolean;
   startsAt: string;
   endsAt: string;
-  onChange: (patch: { limited?: boolean; access_starts_at?: string; access_ends_at?: string }) => void;
+  onChange: (patch: {
+    limited?: boolean;
+    access_starts_at?: string;
+    access_ends_at?: string;
+  }) => void;
 }) {
   return (
     <fieldset>

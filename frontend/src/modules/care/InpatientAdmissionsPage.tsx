@@ -477,8 +477,8 @@ export function InpatientAdmissionsPage() {
                   <legend className={`${GROUP_LABEL} !my-0 px-1`}>Legal basis</legend>
                   {legalActive(legal) ? (
                     <Callout tone="success" role="status">
-                      {legal?.category === "INVOLUNTARY" ? "Involuntary" : "Voluntary"} legal
-                      status active
+                      {legal?.category === "INVOLUNTARY" ? "Involuntary" : "Voluntary"} legal status
+                      active
                       {legal?.decision_by ? ` — decided by ${legal.decision_by}` : ""}
                       {legal?.decision_at ? ` on ${formatDateTime(legal.decision_at)}` : ""}. The
                       admission takes its type from it.

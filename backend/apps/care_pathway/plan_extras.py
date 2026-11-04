@@ -9,8 +9,16 @@ from apps.accounts.access import has_permission
 from .models import CosignRequest, MdtReview, NursingCarePlanEntry, SafetyPlan
 
 SAFETY_FIELDS = [
-    "warning_signs", "coping", "self_talk", "places_people_distract", "people_to_ask",
-    "professionals", "safer_surroundings", "reasons_for_living", "keepsake", "language",
+    "warning_signs",
+    "coping",
+    "self_talk",
+    "places_people_distract",
+    "people_to_ask",
+    "professionals",
+    "safer_surroundings",
+    "reasons_for_living",
+    "keepsake",
+    "language",
 ]
 
 
@@ -37,7 +45,9 @@ def open_safety_plan(patient, user):
 
 def save_safety_plan(plan, data):
     if plan.signed_at:
-        raise ValidationError({"detail": "A signed safety plan cannot be edited — start a revision."})
+        raise ValidationError(
+            {"detail": "A signed safety plan cannot be edited — start a revision."}
+        )
     for field in SAFETY_FIELDS:
         if field in data:
             setattr(plan, field, data[field] or "")
@@ -111,7 +121,11 @@ def add_nursing_problem(plan, user, data):
         raise ValidationError({"problem": "Problem and goal are required."})
     activity = None
     if data.get("action_key"):
-        activity = plan.activities.exclude(decision="DECLINED").filter(action_key=data["action_key"]).first()
+        activity = (
+            plan.activities.exclude(decision="DECLINED")
+            .filter(action_key=data["action_key"])
+            .first()
+        )
         if activity is None:
             raise ValidationError({"action_key": "Link to an action that is in the plan."})
     entry = NursingCarePlanEntry.objects.create(
@@ -136,8 +150,12 @@ def evaluate_nursing_problem(entry, user, data):
         raise ValidationError({"evaluation": "Write the evaluation."})
     entry.evaluations = [
         *entry.evaluations,
-        {"text": text, "by": user.get_full_name() or str(user), "by_id": str(user.pk),
-         "at": timezone.now().isoformat()},
+        {
+            "text": text,
+            "by": user.get_full_name() or str(user),
+            "by_id": str(user.pk),
+            "at": timezone.now().isoformat(),
+        },
     ]
     entry.save(update_fields=["evaluations", "updated_at"])
     return entry
@@ -186,14 +204,19 @@ def decide_cosign(req, user, action, note=""):
         req.decided_by, req.decided_at = user, now
     elif action == "DECLINE":
         if len(note) < 5:
-            raise ValidationError({"note": "Give a reason for declining (returned to the requester)."})
+            raise ValidationError(
+                {"note": "Give a reason for declining (returned to the requester)."}
+            )
         req.status = "DECLINED"
         req.decline_reason = note
         req.decided_by, req.decided_at = user, now
     elif action == "DISCUSS":
         if len(note) < 5:
             raise ValidationError({"note": "Write what you want to discuss."})
-        req.thread = [*req.thread, {"by": user.get_full_name() or str(user), "at": now.isoformat(), "note": note}]
+        req.thread = [
+            *req.thread,
+            {"by": user.get_full_name() or str(user), "at": now.isoformat(), "note": note},
+        ]
     else:
         raise ValidationError({"action": "Use SIGN, DECLINE or DISCUSS."})
     req.save()

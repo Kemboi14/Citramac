@@ -29,12 +29,12 @@ from fhir.resources.R4B.composition import (
     CompositionRelatesTo,
     CompositionSection,
 )
-from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
 from fhir.resources.R4B.documentreference import (
     DocumentReference,
     DocumentReferenceContent,
     DocumentReferenceContext,
 )
+from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
 from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 from fhir.resources.R4B.flag import Flag
 from fhir.resources.R4B.narrative import Narrative
@@ -309,9 +309,7 @@ def _finding_observation(finding, patient_ref, encounter_ref, qr_ref):
         status="final",
         category=[_local("clinical-finding-domain", finding.domain)],
         code=CodeableConcept(
-            coding=[
-                Coding(system="urn:citramac:codesystem:clinical-finding", code=finding.key)
-            ],
+            coding=[Coding(system="urn:citramac:codesystem:clinical-finding", code=finding.key)],
             text=finding.title,
         ),
         subject=Reference(reference=patient_ref),

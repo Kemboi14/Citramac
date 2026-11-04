@@ -31,11 +31,17 @@ class ModulesTestCase(RecordsTestCase):
     def user_with_role(self, role_name, first, last):
         with platform_admin_context():
             user = User.objects.create_user(
-                email=f"{first.lower()}-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True, first_name=first, last_name=last,
+                email=f"{first.lower()}-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name=first,
+                last_name=last,
             )
             if role_name:
-                role, _ = Role.objects.get_or_create(organization=None, name=role_name, defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+                role, _ = Role.objects.get_or_create(
+                    organization=None, name=role_name, defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                )
                 user.roles.add(role)
         return user, {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(user)[0]}"}
 
@@ -49,8 +55,12 @@ class ModulesTestCase(RecordsTestCase):
         return Patient.objects.get(pk=self.pid)
 
     def other_client(self):
-        registered = self.register(allergy_status="NONE", full_name="Otieno Baraka Mwangi", sex="MALE",
-                                   date_of_birth="1985-07-02")
+        registered = self.register(
+            allergy_status="NONE",
+            full_name="Otieno Baraka Mwangi",
+            sex="MALE",
+            date_of_birth="1985-07-02",
+        )
         self.assertEqual(registered.status_code, 201, registered.data)
         return registered.data["patient_id"]
 
@@ -93,11 +103,18 @@ class PrescribingOrderTests(ModulesTestCase):
     def setUp(self):
         super().setUp()
         with platform_admin_context():
-            self.drug = NationalDrugIndex.objects.create(code="TEST-DRUG-1", generic_name="Testamine")
-            self.penicillin = NationalDrugIndex.objects.create(code="TEST-DRUG-2", generic_name="Penicillin V")
+            self.drug = NationalDrugIndex.objects.create(
+                code="TEST-DRUG-1", generic_name="Testamine"
+            )
+            self.penicillin = NationalDrugIndex.objects.create(
+                code="TEST-DRUG-2", generic_name="Penicillin V"
+            )
             InsuranceCoverage.objects.create(
-                organization=self.org, patient=self.patient(), scheme_type="SHA_SHIF",
-                sha_verified=True, sha_premium_compliant=True,
+                organization=self.org,
+                patient=self.patient(),
+                scheme_type="SHA_SHIF",
+                sha_verified=True,
+                sha_premium_compliant=True,
             )
 
     def order(self, auth=None, **over):
@@ -105,7 +122,9 @@ class PrescribingOrderTests(ModulesTestCase):
         return self.as_(auth or self.psych_auth, "care-prescribing", body)
 
     def test_the_route_list_is_a_served_value_set(self):
-        served = self.client.get(reverse("care-valuesets") + "?ids=medication-route", **self.auth).data
+        served = self.client.get(
+            reverse("care-valuesets") + "?ids=medication-route", **self.auth
+        ).data
         codes = [c["code"] for c in served["medication-route"]["concepts"]]
         self.assertIn("ORAL", codes)
 
@@ -122,20 +141,33 @@ class PrescribingOrderTests(ModulesTestCase):
         self.assertFalse(state["can_prescribe"])
         self.assertFalse(state["is_senior"])
         self.assertEqual(self.order(self.auth).status_code, 403)
-        for over in ({"drug": "NOPE"}, {"dose": ""}, {"route": "EAR"}, {"frequency": "hourly"},
-                     {"is_prn": True, "indication": "Agitation"}, {"is_prn": True, "prn_max_per_24h": 2}):
+        for over in (
+            {"drug": "NOPE"},
+            {"dose": ""},
+            {"route": "EAR"},
+            {"frequency": "hourly"},
+            {"is_prn": True, "indication": "Agitation"},
+            {"is_prn": True, "prn_max_per_24h": 2},
+        ):
             self.assertEqual(self.order(**over).status_code, 400, over)
-        placed = self.order(is_prn=True, prn_max_per_24h=2, indication="Acute agitation", frequency="")
+        placed = self.order(
+            is_prn=True, prn_max_per_24h=2, indication="Acute agitation", frequency=""
+        )
         self.assertEqual(placed.status_code, 201, placed.data)
         row = placed.data["orders"][0]
-        self.assertEqual((row["route"], row["is_prn"], row["prn_max_per_24h"], row["prescribed_by"]),
-                         ("Oral", True, 2, "Dr Senior"))
+        self.assertEqual(
+            (row["route"], row["is_prn"], row["prn_max_per_24h"], row["prescribed_by"]),
+            ("Oral", True, 2, "Dr Senior"),
+        )
 
     def test_warnings_must_be_acknowledged(self):
         with platform_admin_context():
             Patient.objects.filter(pk=self.pid).update(allergy_status="ACTIVE_ALLERGIES")
             AllergyRecord.objects.create(
-                organization=self.org, patient=self.patient(), substance="Testamine", allergy_type="INTOLERANCE",
+                organization=self.org,
+                patient=self.patient(),
+                substance="Testamine",
+                allergy_type="INTOLERANCE",
             )
         self.assertEqual(self.order().status_code, 400)
         placed = self.order(acknowledged_warnings=True)
@@ -146,17 +178,26 @@ class PrescribingOrderTests(ModulesTestCase):
         with platform_admin_context():
             Patient.objects.filter(pk=self.pid).update(allergy_status="ACTIVE_ALLERGIES")
             AllergyRecord.objects.create(
-                organization=self.org, patient=self.patient(), substance="Penicillin", verification_status="CONFIRMED",
+                organization=self.org,
+                patient=self.patient(),
+                substance="Penicillin",
+                verification_status="CONFIRMED",
             )
         body = {"drug": self.penicillin.code, "acknowledged_warnings": True}
         self.assertEqual(self.order(self.doctor_auth, **body).status_code, 400)
-        placed = self.order(self.doctor_auth, override_reason="Desensitised under supervision", **body)
+        placed = self.order(
+            self.doctor_auth, override_reason="Desensitised under supervision", **body
+        )
         self.assertEqual(placed.status_code, 201, placed.data)
-        self.assertEqual(placed.data["orders"][0]["allergy_override_reason"], "Desensitised under supervision")
+        self.assertEqual(
+            placed.data["orders"][0]["allergy_override_reason"], "Desensitised under supervision"
+        )
         with platform_admin_context():
             item = PrescriptionItem.objects.get(pk=placed.data["orders"][0]["id"])
             self.assertFalse(item.allergy_check_passed)
-            cosign = CosignRequest.objects.get(subject_type="PrescriptionItem", subject_id=str(item.pk))
+            cosign = CosignRequest.objects.get(
+                subject_type="PrescriptionItem", subject_id=str(item.pk)
+            )
         self.assertEqual(cosign.kind, "PRESCRIBING_OVERRIDE")
         senior = self.order(override_reason="Senior decision, documented", **body)
         self.assertEqual(senior.status_code, 201)
@@ -175,24 +216,48 @@ class MarOrderTests(ModulesTestCase):
         with platform_admin_context():
             patient = self.patient()
             ward = Ward.objects.create(organization=self.org, name="Ward")
-            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="1", status="OCCUPIED")
-            encounter = Encounter.objects.create(organization=self.org, patient=patient, opened_by=self.nurse)
+            bed = Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="1", status="OCCUPIED"
+            )
+            encounter = Encounter.objects.create(
+                organization=self.org, patient=patient, opened_by=self.nurse
+            )
             self.admission = Admission.objects.create(
-                organization=self.org, patient=patient, bed=bed, admitted_by=self.nurse, encounter=encounter,
+                organization=self.org,
+                patient=patient,
+                bed=bed,
+                admitted_by=self.nurse,
+                encounter=encounter,
                 admitted_at=timezone.now() - timedelta(days=1),
             )
             drug = NationalDrugIndex.objects.create(code="TEST-DRUG-3", generic_name="Calmazine")
-            rx = Prescription.objects.create(organization=self.org, encounter=encounter, prescribed_by=self.psych)
+            rx = Prescription.objects.create(
+                organization=self.org, encounter=encounter, prescribed_by=self.psych
+            )
             self.regular = PrescriptionItem.objects.create(
-                organization=self.org, prescription=rx, drug=drug, dose="10 mg", route="Oral", frequency="QDS",
+                organization=self.org,
+                prescription=rx,
+                drug=drug,
+                dose="10 mg",
+                route="Oral",
+                frequency="QDS",
             )
             self.prn = PrescriptionItem.objects.create(
-                organization=self.org, prescription=rx, drug=drug, dose="5 mg", route="Oral", is_prn=True,
-                prn_max_per_24h=1, indication="Agitation", controlled_drug=True,
+                organization=self.org,
+                prescription=rx,
+                drug=drug,
+                dose="5 mg",
+                route="Oral",
+                is_prn=True,
+                prn_max_per_24h=1,
+                indication="Agitation",
+                controlled_drug=True,
             )
 
     def give(self, item, **body):
-        return self.post("care-mar-order-administer", {"outcome": "ADMINISTERED", **body}, self.pid, item.pk)
+        return self.post(
+            "care-mar-order-administer", {"outcome": "ADMINISTERED", **body}, self.pid, item.pk
+        )
 
     def order_row(self, data, item):
         return next(o for o in data["orders"] if o["id"] == str(item.pk))
@@ -206,7 +271,9 @@ class MarOrderTests(ModulesTestCase):
         self.assertEqual(done.status_code, 201, done.data)
         slot = self.order_row(done.data, self.regular)["slots"][0]
         self.assertEqual(slot["state"], "given")
-        self.assertEqual(self.give(self.regular, slot=first.isoformat()).status_code, 400)  # already recorded
+        self.assertEqual(
+            self.give(self.regular, slot=first.isoformat()).status_code, 400
+        )  # already recorded
         odd = (first + timedelta(minutes=7)).isoformat()
         self.assertEqual(self.give(self.regular, slot=odd).status_code, 400)
 
@@ -219,7 +286,9 @@ class MarOrderTests(ModulesTestCase):
         self.assertLess(abs((entry.scheduled_time - timezone.now()).total_seconds()), 60)
 
     def test_prn_maximum_per_24h_needs_an_override_reason_once_reached(self):
-        self.assertEqual(self.give(self.prn, prn_indication="Agitation").status_code, 400)  # controlled: witness
+        self.assertEqual(
+            self.give(self.prn, prn_indication="Agitation").status_code, 400
+        )  # controlled: witness
         first = self.give(self.prn, prn_indication="Agitation", witness_name="K. Mutua")
         self.assertEqual(first.status_code, 201, first.data)
         row = self.order_row(first.data, self.prn)
@@ -227,16 +296,22 @@ class MarOrderTests(ModulesTestCase):
         blocked = self.give(self.prn, prn_indication="Agitation", witness_name="K. Mutua")
         self.assertEqual(blocked.status_code, 400)
         self.assertIn("override_reason", blocked.data)
-        over = self.give(self.prn, prn_indication="Agitation", witness_name="K. Mutua",
-                         override_reason="Prescriber consulted by phone")
+        over = self.give(
+            self.prn,
+            prn_indication="Agitation",
+            witness_name="K. Mutua",
+            override_reason="Prescriber consulted by phone",
+        )
         self.assertEqual(over.status_code, 201, over.data)
         self.assertTrue(any(e["prn_max_override_reason"] for e in over.data["entries"]))
 
     def test_an_order_for_another_client_is_not_found(self):
         other = self.other_client()
         response = self.client.post(
-            reverse("care-mar-order-administer", args=[other, self.regular.pk]), {"outcome": "ADMINISTERED"},
-            format="json", **self.auth,
+            reverse("care-mar-order-administer", args=[other, self.regular.pk]),
+            {"outcome": "ADMINISTERED"},
+            format="json",
+            **self.auth,
         )
         self.assertEqual(response.status_code, 400)  # the other client is not admitted
 
@@ -244,14 +319,21 @@ class MarOrderTests(ModulesTestCase):
 class RestrictivePracticeV4Tests(ModulesTestCase):
     def body(self, **over):
         return {
-            "kind": "RESTRAINT", "de_escalation": ["Verbal de-escalation"], "authorised_by": str(self.psych.pk),
-            "start_at": (timezone.now() - timedelta(minutes=30)).isoformat(), "injury_check": "NONE", **over,
+            "kind": "RESTRAINT",
+            "de_escalation": ["Verbal de-escalation"],
+            "authorised_by": str(self.psych.pk),
+            "start_at": (timezone.now() - timedelta(minutes=30)).isoformat(),
+            "injury_check": "NONE",
+            **over,
         }
 
     def test_authorisers_are_served_with_their_seniority(self):
         listed = {a["name"]: a["senior"] for a in self.get("care-restrictive").data["authorisers"]}
         self.assertEqual(listed, {"Dr Senior": True, "Junior Doctor": False})
-        self.assertEqual(self.post("care-restrictive", self.body(authorised_by=str(self.clerk.pk))).status_code, 400)
+        self.assertEqual(
+            self.post("care-restrictive", self.body(authorised_by=str(self.clerk.pk))).status_code,
+            400,
+        )
 
     def test_a_non_senior_authoriser_raises_a_cosign_request(self):
         senior = self.post("care-restrictive", self.body())
@@ -261,16 +343,30 @@ class RestrictivePracticeV4Tests(ModulesTestCase):
         self.assertEqual(junior.data["cosign_status"], "REQUESTED")
 
     def test_client_debrief_can_be_done_at_creation(self):
-        self.assertEqual(self.post("care-restrictive", self.body(client_debrief="MAYBE")).status_code, 400)
-        self.assertIsNone(self.post("care-restrictive", self.body(client_debrief="PENDING")).data["client_debrief_at"])
-        self.assertIsNotNone(self.post("care-restrictive", self.body(client_debrief="DONE")).data["client_debrief_at"])
+        self.assertEqual(
+            self.post("care-restrictive", self.body(client_debrief="MAYBE")).status_code, 400
+        )
+        self.assertIsNone(
+            self.post("care-restrictive", self.body(client_debrief="PENDING")).data[
+                "client_debrief_at"
+            ]
+        )
+        self.assertIsNotNone(
+            self.post("care-restrictive", self.body(client_debrief="DONE")).data[
+                "client_debrief_at"
+            ]
+        )
 
     def test_the_recorded_end_time_is_kept_and_checked(self):
         eid = self.post("care-restrictive", self.body()).data["id"]
         future = (timezone.now() + timedelta(hours=1)).isoformat()
-        self.assertEqual(self.post("care-restrictive-end", {"end_at": future}, eid).status_code, 400)
+        self.assertEqual(
+            self.post("care-restrictive-end", {"end_at": future}, eid).status_code, 400
+        )
         before = (timezone.now() - timedelta(hours=2)).isoformat()
-        self.assertEqual(self.post("care-restrictive-end", {"end_at": before}, eid).status_code, 400)
+        self.assertEqual(
+            self.post("care-restrictive-end", {"end_at": before}, eid).status_code, 400
+        )
         end = timezone.now() - timedelta(minutes=10)
         ended = self.post("care-restrictive-end", {"end_at": end.isoformat()}, eid)
         self.assertEqual(ended.status_code, 200, ended.data)
@@ -279,31 +375,60 @@ class RestrictivePracticeV4Tests(ModulesTestCase):
 
 class TherapyV4Tests(ModulesTestCase):
     def start(self, auth=None, **over):
-        return self.as_(auth or self.auth, "care-client-therapy", {
-            "modality": "TF_CBT", "planned_sessions": 8, "frequency": "Weekly", "trauma_phase": 1,
-            "consent_to_record": True, "under_supervision": True, **over,
-        })
+        return self.as_(
+            auth or self.auth,
+            "care-client-therapy",
+            {
+                "modality": "TF_CBT",
+                "planned_sessions": 8,
+                "frequency": "Weekly",
+                "trauma_phase": 1,
+                "consent_to_record": True,
+                "under_supervision": True,
+                **over,
+            },
+        )
 
     def session(self, eid, auth=None, **body):
-        return self.as_(auth or self.auth, "care-client-therapy-session", {"episode": eid, "session_notes": "Grounding", **body})
+        return self.as_(
+            auth or self.auth,
+            "care-client-therapy-session",
+            {"episode": eid, "session_notes": "Grounding", **body},
+        )
 
     def test_contract_fields_sessions_and_measure_are_kept_in_one_store(self):
         eid = self.start().data["id"]
         self.post("care-therapy-confidentiality", {}, eid)
         self.assertEqual(self.session(eid, session_notes=" ").status_code, 400)
-        score = self.post("care-client-assessments", {"instrument": "GAD7", "answers": [1] * 7, "context": "THERAPY"}).data
-        self.assertEqual(self.session(eid, homework="Breathing practice", score_id=score["id"]).status_code, 201)
+        score = self.post(
+            "care-client-assessments",
+            {"instrument": "GAD7", "answers": [1] * 7, "context": "THERAPY"},
+        ).data
+        self.assertEqual(
+            self.session(eid, homework="Breathing practice", score_id=score["id"]).status_code, 201
+        )
         self.session(eid, process_notes="Restricted reflection")
         data = self.get("care-client-therapy").data
         episode = data["results"][0]
-        self.assertEqual((episode["frequency"], episode["trauma_phase"], episode["consent_to_record"],
-                          episode["under_supervision"]), ("Weekly", 1, True, True))
+        self.assertEqual(
+            (
+                episode["frequency"],
+                episode["trauma_phase"],
+                episode["consent_to_record"],
+                episode["under_supervision"],
+            ),
+            ("Weekly", 1, True, True),
+        )
         first, second = episode["sessions"]
-        self.assertEqual((first["n"], first["homework"], first["measure"]["total"]), (1, "Breathing practice", 7))
+        self.assertEqual(
+            (first["n"], first["homework"], first["measure"]["total"]), (1, "Breathing practice", 7)
+        )
         self.assertEqual(second["process_notes"], "Restricted reflection")
         self.assertTrue(data["can_view_process_notes"])
         with platform_admin_context():
-            self.assertEqual(OutcomeScore.objects.filter(patient_id=self.pid, instrument="GAD7").count(), 1)
+            self.assertEqual(
+                OutcomeScore.objects.filter(patient_id=self.pid, instrument="GAD7").count(), 1
+            )
 
     def test_process_notes_are_hidden_from_and_refused_for_roles_without_restricted_access(self):
         eid = self.start().data["id"]
@@ -318,7 +443,9 @@ class TherapyV4Tests(ModulesTestCase):
 
     def test_a_score_or_care_plan_action_from_another_client_is_refused(self):
         other = self.other_client()
-        foreign = self.as_(self.auth, "care-client-assessments", {"instrument": "GAD7", "answers": [0] * 7}, other).data
+        foreign = self.as_(
+            self.auth, "care-client-assessments", {"instrument": "GAD7", "answers": [0] * 7}, other
+        ).data
         eid = self.start().data["id"]
         self.post("care-therapy-confidentiality", {}, eid)
         self.assertEqual(self.session(eid, score_id=foreign["id"]).status_code, 400)
@@ -331,18 +458,24 @@ class LabResultEntryTests(ModulesTestCase):
         from apps.dha_interop.models import LoincCodeIndex
 
         with platform_admin_context():
-            LoincCodeIndex.objects.get_or_create(code="TEST-1", defaults={"description": "Test analyte"})
+            LoincCodeIndex.objects.get_or_create(
+                code="TEST-1", defaults={"description": "Test analyte"}
+            )
         self.post("care-client-labs", {"codes": ["TEST-1"]})
         self.order_id = self.get("care-client-labs").data["orders"][0]["id"]
 
     def enter(self, **body):
-        return self.post("care-lab-result", {"value": "6.9", "interpretation": "CRITICAL", **body}, self.order_id)
+        return self.post(
+            "care-lab-result", {"value": "6.9", "interpretation": "CRITICAL", **body}, self.order_id
+        )
 
     def validate(self):
         from apps.lims.models import LabResult
 
         with platform_admin_context():
-            LabResult.objects.filter(lab_order_id=self.order_id).update(is_validated=True, validated_at=timezone.now())
+            LabResult.objects.filter(lab_order_id=self.order_id).update(
+                is_validated=True, validated_at=timezone.now()
+            )
 
     def test_an_entered_result_waits_for_validation_then_shows_flagged_with_who_ordered_it(self):
         self.assertEqual(self.enter(value="").status_code, 400)
@@ -355,7 +488,9 @@ class LabResultEntryTests(ModulesTestCase):
         self.assertEqual(self.enter().status_code, 400)  # one result per order here
         self.validate()
         result = self.get("care-client-labs").data["results"][0]
-        self.assertEqual((result["value"], result["abnormal"], result["critical"]), ("6.9", True, True))
+        self.assertEqual(
+            (result["value"], result["abnormal"], result["critical"]), ("6.9", True, True)
+        )
 
     def test_only_prescribers_acknowledge(self):
         self.enter()
@@ -364,7 +499,9 @@ class LabResultEntryTests(ModulesTestCase):
         self.assertFalse(data["can_acknowledge"])
         rid = data["results"][0]["id"]
         self.assertEqual(self.post("care-lab-acknowledge", {}, rid).status_code, 403)
-        self.assertEqual(self.as_(self.psych_auth, "care-lab-acknowledge", {}, rid).status_code, 200)
+        self.assertEqual(
+            self.as_(self.psych_auth, "care-lab-acknowledge", {}, rid).status_code, 200
+        )
         result = self.as_(self.psych_auth, "care-client-labs").data["results"][0]
         self.assertEqual(result["acknowledged_by"], "Dr Senior")
 
@@ -374,4 +511,6 @@ class SlotTimesTests(ModulesTestCase):
         prn = PrescriptionItem(is_prn=True, frequency="BD")
         stat = PrescriptionItem(frequency="Stat (once)")
         bd = PrescriptionItem(frequency="BD")
-        self.assertEqual((iv.slot_times(prn), iv.slot_times(stat), len(iv.slot_times(bd))), ([], [], 2))
+        self.assertEqual(
+            (iv.slot_times(prn), iv.slot_times(stat), len(iv.slot_times(bd))), ([], [], 2)
+        )

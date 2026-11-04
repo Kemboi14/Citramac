@@ -144,7 +144,8 @@ export function updateBranch(accessToken: string, id: string, payload: Partial<B
 export function setBranchShaCredentials(
   accessToken: string,
   id: string,
-  credentials: { sha_client_id: string; sha_client_secret: string } | { remove_sha_credentials: true },
+  credentials:
+    { sha_client_id: string; sha_client_secret: string } | { remove_sha_credentials: true },
 ) {
   return apiRequest<Branch>(`/platform/branches/${id}/`, {
     method: "PATCH",

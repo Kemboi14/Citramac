@@ -73,7 +73,9 @@ def _identifiers(patient):
             Identifier(
                 system=system,
                 value=row.value,
-                use="old" if row.superseded_at else ("temp" if row.kind == "TEMPORARY" else "usual"),
+                use=(
+                    "old" if row.superseded_at else ("temp" if row.kind == "TEMPORARY" else "usual")
+                ),
                 type=CodeableConcept(text=row.get_kind_display()),
             )
         )
@@ -213,9 +215,7 @@ def build_hie_consent(record):
     return Consent(
         id=str(record.id),
         status="active",
-        scope=CodeableConcept(
-            coding=[Coding(system=CONSENT_SCOPE_SYSTEM, code="patient-privacy")]
-        ),
+        scope=CodeableConcept(coding=[Coding(system=CONSENT_SCOPE_SYSTEM, code="patient-privacy")]),
         category=[CodeableConcept(text=label)],
         patient=Reference(reference=f"Patient/{record.patient_id}"),
         dateTime=record.captured_at.isoformat(),

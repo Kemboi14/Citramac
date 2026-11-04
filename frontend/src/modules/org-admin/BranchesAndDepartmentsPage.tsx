@@ -148,9 +148,7 @@ export function BranchesAndDepartmentsPage() {
     if (!accessToken) return;
     void Promise.resolve().then(() =>
       load()
-        .catch((err) =>
-          setError(err instanceof ApiError ? err.message : "Couldn't load branches."),
-        )
+        .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load branches."))
         .finally(() => setLoading(false)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,7 +287,9 @@ export function BranchesAndDepartmentsPage() {
           <div className="font-medium text-ink-900">{b.name}</div>
           <div className="text-xs text-ink-500">{b.mfl_code || "No MFL code yet"}</div>
           {b.missing_identifiers.length > 0 && (
-            <div className="text-xs font-semibold text-status-red">Registration details missing</div>
+            <div className="text-xs font-semibold text-status-red">
+              Registration details missing
+            </div>
           )}
         </div>
       ),
@@ -302,7 +302,8 @@ export function BranchesAndDepartmentsPage() {
     {
       key: "level",
       header: "Level",
-      cell: (b) => FACILITY_LEVELS.find((l) => l.value === b.facility_level)?.label ?? b.facility_level,
+      cell: (b) =>
+        FACILITY_LEVELS.find((l) => l.value === b.facility_level)?.label ?? b.facility_level,
     },
     {
       key: "departments",
@@ -402,8 +403,8 @@ export function BranchesAndDepartmentsPage() {
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Branches &amp; Departments</h1>
         <p className="mt-1 text-sm text-ink-500">
-          Set up your organisation's physical locations and the departments within them, so staff
-          and clinical activity can be correctly attributed.
+          Set up your organisation&rsquo;s physical locations and the departments within them, so
+          staff and clinical activity can be correctly attributed.
         </p>
       </div>
 
@@ -471,7 +472,11 @@ export function BranchesAndDepartmentsPage() {
           </SaveButton>
         }
       >
-        <form id={branchFormId} onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-4">
+        <form
+          id={branchFormId}
+          onSubmit={(e) => e.preventDefault()}
+          className="flex flex-col gap-4"
+        >
           <label className={LABEL_CLASS}>
             Name
             <input

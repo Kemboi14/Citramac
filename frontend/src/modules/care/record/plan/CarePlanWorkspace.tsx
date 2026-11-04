@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
-import { getPlanWorkspace, listCosign, type CosignRow, type PlanWorkspace } from "../../../../lib/carePathwayApi";
+import {
+  getPlanWorkspace,
+  listCosign,
+  type CosignRow,
+  type PlanWorkspace,
+} from "../../../../lib/carePathwayApi";
 import { confirmPlanReviewed } from "../../../../lib/carePlanOutcomesApi";
 import { formatDateTime } from "../../shared/format";
 import { BTN, BTN_GHOST } from "../../shared/styles";
@@ -72,7 +77,11 @@ export function CarePlanStage(props: RecordViewProps) {
       onRecordChanged();
     } catch (e) {
       const outstanding = (e as { fields?: { outstanding?: string[] } })?.fields?.outstanding;
-      setError(outstanding?.length ? `Cannot sign yet — ${outstanding.length} item(s) to complete: ${outstanding.join("; ")}` : errorText(e, "Couldn't sign the plan."));
+      setError(
+        outstanding?.length
+          ? `Cannot sign yet — ${outstanding.length} item(s) to complete: ${outstanding.join("; ")}`
+          : errorText(e, "Couldn't sign the plan."),
+      );
     } finally {
       setSigning(false);
     }
@@ -82,7 +91,11 @@ export function CarePlanStage(props: RecordViewProps) {
     return (
       <div>
         <PageHeader title="Care Plan" subtitle="Findings recommend — the clinician decides" />
-        {error ? <ErrorNote>{error}</ErrorNote> : <p className="text-[13px] text-ink-500">Loading…</p>}
+        {error ? (
+          <ErrorNote>{error}</ErrorNote>
+        ) : (
+          <p className="text-[13px] text-ink-500">Loading…</p>
+        )}
       </div>
     );
   }
@@ -90,7 +103,11 @@ export function CarePlanStage(props: RecordViewProps) {
     <div>
       <PageHeader
         title="Care Plan"
-        subtitle={ws.version ? `Version ${ws.version} signed ${ws.confirmed_at ? formatDateTime(ws.confirmed_at) : ""} by ${ws.confirmed_by}` : "Not yet signed — findings recommend, the clinician decides"}
+        subtitle={
+          ws.version
+            ? `Version ${ws.version} signed ${ws.confirmed_at ? formatDateTime(ws.confirmed_at) : ""} by ${ws.confirmed_by}`
+            : "Not yet signed — findings recommend, the clinician decides"
+        }
         actions={
           <button type="button" className={BTN} disabled={signing} onClick={startSigning}>
             {signing ? "Signing…" : ws.version ? "Sign a new version" : "Sign care plan"}
@@ -109,11 +126,20 @@ export function CarePlanStage(props: RecordViewProps) {
             ))}
           </ul>
           <label className="mt-2 flex items-center gap-2 font-semibold">
-            <input type="checkbox" checked={bulkReviewed} onChange={(e) => setBulkReviewed(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={bulkReviewed}
+              onChange={(e) => setBulkReviewed(e.target.checked)}
+            />
             I have reviewed each bulk-accepted action
           </label>
           <div className="mt-2 flex gap-2">
-            <button type="button" className={BTN} disabled={!bulkReviewed || signing} onClick={() => void sign()}>
+            <button
+              type="button"
+              className={BTN}
+              disabled={!bulkReviewed || signing}
+              onClick={() => void sign()}
+            >
               {signing ? "Signing…" : "Sign care plan"}
             </button>
             <button type="button" className={BTN_GHOST} onClick={() => setReviewing(false)}>
@@ -127,12 +153,15 @@ export function CarePlanStage(props: RecordViewProps) {
           <strong>What matters to the client:</strong> “{ws.details.what_matters}”
         </Callout>
       )}
-      {(ws.intake.state === "partial" || ws.intake.state === "unsigned" || ws.intake.state === "none") && (
+      {(ws.intake.state === "partial" ||
+        ws.intake.state === "unsigned" ||
+        ws.intake.state === "none") && (
         <Callout tone="warning" className="mb-3">
           {ws.intake.state === "partial" ? (
             <>
               Intake is <strong>partially complete</strong>
-              {ws.intake.reason_incomplete ? ` (${ws.intake.reason_incomplete})` : ""}. You can plan now; open items remain in the task list.
+              {ws.intake.reason_incomplete ? ` (${ws.intake.reason_incomplete})` : ""}. You can plan
+              now; open items remain in the task list.
             </>
           ) : (
             "Intake is not signed yet. You can plan now — recommendations update as findings are added."
@@ -150,14 +179,33 @@ export function CarePlanStage(props: RecordViewProps) {
         </Callout>
       )}
       {cosign.map((c) => (
-        <Callout key={c.id} tone={c.status === "DECLINED" ? "danger" : c.status === "SIGNED" ? "success" : "warning"} className="mb-2" role="status">
-          <strong>Senior co-signature {c.status === "REQUESTED" ? "requested" : c.status === "SIGNED" ? "given" : c.status.toLowerCase()}:</strong> {c.what}{" "}
-          <Tag>by {c.requested_by}</Tag>
+        <Callout
+          key={c.id}
+          tone={c.status === "DECLINED" ? "danger" : c.status === "SIGNED" ? "success" : "warning"}
+          className="mb-2"
+          role="status"
+        >
+          <strong>
+            Senior co-signature{" "}
+            {c.status === "REQUESTED"
+              ? "requested"
+              : c.status === "SIGNED"
+                ? "given"
+                : c.status.toLowerCase()}
+            :
+          </strong>{" "}
+          {c.what} <Tag>by {c.requested_by}</Tag>
           {c.decline_reason && <span> — reason: “{c.decline_reason}”</span>}
-          {c.thread.length > 0 && <span> — discussion: “{c.thread[c.thread.length - 1].note}”</span>}
+          {c.thread.length > 0 && (
+            <span> — discussion: “{c.thread[c.thread.length - 1].note}”</span>
+          )}
         </Callout>
       ))}
-      <div role="tablist" aria-label="Care plan sections" className="mb-4 flex flex-wrap gap-1.5 border-b border-surface-border">
+      <div
+        role="tablist"
+        aria-label="Care plan sections"
+        className="mb-4 flex flex-wrap gap-1.5 border-b border-surface-border"
+      >
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -171,16 +219,26 @@ export function CarePlanStage(props: RecordViewProps) {
           </button>
         ))}
       </div>
-      {tab === "decisions" && <DecisionsTab patientId={patientId} ws={ws} onChange={setWs} disabled={false} />}
+      {tab === "decisions" && (
+        <DecisionsTab patientId={patientId} ws={ws} onChange={setWs} disabled={false} />
+      )}
       {tab === "client" && (
-        <ClientTab patientId={patientId} clientName={props.banner.name.trim() || "the client"} ws={ws} onChange={setWs} disabled={false} />
+        <ClientTab
+          patientId={patientId}
+          clientName={props.banner.name.trim() || "the client"}
+          ws={ws}
+          onChange={setWs}
+          disabled={false}
+        />
       )}
       {tab === "tasks" && (
         <>
           <TasksTab
             patientId={patientId}
             ws={ws}
-            onTaskChanged={(action) => setWs({ ...ws, actions: ws.actions.map((a) => (a.id === action.id ? action : a)) })}
+            onTaskChanged={(action) =>
+              setWs({ ...ws, actions: ws.actions.map((a) => (a.id === action.id ? action : a)) })
+            }
           />
           <NursingCarePlan patientId={patientId} ws={ws} />
         </>

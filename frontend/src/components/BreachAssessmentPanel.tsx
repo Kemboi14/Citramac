@@ -45,7 +45,9 @@ const ASSESSMENT_KEYS: (keyof BreachAssessment)[] = [
 ];
 
 function assessmentOf(incident: BreachIncident): BreachAssessment {
-  return Object.fromEntries(ASSESSMENT_KEYS.map((k) => [k, incident[k]])) as unknown as BreachAssessment;
+  return Object.fromEntries(
+    ASSESSMENT_KEYS.map((k) => [k, incident[k]]),
+  ) as unknown as BreachAssessment;
 }
 
 function errorText(err: unknown, fallback: string) {
@@ -281,7 +283,8 @@ export function BreachAssessmentPanel({
           </div>
         </div>
         <p className={HELP}>
-          Scored as in the ODPC&apos;s DPIA guidance risk register. The statutory test is the one above.
+          Scored as in the ODPC&apos;s DPIA guidance risk register. The statutory test is the one
+          above.
         </p>
       </div>
 
@@ -303,14 +306,55 @@ export function BreachAssessmentPanel({
             ))}
           </select>
         </label>
-        <TextArea label="How it occurred" value={form.how_it_occurred} onChange={(v) => set({ how_it_occurred: v })} disabled={disabled} />
-        <TextArea label="Potential harm to the data subjects" value={form.likely_harm} onChange={(v) => set({ likely_harm: v })} disabled={disabled} />
-        <TextArea label="Remedying the cause and preventing recurrence" value={form.remedy_actions} onChange={(v) => set({ remedy_actions: v })} disabled={disabled} />
-        <TextArea label="Timelines for rectifying the breach" help="Asked for in the DHA follow-up (reg. 11(2)(b))." value={form.rectification_timeline} onChange={(v) => set({ rectification_timeline: v })} disabled={disabled} />
-        <TextArea label="What the data subjects should do to protect themselves" value={form.subject_guidance} onChange={(v) => set({ subject_guidance: v })} disabled={disabled} />
-        <TextArea label="Who obtained the data, where known" value={form.unauthorised_party} onChange={(v) => set({ unauthorised_party: v })} disabled={disabled} />
-        <TextArea label="Other organisations affected" value={form.other_entities_affected} onChange={(v) => set({ other_entities_affected: v })} disabled={disabled} />
-        <TextArea label="Police or other regulators told" value={form.other_reports} onChange={(v) => set({ other_reports: v })} disabled={disabled} />
+        <TextArea
+          label="How it occurred"
+          value={form.how_it_occurred}
+          onChange={(v) => set({ how_it_occurred: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Potential harm to the data subjects"
+          value={form.likely_harm}
+          onChange={(v) => set({ likely_harm: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Remedying the cause and preventing recurrence"
+          value={form.remedy_actions}
+          onChange={(v) => set({ remedy_actions: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Timelines for rectifying the breach"
+          help="Asked for in the DHA follow-up (reg. 11(2)(b))."
+          value={form.rectification_timeline}
+          onChange={(v) => set({ rectification_timeline: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="What the data subjects should do to protect themselves"
+          value={form.subject_guidance}
+          onChange={(v) => set({ subject_guidance: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Who obtained the data, where known"
+          value={form.unauthorised_party}
+          onChange={(v) => set({ unauthorised_party: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Other organisations affected"
+          value={form.other_entities_affected}
+          onChange={(v) => set({ other_entities_affected: v })}
+          disabled={disabled}
+        />
+        <TextArea
+          label="Police or other regulators told"
+          value={form.other_reports}
+          onChange={(v) => set({ other_reports: v })}
+          disabled={disabled}
+        />
       </div>
 
       <div className={SECTION}>
@@ -349,7 +393,9 @@ export function BreachAssessmentPanel({
           <button type="button" className={BTN} onClick={() => void save()} disabled={saving}>
             {saving ? "Saving…" : "Save assessment"}
           </button>
-          {saved && <span className="text-sm text-brand-green-dark">Saved — deadlines updated.</span>}
+          {saved && (
+            <span className="text-sm text-brand-green-dark">Saved — deadlines updated.</span>
+          )}
           {error && <span className="text-sm text-status-red">{error}</span>}
         </div>
       )}
@@ -400,7 +446,12 @@ export function BreachAssessmentPanel({
         </p>
         <div className="flex flex-wrap gap-2">
           {options?.report_kinds.map((k) => (
-            <button key={k.code} type="button" className={BTN_GHOST} onClick={() => void openReport(k.code)}>
+            <button
+              key={k.code}
+              type="button"
+              className={BTN_GHOST}
+              onClick={() => void openReport(k.code)}
+            >
               <FileText size={14} />
               {k.label}
             </button>

@@ -28,7 +28,11 @@ export function OverviewPanel({
   const outcome = overview.episode.outcome;
   const latest = overview.scores.slice(0, 6);
   const items = checklist?.items ?? [];
-  const status = overview.episode.open ? "Active episode" : outcome ? vs.label("episode-outcome", outcome.outcome) : "No episode";
+  const status = overview.episode.open
+    ? "Active episode"
+    : outcome
+      ? vs.label("episode-outcome", outcome.outcome)
+      : "No episode";
 
   return (
     <div className="flex flex-col gap-4">
@@ -38,24 +42,35 @@ export function OverviewPanel({
             <div>
               <div className="font-display text-lg font-bold text-ink-900">{status}</div>
               <p className="text-[13px] text-ink-500">
-                Review completed measures, discharge readiness and the next scheduled contacts for this episode.
+                Review completed measures, discharge readiness and the next scheduled contacts for
+                this episode.
               </p>
             </div>
             <div className="text-right">
-              <div className="font-display text-2xl font-bold text-ink-900">{overview.scores.length}</div>
-              <div className="text-[11px] text-ink-500">measure{overview.scores.length === 1 ? "" : "s"} recorded</div>
+              <div className="font-display text-2xl font-bold text-ink-900">
+                {overview.scores.length}
+              </div>
+              <div className="text-[11px] text-ink-500">
+                measure{overview.scores.length === 1 ? "" : "s"} recorded
+              </div>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => onOpen("measures")}>
               Record a measure
             </button>
-            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => onOpen("discharge")}>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => onOpen("discharge")}
+            >
               Record episode outcome
             </button>
           </div>
         </Card>
-        <Card title={`Discharge checklist${items.length ? ` · ${items.filter((i) => i.ok).length}/${items.length}` : ""}`}>
+        <Card
+          title={`Discharge checklist${items.length ? ` · ${items.filter((i) => i.ok).length}/${items.length}` : ""}`}
+        >
           {items.length === 0 ? (
             <p className="text-[13px] text-ink-500">No open episode.</p>
           ) : (
@@ -63,12 +78,20 @@ export function OverviewPanel({
               {items.map((i) => (
                 <li key={i.key} className="flex justify-between gap-2">
                   <span>{i.label}</span>
-                  <span className={i.ok ? "font-semibold text-brand-green" : "text-priority-orange"}>{i.ok ? "Complete" : "Outstanding"}</span>
+                  <span
+                    className={i.ok ? "font-semibold text-brand-green" : "text-priority-orange"}
+                  >
+                    {i.ok ? "Complete" : "Outstanding"}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-3`} onClick={() => onOpen("discharge")}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM} mt-3`}
+            onClick={() => onOpen("discharge")}
+          >
             Open checklist
           </button>
         </Card>
@@ -77,15 +100,21 @@ export function OverviewPanel({
       {overview.summary.length > 0 && (
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {overview.summary.map((m) => (
-            <li key={m.instrument} className="rounded-lg border border-surface-border bg-surface-card p-3">
+            <li
+              key={m.instrument}
+              className="rounded-lg border border-surface-border bg-surface-card p-3"
+            >
               <div className="flex justify-between gap-2 text-[12px]">
                 <span className="font-semibold text-ink-900">{m.name}</span>
                 <span className="text-ink-500">{formatDate(m.latest.at)}</span>
               </div>
               <div className="font-display text-xl font-bold text-ink-900">
-                {m.latest.score} <span className="text-[12px] font-normal text-ink-500">/ {m.max}</span>
+                {m.latest.score}{" "}
+                <span className="text-[12px] font-normal text-ink-500">/ {m.max}</span>
               </div>
-              <div className="text-[12px] text-ink-500">{m.latest.band || "Latest recorded score"}</div>
+              <div className="text-[12px] text-ink-500">
+                {m.latest.band || "Latest recorded score"}
+              </div>
             </li>
           ))}
         </ul>
@@ -94,7 +123,9 @@ export function OverviewPanel({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Latest scores">
           {latest.length === 0 ? (
-            <p className="text-[13px] text-ink-500">No outcome measures recorded for this client yet.</p>
+            <p className="text-[13px] text-ink-500">
+              No outcome measures recorded for this client yet.
+            </p>
           ) : (
             <ul className="flex flex-col divide-y divide-surface-border text-[13px]">
               {latest.map((s) => (
@@ -107,12 +138,18 @@ export function OverviewPanel({
                       {s.recorded_by ? ` · ${s.recorded_by}` : ""}
                     </div>
                   </div>
-                  <span className="font-mono">{s.score} / {s.max}</span>
+                  <span className="font-mono">
+                    {s.score} / {s.max}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-3`} onClick={() => onOpen("measures")}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM} mt-3`}
+            onClick={() => onOpen("measures")}
+          >
             View all measures
           </button>
         </Card>
@@ -128,12 +165,18 @@ export function OverviewPanel({
                   </li>
                 ))}
               </ul>
-              {followUps.results.length === 0 && <p className="text-[13px] text-ink-500">No follow-up scheduled yet.</p>}
+              {followUps.results.length === 0 && (
+                <p className="text-[13px] text-ink-500">No follow-up scheduled yet.</p>
+              )}
             </>
           ) : (
             <p className="text-[13px] text-ink-500">Loading…</p>
           )}
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-3`} onClick={() => onOpen("followup")}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM} mt-3`}
+            onClick={() => onOpen("followup")}
+          >
             Review follow-up
           </button>
         </Card>
@@ -150,7 +193,8 @@ export function OverviewPanel({
                 </span>{" "}
                 · {e.outcome ? vs.label("episode-outcome", e.outcome) : e.status}
                 {e.destination ? ` → ${vs.label("episode-destination", e.destination)}` : ""}
-                {e.plan_version > 0 && ` · plan v${e.plan_version}: ${e.plan_actions.join(", ") || "—"}`}
+                {e.plan_version > 0 &&
+                  ` · plan v${e.plan_version}: ${e.plan_actions.join(", ") || "—"}`}
               </li>
             ))}
           </ul>

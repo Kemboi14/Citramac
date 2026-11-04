@@ -20,8 +20,8 @@ from apps.notifications.dispatch import queue_activation_invite
 from apps.tenancy.context import platform_admin_context
 from config.errors import error_response
 
-from .models import ActivationInvite, OneTimePassword, Permission, Role, User
 from .access import set_assignments
+from .models import ActivationInvite, OneTimePassword, Permission, Role, User
 from .serializers import (
     MyProfileSerializer,
     PermissionSerializer,
@@ -123,9 +123,7 @@ class RoleViewSet(
                     organization_id=organization_id, scope=Role.SCOPE_ORG_TEMPLATE
                 )
             return queryset.filter(organization__isnull=True, scope=Role.SCOPE_PLATFORM)
-        return queryset.filter(
-            organization_id=user.organization_id, scope=Role.SCOPE_ORG_TEMPLATE
-        )
+        return queryset.filter(organization_id=user.organization_id, scope=Role.SCOPE_ORG_TEMPLATE)
 
     def _copy_source(self):
         copy_from = self.request.data.get("copy_from")
@@ -169,9 +167,8 @@ class RoleViewSet(
                 ]
             else:
                 by_user = {}
-                for a in (
-                    role.assignments.select_related("user", "branch")
-                    .order_by("user__first_name", "user__last_name")
+                for a in role.assignments.select_related("user", "branch").order_by(
+                    "user__first_name", "user__last_name"
                 ):
                     held = by_user.setdefault(a.user_id, (a.user, []))[1]
                     held.append(a.branch.name if a.branch_id else "All branches")
@@ -242,12 +239,19 @@ class StaffViewSet(viewsets.ModelViewSet):
                 return list(
                     User.all_objects.filter(organization__isnull=False)
                     .select_related("organization")
-                    .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch")
+                    .prefetch_related(
+                        "roles",
+                        "branch_access",
+                        "role_assignments__role",
+                        "role_assignments__branch",
+                    )
                     .order_by("organization__name", "first_name", "last_name")
                 )
         return (
             User.all_objects.filter(organization=user.organization)
-            .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch")
+            .prefetch_related(
+                "roles", "branch_access", "role_assignments__role", "role_assignments__branch"
+            )
             .order_by("first_name", "last_name")
         )
 
@@ -265,7 +269,12 @@ class StaffViewSet(viewsets.ModelViewSet):
                 obj = generics.get_object_or_404(
                     User.all_objects.filter(organization__isnull=False)
                     .select_related("organization")
-                    .prefetch_related("roles", "branch_access", "role_assignments__role", "role_assignments__branch"),
+                    .prefetch_related(
+                        "roles",
+                        "branch_access",
+                        "role_assignments__role",
+                        "role_assignments__branch",
+                    ),
                     pk=self.kwargs["pk"],
                 )
             self.check_object_permissions(self.request, obj)
@@ -586,9 +595,11 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                     "reason": {"old": None, "new": data["reason"]},
                     "access_ends_at": {
                         "old": None,
-                        "new": data["access_ends_at"].isoformat()
-                        if data.get("access_ends_at")
-                        else None,
+                        "new": (
+                            data["access_ends_at"].isoformat()
+                            if data.get("access_ends_at")
+                            else None
+                        ),
                     },
                 },
             )
@@ -702,4 +713,3 @@ class MyProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-

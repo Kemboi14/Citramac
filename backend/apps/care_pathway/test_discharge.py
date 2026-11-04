@@ -601,7 +601,10 @@ class FollowUpTests(DischargeFixture):
 class DischargeReadinessTests(DischargeFixture):
     def test_planned_discharge_is_blocked_until_the_checklist_is_met_and_lists_each_gap(self):
         admission = self.admission
-        response = self.sign(admission, readiness={"meds_reconciled": False, "counter_referral": "", "teach_back": False})
+        response = self.sign(
+            admission,
+            readiness={"meds_reconciled": False, "counter_referral": "", "teach_back": False},
+        )
         self.assertEqual(response.status_code, 400)
         gaps = " | ".join(response.data["readiness"])
         for expected in ("Medicines reconciled", "Counter-referral", "Teach-back"):

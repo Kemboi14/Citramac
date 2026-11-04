@@ -125,10 +125,7 @@ export function TriageWorklistPage() {
           <ErrorNote>{error}</ErrorNote>
         </div>
       )}
-      <Card
-        bodyClassName="overflow-x-auto"
-        className="overflow-hidden"
-      >
+      <Card bodyClassName="overflow-x-auto" className="overflow-hidden">
         <TableFilter
           controls={controls}
           label="Filter the triage list"

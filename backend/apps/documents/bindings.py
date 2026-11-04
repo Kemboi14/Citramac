@@ -485,10 +485,7 @@ def _lab_line(r):
     rr = f" (ref {r.reference_range})" if r.reference_range else ""
     return (
         f"{r.lab_order.loinc_code.description} (LOINC {r.lab_order.loinc_code_id}): "
-        f"{r.result_value} {r.unit}".rstrip()
-        + rr
-        + f", {_date(r.recorded_at)}"
-        + flag
+        f"{r.result_value} {r.unit}".rstrip() + rr + f", {_date(r.recorded_at)}" + flag
     )
 
 

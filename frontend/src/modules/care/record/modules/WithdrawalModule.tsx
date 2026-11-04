@@ -41,11 +41,21 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
 
   const load = useCallback(() => {
     if (!accessToken) return;
-    getWithdrawal(accessToken, patientId).then((r) => { setScales(r.scales); setRecommended(r.recommended); setSubstance(r.substance); setBenzodiazepine(r.benzodiazepine); }).catch((e) => setError(errorText(e, "Couldn't load the withdrawal chart.")));
+    getWithdrawal(accessToken, patientId)
+      .then((r) => {
+        setScales(r.scales);
+        setRecommended(r.recommended);
+        setSubstance(r.substance);
+        setBenzodiazepine(r.benzodiazepine);
+      })
+      .catch((e) => setError(errorText(e, "Couldn't load the withdrawal chart.")));
   }, [accessToken, patientId]);
   useEffect(() => {
     load();
-    if (accessToken) getInstruments(accessToken).then((r) => setDefs(r.results.filter((d) => d.withdrawal))).catch(() => undefined);
+    if (accessToken)
+      getInstruments(accessToken)
+        .then((r) => setDefs(r.results.filter((d) => d.withdrawal)))
+        .catch(() => undefined);
   }, [accessToken, load]);
 
   async function saveUnable(code: string) {
@@ -73,11 +83,16 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
       )}
       {!recommended && !benzodiazepine && (
         <Callout>
-          {substance ? `Main substance recorded as “${substance}”.` : "No main substance is recorded yet."} Set alcohol or opioids in Intake → Substance use to open the matching scale; you can still choose a scale below.
+          {substance
+            ? `Main substance recorded as “${substance}”.`
+            : "No main substance is recorded yet."}{" "}
+          Set alcohol or opioids in Intake → Substance use to open the matching scale; you can still
+          choose a scale below.
         </Callout>
       )}
       <Callout tone="warning">
-        Scoring only. Item wording is from the owner’s mockup and is not yet clinically approved. Medicines and doses follow the facility’s withdrawal protocol, not this screen.
+        Scoring only. Item wording is from the owner’s mockup and is not yet clinically approved.
+        Medicines and doses follow the facility’s withdrawal protocol, not this screen.
       </Callout>
       {shown.map((def) => {
         const scale = scales.find((s) => s.instrument === def.code);
@@ -88,7 +103,8 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
               {recommended === def.code && <Tag tone="brand">Suggested for this client</Tag>}
               {scale?.latest && (
                 <Tag>
-                  {scale.latest.score}/{def.max} · {scale.latest.band} · {formatDateTime(scale.latest.at)}
+                  {scale.latest.score}/{def.max} · {scale.latest.band} ·{" "}
+                  {formatDateTime(scale.latest.at)}
                 </Tag>
               )}
               {scale?.nextDueAt && (
@@ -105,12 +121,18 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
             ))}
             {scale?.lastAttempt && (
               <Callout tone="warning" role="alert" className="mt-2">
-                Last attempt could not be scored ({REASONS.find(([v]) => v === scale.lastAttempt?.reason)?.[1] ?? scale.lastAttempt.reason}). Consider delirium — use a delirium screen (e.g. 4AT), check glucose and request medical review. Re-attempt in 1 hour.
+                Last attempt could not be scored (
+                {REASONS.find(([v]) => v === scale.lastAttempt?.reason)?.[1] ??
+                  scale.lastAttempt.reason}
+                ). Consider delirium — use a delirium screen (e.g. 4AT), check glucose and request
+                medical review. Re-attempt in 1 hour.
               </Callout>
             )}
             {scale && <WithdrawalTrend scale={scale} max={def.max} />}
             {scale && !scale.protocolConfigured && (
-              <p className="mt-1 text-xs text-ink-muted">No facility thresholds are configured, so no due time or threshold alert is shown.</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                No facility thresholds are configured, so no due time or threshold alert is shown.
+              </p>
             )}
             {scoring === def.code ? (
               <AssessmentForm
@@ -125,7 +147,12 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
               />
             ) : unable === def.code ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Why it could not be scored">
+                <select
+                  className={INPUT}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  aria-label="Why it could not be scored"
+                >
                   <option value="">Why couldn’t it be scored?</option>
                   {REASONS.map(([v, l]) => (
                     <option key={v} value={v}>
@@ -133,19 +160,36 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
                     </option>
                   ))}
                 </select>
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} disabled={!reason} onClick={() => void saveUnable(def.code)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  disabled={!reason}
+                  onClick={() => void saveUnable(def.code)}
+                >
                   Record
                 </button>
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setUnable(null)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => setUnable(null)}
+                >
                   Cancel
                 </button>
               </div>
             ) : (
               <div className="mt-2 flex gap-2">
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setScoring(def.code)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => setScoring(def.code)}
+                >
                   Score now
                 </button>
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setUnable(def.code)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => setUnable(def.code)}
+                >
                   Unable to score
                 </button>
               </div>
@@ -155,7 +199,11 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
         );
       })}
       {recommended && (
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM} self-start`} onClick={() => setShowAll((v) => !v)}>
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM} self-start`}
+          onClick={() => setShowAll((v) => !v)}
+        >
           {showAll ? "Show only the suggested scale" : "Score a different scale"}
         </button>
       )}

@@ -3,7 +3,10 @@ import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
-import { BreachAssessmentPanel, BreachRegisterButton } from "../../components/BreachAssessmentPanel";
+import {
+  BreachAssessmentPanel,
+  BreachRegisterButton,
+} from "../../components/BreachAssessmentPanel";
 import {
   BREACH_RISK_LABEL,
   createBreachIncident,
@@ -758,7 +761,9 @@ function TrackRow({
         <td className="px-3 py-2 font-medium text-ink-900">{track.track_label}</td>
         <td className="px-3 py-2 text-ink-700">{track.required ? "Yes" : "Not required"}</td>
         <td className="px-3 py-2 text-ink-700">
-          {track.has_deadline ? formatDateTime(track.due_at) : "Within a reasonably practical period"}
+          {track.has_deadline
+            ? formatDateTime(track.due_at)
+            : "Within a reasonably practical period"}
         </td>
         <td className="px-3 py-2 text-ink-700">{timeLeft}</td>
         <td className="px-3 py-2 text-ink-700">

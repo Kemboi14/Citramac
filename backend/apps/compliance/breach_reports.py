@@ -68,7 +68,11 @@ def _when(value):
 
 
 def _rows(pairs):
-    return "<table>" + "".join(f"<tr><th>{escape(k)}</th><td>{v}</td></tr>" for k, v in pairs) + "</table>"
+    return (
+        "<table>"
+        + "".join(f"<tr><th>{escape(k)}</th><td>{v}</td></tr>" for k, v in pairs)
+        + "</table>"
+    )
 
 
 def _yes_no(value):
@@ -152,18 +156,27 @@ def _odpc(incident, user):
         + _rows(
             [
                 ("Date the breach occurred (best estimate)", _when(incident.occurred_at)),
-                ("Date and circumstances of becoming aware — reg. 38(1)(a)", _when(incident.became_aware_at)),
+                (
+                    "Date and circumstances of becoming aware — reg. 38(1)(a)",
+                    _when(incident.became_aware_at),
+                ),
                 ("Description", _text(incident.description)),
                 ("Primary cause", _text(incident.get_cause_display())),
                 ("How it occurred — reg. 38(1)(c)", _text(incident.how_it_occurred)),
-                ("Number of data subjects affected — reg. 38(1)(d)", _text(incident.subjects_affected)),
+                (
+                    "Number of data subjects affected — reg. 38(1)(d)",
+                    _text(incident.subjects_affected),
+                ),
                 (
                     "Personal data or classes of data affected — reg. 38(1)(e)",
                     _text(incident.data_categories)
                     + ("<br>Health information involved" if incident.involves_health_data else ""),
                 ),
                 ("Second Schedule classes involved (reg. 37)", _categories(incident)),
-                ("Potential harm to the data subjects — reg. 38(1)(f)", _text(incident.likely_harm)),
+                (
+                    "Potential harm to the data subjects — reg. 38(1)(f)",
+                    _text(incident.likely_harm),
+                ),
                 ("Other entities affected", _text(incident.other_entities_affected)),
                 ("Police or other regulators notified", _text(incident.other_reports)),
             ]
@@ -172,8 +185,14 @@ def _odpc(incident, user):
         + _rows(
             [
                 ("Names or identification numbers involved", _yes_no(incident.identifies_subjects)),
-                ("Account credentials involved (reg. 37(1)(b))", _yes_no(incident.credentials_exposed)),
-                ("Only publicly available data (reg. 37(3))", _yes_no(incident.publicly_available_only)),
+                (
+                    "Account credentials involved (reg. 37(1)(b))",
+                    _yes_no(incident.credentials_exposed),
+                ),
+                (
+                    "Only publicly available data (reg. 37(3))",
+                    _yes_no(incident.publicly_available_only),
+                ),
                 ("Notifiable under reg. 37", _yes_no(incident.is_notifiable)),
                 ("Risk assessment", _text(incident.get_risk_level_display())),
                 ("Reasoning", _text(incident.notifiability_reasoning)),
@@ -184,8 +203,14 @@ def _odpc(incident, user):
         + "<h2>Response</h2>"
         + _rows(
             [
-                ("Actions to mitigate the harm — reg. 38(1)(g)(i)", _text(incident.containment_actions)),
-                ("Actions to remedy the cause / prevent recurrence — reg. 38(1)(g)(ii)", _text(incident.remedy_actions)),
+                (
+                    "Actions to mitigate the harm — reg. 38(1)(g)(i)",
+                    _text(incident.containment_actions),
+                ),
+                (
+                    "Actions to remedy the cause / prevent recurrence — reg. 38(1)(g)(ii)",
+                    _text(incident.remedy_actions),
+                ),
                 ("Notification to data subjects — reg. 38(1)(h)", subjects_line),
                 ("How data subjects can mitigate the harm", _text(incident.subject_guidance)),
                 ("Reported after 72 hours of becoming aware? — DPA s.43(2)", _late_line(track)),
@@ -212,7 +237,9 @@ def _representative(incident):
         if incident.reported_by.email:
             parts.append(incident.reported_by.email)
     if profile and profile.dpo_name:
-        parts.append(f"Data Protection Officer: {profile.dpo_name} {profile.dpo_email} {profile.dpo_phone}")
+        parts.append(
+            f"Data Protection Officer: {profile.dpo_name} {profile.dpo_email} {profile.dpo_phone}"
+        )
     return " · ".join(p.strip() for p in parts if p.strip())
 
 
@@ -251,7 +278,10 @@ def _hmis1(incident, user):
                     "DHS Certification of Compliance No.",
                     _text(profile.dhs_certification_number if profile else ""),
                 ),
-                ("Description", "Electronic health record for mental health and addiction treatment"),
+                (
+                    "Description",
+                    "Electronic health record for mental health and addiction treatment",
+                ),
             ]
         )
         + "<h2>Breach</h2>"
@@ -259,12 +289,18 @@ def _hmis1(incident, user):
             [
                 ("Date the breach occurred", _when(incident.occurred_at)),
                 ("Date the breach was discovered", _when(incident.became_aware_at)),
-                ("Was the breach reported within 48 hrs of discovery? If not, why", _late_line(track)),
+                (
+                    "Was the breach reported within 48 hrs of discovery? If not, why",
+                    _late_line(track),
+                ),
                 ("Cause", _text(incident.get_cause_display())),
                 ("How the breach occurred", _text(incident.how_it_occurred)),
                 ("Description", _text(incident.description)),
                 ("Type of information", _text(incident.data_categories)),
-                ("Categories (patient / human resource / administrative / de-identified / aggregate)", _text("")),
+                (
+                    "Categories (patient / human resource / administrative / de-identified / aggregate)",
+                    _text(""),
+                ),
                 ("Exact number of data subjects affected", _text(incident.subjects_affected)),
                 ("Effect of the breach", _text(incident.likely_harm)),
                 ("Remedial actions", _text(incident.containment_actions)),
@@ -290,16 +326,23 @@ def _hmis1(incident, user):
 
 def _dha_followup(incident, user):
     dha = _track(incident, "DHA")
-    body = _rows(
-        [
-            ("Incident reference", _text(incident.reference)),
-            ("Form HMIS 1 notified on", _when(dha.notified_at if dha else None)),
-            ("HMIS 1 reference", _text(dha.reference if dha else "")),
-            ("(i) Corrective measures taken", _text(incident.remedy_actions)),
-            ("(ii) Mitigation action adopted", _text(incident.containment_actions)),
-            ("(iii) Timelines for the rectification of the breach", _text(incident.rectification_timeline)),
-        ]
-    ) + "<h2>Steps taken so far</h2>" + _chronology(incident)
+    body = (
+        _rows(
+            [
+                ("Incident reference", _text(incident.reference)),
+                ("Form HMIS 1 notified on", _when(dha.notified_at if dha else None)),
+                ("HMIS 1 reference", _text(dha.reference if dha else "")),
+                ("(i) Corrective measures taken", _text(incident.remedy_actions)),
+                ("(ii) Mitigation action adopted", _text(incident.containment_actions)),
+                (
+                    "(iii) Timelines for the rectification of the breach",
+                    _text(incident.rectification_timeline),
+                ),
+            ]
+        )
+        + "<h2>Steps taken so far</h2>"
+        + _chronology(incident)
+    )
     return _page(
         incident.organization,
         "Breach follow-up to the Chief Executive Officer, Digital Health Agency",
@@ -368,7 +411,11 @@ def render_register(organization, incidents, user):
     for incident in incidents:
         tracks = "<br>".join(
             f"{escape(t.get_track_display())}: "
-            + (escape(facility_time.local_datetime(t.notified_at).strftime("%d %b %Y")) if t.notified_at else "pending")
+            + (
+                escape(facility_time.local_datetime(t.notified_at).strftime("%d %b %Y"))
+                if t.notified_at
+                else "pending"
+            )
             for t in incident.notifications.all()
             if t.required
         )
@@ -397,4 +444,3 @@ def render_register(organization, incidents, user):
         body,
         user,
     )
-

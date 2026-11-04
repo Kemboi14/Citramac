@@ -229,9 +229,7 @@ export function GlobalRolesPage() {
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex items-center justify-between px-6 pt-6">
-          <h2 className="font-display text-base font-semibold text-ink-900">
-            Platform team
-          </h2>
+          <h2 className="font-display text-base font-semibold text-ink-900">Platform team</h2>
           <button
             type="button"
             onClick={() => {
@@ -318,8 +316,8 @@ export function GlobalRolesPage() {
               <>
                 <p className="w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-700">
                   A Super Admin has the same access as you: every organisation, every client record,
-                  platform settings and this team. Give it only to someone who needs all of that, and
-                  set an end date when the access is for a review.
+                  platform settings and this team. Give it only to someone who needs all of that,
+                  and set an end date when the access is for a review.
                 </p>
                 <label className={`${LABEL_CLASS} min-w-[16rem] flex-1`}>
                   Why do they need it?
@@ -489,9 +487,7 @@ export function GlobalRolesPage() {
           <p>
             Access ends:{" "}
             <strong>
-              {superEndsOn
-                ? new Date(endOfDay(superEndsOn)).toLocaleDateString()
-                : "no end date"}
+              {superEndsOn ? new Date(endOfDay(superEndsOn)).toLocaleDateString() : "no end date"}
             </strong>
           </p>
           <p>Reason, kept in the audit log: “{superReason.trim()}”</p>

@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BranchFacilityRegistryView,
     BranchViewSet,
     DepartmentViewSet,
     MySubscriptionView,
@@ -14,13 +15,12 @@ from .views import (
     OrganizationStatusView,
     OrganizationThemeView,
     OrgDashboardStatsView,
+    PlatformAiSettingsView,
+    PlatformAiTestView,
     PlatformBrandingView,
     PlatformDashboardStatsView,
     PlatformEmailSettingsView,
     PlatformHealthView,
-    BranchFacilityRegistryView,
-    PlatformAiSettingsView,
-    PlatformAiTestView,
     PlatformHieCallbackRegistrationView,
     PlatformHieLogView,
     PlatformHieSettingsView,

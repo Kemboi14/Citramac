@@ -127,8 +127,9 @@ export function IntakeDiagnosisTab({
   return (
     <div className="flex flex-col gap-4">
       <Callout>
-        Diagnoses are recorded after assessment — nothing is pre-assigned. Use <strong>provisional</strong> or{" "}
-        <strong>differential</strong> until organic causes are excluded; record comorbidity as separate entries.
+        Diagnoses are recorded after assessment — nothing is pre-assigned. Use{" "}
+        <strong>provisional</strong> or <strong>differential</strong> until organic causes are
+        excluded; record comorbidity as separate entries.
       </Callout>
       <Card title="Diagnoses" bodyClassName="p-0">
         <ErrorNote>{error}</ErrorNote>
@@ -155,7 +156,10 @@ export function IntakeDiagnosisTab({
                         aria-label={`Specifier / note for ${d.icd11_code}`}
                         placeholder="Specifier / note"
                         defaultValue={d.clinical_notes}
-                        onBlur={(e) => e.target.value.trim() !== d.clinical_notes && void change(d, { clinical_notes: e.target.value.trim() })}
+                        onBlur={(e) =>
+                          e.target.value.trim() !== d.clinical_notes &&
+                          void change(d, { clinical_notes: e.target.value.trim() })
+                        }
                       />
                     </td>
                     <td className={TD}>
@@ -163,7 +167,11 @@ export function IntakeDiagnosisTab({
                         className={CELL}
                         aria-label={`Certainty of ${d.icd11_code}`}
                         value={d.verification_status}
-                        onChange={(e) => void change(d, { verification_status: e.target.value as DiagnosisVerification })}
+                        onChange={(e) =>
+                          void change(d, {
+                            verification_status: e.target.value as DiagnosisVerification,
+                          })
+                        }
                       >
                         {!d.verification_status && <option value="">Not recorded</option>}
                         {vs.options("intake-dx-status").map((o) => (
@@ -178,7 +186,9 @@ export function IntakeDiagnosisTab({
                         className={CELL}
                         aria-label={`Clinical status of ${d.icd11_code}`}
                         value={d.status}
-                        onChange={(e) => void change(d, { status: e.target.value as DiagnosisStatus })}
+                        onChange={(e) =>
+                          void change(d, { status: e.target.value as DiagnosisStatus })
+                        }
                       >
                         {CLINICAL_STATUSES.map((s) => (
                           <option key={s.code} value={s.code}>

@@ -57,8 +57,9 @@ export function ClinicalWorkspaceShell() {
       userName={name}
       userRole={
         // In the clinical shell, name the clinical role of someone who is also Org Admin.
-        (claims?.roles?.find((role) => role !== "Org Admin" && role !== "Auditor") ?? claims?.role)
-          ?.replace(/_/g, " ") || "Clinician"
+        (
+          claims?.roles?.find((role) => role !== "Org Admin" && role !== "Auditor") ?? claims?.role
+        )?.replace(/_/g, " ") || "Clinician"
       }
       searchPlaceholder="Search clients..."
       searchSlot={<GlobalClientSearch />}

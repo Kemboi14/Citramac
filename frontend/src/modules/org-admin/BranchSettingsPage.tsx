@@ -342,7 +342,8 @@ export function BranchSettingsPage() {
   const [savedTheme, setSavedTheme] = useState<ThemeOverrides | null>(null);
   const [themeDraft, setThemeDraft] = useState<ThemeOverrides>({});
   const [platformTheme, setPlatformThemeBaseline] = useState<ThemeOverrides>({});
-  const themeDirty = savedTheme !== null && JSON.stringify(savedTheme) !== JSON.stringify(themeDraft);
+  const themeDirty =
+    savedTheme !== null && JSON.stringify(savedTheme) !== JSON.stringify(themeDraft);
   const [themeLoadError, setThemeLoadError] = useState<string | null>(null);
   const [themeSaveError, setThemeSaveError] = useState<string | null>(null);
 
@@ -1010,7 +1011,9 @@ export function BranchSettingsPage() {
                     value={shaClientId}
                     onChange={(e) => setShaClientId(e.target.value)}
                     placeholder={
-                      branch.has_sha_credentials ? "Leave blank to keep the current credentials" : ""
+                      branch.has_sha_credentials
+                        ? "Leave blank to keep the current credentials"
+                        : ""
                     }
                     autoComplete="off"
                     aria-invalid={Boolean(credentialFieldErrors.sha_client_id)}
@@ -1029,7 +1032,9 @@ export function BranchSettingsPage() {
                     value={shaClientSecret}
                     onChange={(e) => setShaClientSecret(e.target.value)}
                     placeholder={
-                      branch.has_sha_credentials ? "Leave blank to keep the current credentials" : ""
+                      branch.has_sha_credentials
+                        ? "Leave blank to keep the current credentials"
+                        : ""
                     }
                     autoComplete="new-password"
                     aria-invalid={Boolean(credentialFieldErrors.sha_client_secret)}
@@ -1339,12 +1344,16 @@ export function BranchSettingsPage() {
                 </span>
               </h2>
               <p className="mb-4 text-xs text-ink-500">
-                Shown on your organization's branded login screen before staff sign in.
+                Shown on your organization&rsquo;s branded login screen before staff sign in.
               </p>
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-bg">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Organization logo" className="h-full w-full object-contain p-1.5" />
+                    <img
+                      src={logoUrl}
+                      alt="Organization logo"
+                      className="h-full w-full object-contain p-1.5"
+                    />
                   ) : (
                     <span className="text-[9px] font-semibold text-ink-400">No logo</span>
                   )}
@@ -1374,7 +1383,9 @@ export function BranchSettingsPage() {
                     )}
                     {logoUploading ? "Uploading…" : "Upload Logo"}
                   </button>
-                  <span className="text-[11px] text-ink-400">PNG, JPG, WEBP, or SVG, up to 30MB</span>
+                  <span className="text-[11px] text-ink-400">
+                    PNG, JPG, WEBP, or SVG, up to 30MB
+                  </span>
                 </div>
               </div>
               {logoError && (
@@ -1383,7 +1394,6 @@ export function BranchSettingsPage() {
                 </p>
               )}
             </div>
-
           </div>
         </div>
       )}
@@ -1417,7 +1427,9 @@ export function BranchSettingsPage() {
                 baselineLabel="platform theme"
               />
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-surface-border pt-4">
-                {themeSaveError && <p className="mr-auto text-sm text-status-red">{themeSaveError}</p>}
+                {themeSaveError && (
+                  <p className="mr-auto text-sm text-status-red">{themeSaveError}</p>
+                )}
                 {themeDirty && <span className="text-xs text-ink-500">Unsaved changes</span>}
                 <button
                   type="button"

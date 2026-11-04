@@ -28,9 +28,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("org_slug")
-        parser.add_argument("--address", choices=sorted(ADDRESSES), required=True,
-                            help="OQ-13: which printed address to use (unconfirmed which is current).")
-        parser.add_argument("--i-understand-this-is-demo-data", action="store_true", dest="confirmed")
+        parser.add_argument(
+            "--address",
+            choices=sorted(ADDRESSES),
+            required=True,
+            help="OQ-13: which printed address to use (unconfirmed which is current).",
+        )
+        parser.add_argument(
+            "--i-understand-this-is-demo-data", action="store_true", dest="confirmed"
+        )
 
     def handle(self, org_slug, address, confirmed, **_):
         if not confirmed:
@@ -49,7 +55,9 @@ class Command(BaseCommand):
             branch.phone = "+254 793 888 475"
             branch.email = branch.email or "info@cafric.org"
             branch.save()
-        self.stdout.write(self.style.WARNING(
-            f"DEMO facility profile written to {org.name} / {branch.name}. Other printed phones: "
-            "+254 768 489 345, +254 768 665 921 (Branch holds one)."
-        ))
+        self.stdout.write(
+            self.style.WARNING(
+                f"DEMO facility profile written to {org.name} / {branch.name}. Other printed phones: "
+                "+254 768 489 345, +254 768 665 921 (Branch holds one)."
+            )
+        )

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
-import { acknowledgeCosign, decideCosign, getDecisionInbox, type CosignRow } from "../../lib/carePathwayApi";
+import {
+  acknowledgeCosign,
+  decideCosign,
+  getDecisionInbox,
+  type CosignRow,
+} from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
@@ -54,37 +59,94 @@ export function DecisionInbox() {
           {items.map((r) => (
             <li key={r.id} className="rounded-lg border border-surface-border p-2.5 text-[13px]">
               <div className="flex flex-wrap items-center gap-2">
-                <Link to={clientRecordPath(r.patient_id, "care-plan")} className="font-semibold text-brand-green hover:underline">
+                <Link
+                  to={clientRecordPath(r.patient_id, "care-plan")}
+                  className="font-semibold text-brand-green hover:underline"
+                >
                   {r.patient_name}
                 </Link>
                 <Tag tone={r.inbox_kind === "returned" ? "risk" : "warn"}>
-                  {r.inbox_kind === "cosign" ? "Co-sign" : r.inbox_kind === "returned" ? "Returned" : "Discuss"}
+                  {r.inbox_kind === "cosign"
+                    ? "Co-sign"
+                    : r.inbox_kind === "returned"
+                      ? "Returned"
+                      : "Discuss"}
                 </Tag>
-                <span className="text-[11px] text-ink-500">requested {formatDateTime(r.requested_at)} by {r.requested_by}</span>
+                <span className="text-[11px] text-ink-500">
+                  requested {formatDateTime(r.requested_at)} by {r.requested_by}
+                </span>
               </div>
               <p className="mt-1">{r.what}</p>
-              {r.decline_reason && <p className="mt-1 text-ink-500">Reason: “{r.decline_reason}”</p>}
-              {r.thread.length > 0 && <p className="mt-1 text-ink-500">“{r.thread[r.thread.length - 1].note}”</p>}
+              {r.decline_reason && (
+                <p className="mt-1 text-ink-500">Reason: “{r.decline_reason}”</p>
+              )}
+              {r.thread.length > 0 && (
+                <p className="mt-1 text-ink-500">“{r.thread[r.thread.length - 1].note}”</p>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {r.inbox_kind === "cosign" && (
                   <>
-                    <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => accessToken && void act(() => decideCosign(accessToken, r.id, "SIGN"))}>
+                    <button
+                      type="button"
+                      className={`${BTN} ${BTN_SM}`}
+                      onClick={() =>
+                        accessToken && void act(() => decideCosign(accessToken, r.id, "SIGN"))
+                      }
+                    >
                       Approve &amp; sign
                     </button>
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setOpen({ id: r.id, mode: "DISCUSS" })}>Discuss…</button>
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setOpen({ id: r.id, mode: "DECLINE" })}>Decline…</button>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={() => setOpen({ id: r.id, mode: "DISCUSS" })}
+                    >
+                      Discuss…
+                    </button>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={() => setOpen({ id: r.id, mode: "DECLINE" })}
+                    >
+                      Decline…
+                    </button>
                   </>
                 )}
                 {r.inbox_kind === "returned" && (
-                  <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => accessToken && void act(() => acknowledgeCosign(accessToken, r.id))}>
+                  <button
+                    type="button"
+                    className={`${BTN_GHOST} ${BTN_SM}`}
+                    onClick={() =>
+                      accessToken && void act(() => acknowledgeCosign(accessToken, r.id))
+                    }
+                  >
                     Acknowledge
                   </button>
                 )}
               </div>
               {open?.id === r.id && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input className={`${INPUT} max-w-md`} aria-label={open.mode === "DECLINE" ? "Reason for declining" : "What to discuss"} placeholder={open.mode === "DECLINE" ? "Reason for declining (returned to the requester)" : "What do you want to discuss?"} value={note} onChange={(e) => setNote(e.target.value)} />
-                  <button type="button" className={`${BTN} ${BTN_SM}`} disabled={note.trim().length < 5} onClick={() => accessToken && void act(() => decideCosign(accessToken, r.id, open.mode, note))}>
+                  <input
+                    className={`${INPUT} max-w-md`}
+                    aria-label={
+                      open.mode === "DECLINE" ? "Reason for declining" : "What to discuss"
+                    }
+                    placeholder={
+                      open.mode === "DECLINE"
+                        ? "Reason for declining (returned to the requester)"
+                        : "What do you want to discuss?"
+                    }
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className={`${BTN} ${BTN_SM}`}
+                    disabled={note.trim().length < 5}
+                    onClick={() =>
+                      accessToken &&
+                      void act(() => decideCosign(accessToken, r.id, open.mode, note))
+                    }
+                  >
                     {open.mode === "DECLINE" ? "Decline with reason" : "Send to requester"}
                   </button>
                 </div>

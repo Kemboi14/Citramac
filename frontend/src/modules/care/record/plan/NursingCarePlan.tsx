@@ -61,7 +61,15 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
   }
 
   return (
-    <Card title="Nursing care plan" aside={<span className="text-[11px] text-ink-500">problem → goal → interventions → evaluation</span>} className="mt-4">
+    <Card
+      title="Nursing care plan"
+      aside={
+        <span className="text-[11px] text-ink-500">
+          problem → goal → interventions → evaluation
+        </span>
+      }
+      className="mt-4"
+    >
       <ErrorNote>{error ?? loadError}</ErrorNote>
       {rows.length > 0 && (
         <div className="overflow-x-auto">
@@ -80,7 +88,9 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
                 <tr key={n.id}>
                   <td className={TD}>
                     {n.problem}
-                    {n.action_name && <div className="text-[11px] text-ink-500">↳ {n.action_name}</div>}
+                    {n.action_name && (
+                      <div className="text-[11px] text-ink-500">↳ {n.action_name}</div>
+                    )}
                   </td>
                   <td className={TD}>{n.goal}</td>
                   <td className={`${TD} whitespace-pre-line`}>{n.interventions || "—"}</td>
@@ -89,19 +99,44 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
                     {n.evaluations.map((e) => (
                       <div key={e.at} className="mb-1">
                         {e.text}
-                        <div className="text-[11px] text-ink-500">{e.by} · {formatDateTime(e.at)}</div>
+                        <div className="text-[11px] text-ink-500">
+                          {e.by} · {formatDateTime(e.at)}
+                        </div>
                       </div>
                     ))}
                     {evaluating?.id === n.id ? (
                       <div className="mt-1 flex flex-col gap-1">
-                        <textarea rows={2} aria-label="Evaluation" className={`${INPUT} resize-y`} value={evaluating.text} onChange={(e) => setEvaluating({ id: n.id, text: e.target.value })} />
+                        <textarea
+                          rows={2}
+                          aria-label="Evaluation"
+                          className={`${INPUT} resize-y`}
+                          value={evaluating.text}
+                          onChange={(e) => setEvaluating({ id: n.id, text: e.target.value })}
+                        />
                         <div className="flex gap-1.5">
-                          <button type="button" className={`${BTN} ${BTN_SM}`} disabled={!evaluating.text.trim()} onClick={() => void evaluate()}>Save</button>
-                          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setEvaluating(null)}>Cancel</button>
+                          <button
+                            type="button"
+                            className={`${BTN} ${BTN_SM}`}
+                            disabled={!evaluating.text.trim()}
+                            onClick={() => void evaluate()}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className={`${BTN_GHOST} ${BTN_SM}`}
+                            onClick={() => setEvaluating(null)}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </div>
                     ) : (
-                      <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-1`} onClick={() => setEvaluating({ id: n.id, text: "" })}>
+                      <button
+                        type="button"
+                        className={`${BTN_GHOST} ${BTN_SM} mt-1`}
+                        onClick={() => setEvaluating({ id: n.id, text: "" })}
+                      >
                         Add evaluation
                       </button>
                     )}
@@ -117,30 +152,55 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
         </div>
       )}
       <details className="mt-3">
-        <summary className="cursor-pointer text-[13px] font-semibold text-ink-900">+ Add a nursing problem</summary>
+        <summary className="cursor-pointer text-[13px] font-semibold text-ink-900">
+          + Add a nursing problem
+        </summary>
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Problem</span>
-            <input className={INPUT} value={draft.problem} onChange={(e) => setDraft((d) => ({ ...d, problem: e.target.value }))} />
+            <input
+              className={INPUT}
+              value={draft.problem}
+              onChange={(e) => setDraft((d) => ({ ...d, problem: e.target.value }))}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Goal</span>
-            <input className={INPUT} value={draft.goal} onChange={(e) => setDraft((d) => ({ ...d, goal: e.target.value }))} />
+            <input
+              className={INPUT}
+              value={draft.goal}
+              onChange={(e) => setDraft((d) => ({ ...d, goal: e.target.value }))}
+            />
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className={FIELD_LABEL}>Interventions</span>
-            <textarea rows={2} className={`${INPUT} resize-y`} value={draft.interventions} onChange={(e) => setDraft((d) => ({ ...d, interventions: e.target.value }))} />
+            <textarea
+              rows={2}
+              className={`${INPUT} resize-y`}
+              value={draft.interventions}
+              onChange={(e) => setDraft((d) => ({ ...d, interventions: e.target.value }))}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Evaluation (optional)</span>
-            <input className={INPUT} value={draft.evaluation} onChange={(e) => setDraft((d) => ({ ...d, evaluation: e.target.value }))} />
+            <input
+              className={INPUT}
+              value={draft.evaluation}
+              onChange={(e) => setDraft((d) => ({ ...d, evaluation: e.target.value }))}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Linked MDT action</span>
-            <select className={INPUT} value={draft.action_key} onChange={(e) => setDraft((d) => ({ ...d, action_key: e.target.value }))}>
+            <select
+              className={INPUT}
+              value={draft.action_key}
+              onChange={(e) => setDraft((d) => ({ ...d, action_key: e.target.value }))}
+            >
               <option value="">— none —</option>
               {live.map((a) => (
-                <option key={a.key} value={a.key}>{a.name}</option>
+                <option key={a.key} value={a.key}>
+                  {a.name}
+                </option>
               ))}
             </select>
           </label>

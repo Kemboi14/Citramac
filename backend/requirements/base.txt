@@ -1,6 +1,6 @@
 Django==5.2.17
 sqlparse==0.6.0
-djangorestframework==3.17.2
+djangorestframework==3.18.2
 djangorestframework-simplejwt==5.5.1
 django-environ==0.14.0
 django-cors-headers==4.9.0
@@ -16,6 +16,6 @@ fhir.resources==8.3.0
 django-structlog==10.1.0
 sentry-sdk==2.36.0
 django-prometheus==2.5.0
-Pillow==12.3.0
+Pillow==13.0.0
 jsonschema==4.26.0
 anthropic==1.11.0

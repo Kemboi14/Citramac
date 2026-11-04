@@ -720,8 +720,15 @@ def _audit_auto_triggers(triage_encounter, draft, before, after):
 
 
 def _record_vitals(
-    encounter, user, *, bp=None, systolic=None, diastolic=None, consciousness="",
-    supplemental_o2=None, **values
+    encounter,
+    user,
+    *,
+    bp=None,
+    systolic=None,
+    diastolic=None,
+    consciousness="",
+    supplemental_o2=None,
+    **values,
 ):
     if bp:
         systolic, diastolic = triage_rules.parse_blood_pressure(bp)
@@ -982,7 +989,9 @@ def _check_recheck_ranges(measured):
         except (TypeError, ValueError):
             raise ValidationError({key: f"{label}: enter a number only."}) from None
         if not hmin <= number <= hmax:
-            raise ValidationError({key: f"{label}: not a possible value — check ({hmin:g}–{hmax:g} {unit})."})
+            raise ValidationError(
+                {key: f"{label}: not a possible value — check ({hmin:g}–{hmax:g} {unit})."}
+            )
     if measured.get("consciousness") not in (None, "", "A", "C", "V", "P", "U"):
         raise ValidationError({"consciousness": "Use A, C, V, P or U."})
     if measured.get("supplementalO2") not in (None, "", "room_air", "supplemental"):
@@ -1124,9 +1133,11 @@ def allergy_banner(patient):
     if patient.allergy_status == "NONE":
         return {"state": "none", "items": []}
     if patient.allergy_status == "ACTIVE_ALLERGIES":
-        records = AllergyRecord.objects.filter(patient=patient).exclude(
-            verification_status="REFUTED"
-        ).exclude(clinical_status="RESOLVED")
+        records = (
+            AllergyRecord.objects.filter(patient=patient)
+            .exclude(verification_status="REFUTED")
+            .exclude(clinical_status="RESOLVED")
+        )
         return {
             "state": "known",
             "items": [
@@ -1329,8 +1340,13 @@ def void_intervention(user, record, reason, after=None):
     record.void_reason = reason
     record.corrections = [
         *record.corrections,
-        {"at": now.isoformat(), "by": user_display(user), "reason": reason,
-         "before": {"voided": False}, "after": after or {"voided": True}},
+        {
+            "at": now.isoformat(),
+            "by": user_display(user),
+            "reason": reason,
+            "before": {"voided": False},
+            "after": after or {"voided": True},
+        },
     ]
     record.save(update_fields=["voided_at", "void_reason", "corrections", "updated_at"])
     ChargeItem.objects.filter(intervention=record, voided_at__isnull=True).update(voided_at=now)
@@ -1518,32 +1534,90 @@ def _clinical_timeline_events(patient):
     out = []
     for sc in OutcomeScore.objects.filter(patient=patient):
         spec = instruments.INSTRUMENTS.get(sc.instrument)
-        out.append({"at": sc.recorded_at, "kind": "score",
-                    "title": f"{spec['name'] if spec else sc.instrument}: {sc.score}",
-                    "detail": f"{instruments.band_for(sc.instrument, sc.score) if spec else ''} — {user_display(sc.recorded_by)}"})
+        out.append(
+            {
+                "at": sc.recorded_at,
+                "kind": "score",
+                "title": f"{spec['name'] if spec else sc.instrument}: {sc.score}",
+                "detail": f"{instruments.band_for(sc.instrument, sc.score) if spec else ''} — {user_display(sc.recorded_by)}",
+            }
+        )
     for at in AssessmentAttempt.objects.filter(patient=patient):
-        out.append({"at": at.recorded_at, "kind": "score", "title": f"{at.instrument} could not be scored",
-                    "detail": at.get_reason_display()})
+        out.append(
+            {
+                "at": at.recorded_at,
+                "kind": "score",
+                "title": f"{at.instrument} could not be scored",
+                "detail": at.get_reason_display(),
+            }
+        )
     for n in ProgressNote.objects.filter(patient=patient, status="SIGNED"):
-        out.append({"at": n.signed_at, "kind": "note", "title": f"Progress note — {n.note_type}",
-                    "detail": f"{(n.text or '')[:140]} — {user_display(n.author)}"})
+        out.append(
+            {
+                "at": n.signed_at,
+                "kind": "note",
+                "title": f"Progress note — {n.note_type}",
+                "detail": f"{(n.text or '')[:140]} — {user_display(n.author)}",
+            }
+        )
     for p in RiskProposal.objects.filter(patient=patient).exclude(status="PROPOSED"):
-        out.append({"at": p.decided_at, "kind": "risk", "title": f"Risk finding {p.get_status_display().lower()}",
-                    "detail": f"{p.source}: {p.row} — {p.option}. {p.reason}".strip()})
+        out.append(
+            {
+                "at": p.decided_at,
+                "kind": "risk",
+                "title": f"Risk finding {p.get_status_display().lower()}",
+                "detail": f"{p.source}: {p.row} — {p.option}. {p.reason}".strip(),
+            }
+        )
     for c in CapacityAssessment.objects.filter(patient=patient):
-        out.append({"at": c.assessed_at, "kind": "consent", "title": f"Capacity: {c.outcome}",
-                    "detail": f"{c.decision} — {user_display(c.assessed_by)}"})
+        out.append(
+            {
+                "at": c.assessed_at,
+                "kind": "consent",
+                "title": f"Capacity: {c.outcome}",
+                "detail": f"{c.decision} — {user_display(c.assessed_by)}",
+            }
+        )
     for v in VisitConsent.objects.filter(patient=patient):
-        out.append({"at": v.recorded_at, "kind": "consent", "title": f"Visit consent ({v.get_party_display()})", "detail": v.scope})
+        out.append(
+            {
+                "at": v.recorded_at,
+                "kind": "consent",
+                "title": f"Visit consent ({v.get_party_display()})",
+                "detail": v.scope,
+            }
+        )
     for v in CarePlanVersion.objects.filter(care_plan__patient=patient):
-        out.append({"at": v.created_at, "kind": "plan", "title": f"Care plan version {v.version} signed", "detail": ""})
+        out.append(
+            {
+                "at": v.created_at,
+                "kind": "plan",
+                "title": f"Care plan version {v.version} signed",
+                "detail": "",
+            }
+        )
     for m in MdtReview.objects.filter(patient=patient, held_at__isnull=False):
-        out.append({"at": m.held_at, "kind": "plan", "title": "MDT review held", "detail": m.outcome[:140]})
+        out.append(
+            {"at": m.held_at, "kind": "plan", "title": "MDT review held", "detail": m.outcome[:140]}
+        )
     for r in CosignRequest.objects.filter(patient=patient, decided_at__isnull=False):
-        out.append({"at": r.decided_at, "kind": "plan", "title": f"Co-sign {r.status.lower()}", "detail": r.what})
+        out.append(
+            {
+                "at": r.decided_at,
+                "kind": "plan",
+                "title": f"Co-sign {r.status.lower()}",
+                "detail": r.what,
+            }
+        )
     for ep in RestrictivePracticeEpisode.objects.filter(patient=patient):
-        out.append({"at": ep.start_at, "kind": "risk", "title": f"{ep.get_kind_display()} recorded",
-                    "detail": "Ended" if ep.end_at else "Ongoing"})
+        out.append(
+            {
+                "at": ep.start_at,
+                "kind": "risk",
+                "title": f"{ep.get_kind_display()} recorded",
+                "detail": "Ended" if ep.end_at else "Ongoing",
+            }
+        )
     return out
 
 
@@ -1642,15 +1716,19 @@ def client_timeline(patient):
                     "detail": detail,
                 }
             )
-    for intake in IntakeAssessment.objects.filter(
-        patient=patient, status="SIGNED"
-    ).select_related("author", "signed_by"):
+    for intake in IntakeAssessment.objects.filter(patient=patient, status="SIGNED").select_related(
+        "author", "signed_by"
+    ):
         events.append(
             {
                 "at": intake.signed_at or intake.created_at,
                 "kind": "intake",
                 "title": f"Intake v{intake.version} signed"
-                + ("" if intake.completeness in ("", "COMPLETE") else f" ({intake.get_completeness_display()})"),
+                + (
+                    ""
+                    if intake.completeness in ("", "COMPLETE")
+                    else f" ({intake.get_completeness_display()})"
+                ),
                 "detail": user_display(intake.signed_by or intake.author),
             }
         )
@@ -2197,32 +2275,49 @@ def readiness_checklist(patient, answers, follow_up_booked, needs_safety_plan=Fa
     self_harm = bool(row and "suicide" in intake.risk_rows_active(row.sections))
     items = [("meds", "Medicines reconciled with the client", bool(r.get("meds_reconciled")))]
     if self_harm or needs_safety_plan:
-        label = "Safety plan signed (self-harm risk is active)" if self_harm else "Safety plan signed"
-        items.append(("safety", label, patient.safety_plans.filter(signed_at__isnull=False).exists()))
-    items.append((
-        "follow_up", "Follow-up contact booked — or the reason none is needed",
-        bool(follow_up_booked or str(r.get("no_follow_up_reason", "")).strip()),
-    ))
-    items.append((
-        "counter_referral", "Counter-referral sent, or recorded as ‘no referring service’",
-        r.get("counter_referral") in ("SENT", "NO_REFERRER"),
-    ))
+        label = (
+            "Safety plan signed (self-harm risk is active)" if self_harm else "Safety plan signed"
+        )
+        items.append(
+            ("safety", label, patient.safety_plans.filter(signed_at__isnull=False).exists())
+        )
+    items.append(
+        (
+            "follow_up",
+            "Follow-up contact booked — or the reason none is needed",
+            bool(follow_up_booked or str(r.get("no_follow_up_reason", "")).strip()),
+        )
+    )
+    items.append(
+        (
+            "counter_referral",
+            "Counter-referral sent, or recorded as ‘no referring service’",
+            r.get("counter_referral") in ("SENT", "NO_REFERRER"),
+        )
+    )
     if withdrawal.is_opioid(patient):
-        items.append((
-            "naloxone", "Naloxone offered (opioid use) — record whether it was accepted or declined",
-            r.get("naloxone") in ("OFFERED", "DECLINED"),
-        ))
-    items.append((
-        "teach_back", "Teach-back done: crisis plan, warning signs and reduced tolerance explained",
-        bool(r.get("teach_back")),
-    ))
+        items.append(
+            (
+                "naloxone",
+                "Naloxone offered (opioid use) — record whether it was accepted or declined",
+                r.get("naloxone") in ("OFFERED", "DECLINED"),
+            )
+        )
+    items.append(
+        (
+            "teach_back",
+            "Teach-back done: crisis plan, warning signs and reduced tolerance explained",
+            bool(r.get("teach_back")),
+        )
+    )
     return [{"key": key, "label": label, "ok": ok} for key, label, ok in items]
 
 
 def discharge_readiness(admission, summary, follow_up_given=False):
     """What still blocks a planned inpatient discharge (labels of unmet items)."""
     checklist = readiness_checklist(
-        admission.patient, summary.readiness,
+        admission.patient,
+        summary.readiness,
         bool(follow_up_given or summary.follow_up_appointment_id),
     )
     return [item["label"] for item in checklist if not item["ok"]]

@@ -26,4 +26,14 @@ export const SAFETY_LABELS: Record<"en" | "sw", Record<string, string>> = {
     keepsake: "Ninachoweka pamoja na mpango huu (picha, barua, kitu)",
   },
 };
-export const SAFETY_KEYS = ["warning_signs", "coping", "self_talk", "places_people_distract", "people_to_ask", "professionals", "safer_surroundings", "reasons_for_living", "keepsake"] as const;
+export const SAFETY_KEYS = [
+  "warning_signs",
+  "coping",
+  "self_talk",
+  "places_people_distract",
+  "people_to_ask",
+  "professionals",
+  "safer_surroundings",
+  "reasons_for_living",
+  "keepsake",
+] as const;

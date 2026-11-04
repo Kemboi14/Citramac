@@ -17,7 +17,11 @@ keeps its old text check for them — and nothing here rewrites a stored intake.
 
 from . import intake_schema as schema
 
-ORIENTATION_SPHERES = [("orient_time", "Time"), ("orient_place", "Place"), ("orient_person", "Person")]
+ORIENTATION_SPHERES = [
+    ("orient_time", "Time"),
+    ("orient_place", "Place"),
+    ("orient_person", "Person"),
+]
 # INT-16 rule: thought content "Suicidal" / "Homicidal" feeds the INT-03 risk register.
 RISK_SIGNALS = [("Suicidal", "suicide", "Thoughts"), ("Homicidal", "violence", "Thoughts")]
 HALLUCINATIONS = ["Auditory hallucinations", "Visual hallucinations", "Other hallucinations"]
@@ -63,7 +67,9 @@ def risk_signals(mse, legacy_thought_content=""):
 
 def psychotic_features(mse):
     """Structured perception / thought-content findings that suggest psychosis."""
-    return any(has(mse, "perception", h) for h in HALLUCINATIONS) or has(mse, "thought_content", "Delusions")
+    return any(has(mse, "perception", h) for h in HALLUCINATIONS) or has(
+        mse, "thought_content", "Delusions"
+    )
 
 
 def _display_lookup():
@@ -71,8 +77,7 @@ def _display_lookup():
 
     ids = [valueset_for(k) for k in _CODED_DOMAINS] + ["intake-orientation", "intake-reliability"]
     table = {
-        (c.valueset_id, c.code): c.display
-        for c in LocalConcept.objects.filter(valueset_id__in=ids)
+        (c.valueset_id, c.code): c.display for c in LocalConcept.objects.filter(valueset_id__in=ids)
     }
     return lambda valueset, code: table.get((valueset, code), code)
 
@@ -88,7 +93,9 @@ def exam_text(mse):
     label = _display_lookup()
     out = {}
     for key, _label, _opts in schema.MSE_DOMAINS:
-        picked = [label(valueset_for(key), c) for c in codes(mse, key)] if key in _CODED_DOMAINS else []
+        picked = (
+            [label(valueset_for(key), c) for c in codes(mse, key)] if key in _CODED_DOMAINS else []
+        )
         out[key] = " — ".join(part for part in (", ".join(picked), notes(mse, key).strip()) if part)
     spheres = [
         f"{sphere}: {label('intake-orientation', mse[field])}"

@@ -77,7 +77,8 @@ export function OrgBranchPill() {
   const branchName =
     working === ALL_BRANCHES || (!workingBranch && profile.all_branches)
       ? "All branches"
-      : (workingBranch?.name ?? (profile.branches.length ? "Choose a branch" : "No branch assigned"));
+      : (workingBranch?.name ??
+        (profile.branches.length ? "Choose a branch" : "No branch assigned"));
   const roles = profile.role_names.length ? profile.role_names : claims?.role ? [claims.role] : [];
   const canSwitch = profile.branches.length > 1 || profile.all_branches;
   const inOrgAdmin = location.pathname.startsWith("/org-admin");
@@ -226,7 +227,9 @@ function BranchOption({
         disabled={disabled}
         aria-pressed={selected}
         className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] transition-colors duration-150 disabled:cursor-default ${
-          selected ? "bg-brand-green-tint text-brand-green-dark" : "text-ink-900 hover:bg-surface-bg"
+          selected
+            ? "bg-brand-green-tint text-brand-green-dark"
+            : "text-ink-900 hover:bg-surface-bg"
         }`}
       >
         <span className="min-w-0">

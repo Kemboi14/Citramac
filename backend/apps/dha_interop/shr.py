@@ -142,8 +142,17 @@ def open_visits(patient, branch):
 
 @transaction.atomic
 def request_consent(
-    patient, branch, episode, user, visit_type, *, emergency=False, incapacity_reason="",
-    representative_cr_id="", representative_relationship="", patient_capable=True,
+    patient,
+    branch,
+    episode,
+    user,
+    visit_type,
+    *,
+    emergency=False,
+    incapacity_reason="",
+    representative_cr_id="",
+    representative_relationship="",
+    patient_capable=True,
 ):
     cr_id = client_registry_id(patient)
     if not cr_id:
@@ -163,7 +172,10 @@ def request_consent(
         )
     relationships = dict(ShrConsent.RELATIONSHIP_CHOICES)
     if representative_cr_id and representative_relationship not in relationships:
-        raise ShrError("Choose how the representative relates to the client.", field="representative_relationship")
+        raise ShrError(
+            "Choose how the representative relates to the client.",
+            field="representative_relationship",
+        )
     payload = {
         "cr_id": cr_id,
         "facility_id": branch.sha_fr_code,
@@ -182,10 +194,16 @@ def request_consent(
     if representative_cr_id:
         payload["representative_cr_id"] = representative_cr_id.strip()
         payload["representative_relationship"] = representative_relationship
-    body = _call(
-        "POST", "/shr/consents", branch=branch, organization_id=patient.organization_id,
-        json_body=payload,
-    ) or {}
+    body = (
+        _call(
+            "POST",
+            "/shr/consents",
+            branch=branch,
+            organization_id=patient.organization_id,
+            json_body=payload,
+        )
+        or {}
+    )
     consent = ShrConsent(
         organization=patient.organization,
         patient=patient,
@@ -231,22 +249,28 @@ def verify_consent(consent, user, *, otp="", approve=True, rejection_reason=""):
         payload["rejection_reason"] = rejection_reason.strip()[:255]
         if (otp or "").strip():
             payload["otp"] = otp.strip()
-    body = _call(
-        "POST",
-        f"/shr/consents/{consent.consent_id}/verify",
-        branch=consent.branch,
-        organization_id=consent.organization_id,
-        json_body=payload,
-    ) or {}
+    body = (
+        _call(
+            "POST",
+            f"/shr/consents/{consent.consent_id}/verify",
+            branch=consent.branch,
+            organization_id=consent.organization_id,
+            json_body=payload,
+        )
+        or {}
+    )
     consent.detail = str(body.get("message") or "")[:255]
     if closing:
         consent.status = ShrConsent.STATUS_CLOSED
         consent.closed_at = timezone.now()
-        consent.consent_token_encrypted = ""
+        # bandit B105 false positive: clearing the token.
+        consent.consent_token_encrypted = ""  # nosec B105
     elif approve:
         token = str(body.get("consent_token") or "")
         if not token:
-            raise ShrError(f"DHA did not approve the consent: {consent.detail or 'no token issued'}")
+            raise ShrError(
+                f"DHA did not approve the consent: {consent.detail or 'no token issued'}"
+            )
         consent.status = ShrConsent.STATUS_APPROVED
         consent.consent_token_encrypted = encrypt_value(token)
         consent.visit_id = str(body.get("visit_id") or "")[:64]
@@ -262,12 +286,15 @@ def verify_consent(consent, user, *, otp="", approve=True, rejection_reason=""):
 def resend_otp(consent):
     if consent.status not in (ShrConsent.STATUS_PENDING, ShrConsent.STATUS_CLOSING):
         raise ShrError("This consent is not awaiting an OTP.")
-    body = _call(
-        "POST",
-        f"/shr/consents/{consent.consent_id}/resend-otp",
-        branch=consent.branch,
-        organization_id=consent.organization_id,
-    ) or {}
+    body = (
+        _call(
+            "POST",
+            f"/shr/consents/{consent.consent_id}/resend-otp",
+            branch=consent.branch,
+            organization_id=consent.organization_id,
+        )
+        or {}
+    )
     # "Verify with that one, not the original."
     consent.otp_record = str(body.get("otp_record") or consent.otp_record)[:128]
     consent.save(update_fields=["otp_record", "updated_at"])
@@ -277,12 +304,15 @@ def resend_otp(consent):
 def refresh_token(consent):
     if consent.status != ShrConsent.STATUS_APPROVED or not consent.visit_id:
         raise ShrError("Only an open SHR visit can be refreshed.")
-    body = _call(
-        "POST",
-        f"/shr/visits/{consent.visit_id}/refresh",
-        branch=consent.branch,
-        organization_id=consent.organization_id,
-    ) or {}
+    body = (
+        _call(
+            "POST",
+            f"/shr/visits/{consent.visit_id}/refresh",
+            branch=consent.branch,
+            organization_id=consent.organization_id,
+        )
+        or {}
+    )
     if body.get("consent_token"):
         consent.consent_token_encrypted = encrypt_value(str(body["consent_token"]))
         consent.save(update_fields=["consent_token_encrypted", "updated_at"])
@@ -297,15 +327,20 @@ def close_visit(consent, user, *, patient_incapable=False, incapacity_reason="")
     payload = {}
     if patient_incapable:
         if not (incapacity_reason or "").strip():
-            raise ShrError("Record why the client cannot consent to closing.", field="incapacity_reason")
+            raise ShrError(
+                "Record why the client cannot consent to closing.", field="incapacity_reason"
+            )
         payload = {"patient_incapable": 1, "incapacity_reason": incapacity_reason.strip()[:255]}
-    body = _call(
-        "POST",
-        f"/shr/visits/{consent.visit_id}/close",
-        branch=consent.branch,
-        organization_id=consent.organization_id,
-        json_body=payload or None,
-    ) or {}
+    body = (
+        _call(
+            "POST",
+            f"/shr/visits/{consent.visit_id}/close",
+            branch=consent.branch,
+            organization_id=consent.organization_id,
+            json_body=payload or None,
+        )
+        or {}
+    )
     consent.detail = str(body.get("message") or "")[:255]
     if body.get("otp_record") and not body.get("end_date"):
         consent.status = ShrConsent.STATUS_CLOSING
@@ -314,7 +349,8 @@ def close_visit(consent, user, *, patient_incapable=False, incapacity_reason="")
     else:
         consent.status = ShrConsent.STATUS_CLOSED
         consent.closed_at = timezone.now()
-        consent.consent_token_encrypted = ""
+        # bandit B105 false positive: clearing the token.
+        consent.consent_token_encrypted = ""  # nosec B105
     consent.save()
     return consent
 
@@ -327,13 +363,16 @@ def label_catalogue(branch, organization_id):
     cached = cache.get("shr-security-labels")
     if cached:
         return cached
-    body = _call(
-        "GET",
-        "/shr/security-labels",
-        branch=branch,
-        organization_id=organization_id,
-        transaction_type="SHR_LABELS",
-    ) or {}
+    body = (
+        _call(
+            "GET",
+            "/shr/security-labels",
+            branch=branch,
+            organization_id=organization_id,
+            transaction_type="SHR_LABELS",
+        )
+        or {}
+    )
     catalogue = {}
     for item in body.get("data") or []:
         if not (item.get("label") and item.get("system")):
@@ -353,14 +392,17 @@ def condition_labels(branch, organization_id, code):
     cached = cache.get(key)
     if cached is not None:
         return cached
-    body = _call(
-        "GET",
-        "/shr/resource-labels",
-        branch=branch,
-        organization_id=organization_id,
-        transaction_type="SHR_LABELS",
-        params={"resource_name": "Condition", "code": code},
-    ) or {}
+    body = (
+        _call(
+            "GET",
+            "/shr/resource-labels",
+            branch=branch,
+            organization_id=organization_id,
+            transaction_type="SHR_LABELS",
+            params={"resource_name": "Condition", "code": code},
+        )
+        or {}
+    )
     labels = sorted(
         {
             str(item.get("label"))
@@ -425,20 +467,26 @@ def _encounter_resource(consent, encounter, security, omissions):
         "resourceType": "Encounter",
         "id": str(encounter.id),
         "meta": _meta(kenya_core.encounter_profile(), security),
-        "status": kenya_core.coding(ENCOUNTER_STATUS_VS, ENCOUNTER_STATUS[encounter.status])["code"],
+        "status": kenya_core.coding(ENCOUNTER_STATUS_VS, ENCOUNTER_STATUS[encounter.status])[
+            "code"
+        ],
         "class": {
             "system": ACT_CODE_SYSTEM,
             "code": "IMP" if encounter.encounter_type == "INPATIENT" else "AMB",
-            "display": "inpatient encounter" if encounter.encounter_type == "INPATIENT" else "ambulatory",
+            "display": (
+                "inpatient encounter" if encounter.encounter_type == "INPATIENT" else "ambulatory"
+            ),
         },
         "type": [
             {
                 "coding": [
                     kenya_core.coding(
                         ENCOUNTER_TYPE_VS,
-                        "INPATIENT-VISIT"
-                        if encounter.encounter_type == "INPATIENT"
-                        else "OUTPATIENT-VISIT",
+                        (
+                            "INPATIENT-VISIT"
+                            if encounter.encounter_type == "INPATIENT"
+                            else "OUTPATIENT-VISIT"
+                        ),
                     )
                 ]
             }
@@ -472,7 +520,10 @@ def _condition_resource(consent, diagnosis, security):
         "meta": _meta(kenya_core.condition_profile(), security),
         "clinicalStatus": {
             "coding": [
-                {"system": CONDITION_CLINICAL_SYSTEM, "code": HL7_CLINICAL_STATUS[diagnosis.status]},
+                {
+                    "system": CONDITION_CLINICAL_SYSTEM,
+                    "code": HL7_CLINICAL_STATUS[diagnosis.status],
+                },
                 kenya_core.coding(CONDITION_CLINICAL_VS, CONDITION_CLINICAL[diagnosis.status]),
             ]
         },
@@ -485,9 +536,7 @@ def _condition_resource(consent, diagnosis, security):
                 kenya_core.coding(CONDITION_VERIFICATION_VS, CONDITION_VERIFICATION[verification]),
             ]
         },
-        "category": [
-            {"coding": [kenya_core.coding(CONDITION_CATEGORY_VS, "ENCOUNTER-DIAGNOSIS")]}
-        ],
+        "category": [{"coding": [kenya_core.coding(CONDITION_CATEGORY_VS, "ENCOUNTER-DIAGNOSIS")]}],
         "code": {
             "coding": [
                 {
@@ -654,7 +703,8 @@ def send_visit(consent, user):
             {
                 "bundle_id": bundle["id"],
                 "resources": [
-                    f"{e['resource']['resourceType']}/{e['resource']['id']}" for e in bundle["entry"]
+                    f"{e['resource']['resourceType']}/{e['resource']['id']}"
+                    for e in bundle["entry"]
                 ],
                 "labels": ["R", "PSY"] + (["SUD"] if sud else []),
                 "facility": consent.branch.sha_fr_code,
@@ -681,9 +731,18 @@ def read_records(consent, user, resources):
             field="puid",
         )
     allowed = (
-        "Encounter", "EpisodeOfCare", "Observation", "Condition", "Procedure", "Medication",
-        "MedicationRequest", "MedicationDispense", "MedicationAdministration", "Immunization",
-        "ServiceRequest", "AllergyIntolerance",
+        "Encounter",
+        "EpisodeOfCare",
+        "Observation",
+        "Condition",
+        "Procedure",
+        "Medication",
+        "MedicationRequest",
+        "MedicationDispense",
+        "MedicationAdministration",
+        "Immunization",
+        "ServiceRequest",
+        "AllergyIntolerance",
     )
     wanted = [r for r in resources if r in allowed] or ["Condition", "Encounter"]
     body = _call(

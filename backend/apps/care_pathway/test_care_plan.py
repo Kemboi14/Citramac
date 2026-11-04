@@ -20,23 +20,30 @@ class CarePlanTestCase(IntakeTestCase):
         super().setUp()
         with platform_admin_context():
             self.psych = User.objects.create_user(
-                email=f"psych-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True, first_name="Dr", last_name="Senior",
+                email=f"psych-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name="Dr",
+                last_name="Senior",
             )
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Psychiatrist", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.psych.roles.add(role)
         self.psych_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.psych)[0]}"}
 
     def ws(self, auth=None):
-        return self.client.get(reverse("care-plan-workspace", args=[self.pid]), **(auth or self.auth))
+        return self.client.get(
+            reverse("care-plan-workspace", args=[self.pid]), **(auth or self.auth)
+        )
 
     def decide(self, key, decision, auth=None, **body):
         return self.client.post(
             reverse("care-plan-action-decide", args=[self.pid, key]),
-            {"decision": decision, **body}, format="json", **(auth or self.auth),
+            {"decision": decision, **body},
+            format="json",
+            **(auth or self.auth),
         )
 
     def details(self, **body):
@@ -45,7 +52,9 @@ class CarePlanTestCase(IntakeTestCase):
         )
 
     def confirm(self):
-        return self.client.post(reverse("care-plan-confirm", args=[self.pid]), format="json", **self.auth)
+        return self.client.post(
+            reverse("care-plan-confirm", args=[self.pid]), format="json", **self.auth
+        )
 
     def risk(self, **rows):
         self.draft()
@@ -68,7 +77,9 @@ class RecommendationTests(CarePlanTestCase):
 
     def test_no_findings_recommends_routine_outpatient(self):
         data = self.ws().data
-        self.assertEqual([(r["key"], r["priority"]) for r in data["recommendations"]], [("outpatient", "GREEN")])
+        self.assertEqual(
+            [(r["key"], r["priority"]) for r in data["recommendations"]], [("outpatient", "GREEN")]
+        )
 
     def test_the_rules_are_labelled_illustrative_and_versioned(self):
         data = self.ws().data
@@ -86,7 +97,9 @@ class RecommendationTests(CarePlanTestCase):
         self.assess = lambda **b: self.client.post(
             reverse("care-client-assessments", args=[self.pid]), b, format="json", **self.auth
         )
-        self.assertEqual(self.assess(instrument="PHQ9", answers=[3] * 8 + [0]).status_code, 201)  # 24
+        self.assertEqual(
+            self.assess(instrument="PHQ9", answers=[3] * 8 + [0]).status_code, 201
+        )  # 24
         self.draft()
         self.save(sections={"mse": {"perception": "Auditory hallucinations"}})
         recs = {r["key"]: r for r in self.ws().data["recommendations"]}
@@ -101,20 +114,35 @@ class DecisionTests(CarePlanTestCase):
         accepted = self.decide("psych_review", "ACCEPTED")
         self.assertEqual(accepted.status_code, 200, accepted.data)
         actions = {a["key"]: a for a in accepted.data["actions"]}
-        self.assertEqual((actions["psych_review"]["decision"], actions["psych_review"]["priority"]), ("ACCEPTED", "ORANGE"))
+        self.assertEqual(
+            (actions["psych_review"]["decision"], actions["psych_review"]["priority"]),
+            ("ACCEPTED", "ORANGE"),
+        )
         # Lowering the priority needs a real reason.
-        self.assertEqual(self.decide("safety", "MODIFIED", priority="GREEN", reason="no").status_code, 400)
-        modified = self.decide("safety", "MODIFIED", priority="YELLOW", reason="Client engaged, family present")
-        self.assertEqual({a["key"]: a["decision"] for a in modified.data["actions"]}["safety"], "MODIFIED")
+        self.assertEqual(
+            self.decide("safety", "MODIFIED", priority="GREEN", reason="no").status_code, 400
+        )
+        modified = self.decide(
+            "safety", "MODIFIED", priority="YELLOW", reason="Client engaged, family present"
+        )
+        self.assertEqual(
+            {a["key"]: a["decision"] for a in modified.data["actions"]}["safety"], "MODIFIED"
+        )
         # An unrecommended action is "added by clinician".
         added = self.decide("therapy", "ADDED", priority="GREEN")
-        self.assertEqual({a["key"]: a["decision"] for a in added.data["actions"]}["therapy"], "ADDED")
+        self.assertEqual(
+            {a["key"]: a["decision"] for a in added.data["actions"]}["therapy"], "ADDED"
+        )
 
     def test_declining_needs_a_recommendation_and_a_reason_and_is_not_a_live_action(self):
         self.risk(suicide=["Thoughts"])
         self.assertEqual(self.decide("safety", "DECLINED", reason="n").status_code, 400)
-        self.assertEqual(self.decide("therapy", "DECLINED", reason="Not recommended at all").status_code, 400)
-        declined = self.decide("safety", "DECLINED", reason="Handled through the existing crisis plan")
+        self.assertEqual(
+            self.decide("therapy", "DECLINED", reason="Not recommended at all").status_code, 400
+        )
+        declined = self.decide(
+            "safety", "DECLINED", reason="Handled through the existing crisis plan"
+        )
         self.assertEqual(declined.status_code, 200)
         plan = self.client.get(reverse("care-client-care-plan", args=[self.pid]), **self.auth).data
         self.assertNotIn("safety", [a["title"].lower() for a in plan["activities"]])
@@ -153,7 +181,9 @@ class SignPlanTests(CarePlanTestCase):
         again = self.confirm()
         self.assertEqual(again.data["version"], 2)
         with platform_admin_context():
-            self.assertEqual(CarePlanVersion.objects.filter(care_plan__patient_id=self.pid).count(), 2)
+            self.assertEqual(
+                CarePlanVersion.objects.filter(care_plan__patient_id=self.pid).count(), 2
+            )
             self.assertEqual(
                 CarePlanTask.objects.filter(activity__care_plan__patient_id=self.pid).count(),
                 len(action["tasks"]),
@@ -191,7 +221,9 @@ class SignPlanTests(CarePlanTestCase):
             senior_reviewer=seniors[0]["id"],
         )
         self.assertEqual(self.confirm().status_code, 200)
-        requests = self.client.get(reverse("care-client-cosign", args=[self.pid]), **self.auth).data["results"]
+        requests = self.client.get(
+            reverse("care-client-cosign", args=[self.pid]), **self.auth
+        ).data["results"]
         self.assertEqual(requests[0]["kind"], "CARE_PLAN_CONFLICT")
         self.assertEqual(requests[0]["status"], "REQUESTED")
 
@@ -210,8 +242,18 @@ class SignPlanTests(CarePlanTestCase):
         self.assertIn("Named follow-up clinician", items)
         sp = reverse("care-safety-plan", args=[self.pid])
         self.client.get(sp, **self.auth)
-        self.client.put(sp, {"warning_signs": "Not sleeping", "people_to_ask": "My sister"}, format="json", **self.auth)
-        self.assertEqual(self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth).status_code, 200)
+        self.client.put(
+            sp,
+            {"warning_signs": "Not sleeping", "people_to_ask": "My sister"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("care-safety-plan-sign", args=[self.pid]), **self.auth
+            ).status_code,
+            200,
+        )
         self.details(
             contact_72h_at=(timezone.now() + timedelta(days=3)).isoformat(),
             follow_up_clinician="J. Njoroge",
@@ -223,12 +265,24 @@ class SafetyPlanTests(CarePlanTestCase):
     def test_signed_plan_is_never_edited_a_revision_is_a_new_version(self):
         url = reverse("care-safety-plan", args=[self.pid])
         self.assertEqual(self.client.get(url, **self.auth).data["version"], 1)
-        self.assertEqual(self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth).status_code, 400)
-        self.client.put(url, {"warning_signs": "Isolating", "reasons_for_living": "My children"}, format="json", **self.auth)
+        self.assertEqual(
+            self.client.post(
+                reverse("care-safety-plan-sign", args=[self.pid]), **self.auth
+            ).status_code,
+            400,
+        )
+        self.client.put(
+            url,
+            {"warning_signs": "Isolating", "reasons_for_living": "My children"},
+            format="json",
+            **self.auth,
+        )
         signed = self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth)
         self.assertEqual(signed.data["signed_by"], "Jane Njoroge")
         # No draft left: editing is refused.
-        self.assertEqual(self.client.put(url, {"coping": "x"}, format="json", **self.auth).status_code, 400)
+        self.assertEqual(
+            self.client.put(url, {"coping": "x"}, format="json", **self.auth).status_code, 400
+        )
         copy = self.client.post(reverse("care-safety-plan-copy", args=[self.pid]), **self.auth)
         self.assertIsNotNone(copy.data["copy_given_at"])
         revision = self.client.get(url, **self.auth).data
@@ -239,9 +293,18 @@ class SafetyPlanTests(CarePlanTestCase):
     def test_a_copy_needs_a_signed_plan_and_language_is_validated(self):
         url = reverse("care-safety-plan", args=[self.pid])
         self.client.get(url, **self.auth)
-        self.assertEqual(self.client.post(reverse("care-safety-plan-copy", args=[self.pid]), **self.auth).status_code, 400)
-        self.assertEqual(self.client.put(url, {"language": "fr"}, format="json", **self.auth).status_code, 400)
-        self.assertEqual(self.client.put(url, {"language": "sw"}, format="json", **self.auth).status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                reverse("care-safety-plan-copy", args=[self.pid]), **self.auth
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.put(url, {"language": "fr"}, format="json", **self.auth).status_code, 400
+        )
+        self.assertEqual(
+            self.client.put(url, {"language": "sw"}, format="json", **self.auth).status_code, 200
+        )
 
 
 class MdtTests(CarePlanTestCase):
@@ -254,22 +317,35 @@ class MdtTests(CarePlanTestCase):
         record = reverse("care-mdt-record", args=[review.data["id"]])
         self.assertEqual(self.client.post(record, {}, format="json", **self.auth).status_code, 400)
         nxt = (timezone.now() + timedelta(days=21)).date().isoformat()
-        done = self.client.post(record, {"notes": "Reviewed goals", "attendees": "Team", "next_review": nxt}, format="json", **self.auth)
+        done = self.client.post(
+            record,
+            {"notes": "Reviewed goals", "attendees": "Team", "next_review": nxt},
+            format="json",
+            **self.auth,
+        )
         self.assertIsNotNone(done.data["held_at"])
         self.assertEqual(len(self.client.get(url, **self.auth).data["results"]), 2)
-        self.assertEqual(self.client.post(record, {"notes": "again"}, format="json", **self.auth).status_code, 400)
+        self.assertEqual(
+            self.client.post(record, {"notes": "again"}, format="json", **self.auth).status_code,
+            400,
+        )
 
 
 class CosignTests(CarePlanTestCase):
     def request(self, what="Plan for an urgent client"):
         return self.client.post(
-            reverse("care-client-cosign", args=[self.pid]), {"what": what, "kind": "GENERAL"}, format="json", **self.auth
+            reverse("care-client-cosign", args=[self.pid]),
+            {"what": what, "kind": "GENERAL"},
+            format="json",
+            **self.auth,
         )
 
     def decide_cosign(self, rid, action, note="", auth=None):
         return self.client.post(
-            reverse("care-cosign-decide", args=[rid]), {"action": action, "note": note},
-            format="json", **(auth or self.psych_auth),
+            reverse("care-cosign-decide", args=[rid]),
+            {"action": action, "note": note},
+            format="json",
+            **(auth or self.psych_auth),
         )
 
     def test_a_request_is_idempotent_and_a_senior_signs_it(self):
@@ -279,24 +355,38 @@ class CosignTests(CarePlanTestCase):
         inbox = self.client.get(reverse("care-decisions"), **self.psych_auth).data["results"]
         self.assertEqual([i["inbox_kind"] for i in inbox], ["cosign"])
         signed = self.decide_cosign(first.data["id"], "SIGN")
-        self.assertEqual((signed.data["status"], signed.data["decided_by"]), ("SIGNED", "Dr Senior"))
+        self.assertEqual(
+            (signed.data["status"], signed.data["decided_by"]), ("SIGNED", "Dr Senior")
+        )
         self.assertEqual(self.decide_cosign(first.data["id"], "SIGN").status_code, 400)
 
     def test_requester_and_non_seniors_cannot_decide(self):
         rid = self.request().data["id"]
         self.assertEqual(self.decide_cosign(rid, "SIGN", auth=self.auth).status_code, 403)
-        self.assertEqual(self.client.get(reverse("care-decisions"), **self.auth).data["results"], [])
+        self.assertEqual(
+            self.client.get(reverse("care-decisions"), **self.auth).data["results"], []
+        )
 
     def test_decline_needs_a_reason_and_returns_to_the_requester_who_acknowledges(self):
         rid = self.request().data["id"]
         self.assertEqual(self.decide_cosign(rid, "DECLINE", "no").status_code, 400)
-        self.assertEqual(self.decide_cosign(rid, "DECLINE", "Needs an admission assessment").data["status"], "DECLINED")
+        self.assertEqual(
+            self.decide_cosign(rid, "DECLINE", "Needs an admission assessment").data["status"],
+            "DECLINED",
+        )
         inbox = self.client.get(reverse("care-decisions"), **self.auth).data["results"]
         self.assertEqual([i["inbox_kind"] for i in inbox], ["returned"])
-        self.assertEqual(self.client.post(reverse("care-cosign-acknowledge", args=[rid]), **self.psych_auth).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                reverse("care-cosign-acknowledge", args=[rid]), **self.psych_auth
+            ).status_code,
+            403,
+        )
         ack = self.client.post(reverse("care-cosign-acknowledge", args=[rid]), **self.auth)
         self.assertEqual(ack.data["status"], "ACKNOWLEDGED")
-        self.assertEqual(self.client.get(reverse("care-decisions"), **self.auth).data["results"], [])
+        self.assertEqual(
+            self.client.get(reverse("care-decisions"), **self.auth).data["results"], []
+        )
 
     def test_a_discussion_keeps_the_request_open_and_surfaces_for_the_requester(self):
         rid = self.request().data["id"]

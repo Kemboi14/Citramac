@@ -53,7 +53,9 @@ def score(obs):
         "temp": _band("temp", _num(obs.get("temp"))),
     }
     consciousness = obs.get("consciousness") or ""
-    parts["acvpu"] = 0 if consciousness == "A" else 3 if consciousness in ("C", "V", "P", "U") else None
+    parts["acvpu"] = (
+        0 if consciousness == "A" else 3 if consciousness in ("C", "V", "P", "U") else None
+    )
     values = [parts[k] for k in PARAMS if parts[k] is not None]
     o2 = 2 if obs.get("supplemental_o2") else 0
     glucose, dbp = _num(obs.get("glucose")), _num(obs.get("dbp"))
@@ -88,12 +90,21 @@ def response_for(total, measured, any_three):
     if not measured:
         return {"tone": "warn", "text": "No score — record a full set of observations."}
     if total >= 7:
-        return {"tone": "bad", "text": "EWS ≥ 7 — emergency response: senior medical review now; continuous monitoring."}
+        return {
+            "tone": "bad",
+            "text": "EWS ≥ 7 — emergency response: senior medical review now; continuous monitoring.",
+        }
     if total >= 5 or any_three:
         what = "EWS 5–6" if total >= 5 else "A single parameter scores 3"
-        return {"tone": "bad", "text": f"{what} — urgent medical review within 1 hour; observations at least hourly."}
+        return {
+            "tone": "bad",
+            "text": f"{what} — urgent medical review within 1 hour; observations at least hourly.",
+        }
     if total >= 1:
-        return {"tone": "warn", "text": "EWS 1–4 — inform the nurse in charge; observations 4–6 hourly."}
+        return {
+            "tone": "warn",
+            "text": "EWS 1–4 — inform the nurse in charge; observations 4–6 hourly.",
+        }
     return {"tone": "ok", "text": "EWS 0 — routine observations (at least 12-hourly)."}
 
 

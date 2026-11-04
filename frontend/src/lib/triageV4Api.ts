@@ -111,7 +111,13 @@ export interface LiveQueueRow {
   priority: PriorityOrBlank;
   rules_version: string;
   wait: { minutes: number; target: number | null; over: boolean; kind: string };
-  next_action: { key: string; text: string; due_at: string | null; overdue: boolean; kind: string } | null;
+  next_action: {
+    key: string;
+    text: string;
+    due_at: string | null;
+    overdue: boolean;
+    kind: string;
+  } | null;
   next_follow_up: string | null;
   observation: { off_site: boolean; level: string; location: string; observer: string } | null;
   owner: { id: string; name: string } | null;

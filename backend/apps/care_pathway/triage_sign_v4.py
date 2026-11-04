@@ -168,9 +168,7 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
             )
 
     if hasattr(rules, "domain_findings"):
-        findings.record_from_triage(
-            assessment, rules.domain_findings(answers, labels), user, now
-        )
+        findings.record_from_triage(assessment, rules.domain_findings(answers, labels), user, now)
     if present:
         _record_vitals(encounter, user, answers, now)
         _record_observation(patient, user, answers, assessment.version, labels)

@@ -280,8 +280,7 @@ class CategoryTests(GroupProgrammeTestCase):
                 last_name="Admin",
             )
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             admin.roles.add(role)
         admin_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(admin)[0]}"}
@@ -408,16 +407,22 @@ class RiskScreenTests(GroupProgrammeTestCase):
 
         with platform_admin_context():
             return list(
-                ClinicalAlert.objects.filter(patient_id=patient, alert_code="GROUP_RISK_DISCLOSURE")
-                .values_list("status", flat=True)
+                ClinicalAlert.objects.filter(
+                    patient_id=patient, alert_code="GROUP_RISK_DISCLOSURE"
+                ).values_list("status", flat=True)
             )
 
     def test_screen_reports_possible_risk_language_and_stores_nothing(self):
         response = self.client.post(
             reverse("care-group-screen"),
-            {"entries": [{"patient": self.amina, "observation": RISK_NOTE},
-                         {"patient": self.brian, "observation": "Spoke about cutting down drinking."}]},
-            format="json", **self.auth,
+            {
+                "entries": [
+                    {"patient": self.amina, "observation": RISK_NOTE},
+                    {"patient": self.brian, "observation": "Spoke about cutting down drinking."},
+                ]
+            },
+            format="json",
+            **self.auth,
         )
         self.assertEqual(response.status_code, 200, response.data)
         amina, brian = response.data["results"]
@@ -429,10 +434,15 @@ class RiskScreenTests(GroupProgrammeTestCase):
         self.assertEqual(refused.status_code, 400)
         self.assertIn("entries.0.risk_disclosure", refused.data)
         self.assertEqual(self.alerts(self.amina), [])
-        overridden = self.confirm([self.entry(
-            self.amina, observation=RISK_NOTE,
-            risk_override_reason="Quoting a film the group discussed; no personal disclosure.",
-        )])
+        overridden = self.confirm(
+            [
+                self.entry(
+                    self.amina,
+                    observation=RISK_NOTE,
+                    risk_override_reason="Quoting a film the group discussed; no personal disclosure.",
+                )
+            ]
+        )
         self.assertEqual(overridden.status_code, 201, overridden.data)
         entry = self.entry_for(overridden.data, self.amina)
         self.assertTrue(entry["risk_detected"])
@@ -449,8 +459,12 @@ class RiskScreenTests(GroupProgrammeTestCase):
         with platform_admin_context():
             CareTask.objects.filter(pk=carol["follow_up_task_id"]).update(status="COMPLETED")
         corrected = self.correct(
-            carol["id"], attendance="PRESENT", observation="Discussed sleep routines.",
-            risk_disclosure=False, follow_up=False, reason="Observation recorded against the wrong client",
+            carol["id"],
+            attendance="PRESENT",
+            observation="Discussed sleep routines.",
+            risk_disclosure=False,
+            follow_up=False,
+            reason="Observation recorded against the wrong client",
         )
         self.assertEqual(corrected.status_code, 200, corrected.data)
         self.assertEqual(self.alerts(self.carol), ["RESOLVED"])

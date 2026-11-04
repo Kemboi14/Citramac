@@ -115,7 +115,9 @@ class PatientShrView(APIView):
             if branch is None:
                 raise shr.ShrError("Choose the facility (branch).", field="branch")
             if episode is None:
-                raise shr.ShrError("Choose the episode of care this visit belongs to.", field="episode")
+                raise shr.ShrError(
+                    "Choose the episode of care this visit belongs to.", field="episode"
+                )
             consent = shr.request_consent(
                 patient,
                 branch,
@@ -170,7 +172,11 @@ class ShrConsentActionView(APIView):
                 shr.send_visit(consent, request.user)
             elif action_name == "records":
                 return Response(
-                    {"records": shr.read_records(consent, request.user, data.get("resources") or [])}
+                    {
+                        "records": shr.read_records(
+                            consent, request.user, data.get("resources") or []
+                        )
+                    }
                 )
             else:
                 return Response(status=status.HTTP_404_NOT_FOUND)

@@ -46,7 +46,10 @@ function statusText(s: Staff) {
 }
 
 const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  value.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
 
 /**
  * Opens the filtered roster as a plain printable page and prints it — no app
@@ -72,7 +75,9 @@ export function printStaffList({
   if (filters.branch)
     described.push(`branch: ${branches.find((b) => b.id === filters.branch)?.name ?? ""}`);
   if (filters.department)
-    described.push(`department: ${departments.find((d) => d.id === filters.department)?.name ?? ""}`);
+    described.push(
+      `department: ${departments.find((d) => d.id === filters.department)?.name ?? ""}`,
+    );
   if (filters.duty) described.push(filters.duty === "on" ? "on duty" : "off duty");
   if (filters.status) {
     const label = filtersLabel(filters.status);

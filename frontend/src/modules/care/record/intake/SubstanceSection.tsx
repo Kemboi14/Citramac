@@ -42,17 +42,28 @@ export function SubstanceSection({
       "substances",
       cards.map((c, i) => (i === index ? { ...c, [key]: value } : c)),
     );
-  const currentCard = (code: string) => cards.some((c) => c.substance === code && c.current === "YES");
+  const currentCard = (code: string) =>
+    cards.some((c) => c.substance === code && c.current === "YES");
   const alcohol = ["ALCOHOL", "POLY_SUBSTANCE", "UNKNOWN"].includes(kind) || currentCard("ALCOHOL");
   const opioid = kind === "OPIOIDS" || shown.has("OPIOIDS");
   const unknown = ["UNKNOWN", "POLY_SUBSTANCE"].includes(kind);
-  const sources = (values._sources ?? undefined) as Record<string, { stage?: string; version?: number }> | undefined;
-  const only = (keys: string[]) => ({ ...spec, fields: spec.fields.filter((f) => keys.includes(f.key)) });
+  const sources = (values._sources ?? undefined) as
+    Record<string, { stage?: string; version?: number }> | undefined;
+  const only = (keys: string[]) => ({
+    ...spec,
+    fields: spec.fields.filter((f) => keys.includes(f.key)),
+  });
   const pillField = (key: string) => spec.fields.find((f) => f.key === key);
 
   return (
     <div className="flex flex-col gap-3">
-      <SchemaSection spec={only(["kind", "screen"])} values={values} vs={vs} onChange={onChange} sources={sources} />
+      <SchemaSection
+        spec={only(["kind", "screen"])}
+        values={values}
+        vs={vs}
+        onChange={onChange}
+        sources={sources}
+      />
       <p className="text-xs leading-5 text-ink-700">
         {auditC?.last ? (
           <>
@@ -64,7 +75,11 @@ export function SubstanceSection({
         ) : (
           <>
             AUDIT-C (structured, 3 items) — record it in{" "}
-            <button type="button" className="font-semibold text-brand-green underline" onClick={onOpenTools}>
+            <button
+              type="button"
+              className="font-semibold text-brand-green underline"
+              onClick={onOpenTools}
+            >
               Section 20 Assessment tools
             </button>
             .
@@ -72,14 +87,23 @@ export function SubstanceSection({
         )}
       </p>
       <div className={GROUP_LABEL}>
-        Substances used         <span className="font-normal normal-case text-ink-700">— one card per substance</span>
+        Substances used{" "}
+        <span className="font-normal normal-case text-ink-700">— one card per substance</span>
       </div>
-      {cards.length === 0 && <p className="text-[13px] leading-5 text-ink-700">No substances recorded yet.</p>}
+      {cards.length === 0 && (
+        <p className="text-[13px] leading-5 text-ink-700">No substances recorded yet.</p>
+      )}
       {cards.map((card, index) => (
         <section key={card.substance} className="rounded-lg border border-surface-border p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-semibold text-ink-900">{vs.label("intake-substance-rows", card.substance)}</span>
-            {card.current === "YES" ? <Tag tone="warn">current</Tag> : card.current ? <Tag>{vs.label("intake-substance-current", card.current)}</Tag> : null}
+            <span className="text-[13px] font-semibold text-ink-900">
+              {vs.label("intake-substance-rows", card.substance)}
+            </span>
+            {card.current === "YES" ? (
+              <Tag tone="warn">current</Tag>
+            ) : card.current ? (
+              <Tag>{vs.label("intake-substance-current", card.current)}</Tag>
+            ) : null}
           </div>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
             {(spec.cardFields ?? []).map((field) => (
@@ -98,7 +122,12 @@ export function SubstanceSection({
           <button
             type="button"
             className={`${BTN_GHOST} ${BTN_SM} mt-2`}
-            onClick={() => onChange("substances", cards.filter((_, i) => i !== index))}
+            onClick={() =>
+              onChange(
+                "substances",
+                cards.filter((_, i) => i !== index),
+              )
+            }
           >
             Remove card
           </button>
@@ -127,7 +156,12 @@ export function SubstanceSection({
         </button>
       </div>
       {/* Mockup order: injecting (and its harm-reduction prompts), then features and consequences. */}
-      <SchemaSection spec={only(["injecting", "harm_reduction"])} values={values} vs={vs} onChange={onChange} />
+      <SchemaSection
+        spec={only(["injecting", "harm_reduction"])}
+        values={values}
+        vs={vs}
+        onChange={onChange}
+      />
       {["features", "consequences"].map((key) => {
         const field = pillField(key);
         return field ? (
@@ -147,7 +181,15 @@ export function SubstanceSection({
         spec={{
           ...spec,
           fields: spec.fields.filter(
-            (f) => !["kind", "screen", "injecting", "harm_reduction", "features", "consequences"].includes(f.key),
+            (f) =>
+              ![
+                "kind",
+                "screen",
+                "injecting",
+                "harm_reduction",
+                "features",
+                "consequences",
+              ].includes(f.key),
           ),
         }}
         values={values}
@@ -156,7 +198,10 @@ export function SubstanceSection({
       />
       {triggers}
       {alcohol && (
-        <section aria-labelledby="intake-thiamine" className="rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm">
+        <section
+          aria-labelledby="intake-thiamine"
+          className="rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
+        >
           <div className="mb-1 flex items-center justify-between gap-2">
             <h3 id="intake-thiamine" className="text-[13px] font-bold text-ink-900">
               Thiamine — give promptly
@@ -164,23 +209,25 @@ export function SubstanceSection({
             <Tag tone="risk">alert</Tag>
           </div>
           <p className="text-[12.5px] text-ink-900">
-            Alcohol dependence or malnutrition: give thiamine as soon as possible (parenteral if Wernicke’s
-            encephalopathy is suspected). <strong>Never delay glucose in hypoglycaemia</strong> — treat low glucose
-            immediately and give thiamine alongside. Dose and route follow the facility protocol.
+            Alcohol dependence or malnutrition: give thiamine as soon as possible (parenteral if
+            Wernicke’s encephalopathy is suspected).{" "}
+            <strong>Never delay glucose in hypoglycaemia</strong> — treat low glucose immediately
+            and give thiamine alongside. Dose and route follow the facility protocol.
           </p>
         </section>
       )}
       {opioid && (
         <Callout tone="warning">
-          <strong>Opioids — overdose risk.</strong> Opioid withdrawal is distressing but rarely life-threatening. Offer
-          opioid agonist therapy (methadone / buprenorphine); naloxone kit and overdose-risk teaching at discharge
-          (tolerance falls quickly).
+          <strong>Opioids — overdose risk.</strong> Opioid withdrawal is distressing but rarely
+          life-threatening. Offer opioid agonist therapy (methadone / buprenorphine); naloxone kit
+          and overdose-risk teaching at discharge (tolerance falls quickly).
         </Callout>
       )}
       {unknown && (
         <Callout tone="warning">
-          <strong>Unknown / poly-substance — urine drug screen.</strong> Order a UDS and use generic intoxication /
-          withdrawal observations. No substance-specific scale until the substance is known.
+          <strong>Unknown / poly-substance — urine drug screen.</strong> Order a UDS and use generic
+          intoxication / withdrawal observations. No substance-specific scale until the substance is
+          known.
         </Callout>
       )}
     </div>

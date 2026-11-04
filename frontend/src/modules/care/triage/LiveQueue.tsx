@@ -123,7 +123,11 @@ export function LiveQueue({
           <PriorityPill priority={row.priority} />
         </td>
         <td className={TD}>
-          <button type="button" className="text-left font-semibold text-brand-green hover:underline" onClick={() => open(row)}>
+          <button
+            type="button"
+            className="text-left font-semibold text-brand-green hover:underline"
+            onClick={() => open(row)}
+          >
             {privacy ? row.privacy_name : row.name || "Unidentified client"}
           </button>
           <span className="block text-[11px] text-ink-500">
@@ -135,7 +139,9 @@ export function LiveQueue({
         <td className={`${TD} min-w-[150px]`}>
           {row.lane === "discharged" ? (
             <span className="text-[12px]">
-              {row.next_follow_up ? `next follow-up ${formatDateTime(row.next_follow_up)}` : "no follow-up due"}
+              {row.next_follow_up
+                ? `next follow-up ${formatDateTime(row.next_follow_up)}`
+                : "no follow-up due"}
             </span>
           ) : (
             <>
@@ -178,7 +184,11 @@ export function LiveQueue({
           )}
         </td>
         <td className={`${TD} text-[12.5px]`}>
-          {!obs ? "—" : obs.off_site ? "Off site" : (
+          {!obs ? (
+            "—"
+          ) : obs.off_site ? (
+            "Off site"
+          ) : (
             <>
               {obs.level || "—"}
               <span className="block text-[11px] text-ink-500">
@@ -188,18 +198,35 @@ export function LiveQueue({
             </>
           )}
         </td>
-        <td className={`${TD} text-[12.5px]`}>{row.owner ? row.owner.name : row.team ? row.team : <span className="text-ink-500">Unassigned</span>}</td>
+        <td className={`${TD} text-[12.5px]`}>
+          {row.owner ? (
+            row.owner.name
+          ) : row.team ? (
+            row.team
+          ) : (
+            <span className="text-ink-500">Unassigned</span>
+          )}
+        </td>
         <td className={TD}>
           <div className="flex flex-wrap gap-1">
             {show.map((c) => (
-              <span key={c.key} title={c.key === "alerts" && privacy ? "Neutral display — open the record for details" : undefined}>
+              <span
+                key={c.key}
+                title={
+                  c.key === "alerts" && privacy
+                    ? "Neutral display — open the record for details"
+                    : undefined
+                }
+              >
                 <Tag tone={TONE[c.tone]}>{chipLabel(c)}</Tag>
               </span>
             ))}
           </div>
           {extra.length > 0 && (
             <details className="mt-1">
-              <summary className="cursor-pointer text-[11px] text-ink-500">+{extra.length} more</summary>
+              <summary className="cursor-pointer text-[11px] text-ink-500">
+                +{extra.length} more
+              </summary>
               <div className="mt-1 flex flex-wrap gap-1">
                 {extra.map((c) => (
                   <Tag key={c.key} tone={TONE[c.tone]}>
@@ -217,7 +244,11 @@ export function LiveQueue({
   return (
     <section aria-label="Live queue">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div role="group" aria-label="Filter queue" className="inline-flex overflow-hidden rounded-lg border border-surface-border">
+        <div
+          role="group"
+          aria-label="Filter queue"
+          className="inline-flex overflow-hidden rounded-lg border border-surface-border"
+        >
           {FILTERS.map(([key, label]) => (
             <button
               key={key}
@@ -230,12 +261,19 @@ export function LiveQueue({
             </button>
           ))}
         </div>
-        <button type="button" aria-pressed={privacy} className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setPrivacy((p) => !p)}>
+        <button
+          type="button"
+          aria-pressed={privacy}
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          onClick={() => setPrivacy((p) => !p)}
+        >
           Queue privacy: {privacy ? "on" : "off"}
         </button>
       </div>
       <p role="status" aria-live="polite" className="mb-2 text-[12.5px] text-ink-700">
-        {overCount ? `${overCount} client${overCount > 1 ? "s" : ""} over their target time.` : "All waiting clients are within target."}{" "}
+        {overCount
+          ? `${overCount} client${overCount > 1 ? "s" : ""} over their target time.`
+          : "All waiting clients are within target."}{" "}
         <span className="text-ink-500">
           Targets: {data?.targets_approval ?? "illustrative — from client mockup, VERIFY"}.
         </span>

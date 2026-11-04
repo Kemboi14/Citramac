@@ -35,10 +35,21 @@ export function TasksTab({
   const { accessToken } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
-  const mdt = useRecordData(patientId, version, (token) => listMdt(token, patientId), "Couldn't load MDT reviews.");
+  const mdt = useRecordData(
+    patientId,
+    version,
+    (token) => listMdt(token, patientId),
+    "Couldn't load MDT reviews.",
+  );
   const [day, setDay] = useState("");
   const [recording, setRecording] = useState<string | null>(null);
-  const [form, setForm] = useState({ notes: "", attendees: "", outcome: "", dissent: "", next_review: "" });
+  const [form, setForm] = useState({
+    notes: "",
+    attendees: "",
+    outcome: "",
+    dissent: "",
+    next_review: "",
+  });
   const live = ws.actions.filter((a) => a.decision && a.decision !== "DECLINED");
 
   async function toggle(task: PlanAction["tasks"][number], done: boolean) {
@@ -53,9 +64,15 @@ export function TasksTab({
   return (
     <div className="flex flex-col gap-4">
       <ErrorNote>{error}</ErrorNote>
-      {ws.version === 0 && <p className="text-[13px] text-ink-500">Tasks open once the plan is signed.</p>}
+      {ws.version === 0 && (
+        <p className="text-[13px] text-ink-500">Tasks open once the plan is signed.</p>
+      )}
       {live.map((a) => (
-        <Card key={a.id} title={a.name} aside={a.due_at ? <Tag>due {formatDateTime(a.due_at)}</Tag> : undefined}>
+        <Card
+          key={a.id}
+          title={a.name}
+          aside={a.due_at ? <Tag>due {formatDateTime(a.due_at)}</Tag> : undefined}
+        >
           {a.tasks.length === 0 ? (
             <p className="text-[13px] text-ink-500">No tasks yet.</p>
           ) : (
@@ -63,11 +80,19 @@ export function TasksTab({
               {a.tasks.map((t) => (
                 <li key={t.id} className="flex flex-wrap items-center gap-2 text-[13px]">
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={Boolean(t.done_at)} onChange={(e) => void toggle(t, e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={Boolean(t.done_at)}
+                      onChange={(e) => void toggle(t, e.target.checked)}
+                    />
                     <span className={t.done_at ? "text-ink-500 line-through" : ""}>{t.label}</span>
                   </label>
                   <Tag>{t.owner_role}</Tag>
-                  {t.done_at && <span className="text-[11px] text-ink-500">{t.done_by} · {formatDateTime(t.done_at)}</span>}
+                  {t.done_at && (
+                    <span className="text-[11px] text-ink-500">
+                      {t.done_by} · {formatDateTime(t.done_at)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -85,39 +110,105 @@ export function TasksTab({
               </div>
               {r.held_at ? (
                 <>
-                  <p className="mt-1 text-ink-900">{r.notes}{r.outcome ? ` — outcome: ${r.outcome}` : ""}</p>
+                  <p className="mt-1 text-ink-900">
+                    {r.notes}
+                    {r.outcome ? ` — outcome: ${r.outcome}` : ""}
+                  </p>
                   {r.attendees && <p className="text-[12px] text-ink-500">{r.attendees}</p>}
-                  {r.dissent && <p className="text-[12px] text-ink-900"><strong>Dissent:</strong> {r.dissent}</p>}
+                  {r.dissent && (
+                    <p className="text-[12px] text-ink-900">
+                      <strong>Dissent:</strong> {r.dissent}
+                    </p>
+                  )}
                 </>
               ) : recording === r.id ? (
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(["notes", "attendees", "outcome", "dissent"] as const).map((k) => (
-                    <label key={k} className={`flex flex-col gap-1 ${k === "notes" ? "sm:col-span-2" : ""}`}>
+                    <label
+                      key={k}
+                      className={`flex flex-col gap-1 ${k === "notes" ? "sm:col-span-2" : ""}`}
+                    >
                       {/* eslint-disable-next-line security/detect-object-injection -- `k` is a typed union. */}
                       <span className={FIELD_LABEL}>{MDT_LABELS[k]}</span>
-                      <input className={INPUT} value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />
+                      <input
+                        className={INPUT}
+                        value={form[k]}
+                        onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
+                      />
                     </label>
                   ))}
                   <label className="flex flex-col gap-1">
                     <span className={FIELD_LABEL}>Next review</span>
-                    <input type="date" className={INPUT} value={form.next_review} onChange={(e) => setForm((f) => ({ ...f, next_review: e.target.value }))} />
+                    <input
+                      type="date"
+                      className={INPUT}
+                      value={form.next_review}
+                      onChange={(e) => setForm((f) => ({ ...f, next_review: e.target.value }))}
+                    />
                   </label>
                   <div className="flex items-end gap-2">
-                    <button type="button" className={`${BTN} ${BTN_SM}`} disabled={!form.notes.trim()} onClick={() => accessToken && void recordMdt(accessToken, r.id, { ...form, next_review: form.next_review || undefined }).then(() => { setRecording(null); setVersion((v) => v + 1); }).catch((e) => setError(errorText(e, "Couldn't record the review.")))}>
+                    <button
+                      type="button"
+                      className={`${BTN} ${BTN_SM}`}
+                      disabled={!form.notes.trim()}
+                      onClick={() =>
+                        accessToken &&
+                        void recordMdt(accessToken, r.id, {
+                          ...form,
+                          next_review: form.next_review || undefined,
+                        })
+                          .then(() => {
+                            setRecording(null);
+                            setVersion((v) => v + 1);
+                          })
+                          .catch((e) => setError(errorText(e, "Couldn't record the review.")))
+                      }
+                    >
                       Record review
                     </button>
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setRecording(null)}>Cancel</button>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={() => setRecording(null)}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               ) : (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-1`} onClick={() => setRecording(r.id)}>Record this review</button>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM} mt-1`}
+                  onClick={() => setRecording(r.id)}
+                >
+                  Record this review
+                </button>
               )}
             </li>
           ))}
         </ul>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input type="date" aria-label="Review date" className={`${INPUT} max-w-[180px]`} value={day} onChange={(e) => setDay(e.target.value)} />
-          <button type="button" className={`${BTN} ${BTN_SM}`} disabled={!day} onClick={() => accessToken && void scheduleMdt(accessToken, patientId, day).then(() => { setDay(""); setVersion((v) => v + 1); }).catch((e) => setError(errorText(e, "Couldn't schedule.")))}>
+          <input
+            type="date"
+            aria-label="Review date"
+            className={`${INPUT} max-w-[180px]`}
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+          />
+          <button
+            type="button"
+            className={`${BTN} ${BTN_SM}`}
+            disabled={!day}
+            onClick={() =>
+              accessToken &&
+              void scheduleMdt(accessToken, patientId, day)
+                .then(() => {
+                  setDay("");
+                  setVersion((v) => v + 1);
+                })
+                .catch((e) => setError(errorText(e, "Couldn't schedule.")))
+            }
+          >
             Schedule review
           </button>
         </div>

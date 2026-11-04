@@ -180,8 +180,7 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertFalse(front_desk.data["open_triage"])
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
         self.assertTrue(self.register(full_name="Brian Otieno").data["open_triage"])
@@ -218,8 +217,7 @@ class RegistrationTests(CarePathwayApiTestCase):
     def test_triage_tasks_go_to_a_team_or_a_person_from_the_staff_list(self):
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
         te_id = self.register().data["triage_encounter_id"]
@@ -252,8 +250,7 @@ class RegistrationTests(CarePathwayApiTestCase):
 
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             colleague = User.objects.create_user(
                 email=f"colleague-{uuid.uuid4().hex[:6]}@org.test",
@@ -268,8 +265,10 @@ class RegistrationTests(CarePathwayApiTestCase):
         te_id = self.register().data["triage_encounter_id"]
         url = reverse("care-triage-tasks", args=[te_id])
         done = self.client.post(
-            url, {"actions": ["safety_plan"], "owner": "Nurse", "status": "COMPLETED"},
-            format="json", **self.auth,
+            url,
+            {"actions": ["safety_plan"], "owner": "Nurse", "status": "COMPLETED"},
+            format="json",
+            **self.auth,
         )
         self.assertEqual(done.status_code, 400)
 
@@ -277,16 +276,21 @@ class RegistrationTests(CarePathwayApiTestCase):
             with platform_admin_context():
                 return list(
                     Notification.objects.filter(recipient=user, category="CARE_TASK")
-                    .order_by("created_at").values_list("title", "body", "link")
+                    .order_by("created_at")
+                    .values_list("title", "body", "link")
                 )
 
         self.client.post(
-            url, {"actions": ["safety_plan", "comprehensive_intake"], "owner": "Nurse"},
-            format="json", **self.auth,
+            url,
+            {"actions": ["safety_plan", "comprehensive_intake"], "owner": "Nurse"},
+            format="json",
+            **self.auth,
         )
         self.client.post(
-            url, {"actions": ["safety_plan"], "assignee": str(colleague.pk)},
-            format="json", **self.auth,
+            url,
+            {"actions": ["safety_plan"], "assignee": str(colleague.pk)},
+            format="json",
+            **self.auth,
         )
         titles = [t for t, _, _ in told(colleague)]
         self.assertEqual(
@@ -301,7 +305,10 @@ class RegistrationTests(CarePathwayApiTestCase):
         with platform_admin_context():
             task = CareTask.objects.filter(triage_encounter_id=te_id).first()
         done = self.client.patch(
-            reverse("care-task", args=[task.pk]), {"status": "COMPLETED"}, format="json", **self.auth
+            reverse("care-task", args=[task.pk]),
+            {"status": "COMPLETED"},
+            format="json",
+            **self.auth,
         )
         self.assertIsNotNone(done.data["completed_at"])
         with platform_admin_context():
@@ -337,11 +344,13 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertEqual(names("0799000000"), [])
 
 
-
 class RegistrationEditTests(CarePathwayApiTestCase):
     def edit(self, patient_id, **data):
         return self.client.patch(
-            reverse("care-registration-details", args=[patient_id]), data, format="json", **self.auth
+            reverse("care-registration-details", args=[patient_id]),
+            data,
+            format="json",
+            **self.auth,
         )
 
     def test_edit_updates_details_without_a_new_encounter(self):
@@ -382,15 +391,21 @@ class RegistrationEditTests(CarePathwayApiTestCase):
     def test_identifier_held_by_another_client_is_refused(self):
         self.register(id_document_type="NATIONAL_ID", id_document_number="12345678")
         other = self.register(
-            full_name="Brian Ochieng", date_of_birth="1980-01-01", sex="MALE",
+            full_name="Brian Ochieng",
+            date_of_birth="1980-01-01",
+            sex="MALE",
             confirm_new_record=True,
         ).data["patient_id"]
         response = self.edit(
-            other, first_name="Brian", last_name="Ochieng",
-            id_document_type="NATIONAL_ID", id_document_number="12345678",
+            other,
+            first_name="Brian",
+            last_name="Ochieng",
+            id_document_type="NATIONAL_ID",
+            id_document_number="12345678",
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("duplicate_of", response.data)
+
 
 class TriageFlowTests(CarePathwayApiTestCase):
     def setUp(self):

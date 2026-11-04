@@ -12,7 +12,6 @@ from apps.accounts.permissions import _has_org_admin_role
 from apps.billing.permissions import IsFinanceOrReadOnly, is_finance
 from apps.client_registry.models import Patient
 from apps.retention.mixins import NoHardDeleteMixin
-
 from apps.tenancy.models import Branch
 
 from . import sha_callbacks, sha_claims, sha_eligibility, sha_remittance, workspace
@@ -25,13 +24,13 @@ from .models import (
     ServicePayerCode,
     ShaVisit,
 )
-from .sha_eligibility import ShaError
 from .serializers import (
     InsuranceClaimSerializer,
     PreAuthorizationSerializer,
     RemittanceSerializer,
     ServicePayerCodeSerializer,
 )
+from .sha_eligibility import ShaError
 
 
 class PreAuthorizationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
@@ -291,9 +290,13 @@ class ServicePayerCodeViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
 
 def _sha_branch(patient, branch_id):
-    branch = Branch.objects.filter(
-        pk=branch_id, organization_id=patient.organization_id, is_active=True
-    ).first() if branch_id else None
+    branch = (
+        Branch.objects.filter(
+            pk=branch_id, organization_id=patient.organization_id, is_active=True
+        ).first()
+        if branch_id
+        else None
+    )
     if branch is None:
         raise ShaError("Choose the facility (branch) the client is at.", field="branch")
     return branch
@@ -482,9 +485,7 @@ class ShaRemittanceView(_FinanceView):
         statements = ShaRemittanceStatement.objects.filter(
             organization_id=request.user.organization_id
         )[:50]
-        return Response(
-            {"statements": [sha_remittance.statement_data(s) for s in statements]}
-        )
+        return Response({"statements": [sha_remittance.statement_data(s) for s in statements]})
 
     def post(self, request):
         branch = Branch.objects.filter(

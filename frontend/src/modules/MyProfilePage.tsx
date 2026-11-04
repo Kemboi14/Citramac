@@ -170,7 +170,7 @@ export function MyProfilePage() {
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="font-display text-base font-semibold text-ink-900">Appearance</h2>
         <p className="mt-1 text-[13px] text-ink-500">
-          "Match device" follows your system's light/dark setting automatically.
+          &ldquo;Match device&rdquo; follows your system&rsquo;s light/dark setting automatically.
         </p>
         <div className="mt-4">
           <PillRadio value={preference} options={THEME_OPTIONS} onChange={setPreference} />

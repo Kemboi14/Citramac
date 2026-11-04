@@ -36,7 +36,9 @@ export function MergeHistory({
       .catch(
         (err) =>
           !cancelled &&
-          setLoadError(err instanceof ApiError ? err.message : "Merge history could not be loaded."),
+          setLoadError(
+            err instanceof ApiError ? err.message : "Merge history could not be loaded.",
+          ),
       );
     return () => {
       cancelled = true;

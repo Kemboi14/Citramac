@@ -110,7 +110,9 @@ def record_event(payload, path_entity):
         return event, True
     except IntegrityError:
         return (
-            ShaCallbackEvent.objects.get(entity_type=entity, subject_guid=subject, to_state=to_state),
+            ShaCallbackEvent.objects.get(
+                entity_type=entity, subject_guid=subject, to_state=to_state
+            ),
             False,
         )
 
@@ -172,12 +174,12 @@ def apply_event(event):
             org = pre_auth.organization_id
         else:
             visit = (
-                ShaVisit.objects.unscoped()
-                .filter(authorization_guid=event.subject_guid)
-                .first()
+                ShaVisit.objects.unscoped().filter(authorization_guid=event.subject_guid).first()
             )
             if visit is None and event.consent_token:
-                visit = ShaVisit.objects.unscoped().filter(consent_token=event.consent_token).first()
+                visit = (
+                    ShaVisit.objects.unscoped().filter(consent_token=event.consent_token).first()
+                )
             if visit is None:
                 return _finish(event, None, "No SHA visit matches this callback.")
             org = visit.organization_id
@@ -249,9 +251,9 @@ def _apply_authorization(event, visit):
 
 def apply_pending(limit=200):
     applied = 0
-    for event in ShaCallbackEvent.objects.filter(processed_at__isnull=True).order_by(
-        "received_at"
-    )[:limit]:
+    for event in ShaCallbackEvent.objects.filter(processed_at__isnull=True).order_by("received_at")[
+        :limit
+    ]:
         try:
             apply_event(event)
             applied += 1

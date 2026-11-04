@@ -71,8 +71,7 @@ export interface HieCallbackEntityResult {
 }
 
 export type HieCallbackBranchResult =
-  | { branch: string; results: HieCallbackEntityResult[] }
-  | { branch: string; error: string };
+  { branch: string; results: HieCallbackEntityResult[] } | { branch: string; error: string };
 
 export interface HieTransaction {
   id: string;

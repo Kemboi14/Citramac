@@ -24,21 +24,46 @@ class ObservationTests(CarePlanTestCase):
 
     def test_no_level_until_one_is_set_then_changes_need_a_reason(self):
         self.assertIsNone(self.state()["level"])
-        self.assertEqual(self.post("care-observation-level", {"level": "EYESIGHT"}).status_code, 400)
-        self.assertEqual(self.post("care-observation-level", {"level": "NOPE", "reason": "x"}).status_code, 400)
-        ok = self.post("care-observation-level", {"level": "EYESIGHT", "reason": "Suicidal thoughts with plan"})
+        self.assertEqual(
+            self.post("care-observation-level", {"level": "EYESIGHT"}).status_code, 400
+        )
+        self.assertEqual(
+            self.post("care-observation-level", {"level": "NOPE", "reason": "x"}).status_code, 400
+        )
+        ok = self.post(
+            "care-observation-level", {"level": "EYESIGHT", "reason": "Suicidal thoughts with plan"}
+        )
         self.assertEqual(ok.status_code, 201)
         self.assertEqual(ok.data["level"]["display"], "Within eyesight (continuous)")
-        self.assertEqual(self.post("care-observation-level", {"level": "EYESIGHT", "reason": "again"}).status_code, 400)
-        self.post("care-observation-level", {"level": "GENERAL_HOURLY", "reason": "Step-down after review"})
+        self.assertEqual(
+            self.post(
+                "care-observation-level", {"level": "EYESIGHT", "reason": "again"}
+            ).status_code,
+            400,
+        )
+        self.post(
+            "care-observation-level",
+            {"level": "GENERAL_HOURLY", "reason": "Step-down after review"},
+        )
         self.assertEqual(self.state()["level"]["code"], "GENERAL_HOURLY")
 
     def test_entries_need_a_real_observation_and_set_the_next_due_time(self):
         self.post("care-observation-level", {"level": "INTERMITTENT_15", "reason": "Distress"})
-        self.assertEqual(self.post("care-observation-entries", {"location": "Quiet room", "note": ""}).status_code, 400)
-        self.assertEqual(self.post("care-observation-entries", {"location": "Nowhere", "note": "x"}).status_code, 400)
         self.assertEqual(
-            self.post("care-observation-entries", {"location": "Quiet room", "engagement": "Asleep — breathing observed", "note": ""}).status_code,
+            self.post(
+                "care-observation-entries", {"location": "Quiet room", "note": ""}
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.post("care-observation-entries", {"location": "Nowhere", "note": "x"}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.post(
+                "care-observation-entries",
+                {"location": "Quiet room", "engagement": "Asleep — breathing observed", "note": ""},
+            ).status_code,
             201,
         )
         state = self.client.get(reverse("care-observation", args=[self.pid]), **self.auth).data
@@ -47,7 +72,9 @@ class ObservationTests(CarePlanTestCase):
 
     def test_an_entry_goes_overdue_and_continuous_observers_must_rotate(self):
         self.post("care-observation-level", {"level": "ARMS_LENGTH", "reason": "High risk"})
-        self.post("care-observation-handover", {"observer_name": "Mary", "observer_gender": "Female"})
+        self.post(
+            "care-observation-handover", {"observer_name": "Mary", "observer_gender": "Female"}
+        )
         past = timezone.now() - timedelta(minutes=200)
         with platform_admin_context():
             from .models import ObservationLevelChange, ObserverHandover
@@ -58,7 +85,9 @@ class ObservationTests(CarePlanTestCase):
         self.assertTrue(state["overdue"])
         self.assertTrue(state["rotation_overdue"])
         self.assertEqual(state["observer"]["name"], "Mary")
-        self.assertEqual(self.post("care-observation-handover", {"observer_name": ""}).status_code, 400)
+        self.assertEqual(
+            self.post("care-observation-handover", {"observer_name": ""}).status_code, 400
+        )
 
     def test_config_is_served_and_labelled_illustrative(self):
         config = self.client.get(reverse("care-observation-config"), **self.auth).data
@@ -68,12 +97,19 @@ class ObservationTests(CarePlanTestCase):
 
 class ObservationSetTests(CarePlanTestCase):
     def record(self, **body):
-        return self.client.post(reverse("care-observation-sets", args=[self.pid]), body, format="json", **self.auth)
+        return self.client.post(
+            reverse("care-observation-sets", args=[self.pid]), body, format="json", **self.auth
+        )
 
     def test_a_full_set_scores_the_ews_and_unmeasured_items_are_reported(self):
         response = self.record(
-            heart_rate=118, respiratory_rate=22, systolic_bp=150, spo2=96, temperature_c=37.0,
-            consciousness="A", not_measured={"blood_glucose_mmol": "Declined"},
+            heart_rate=118,
+            respiratory_rate=22,
+            systolic_bp=150,
+            spo2=96,
+            temperature_c=37.0,
+            consciousness="A",
+            not_measured={"blood_glucose_mmol": "Declined"},
         )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["ews"]["score"], 4)
@@ -85,7 +121,9 @@ class ObservationSetTests(CarePlanTestCase):
         self.assertEqual(self.record(heart_rate="abc").status_code, 400)
         self.assertEqual(self.record().status_code, 400)
         self.assertEqual(self.record(heart_rate=60, consciousness="Z").status_code, 400)
-        self.assertEqual(self.record(heart_rate=60, not_measured={"spo2": "Because"}).status_code, 400)
+        self.assertEqual(
+            self.record(heart_rate=60, not_measured={"spo2": "Because"}).status_code, 400
+        )
         warned = self.record(heart_rate=160, consciousness="A")
         self.assertEqual(warned.status_code, 201)
         self.assertIn("unusual", warned.data["warnings"][0])
@@ -95,14 +133,19 @@ class ObservationSetTests(CarePlanTestCase):
 class PrescribingChecksTests(CarePlanTestCase):
     def check(self, drug):
         return self.client.post(
-            reverse("care-prescribing-checks", args=[self.pid]), {"drug": drug}, format="json", **self.auth
+            reverse("care-prescribing-checks", args=[self.pid]),
+            {"drug": drug},
+            format="json",
+            **self.auth,
         )
 
     def test_an_allergy_match_is_blocking_and_says_if_it_is_unconfirmed(self):
         with platform_admin_context():
             AllergyRecord.objects.create(
-                organization=self.org, patient=Patient.objects.get(pk=self.pid),
-                substance="Penicillin", verification_status="UNCONFIRMED",
+                organization=self.org,
+                patient=Patient.objects.get(pk=self.pid),
+                substance="Penicillin",
+                verification_status="UNCONFIRMED",
             )
         result = self.check("Penicillin V").data
         self.assertIn("unconfirmed", result["blocking"][0])
@@ -111,8 +154,11 @@ class PrescribingChecksTests(CarePlanTestCase):
     def test_duplicates_on_the_medication_list_warn(self):
         with platform_admin_context():
             MedicationHistoryEntry.objects.create(
-                organization=self.org, patient=Patient.objects.get(pk=self.pid),
-                name="Sertraline", dose="50 mg", frequency="OD",
+                organization=self.org,
+                patient=Patient.objects.get(pk=self.pid),
+                name="Sertraline",
+                dose="50 mg",
+                frequency="OD",
             )
         self.assertIn("Duplicate", self.check("sertraline").data["warnings"][0])
 
@@ -128,21 +174,31 @@ class MarTests(CarePlanTestCase):
         super().setUp()
         with platform_admin_context():
             ward = Ward.objects.create(organization=self.org, name="Ward")
-            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="1", status="OCCUPIED")
+            bed = Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="1", status="OCCUPIED"
+            )
             self.admission = Admission.objects.create(
-                organization=self.org, patient=Patient.objects.get(pk=self.pid), bed=bed, admitted_by=self.nurse
+                organization=self.org,
+                patient=Patient.objects.get(pk=self.pid),
+                bed=bed,
+                admitted_by=self.nurse,
             )
 
     def entry(self, minutes_ago=0, **extra):
         with platform_admin_context():
             return MedicationAdministration.objects.create(
-                organization=self.org, admission=self.admission,
-                scheduled_time=timezone.now() - timedelta(minutes=minutes_ago), **extra,
+                organization=self.org,
+                admission=self.admission,
+                scheduled_time=timezone.now() - timedelta(minutes=minutes_ago),
+                **extra,
             )
 
     def give(self, entry, outcome="ADMINISTERED", **body):
         return self.client.post(
-            reverse("care-mar-administer", args=[entry.pk]), {"outcome": outcome, **body}, format="json", **self.auth
+            reverse("care-mar-administer", args=[entry.pk]),
+            {"outcome": outcome, **body},
+            format="json",
+            **self.auth,
         )
 
     def test_slot_states_follow_the_time_windows(self):
@@ -176,19 +232,31 @@ class MarTests(CarePlanTestCase):
         pending = self.give(prn, prn_indication="Agitation").data["pending_effects"]
         self.assertEqual(len(pending), 1)
         url = reverse("care-mar-effect", args=[prn.pk])
-        self.assertEqual(self.client.post(url, {"effect": ""}, format="json", **self.auth).status_code, 400)
-        done = self.client.post(url, {"effect": "Calmer within 40 minutes"}, format="json", **self.auth)
+        self.assertEqual(
+            self.client.post(url, {"effect": ""}, format="json", **self.auth).status_code, 400
+        )
+        done = self.client.post(
+            url, {"effect": "Calmer within 40 minutes"}, format="json", **self.auth
+        )
         self.assertEqual(done.data["pending_effects"], [])
         plain = self.entry(10)
         self.give(plain)
         self.assertEqual(
-            self.client.post(reverse("care-mar-effect", args=[plain.pk]), {"effect": "x"}, format="json", **self.auth).status_code, 400
+            self.client.post(
+                reverse("care-mar-effect", args=[plain.pk]),
+                {"effect": "x"},
+                format="json",
+                **self.auth,
+            ).status_code,
+            400,
         )
 
     def test_a_client_who_is_not_admitted_has_no_mar(self):
         with platform_admin_context():
             Admission.objects.filter(pk=self.admission.pk).update(status="DISCHARGED")
-        self.assertIsNone(self.client.get(reverse("care-mar", args=[self.pid]), **self.auth).data["admission"])
+        self.assertIsNone(
+            self.client.get(reverse("care-mar", args=[self.pid]), **self.auth).data["admission"]
+        )
 
 
 class RestrictivePracticeTests(CarePlanTestCase):
@@ -203,10 +271,21 @@ class RestrictivePracticeTests(CarePlanTestCase):
         }
 
     def post(self, **over):
-        return self.client.post(reverse("care-restrictive", args=[self.pid]), self.body(**over), format="json", **self.auth)
+        return self.client.post(
+            reverse("care-restrictive", args=[self.pid]),
+            self.body(**over),
+            format="json",
+            **self.auth,
+        )
 
     def test_de_escalation_authoriser_start_and_injury_check_are_required(self):
-        for over in ({"de_escalation": []}, {"kind": "NOPE"}, {"authorised_by": ""}, {"start_at": ""}, {"injury_check": ""}):
+        for over in (
+            {"de_escalation": []},
+            {"kind": "NOPE"},
+            {"authorised_by": ""},
+            {"start_at": ""},
+            {"injury_check": ""},
+        ):
             self.assertEqual(self.post(**over).status_code, 400, over)
 
     def test_recording_schedules_the_configured_timed_checks_and_logs_them_done(self):
@@ -217,7 +296,12 @@ class RestrictivePracticeTests(CarePlanTestCase):
         check_id = created.data["checks"][0]["id"]
         done = self.client.post(reverse("care-restrictive-check", args=[check_id]), **self.auth)
         self.assertEqual(done.data["checks"][0]["done_by"], "Jane Njoroge")
-        self.assertEqual(self.client.post(reverse("care-restrictive-check", args=[check_id]), **self.auth).status_code, 400)
+        self.assertEqual(
+            self.client.post(
+                reverse("care-restrictive-check", args=[check_id]), **self.auth
+            ).status_code,
+            400,
+        )
 
     @override_settings(RESTRICTIVE_CHECK_MINUTES={})
     def test_no_checks_are_invented_when_none_are_configured(self):
@@ -227,14 +311,23 @@ class RestrictivePracticeTests(CarePlanTestCase):
         old = (timezone.now() - timedelta(hours=9)).isoformat()
         created = self.post(kind="SECLUSION", start_at=old)
         self.assertTrue(created.data["senior_review_due"])
-        ended = self.client.post(reverse("care-restrictive-end", args=[created.data["id"]]), **self.auth)
+        ended = self.client.post(
+            reverse("care-restrictive-end", args=[created.data["id"]]), **self.auth
+        )
         self.assertFalse(ended.data["senior_review_due"])
-        self.assertEqual(self.client.post(reverse("care-restrictive-end", args=[created.data["id"]]), **self.auth).status_code, 400)
+        self.assertEqual(
+            self.client.post(
+                reverse("care-restrictive-end", args=[created.data["id"]]), **self.auth
+            ).status_code,
+            400,
+        )
 
     def test_client_debrief_is_recorded(self):
         created = self.post()
         self.assertIsNone(created.data["client_debrief_at"])
-        done = self.client.post(reverse("care-restrictive-debrief", args=[created.data["id"]]), **self.auth)
+        done = self.client.post(
+            reverse("care-restrictive-debrief", args=[created.data["id"]]), **self.auth
+        )
         self.assertIsNotNone(done.data["client_debrief_at"])
         listing = self.client.get(reverse("care-restrictive", args=[self.pid]), **self.auth).data
         self.assertEqual(len(listing["results"]), 1)
@@ -247,10 +340,22 @@ class SbarTests(CarePlanTestCase):
         self.save(sections={"mse": {"mood": "Low"}, "close": {"message": "Needs review at 08:00"}})
         with platform_admin_context():
             MedicationHistoryEntry.objects.create(
-                organization=self.org, patient=Patient.objects.get(pk=self.pid), name="Sertraline", dose="50 mg"
+                organization=self.org,
+                patient=Patient.objects.get(pk=self.pid),
+                name="Sertraline",
+                dose="50 mg",
             )
         text = self.client.get(reverse("care-sbar", args=[self.pid]), **self.auth).data["text"]
-        for fragment in ("SITUATION", "BACKGROUND", "ASSESSMENT", "RECOMMENDATION", "Low mood and drinking",
-                         "Sertraline 50 mg", "mood Low", "Needs review at 08:00", "Prepared by Jane Njoroge"):
+        for fragment in (
+            "SITUATION",
+            "BACKGROUND",
+            "ASSESSMENT",
+            "RECOMMENDATION",
+            "Low mood and drinking",
+            "Sertraline 50 mg",
+            "mood Low",
+            "Needs review at 08:00",
+            "Prepared by Jane Njoroge",
+        ):
             self.assertIn(fragment, text)
         self.assertIn("Priority Urgent", text)

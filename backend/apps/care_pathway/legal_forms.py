@@ -36,8 +36,12 @@ def _may_sign(user, spec):
 def prepare(patient, user, form_key, content, admission=None):
     spec = _spec(form_key)
     return LegalForm.objects.create(
-        organization_id=patient.organization_id, patient=patient, admission=admission,
-        form_key=spec["key"], content=content or {}, prepared_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        admission=admission,
+        form_key=spec["key"],
+        content=content or {},
+        prepared_by=user,
     )
 
 

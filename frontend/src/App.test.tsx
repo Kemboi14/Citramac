@@ -61,7 +61,8 @@ describe("App routing", () => {
         return Promise.resolve({
           ok: false,
           status: 401,
-          text: async () => JSON.stringify({ error: { code: "MISSING_REFRESH_TOKEN", message: "" } }),
+          text: async () =>
+            JSON.stringify({ error: { code: "MISSING_REFRESH_TOKEN", message: "" } }),
         });
       }),
     );

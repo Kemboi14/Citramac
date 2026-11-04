@@ -82,7 +82,10 @@ export function ResponsiveTable<T>({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-10 text-center text-[13px] text-ink-500">
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-10 text-center text-[13px] text-ink-500"
+                >
                   {emptyMessage}
                 </td>
               </tr>
@@ -130,7 +133,9 @@ export function ResponsiveTable<T>({
             )}
           </div>
         ))}
-        {rows.length === 0 && <p className="py-8 text-center text-[13px] text-ink-500">{emptyMessage}</p>}
+        {rows.length === 0 && (
+          <p className="py-8 text-center text-[13px] text-ink-500">{emptyMessage}</p>
+        )}
       </div>
     </>
   );

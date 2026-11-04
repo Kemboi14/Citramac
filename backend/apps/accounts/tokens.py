@@ -6,7 +6,6 @@ from apps.tenancy.context import platform_admin_context
 
 from .access import branches_for
 
-
 # Which shell a multi-role user lands in first: Org Admin's console, then the
 # Auditor's audit log, then the Clinical Workspace. They switch shells from
 # the sidebar (`roles` carries everything they hold). Recognised by key; the

@@ -18,7 +18,6 @@ of record data and cannot be submitted, signed or released until the
 facility supplies approved wording.
 """
 
-
 CATALOGUE_VERSION = "2026-10-17.1"
 
 CATEGORIES = [
@@ -2098,7 +2097,9 @@ def _build_legal(entry, served):
     # DOC-REQ / DOC-GOV-01 belong to the legal module's own draft → signed flow.
     # A statutory form is released whole or not at all: no per-class choice.
     spec["userEntered"] = [
-        f for f in spec["userEntered"] if f["key"] not in ("include_classes", "diagnosis_disclosure")
+        f
+        for f in spec["userEntered"]
+        if f["key"] not in ("include_classes", "diagnosis_disclosure")
     ]
     spec["conditionalRules"] = [
         r for r in spec["conditionalRules"] if r["id"] not in ("DOC-GOV-01", "DOC-REQ")

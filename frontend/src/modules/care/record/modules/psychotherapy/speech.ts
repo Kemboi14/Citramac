@@ -9,9 +9,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // master prompt X-12). Nothing heard is stored in the browser: committed text
 // goes straight to the server draft.
 
-interface RecognitionAlternative { transcript: string }
-interface RecognitionResult extends ArrayLike<RecognitionAlternative> { isFinal: boolean }
-interface RecognitionEvent { resultIndex: number; results: ArrayLike<RecognitionResult> }
+interface RecognitionAlternative {
+  transcript: string;
+}
+interface RecognitionResult extends ArrayLike<RecognitionAlternative> {
+  isFinal: boolean;
+}
+interface RecognitionEvent {
+  resultIndex: number;
+  results: ArrayLike<RecognitionResult>;
+}
 interface Recognizer {
   lang: string;
   continuous: boolean;
@@ -27,7 +34,10 @@ type RecognizerCtor = new () => Recognizer;
 
 export function recognizerCtor(): RecognizerCtor | null {
   if (typeof window === "undefined") return null;
-  const w = window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor };
+  const w = window as unknown as {
+    SpeechRecognition?: RecognizerCtor;
+    webkitSpeechRecognition?: RecognizerCtor;
+  };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
@@ -67,17 +77,27 @@ export function stopSpeaking() {
   if (synthesisAvailable()) window.speechSynthesis.cancel();
 }
 
-const COMMIT_COMMANDS = ["next question", "end of answer", "that's all", "thats all", "that is all", "swali linalofuata"];
+const COMMIT_COMMANDS = [
+  "next question",
+  "end of answer",
+  "that's all",
+  "thats all",
+  "that is all",
+  "swali linalofuata",
+];
 const REPEAT_COMMANDS = ["repeat question", "repeat the question", "rudia swali"];
 export const SILENCE_PROMPT_MS = 4500;
 export const SILENCE_COMMIT_MS = 8000;
 
 export type DictationError = "blocked" | "no-mic" | "unsupported" | "network" | "other";
 export const DICTATION_ERRORS: Record<DictationError, string> = {
-  blocked: "The microphone is blocked for this site. Allow microphone access in the browser, or switch to typing.",
+  blocked:
+    "The microphone is blocked for this site. Allow microphone access in the browser, or switch to typing.",
   "no-mic": "No microphone was found. Connect one, or switch to typing.",
-  unsupported: "This browser does not support dictation. Use a recent Chrome or Edge, or switch to typing.",
-  network: "Dictation lost its connection to the browser's speech service. Try again, or switch to typing.",
+  unsupported:
+    "This browser does not support dictation. Use a recent Chrome or Edge, or switch to typing.",
+  network:
+    "Dictation lost its connection to the browser's speech service. Try again, or switch to typing.",
   other: "Dictation stopped unexpectedly. Try again, or switch to typing.",
 };
 
@@ -85,7 +105,11 @@ function stripCommand(text: string, commands: string[]) {
   const lower = text.toLowerCase();
   for (const c of commands) {
     const at = lower.lastIndexOf(c);
-    if (at >= 0) return { found: true, text: `${text.slice(0, at)}${text.slice(at + c.length)}`.replace(/\s+/g, " ").trim() };
+    if (at >= 0)
+      return {
+        found: true,
+        text: `${text.slice(0, at)}${text.slice(at + c.length)}`.replace(/\s+/g, " ").trim(),
+      };
   }
   return { found: false, text };
 }
@@ -151,15 +175,20 @@ export function useDictation(lang: string, safetyMode: boolean, handlers: Dictat
   const armSilence = useCallback(() => {
     clearTimers();
     if (!textRef.current.trim() || safetyMode) return;
-    timers.current.push(window.setTimeout(() => {
-      const start = Date.now();
-      const tick = () => {
-        const left = Math.max(0, Math.ceil((SILENCE_COMMIT_MS - SILENCE_PROMPT_MS - (Date.now() - start)) / 1000));
-        setCountdown(left);
-        if (left > 0) timers.current.push(window.setTimeout(tick, 250));
-      };
-      tick();
-    }, SILENCE_PROMPT_MS));
+    timers.current.push(
+      window.setTimeout(() => {
+        const start = Date.now();
+        const tick = () => {
+          const left = Math.max(
+            0,
+            Math.ceil((SILENCE_COMMIT_MS - SILENCE_PROMPT_MS - (Date.now() - start)) / 1000),
+          );
+          setCountdown(left);
+          if (left > 0) timers.current.push(window.setTimeout(tick, 250));
+        };
+        tick();
+      }, SILENCE_PROMPT_MS),
+    );
     timers.current.push(window.setTimeout(() => commit(), SILENCE_COMMIT_MS));
   }, [clearTimers, commit, safetyMode]);
 
@@ -217,7 +246,10 @@ export function useDictation(lang: string, safetyMode: boolean, handlers: Dictat
     };
     r.onerror = (e) => {
       const map: Record<string, DictationError> = {
-        "not-allowed": "blocked", "service-not-allowed": "blocked", "audio-capture": "no-mic", network: "network",
+        "not-allowed": "blocked",
+        "service-not-allowed": "blocked",
+        "audio-capture": "no-mic",
+        network: "network",
       };
       if (e.error === "no-speech" || e.error === "aborted") return;
       want.current = false;
@@ -259,11 +291,27 @@ export function useDictation(lang: string, safetyMode: boolean, handlers: Dictat
     setInterim("");
   }, []);
 
-  useEffect(() => () => {
-    want.current = false;
-    timers.current.forEach((t) => window.clearTimeout(t));
-    rec.current?.abort();
-  }, []);
+  useEffect(
+    () => () => {
+      want.current = false;
+      timers.current.forEach((t) => window.clearTimeout(t));
+      rec.current?.abort();
+    },
+    [],
+  );
 
-  return { listening, paused, finalText, interim, countdown, error, start, stop, pause, commit, reset, setError };
+  return {
+    listening,
+    paused,
+    finalText,
+    interim,
+    countdown,
+    error,
+    start,
+    stop,
+    pause,
+    commit,
+    reset,
+    setError,
+  };
 }

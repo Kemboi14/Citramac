@@ -11,7 +11,9 @@ export function priceText(module: InterventionModule) {
 
 /** Price · configured SHA code · pre-auth — nothing here is a guessed code. */
 export function metaParts(module: InterventionModule) {
-  return [priceText(module), module.sha_code && `SHA ${module.sha_code}`].filter(Boolean) as string[];
+  return [priceText(module), module.sha_code && `SHA ${module.sha_code}`].filter(
+    Boolean,
+  ) as string[];
 }
 
 /** "3 sessions delivered" in the module's unit. */

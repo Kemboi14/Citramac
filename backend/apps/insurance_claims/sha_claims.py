@@ -239,7 +239,9 @@ def _validate_visit_request(service_type, intervention_codes):
         raise ShaError("Choose the type of service.", field="service_type")
     codes = [str(c).strip() for c in intervention_codes or [] if str(c).strip()]
     if not codes:
-        raise ShaError("Choose at least one SHA intervention for the visit.", field="intervention_codes")
+        raise ShaError(
+            "Choose at least one SHA intervention for the visit.", field="intervention_codes"
+        )
     check_combination(codes)
     return codes
 
@@ -287,7 +289,9 @@ def send_visit_otp(patient, branch, intervention_codes, contact_id=None):
         try:
             payload["contact_id"] = int(contact_id)
         except (TypeError, ValueError):
-            raise ShaError("Choose one of the client's registered contacts.", field="contact_id") from None
+            raise ShaError(
+                "Choose one of the client's registered contacts.", field="contact_id"
+            ) from None
     body = _call(
         "POST",
         "/claims/otp",
@@ -359,15 +363,25 @@ def open_visit_with_otp(patient, branch, user, service_type, intervention_codes,
 
 @transaction.atomic
 def start_biometric_consent(
-    patient, branch, user, service_type, intervention_codes, *, agent_id, work_station_id,
-    device_os="windows", episode=None,
+    patient,
+    branch,
+    user,
+    service_type,
+    intervention_codes,
+    *,
+    agent_id,
+    work_station_id,
+    device_os="windows",
+    episode=None,
 ):
     _branch_ready(branch)
     cr_id = _require_cr_id(patient)
     _require_alive(patient)
     codes = _validate_visit_request(service_type, intervention_codes)
     if service_type not in AUTHORIZE_SERVICE_TYPES:
-        raise ShaError("Fingerprint consent covers outpatient and inpatient visits.", field="service_type")
+        raise ShaError(
+            "Fingerprint consent covers outpatient and inpatient visits.", field="service_type"
+        )
     if not (agent_id or "").strip():
         raise ShaError("Enter the biometrics agent's national ID.", field="agent_id")
     if not (work_station_id or "").strip():
@@ -468,7 +482,9 @@ def refresh_biometric_consent(visit, user):
                 **claim_practitioner_fields(user),
             },
         )
-        return _visit_from_response(visit, body or {}, user, "Visit opened with fingerprint consent")
+        return _visit_from_response(
+            visit, body or {}, user, "Visit opened with fingerprint consent"
+        )
     if state in ("REJECTED", "EXPIRED"):
         visit.status = ShaVisit.STATUS_REJECTED
         note = (
@@ -568,7 +584,9 @@ def attach_visit(claim, visit, user):
     if visit.patient_id != claim.patient_id:
         raise ShaError("That visit belongs to another client.", field="visit")
     if visit.status != ShaVisit.STATUS_OPEN:
-        raise ShaError("The SHA visit is not open — the client's consent is needed first.", field="visit")
+        raise ShaError(
+            "The SHA visit is not open — the client's consent is needed first.", field="visit"
+        )
     if InsuranceClaim.objects.filter(sha_visit=visit).exclude(pk=claim.pk).exists():
         raise ShaError("Another claim is already billed against this visit.", field="visit")
     claim.sha_visit = visit
@@ -746,8 +764,16 @@ def send_discharge_otp(claim):
     return (body or {}).get("message", "The discharge OTP has been sent to the client.")
 
 
-def dispatch_request(claim, *, discharge_reason, otp="", discharge_auth_guid="",
-                     discharge_status="FULL", notes="", discharge_date=None):
+def dispatch_request(
+    claim,
+    *,
+    discharge_reason,
+    otp="",
+    discharge_auth_guid="",
+    discharge_status="FULL",
+    notes="",
+    discharge_date=None,
+):
     """(path, payload) for dispatching the visit's claim — validated with no
     network call, so a missing OTP is caught before anything is pushed.
     Outpatient/capitation/emergency → /claims/submit; inpatient →
@@ -905,7 +931,9 @@ def create_preauth(claim, line, user, *, service_start, service_end, notificatio
             field="doctor",
         )
     if not (notification_email or "").strip():
-        raise ShaError("Enter the email SHA notifies about this request.", field="notification_email")
+        raise ShaError(
+            "Enter the email SHA notifies about this request.", field="notification_email"
+        )
     from apps.clinical_encounter.models import DiagnosisCode
 
     diagnoses = [
@@ -1040,7 +1068,11 @@ def visit_data(visit):
     }
     return {
         "id": str(visit.id),
-        "branch": {"id": str(visit.branch_id), "name": visit.branch.name, "fr_code": visit.branch.sha_fr_code},
+        "branch": {
+            "id": str(visit.branch_id),
+            "name": visit.branch.name,
+            "fr_code": visit.branch.sha_fr_code,
+        },
         "cr_id": visit.cr_id,
         "service_type": visit.service_type,
         "consent_method": visit.consent_method,
@@ -1051,22 +1083,24 @@ def visit_data(visit):
             {
                 "code": code,
                 "name": interventions[code].name if code in interventions else "",
-                "needs_preauth": interventions[code].needs_preauth if code in interventions else None,
-                "payment_mechanism": interventions[code].payment_mechanism
-                if code in interventions
-                else "",
-                "applicable_document_types": interventions[code].applicable_document_types
-                if code in interventions
-                else [],
+                "needs_preauth": (
+                    interventions[code].needs_preauth if code in interventions else None
+                ),
+                "payment_mechanism": (
+                    interventions[code].payment_mechanism if code in interventions else ""
+                ),
+                "applicable_document_types": (
+                    interventions[code].applicable_document_types if code in interventions else []
+                ),
             }
             for code in visit.intervention_codes
         ],
         "authorization_state": visit.authorization_state,
         "authorization_reason": visit.authorization_reason,
         "otp_fallback_allowed": visit.authorization_reason == OTP_FALLBACK_REASON,
-        "biometric_capture_url": visit.biometric_capture_url
-        if visit.status == ShaVisit.STATUS_AWAITING_CONSENT
-        else "",
+        "biometric_capture_url": (
+            visit.biometric_capture_url if visit.status == ShaVisit.STATUS_AWAITING_CONSENT else ""
+        ),
         "consent_token": visit.consent_token,
         "workflow_state": visit.workflow_state,
         "payer_workflow_state": visit.payer_workflow_state,

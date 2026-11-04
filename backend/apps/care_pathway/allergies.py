@@ -30,7 +30,9 @@ def payload(patient):
         "status": patient.allergy_status,
         "info_source": patient.allergy_info_source,
         "confirmed_at": patient.allergy_confirmed_at,
-        "confirmed_by": _name(patient.allergy_confirmed_by) if patient.allergy_confirmed_by_id else "",
+        "confirmed_by": (
+            _name(patient.allergy_confirmed_by) if patient.allergy_confirmed_by_id else ""
+        ),
         "records": [
             {
                 "id": str(a.id),
@@ -44,7 +46,9 @@ def payload(patient):
                 "noted_at": a.noted_at,
                 "recorded_by": _name(a.recorded_by) if a.recorded_by_id else "",
             }
-            for a in patient.allergy_records.exclude(verification_status="REFUTED").select_related("recorded_by")
+            for a in patient.allergy_records.exclude(verification_status="REFUTED").select_related(
+                "recorded_by"
+            )
         ],
     }
 
@@ -114,9 +118,12 @@ def update_record(record, user, data):
     record.save()
     patient = record.patient
     # Nothing active left: the status is asked again rather than assumed (mockup).
-    if not patient.allergy_records.exclude(verification_status="REFUTED").exclude(
-        clinical_status="RESOLVED"
-    ).exists() and patient.allergy_status == "ACTIVE_ALLERGIES":
+    if (
+        not patient.allergy_records.exclude(verification_status="REFUTED")
+        .exclude(clinical_status="RESOLVED")
+        .exists()
+        and patient.allergy_status == "ACTIVE_ALLERGIES"
+    ):
         patient.allergy_status = "UNKNOWN"
         patient.save(update_fields=["allergy_status", "updated_at"])
     return payload(patient)
@@ -134,7 +141,9 @@ def update_status(patient, user, data):
     if "info_source" in data:
         source = str(data.get("info_source") or "")
         if source:
-            _check_code("allergy-info-source", source, "info_source", "Choose the source of information.")
+            _check_code(
+                "allergy-info-source", source, "info_source", "Choose the source of information."
+            )
         patient.allergy_info_source = source
         fields.append("allergy_info_source")
     if data.get("confirm"):

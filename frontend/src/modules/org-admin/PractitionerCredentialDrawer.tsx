@@ -50,9 +50,15 @@ interface FormState {
 
 const NACADA_STATUS: Record<string, { label: string; tint: string }> = {
   VALID: { label: "NACADA licence valid", tint: "bg-brand-green-tint text-brand-green-dark" },
-  EXPIRING: { label: "NACADA licence expires within 30 days", tint: "bg-status-amber-tint text-status-amber" },
+  EXPIRING: {
+    label: "NACADA licence expires within 30 days",
+    tint: "bg-status-amber-tint text-status-amber",
+  },
   EXPIRED: { label: "NACADA licence expired", tint: "bg-status-red-tint text-status-red" },
-  UNVERIFIED: { label: "NACADA licence not yet verified", tint: "bg-status-amber-tint text-status-amber" },
+  UNVERIFIED: {
+    label: "NACADA licence not yet verified",
+    tint: "bg-status-amber-tint text-status-amber",
+  },
 };
 
 function formFromCredential(c: Credential): FormState {
@@ -180,7 +186,9 @@ export function PractitionerCredentialDrawer({
         .catch((err) => {
           if (!cancelled) {
             setLoadError(
-              err instanceof ApiError ? err.message : "Couldn't load this practitioner's credential.",
+              err instanceof ApiError
+                ? err.message
+                : "Couldn't load this practitioner's credential.",
             );
           }
         });
@@ -397,8 +405,8 @@ export function PractitionerCredentialDrawer({
                 </select>
                 <span className={HELP_CLASS}>
                   The regulator that issued the registration number above. The Health Worker
-                  Registry accepts only these four, so a practitioner registered with any other
-                  body cannot be looked up.
+                  Registry accepts only these four, so a practitioner registered with any other body
+                  cannot be looked up.
                 </span>
                 <FieldError message={fieldErrors.hwr_regulator} />
               </label>
@@ -415,8 +423,7 @@ export function PractitionerCredentialDrawer({
                   </SaveButton>
                 </div>
                 <span className={HELP_CLASS}>
-                  Saves this form, then looks the registration number up with the chosen
-                  regulator.
+                  Saves this form, then looks the registration number up with the chosen regulator.
                 </span>
                 <FieldError message={fieldErrors.health_worker_registry} />
               </div>
@@ -431,9 +438,9 @@ export function PractitionerCredentialDrawer({
                   aria-invalid={Boolean(fieldErrors.hwr_puid)}
                 />
                 <span className={HELP_CLASS}>
-                  Practitioner Unique Identifier — the identifier the Shared Health Record asks
-                  for. Copy it exactly from the registry record; never guess or derive it. Leave
-                  blank until you have it.
+                  Practitioner Unique Identifier — the identifier the Shared Health Record asks for.
+                  Copy it exactly from the registry record; never guess or derive it. Leave blank
+                  until you have it.
                 </span>
                 <FieldError message={fieldErrors.hwr_puid} />
               </label>

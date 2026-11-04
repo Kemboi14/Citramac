@@ -670,7 +670,9 @@ export function SubscriptionsPage() {
                   <GraceCell
                     subscription={sub}
                     onSaved={(updated) =>
-                      setSubscriptions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+                      setSubscriptions((prev) =>
+                        prev.map((s) => (s.id === updated.id ? updated : s)),
+                      )
                     }
                   />
                 </td>

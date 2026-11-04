@@ -119,7 +119,11 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
         # Triage v5: one Observation per shared clinical finding, derived from the
         # QuestionnaireResponse and covered by the signature's Provenance.
         bundle = _load("triage-routine-green")
-        observations = [r for r in (e["resource"] for e in bundle["entry"]) if r["resourceType"] == "Observation"]
+        observations = [
+            r
+            for r in (e["resource"] for e in bundle["entry"])
+            if r["resourceType"] == "Observation"
+        ]
         self.assertTrue(observations)
         for obs in observations:
             self.assertTrue(obs["derivedFrom"] and obs["encounter"] and obs["performer"])
@@ -127,7 +131,8 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
         reported = next(
             r
             for r in (e["resource"] for e in phone["entry"])
-            if r["resourceType"] == "Observation" and r["code"]["coding"][0]["code"] == "SUICIDE_SELF_HARM"
+            if r["resourceType"] == "Observation"
+            and r["code"]["coding"][0]["code"] == "SUICIDE_SELF_HARM"
         )
         self.assertIn("Third-party report", reported["performer"][0]["display"])
 

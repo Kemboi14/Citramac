@@ -35,14 +35,19 @@ export function MeasuresPanel({
       <Card
         title="Outcome measures"
         aside={
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setAsTable((v) => !v)}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => setAsTable((v) => !v)}
+          >
             {asTable ? "View as charts" : "View as table"}
           </button>
         }
       >
         {overview.summary.length === 0 ? (
           <p className="text-[13px] text-ink-500">
-            No outcome measures yet. Record a baseline below — scores from intake, therapy sessions and withdrawal charts appear here too.
+            No outcome measures yet. Record a baseline below — scores from intake, therapy sessions
+            and withdrawal charts appear here too.
           </p>
         ) : asTable ? (
           <div className="overflow-x-auto">
@@ -62,9 +67,13 @@ export function MeasuresPanel({
                   <tr key={s.id}>
                     <td className={TD}>{s.name}</td>
                     <td className={TD}>{formatDateTime(s.recorded_at)}</td>
-                    <td className={`${TD} text-right font-mono`}>{s.score} / {s.max}</td>
+                    <td className={`${TD} text-right font-mono`}>
+                      {s.score} / {s.max}
+                    </td>
                     <td className={TD}>{s.band || "—"}</td>
-                    <td className={TD}>{s.timepoint ? vs.label("assessment-timepoint", s.timepoint) : "—"}</td>
+                    <td className={TD}>
+                      {s.timepoint ? vs.label("assessment-timepoint", s.timepoint) : "—"}
+                    </td>
                     <td className={TD}>{s.recorded_by || "—"}</td>
                   </tr>
                 ))}
@@ -77,47 +86,87 @@ export function MeasuresPanel({
               <li key={m.instrument} className="rounded-lg border border-surface-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13px] font-semibold">{m.name}</span>
-                  <Tag tone={m.change.direction === "bad" ? "risk" : m.change.direction === "good" ? "brand" : "neutral"}>
+                  <Tag
+                    tone={
+                      m.change.direction === "bad"
+                        ? "risk"
+                        : m.change.direction === "good"
+                          ? "brand"
+                          : "neutral"
+                    }
+                  >
                     {m.change.text}
                   </Tag>
                 </div>
                 <div className="mt-1 text-[13px]">
-                  Latest <strong>{m.latest.score}</strong> / {m.max} · {m.latest.band} · baseline <strong>{m.baseline.score}</strong> ({formatDate(m.baseline.at)})
+                  Latest <strong>{m.latest.score}</strong> / {m.max} · {m.latest.band} · baseline{" "}
+                  <strong>{m.baseline.score}</strong> ({formatDate(m.baseline.at)})
                 </div>
                 {m.latest.flags.map((flag) => (
-                  <p key={flag} role="alert" className="mt-1 text-[12px] font-semibold text-priority-red">{flag}</p>
+                  <p
+                    key={flag}
+                    role="alert"
+                    className="mt-1 text-[12px] font-semibold text-priority-red"
+                  >
+                    {flag}
+                  </p>
                 ))}
                 <div className="mt-2">
                   <LineChart
                     compact
                     title={`${m.name} trend`}
                     domain={[0, m.max]}
-                    series={[{ label: m.name, colorClass: "text-brand-green", points: m.series.map((p) => ({ at: p.at, value: p.score })) }]}
+                    series={[
+                      {
+                        label: m.name,
+                        colorClass: "text-brand-green",
+                        points: m.series.map((p) => ({ at: p.at, value: p.score })),
+                      },
+                    ]}
                     emptyText={`No ${m.name} scores yet.`}
                   />
                 </div>
                 {m.approval === "illustrative" && (
-                  <p className="mt-1 text-[11px] text-ink-500">Illustrative bands — clinical approval pending.</p>
+                  <p className="mt-1 text-[11px] text-ink-500">
+                    Illustrative bands — clinical approval pending.
+                  </p>
                 )}
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-2 text-[11px] text-ink-500">Change is descriptive and does not replace clinical interpretation.</p>
+        <p className="mt-2 text-[11px] text-ink-500">
+          Change is descriptive and does not replace clinical interpretation.
+        </p>
       </Card>
 
       <Callout>
-        <strong>CRI is experimental</strong> — items, scoring and minimal important difference are not yet published.{" "}
-        {cri ? `Baseline ${cri.baseline.score} → latest ${cri.latest.score}.` : "No CRI baseline yet."}
+        <strong>CRI is experimental</strong> — items, scoring and minimal important difference are
+        not yet published.{" "}
+        {cri
+          ? `Baseline ${cri.baseline.score} → latest ${cri.latest.score}.`
+          : "No CRI baseline yet."}
       </Callout>
       {overview.discharge_measures_due && (
         <Callout tone="warning">Record discharge measures with timepoint “Discharge”.</Callout>
       )}
 
-      <Card title="Record a measure" aside={<span className="text-[11px] text-ink-500">the same instruments and store used at intake</span>}>
+      <Card
+        title="Record a measure"
+        aside={
+          <span className="text-[11px] text-ink-500">
+            the same instruments and store used at intake
+          </span>
+        }
+      >
         <label className="flex max-w-md flex-col gap-1">
           <span className={FIELD_LABEL}>Measure</span>
-          <select aria-label="Measure" className={INPUT} value={picking} onChange={(e) => setPicking(e.target.value)}>
+          <select
+            aria-label="Measure"
+            className={INPUT}
+            value={picking}
+            onChange={(e) => setPicking(e.target.value)}
+          >
             <option value="">— choose —</option>
             {overview.measure_options.map((o) => (
               <option key={o.code} value={o.code}>

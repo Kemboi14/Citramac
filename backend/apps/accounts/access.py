@@ -109,7 +109,9 @@ def resolve_working_branch(user, requested):
         return {requested}, requested
     if requested == ALL_BRANCHES:
         if visible is not None:
-            raise PermissionDenied("Only an organisation-wide account can work across all branches.")
+            raise PermissionDenied(
+                "Only an organisation-wide account can work across all branches."
+            )
         return None, None
 
     default = None
@@ -127,8 +129,10 @@ def active_roles(user):
     from .models import Role, RoleAssignment
 
     working = get_active_branch_id()
-    if user.is_superuser or not user.organization_id or (
-        working is None and get_branch_scope() is None
+    if (
+        user.is_superuser
+        or not user.organization_id
+        or (working is None and get_branch_scope() is None)
     ):
         return user.roles.all()
     if not RoleAssignment.all_objects.filter(user=user).exists():

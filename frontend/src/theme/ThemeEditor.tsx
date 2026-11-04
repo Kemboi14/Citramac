@@ -1,5 +1,13 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Moon, RotateCcw, Sun, Wand2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Moon,
+  RotateCcw,
+  Sun,
+  Wand2,
+} from "lucide-react";
 import {
   CONTRAST_CHECKS,
   contrastRatio,
@@ -46,7 +54,9 @@ function setMode(value: ThemeOverrides, mode: ThemeMode, palette: ThemePalette):
 /** Keep only status keys (which an org-scoped preset/generator must not touch). */
 function statusOnly(palette: ThemePalette | undefined): ThemePalette {
   return Object.fromEntries(
-    Object.entries(palette ?? {}).filter(([key]) => THEME_TOKENS.find((t) => t.key === key)?.platformOnly),
+    Object.entries(palette ?? {}).filter(
+      ([key]) => THEME_TOKENS.find((t) => t.key === key)?.platformOnly,
+    ),
   );
 }
 
@@ -74,7 +84,10 @@ export function ThemeEditor({
     () => ({ ...baseline[mode], ...value[mode] }),
     [mode, baseline, value],
   );
-  const resolved = useMemo(() => resolvePalette(mode, effectiveOverrides), [mode, effectiveOverrides]);
+  const resolved = useMemo(
+    () => resolvePalette(mode, effectiveOverrides),
+    [mode, effectiveOverrides],
+  );
   const overriddenCount = (m: ThemeMode) => Object.keys(value[m] ?? {}).length;
 
   const setToken = (key: string, color: string) =>
@@ -179,7 +192,9 @@ export function ThemeEditor({
               type="button"
               onClick={() => setModeTab(m)}
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                mode === m ? "bg-brand-green text-on-primary" : "bg-surface-card text-ink-700 hover:bg-surface-bg"
+                mode === m
+                  ? "bg-brand-green text-on-primary"
+                  : "bg-surface-card text-ink-700 hover:bg-surface-bg"
               }`}
             >
               {m === "light" ? <Sun size={14} /> : <Moon size={14} />}
@@ -213,7 +228,10 @@ export function ThemeEditor({
             const open = openGroups.has(group.id);
             const changed = groupTokens.filter((t) => overrides[t.key]).length;
             return (
-              <div key={group.id} className="rounded-md border border-surface-border bg-surface-card">
+              <div
+                key={group.id}
+                className="rounded-md border border-surface-border bg-surface-card"
+              >
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.id)}
@@ -249,9 +267,13 @@ export function ThemeEditor({
                   <div className="border-t border-surface-border">
                     {group.id === "status" && (
                       <p className="flex gap-2 bg-status-amber-tint px-3.5 py-2 text-[11.5px] text-ink-700">
-                        <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-status-amber" />
-                        Applies to every organization. Danger marks risk flags and allergies — keep it
-                        unmistakably red-family and high-contrast so clinical alerts are never missed.
+                        <AlertTriangle
+                          size={14}
+                          className="mt-0.5 flex-shrink-0 text-status-amber"
+                        />
+                        Applies to every organization. Danger marks risk flags and allergies — keep
+                        it unmistakably red-family and high-contrast so clinical alerts are never
+                        missed.
                       </p>
                     )}
                     {groupTokens.map((t) => (
@@ -302,7 +324,9 @@ export function ThemeEditor({
                     Aa
                   </span>
                   <span className="flex-1">{c.label}</span>
-                  <span className={`font-mono text-[11px] ${c.ok ? "text-ink-500" : "font-bold text-status-red"}`}>
+                  <span
+                    className={`font-mono text-[11px] ${c.ok ? "text-ink-500" : "font-bold text-status-red"}`}
+                  >
                     {c.ratio.toFixed(1)}:1
                   </span>
                 </li>
@@ -410,36 +434,57 @@ export function ThemePreview({ mode, overrides }: { mode: ThemeMode; overrides: 
     >
       <div
         className="flex w-[34%] flex-col gap-1 p-2.5 text-sidebar-text"
-        style={{ backgroundImage: "linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%)" }}
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%)",
+        }}
       >
         <div className="mb-1 flex items-center gap-1.5 border-b border-sidebar-divider pb-2">
           <span className="grid h-5 w-5 place-items-center rounded-sm bg-sidebar-active-bg text-[8px] font-bold text-sidebar-active-text">
             CT
           </span>
-          <span className="font-display text-[11px] font-bold text-sidebar-text-strong">CITRAMAC</span>
+          <span className="font-display text-[11px] font-bold text-sidebar-text-strong">
+            CITRAMAC
+          </span>
         </div>
-        <div className="px-1 text-[8px] font-bold uppercase tracking-wide text-sidebar-muted">Clinical</div>
+        <div className="px-1 text-[8px] font-bold uppercase tracking-wide text-sidebar-muted">
+          Clinical
+        </div>
         <div className="rounded-sm bg-sidebar-active-bg px-1.5 py-1 text-[10px] font-semibold text-sidebar-active-text">
           Dashboard
         </div>
         <div className="rounded-sm px-1.5 py-1 text-[10px]">Client Registry</div>
-        <div className="rounded-sm bg-sidebar-hover px-1.5 py-1 text-[10px] text-sidebar-text-strong">Appointments</div>
+        <div className="rounded-sm bg-sidebar-hover px-1.5 py-1 text-[10px] text-sidebar-text-strong">
+          Appointments
+        </div>
         <div className="rounded-sm px-1.5 py-1 text-[10px]">Reports</div>
       </div>
       <div className="flex flex-1 flex-col gap-2 p-2.5">
         <div className="rounded-sm border border-surface-border bg-surface-card p-2.5 shadow-sm">
           <div className="font-display text-[12px] font-bold text-ink-900">Client overview</div>
           <div className="text-[10px] text-ink-700">Body text reads like this.</div>
-          <div className="mb-2 text-[9.5px] text-ink-500">Muted helper text · <span className="text-brand-green">a link</span></div>
+          <div className="mb-2 text-[9.5px] text-ink-500">
+            Muted helper text · <span className="text-brand-green">a link</span>
+          </div>
           <div className="mb-2 rounded-sm border border-surface-border bg-surface-card px-1.5 py-1 text-[9.5px] text-ink-400">
             Search clients…
           </div>
           <div className="flex flex-wrap gap-1">
-            <span className="rounded-full bg-brand-green-tint px-1.5 py-0.5 text-[8.5px] font-bold text-brand-green-dark">Active</span>
-            <span className="rounded-full bg-status-amber-tint px-1.5 py-0.5 text-[8.5px] font-bold text-status-amber">Pending</span>
-            <span className="rounded-full bg-status-red-tint px-1.5 py-0.5 text-[8.5px] font-bold text-status-red">Allergy</span>
-            <span className="rounded-full bg-accent-info-tint px-1.5 py-0.5 text-[8.5px] font-bold text-accent-info">Info</span>
-            <span className="rounded-full bg-accent-violet-tint px-1.5 py-0.5 text-[8.5px] font-bold text-accent-violet">Group</span>
+            <span className="rounded-full bg-brand-green-tint px-1.5 py-0.5 text-[8.5px] font-bold text-brand-green-dark">
+              Active
+            </span>
+            <span className="rounded-full bg-status-amber-tint px-1.5 py-0.5 text-[8.5px] font-bold text-status-amber">
+              Pending
+            </span>
+            <span className="rounded-full bg-status-red-tint px-1.5 py-0.5 text-[8.5px] font-bold text-status-red">
+              Allergy
+            </span>
+            <span className="rounded-full bg-accent-info-tint px-1.5 py-0.5 text-[8.5px] font-bold text-accent-info">
+              Info
+            </span>
+            <span className="rounded-full bg-accent-violet-tint px-1.5 py-0.5 text-[8.5px] font-bold text-accent-violet">
+              Group
+            </span>
           </div>
         </div>
         <div className="flex items-end gap-1 rounded-sm border border-surface-border bg-surface-card p-2 shadow-sm">

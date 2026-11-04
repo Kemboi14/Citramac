@@ -82,13 +82,16 @@ class ChatTestCase(PsyNoteTestCase):
                 organization=self.org, consent_type="AI_NOTE_PROCESSING", active=True
             ).exists():
                 ConsentTemplate.objects.create(
-                    organization=self.org, consent_type="AI_NOTE_PROCESSING", version="1",
+                    organization=self.org,
+                    consent_type="AI_NOTE_PROCESSING",
+                    version="1",
                     text="Facility wording for AI-assisted note processing.",
                 )
         response = self.client.post(
             reverse("care-client-consent", args=[self.pid]),
             {"granted": granted, "consent_type": "AI_NOTE_PROCESSING"},
-            format="json", **self.auth,
+            format="json",
+            **self.auth,
         )
         self.assertEqual(response.status_code, 201, response.data)
 
@@ -212,7 +215,9 @@ class AssistGatingTests(ChatTestCase):
     def test_org_switches_and_client_consent_both_gate_ai(self):
         patcher, client = self.ai_client()
         self.set_org(psy_ai_enabled=False)
-        self.assertFalse(self.client.get(reverse("care-psy-config"), **self.auth).data["ai_enabled"])
+        self.assertFalse(
+            self.client.get(reverse("care-psy-config"), **self.auth).data["ai_enabled"]
+        )
         nid = self.start().data["id"]
         with patcher, self.captureOnCommitCallbacks(execute=True):
             data = self.say(nid, "q1", "Sijalala siku mbili.", language="sw-KE").data
@@ -235,24 +240,43 @@ class AssistGatingTests(ChatTestCase):
 
         url = reverse("care-psy-assist-settings")
         self.set_org(psy_ai_allowed=False, psy_ai_enabled=False)
-        self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
-                                         **self.auth).status_code, 403)
+        self.assertEqual(
+            self.client.put(
+                url, {"ai_enabled": True, "attest": True}, format="json", **self.auth
+            ).status_code,
+            403,
+        )
         with platform_admin_context():
-            role, _ = Role.objects.get_or_create(organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE})
+            role, _ = Role.objects.get_or_create(
+                organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
             self.nurse.roles.add(role)
-        self.assertEqual(self.client.put(url, {"ai_enabled": True, "attest": True}, format="json",
-                                         **self.auth).status_code, 400)  # not allowed by Super Admin
+        self.assertEqual(
+            self.client.put(
+                url, {"ai_enabled": True, "attest": True}, format="json", **self.auth
+            ).status_code,
+            400,
+        )  # not allowed by Super Admin
         self.set_org(psy_ai_allowed=True, psy_dictation_allowed=True)
-        self.assertEqual(self.client.put(url, {"ai_enabled": True}, format="json", **self.auth).status_code, 400)
-        data = self.client.put(url, {"ai_enabled": True, "dictation_enabled": True, "attest": True},
-                               format="json", **self.auth).data
+        self.assertEqual(
+            self.client.put(url, {"ai_enabled": True}, format="json", **self.auth).status_code, 400
+        )
+        data = self.client.put(
+            url,
+            {"ai_enabled": True, "dictation_enabled": True, "attest": True},
+            format="json",
+            **self.auth,
+        ).data
         self.assertTrue(data["ai_enabled"] and data["dictation_enabled"])
         self.assertIn("(Org Admin)", data["changed_by"])
         config = self.client.get(reverse("care-psy-config"), **self.auth).data
         self.assertTrue(config["dictation_enabled"])
         # Turning off needs no attestation.
-        self.assertFalse(self.client.put(url, {"dictation_enabled": False}, format="json",
-                                         **self.auth).data["dictation_enabled"])
+        self.assertFalse(
+            self.client.put(url, {"dictation_enabled": False}, format="json", **self.auth).data[
+                "dictation_enabled"
+            ]
+        )
 
     def test_super_admin_withdrawing_permission_switches_it_off(self):
         from apps.tenancy.serializers import OrganizationSerializer

@@ -39,9 +39,18 @@ export function MyTasks() {
           {tasks.slice(0, 100).map((t) => (
             <li key={`${t.patient_id}:${t.key}`} className="flex flex-wrap items-center gap-2">
               <Tag tone={t.overdue ? "risk" : "neutral"}>{t.category}</Tag>
-              <Link to={clientRecordPath(t.patient_id, "snapshot")} className="font-semibold text-brand-green hover:underline">{t.patient}</Link>
+              <Link
+                to={clientRecordPath(t.patient_id, "snapshot")}
+                className="font-semibold text-brand-green hover:underline"
+              >
+                {t.patient}
+              </Link>
               {t.text}
-              {t.due_at && <span className="text-ink-500">{t.overdue ? "overdue since" : "due"} {formatDateTime(t.due_at)}</span>}
+              {t.due_at && (
+                <span className="text-ink-500">
+                  {t.overdue ? "overdue since" : "due"} {formatDateTime(t.due_at)}
+                </span>
+              )}
             </li>
           ))}
         </ul>

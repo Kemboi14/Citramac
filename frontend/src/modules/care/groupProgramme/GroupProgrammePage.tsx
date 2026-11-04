@@ -331,7 +331,10 @@ export function GroupProgrammePage() {
     setEditorStatus("Checking observations for risk language…");
     screenGroupEntries(
       accessToken,
-      rows.map(({ client, entry }) => ({ patient: client.id, observation: entry.observation ?? "" })),
+      rows.map(({ client, entry }) => ({
+        patient: client.id,
+        observation: entry.observation ?? "",
+      })),
     )
       .then(({ results }) => {
         const flags: Record<string, RiskFlag[]> = {};
@@ -349,7 +352,11 @@ export function GroupProgrammePage() {
         scrollToId("group-session-review");
       })
       .catch((err) =>
-        setEditorStatus(err instanceof ApiError ? err.message : "Couldn't screen the observations for risk language."),
+        setEditorStatus(
+          err instanceof ApiError
+            ? err.message
+            : "Couldn't screen the observations for risk language.",
+        ),
       );
   };
 

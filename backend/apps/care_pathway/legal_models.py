@@ -73,24 +73,38 @@ class LegalStatus(TenantScopedModel):
     # [{key, act, section, versionLabel}] copied from jurisdiction config — never free text.
     statutory_basis = models.JSONField(default=list, blank=True)
     application_document = models.ForeignKey(
-        "care_pathway.LegalDocument", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+        "care_pathway.LegalDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     # An application awaiting the admitting officer's decision. While a status is
     # in force this is a conversion application (LGL-WF-04, OQ-16); the status in
     # force is unchanged until the decision.
     pending_application = models.ForeignKey(
-        "care_pathway.LegalDocument", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+        "care_pathway.LegalDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     decision = models.CharField(max_length=10, choices=DECISION_CHOICES, default="PENDING")
-    decision_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    decision_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     decision_role = models.CharField(max_length=100, blank=True)
     decision_at = models.DateTimeField(null=True, blank=True)
     decision_reason = models.TextField(blank=True)
     effective_from = models.DateTimeField(null=True, blank=True)
     max_expiry_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=14, choices=STATUS_CHOICES, default="PENDING")
-    workflow_state = models.CharField(max_length=24, choices=STATE_CHOICES, default="APPLICATION_DRAFT")
-    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    workflow_state = models.CharField(
+        max_length=24, choices=STATE_CHOICES, default="APPLICATION_DRAFT"
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]
@@ -106,7 +120,9 @@ class LegalStatusEvent(TenantScopedModel):
     event = models.CharField(max_length=40)
     from_state = models.CharField(max_length=24, blank=True)
     to_state = models.CharField(max_length=24, blank=True)
-    actor = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     actor_role = models.CharField(max_length=100, blank=True)
     at = models.DateTimeField(default=timezone.now)
     detail = models.JSONField(default=dict, blank=True)
@@ -146,7 +162,9 @@ class LegalDocument(TenantScopedModel):
         ("WET_SCAN", "Captured wet signature (scan upload)"),
     ]
 
-    legal_status = models.ForeignKey(LegalStatus, on_delete=models.PROTECT, related_name="documents")
+    legal_status = models.ForeignKey(
+        LegalStatus, on_delete=models.PROTECT, related_name="documents"
+    )
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
     template_id = models.CharField(max_length=32, choices=TEMPLATE_CHOICES)
     config_version = models.CharField(max_length=40)
@@ -166,19 +184,37 @@ class LegalDocument(TenantScopedModel):
     signer_kind = models.CharField(max_length=16, choices=SIGNER_CHOICES, blank=True)
     signer_name = models.CharField(max_length=255, blank=True)
     signer_related_person = models.ForeignKey(
-        "client_registry.EmergencyContact", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+        "client_registry.EmergencyContact",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
     )
-    signer_user = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    signer_user = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     signature_method = models.CharField(max_length=12, choices=METHOD_CHOICES, blank=True)
     signature_attachment = models.ForeignKey(
-        "client_registry.Attachment", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+        "client_registry.Attachment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     signed_at = models.DateTimeField(null=True, blank=True)
-    captured_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    examination_encounter = models.ForeignKey(
-        "clinical_encounter.Encounter", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    captured_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    examination_encounter = models.ForeignKey(
+        "clinical_encounter.Encounter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]
@@ -187,7 +223,9 @@ class LegalDocument(TenantScopedModel):
         if self.pk and not self._state.adding:
             stored = type(self).all_objects.filter(pk=self.pk).values_list("status", flat=True)
             if stored and stored[0] == "SIGNED":
-                raise PermissionError("This form is signed and cannot be changed. Amend it instead.")
+                raise PermissionError(
+                    "This form is signed and cannot be changed. Amend it instead."
+                )
         super().save(*args, **kwargs)
 
     @property
@@ -198,19 +236,29 @@ class LegalDocument(TenantScopedModel):
 class DischargeNotice(TenantScopedModel):
     """LGL-V-WF: a voluntary client's written notice of intention to leave."""
 
-    legal_status = models.ForeignKey(LegalStatus, on_delete=models.PROTECT, related_name="discharge_notices")
+    legal_status = models.ForeignKey(
+        LegalStatus, on_delete=models.PROTECT, related_name="discharge_notices"
+    )
     given_at = models.DateTimeField()
-    given_to = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
-    written_notice_document = models.ForeignKey(LegalDocument, on_delete=models.PROTECT, related_name="+")
+    given_to = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    written_notice_document = models.ForeignKey(
+        LegalDocument, on_delete=models.PROTECT, related_name="+"
+    )
     notice_period_hours = models.PositiveIntegerField()
     earliest_departure_at = models.DateTimeField()
     withdrawn_at = models.DateTimeField(null=True, blank=True)
-    withdrawn_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    withdrawn_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     # Departure before earliest_departure_at: routed to AMA discharge documentation.
     departed_at = models.DateTimeField(null=True, blank=True)
     departure_against_advice = models.BooleanField(default=False)
     risk_review_prompted_at = models.DateTimeField(null=True, blank=True)
-    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-given_at"]

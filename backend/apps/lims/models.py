@@ -69,7 +69,11 @@ class LabResult(TenantScopedModel):
     # Normal / abnormal / critical as flagged on the report (is_abnormal stays the
     # yes/no). Blank for results recorded before this existed. VERIFY: mapping to
     # R4 Observation.interpretation (HL7 ObservationInterpretation) codes.
-    INTERPRETATION_CHOICES = [("NORMAL", "Normal"), ("ABNORMAL", "Abnormal"), ("CRITICAL", "Critical")]
+    INTERPRETATION_CHOICES = [
+        ("NORMAL", "Normal"),
+        ("ABNORMAL", "Abnormal"),
+        ("CRITICAL", "Critical"),
+    ]
     interpretation = models.CharField(max_length=10, choices=INTERPRETATION_CHOICES, blank=True)
 
     recorded_by = models.ForeignKey(

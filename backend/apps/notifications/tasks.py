@@ -118,9 +118,7 @@ def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
     from apps.accounts.access import users_with_permission
 
     with platform_admin_context():
-        supervisors = list(
-            users_with_permission(["clinical.risk_alerts.receive"], organization_id)
-        )
+        supervisors = list(users_with_permission(["clinical.risk_alerts.receive"], organization_id))
     if not supervisors:
         return
 
@@ -268,5 +266,3 @@ def retry_pending_deliveries():
     ).values_list("id", flat=True)[:500]
     for delivery_id in due:
         deliver_notification(str(delivery_id))
-
-

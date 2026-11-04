@@ -204,11 +204,17 @@ def test_connection(key, model):
     except anthropic.NotFoundError:
         return {"success": False, "message": f"Model “{model}” was not found (404)."}
     except anthropic.RateLimitError:
-        return {"success": False, "message": "Rate limited (429) — the key works; try again shortly."}
+        return {
+            "success": False,
+            "message": "Rate limited (429) — the key works; try again shortly.",
+        }
     except anthropic.APIStatusError as exc:
         return {"success": False, "message": f"Anthropic API error {exc.status_code}."}
     except anthropic.APIConnectionError:
-        return {"success": False, "message": "Couldn't reach the Anthropic API (network or timeout)."}
+        return {
+            "success": False,
+            "message": "Couldn't reach the Anthropic API (network or timeout).",
+        }
     served = getattr(response, "model", "") or model
     return {"success": True, "message": f"Connected — {served} answered.", "model": served}
 

@@ -20,7 +20,12 @@ target-version = "py312"
 exclude = [".venv", "**/migrations/*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
+select = ["E", "F", "B"]
+# E501: black owns line length (pyproject [tool.black]); the long lines it leaves
+# are user-facing strings and comments it deliberately does not split.
+# I: import order is enforced by isort (its own CI step) — ruff's sorter orders
+# aliased imports differently, so enabling both made them fail each other.
+ignore = ["E501"]
 
 [tool.bandit]
 exclude_dirs = [".venv", "migrations"]

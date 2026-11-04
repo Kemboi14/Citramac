@@ -59,9 +59,7 @@ class Command(BaseCommand):
 
             role = organization_role_named(organization, options["role"])
             if role is None:
-                raise CommandError(
-                    f"'{organization.name}' has no role named '{options['role']}'"
-                )
+                raise CommandError(f"'{organization.name}' has no role named '{options['role']}'")
 
             branch = None
             if options["branch_name"]:

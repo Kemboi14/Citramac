@@ -6,8 +6,8 @@ from .models import (
     CarePlanActivity,
     CareTask,
     IntakeAssessment,
-    MedicationHistoryEntry,
     InterventionRecord,
+    MedicationHistoryEntry,
     OutcomeScore,
 )
 from .services import user_display
@@ -173,6 +173,7 @@ class CarePlanSerializer(serializers.ModelSerializer):
         return CarePlanActivitySerializer(
             plan.activities.exclude(decision="DECLINED"), many=True
         ).data
+
     care_coordinator_name = serializers.SerializerMethodField()
 
     class Meta:

@@ -21,10 +21,17 @@ def active_legal_status(patient, user, category="VOLUNTARY"):
     with platform_admin_context():
         episode = get_or_open_episode(patient, user)
         return LegalStatus.objects.create(
-            organization_id=patient.organization_id, patient=patient, episode=episode,
-            config_version=legal_config.version(), category=category,
-            statutory_basis=legal_config.statutory_basis(category), created_by=user,
-            status="ACTIVE", decision="ADMITTED", decision_by=user, decision_at=timezone.now(),
+            organization_id=patient.organization_id,
+            patient=patient,
+            episode=episode,
+            config_version=legal_config.version(),
+            category=category,
+            statutory_basis=legal_config.statutory_basis(category),
+            created_by=user,
+            status="ACTIVE",
+            decision="ADMITTED",
+            decision_by=user,
+            decision_at=timezone.now(),
             effective_from=timezone.now(),
         )
 
@@ -147,9 +154,16 @@ class IpdWardTests(APITestCase):
 
     def test_no_admission_without_an_active_legal_status(self):
         """Owner decision 2026-10-22: legal status first — no free-text legal basis."""
-        for body in ({}, {"admission_type": "INVOLUNTARY", "legal_status": "Order",
-                          "legal_order_reference": "MHA-1", "legal_order_date": "2026-09-01",
-                          "authorizing_professional": "Dr. A"}):
+        for body in (
+            {},
+            {
+                "admission_type": "INVOLUNTARY",
+                "legal_status": "Order",
+                "legal_order_reference": "MHA-1",
+                "legal_order_date": "2026-09-01",
+                "authorizing_professional": "Dr. A",
+            },
+        ):
             response = self.admit(**body)
             self.assertEqual(response.status_code, 400)
             self.assertIn("legal_status_record", response.data)
@@ -179,7 +193,9 @@ class IpdWardTests(APITestCase):
         self.assertEqual(response.data["legal_status_record"], status.id)
         self.assertEqual(response.data["legal_order_reference"], "")  # never a second store
         self.assertTrue(response.data["risk_self_harm"])
-        self.assertEqual(self.admit(admission_type="VOLUNTARY", bed=str(self.bed_b.id)).status_code, 400)
+        self.assertEqual(
+            self.admit(admission_type="VOLUNTARY", bed=str(self.bed_b.id)).status_code, 400
+        )
 
     def test_legacy_legal_basis_can_be_updated_but_not_blanked(self):
         with platform_admin_context():
@@ -321,17 +337,24 @@ class WardBedEditTests(APITestCase):
                 name="Org", slug="org-edit", facility_type="MENTAL_HEALTH_MHP"
             )
             self.admin = User.objects.create_user(
-                email="admin@org-edit.test", password="Password123!",
-                organization=self.org, is_active=True,
+                email="admin@org-edit.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
             )
             self.admin.roles.add(Role.objects.get(name="Org Admin", organization__isnull=True))
             self.nurse = User.objects.create_user(
-                email="nurse@org-edit.test", password="Password123!",
-                organization=self.org, is_active=True,
+                email="nurse@org-edit.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
             )
             self.patient = Patient.objects.create(
-                organization=self.org, first_name="Faith", last_name="Mwangi",
-                gender="FEMALE", date_of_birth="1997-03-14",
+                organization=self.org,
+                first_name="Faith",
+                last_name="Mwangi",
+                gender="FEMALE",
+                date_of_birth="1997-03-14",
             )
             self.ward = Ward.objects.create(organization=self.org, name="SAWA 1")
             self.other_ward = Ward.objects.create(organization=self.org, name="SAWA 2")
@@ -345,12 +368,16 @@ class WardBedEditTests(APITestCase):
 
     def test_org_admin_renames_ward_and_bed(self):
         response = self.patch(
-            "ipd-ward-detail", self.ward.id, {"name": " Sawa One ", "ward_type": "ACUTE"},
+            "ipd-ward-detail",
+            self.ward.id,
+            {"name": " Sawa One ", "ward_type": "ACUTE"},
             self.admin_auth,
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["name"], "Sawa One")
-        response = self.patch("ipd-bed-detail", self.bed.id, {"bed_number": "B-12"}, self.admin_auth)
+        response = self.patch(
+            "ipd-bed-detail", self.bed.id, {"bed_number": "B-12"}, self.admin_auth
+        )
         self.assertEqual(response.status_code, 200, response.data)
         with platform_admin_context():
             self.bed.refresh_from_db()
@@ -378,7 +405,10 @@ class WardBedEditTests(APITestCase):
     def test_bed_with_admission_history_cannot_move_ward(self):
         with platform_admin_context():
             Admission.objects.create(
-                organization=self.org, patient=self.patient, bed=self.bed, admitted_by=self.admin,
+                organization=self.org,
+                patient=self.patient,
+                bed=self.bed,
+                admitted_by=self.admin,
                 status="DISCHARGED",
             )
         response = self.patch(

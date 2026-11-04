@@ -153,9 +153,11 @@ def _doc_payload(doc, spec, user, full=True):
             "filed_at": _iso(doc.filed_at),
             "correction_reason": doc.correction_reason,
             "supersedes_id": str(doc.supersedes_id) if doc.supersedes_id else None,
-            "watermark": ""
-            if doc.status in ("SIGNED", "RELEASED", "FILED")
-            else "DRAFT — CLINICIAN REVIEW REQUIRED",
+            "watermark": (
+                ""
+                if doc.status in ("SIGNED", "RELEASED", "FILED")
+                else "DRAFT — CLINICIAN REVIEW REQUIRED"
+            ),
             "allowed_actions": workflow.allowed_actions(doc, spec, user),
             "user_fields": spec["userEntered"],
             "disclosure_rules": spec["disclosureRules"]["perRecipient"],

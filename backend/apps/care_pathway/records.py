@@ -11,7 +11,6 @@ from rest_framework.exceptions import ValidationError
 from . import instruments, services
 from .models import (
     CapacityAssessment,
-    EpisodeOfCare,
     EpisodeOutcome,
     ProgressNote,
     RiskProposal,
@@ -25,7 +24,12 @@ def _propose(patient, source, source_key, row, option):
     proposal, _ = RiskProposal.objects.get_or_create(
         patient=patient,
         source_key=source_key,
-        defaults={"organization_id": patient.organization_id, "source": source, "row": row, "option": option},
+        defaults={
+            "organization_id": patient.organization_id,
+            "source": source,
+            "row": row,
+            "option": option,
+        },
     )
     return proposal
 
@@ -35,7 +39,9 @@ def propose_from_score(patient, score):
     risk register, never written to it silently."""
     spec = instruments.INSTRUMENTS[score.instrument]
     if instruments.safety_positive(score.instrument, score.items, score.detail):
-        return _propose(patient, f"{spec['name']} self-harm item", f"score:{score.pk}", "suicide", "Thoughts")
+        return _propose(
+            patient, f"{spec['name']} self-harm item", f"score:{score.pk}", "suicide", "Thoughts"
+        )
     return None
 
 
@@ -45,7 +51,9 @@ def propose_from_mse(patient, mse, section=None):
     from . import mental_state
 
     for label, row, option in mental_state.risk_signals(section, mse.thought_content):
-        _propose(patient, f"MSE thought content: {label.lower()}", f"mse:{mse.pk}:{label}", row, option)
+        _propose(
+            patient, f"MSE thought content: {label.lower()}", f"mse:{mse.pk}:{label}", row, option
+        )
 
 
 @transaction.atomic
@@ -94,11 +102,18 @@ def record_capacity(patient, user, data):
         raise ValidationError({"other_decision": "Say which decision this is for."})
     answers = [data.get(k) for k in ("understand", "retain", "weigh", "communicate")]
     return CapacityAssessment.objects.create(
-        organization_id=patient.organization_id, patient=patient, decision=decision,
+        organization_id=patient.organization_id,
+        patient=patient,
+        decision=decision,
         other_decision=str(data.get("other_decision", ""))[:200],
-        understand=answers[0], retain=answers[1], weigh=answers[2], communicate=answers[3],
-        outcome=capacity_outcome(answers), reassess_by=data.get("reassess_by") or None,
-        note=str(data.get("note", "")), assessed_by=user,
+        understand=answers[0],
+        retain=answers[1],
+        weigh=answers[2],
+        communicate=answers[3],
+        outcome=capacity_outcome(answers),
+        reassess_by=data.get("reassess_by") or None,
+        note=str(data.get("note", "")),
+        assessed_by=user,
     )
 
 
@@ -115,7 +130,9 @@ def consent_warnings(patient, scope, party):
     warnings = []
     cap = next((a for a in current_capacity(patient) if a.decision == scope), None)
     if cap and cap.outcome == "Lacks capacity" and party == "PATIENT":
-        warnings.append("Capacity for this decision was assessed as lacking — the client cannot give this consent")
+        warnings.append(
+            "Capacity for this decision was assessed as lacking — the client cannot give this consent"
+        )
     if patient.age_years is not None and patient.age_years < 18 and party == "PATIENT":
         warnings.append("Client is under 18 — consent from a parent or guardian is normally needed")
     if party == "DEFERRED":
@@ -133,9 +150,14 @@ def record_visit_consent(patient, user, data):
     if party in ("GUARDIAN", "SUBSTITUTE") and not str(data.get("given_by_name", "")).strip():
         raise ValidationError({"given_by_name": "Record the name of the person consenting."})
     return VisitConsent.objects.create(
-        organization_id=patient.organization_id, patient=patient, scope=scope, party=party,
-        method=str(data.get("method", ""))[:20], given_by_name=str(data.get("given_by_name", ""))[:150],
-        warnings=consent_warnings(patient, scope, party), recorded_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        scope=scope,
+        party=party,
+        method=str(data.get("method", ""))[:20],
+        given_by_name=str(data.get("given_by_name", ""))[:150],
+        warnings=consent_warnings(patient, scope, party),
+        recorded_by=user,
     )
 
 
@@ -160,9 +182,13 @@ def save_note(patient, user, data, note=None):
         _check_type(data.get("note_type"))
         episode = services.get_or_open_episode(patient, user)
         note = ProgressNote.objects.create(
-            organization_id=patient.organization_id, patient=patient, episode=episode,
+            organization_id=patient.organization_id,
+            patient=patient,
+            episode=episode,
             encounter=services.clinical_encounter_for(patient, episode, user),
-            note_type=data["note_type"], author=user, amends=data.get("amends"),
+            note_type=data["note_type"],
+            author=user,
+            amends=data.get("amends"),
         )
     if note.status == "SIGNED":
         raise ValidationError({"detail": "A signed note cannot be edited — add an addendum."})
@@ -208,7 +234,9 @@ def episode_discharge_checklist(patient, episode=None):
     if episode is None:
         return None
     signed = (
-        DischargeSummary.objects.filter(episode=episode, status="COMPLETED").order_by("-version").first()
+        DischargeSummary.objects.filter(episode=episode, status="COMPLETED")
+        .order_by("-version")
+        .first()
     )
     plan = CarePlan.objects.filter(episode=episode).first()
     answers = signed.readiness if signed else (plan.discharge_readiness if plan else {})
@@ -224,12 +252,19 @@ def episode_discharge_checklist(patient, episode=None):
         patient, answers, booked, needs_safety_plan=bool(plan and care_plan.needs_safety_plan(plan))
     )
     if Admission.objects.filter(patient=patient, status="ADMITTED").exists():
-        items.insert(0, {
-            "key": "inpatient",
-            "label": "Inpatient stay discharged through its signed discharge summary",
-            "ok": False,
-        })
-    return {"source": "inpatient" if signed else "episode", "answers": answers or {}, "items": items}
+        items.insert(
+            0,
+            {
+                "key": "inpatient",
+                "label": "Inpatient stay discharged through its signed discharge summary",
+                "ok": False,
+            },
+        )
+    return {
+        "source": "inpatient" if signed else "episode",
+        "answers": answers or {},
+        "items": items,
+    }
 
 
 def save_discharge_answers(patient, user, data):
@@ -256,22 +291,35 @@ def close_episode(patient, user, outcome, destination="", reason=""):
     if episode is None:
         raise ValidationError({"detail": "There is no open episode to close."})
     if outcome != "PLANNED" and not reason.strip():
-        raise ValidationError({"reason": "Give the reason when the episode did not end as a planned discharge."})
+        raise ValidationError(
+            {"reason": "Give the reason when the episode did not end as a planned discharge."}
+        )
     if destination and destination not in services._valid_codes("episode-destination"):
         raise ValidationError({"destination": "Choose the destination from the list."})
     if outcome == "TRANSFERRED" and not destination.strip():
         raise ValidationError({"destination": "Say where the client was transferred to."})
     if outcome == "PLANNED":
-        unmet = [i["label"] for i in episode_discharge_checklist(patient, episode)["items"] if not i["ok"]]
+        unmet = [
+            i["label"]
+            for i in episode_discharge_checklist(patient, episode)["items"]
+            if not i["ok"]
+        ]
         if unmet:
-            raise ValidationError({
-                "checklist": unmet,
-                "outcome": "Complete the discharge checklist before recording a planned discharge "
-                           "— or choose another outcome.",
-            })
+            raise ValidationError(
+                {
+                    "checklist": unmet,
+                    "outcome": "Complete the discharge checklist before recording a planned discharge "
+                    "— or choose another outcome.",
+                }
+            )
     record = EpisodeOutcome.objects.create(
-        organization_id=patient.organization_id, episode=episode, patient=patient, outcome=outcome,
-        destination=destination.strip(), reason=reason.strip(), recorded_by=user,
+        organization_id=patient.organization_id,
+        episode=episode,
+        patient=patient,
+        outcome=outcome,
+        destination=destination.strip(),
+        reason=reason.strip(),
+        recorded_by=user,
     )
     episode.transition("finished", user)
     if outcome == "PLANNED":
@@ -299,11 +347,15 @@ def generate_follow_ups(patient, user, episode):
     for step in getattr(settings, "FOLLOW_UP_SCHEDULE", None) or []:
         created.append(
             services.book_follow_up(
-                user, patient,
-                {"reason": step["reason"],
-                 "scheduled_for": timezone.now() + timedelta(hours=step["after_hours"]),
-                 "mode": step.get("mode", "PHONE")},
-                episode=episode, origin="DISCHARGE",
+                user,
+                patient,
+                {
+                    "reason": step["reason"],
+                    "scheduled_for": timezone.now() + timedelta(hours=step["after_hours"]),
+                    "mode": step.get("mode", "PHONE"),
+                },
+                episode=episode,
+                origin="DISCHARGE",
             )
         )
     return created
@@ -314,7 +366,9 @@ def mark_missed(appointment, user, reason):
     re-contact is decided from live risk in attention.py, not stored here."""
     from .models import LocalConcept
 
-    if not LocalConcept.objects.filter(valueset_id="missed-appointment-reason", code=reason).exists():
+    if not LocalConcept.objects.filter(
+        valueset_id="missed-appointment-reason", code=reason
+    ).exists():
         raise ValidationError({"reason": "Choose why the appointment was missed."})
     if appointment.status not in ("SCHEDULED", "CONFIRMED"):
         raise ValidationError({"detail": "Only a scheduled appointment can be marked missed."})
@@ -353,7 +407,9 @@ def client_follow_ups(patient, now=None):
     )
     contacts = {
         n.appointment_id: n
-        for n in ProgressNote.objects.filter(appointment__in=rows, status="SIGNED").select_related("author")
+        for n in ProgressNote.objects.filter(appointment__in=rows, status="SIGNED").select_related(
+            "author"
+        )
     }
     risky = any(a["severity"] == "high" for a in attention.active_alerts(patient))
     labels = services.concept_labels()
@@ -361,19 +417,29 @@ def client_follow_ups(patient, now=None):
     for appt in rows:
         row = services._follow_up_row(appt, labels)
         note = contacts.get(appt.id)
-        row.update({
-            "overdue": appt.status in DUE_STATUSES and appt.scheduled_for < now,
-            "notes": appt.notes,
-            "missed_reason": appt.missed_reason,
-            "missed_reason_label": labels.get(("missed-appointment-reason", appt.missed_reason), appt.missed_reason),
-            "dna_actioned_at": appt.dna_actioned_at.isoformat() if appt.dna_actioned_at else None,
-            "escalate": appt.status == "NO_SHOW" and not appt.dna_actioned_at and risky,
-            "contact_note": (
-                {"text": note.text, "by": note.author.get_full_name() if note.author else "",
-                 "at": note.signed_at.isoformat() if note.signed_at else None}
-                if note else None
-            ),
-        })
+        row.update(
+            {
+                "overdue": appt.status in DUE_STATUSES and appt.scheduled_for < now,
+                "notes": appt.notes,
+                "missed_reason": appt.missed_reason,
+                "missed_reason_label": labels.get(
+                    ("missed-appointment-reason", appt.missed_reason), appt.missed_reason
+                ),
+                "dna_actioned_at": (
+                    appt.dna_actioned_at.isoformat() if appt.dna_actioned_at else None
+                ),
+                "escalate": appt.status == "NO_SHOW" and not appt.dna_actioned_at and risky,
+                "contact_note": (
+                    {
+                        "text": note.text,
+                        "by": note.author.get_full_name() if note.author else "",
+                        "at": note.signed_at.isoformat() if note.signed_at else None,
+                    }
+                    if note
+                    else None
+                ),
+            }
+        )
         items.append(row)
     due = [r for r in items if r["status"] in DUE_STATUSES]
     return {
@@ -398,9 +464,14 @@ def complete_follow_up(appointment, user, note):
     if appointment.status not in DUE_STATUSES:
         raise ValidationError({"detail": "Only a follow-up that is due can be marked done."})
     ProgressNote.objects.create(
-        organization_id=appointment.organization_id, patient=appointment.patient,
+        organization_id=appointment.organization_id,
+        patient=appointment.patient,
         episode=appointment.episode or services.open_episode_for(appointment.patient),
-        note_type="FOLLOW_UP", text=note, status="SIGNED", author=user, signed_at=timezone.now(),
+        note_type="FOLLOW_UP",
+        text=note,
+        status="SIGNED",
+        author=user,
+        signed_at=timezone.now(),
         appointment=appointment,
     )
     appointment.status = "COMPLETED"
@@ -410,17 +481,24 @@ def complete_follow_up(appointment, user, note):
 
 @transaction.atomic
 def rebook_missed(appointment, user, data):
-    """"Contacted & rebooked": the missed appointment is actioned and an outreach
+    """ "Contacted & rebooked": the missed appointment is actioned and an outreach
     follow-up is booked on the same episode (idempotent on client_request_id)."""
     if appointment.status != "NO_SHOW" or appointment.dna_actioned_at:
-        raise ValidationError({"detail": "Only a missed follow-up that is not yet actioned can be rebooked."})
+        raise ValidationError(
+            {"detail": "Only a missed follow-up that is not yet actioned can be rebooked."}
+        )
     action_missed(appointment, user)
     return services.book_follow_up(
-        user, appointment.patient,
-        {"reason": "OUTREACH", "scheduled_for": data.get("scheduled_for"),
-         "provider": str(appointment.provider_id) if appointment.provider_id else None,
-         "mode": data.get("mode") or appointment.mode,
-         "notes": f"Rebooked after the missed appointment of {appointment.scheduled_for:%Y-%m-%d}",
-         "client_request_id": data.get("client_request_id") or ""},
-        episode=appointment.episode, origin=appointment.origin,
+        user,
+        appointment.patient,
+        {
+            "reason": "OUTREACH",
+            "scheduled_for": data.get("scheduled_for"),
+            "provider": str(appointment.provider_id) if appointment.provider_id else None,
+            "mode": data.get("mode") or appointment.mode,
+            "notes": f"Rebooked after the missed appointment of {appointment.scheduled_for:%Y-%m-%d}",
+            "client_request_id": data.get("client_request_id") or "",
+        },
+        episode=appointment.episode,
+        origin=appointment.origin,
     )

@@ -13,14 +13,25 @@ export function SbarModule({ patientId }: { patientId: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!accessToken) return;
-    getSbar(accessToken, patientId).then((r) => setText(r.text)).catch((e) => setError(errorText(e, "Couldn't build the SBAR.")));
+    getSbar(accessToken, patientId)
+      .then((r) => setText(r.text))
+      .catch((e) => setError(errorText(e, "Couldn't build the SBAR.")));
   }, [accessToken, patientId]);
   return (
     <div className="flex flex-col gap-2">
       <ErrorNote>{error}</ErrorNote>
-      <pre className="whitespace-pre-wrap rounded-lg border border-surface-border bg-surface-bg p-3 text-[12.5px] leading-relaxed">{text ?? "Building…"}</pre>
+      <pre className="whitespace-pre-wrap rounded-lg border border-surface-border bg-surface-bg p-3 text-[12.5px] leading-relaxed">
+        {text ?? "Building…"}
+      </pre>
       <div>
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} disabled={!text} onClick={() => text && void navigator.clipboard.writeText(text).then(() => setCopied(true))}>
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          disabled={!text}
+          onClick={() =>
+            text && void navigator.clipboard.writeText(text).then(() => setCopied(true))
+          }
+        >
           {copied ? "Copied" : "Copy SBAR"}
         </button>
       </div>

@@ -41,16 +41,25 @@ export function FollowUpStats({ data }: { data: ClientFollowUps }) {
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {stats.map(([label, count]) => (
           <div key={label} className="rounded-lg border border-surface-border px-3 py-2">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">{label}</dt>
-            <dd className={`font-display text-xl font-bold ${label === "Overdue" && count > 0 ? "text-priority-red" : "text-ink-900"}`}>{count}</dd>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              {label}
+            </dt>
+            <dd
+              className={`font-display text-xl font-bold ${label === "Overdue" && count > 0 ? "text-priority-red" : "text-ink-900"}`}
+            >
+              {count}
+            </dd>
           </div>
         ))}
       </dl>
       {data.next_due && (
         <p className="text-[13px] text-ink-900">
-          Next due: <strong>{data.next_due.reason_label || "Follow-up"}</strong> · {formatDateTime(data.next_due.scheduled_for)}
+          Next due: <strong>{data.next_due.reason_label || "Follow-up"}</strong> ·{" "}
+          {formatDateTime(data.next_due.scheduled_for)}
           {data.next_due.provider_name ? ` · ${data.next_due.provider_name}` : ""}
-          {data.next_due.overdue && <span className="font-semibold text-priority-red"> · Overdue</span>}
+          {data.next_due.overdue && (
+            <span className="font-semibold text-priority-red"> · Overdue</span>
+          )}
         </p>
       )}
     </div>
@@ -83,7 +92,11 @@ export function FollowUpPanel({
   const rebookIds = useRef(new Map<string, string>());
   const [openedAt] = useState(() => Date.now());
 
-  async function run(work: () => Promise<ClientFollowUps | undefined>, failure: string, done: string) {
+  async function run(
+    work: () => Promise<ClientFollowUps | undefined>,
+    failure: string,
+    done: string,
+  ) {
     setError(null);
     setNotice(null);
     try {
@@ -99,7 +112,9 @@ export function FollowUpPanel({
     // Mockup: next day when a risk is active, a week otherwise — a starting point the clinician changes.
     const at = new Date(openedAt + (data?.active_risk ? 1 : 7) * 24 * 60 * 60 * 1000);
     at.setHours(9, 0, 0, 0);
-    const local = new Date(at.getTime() - at.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const local = new Date(at.getTime() - at.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
     return rebookAt[row.id] ?? local;
   }
 
@@ -122,7 +137,8 @@ export function FollowUpPanel({
       )}
       {rows.length === 0 ? (
         <p className="text-[13px] text-ink-500">
-          No follow-up scheduled yet. The facility schedule books it at a planned discharge, or add one now.
+          No follow-up scheduled yet. The facility schedule books it at a planned discharge, or add
+          one now.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -141,7 +157,10 @@ export function FollowUpPanel({
             </thead>
             <tbody>
               {rows.map((row) => {
-                const status = STATUS[row.status] ?? { label: row.status, tone: "neutral" as const };
+                const status = STATUS[row.status] ?? {
+                  label: row.status,
+                  tone: "neutral" as const,
+                };
                 const due = row.status === "SCHEDULED" || row.status === "CHECKED_IN";
                 return (
                   <tr key={row.id}>
@@ -152,7 +171,11 @@ export function FollowUpPanel({
                     </td>
                     <td className={TD}>
                       {formatDate(row.scheduled_for)}
-                      {row.overdue && <span className="ml-1"><Tag tone="risk">overdue</Tag></span>}
+                      {row.overdue && (
+                        <span className="ml-1">
+                          <Tag tone="risk">overdue</Tag>
+                        </span>
+                      )}
                     </td>
                     <td className={TD}>{row.provider_name || "—"}</td>
                     <td className={TD}>
@@ -175,10 +198,16 @@ export function FollowUpPanel({
                               {row.contact_note.by} {formatDateTime(row.contact_note.at)}
                             </div>
                           )}
-                          {row.missed_reason && <div className="text-[11px] text-ink-500">reason: {row.missed_reason_label}</div>}
+                          {row.missed_reason && (
+                            <div className="text-[11px] text-ink-500">
+                              reason: {row.missed_reason_label}
+                            </div>
+                          )}
                           {row.escalate && (
                             <div className="mt-1">
-                              <Tag tone="risk">Active risk — contact client and next of kin today</Tag>
+                              <Tag tone="risk">
+                                Active risk — contact client and next of kin today
+                              </Tag>
                             </div>
                           )}
                         </>
@@ -207,11 +236,15 @@ export function FollowUpPanel({
                               className={`${INPUT} !py-1 text-xs`}
                               aria-label="If missed — reason"
                               value={reasons[row.id] ?? ""}
-                              onChange={(e) => setReasons((r) => ({ ...r, [row.id]: e.target.value }))}
+                              onChange={(e) =>
+                                setReasons((r) => ({ ...r, [row.id]: e.target.value }))
+                              }
                             >
                               <option value="">If missed — reason</option>
                               {vs.options("missed-appointment-reason").map((o) => (
-                                <option key={o.code} value={o.code}>{o.display}</option>
+                                <option key={o.code} value={o.code}>
+                                  {o.display}
+                                </option>
                               ))}
                             </select>
                             <button
@@ -222,7 +255,11 @@ export function FollowUpPanel({
                                 accessToken &&
                                 void run(
                                   async () => {
-                                    await markAppointmentMissed(accessToken, row.id, reasons[row.id] ?? "");
+                                    await markAppointmentMissed(
+                                      accessToken,
+                                      row.id,
+                                      reasons[row.id] ?? "",
+                                    );
                                     return undefined;
                                   },
                                   "Couldn't mark the follow-up missed.",
@@ -244,19 +281,23 @@ export function FollowUpPanel({
                             className={`${INPUT} !py-1 text-xs`}
                             aria-label="Rebook for"
                             value={defaultRebook(row)}
-                            onChange={(e) => setRebookAt((r) => ({ ...r, [row.id]: e.target.value }))}
+                            onChange={(e) =>
+                              setRebookAt((r) => ({ ...r, [row.id]: e.target.value }))
+                            }
                           />
                           <button
                             type="button"
                             className={`${BTN_GHOST} ${BTN_SM}`}
                             onClick={() => {
                               if (!accessToken) return;
-                              if (!rebookIds.current.has(row.id)) rebookIds.current.set(row.id, newRequestId());
+                              if (!rebookIds.current.has(row.id))
+                                rebookIds.current.set(row.id, newRequestId());
                               void run(
                                 () =>
                                   rebookMissedFollowUp(accessToken, row.id, {
                                     scheduled_for: new Date(defaultRebook(row)).toISOString(),
-                                    client_request_id: rebookIds.current.get(row.id) ?? newRequestId(),
+                                    client_request_id:
+                                      rebookIds.current.get(row.id) ?? newRequestId(),
                                   }),
                                 "Couldn't rebook the follow-up.",
                                 "Contacted and rebooked.",
@@ -287,7 +328,11 @@ export function FollowUpPanel({
         />
       ) : (
         <div>
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setAdding(true)}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => setAdding(true)}
+          >
             + Add follow-up
           </button>
         </div>

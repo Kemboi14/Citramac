@@ -60,8 +60,7 @@ class WithdrawalRulesTests(SimpleTestCase):
 def as_org_admin(test):
     with platform_admin_context():
         role, _ = Role.objects.get_or_create(
-            organization=None,
-            name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            organization=None, name="Org Admin", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
         )
         test.nurse.roles.add(role)
 

@@ -44,18 +44,32 @@ def _name(user):
 
 
 def score_rows(patient):
-    rows = OutcomeScore.objects.filter(patient=patient).select_related("recorded_by").order_by("-recorded_at")
+    rows = (
+        OutcomeScore.objects.filter(patient=patient)
+        .select_related("recorded_by")
+        .order_by("-recorded_at")
+    )
     out = []
     for r in rows:
         spec = instruments.INSTRUMENTS.get(r.instrument)
         if spec is None:
             continue
-        out.append({
-            "id": str(r.id), "instrument": r.instrument, "name": spec["name"], "score": r.score,
-            "max": spec["max"], "band": instruments.band_for(r.instrument, r.score),
-            "timepoint": r.timepoint, "context": r.context, "note": r.note, "flags": r.flags,
-            "recorded_at": r.recorded_at, "recorded_by": _name(r.recorded_by),
-        })
+        out.append(
+            {
+                "id": str(r.id),
+                "instrument": r.instrument,
+                "name": spec["name"],
+                "score": r.score,
+                "max": spec["max"],
+                "band": instruments.band_for(r.instrument, r.score),
+                "timepoint": r.timepoint,
+                "context": r.context,
+                "note": r.note,
+                "flags": r.flags,
+                "recorded_at": r.recorded_at,
+                "recorded_by": _name(r.recorded_by),
+            }
+        )
     return out
 
 
@@ -79,25 +93,36 @@ def previous_episodes(patient):
     numbers = {e.id: n for n, e in enumerate(all_episodes, start=1)}
     episodes = [e for e in all_episodes[:-1] if e.status not in EpisodeOfCare.OPEN_STATUSES]
     outcomes = {o.episode_id: o for o in EpisodeOutcome.objects.filter(episode__in=episodes)}
-    plans = {p.episode_id: p for p in CarePlan.objects.filter(episode__in=episodes).prefetch_related("activities")}
+    plans = {
+        p.episode_id: p
+        for p in CarePlan.objects.filter(episode__in=episodes).prefetch_related("activities")
+    }
     rows = []
     for episode in episodes:
         outcome = outcomes.get(episode.id)
         plan = plans.get(episode.id)
-        rows.append({
-            "id": str(episode.id),
-            "number": numbers[episode.id],
-            "period_start": episode.period_start,
-            "period_end": episode.period_end,
-            "status": episode.status,
-            "outcome": outcome.outcome if outcome else "",
-            "destination": outcome.destination if outcome else "",
-            "reason": outcome.reason if outcome else "",
-            "plan_version": plan.version if plan else 0,
-            "plan_actions": [
-                a.title for a in plan.activities.all() if a.decision and a.decision != "DECLINED"
-            ] if plan and plan.version else [],
-        })
+        rows.append(
+            {
+                "id": str(episode.id),
+                "number": numbers[episode.id],
+                "period_start": episode.period_start,
+                "period_end": episode.period_end,
+                "status": episode.status,
+                "outcome": outcome.outcome if outcome else "",
+                "destination": outcome.destination if outcome else "",
+                "reason": outcome.reason if outcome else "",
+                "plan_version": plan.version if plan else 0,
+                "plan_actions": (
+                    [
+                        a.title
+                        for a in plan.activities.all()
+                        if a.decision and a.decision != "DECLINED"
+                    ]
+                    if plan and plan.version
+                    else []
+                ),
+            }
+        )
     return list(reversed(rows))
 
 
@@ -115,9 +140,15 @@ def overview(patient):
         "episode": {
             "open": episode is not None,
             "outcome": (
-                {"outcome": outcome.outcome, "destination": outcome.destination, "reason": outcome.reason,
-                 "recorded_at": outcome.recorded_at, "recorded_by": _name(outcome.recorded_by)}
-                if outcome else None
+                {
+                    "outcome": outcome.outcome,
+                    "destination": outcome.destination,
+                    "reason": outcome.reason,
+                    "recorded_at": outcome.recorded_at,
+                    "recorded_by": _name(outcome.recorded_by),
+                }
+                if outcome
+                else None
             ),
         },
         "previous_episodes": previous_episodes(patient),

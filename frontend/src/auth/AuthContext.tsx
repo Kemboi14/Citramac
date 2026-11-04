@@ -26,7 +26,7 @@ export type { LoginOutcome };
 const KEEPALIVE_EVERY_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
 
-function inactivityMessage(_firstName: string | undefined): string {
+function inactivityMessage(): string {
   return "Session Timeout. Please sign in again.";
 }
 
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const endSessionForInactivity = useCallback(() => {
     if (loggingOutRef.current) return;
     const current = claimsRef.current;
-    setSessionEndedMessage(inactivityMessage(current?.first_name));
+    setSessionEndedMessage(inactivityMessage());
     setSessionEndedEmail(current?.email ?? null);
     setResumeAfterSignIn(
       current

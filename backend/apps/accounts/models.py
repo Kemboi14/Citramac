@@ -7,7 +7,13 @@ from django.db import models
 from django.utils import timezone
 
 from apps.tenancy.managers import TenantScopedManager
-from apps.tenancy.models import Branch, Department, Organization, TenantScopedModel, TimestampedModel
+from apps.tenancy.models import (
+    Branch,
+    Department,
+    Organization,
+    TenantScopedModel,
+    TimestampedModel,
+)
 
 
 def _opaque_token():
@@ -515,7 +521,9 @@ class PractitionerCredential(TenantScopedModel):
     verified registration *and* this flag can open or sign an LGL-R form.
     """
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="practitioner_credential")
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="practitioner_credential"
+    )
     registration_number = models.CharField(max_length=64, blank=True)
     registration_body = models.CharField(max_length=150, blank=True)
     registration_verified_at = models.DateTimeField(null=True, blank=True)
@@ -551,7 +559,9 @@ class PractitionerCredential(TenantScopedModel):
     # its identifier `system` URI are VERIFY (CLAUDE.md §6) — the category is
     # recorded as NACADA wrote it on the certificate, never picked from a list
     # invented here.
-    nacada_number = models.CharField("NACADA accreditation / licence no.", max_length=64, blank=True)
+    nacada_number = models.CharField(
+        "NACADA accreditation / licence no.", max_length=64, blank=True
+    )
     nacada_category = models.CharField(max_length=150, blank=True)
     nacada_issued_on = models.DateField(null=True, blank=True)
     nacada_expires_on = models.DateField(null=True, blank=True)

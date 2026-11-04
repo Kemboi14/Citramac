@@ -221,7 +221,9 @@ def validate_assignments(assignments, organization):
     from .roles import own_role
 
     if not assignments:
-        raise serializers.ValidationError({"assignments": "Give the staff member at least one role."})
+        raise serializers.ValidationError(
+            {"assignments": "Give the staff member at least one role."}
+        )
     pairs = []
     for item in assignments:
         role, branch = item["role"], item.get("branch")
@@ -577,7 +579,5 @@ class StaffInviteSerializer(serializers.Serializer):
         if not attrs.get("assignments"):
             if not attrs.get("role"):
                 raise serializers.ValidationError({"assignments": "Give the staff member a role."})
-            attrs["assignments"] = [
-                {"role": attrs["role"], "branch": attrs.get("primary_branch")}
-            ]
+            attrs["assignments"] = [{"role": attrs["role"], "branch": attrs.get("primary_branch")}]
         return attrs

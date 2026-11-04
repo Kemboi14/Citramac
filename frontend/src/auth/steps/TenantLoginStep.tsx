@@ -131,9 +131,7 @@ export function TenantLoginStep({
               </span>
               <p className="font-display text-lg font-semibold">{branding.name}</p>
               {branding.tagline && (
-                <p className="max-w-[200px] text-center text-xs opacity-80">
-                  {branding.tagline}
-                </p>
+                <p className="max-w-[200px] text-center text-xs opacity-80">{branding.tagline}</p>
               )}
             </>
           )}

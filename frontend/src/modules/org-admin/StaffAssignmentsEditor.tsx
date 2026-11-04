@@ -11,7 +11,6 @@ export interface AssignmentRow {
   branch: string;
 }
 
-
 export function rowsFromAssignments(assignments: RoleAssignment[]): AssignmentRow[] {
   return assignments.map((a) => ({ role: String(a.role), branch: a.branch ?? "" }));
 }

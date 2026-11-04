@@ -11,9 +11,7 @@ export function OrgAdminShell() {
   const { initials, name } = initialsAndLabel(claims);
   // An Auditor reaches this shell for the audit log only (roleRouting.ts).
   const isAuditor = claims?.role === "Auditor";
-  const brandSub = isAuditor
-    ? "Auditor"
-    : `${profile?.organization_name ?? "Org"} Admin`;
+  const brandSub = isAuditor ? "Auditor" : `${profile?.organization_name ?? "Org"} Admin`;
 
   return (
     <AppShell

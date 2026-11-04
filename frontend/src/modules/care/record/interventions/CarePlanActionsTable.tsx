@@ -62,7 +62,8 @@ export function CarePlanActionsTable({
                   <Tag tone={STATUS_TONE[action.status]}>{action.status_display}</Tag>
                   {action.latest_at && (
                     <div className="mt-0.5 text-[11.5px] text-ink-500">
-                      {action.latest_by || "Provider not recorded"} · {formatDateTime(action.latest_at)}
+                      {action.latest_by || "Provider not recorded"} ·{" "}
+                      {formatDateTime(action.latest_at)}
                     </div>
                   )}
                 </td>

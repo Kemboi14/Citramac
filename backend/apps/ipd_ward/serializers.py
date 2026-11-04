@@ -33,7 +33,7 @@ class WardSerializer(serializers.ModelSerializer):
             clash = clash.exclude(pk=instance.pk)
         if clash.exists():
             raise serializers.ValidationError(
-                {"name": [f"There is already a ward called \"{name}\" at this branch."]}
+                {"name": [f'There is already a ward called "{name}" at this branch.']}
             )
         return attrs
 
@@ -187,7 +187,12 @@ class AdmissionSerializer(serializers.ModelSerializer):
     # Master prompt §7A: once an admission is linked to the episode's LegalStatus,
     # that object is the single store — its category and the legacy legal fields
     # change only through the legal-status workflow (signed forms + decision).
-    LEGAL_STATUS_OWNED = ("admission_type", *INVOLUNTARY_REQUIRED, "legal_review_due_date", "legal_rationale")
+    LEGAL_STATUS_OWNED = (
+        "admission_type",
+        *INVOLUNTARY_REQUIRED,
+        "legal_review_due_date",
+        "legal_rationale",
+    )
 
     def validate(self, attrs):
         if self.instance is not None and self.instance.legal_status_record_id:
@@ -238,7 +243,9 @@ class AdmissionSerializer(serializers.ModelSerializer):
         requested = attrs.get("admission_type")
         if requested and requested != ls.category:
             raise serializers.ValidationError(
-                {"admission_type": f"The client's legal status is {ls.get_category_display().lower()}."}
+                {
+                    "admission_type": f"The client's legal status is {ls.get_category_display().lower()}."
+                }
             )
         for field in self.LEGAL_STATUS_OWNED:
             attrs.pop(field, None)

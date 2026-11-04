@@ -27,16 +27,31 @@ QUESTION_KEYS = ("q1", "q2", "q3", "q4", "q5")
 
 # PSY-Q — the five questions (fixed, model-independent; master prompt §7).
 QUESTIONS = [
-    {"key": "q1", "title": "What did the client bring to the session today?",
-     "hint": "Since last session; struggles, concerns, what they want to work on."},
-    {"key": "q2", "title": "What did you notice or assess?",
-     "hint": "Emotions, thoughts, behaviour, functioning, relationships, symptoms, substance use, strengths, changes."},
-    {"key": "q3", "title": "What did you work on therapeutically?",
-     "hint": "Focus, interventions, therapy approach/model where relevant."},
-    {"key": "q4", "title": "How did the client respond?",
-     "hint": "Response, insight, difficulties, strengths, changes, progress toward goals."},
-    {"key": "q5", "title": "What happens next?",
-     "hint": "Next steps, between-session practice, treatment-plan changes, referrals/consultations, follow-up."},
+    {
+        "key": "q1",
+        "title": "What did the client bring to the session today?",
+        "hint": "Since last session; struggles, concerns, what they want to work on.",
+    },
+    {
+        "key": "q2",
+        "title": "What did you notice or assess?",
+        "hint": "Emotions, thoughts, behaviour, functioning, relationships, symptoms, substance use, strengths, changes.",
+    },
+    {
+        "key": "q3",
+        "title": "What did you work on therapeutically?",
+        "hint": "Focus, interventions, therapy approach/model where relevant.",
+    },
+    {
+        "key": "q4",
+        "title": "How did the client respond?",
+        "hint": "Response, insight, difficulties, strengths, changes, progress toward goals.",
+    },
+    {
+        "key": "q5",
+        "title": "What happens next?",
+        "hint": "Next steps, between-session practice, treatment-plan changes, referrals/consultations, follow-up.",
+    },
 ]
 
 # PSY-S — the mandatory safety question, verbatim.
@@ -63,8 +78,11 @@ NOT_RECORDED = "Not recorded in this session."
 INPUT_MODES = ("TYPED", "DICTATED")
 LEGACY_MODES = {"TYPE": "TYPED", "SPEAK": "DICTATED"}
 LANGUAGES = [
-    ("en-GB", "English (UK)"), ("en-KE", "English (Kenya)"), ("en-US", "English (US)"),
-    ("sw-KE", "Kiswahili → English"), ("sheng", "Sheng → English"),
+    ("en-GB", "English (UK)"),
+    ("en-KE", "English (Kenya)"),
+    ("en-US", "English (US)"),
+    ("sw-KE", "Kiswahili → English"),
+    ("sheng", "Sheng → English"),
 ]
 TRANSLATED_LANGUAGES = ("sw-KE", "sheng")
 
@@ -92,12 +110,70 @@ SECTION_KEYS = tuple(k for k, _ in SECTIONS)
 
 # Language plumbing for goal matching only (not clinical vocabulary).
 _STOPWORDS = {
-    "about", "after", "again", "also", "been", "before", "being", "between", "could", "does",
-    "doing", "during", "each", "from", "have", "having", "into", "just", "less", "like", "more",
-    "most", "much", "only", "other", "over", "same", "should", "some", "such", "than", "that",
-    "their", "them", "then", "there", "these", "they", "this", "those", "through", "very", "want",
-    "wants", "were", "what", "when", "where", "which", "while", "will", "with", "would", "your",
-    "client", "session", "today", "week", "better", "able", "feel", "feels", "felt", "work",
+    "about",
+    "after",
+    "again",
+    "also",
+    "been",
+    "before",
+    "being",
+    "between",
+    "could",
+    "does",
+    "doing",
+    "during",
+    "each",
+    "from",
+    "have",
+    "having",
+    "into",
+    "just",
+    "less",
+    "like",
+    "more",
+    "most",
+    "much",
+    "only",
+    "other",
+    "over",
+    "same",
+    "should",
+    "some",
+    "such",
+    "than",
+    "that",
+    "their",
+    "them",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "very",
+    "want",
+    "wants",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "will",
+    "with",
+    "would",
+    "your",
+    "client",
+    "session",
+    "today",
+    "week",
+    "better",
+    "able",
+    "feel",
+    "feels",
+    "felt",
+    "work",
 }
 
 
@@ -137,10 +213,23 @@ def find_terms(text, terms):
 def _passage(text, start, end):
     """The sentence holding the match, with the match's offsets inside it."""
     text = str(text or "")
-    left = max(text.rfind(".", 0, start), text.rfind("!", 0, start), text.rfind("?", 0, start),
-               text.rfind("\n", 0, start))
+    left = max(
+        text.rfind(".", 0, start),
+        text.rfind("!", 0, start),
+        text.rfind("?", 0, start),
+        text.rfind("\n", 0, start),
+    )
     s = left + 1
-    stops = [i for i in (text.find(".", end), text.find("!", end), text.find("?", end), text.find("\n", end)) if i != -1]
+    stops = [
+        i
+        for i in (
+            text.find(".", end),
+            text.find("!", end),
+            text.find("?", end),
+            text.find("\n", end),
+        )
+        if i != -1
+    ]
     e = (min(stops) + 1) if stops else len(text)
     raw = text[s:e]
     lead = len(raw) - len(raw.lstrip())
@@ -180,11 +269,21 @@ def detect_risk_language(answers, risk_terms):
                     continue
                 seen.add(dkey)
                 passage, p_start, p_end = _passage(text, start, end)
-                out.append({
-                    "key": dkey, "question": key, "source": source, "category": term.get("category", ""),
-                    "phrase": term["phrase"], "matched": text[start:end], "start": start, "end": end,
-                    "passage": passage, "passage_start": p_start, "passage_end": p_end,
-                })
+                out.append(
+                    {
+                        "key": dkey,
+                        "question": key,
+                        "source": source,
+                        "category": term.get("category", ""),
+                        "phrase": term["phrase"],
+                        "matched": text[start:end],
+                        "start": start,
+                        "end": end,
+                        "passage": passage,
+                        "passage_start": p_start,
+                        "passage_end": p_end,
+                    }
+                )
     return out
 
 
@@ -195,8 +294,15 @@ def stigma_flags(texts, stigma_terms):
     out = []
     for where, text in texts.items():
         for term, start, end in sorted(find_terms(text, stigma_terms), key=lambda t: t[1]):
-            out.append({"where": where, "term": text[start:end], "start": start, "end": end,
-                        "suggestion": term.get("suggestion", "")})
+            out.append(
+                {
+                    "where": where,
+                    "term": text[start:end],
+                    "start": start,
+                    "end": end,
+                    "suggestion": term.get("suggestion", ""),
+                }
+            )
     return out
 
 
@@ -224,8 +330,11 @@ def named_models(q3_text, selected_codes, registry):
     # "TF-CBT" names Trauma-Focused CBT, not CBT as well: a match inside a
     # longer match of another model does not count.
     named = {
-        code for start, end, code in spans
-        if not any(s <= start and end <= e and (e - s) > (end - start) and c != code for s, e, c in spans)
+        code
+        for start, end, code in spans
+        if not any(
+            s <= start and end <= e and (e - s) > (end - start) and c != code for s, e, c in spans
+        )
     }
     return [m for m in registry if m["code"] in named or m["code"] in (selected_codes or [])]
 
@@ -251,8 +360,15 @@ def detect_models(q3_text, q4_text, registry):
             how = "suggested"
         else:
             continue
-        out.append({"code": model["code"], "name": model["name"], "version": model.get("version", ""),
-                    "how": how, "concepts": concepts})
+        out.append(
+            {
+                "code": model["code"],
+                "name": model["name"],
+                "version": model.get("version", ""),
+                "how": how,
+                "concepts": concepts,
+            }
+        )
     return out
 
 
@@ -275,7 +391,11 @@ def goal_suggestions(goals, answers):
     the clinician confirms, edits or dismisses."""
 
     def stems(text):
-        return {w[:5] for w in re.findall(r"[a-z]+", str(text).lower()) if len(w) >= 4 and w not in _STOPWORDS}
+        return {
+            w[:5]
+            for w in re.findall(r"[a-z]+", str(text).lower())
+            if len(w) >= 4 and w not in _STOPWORDS
+        }
 
     out = []
     pool = [s for k in ("q4", "q1") for s in sentences(english_text(answers.get(k)))]
@@ -292,11 +412,14 @@ def goal_suggestions(goals, answers):
 
 def _session_information(info):
     rows = [
-        ("Date", info.get("date")), ("Time", info.get("time")),
+        ("Date", info.get("date")),
+        ("Time", info.get("time")),
         ("Duration", f"{info['duration']} minutes" if info.get("duration") else "Not recorded"),
-        ("Clinician", info.get("clinician")), ("Session type", info.get("session_type")),
+        ("Clinician", info.get("clinician")),
+        ("Session type", info.get("session_type")),
         ("Mode", info.get("mode") or "Not recorded"),
-        ("Therapy episode", info.get("episode")), ("Linked care-plan action", info.get("activity")),
+        ("Therapy episode", info.get("episode")),
+        ("Linked care-plan action", info.get("activity")),
     ]
     return "\n".join(f"{label}: {value}" for label, value in rows if value)
 
@@ -318,11 +441,16 @@ def _risk_safety(safety, detections, resolutions, context):
         link = safety.get("link")
         if link:
             lines.append(f"Linked risk assessment: {link['display_id']} (opened {link['opened']})")
-        lines.append("Safety concern alert raised on the client record; the findings are queued for "
-                     "the risk register for clinician review.")
+        lines.append(
+            "Safety concern alert raised on the client record; the findings are queued for "
+            "the risk register for clinician review."
+        )
         plan = context.get("safety_plan")
-        lines.append(f"Active safety plan on record: version {plan['version']}, signed {plan['signed_at']}."
-                     if plan else "No signed safety plan on record.")
+        lines.append(
+            f"Active safety plan on record: version {plan['version']}, signed {plan['signed_at']}."
+            if plan
+            else "No signed safety plan on record."
+        )
     elif answer == SAFETY_NO:
         lines.append(SAFETY_NO_TEXT)
     elif answer == SAFETY_NOT_ASSESSED:
@@ -337,7 +465,9 @@ def _risk_safety(safety, detections, resolutions, context):
         lines.append("Language prompting a safety review was reviewed by the clinician:")
         for d in reviewed:
             r = resolutions[d["key"]]
-            lines.append(f"- \"{d['passage']}\" — {r.get('reason') or 'reviewed by ' + str(r.get('by') or 'the clinician')}")
+            lines.append(
+                f"- \"{d['passage']}\" — {r.get('reason') or 'reviewed by ' + str(r.get('by') or 'the clinician')}"
+            )
     return "\n".join(lines)
 
 
@@ -364,16 +494,34 @@ def model_block(models):
         return ""
     names = ", ".join(m["name"] for m in models)
     elements = [
-        f"{m['name']}: {', '.join(m['concepts'])}" if m.get("concepts")
-        else f"{m['name']}: no specific elements described" for m in models
+        (
+            f"{m['name']}: {', '.join(m['concepts'])}"
+            if m.get("concepts")
+            else f"{m['name']}: no specific elements described"
+        )
+        for m in models
     ]
-    return _join(f"Approach(es) identified by clinician: {names}",
-                 _block("Model-consistent elements documented", elements))
+    return _join(
+        f"Approach(es) identified by clinician: {names}",
+        _block("Model-consistent elements documented", elements),
+    )
 
 
-def organize(answers, safety, info, registry, cue_terms, detections=(), resolutions=None,
-             confirmed_links=(), measure=None, context=None, selected_models=(), applied_models=None,
-             goal_links=()):
+def organize(
+    answers,
+    safety,
+    info,
+    registry,
+    cue_terms,
+    detections=(),
+    resolutions=None,
+    confirmed_links=(),
+    measure=None,
+    context=None,
+    selected_models=(),
+    applied_models=None,
+    goal_links=(),
+):
     """Build the seven PSY-OUT sections from the clinician's answers (the
     English translation where one is done). Returns {"sections": {key: text},
     "models_applied": [...], "fixed": {...}} — `fixed` holds the deterministic
@@ -386,26 +534,40 @@ def organize(answers, safety, info, registry, cue_terms, detections=(), resoluti
     presenting = _block("Client report", sentences(text["q1"]))
 
     reported2, observed2 = split_attribution(text["q2"], cue_terms)
-    assessment = _join(_block("Client report", reported2), _block("Clinician observation / assessment", observed2))
+    assessment = _join(
+        _block("Client report", reported2), _block("Clinician observation / assessment", observed2)
+    )
 
     if applied_models is None:
-        applied_models = [{**m, "concepts": supported_concepts(m, [text["q3"], text["q4"]])}
-                          for m in named_models(text["q3"], selected_models, registry)]
+        applied_models = [
+            {**m, "concepts": supported_concepts(m, [text["q3"], text["q4"]])}
+            for m in named_models(text["q3"], selected_models, registry)
+        ]
     approaches = model_block(applied_models)
     work = _block("Session work and interventions", sentences(text["q3"]))
     interventions = _join(approaches, work)
 
     reported4, observed4 = split_attribution(text["q4"], cue_terms)
     legacy = [f"Goal \"{link['goal']}\": {link['statement']}" for link in confirmed_links]
-    measured = ([f"{measure['name']} total {measure['total']} (recorded through the outcome store)"]
-                if measure else [])
-    response_extra = "\n\n".join(b for b in (
-        _block("Treatment-plan goals (clinician confirmed)", goal_lines(goal_links)),
-        _block("Progress toward care-plan goals (confirmed by the clinician)", legacy),
-        _block("Measurement", measured),
-    ) if b)
-    response = _join(_block("Client response as observed", observed4), _block("Client reported", reported4),
-                     response_extra)
+    measured = (
+        [f"{measure['name']} total {measure['total']} (recorded through the outcome store)"]
+        if measure
+        else []
+    )
+    response_extra = "\n\n".join(
+        b
+        for b in (
+            _block("Treatment-plan goals (clinician confirmed)", goal_lines(goal_links)),
+            _block("Progress toward care-plan goals (confirmed by the clinician)", legacy),
+            _block("Measurement", measured),
+        )
+        if b
+    )
+    response = _join(
+        _block("Client response as observed", observed4),
+        _block("Client reported", reported4),
+        response_extra,
+    )
 
     plan = _block("Next steps", sentences(text["q5"]))
 
@@ -418,14 +580,25 @@ def organize(answers, safety, info, registry, cue_terms, detections=(), resoluti
         "risk_safety": _risk_safety(safety, list(detections), resolutions, context),
         "plan": plan or NOT_RECORDED,
     }
-    applied = [{"code": m["code"], "name": m["name"], "version": m.get("version", "")} for m in applied_models]
-    return {"sections": sections, "models_applied": applied,
-            "fixed": {"interventions": approaches, "response": response_extra}}
+    applied = [
+        {"code": m["code"], "name": m["name"], "version": m.get("version", "")}
+        for m in applied_models
+    ]
+    return {
+        "sections": sections,
+        "models_applied": applied,
+        "fixed": {"interventions": approaches, "response": response_extra},
+    }
 
 
 # Which section each question's narrative feeds (for the reworded sections).
-QUESTION_SECTION = {"q1": "presenting_focus", "q2": "assessment", "q3": "interventions",
-                    "q4": "response", "q5": "plan"}
+QUESTION_SECTION = {
+    "q1": "presenting_focus",
+    "q2": "assessment",
+    "q3": "interventions",
+    "q4": "response",
+    "q5": "plan",
+}
 
 
 def compose_reworded(question_key, reworded, fixed):

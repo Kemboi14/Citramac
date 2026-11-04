@@ -1,6 +1,9 @@
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../auth/useAuth";
-import { BreachAssessmentPanel, BreachRegisterButton } from "../../components/BreachAssessmentPanel";
+import {
+  BreachAssessmentPanel,
+  BreachRegisterButton,
+} from "../../components/BreachAssessmentPanel";
 import { ApiError } from "../../lib/apiClient";
 import {
   BREACH_RISK_LABEL,

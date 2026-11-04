@@ -5,7 +5,6 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.accounts.permissions import _has_org_admin_role
-
 from apps.retention.mixins import NoHardDeleteMixin
 
 from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward

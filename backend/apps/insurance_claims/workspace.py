@@ -306,9 +306,11 @@ def checklist(claim):
             "key": "identity",
             "label": "Identity verified",
             "ok": _identity_verified(patient),
-            "detail": "A registry-verified identifier is on file"
-            if _identity_verified(patient)
-            else "No verified identifier — resolve at registration",
+            "detail": (
+                "A registry-verified identifier is on file"
+                if _identity_verified(patient)
+                else "No verified identifier — resolve at registration"
+            ),
         },
         {
             "key": "lines",
@@ -317,9 +319,11 @@ def checklist(claim):
             "detail": (
                 "No lines on the claim"
                 if not lines
-                else ("Changed since added: " + ", ".join(mismatched))
-                if mismatched
-                else f"{len(lines)} line(s) from documented, priced services"
+                else (
+                    ("Changed since added: " + ", ".join(mismatched))
+                    if mismatched
+                    else f"{len(lines)} line(s) from documented, priced services"
+                )
             ),
         },
         *facility,
@@ -822,9 +826,9 @@ def _claim_data(claim):
         "status_label": claim.get_status_display(),
         "timeline_stage": timeline_stage(claim),
         "total_claimed_amount": _money(claim.total_claimed_amount),
-        "approved_amount": _money(claim.approved_amount)
-        if claim.approved_amount is not None
-        else None,
+        "approved_amount": (
+            _money(claim.approved_amount) if claim.approved_amount is not None else None
+        ),
         "guarantor": claim.guarantor,
         "submitted_at": claim.submitted_at.isoformat() if claim.submitted_at else None,
         "adjudicated_at": claim.adjudicated_at.isoformat() if claim.adjudicated_at else None,
@@ -987,9 +991,7 @@ def sha_section(patient):
         "cr_id": client_registry_id(patient),
         "eligibility": check_data(latest_check(patient)),
         "visits": [sha_claims.visit_data(v) for v in sha_claims.patient_visits(patient)[:20]],
-        "branches": [
-            {"id": str(b.id), "name": b.name, "fr_code": b.sha_fr_code} for b in branches
-        ],
+        "branches": [{"id": str(b.id), "name": b.name, "fr_code": b.sha_fr_code} for b in branches],
         "service_types": list(sha_claims.SERVICE_TYPES),
         "outpatient_discharge_reasons": list(sha_claims.OUTPATIENT_DISCHARGE_REASONS),
         "inpatient_discharge_reasons": list(sha_claims.INPATIENT_DISCHARGE_REASONS),

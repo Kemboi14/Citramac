@@ -53,7 +53,8 @@ export function CoProductionView({
   const goals = ws.details.goal_items.filter((g) => g.goal.trim());
   const actions = ws.actions.filter((a) => a.decision && a.decision !== "DECLINED");
   // eslint-disable-next-line security/detect-object-injection -- `k` is one of SAFETY_KEYS.
-  const safety = ws.needs_safety_plan && safetyPlan ? SAFETY_KEYS.filter((k) => safetyPlan[k].trim()) : [];
+  const safety =
+    ws.needs_safety_plan && safetyPlan ? SAFETY_KEYS.filter((k) => safetyPlan[k].trim()) : [];
 
   return (
     <WideModal open={open} title={`${text.heading} — ${clientName}`} onClose={onClose}>
@@ -73,8 +74,8 @@ export function CoProductionView({
         </div>
         {language === "sw" && (
           <Callout tone="warning">
-            Tafsiri ya majaribio — ithibitishwe na mtafsiri kabla ya matumizi ya kliniki. (Draft translation — verify
-            with a qualified translator before clinical use.)
+            Tafsiri ya majaribio — ithibitishwe na mtafsiri kabla ya matumizi ya kliniki. (Draft
+            translation — verify with a qualified translator before clinical use.)
           </Callout>
         )}
         <section>

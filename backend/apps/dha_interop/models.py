@@ -326,9 +326,7 @@ class ShrConsent(TenantScopedModel):
         max_length=20, choices=RELATIONSHIP_CHOICES, blank=True
     )
     rejection_reason = models.CharField(max_length=255, blank=True)
-    requested_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, related_name="+"
-    )
+    requested_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
     decided_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     detail = models.CharField(max_length=255, blank=True)

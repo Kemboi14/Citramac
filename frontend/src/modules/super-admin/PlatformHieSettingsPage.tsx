@@ -203,7 +203,9 @@ export function PlatformHieSettingsPage() {
     try {
       apply(await updatePlatformHieSettings(accessToken, { rotate_callback_token: true }));
     } catch (err) {
-      setCallbackError(err instanceof ApiError ? err.message : "Couldn't rotate the callback token.");
+      setCallbackError(
+        err instanceof ApiError ? err.message : "Couldn't rotate the callback token.",
+      );
       throw err;
     }
   };
@@ -216,7 +218,9 @@ export function PlatformHieSettingsPage() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      setCallbackError("Couldn't copy to the clipboard — select the callback URL and copy it manually.");
+      setCallbackError(
+        "Couldn't copy to the clipboard — select the callback URL and copy it manually.",
+      );
     }
   };
 
@@ -303,7 +307,9 @@ export function PlatformHieSettingsPage() {
                     <select
                       className={FIELD_CLASS}
                       value={form.environment}
-                      onChange={(e) => updateForm({ environment: e.target.value as HieEnvironment })}
+                      onChange={(e) =>
+                        updateForm({ environment: e.target.value as HieEnvironment })
+                      }
                     >
                       {ENVIRONMENT_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -384,8 +390,8 @@ export function PlatformHieSettingsPage() {
                     onChange={(e) => updateForm({ public_api_base_url: e.target.value })}
                   />
                   <span className={HELP_CLASS}>
-                    This deployment’s API as reachable from the internet, ending in /api/v1. The
-                    HIE posts claim, pre-authorisation and authorisation status changes under it.
+                    This deployment’s API as reachable from the internet, ending in /api/v1. The HIE
+                    posts claim, pre-authorisation and authorisation status changes under it.
                   </span>
                 </label>
 
@@ -411,8 +417,8 @@ export function PlatformHieSettingsPage() {
                 </div>
                 <p className={HELP_CLASS}>
                   DHA publishes the remittance workflows but has not published their paths. Leave
-                  both blank until DHA supplies them; remittances can’t be fetched until then.
-                  Paths are relative to the base URL.
+                  both blank until DHA supplies them; remittances can’t be fetched until then. Paths
+                  are relative to the base URL.
                 </p>
 
                 <div className="flex flex-wrap gap-2">
@@ -438,9 +444,9 @@ export function PlatformHieSettingsPage() {
 
                 <div className="mt-2 border-t border-surface-border pt-4">
                   <p className="mb-2 text-xs text-ink-500">
-                    Signs in with the saved service account, then looks every active branch’s SHA
-                    FR code up in the DHA Facility Registry and records the answer on the branch.
-                    No client information is sent. Save any changes above first.
+                    Signs in with the saved service account, then looks every active branch’s SHA FR
+                    code up in the DHA Facility Registry and records the answer on the branch. No
+                    client information is sent. Save any changes above first.
                   </p>
                   <SaveButton
                     onSave={runTest}
@@ -556,8 +562,8 @@ export function PlatformHieSettingsPage() {
                     </div>
                   )}
                   <span className={HELP_CLASS}>
-                    &lt;entity&gt; is filled in per callback type (claim, preauth,
-                    authorization) when the callbacks are registered.
+                    &lt;entity&gt; is filled in per callback type (claim, preauth, authorization)
+                    when the callbacks are registered.
                   </span>
                 </div>
                 <p className="rounded-sm bg-status-amber-tint px-3 py-2 text-sm text-ink-900">
@@ -585,9 +591,9 @@ export function PlatformHieSettingsPage() {
                   </SaveButton>
                 </div>
                 <p className={HELP_CLASS}>
-                  Registers the claim, pre-authorisation and authorisation status callbacks with
-                  the HIE for every active branch with SHA claims turned on and an SHA FR code.
-                  Safe to repeat — callbacks already registered at this URL are left as they are.
+                  Registers the claim, pre-authorisation and authorisation status callbacks with the
+                  HIE for every active branch with SHA claims turned on and an SHA FR code. Safe to
+                  repeat — callbacks already registered at this URL are left as they are.
                 </p>
                 {callbackError && <p className={ERROR_CLASS}>{callbackError}</p>}
                 {registrationError && <p className={ERROR_CLASS}>{registrationError}</p>}
@@ -636,8 +642,8 @@ export function PlatformHieSettingsPage() {
                   here take precedence over a service account set in the server environment.
                 </p>
                 <p>
-                  One service account serves every branch: each call names the branch’s facility
-                  by its <span className="font-medium text-ink-900">SHA FR code</span>, set under
+                  One service account serves every branch: each call names the branch’s facility by
+                  its <span className="font-medium text-ink-900">SHA FR code</span>, set under
                   Branch Settings. A branch that holds its own facility-scoped DHA credentials can
                   enter them there instead.
                 </p>
