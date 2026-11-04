@@ -6,11 +6,10 @@ import { getCareDashboard, type CareDashboard } from "../../lib/carePathwayApi";
 import { EmptyState } from "../../components/EmptyState";
 import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
 import { DashboardWelcome } from "../../components/DashboardWelcome";
+import { MyTasks } from "./MyTasks";
 import { formatTime } from "./shared/format";
 import { Card, ErrorNote, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
-import { DecisionInbox } from "./DecisionInbox";
-import { MyTasks } from "./MyTasks";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.3 — mockup dashboard(). Every number is
 // served by GET /care/dashboard/; nothing here is demo text.
@@ -231,6 +230,12 @@ export function DashboardPage() {
         eyebrow="Clinical dashboard"
         subtitle={`System overview — ${TODAY_LABEL()}${updatedAt ? ` · Updated ${formatTime(updatedAt.toISOString())}` : ""}`}
       >
+        <Link to="/clinical/appointments" className={BTN_GHOST}>
+          Appointments
+        </Link>
+        <Link to="/clinical/follow-up" className={BTN_GHOST}>
+          Follow-up
+        </Link>
         <button
           type="button"
           className={BTN_GHOST}
@@ -254,7 +259,6 @@ export function DashboardPage() {
       )}
 
       <div className="mb-6">
-        <DecisionInbox />
         <MyTasks />
       </div>
 

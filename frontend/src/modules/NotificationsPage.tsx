@@ -12,6 +12,7 @@ import {
   type Notification,
   type NotificationCategory,
 } from "../lib/notificationsApi";
+import { DecisionInbox } from "./care/DecisionInbox";
 
 const CATEGORY_FILTERS: { value: NotificationCategory | ""; label: string }[] = [
   { value: "", label: "All" },
@@ -31,7 +32,7 @@ const PAGE_SIZE = 25;
  * Filters are server-side (`?category=`, `?unread=`), so they apply to the
  * whole history rather than just the page on screen.
  */
-export function NotificationsPage() {
+export function NotificationsPage({ showDecisionInbox = false }: { showDecisionInbox?: boolean }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const [category, setCategory] = useState<NotificationCategory | "">("");
@@ -123,6 +124,8 @@ export function NotificationsPage() {
           Mark all as read
         </button>
       </div>
+
+      {showDecisionInbox && <DecisionInbox />}
 
       <div className="flex flex-wrap items-center gap-2">
         {CATEGORY_FILTERS.map((filter) => (
