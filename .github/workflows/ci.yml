@@ -59,7 +59,7 @@ jobs:
           ruff check .
 
       - name: SAST (bandit)
-        run: bandit -q -r apps config -x "*/migrations/*,*/tests.py"
+        run: bandit -q -r apps config -x "*/migrations/*,*/tests.py,*/test_*.py"
 
       - name: Dependency vulnerability scan
         run: pip install pip-audit && pip-audit -r requirements/base.txt -r requirements/production.txt
@@ -107,7 +107,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -138,5 +138,6 @@ jobs:
       - run: pip install detect-secrets==1.5.0
       - name: Verify no new secrets vs. baseline
         run: |
+          cp .secrets.baseline /tmp/committed-baseline.json
           detect-secrets scan --baseline .secrets.baseline --exclude-lines "citramac:citramac"
-          git diff --exit-code .secrets.baseline
+          python backend/scripts/secrets_baseline_gate.py /tmp/committed-baseline.json .secrets.baseline

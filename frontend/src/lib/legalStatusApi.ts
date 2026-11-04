@@ -237,14 +237,18 @@ export function getPractitionerCredential(accessToken: string, userId: string) {
 export function uploadNacadaEvidence(accessToken: string, userId: string, file: File) {
   const body = new FormData();
   body.set("file", file);
-  return apiRequest<Credential>(
-    `/care/legal/practitioners/${userId}/credential/nacada-evidence/`,
-    { method: "POST", body, accessToken },
-  );
+  return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/nacada-evidence/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
 }
 
 export function downloadNacadaEvidence(accessToken: string, userId: string) {
-  return apiDownload(`/care/legal/practitioners/${userId}/credential/nacada-evidence/`, accessToken);
+  return apiDownload(
+    `/care/legal/practitioners/${userId}/credential/nacada-evidence/`,
+    accessToken,
+  );
 }
 
 export function updatePractitionerCredential(
@@ -263,7 +267,11 @@ export function getLegalWorkspace(accessToken: string, patientId: string) {
   return apiRequest<LegalWorkspace>(`/care/clients/${patientId}/legal-status/`, { accessToken });
 }
 
-export function startLegalApplication(accessToken: string, patientId: string, category: LegalCategory) {
+export function startLegalApplication(
+  accessToken: string,
+  patientId: string,
+  category: LegalCategory,
+) {
   return apiRequest<LegalDocumentRow>(`/care/clients/${patientId}/legal-status/applications/`, {
     method: "POST",
     accessToken,
@@ -279,7 +287,11 @@ export function saveLegalDraft(accessToken: string, docId: string, body: Record<
   });
 }
 
-export function signLegalDocument(accessToken: string, docId: string, body: Record<string, unknown>) {
+export function signLegalDocument(
+  accessToken: string,
+  docId: string,
+  body: Record<string, unknown>,
+) {
   return apiRequest<LegalDocumentRow>(`/care/legal/documents/${docId}/sign/`, {
     method: "POST",
     accessToken,
@@ -323,7 +335,11 @@ export function endInvoluntary(accessToken: string, legalStatusId: string, reaso
   });
 }
 
-export function giveDischargeNotice(accessToken: string, legalStatusId: string, body: Record<string, unknown>) {
+export function giveDischargeNotice(
+  accessToken: string,
+  legalStatusId: string,
+  body: Record<string, unknown>,
+) {
   return apiRequest<{ id: string }>(`/care/legal/${legalStatusId}/notices/`, {
     method: "POST",
     accessToken,
@@ -359,8 +375,13 @@ export function unmaskIdentity(
   subject: "client" | "applicant",
   relatedPersonId?: string,
 ) {
-  const q = new URLSearchParams({ subject, ...(relatedPersonId ? { related_person_id: relatedPersonId } : {}) });
-  return apiRequest<{ value: string }>(`/care/legal/${legalStatusId}/identity/?${q}`, { accessToken });
+  const q = new URLSearchParams({
+    subject,
+    ...(relatedPersonId ? { related_person_id: relatedPersonId } : {}),
+  });
+  return apiRequest<{ value: string }>(`/care/legal/${legalStatusId}/identity/?${q}`, {
+    accessToken,
+  });
 }
 
 /** The printable form (server-rendered HTML), held in memory only. */

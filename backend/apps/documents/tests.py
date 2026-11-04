@@ -120,7 +120,6 @@ class CatalogueTests(SimpleTestCase):
         for action in ("generate", "sign", "release"):
             self.assertEqual(rx["authorization"][action], ["PRESCRIBERS"])
 
-
     def test_lgl_doc_01_statutory_forms_use_the_legal_modules_doc_spec(self):
         from apps.care_pathway import legal_config
 
@@ -738,7 +737,9 @@ class StatutoryFormReleaseTests(DocumentFixture):
         self.assertFalse(DisclosureRecord.objects.filter(document_id=doc_id).exists())
 
         self.consent("RELEASE_OF_INFORMATION", scope=["ADMISSION", "LEGAL_STATUS"])
-        self.assertEqual(self.act(doc_id, "recheck_consent", self.psychiatrist).data["status"], "SIGNED")
+        self.assertEqual(
+            self.act(doc_id, "recheck_consent", self.psychiatrist).data["status"], "SIGNED"
+        )
         released = self.act(doc_id, "release", self.records)
         self.assertEqual(released.status_code, 200, released.data)
         self.assertEqual(released.data["status"], "RELEASED")
@@ -813,7 +814,9 @@ class FacilityReleaseWordingTests(DocumentFixture):
             reverse("documents-authorizations") + f"?patient={self.patient.id}",
             **self.auth(self.psychiatrist),
         )
-        self.assertEqual(listing.data["wording"]["EMPLOYER_COMMUNICATION"]["version"], "EMP-SYNTH-1")
+        self.assertEqual(
+            listing.data["wording"]["EMPLOYER_COMMUNICATION"]["version"], "EMP-SYNTH-1"
+        )
         response = self.record()
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["consent_text_version"], "EMP-SYNTH-1")

@@ -48,15 +48,24 @@ export interface NursingProblem {
 }
 
 export function listNursingProblems(accessToken: string, patientId: string) {
-  return apiRequest<{ results: NursingProblem[] }>(`/care/clients/${patientId}/care-plan/nursing/`, {
-    accessToken,
-  });
+  return apiRequest<{ results: NursingProblem[] }>(
+    `/care/clients/${patientId}/care-plan/nursing/`,
+    {
+      accessToken,
+    },
+  );
 }
 
 export function addNursingProblem(
   accessToken: string,
   patientId: string,
-  body: { problem: string; goal: string; interventions?: string; evaluation?: string; action_key?: string },
+  body: {
+    problem: string;
+    goal: string;
+    interventions?: string;
+    evaluation?: string;
+    action_key?: string;
+  },
 ) {
   return apiRequest<NursingProblem>(`/care/clients/${patientId}/care-plan/nursing/`, {
     method: "POST",
@@ -128,7 +137,9 @@ export interface OutcomesOverview {
 }
 
 export function getOutcomesOverview(accessToken: string, patientId: string) {
-  return apiRequest<OutcomesOverview>(`/care/clients/${patientId}/outcomes/overview/`, { accessToken });
+  return apiRequest<OutcomesOverview>(`/care/clients/${patientId}/outcomes/overview/`, {
+    accessToken,
+  });
 }
 
 export interface DischargeAnswers {
@@ -146,10 +157,16 @@ export interface DischargeChecklist {
 }
 
 export function getDischargeChecklist(accessToken: string, patientId: string) {
-  return apiRequest<DischargeChecklist>(`/care/clients/${patientId}/discharge-checklist/`, { accessToken });
+  return apiRequest<DischargeChecklist>(`/care/clients/${patientId}/discharge-checklist/`, {
+    accessToken,
+  });
 }
 
-export function saveDischargeAnswers(accessToken: string, patientId: string, body: DischargeAnswers) {
+export function saveDischargeAnswers(
+  accessToken: string,
+  patientId: string,
+  body: DischargeAnswers,
+) {
   return apiRequest<DischargeChecklist>(`/care/clients/${patientId}/discharge-checklist/`, {
     method: "PATCH",
     body,

@@ -57,12 +57,18 @@ NO_FIXED_DEADLINE = {"DATA_SUBJECTS"}
 # service are listed by name; OTHER covers the rest of the Schedule.
 SECOND_SCHEDULE_CATEGORIES = [
     ("MENTAL_DISORDER", "Assessment, diagnosis or treatment of a mental disorder (item 16(c))"),
-    ("SUBSTANCE_ABUSE", "Assessment, diagnosis or treatment of substance abuse and addiction (item 16(d))"),
+    (
+        "SUBSTANCE_ABUSE",
+        "Assessment, diagnosis or treatment of substance abuse and addiction (item 16(d))",
+    ),
     ("STI", "Assessment, diagnosis or treatment of a sexually transmitted disease (item 16(a))"),
     ("HIV", "Assessment, diagnosis or treatment of HIV infection (item 16(b))"),
     ("SUICIDE", "Suicide or attempted suicide of the individual (item 19)"),
     ("ABUSE", "Domestic abuse, child abuse or sexual abuse (item 20)"),
-    ("CHILD_PROTECTION", "A child in conflict with the law or in need of care and protection (item 5)"),
+    (
+        "CHILD_PROTECTION",
+        "A child in conflict with the law or in need of care and protection (item 5)",
+    ),
     ("OTHER", "Another class of personal data in the Second Schedule"),
 ]
 
@@ -210,9 +216,15 @@ class BreachIncident(TenantScopedModel):
         ("OTHER", "Other"),
     ]
     SUBJECTS_EXEMPTION_CHOICES = [
-        ("SAFEGUARDS", "Appropriate security safeguards (e.g. encryption) protect the data — DPA s.43(6)"),
+        (
+            "SAFEGUARDS",
+            "Appropriate security safeguards (e.g. encryption) protect the data — DPA s.43(6)",
+        ),
         ("IDENTITY_UNKNOWN", "The data subjects' identity cannot be established — DPA s.43(1)(b)"),
-        ("INVESTIGATION", "Delayed for the prevention, detection or investigation of an offence — DPA s.43(4)"),
+        (
+            "INVESTIGATION",
+            "Delayed for the prevention, detection or investigation of an offence — DPA s.43(4)",
+        ),
     ]
 
     reference = models.CharField(max_length=32)
@@ -280,13 +292,14 @@ class BreachIncident(TenantScopedModel):
             )
         ]
 
-
     @property
     def is_notifiable(self):
         """Reg. 37: notifiable by the kind of data involved, before any risk judgement."""
         if self.publicly_available_only:
             return False
-        return bool(self.identifies_subjects and self.schedule_categories) or self.credentials_exposed
+        return (
+            bool(self.identifies_subjects and self.schedule_categories) or self.credentials_exposed
+        )
 
     @property
     def real_risk_of_harm(self):

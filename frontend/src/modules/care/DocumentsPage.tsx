@@ -10,7 +10,10 @@ import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
-import { DocumentCatalogueBrowser, GeneratedDocumentsCard } from "./documents/DocumentCatalogueBrowser";
+import {
+  DocumentCatalogueBrowser,
+  GeneratedDocumentsCard,
+} from "./documents/DocumentCatalogueBrowser";
 import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.14 — mockup documents().

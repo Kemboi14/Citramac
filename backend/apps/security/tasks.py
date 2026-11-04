@@ -39,17 +39,23 @@ def purge_expired_auth_artifacts():
 
     counts = {}
     with platform_admin_context():
-        counts["otp"], _ = OneTimePassword.objects.filter(
-            created_at__lt=cutoff
-        ).filter(Q(is_used=True) | Q(expires_at__lt=now)).delete()
+        counts["otp"], _ = (
+            OneTimePassword.objects.filter(created_at__lt=cutoff)
+            .filter(Q(is_used=True) | Q(expires_at__lt=now))
+            .delete()
+        )
 
-        counts["activation_invite"], _ = ActivationInvite.objects.filter(
-            created_at__lt=cutoff
-        ).filter(Q(used_at__isnull=False) | Q(expires_at__lt=now)).delete()
+        counts["activation_invite"], _ = (
+            ActivationInvite.objects.filter(created_at__lt=cutoff)
+            .filter(Q(used_at__isnull=False) | Q(expires_at__lt=now))
+            .delete()
+        )
 
-        counts["password_setup_token"], _ = PasswordSetupToken.objects.filter(
-            created_at__lt=cutoff
-        ).filter(Q(used_at__isnull=False) | Q(expires_at__lt=now)).delete()
+        counts["password_setup_token"], _ = (
+            PasswordSetupToken.objects.filter(created_at__lt=cutoff)
+            .filter(Q(used_at__isnull=False) | Q(expires_at__lt=now))
+            .delete()
+        )
 
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 

@@ -96,9 +96,7 @@ def _friendly_message(exc, detail, code):
         if wait:
             seconds = max(1, int(round(wait)))
             unit = "second" if seconds == 1 else "seconds"
-            return (
-                f"Too many requests in a short time. Please wait {seconds} {unit} and try again."
-            )
+            return f"Too many requests in a short time. Please wait {seconds} {unit} and try again."
         return "Too many requests in a short time. Please wait a moment and try again."
     for exc_class, friendly in _FRIENDLY_DEFAULTS.items():
         if type(exc) is exc_class and str(detail) == str(exc_class.default_detail):

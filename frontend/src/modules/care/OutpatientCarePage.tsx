@@ -214,7 +214,10 @@ export function OutpatientCarePage({ kind }: { kind: Kind }) {
               // Master prompt §7 — the Psychotherapy Session note workflow (group
               // attendance is recorded in the group programme, one client at a time).
               <Card title="Psychotherapy Session">
-                <TherapyModule key={`therapy-${selected.patient_id}`} patientId={selected.patient_id} />
+                <TherapyModule
+                  key={`therapy-${selected.patient_id}`}
+                  patientId={selected.patient_id}
+                />
               </Card>
             )}
           </div>

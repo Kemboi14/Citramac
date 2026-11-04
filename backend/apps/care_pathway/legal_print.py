@@ -61,9 +61,15 @@ def _when(iso):
 
 def _official(ls, r, labels, document_template):
     """FOR OFFICIAL USE ONLY — the admitting officer's decision, from LegalStatus."""
-    decided = ls.application_document_id == r.get("_doc_id") and ls.decision in ("ADMITTED", "REJECTED")
+    decided = ls.application_document_id == r.get("_doc_id") and ls.decision in (
+        "ADMITTED",
+        "REJECTED",
+    )
     if document_template == RECOMMENDATION_TEMPLATE:
-        decided = ls.application_document_id == r.get("_application_id") and ls.decision in ("ADMITTED", "REJECTED")
+        decided = ls.application_document_id == r.get("_application_id") and ls.decision in (
+            "ADMITTED",
+            "REJECTED",
+        )
     decision = ls.decision if decided else ""
     parts = [
         '<div class="official"><div class="official-title">FOR OFFICIAL USE ONLY</div>',
@@ -75,10 +81,16 @@ def _official(ls, r, labels, document_template):
     else:
         if decision == "REJECTED":
             parts.append(f"<p>Reason: {_dots(ls.decision_reason)}</p>")
-        parts.append(f'<p>{escape(labels.get("admittingOfficerName", ""))}: {_dots(legal_status._name(ls.decision_by) if decided else "")}</p>')
-        parts.append(f'<p>{escape(labels.get("admittingOfficerSignature", ""))}: {_dots("Signed electronically" if decided else "")}</p>')
+        parts.append(
+            f'<p>{escape(labels.get("admittingOfficerName", ""))}: {_dots(legal_status._name(ls.decision_by) if decided else "")}</p>'
+        )
+        parts.append(
+            f'<p>{escape(labels.get("admittingOfficerSignature", ""))}: {_dots("Signed electronically" if decided else "")}</p>'
+        )
         date_label = labels.get("decisionDateTime") or labels.get("date", "Date")
-        parts.append(f"<p>{escape(date_label)}: {_dots(facility_time.local_format(ls.decision_at, '%d/%m/%Y %H:%M') if decided else '')}</p>")
+        parts.append(
+            f"<p>{escape(date_label)}: {_dots(facility_time.local_format(ls.decision_at, '%d/%m/%Y %H:%M') if decided else '')}</p>"
+        )
     parts.append("</div>")
     return "".join(parts)
 
@@ -86,35 +98,51 @@ def _official(ls, r, labels, document_template):
 def _signature_line(doc, label):
     if doc.status != "SIGNED":
         return f"<p>{escape(label)}: {_dots('')}</p>"
-    how = "e-signature, witnessed by " + legal_status._name(doc.captured_by) if doc.signature_method == "ELECTRONIC" else "wet signature (scan on file)"
+    how = (
+        "e-signature, witnessed by " + legal_status._name(doc.captured_by)
+        if doc.signature_method == "ELECTRONIC"
+        else "wet signature (scan on file)"
+    )
     return f"<p>{escape(label)}: {_dots(f'{doc.signer_name} — {how}')}</p>"
 
 
 def render(doc, user):
     ls = doc.legal_status
-    r = dict(doc.rendered) if doc.status == "SIGNED" and doc.rendered else legal_status.render_snapshot(doc)
+    r = (
+        dict(doc.rendered)
+        if doc.status == "SIGNED" and doc.rendered
+        else legal_status.render_snapshot(doc)
+    )
     r["_doc_id"], r["_application_id"] = doc.pk, doc.application_id
     facility, labels, client = r["facility"], r.get("labels", {}), r["client"]
     body = []
     if doc.status != "SIGNED":
         body.append('<div class="watermark">DRAFT</div>')
     logo = f'<img src="{escape(facility["logo_url"])}" alt="">' if facility.get("logo_url") else ""
-    body.append(f'<div class="letterhead">{logo}<div class="org">{escape(facility.get("name") or facility.get("organization", ""))}</div></div>')
+    body.append(
+        f'<div class="letterhead">{logo}<div class="org">{escape(facility.get("name") or facility.get("organization", ""))}</div></div>'
+    )
     if r.get("statuteLine"):
         body.append(f'<div class="statute">{escape(r["statuteLine"])}</div>')
     body.append(f"<h1>{escape(r['title'])}</h1>")
     if doc.supersedes_id:
-        body.append(f'<p><strong>Amended version {doc.version}.</strong> Reason: {escape(doc.amendment_reason)}</p>')
+        body.append(
+            f"<p><strong>Amended version {doc.version}.</strong> Reason: {escape(doc.amendment_reason)}</p>"
+        )
 
     if doc.template_id == VOLUNTARY_TEMPLATE:
         body.append(f"<p>{escape(r['explanatoryText'])}</p>")
-        body.append(f'<div class="notice"><strong>{escape(r["noticeHeading"])}</strong><p>“{escape(r["noticeText"])}”</p>'
-                    f'<p><em>({escape(r["noticePurpose"])})</em></p>'
-                    f'<p>{_box(bool(doc.content.get("notice_acknowledged_at")))}{escape(r["noticeAcknowledgement"])} '
-                    f'{escape(_when(doc.content.get("notice_acknowledged_at")))}</p></div>')
+        body.append(
+            f'<div class="notice"><strong>{escape(r["noticeHeading"])}</strong><p>“{escape(r["noticeText"])}”</p>'
+            f'<p><em>({escape(r["noticePurpose"])})</em></p>'
+            f'<p>{_box(bool(doc.content.get("notice_acknowledged_at")))}{escape(r["noticeAcknowledgement"])} '
+            f'{escape(_when(doc.content.get("notice_acknowledged_at")))}</p></div>'
+        )
         body.append(f"<p>{escape(r['declaration'])}</p>")
         body.append(_signature_line(doc, labels.get("applicantSignature", "")))
-        body.append(f'<p>{escape(labels.get("applicantSignatureDate", "Date"))}: {_dots(facility_time.local_format(doc.signed_at, "%d/%m/%Y %H:%M"))}</p>')
+        body.append(
+            f'<p>{escape(labels.get("applicantSignatureDate", "Date"))}: {_dots(facility_time.local_format(doc.signed_at, "%d/%m/%Y %H:%M"))}</p>'
+        )
         body.append(_official(ls, r, labels, doc.template_id))
     elif doc.template_id == INVOLUNTARY_APPLICATION_TEMPLATE:
         parts = r["parts"]
@@ -123,9 +151,11 @@ def render(doc, user):
         id_value = legal_status.mask(doc.patient.national_id or doc.patient.passport_number)
         body.append(f"<p>2. {escape(labels['clientIdNumber'])}: {_dots(id_value)}</p>")
         g = client.get("gender_form")
-        body.append(f"<p>3. {escape(labels['clientGender'])}: {_box(g == 'MALE')}{escape(labels['genderMale'])} "
-                    f"{_box(g == 'FEMALE')}{escape(labels['genderFemale'])} {_box(g == 'OTHER')}{escape(labels['genderOther'])} "
-                    f"{_dots(client.get('gender_other_detail'))}</p>")
+        body.append(
+            f"<p>3. {escape(labels['clientGender'])}: {_box(g == 'MALE')}{escape(labels['genderMale'])} "
+            f"{_box(g == 'FEMALE')}{escape(labels['genderFemale'])} {_box(g == 'OTHER')}{escape(labels['genderOther'])} "
+            f"{_dots(client.get('gender_other_detail'))}</p>"
+        )
         body.append(f"<p>4. {escape(labels['clientIs'])}:</p>")
         for a in r["assertions"]:
             body.append(f"<p style='margin-left:24px'>{_box(a['ticked'])}{escape(a['text'])}</p>")
@@ -135,16 +165,24 @@ def render(doc, user):
         body.append(f"<h2>{escape(parts['B'])}</h2>")
         body.append(f"<p>1. {escape(labels['applicantFullName'])}: {_dots(ap.get('name'))}</p>")
         person = doc.signer_related_person or (
-            doc.patient.emergency_contacts.filter(pk=doc.content.get("applicant_related_person_id")).first()
-            if doc.content.get("applicant_related_person_id") else None)
-        body.append(f"<p>2. {escape(labels['applicantIdNumber'])}: {_dots(legal_status.mask(person.id_number) if person else '')}</p>")
+            doc.patient.emergency_contacts.filter(
+                pk=doc.content.get("applicant_related_person_id")
+            ).first()
+            if doc.content.get("applicant_related_person_id")
+            else None
+        )
+        body.append(
+            f"<p>2. {escape(labels['applicantIdNumber'])}: {_dots(legal_status.mask(person.id_number) if person else '')}</p>"
+        )
         body.append(f"<p>3. {escape(labels['applicantAddress'])}: {_dots(ap.get('address'))}</p>")
         body.append(f"<p>4. {escape(labels['applicantPhone'])}: {_dots(ap.get('phone'))}</p>")
         rel = " — ".join(x for x in (ap.get("relationship"), ap.get("relationship_detail")) if x)
         body.append(f"<p>5. {escape(labels['applicantRelationship'])}: {_dots(rel)}</p>")
         body.append(f"<h2>{escape(parts['D'])}</h2><p>{escape(r['declaration'])}</p>")
         body.append(_signature_line(doc, labels["applicantSignature"]))
-        body.append(f"<p>{escape(labels['date'])}: {_dots(facility_time.local_format(doc.signed_at, '%d/%m/%Y %H:%M'))}</p>")
+        body.append(
+            f"<p>{escape(labels['date'])}: {_dots(facility_time.local_format(doc.signed_at, '%d/%m/%Y %H:%M'))}</p>"
+        )
         body.append(_official(ls, r, labels, doc.template_id))
     elif doc.template_id == RECOMMENDATION_TEMPLATE:
         body.append(f"<p>{escape(r['intro'])}</p>")
@@ -155,30 +193,53 @@ def render(doc, user):
             else:
                 body.append(f"<p>{decl['number']}.</p>")
             for gr in decl.get("grounds") or []:
-                body.append(f"<p style='margin-left:24px'>{_box(gr['affirmed'])}({escape(gr['code'])}) {escape(gr['text'])}</p>")
+                body.append(
+                    f"<p style='margin-left:24px'>{_box(gr['affirmed'])}({escape(gr['code'])}) {escape(gr['text'])}</p>"
+                )
                 if gr.get("narrative"):
-                    body.append(f"<p class='narrative'>{escape(labels.get('groundNarrative', ''))}: {escape(gr['narrative'])}</p>")
+                    body.append(
+                        f"<p class='narrative'>{escape(labels.get('groundNarrative', ''))}: {escape(gr['narrative'])}</p>"
+                    )
         cred = r.get("credential") or {}
         body.append(_signature_line(doc, labels["signature"]))
-        body.append(f"<p>{escape(labels['qualifications'])}: {_dots(cred.get('qualifications'))}</p>")
+        body.append(
+            f"<p>{escape(labels['qualifications'])}: {_dots(cred.get('qualifications'))}</p>"
+        )
         reg = cred.get("registration_number", "")
         if cred.get("registration_verified_at"):
             reg += f" (verified {_when(cred['registration_verified_at'])[:10]})"
         body.append(f"<p>{escape(labels['registration'])}: {_dots(reg)}</p>")
-        body.append(f"<p>{escape(labels['date'])}: {_dots(facility_time.local_format(doc.signed_at, '%d/%m/%Y'))}</p>")
+        body.append(
+            f"<p>{escape(labels['date'])}: {_dots(facility_time.local_format(doc.signed_at, '%d/%m/%Y'))}</p>"
+        )
         body.append(_official(ls, r, labels, doc.template_id))
     elif doc.template_id == NOTICE_TEMPLATE:
-        body.append(f'<div class="notice"><strong>{escape(r["noticeHeading"])}</strong><p>“{escape(r["noticeText"])}”</p></div>')
-        body.append(f"<p>{escape(labels['clientStatement'])}: {_dots(r.get('statement') or 'Written notice on file (scan)')}</p>")
+        body.append(
+            f'<div class="notice"><strong>{escape(r["noticeHeading"])}</strong><p>“{escape(r["noticeText"])}”</p></div>'
+        )
+        body.append(
+            f"<p>{escape(labels['clientStatement'])}: {_dots(r.get('statement') or 'Written notice on file (scan)')}</p>"
+        )
         body.append(f"<p>{escape(labels['givenAt'])}: {_dots(_when(r.get('givenAt')))}</p>")
         body.append(f"<p>{escape(labels['givenTo'])}: {_dots(r.get('givenTo'))}</p>")
         body.append(_signature_line(doc, labels["signature"]))
 
-    footer_lines = [facility.get("name") or facility.get("organization", ""), facility.get("address", ""),
-                    " · ".join(x for x in (facility.get("phone"), facility.get("email"), facility.get("website")) if x)]
+    footer_lines = [
+        facility.get("name") or facility.get("organization", ""),
+        facility.get("address", ""),
+        " · ".join(
+            x for x in (facility.get("phone"), facility.get("email"), facility.get("website")) if x
+        ),
+    ]
     generated = facility_time.local_format(timezone.now(), "%Y-%m-%d %H:%M")
     status = "Signed" if doc.status == "SIGNED" else "DRAFT — not signed"
-    footer_lines.append(f"Document {doc.document_number} · version {doc.version} · {status} · config {r.get('configVersion', '')} · generated {generated} by {legal_status._name(user)}")
-    body.append('<div class="footer">' + "<br>".join(escape(x) for x in footer_lines if x) + "</div>")
-    return (f"<!doctype html><html><head><meta charset='utf-8'><title>{escape(r['title'])}</title>"
-            f"<style>{CSS}</style></head><body><div class='page'>{''.join(body)}</div></body></html>")
+    footer_lines.append(
+        f"Document {doc.document_number} · version {doc.version} · {status} · config {r.get('configVersion', '')} · generated {generated} by {legal_status._name(user)}"
+    )
+    body.append(
+        '<div class="footer">' + "<br>".join(escape(x) for x in footer_lines if x) + "</div>"
+    )
+    return (
+        f"<!doctype html><html><head><meta charset='utf-8'><title>{escape(r['title'])}</title>"
+        f"<style>{CSS}</style></head><body><div class='page'>{''.join(body)}</div></body></html>"
+    )

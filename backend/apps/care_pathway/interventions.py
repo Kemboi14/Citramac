@@ -43,18 +43,29 @@ OBS_LEVELS = {
 }
 CONTINUOUS = {"EYESIGHT", "ARMS_LENGTH"}
 LOCATIONS = [
-    "Main waiting area", "Quiet room", "Safe (low-stimulus) room", "Medical bay / resus",
-    "Ward bed", "Day room", "Garden / outside area", "Off ward (escorted)",
+    "Main waiting area",
+    "Quiet room",
+    "Safe (low-stimulus) room",
+    "Medical bay / resus",
+    "Ward bed",
+    "Day room",
+    "Garden / outside area",
+    "Off ward (escorted)",
 ]
 ENGAGEMENT = [
-    "Engaged — talked with observer", "Withdrawn", "Agitated",
-    "Asleep — breathing observed", "Off ward",
+    "Engaged — talked with observer",
+    "Withdrawn",
+    "Agitated",
+    "Asleep — breathing observed",
+    "Off ward",
 ]
 
 
 def served_observation():
     return {
-        "levels": [{"code": c, "display": d, "interval_minutes": m} for c, (d, m) in OBS_LEVELS.items()],
+        "levels": [
+            {"code": c, "display": d, "interval_minutes": m} for c, (d, m) in OBS_LEVELS.items()
+        ],
         "locations": LOCATIONS,
         "engagement": ENGAGEMENT,
         "max_continuous_minutes": settings.OBS_MAX_CONTINUOUS_MINUTES,
@@ -70,28 +81,49 @@ def observation_state(patient):
     due = None
     if level:
         interval = OBS_LEVELS[level.level][1]
-        base = last_entry.observed_at if last_entry and last_entry.observed_at >= level.changed_at else level.changed_at
+        base = (
+            last_entry.observed_at
+            if last_entry and last_entry.observed_at >= level.changed_at
+            else level.changed_at
+        )
         due = base + timedelta(minutes=interval)
     rotation_due = None
     if level and level.level in CONTINUOUS and observer:
         rotation_due = observer.since + timedelta(minutes=settings.OBS_MAX_CONTINUOUS_MINUTES)
     return {
         "level": (
-            {"code": level.level, "display": OBS_LEVELS[level.level][0], "reason": level.reason,
-             "since": level.changed_at, "by": _name(level.changed_by)}
-            if level else None
+            {
+                "code": level.level,
+                "display": OBS_LEVELS[level.level][0],
+                "reason": level.reason,
+                "since": level.changed_at,
+                "by": _name(level.changed_by),
+            }
+            if level
+            else None
         ),
         "next_entry_due": due,
         "overdue": bool(due and now > due),
         "observer": (
-            {"name": observer.observer_name, "gender": observer.observer_gender, "since": observer.since}
-            if observer else None
+            {
+                "name": observer.observer_name,
+                "gender": observer.observer_gender,
+                "since": observer.since,
+            }
+            if observer
+            else None
         ),
         "rotation_due": rotation_due,
         "rotation_overdue": bool(rotation_due and now > rotation_due),
         "entries": [
-            {"id": str(e.id), "at": e.observed_at, "location": e.location,
-             "engagement": e.engagement, "note": e.note, "by": _name(e.observed_by)}
+            {
+                "id": str(e.id),
+                "at": e.observed_at,
+                "location": e.location,
+                "engagement": e.engagement,
+                "note": e.note,
+                "by": _name(e.observed_by),
+            }
             for e in ObservationEntry.objects.filter(patient=patient)[:20]
         ],
     }
@@ -110,8 +142,11 @@ def set_observation_level(patient, user, code, reason):
     if not (reason or "").strip():
         raise ValidationError({"reason": "A reason is required."})
     return ObservationLevelChange.objects.create(
-        organization_id=patient.organization_id, patient=patient, level=code,
-        reason=reason.strip(), changed_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        level=code,
+        reason=reason.strip(),
+        changed_by=user,
     )
 
 
@@ -119,8 +154,11 @@ def hand_over_observer(patient, user, name, gender=""):
     if not (name or "").strip():
         raise ValidationError({"observer_name": "Name the incoming observer."})
     return ObserverHandover.objects.create(
-        organization_id=patient.organization_id, patient=patient,
-        observer_name=name.strip(), observer_gender=gender or "", recorded_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        observer_name=name.strip(),
+        observer_gender=gender or "",
+        recorded_by=user,
     )
 
 
@@ -131,8 +169,12 @@ def add_observation_entry(patient, user, location, engagement, note):
     if not note and not (engagement or "").startswith("Asleep"):
         raise ValidationError({"note": "Describe what you observed."})
     return ObservationEntry.objects.create(
-        organization_id=patient.organization_id, patient=patient, location=location,
-        engagement=engagement or "", note=note or engagement, observed_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        location=location,
+        engagement=engagement or "",
+        note=note or engagement,
+        observed_by=user,
     )
 
 
@@ -149,7 +191,9 @@ VITAL_RANGES = {
     "blood_glucose_mmol": ("Glucose", "mmol/L", 0.5, 50, 3, 20),
 }
 NOT_MEASURED_REASONS = [
-    "Declined", "Too agitated / unsafe to measure", "Equipment unavailable",
+    "Declined",
+    "Too agitated / unsafe to measure",
+    "Equipment unavailable",
     "Not clinically indicated now",
 ]
 
@@ -171,9 +215,13 @@ def record_observation_set(patient, user, data):
         except (TypeError, ValueError):
             raise ValidationError({field: f"{label}: enter a number only."}) from None
         if not hmin <= number <= hmax:
-            raise ValidationError({field: f"{label}: not a possible value — check ({hmin}–{hmax} {unit})."})
+            raise ValidationError(
+                {field: f"{label}: not a possible value — check ({hmin}–{hmax} {unit})."}
+            )
         if not smin <= number <= smax:
-            warnings.append(f"{label} {number:g} {unit} is unusual — confirm it was measured correctly.")
+            warnings.append(
+                f"{label} {number:g} {unit} is unusual — confirm it was measured correctly."
+            )
         values[field] = number
     for field, reason in skipped.items():
         if field in VITAL_RANGES and reason not in NOT_MEASURED_REASONS:
@@ -189,8 +237,12 @@ def record_observation_set(patient, user, data):
     episode = services.get_or_open_episode(patient, user)
     encounter = services.clinical_encounter_for(patient, episode, user)
     vital = VitalSigns.objects.create(
-        organization_id=patient.organization_id, encounter=encounter, recorded_by=user,
-        consciousness=consciousness, supplemental_o2=data.get("supplemental_o2"), **values,
+        organization_id=patient.organization_id,
+        encounter=encounter,
+        recorded_by=user,
+        consciousness=consciousness,
+        supplemental_o2=data.get("supplemental_o2"),
+        **values,
     )
     return vital, warnings, {k: v for k, v in skipped.items() if k in VITAL_RANGES}
 
@@ -205,14 +257,22 @@ def prescribing_checks(patient, drug_name):
         raise ValidationError({"drug": "Name the medicine."})
     hard, warn = [], []
     # INT-06: a true allergy hard-stops; an intolerance or ADR warns but does not block.
-    for allergy in patient.allergy_records.exclude(verification_status="REFUTED").exclude(clinical_status="RESOLVED"):
+    for allergy in patient.allergy_records.exclude(verification_status="REFUTED").exclude(
+        clinical_status="RESOLVED"
+    ):
         substance = allergy.substance.strip().lower()
         if substance and (substance in name or name in substance):
-            tag = "client-reported, unconfirmed" if allergy.verification_status == "UNCONFIRMED" else "confirmed"
+            tag = (
+                "client-reported, unconfirmed"
+                if allergy.verification_status == "UNCONFIRMED"
+                else "confirmed"
+            )
             if allergy.allergy_type == "ALLERGY":
                 hard.append(f"Recorded allergy to {allergy.substance} ({tag}) matches {drug_name}.")
             else:
-                warn.append(f"Recorded {allergy.get_allergy_type_display().lower()} to {allergy.substance} ({tag}) matches {drug_name}.")
+                warn.append(
+                    f"Recorded {allergy.get_allergy_type_display().lower()} to {allergy.substance} ({tag}) matches {drug_name}."
+                )
     if patient.allergy_status == "UNKNOWN":
         warn.append("Allergy status is unknown — assess before prescribing.")
     elif patient.allergy_records.filter(verification_status="UNCONFIRMED").exists():
@@ -221,12 +281,16 @@ def prescribing_checks(patient, drug_name):
         patient=patient, superseded_at__isnull=True, status="TAKING"
     ):
         if med.name.strip().lower() == name:
-            warn.append(f"Duplicate — {med.name} is already on the medication list ({med.dose} {med.frequency}).")
+            warn.append(
+                f"Duplicate — {med.name} is already on the medication list ({med.dose} {med.frequency})."
+            )
     admission = _current_admission(patient)
     if admission:
         for item in admission_orders(admission):
             if item.drug.generic_name.strip().lower() == name:
-                warn.append(f"Duplicate — {item.drug.generic_name} is already ordered during this admission ({_order_text(item)}).")
+                warn.append(
+                    f"Duplicate — {item.drug.generic_name} is already ordered during this admission ({_order_text(item)})."
+                )
     return {
         "blocking": hard,
         "warnings": warn,
@@ -244,8 +308,11 @@ ROUTE_VALUESET_TITLE = "Medication route"
 # Local codes, seeded by migration 0037 and served from then on. VERIFY: mapping
 # to the SNOMED CT route codes the R4 Dosage.route binding expects.
 ROUTES = [
-    ("ORAL", "Oral"), ("IM", "Intramuscular (IM)"), ("IV", "Intravenous (IV)"),
-    ("SC", "Subcutaneous (SC)"), ("SL", "Sublingual"),
+    ("ORAL", "Oral"),
+    ("IM", "Intramuscular (IM)"),
+    ("IV", "Intravenous (IV)"),
+    ("SC", "Subcutaneous (SC)"),
+    ("SL", "Sublingual"),
 ]
 # Frequencies the MAR can turn into dose times (FREQUENCY_SLOTS below), plus a
 # single stat dose, which has no scheduled time and is recorded as unscheduled.
@@ -277,12 +344,20 @@ def _order_text(item):
 def _order_row(item):
     rx = item.prescription
     return {
-        "id": str(item.pk), "drug_code": item.drug_id, "drug": item.drug.generic_name, "dose": item.dose,
-        "route": item.route, "frequency": item.frequency, "is_prn": item.is_prn,
-        "prn_max_per_24h": item.prn_max_per_24h, "indication": item.indication,
-        "controlled_drug": item.controlled_drug, "findings": item.check_findings,
+        "id": str(item.pk),
+        "drug_code": item.drug_id,
+        "drug": item.drug.generic_name,
+        "dose": item.dose,
+        "route": item.route,
+        "frequency": item.frequency,
+        "is_prn": item.is_prn,
+        "prn_max_per_24h": item.prn_max_per_24h,
+        "indication": item.indication,
+        "controlled_drug": item.controlled_drug,
+        "findings": item.check_findings,
         "allergy_override_reason": item.allergy_override_reason,
-        "prescribed_by": _name(rx.prescribed_by), "prescribed_at": rx.prescribed_at,
+        "prescribed_by": _name(rx.prescribed_by),
+        "prescribed_at": rx.prescribed_at,
     }
 
 
@@ -291,9 +366,11 @@ def prescribing_state(patient, user):
 
     from . import plan_extras
 
-    orders = PrescriptionItem.objects.filter(prescription__encounter__patient=patient).select_related(
-        "drug", "prescription__prescribed_by"
-    ).order_by("-prescription__prescribed_at")[:20]
+    orders = (
+        PrescriptionItem.objects.filter(prescription__encounter__patient=patient)
+        .select_related("drug", "prescription__prescribed_by")
+        .order_by("-prescription__prescribed_at")[:20]
+    )
     return {
         "allergy_status": patient.allergy_status,
         "allergy_text": allergy_text(patient),
@@ -321,16 +398,22 @@ def place_order(patient, user, data):
     from .models import LocalConcept
 
     if not can_prescribe(user):
-        raise PermissionDenied("Only a prescriber can place a medication order — request a psychiatrist review instead.")
+        raise PermissionDenied(
+            "Only a prescriber can place a medication order — request a psychiatrist review instead."
+        )
     if patient.allergy_status in PRESCRIBING_LOCKED:
-        raise ValidationError({"detail": "Prescribing locked — allergy status unknown. Record it in Intake first."})
+        raise ValidationError(
+            {"detail": "Prescribing locked — allergy status unknown. Record it in Intake first."}
+        )
     drug = NationalDrugIndex.objects.filter(pk=data.get("drug") or "").first()
     if drug is None:
         raise ValidationError({"drug": "Choose the medicine from the national drug index."})
     dose = str(data.get("dose") or "").strip()
     if not dose:
         raise ValidationError({"dose": "Enter the dose."})
-    route = LocalConcept.objects.filter(valueset_id=ROUTE_VALUESET_ID, code=data.get("route"), active=True).first()
+    route = LocalConcept.objects.filter(
+        valueset_id=ROUTE_VALUESET_ID, code=data.get("route"), active=True
+    ).first()
     if route is None:
         raise ValidationError({"route": "Choose the route."})
     is_prn = bool(data.get("is_prn"))
@@ -342,7 +425,9 @@ def place_order(patient, user, data):
         except (TypeError, ValueError):
             maximum = 0
         if maximum < 1:
-            raise ValidationError({"prn_max_per_24h": "A PRN order needs the maximum number of doses in 24 hours."})
+            raise ValidationError(
+                {"prn_max_per_24h": "A PRN order needs the maximum number of doses in 24 hours."}
+            )
         if not indication:
             raise ValidationError({"indication": "A PRN order needs its indication."})
     else:
@@ -351,21 +436,40 @@ def place_order(patient, user, data):
             raise ValidationError({"frequency": "Choose the frequency, or mark the order PRN."})
     checks = prescribing_checks(patient, drug.generic_name)
     if checks["warnings"] and not data.get("acknowledged_warnings"):
-        raise ValidationError({"acknowledged_warnings": "Review the warnings and confirm the order is clinically appropriate."})
+        raise ValidationError(
+            {
+                "acknowledged_warnings": "Review the warnings and confirm the order is clinically appropriate."
+            }
+        )
     override = str(data.get("override_reason") or "").strip()
     if checks["blocking"] and len(override) < 5:
-        raise ValidationError({"override_reason": "A recorded allergy is a hard stop. Cancel the order, or give the clinical reason for overriding it."})
+        raise ValidationError(
+            {
+                "override_reason": "A recorded allergy is a hard stop. Cancel the order, or give the clinical reason for overriding it."
+            }
+        )
     admission = services.current_admission(patient)
     if admission and admission.encounter_id:
         encounter = admission.encounter
     else:
-        encounter = services.clinical_encounter_for(patient, services.get_or_open_episode(patient, user), user)
+        encounter = services.clinical_encounter_for(
+            patient, services.get_or_open_episode(patient, user), user
+        )
     check_billing_clearance(encounter)
-    rx = Prescription.objects.create(organization_id=patient.organization_id, encounter=encounter, prescribed_by=user)
+    rx = Prescription.objects.create(
+        organization_id=patient.organization_id, encounter=encounter, prescribed_by=user
+    )
     item = PrescriptionItem.objects.create(
-        organization_id=patient.organization_id, prescription=rx, drug=drug, dose=dose,
-        route=route.display, frequency=frequency, is_prn=is_prn, prn_max_per_24h=maximum,
-        indication=indication, controlled_drug=bool(data.get("controlled_drug")),
+        organization_id=patient.organization_id,
+        prescription=rx,
+        drug=drug,
+        dose=dose,
+        route=route.display,
+        frequency=frequency,
+        is_prn=is_prn,
+        prn_max_per_24h=maximum,
+        indication=indication,
+        controlled_drug=bool(data.get("controlled_drug")),
         allergy_check_passed=not checks["blocking"],
         check_findings=[{"level": "HARD", "text": t} for t in checks["blocking"]]
         + [{"level": "WARN", "text": t} for t in checks["warnings"]],
@@ -373,9 +477,12 @@ def place_order(patient, user, data):
     )
     if checks["blocking"] and not plan_extras.can_cosign(user):
         plan_extras.request_cosign(
-            patient, user, "PRESCRIBING_OVERRIDE",
+            patient,
+            user,
+            "PRESCRIBING_OVERRIDE",
             f"Allergy hard-stop override: {drug.generic_name} — {override}"[:300],
-            subject_type="PrescriptionItem", subject_id=item.pk,
+            subject_type="PrescriptionItem",
+            subject_id=item.pk,
         )
     return item
 
@@ -384,8 +491,12 @@ def place_order(patient, user, data):
 # VERIFY: the facility's drug-round times. Times are facility wall-clock times
 # (settings.FACILITY_TIME_ZONE, via facility_time), not UTC.
 FREQUENCY_SLOTS = {
-    "once daily": ["08:00"], "mane": ["08:00"], "nocte": ["22:00"], "bd": ["08:00", "20:00"],
-    "tds": ["08:00", "14:00", "20:00"], "qds": ["06:00", "12:00", "18:00", "22:00"],
+    "once daily": ["08:00"],
+    "mane": ["08:00"],
+    "nocte": ["22:00"],
+    "bd": ["08:00", "20:00"],
+    "tds": ["08:00", "14:00", "20:00"],
+    "qds": ["06:00", "12:00", "18:00", "22:00"],
 }
 
 
@@ -429,10 +540,18 @@ def admission_orders(admission):
     charted = MedicationAdministration.objects.filter(
         admission=admission, prescription_item__isnull=False
     ).values("prescription_item")
-    return PrescriptionItem.objects.filter(
-        Q(prescription__encounter__patient_id=admission.patient_id, prescription__prescribed_at__gte=admission.admitted_at)
-        | Q(pk__in=charted)
-    ).select_related("drug", "prescription").distinct().order_by("prescription__prescribed_at")
+    return (
+        PrescriptionItem.objects.filter(
+            Q(
+                prescription__encounter__patient_id=admission.patient_id,
+                prescription__prescribed_at__gte=admission.admitted_at,
+            )
+            | Q(pk__in=charted)
+        )
+        .select_related("drug", "prescription")
+        .distinct()
+        .order_by("prescription__prescribed_at")
+    )
 
 
 def prn_given_24h(item, now=None):
@@ -461,15 +580,22 @@ def _order_mar(item, entries, now):
     PRN, how many doses were given in the last 24 h against the written maximum."""
     by_time = {e.scheduled_time: e for e in entries if e.prescription_item_id == item.pk}
     slots = []
-    for at in sorted(set(slot_times(item, now)) | {t for t, e in by_time.items() if e.status == "SCHEDULED"}):
+    for at in sorted(
+        set(slot_times(item, now)) | {t for t, e in by_time.items() if e.status == "SCHEDULED"}
+    ):
         entry = by_time.get(at)
-        slots.append({
-            "time": at, "entry": str(entry.pk) if entry else None,
-            "state": slot_state(entry, now) if entry else _time_state(at, now),
-        })
+        slots.append(
+            {
+                "time": at,
+                "entry": str(entry.pk) if entry else None,
+                "state": slot_state(entry, now) if entry else _time_state(at, now),
+            }
+        )
     given = prn_given_24h(item, now) if item.is_prn else None
     return {
-        **_order_row(item), "slots": slots, "given_24h": given,
+        **_order_row(item),
+        "slots": slots,
+        "given_24h": given,
         "at_max": bool(item.is_prn and item.prn_max_per_24h and given >= item.prn_max_per_24h),
     }
 
@@ -484,27 +610,46 @@ def mar_today(patient):
         return {"admission": None, "orders": [], "entries": [], "pending_effects": []}
     now = timezone.now()
     start = facility_time.combine_local(facility_time.local_date(now))
-    entries = list(MedicationAdministration.objects.filter(
-        admission=admission, scheduled_time__gte=start - timedelta(days=1)
-    ).select_related("prescription_item__drug", "administered_by").order_by("scheduled_time"))
+    entries = list(
+        MedicationAdministration.objects.filter(
+            admission=admission, scheduled_time__gte=start - timedelta(days=1)
+        )
+        .select_related("prescription_item__drug", "administered_by")
+        .order_by("scheduled_time")
+    )
     rows = [_mar_row(e, now) for e in entries]
     return {
         "admission": str(admission.id),
-        "orders": [_order_mar(item, entries, now) for item in admission_orders(admission).select_related("prescription__prescribed_by")],
+        "orders": [
+            _order_mar(item, entries, now)
+            for item in admission_orders(admission).select_related("prescription__prescribed_by")
+        ],
         "entries": rows,
-        "pending_effects": [r for r in rows if r["is_prn"] and r["status"] == "ADMINISTERED" and not r["effect"]],
+        "pending_effects": [
+            r for r in rows if r["is_prn"] and r["status"] == "ADMINISTERED" and not r["effect"]
+        ],
     }
 
 
 def _mar_row(e, now):
     drug = e.prescription_item.drug.generic_name if e.prescription_item_id else ""
     return {
-        "id": str(e.id), "order": str(e.prescription_item_id or ""), "drug": drug,
+        "id": str(e.id),
+        "order": str(e.prescription_item_id or ""),
+        "drug": drug,
         "dose": e.prescription_item.dose if e.prescription_item_id else "",
-        "scheduled_time": e.scheduled_time, "status": e.status, "state": slot_state(e, now),
-        "is_prn": e.is_prn, "prn_indication": e.prn_indication, "controlled_drug": e.controlled_drug,
-        "witness_name": e.witness_name, "own_supply": e.own_supply, "notes": e.notes,
-        "effect": e.effect, "administered_at": e.administered_at, "by": _name(e.administered_by),
+        "scheduled_time": e.scheduled_time,
+        "status": e.status,
+        "state": slot_state(e, now),
+        "is_prn": e.is_prn,
+        "prn_indication": e.prn_indication,
+        "controlled_drug": e.controlled_drug,
+        "witness_name": e.witness_name,
+        "own_supply": e.own_supply,
+        "notes": e.notes,
+        "effect": e.effect,
+        "administered_at": e.administered_at,
+        "by": _name(e.administered_by),
         "prn_max_override_reason": e.prn_max_override_reason,
     }
 
@@ -534,15 +679,28 @@ def administer_order(admission, item, user, outcome, *, slot="", **documentation
         when = now
     if entry is None:
         entry = MedicationAdministration.objects.create(
-            organization_id=admission.organization_id, admission=admission, prescription_item=item,
-            scheduled_time=when, is_prn=item.is_prn, controlled_drug=item.controlled_drug,
+            organization_id=admission.organization_id,
+            admission=admission,
+            prescription_item=item,
+            scheduled_time=when,
+            is_prn=item.is_prn,
+            controlled_drug=item.controlled_drug,
         )
     return record_administration(entry, user, outcome, **documentation)
 
 
 @transaction.atomic
-def record_administration(entry, user, outcome, *, notes="", indication="", witness="", own_supply=False,
-                          override_reason=""):
+def record_administration(
+    entry,
+    user,
+    outcome,
+    *,
+    notes="",
+    indication="",
+    witness="",
+    own_supply=False,
+    override_reason="",
+):
     """Given / Declined / Withheld — each with the documentation it needs."""
     if entry.status not in ("SCHEDULED", "MISSED"):
         raise ValidationError({"detail": "This dose has already been recorded."})
@@ -550,19 +708,32 @@ def record_administration(entry, user, outcome, *, notes="", indication="", witn
     if outcome not in ("ADMINISTERED", "REFUSED", "WITHHELD"):
         raise ValidationError({"outcome": "Use ADMINISTERED, REFUSED or WITHHELD."})
     if outcome != "ADMINISTERED" and not notes:
-        raise ValidationError({"notes": "A reason is required when a dose is declined or withheld."})
+        raise ValidationError(
+            {"notes": "A reason is required when a dose is declined or withheld."}
+        )
     if outcome == "ADMINISTERED":
         if entry.controlled_drug and not (witness or "").strip():
-            raise ValidationError({"witness_name": "A second signature (witness) is required for a controlled drug."})
+            raise ValidationError(
+                {"witness_name": "A second signature (witness) is required for a controlled drug."}
+            )
         if entry.is_prn and not (indication or "").strip():
             raise ValidationError({"prn_indication": "Say why the PRN dose is being given now."})
         order = entry.prescription_item
-        if entry.is_prn and order and order.prn_max_per_24h and prn_given_24h(order) >= order.prn_max_per_24h:
+        if (
+            entry.is_prn
+            and order
+            and order.prn_max_per_24h
+            and prn_given_24h(order) >= order.prn_max_per_24h
+        ):
             if not (override_reason or "").strip():
-                raise ValidationError({"override_reason": (
-                    f"The maximum of {order.prn_max_per_24h} doses in 24 h has already been given — review "
-                    "with the prescriber, and record the reason if the dose is still given."
-                )})
+                raise ValidationError(
+                    {
+                        "override_reason": (
+                            f"The maximum of {order.prn_max_per_24h} doses in 24 h has already been given — review "
+                            "with the prescriber, and record the reason if the dose is still given."
+                        )
+                    }
+                )
             entry.prn_max_override_reason = override_reason.strip()[:400]
     entry.status = outcome
     entry.administered_by = user
@@ -588,7 +759,12 @@ def record_effect(entry, user, effect):
 
 
 # ── restrictive practice ──
-DE_ESCALATION = ["Verbal de-escalation", "Reduced stimulation / space offered", "Oral PRN offered first", "Support person involved"]
+DE_ESCALATION = [
+    "Verbal de-escalation",
+    "Reduced stimulation / space offered",
+    "Oral PRN offered first",
+    "Support person involved",
+]
 
 
 def _check_label(kind, minutes):
@@ -630,25 +806,36 @@ def record_restrictive_episode(patient, user, data):
     if timezone.is_naive(start_at):
         start_at = facility_time.make_local_aware(start_at)
     episode = RestrictivePracticeEpisode.objects.create(
-        organization_id=patient.organization_id, patient=patient, kind=kind, de_escalation=tried,
-        authorised_by=authoriser, start_at=start_at, injury_check=data["injury_check"],
+        organization_id=patient.organization_id,
+        patient=patient,
+        kind=kind,
+        de_escalation=tried,
+        authorised_by=authoriser,
+        start_at=start_at,
+        injury_check=data["injury_check"],
         incident_reference=(data.get("incident_reference") or "").strip(),
-        staff_debrief_held=bool(data.get("staff_debrief_held")), recorded_by=user,
+        staff_debrief_held=bool(data.get("staff_debrief_held")),
+        recorded_by=user,
         client_debrief_at=timezone.now() if debrief == "DONE" else None,
     )
     for minutes in settings.RESTRICTIVE_CHECK_MINUTES.get(kind, []):
         RestrictiveCheck.objects.create(
-            organization_id=patient.organization_id, episode=episode,
-            label=_check_label(kind, minutes), due_at=start_at + timedelta(minutes=minutes),
+            organization_id=patient.organization_id,
+            episode=episode,
+            label=_check_label(kind, minutes),
+            due_at=start_at + timedelta(minutes=minutes),
         )
     from . import plan_extras
 
     if not plan_extras.can_cosign(authoriser):
         plan_extras.request_cosign(
-            patient, user, "RESTRICTIVE_PRACTICE",
+            patient,
+            user,
+            "RESTRICTIVE_PRACTICE",
             f"{episode.get_kind_display()} authorised by {_name(authoriser)} from "
             f"{_local(start_at)}",
-            subject_type="RestrictivePracticeEpisode", subject_id=episode.pk,
+            subject_type="RestrictivePracticeEpisode",
+            subject_id=episode.pk,
         )
     return episode
 
@@ -697,7 +884,8 @@ def client_debrief(episode):
 def seclusion_review_due(episode):
     """An ongoing seclusion past the configured maximum needs independent senior review."""
     return bool(
-        episode.kind == "SECLUSION" and not episode.end_at
+        episode.kind == "SECLUSION"
+        and not episode.end_at
         and timezone.now() - episode.start_at >= timedelta(minutes=settings.SECLUSION_MAX_MINUTES)
     )
 
@@ -730,8 +918,10 @@ def build_sbar(patient, user):
     sections = signed.sections if signed else {}
     triage = services.latest_signed_triage(patient)
     allergies = allergy_text(patient)
-    meds =MedicationHistoryEntry.objects.filter(patient=patient, superseded_at__isnull=True)
-    meds_text = "; ".join(f"{m.name} {m.dose} {m.frequency}".strip() for m in meds) or "none recorded"
+    meds = MedicationHistoryEntry.objects.filter(patient=patient, superseded_at__isnull=True)
+    meds_text = (
+        "; ".join(f"{m.name} {m.dose} {m.frequency}".strip() for m in meds) or "none recorded"
+    )
     vital = VitalSigns.objects.filter(encounter__patient=patient).order_by("-recorded_at").first()
     vitals_text = "—"
     if vital:
@@ -746,22 +936,34 @@ def build_sbar(patient, user):
     mse = mental_state.exam_text(sections.get("mse", {}))
     scores = []
     for code in ("PHQ9", "GAD7", "PAWSS", "PCL5", "EPDS"):
-        s = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at").first()
+        s = (
+            OutcomeScore.objects.filter(patient=patient, instrument=code)
+            .order_by("-recorded_at")
+            .first()
+        )
         if s:
             scores.append(f"{code} {s.score}")
     from apps.clinical_encounter.models import DiagnosisCode
 
-    dx = "; ".join(
-        f"{d.icd11_code.code} {d.icd11_code.description}"
-        for d in DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT").select_related("icd11_code")
-    ) or "none recorded"
+    dx = (
+        "; ".join(
+            f"{d.icd11_code.code} {d.icd11_code.description}"
+            for d in DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
+            .exclude(verification_status="RULED_OUT")
+            .select_related("icd11_code")
+        )
+        or "none recorded"
+    )
     plan = services.current_or_latest_episode(patient)
     plan_text = ""
     if plan and hasattr(plan, "care_plan"):
         actions = plan.care_plan.activities.exclude(decision="DECLINED").exclude(action_key="")
         if actions.exists():
-            plan_text = "Plan: " + "; ".join(f"{a.title} ({a.get_priority_display() or '—'})" for a in actions) + ". "
+            plan_text = (
+                "Plan: "
+                + "; ".join(f"{a.title} ({a.get_priority_display() or '—'})" for a in actions)
+                + ". "
+            )
     priority = triage.get_priority_display() if triage and triage.priority else "not triaged"
     handover = sections.get("close", {}).get("message", "")
     age = patient.age_years
@@ -784,4 +986,3 @@ def build_sbar(patient, user):
         f"RECOMMENDATION\n{plan_text}{('Handover: ' + handover + '. ') if handover else ''}"
         f"Request senior review / receiving-unit acceptance. Prepared by {_name(user)} at {_local(timezone.now(), '%H:%M')}."
     )
-

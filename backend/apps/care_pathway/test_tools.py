@@ -40,7 +40,10 @@ class InstrumentScoringTests(SimpleTestCase):
     def test_change_is_stated_in_words_with_reliable_and_clinical_significance(self):
         self.assertEqual(instruments.change_text("PHQ9", [14])["text"], "Baseline only")
         better = instruments.change_text("PHQ9", [14, 9])
-        self.assertEqual(better["text"], "Improved 5 points · reliable change · clinically significant (now below 10)")
+        self.assertEqual(
+            better["text"],
+            "Improved 5 points · reliable change · clinically significant (now below 10)",
+        )
         self.assertTrue(better["clinically_significant"])
         small = instruments.change_text("PHQ9", [14, 12])
         self.assertEqual((small["text"], small["reliable"]), ("Improved 2 points", False))
@@ -65,7 +68,9 @@ class EarlyWarningScoreTests(SimpleTestCase):
         self.assertEqual(result["response"]["tone"], "ok")
 
     def test_bands_and_oxygen_add_up(self):
-        result = ews.score({**self.NORMAL, "rr": 25, "spo2": 94, "hr": 100, "supplemental_o2": True})
+        result = ews.score(
+            {**self.NORMAL, "rr": 25, "spo2": 94, "hr": 100, "supplemental_o2": True}
+        )
         # rr 25→3, spo2 94→1, hr 100→1, plus 2 for oxygen
         self.assertEqual(result["score"], 7)
         self.assertIn("emergency", result["response"]["text"])
@@ -138,7 +143,9 @@ class ToolsApiTests(IntakeTestCase):
         with platform_admin_context():
             from datetime import date
 
-            Patient.objects.filter(pk=self.pid).update(date_of_birth=date(date.today().year - 15, 1, 1))
+            Patient.objects.filter(pk=self.pid).update(
+                date_of_birth=date(date.today().year - 15, 1, 1)
+            )
         self.draft()
         self.save(sections={"sx": {"list": [_code("Low mood")]}})
         tools = self.tools()
@@ -149,14 +156,18 @@ class ToolsApiTests(IntakeTestCase):
         self.draft()
         self.save(sections={"subs": {"kind": _code("Alcohol")}})
         tools = self.tools()
-        self.assertEqual((tools["PAWSS"]["status"], tools["AUDITC"]["status"]), ("Recommended",) * 2)
+        self.assertEqual(
+            (tools["PAWSS"]["status"], tools["AUDITC"]["status"]), ("Recommended",) * 2
+        )
         self.assertNotIn("CIWA", tools)
 
     def test_declining_needs_a_reason_and_is_reversible(self):
         self.draft()
         self.save(sections={"sx": {"list": [_code("Low mood")]}})
         self.assertEqual(self.decide("PHQ9", "DECLINED").status_code, 400)
-        self.assertEqual(self.decide("PHQ9", "DECLINED", "Client too distressed today").status_code, 201)
+        self.assertEqual(
+            self.decide("PHQ9", "DECLINED", "Client too distressed today").status_code, 201
+        )
         declined = self.tools()["PHQ9"]
         self.assertEqual(declined["status"], "Declined")
         self.assertEqual(declined["decision"]["reason"], "Client too distressed today")
@@ -228,9 +239,17 @@ class VitalsEwsEndpointTests(IntakeTestCase):
             episode = services.get_or_open_episode(patient, self.nurse)
             encounter = services.clinical_encounter_for(patient, episode, self.nurse)
             VitalSigns.objects.create(
-                organization=self.org, encounter=encounter, heart_rate=118, respiratory_rate=22,
-                systolic_bp=150, spo2=96, temperature_c="37.0", consciousness="A",
+                organization=self.org,
+                encounter=encounter,
+                heart_rate=118,
+                respiratory_rate=22,
+                systolic_bp=150,
+                spo2=96,
+                temperature_c="37.0",
+                consciousness="A",
             )
-        rows = self.client.get(reverse("care-client-vitals", args=[self.pid]), **self.auth).data["results"]
+        rows = self.client.get(reverse("care-client-vitals", args=[self.pid]), **self.auth).data[
+            "results"
+        ]
         self.assertEqual(rows[-1]["ews"]["score"], 4)  # hr 118→2, rr 22→2
         self.assertTrue(rows[-1]["ews"]["complete"])

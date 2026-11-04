@@ -34,8 +34,9 @@ from apps.mhp_program.permissions import has_full_mhp_access
 from apps.sysadmin_audit.audit import log_view, write_event
 from apps.tenancy.context import platform_admin_context
 
-from . import facility_time, intake_schema, psy_ai, psy_seed, records, services, therapy
+from . import facility_time, intake_schema, psy_ai
 from . import psy_organizer as org
+from . import psy_seed, records, services, therapy
 from .models import (
     CarePlan,
     CarePlanActivity,
@@ -109,9 +110,17 @@ def therapy_models(organization_id, enabled_only=True):
     created on first use (PSY-TM-03). Disabled models stay on file."""
     if organization_id and not TherapyModel.objects.exists():
         TherapyModel.objects.bulk_create(
-            [TherapyModel(organization_id=organization_id, code=code, name=name, aliases=aliases,
-                          concepts=concepts, order=i)
-             for i, (code, name, aliases, concepts) in enumerate(psy_seed.THERAPY_MODELS)],
+            [
+                TherapyModel(
+                    organization_id=organization_id,
+                    code=code,
+                    name=name,
+                    aliases=aliases,
+                    concepts=concepts,
+                    order=i,
+                )
+                for i, (code, name, aliases, concepts) in enumerate(psy_seed.THERAPY_MODELS)
+            ],
             ignore_conflicts=True,
         )
     rows = TherapyModel.objects.all()
@@ -119,10 +128,16 @@ def therapy_models(organization_id, enabled_only=True):
 
 
 def model_row(m):
-    return {"code": m.code, "name": m.name, "aliases": list(m.aliases or []), "concepts": list(m.concepts or []),
-            "version": m.version, "enabled": m.enabled,
-            # Added by the organisation (not one of the seed models): may be removed (disabled).
-            "custom": m.code not in SEED_MODEL_CODES}
+    return {
+        "code": m.code,
+        "name": m.name,
+        "aliases": list(m.aliases or []),
+        "concepts": list(m.concepts or []),
+        "version": m.version,
+        "enabled": m.enabled,
+        # Added by the organisation (not one of the seed models): may be removed (disabled).
+        "custom": m.code not in SEED_MODEL_CODES,
+    }
 
 
 def _clean_list(value, field):
@@ -141,16 +156,24 @@ def add_model(user, data):
     from django.utils.text import slugify
 
     code = slugify(data.get("code") or name).replace("-", "_")[:60] or "model"
-    if TherapyModel.objects.filter(code=code).exists() or TherapyModel.objects.filter(name__iexact=name).exists():
+    if (
+        TherapyModel.objects.filter(code=code).exists()
+        or TherapyModel.objects.filter(name__iexact=name).exists()
+    ):
         raise ValidationError({"name": "This therapy model is already in the registry."})
     concepts = _clean_list(data.get("concepts") or [], "concepts")
     if not concepts:
         raise ValidationError({"concepts": "List the model's concepts."})
     last = TherapyModel.objects.order_by("-order").first()
     return TherapyModel.objects.create(
-        organization_id=user.organization_id, code=code, name=name, concepts=concepts,
-        aliases=_clean_list(data.get("aliases") or [], "aliases"), version=str(data.get("version") or "1")[:16],
-        enabled=bool(data.get("enabled", True)), order=(last.order + 1) if last else 0,
+        organization_id=user.organization_id,
+        code=code,
+        name=name,
+        concepts=concepts,
+        aliases=_clean_list(data.get("aliases") or [], "aliases"),
+        version=str(data.get("version") or "1")[:16],
+        enabled=bool(data.get("enabled", True)),
+        order=(last.order + 1) if last else 0,
     )
 
 
@@ -183,13 +206,17 @@ def _next_version(version):
 
 
 def lexicon(name):
-    return [{"id": t.pk, "category": t.category, "phrase": t.phrase, "suggestion": t.suggestion}
-            for t in ClinicalLexiconTerm.objects.filter(lexicon=name, active=True)]
+    return [
+        {"id": t.pk, "category": t.category, "phrase": t.phrase, "suggestion": t.suggestion}
+        for t in ClinicalLexiconTerm.objects.filter(lexicon=name, active=True)
+    ]
 
 
 def _concepts(valueset_id):
-    return [{"code": c.code, "label": c.display}
-            for c in LocalConcept.objects.filter(valueset_id=valueset_id, active=True)]
+    return [
+        {"code": c.code, "label": c.display}
+        for c in LocalConcept.objects.filter(valueset_id=valueset_id, active=True)
+    ]
 
 
 def concern_options():
@@ -201,12 +228,20 @@ def concern_options():
     categories = []
     for c in _concepts(CONCERN_VALUESET):
         row = rows.get(psy_seed.CONCERN_REGISTER_ROW.get(c["code"], ""))
-        categories.append({**c, "register_row": row["key"] if row else None,
-                           "register_label": row["label"] if row else "",
-                           "options": list(row["active"]) if row else []})
+        categories.append(
+            {
+                **c,
+                "register_row": row["key"] if row else None,
+                "register_label": row["label"] if row else "",
+                "options": list(row["active"]) if row else [],
+            }
+        )
     return {
         "categories": categories,
-        "register": [{"row": r["key"], "label": r["label"], "options": list(r["active"])} for r in rows.values()],
+        "register": [
+            {"row": r["key"], "label": r["label"], "options": list(r["active"])}
+            for r in rows.values()
+        ],
         "other": _concepts(OTHER_CONCERN_VALUESET),
     }
 
@@ -224,11 +259,17 @@ def config(user):
         "concerns": concern_options(),
         "safety_actions": _concepts(ACTION_VALUESET),
         "attendance_modes": _concepts(ATTENDANCE_VALUESET),
-        "session_types": [{"code": c, "label": dict(PsychotherapySession.SESSION_TYPE_CHOICES)[c]}
-                          for c in SESSION_TYPES],
-        "languages": [{"code": c, "label": label, "translated": c in org.TRANSLATED_LANGUAGES}
-                      for c, label in org.LANGUAGES],
-        "goal_decisions": [{"code": c, "label": label or "not relevant"} for c, label in org.GOAL_DECISIONS.items()],
+        "session_types": [
+            {"code": c, "label": dict(PsychotherapySession.SESSION_TYPE_CHOICES)[c]}
+            for c in SESSION_TYPES
+        ],
+        "languages": [
+            {"code": c, "label": label, "translated": c in org.TRANSLATED_LANGUAGES}
+            for c, label in org.LANGUAGES
+        ],
+        "goal_decisions": [
+            {"code": c, "label": label or "not relevant"} for c, label in org.GOAL_DECISIONS.items()
+        ],
         "not_assessed_ack_text": NA_ACK_TEXT,
         "attestation_text": ATTESTATION_TEXT,
         # X-12: browser dictation is off unless the organisation has approved it —
@@ -237,7 +278,11 @@ def config(user):
         # also needs each client's consent, reported on the note.
         "dictation_enabled": dictation_enabled(user.organization),
         "ai_enabled": psy_ai.org_enabled(user.organization),
-        "processed_labels": {"ai": PROCESSED_AI, "rules": PROCESSED_RULES, "not_translated": NOT_TRANSLATED},
+        "processed_labels": {
+            "ai": PROCESSED_AI,
+            "rules": PROCESSED_RULES,
+            "not_translated": NOT_TRANSLATED,
+        },
         "can_configure": can_configure(user),
     }
 
@@ -253,7 +298,9 @@ def can_read(user, note):
 
 def _require_author(user, note):
     if note.author_id != user.pk:
-        raise PermissionDenied("Only the clinician who wrote this session note can change or sign it.")
+        raise PermissionDenied(
+            "Only the clinician who wrote this session note can change or sign it."
+        )
 
 
 def _require_draft(note):
@@ -277,23 +324,44 @@ def start_or_resume(patient, user, data):
         return existing, False
     session_type = data.get("session_type") or "INDIVIDUAL"
     if session_type not in SESSION_TYPES:
-        raise ValidationError({"session_type": "Individual, couple or family — group sessions are recorded in the group programme."})
-    activity = therapy._activity(patient, data.get("activity")) if data.get("activity") else ep.activity
+        raise ValidationError(
+            {
+                "session_type": "Individual, couple or family — group sessions are recorded in the group programme."
+            }
+        )
+    activity = (
+        therapy._activity(patient, data.get("activity")) if data.get("activity") else ep.activity
+    )
     episode = services.get_or_open_episode(patient, user)
     encounter = Encounter.objects.create(
-        organization_id=patient.organization_id, patient=patient, episode=episode, opened_by=user,
-        encounter_type="PSYCHOTHERAPY", status="IN_PROGRESS",
+        organization_id=patient.organization_id,
+        patient=patient,
+        episode=episode,
+        opened_by=user,
+        encounter_type="PSYCHOTHERAPY",
+        status="IN_PROGRESS",
     )
     session = PsychotherapySession.objects.create(
-        organization_id=patient.organization_id, patient=patient, session_type=session_type, therapist=user,
-        modality=ep.modality, trauma_processing_stage=str(ep.trauma_phase or ""),
+        organization_id=patient.organization_id,
+        patient=patient,
+        session_type=session_type,
+        therapist=user,
+        modality=ep.modality,
+        trauma_processing_stage=str(ep.trauma_phase or ""),
         extra={"therapy_episode": str(ep.pk), "activity": str(activity.pk if activity else "")},
     )
     note = PsychotherapyNote(
-        organization_id=patient.organization_id, patient=patient, therapy_episode=ep, episode=episode,
-        encounter=encounter, session=session, author=user,
-        answers={k: {"text": "", "mode": "TYPED", "language": DEFAULT_LANGUAGE, "answered_at": None}
-                 for k in org.QUESTION_KEYS},
+        organization_id=patient.organization_id,
+        patient=patient,
+        therapy_episode=ep,
+        episode=episode,
+        encounter=encounter,
+        session=session,
+        author=user,
+        answers={
+            k: {"text": "", "mode": "TYPED", "language": DEFAULT_LANGUAGE, "answered_at": None}
+            for k in org.QUESTION_KEYS
+        },
     )
     _audit(note, user, "CREATE")
     note.save()
@@ -301,7 +369,7 @@ def start_or_resume(patient, user, data):
 
 
 def _digest(language, text):
-    return hashlib.sha1(f"{language}|{text}".encode()).hexdigest()[:16]
+    return hashlib.sha1(f"{language}|{text}".encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 def _set_answers(note, user, answers, to_translate):
@@ -317,16 +385,26 @@ def _set_answers(note, user, answers, to_translate):
         if key not in org.QUESTION_KEYS or not isinstance(value, dict):
             raise ValidationError({"answers": f"Unknown question {key!r}."})
         prev = current.get(key) or {}
-        mode = org.LEGACY_MODES.get(value.get("mode"), value.get("mode")) or org.LEGACY_MODES.get(
-            prev.get("mode"), prev.get("mode")) or "TYPED"
+        mode = (
+            org.LEGACY_MODES.get(value.get("mode"), value.get("mode"))
+            or org.LEGACY_MODES.get(prev.get("mode"), prev.get("mode"))
+            or "TYPED"
+        )
         if mode not in org.INPUT_MODES:
             raise ValidationError({"answers": "Input mode is TYPED or DICTATED."})
         language = value.get("language") or prev.get("language") or DEFAULT_LANGUAGE
         if language not in languages:
             raise ValidationError({"answers": "Choose a language from the list."})
         text = str(value.get("text", prev.get("text", "")))[:20000]
-        entry = {"text": text, "mode": mode, "language": language, "answered_at": prev.get("answered_at")}
-        content_changed = text != prev.get("text", "") or language != (prev.get("language") or DEFAULT_LANGUAGE)
+        entry = {
+            "text": text,
+            "mode": mode,
+            "language": language,
+            "answered_at": prev.get("answered_at"),
+        }
+        content_changed = text != prev.get("text", "") or language != (
+            prev.get("language") or DEFAULT_LANGUAGE
+        )
         if content_changed:
             entry["answered_at"] = _now_iso() if text.strip() else None
             _audit(note, user, "ANSWER", question=key, mode=mode, language=language)
@@ -337,8 +415,12 @@ def _set_answers(note, user, answers, to_translate):
                 entry["translation"] = previous
             else:
                 entry["translation"] = {
-                    "digest": digest, "status": "pending" if ai_on else "unavailable", "text": "",
-                    "model": psy_ai.model_name() if ai_on else "", "requested_at": _now_iso(), "at": None,
+                    "digest": digest,
+                    "status": "pending" if ai_on else "unavailable",
+                    "text": "",
+                    "model": psy_ai.model_name() if ai_on else "",
+                    "requested_at": _now_iso(),
+                    "at": None,
                 }
                 if ai_on:
                     to_translate.append((key, digest))
@@ -361,7 +443,11 @@ def _clean_safety_detail(note, detail):
         if "category" in c:
             cat = categories.get(c["category"])
             chosen = c.get("options") or []
-            if cat is None or not isinstance(chosen, list) or any(o not in cat["options"] for o in chosen):
+            if (
+                cat is None
+                or not isinstance(chosen, list)
+                or any(o not in cat["options"] for o in chosen)
+            ):
                 raise ValidationError({"safety_detail": "Choose concerns from the list."})
             concerns.append({"category": cat["code"], "options": list(dict.fromkeys(chosen))})
         elif "other" in c:  # earlier shape
@@ -376,9 +462,12 @@ def _clean_safety_detail(note, detail):
     allowed = {a["code"] for a in safety_action_options(note.patient)}
     if not isinstance(codes, list) or any(code not in allowed for code in codes):
         raise ValidationError({"safety_detail": "Choose the actions taken from the list."})
-    cleaned = {"concerns": concerns, "description": str(detail.get("description", "")).strip()[:4000],
-               "action_codes": list(dict.fromkeys(codes)),
-               "actions": str(detail.get("actions", "")).strip()[:4000]}
+    cleaned = {
+        "concerns": concerns,
+        "description": str(detail.get("description", "")).strip()[:4000],
+        "action_codes": list(dict.fromkeys(codes)),
+        "actions": str(detail.get("actions", "")).strip()[:4000],
+    }
     if (note.safety_detail or {}).get("risk_link"):
         cleaned["risk_link"] = note.safety_detail["risk_link"]
     return cleaned
@@ -404,20 +493,31 @@ def _set_session_info(note, user, data):
             try:
                 value = int(value)
             except (TypeError, ValueError):
-                raise ValidationError({"duration_minutes": "Duration is a number of minutes."}) from None
+                raise ValidationError(
+                    {"duration_minutes": "Duration is a number of minutes."}
+                ) from None
             if not 1 <= value <= 600:
-                raise ValidationError({"duration_minutes": "Duration is between 1 and 600 minutes."})
+                raise ValidationError(
+                    {"duration_minutes": "Duration is between 1 and 600 minutes."}
+                )
         session.duration_minutes = value or None
         fields.append("duration_minutes")
     if "session_type" in data and data["session_type"] != session.session_type:
         if data["session_type"] not in SESSION_TYPES:
-            raise ValidationError({"session_type": "Individual, couple or family — group sessions are recorded in the group programme."})
+            raise ValidationError(
+                {
+                    "session_type": "Individual, couple or family — group sessions are recorded in the group programme."
+                }
+            )
         session.session_type = data["session_type"]
         fields.append("session_type")
     extra = dict(session.extra or {})
     if "attendance_mode" in data:
         mode = data["attendance_mode"] or ""
-        if mode and not LocalConcept.objects.filter(valueset_id=ATTENDANCE_VALUESET, code=mode).exists():
+        if (
+            mode
+            and not LocalConcept.objects.filter(valueset_id=ATTENDANCE_VALUESET, code=mode).exists()
+        ):
             raise ValidationError({"attendance_mode": "Choose in person, virtual or telephone."})
         extra["attendance_mode"] = mode
     if "location" in data:
@@ -451,8 +551,11 @@ def _set_session_info(note, user, data):
 
 def _raise_alert(note, user, code):
     return ClinicalAlert.objects.create(
-        organization_id=note.organization_id, patient=note.patient, alert_code=code,
-        label=ALERT_LABELS[code], raised_by=user,
+        organization_id=note.organization_id,
+        patient=note.patient,
+        alert_code=code,
+        label=ALERT_LABELS[code],
+        raised_by=user,
     )
 
 
@@ -463,7 +566,9 @@ def _resolve_alert(alert, user):
 
 
 def _proposal_key(note, concern):
-    digest = hashlib.sha1(f"{concern['row']}|{concern['option']}".encode()).hexdigest()[:10]
+    digest = hashlib.sha1(
+        f"{concern['row']}|{concern['option']}".encode(), usedforsecurity=False
+    ).hexdigest()[:10]
     return f"psy:{note.pk.hex}:{digest}"
 
 
@@ -495,16 +600,26 @@ def _apply_safety(note, user):
             note.safety_alert = _raise_alert(note, user, "PSYCHOTHERAPY_SAFETY_CONCERN")
             _audit(note, user, "RAISE_ALERT", code="PSYCHOTHERAPY_SAFETY_CONCERN")
         for row, option in _register_findings(note.safety_detail or {}):
-            records._propose(note.patient, PROPOSAL_SOURCE, _proposal_key(note, {"row": row, "option": option}),
-                             row, option)
+            records._propose(
+                note.patient,
+                PROPOSAL_SOURCE,
+                _proposal_key(note, {"row": row, "option": option}),
+                row,
+                option,
+            )
     if answer == org.SAFETY_NOT_ASSESSED and not note.safety_ack_at:
         if note.not_assessed_alert is None or note.not_assessed_alert.status != "ACTIVE":
             note.not_assessed_alert = _raise_alert(note, user, "SAFETY_NOT_ASSESSED")
             _audit(note, user, "RAISE_ALERT", code="SAFETY_NOT_ASSESSED")
     elif note.not_assessed_alert and note.not_assessed_alert.status == "ACTIVE":
         _resolve_alert(note.not_assessed_alert, user)
-        _audit(note, user, "RESOLVE_ALERT", code="SAFETY_NOT_ASSESSED",
-               reason="Acknowledged" if note.safety_ack_at else "Safety answer changed")
+        _audit(
+            note,
+            user,
+            "RESOLVE_ALERT",
+            code="SAFETY_NOT_ASSESSED",
+            reason="Acknowledged" if note.safety_ack_at else "Safety answer changed",
+        )
 
 
 def _link_risk(note, user):
@@ -513,14 +628,26 @@ def _link_risk(note, user):
     so the note names it ("Linked risk assessment: <id> (opened HH:MM)")."""
     detail = note.safety_detail or {}
     if note.safety_answer != org.SAFETY_YES:
-        raise ValidationError({"link_risk_assessment": "Only a Yes safety answer links a risk assessment."})
+        raise ValidationError(
+            {"link_risk_assessment": "Only a Yes safety answer links a risk assessment."}
+        )
     if not detail.get("concerns") or not detail.get("description"):
-        raise ValidationError({"link_risk_assessment": "Choose the concern(s) and describe them first."})
+        raise ValidationError(
+            {"link_risk_assessment": "Choose the concern(s) and describe them first."}
+        )
     alert = note.safety_alert
-    proposals = RiskProposal.objects.filter(patient=note.patient, source_key__startswith=f"psy:{note.pk.hex}:")
-    link = {"alert_id": str(alert.pk), "display_id": alert.pk.hex[:8].upper(),
-            "opened_at": alert.raised_at.isoformat(), "opened": _hhmm(alert.raised_at),
-            "proposal_ids": [str(p.pk) for p in proposals], "by": _by(user), "at": _now_iso()}
+    proposals = RiskProposal.objects.filter(
+        patient=note.patient, source_key__startswith=f"psy:{note.pk.hex}:"
+    )
+    link = {
+        "alert_id": str(alert.pk),
+        "display_id": alert.pk.hex[:8].upper(),
+        "opened_at": alert.raised_at.isoformat(),
+        "opened": _hhmm(alert.raised_at),
+        "proposal_ids": [str(p.pk) for p in proposals],
+        "by": _by(user),
+        "at": _now_iso(),
+    }
     note.safety_detail = {**detail, "risk_link": link}
     _audit(note, user, "RISK_LINK", risk_record=link["display_id"])
 
@@ -529,18 +656,26 @@ def _acknowledge(note, user, payload):
     payload = payload if isinstance(payload, dict) else {}
     reason = str(payload.get("reason") or note.safety_ack_reason or "").strip()
     if note.safety_answer != org.SAFETY_NOT_ASSESSED:
-        raise ValidationError({"acknowledge": "Only a 'not assessed' safety answer is acknowledged."})
+        raise ValidationError(
+            {"acknowledge": "Only a 'not assessed' safety answer is acknowledged."}
+        )
     if len(reason) < 3:
         raise ValidationError({"acknowledge": "Give the reason safety was not assessed."})
     if payload.get("acknowledged") is not True:
         raise ValidationError({"acknowledge": f"Tick: {NA_ACK_TEXT}"})
-    note.safety_ack_reason, note.safety_ack_at, note.safety_ack_by = reason[:2000], timezone.now(), user
+    note.safety_ack_reason, note.safety_ack_at, note.safety_ack_by = (
+        reason[:2000],
+        timezone.now(),
+        user,
+    )
     _audit(note, user, "ACKNOWLEDGE", reason=reason[:2000], statement=NA_ACK_TEXT)
 
 
 def _set_not_assessed_reason(note, user, reason):
     if note.safety_answer != org.SAFETY_NOT_ASSESSED:
-        raise ValidationError({"not_assessed_reason": "Only a 'not assessed' safety answer takes a reason."})
+        raise ValidationError(
+            {"not_assessed_reason": "Only a 'not assessed' safety answer takes a reason."}
+        )
     reason = str(reason or "").strip()[:2000]
     if reason != note.safety_ack_reason:
         note.safety_ack_reason, note.safety_ack_at, note.safety_ack_by = reason, None, None
@@ -553,8 +688,10 @@ def _resolve_detection(note, user, data):
     key, reason = str(data.get("key") or ""), str(data.get("reason") or "").strip()
     if key not in {d["key"] for d in detections(note)}:
         raise ValidationError({"resolve_detection": "That prompt is no longer in the answers."})
-    note.detection_resolutions = {**(note.detection_resolutions or {}),
-                                  key: {"reason": reason[:2000], "by": _by(user), "at": _now_iso()}}
+    note.detection_resolutions = {
+        **(note.detection_resolutions or {}),
+        key: {"reason": reason[:2000], "by": _by(user), "at": _now_iso()},
+    }
     _audit(note, user, "REVIEW_DETECTION", key=key, reason=reason[:2000])
 
 
@@ -568,16 +705,29 @@ def _goal_link(note, user, data):
         raise ValidationError({"goal_link": "Choose a goal from the care plan."})
     decision = data.get("decision")
     if decision not in (*org.GOAL_DECISIONS, *org.LEGACY_GOAL_DECISIONS):
-        raise ValidationError({"goal_link": "Choose progress, no clear change, barrier or not relevant."})
+        raise ValidationError(
+            {"goal_link": "Choose progress, no clear change, barrier or not relevant."}
+        )
     statement = str(data.get("statement") or "").strip()[:2000]
     if decision == "CONFIRMED" and not statement:
         raise ValidationError({"goal_link": "Write the progress statement you are confirming."})
-    suggested = {s["goal_index"]: s["evidence"]
-                 for s in org.goal_suggestions(list(goals.values()), note.answers or {})}
+    suggested = {
+        s["goal_index"]: s["evidence"]
+        for s in org.goal_suggestions(list(goals.values()), note.answers or {})
+    }
     evidence = suggested.get(index) or str(data.get("evidence") or "").strip()[:2000]
     links = [link for link in (note.goal_links or []) if link["goal_index"] != index]
-    links.append({"goal_index": index, "goal": goals[index]["goal"], "evidence": evidence, "statement": statement,
-                  "status": decision, "by": _by(user), "at": _now_iso()})
+    links.append(
+        {
+            "goal_index": index,
+            "goal": goals[index]["goal"],
+            "evidence": evidence,
+            "statement": statement,
+            "status": decision,
+            "by": _by(user),
+            "at": _now_iso(),
+        }
+    )
     note.goal_links = links
     _audit(note, user, f"GOAL_LINK_{decision}", goal=goals[index]["goal"], statement=statement)
 
@@ -599,7 +749,9 @@ def _compose_sections(note):
     """The sections as they stand: generated text, with each clinician edit in place."""
     edits = note.section_edits or {}
     base = note.generated_sections or {}
-    note.sections = {k: (edits[k]["text"] if k in edits else base.get(k, "")) for k in org.SECTION_KEYS}
+    note.sections = {
+        k: (edits[k]["text"] if k in edits else base.get(k, "")) for k in org.SECTION_KEYS
+    }
     note.sections_edited = bool(edits)
 
 
@@ -608,7 +760,9 @@ def _edit_sections(note, user, sections):
         raise ValidationError({"sections": "Unknown note section."})
     if not note.generated_at:
         raise ValidationError({"sections": "Organise the note before editing its sections."})
-    if not note.generated_sections and note.sections:  # a draft organised before edits were kept apart
+    if (
+        not note.generated_sections and note.sections
+    ):  # a draft organised before edits were kept apart
         note.generated_sections = dict(note.sections)
     edits = dict(note.section_edits or {})
     changed = []
@@ -662,14 +816,18 @@ def save_draft(note, user, data):
         if answer not in ("", *dict(org.SAFETY_OPTIONS)):
             raise ValidationError({"safety_answer": "Answer Yes, No or Not assessed."})
         if answer != note.safety_answer:
-            _audit(note, user, "UPDATE", field="safety_answer", previous=note.safety_answer, new=answer)
+            _audit(
+                note, user, "UPDATE", field="safety_answer", previous=note.safety_answer, new=answer
+            )
             note.safety_answer = answer
             note.safety_ack_reason, note.safety_ack_at, note.safety_ack_by = "", None, None
             inputs_changed = True
     if "safety_detail" in data:
         detail = _clean_safety_detail(note, data["safety_detail"])
         if detail != note.safety_detail:
-            _audit(note, user, "UPDATE", field="safety_detail", previous=note.safety_detail, new=detail)
+            _audit(
+                note, user, "UPDATE", field="safety_detail", previous=note.safety_detail, new=detail
+            )
             note.safety_detail = detail
             inputs_changed = True
     if "not_assessed_reason" in data:
@@ -705,7 +863,9 @@ def save_draft(note, user, data):
     note.draft_saved_at = timezone.now()
     note.save()
     for key, digest in to_translate:
-        transaction.on_commit(lambda key=key, digest=digest: _enqueue("translate", str(note.pk), key, digest))
+        transaction.on_commit(
+            lambda key=key, digest=digest: _enqueue("translate", str(note.pk), key, digest)
+        )
     return note
 
 
@@ -721,7 +881,9 @@ def _enqueue(kind, note_id, *args):
     try:
         task.delay(note_id, *args)
     except Exception:  # noqa: BLE001 — any broker failure degrades to rule-based
-        logger.exception("psychotherapy AI step could not be queued", extra={"note": note_id, "step": kind})
+        logger.exception(
+            "psychotherapy AI step could not be queued", extra={"note": note_id, "step": kind}
+        )
         if kind == "translate":
             run_translation(note_id, *args, failure="The translation could not be queued.")
         else:
@@ -745,7 +907,11 @@ def run_translation(note_id, key, digest, failure=None):
                 english, model = psy_ai.translate(answer["text"])
                 result = {"status": "done", "text": english, "model": model}
             except psy_ai.AIUnavailable as exc:
-                logger.warning("psychotherapy translation failed: %s", exc, extra={"note": note_id, "question": key})
+                logger.warning(
+                    "psychotherapy translation failed: %s",
+                    exc,
+                    extra={"note": note_id, "question": key},
+                )
                 result = {"status": "error", "text": "", "error": str(exc)}
         else:
             result = {"status": "error", "text": "", "error": failure}
@@ -753,7 +919,11 @@ def run_translation(note_id, key, digest, failure=None):
             note = PsychotherapyNote.objects.select_for_update().get(pk=note_id)
             answer = dict((note.answers or {}).get(key) or {})
             slot = answer.get("translation") or {}
-            if note.status != "DRAFT" or slot.get("digest") != digest or slot.get("status") != "pending":
+            if (
+                note.status != "DRAFT"
+                or slot.get("digest") != digest
+                or slot.get("status") != "pending"
+            ):
                 return
             answer["translation"] = {**slot, **result, "at": _now_iso()}
             note.answers = {**note.answers, key: answer}
@@ -763,7 +933,15 @@ def run_translation(note_id, key, digest, failure=None):
                 _audit(note, None, "TRANSLATE", question=key, model=result["model"])
             else:
                 _audit(note, None, "TRANSLATE_FAILED", question=key, error=result["error"])
-            note.save(update_fields=["answers", "generated_at", "accuracy_confirmed", "history", "updated_at"])
+            note.save(
+                update_fields=[
+                    "answers",
+                    "generated_at",
+                    "accuracy_confirmed",
+                    "history",
+                    "updated_at",
+                ]
+            )
 
 
 def run_reword(note_id, token, failure=None):
@@ -787,12 +965,18 @@ def run_reword(note_id, token, failure=None):
                         out, model = psy_ai.rewrite_section(q, text, names)
                         reworded[section] = org.compose_reworded(q, out, proc.get("fixed") or {})
             except psy_ai.AIUnavailable as exc:
-                logger.warning("psychotherapy note rewording failed: %s", exc, extra={"note": note_id})
+                logger.warning(
+                    "psychotherapy note rewording failed: %s", exc, extra={"note": note_id}
+                )
                 error = str(exc)
         with transaction.atomic():
             note = PsychotherapyNote.objects.select_for_update().get(pk=note_id)
             proc = dict(note.processing or {})
-            if note.status != "DRAFT" or proc.get("token") != token or proc.get("status") != "pending":
+            if (
+                note.status != "DRAFT"
+                or proc.get("token") != token
+                or proc.get("status") != "pending"
+            ):
                 return
             at = _now_iso()
             if error:
@@ -804,8 +988,14 @@ def run_reword(note_id, token, failure=None):
                 sources = dict(proc.get("sections") or {})
                 for section in reworded:
                     sources[section] = {"source": "ai", "model": model, "at": at}
-                proc.update({"status": "done", "model": model or proc.get("model", ""), "at": at,
-                             "sections": sources})
+                proc.update(
+                    {
+                        "status": "done",
+                        "model": model or proc.get("model", ""),
+                        "at": at,
+                        "sections": sources,
+                    }
+                )
                 _compose_sections(note)
                 if note.sections != before:
                     note.accuracy_confirmed = False
@@ -832,13 +1022,21 @@ def processing_state(note):
     if status == "pending":
         requested = proc.get("requested_at")
         if requested and timezone.now() - datetime.fromisoformat(requested) > AI_STALE_AFTER:
-            status, proc["error"] = "error", "The AI step did not finish; the rule-based text is used."
+            status, proc["error"] = (
+                "error",
+                "The AI step did not finish; the rule-based text is used.",
+            )
     ai_done = status == "done" and proc.get("engine") == "ai"
-    return {"engine": proc.get("engine", "rules"), "status": status or "none", "model": proc.get("model", ""),
-            "at": proc.get("at"), "error": proc.get("error", ""),
-            "label": PROCESSED_AI if ai_done else PROCESSED_RULES,
-            "reason": "" if ai_done else psy_ai.unavailable_reason(note.patient),
-            "sections": proc.get("sections") or {}}
+    return {
+        "engine": proc.get("engine", "rules"),
+        "status": status or "none",
+        "model": proc.get("model", ""),
+        "at": proc.get("at"),
+        "error": proc.get("error", ""),
+        "label": PROCESSED_AI if ai_done else PROCESSED_RULES,
+        "reason": "" if ai_done else psy_ai.unavailable_reason(note.patient),
+        "sections": proc.get("sections") or {},
+    }
 
 
 def _translation_pending(note):
@@ -846,7 +1044,10 @@ def _translation_pending(note):
         slot = (answer or {}).get("translation") or {}
         if slot.get("status") == "pending":
             requested = slot.get("requested_at")
-            if not requested or timezone.now() - datetime.fromisoformat(requested) <= AI_STALE_AFTER:
+            if (
+                not requested
+                or timezone.now() - datetime.fromisoformat(requested) <= AI_STALE_AFTER
+            ):
                 return True
     return False
 
@@ -861,18 +1062,37 @@ def context_goals(patient):
     for i, g in enumerate((plan.goal_items if plan else None) or []):
         text = str((g or {}).get("goal", "")).strip()
         if text:
-            goals.append({"index": i, "goal": text, "owner": g.get("owner", ""), "review_date": g.get("review_date", "")})
+            goals.append(
+                {
+                    "index": i,
+                    "goal": text,
+                    "owner": g.get("owner", ""),
+                    "review_date": g.get("review_date", ""),
+                }
+            )
     return goals
 
 
 def _active_safety_plan(patient):
-    return SafetyPlan.objects.filter(patient=patient, signed_at__isnull=False).order_by("-version").first()
+    return (
+        SafetyPlan.objects.filter(patient=patient, signed_at__isnull=False)
+        .order_by("-version")
+        .first()
+    )
 
 
 def _safety_plan(patient):
     plan = _active_safety_plan(patient)
-    return ({"id": str(plan.pk), "display_id": plan.pk.hex[:8].upper(), "version": plan.version,
-             "signed_at": facility_time.local_format(plan.signed_at)} if plan else None)
+    return (
+        {
+            "id": str(plan.pk),
+            "display_id": plan.pk.hex[:8].upper(),
+            "version": plan.version,
+            "signed_at": facility_time.local_format(plan.signed_at),
+        }
+        if plan
+        else None
+    )
 
 
 def safety_action_options(patient):
@@ -884,7 +1104,10 @@ def safety_action_options(patient):
         if a["code"] == SAFETY_PLAN_ACTION:
             if not plan:
                 continue
-            a = {**a, "label": f"Safety plan {plan.pk.hex[:8].upper()} (version {plan.version}) reviewed with client"}
+            a = {
+                **a,
+                "label": f"Safety plan {plan.pk.hex[:8].upper()} (version {plan.version}) reviewed with client",
+            }
         out.append(a)
     return out
 
@@ -892,8 +1115,11 @@ def safety_action_options(patient):
 def _diagnoses(patient):
     from apps.clinical_encounter.models import DiagnosisCode
 
-    rows = (DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-            .select_related("icd11_code").order_by("-is_primary", "-noted_at"))
+    rows = (
+        DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
+        .select_related("icd11_code")
+        .order_by("-is_primary", "-noted_at")
+    )
     return [f"{d.icd11_code_id} — {d.icd11_code.description}" for d in rows]
 
 
@@ -905,21 +1131,41 @@ def effective_sections(note):
 
 
 def _previous(note, user):
-    prev = (PsychotherapyNote.objects.filter(patient=note.patient, status="SIGNED")
-            .exclude(pk=note.pk).select_related("signed_by").order_by("-signed_at").first())
+    prev = (
+        PsychotherapyNote.objects.filter(patient=note.patient, status="SIGNED")
+        .exclude(pk=note.pk)
+        .select_related("signed_by")
+        .order_by("-signed_at")
+        .first()
+    )
     if prev:
         if not can_read(user, prev):
             return {"restricted": True, "at": prev.signed_at.isoformat()}
         log_view(prev)
         sections = effective_sections(prev)
-        return {"id": str(prev.pk), "at": prev.signed_at.isoformat(), "by": _by(prev.signed_by),
-                "response": sections.get("response", ""), "plan": sections.get("plan", ""),
-                "risk_safety": sections.get("risk_safety", "")}
-    legacy = (PsychotherapySession.objects.filter(patient=note.patient).exclude(pk=note.session_id)
-              .exclude(psy_note__status="DRAFT").exclude(session_notes="").order_by("-session_date").first())
+        return {
+            "id": str(prev.pk),
+            "at": prev.signed_at.isoformat(),
+            "by": _by(prev.signed_by),
+            "response": sections.get("response", ""),
+            "plan": sections.get("plan", ""),
+            "risk_safety": sections.get("risk_safety", ""),
+        }
+    legacy = (
+        PsychotherapySession.objects.filter(patient=note.patient)
+        .exclude(pk=note.session_id)
+        .exclude(psy_note__status="DRAFT")
+        .exclude(session_notes="")
+        .order_by("-session_date")
+        .first()
+    )
     if legacy:
-        return {"id": None, "at": legacy.session_date.isoformat(), "by": _by(legacy.therapist),
-                "text": legacy.session_notes[:2000]}
+        return {
+            "id": None,
+            "at": legacy.session_date.isoformat(),
+            "by": _by(legacy.therapist),
+            "text": legacy.session_notes[:2000],
+        }
     return None
 
 
@@ -947,7 +1193,9 @@ def detected_models(note):
     is included (the clinician's decision, else named → in, suggested → out)."""
     registry = [model_row(m) for m in therapy_models(note.organization_id)]
     answers = note.answers or {}
-    found = org.detect_models(org.english_text(answers.get("q3")), org.english_text(answers.get("q4")), registry)
+    found = org.detect_models(
+        org.english_text(answers.get("q3")), org.english_text(answers.get("q4")), registry
+    )
     decisions = note.model_decisions or {}
     for m in found:
         default = "INCLUDE" if m["how"] == "named" else "EXCLUDE"
@@ -985,7 +1233,9 @@ def _concern_labels(detail):
 
 def _action_labels(note, detail):
     labels = {a["code"]: a["label"] for a in safety_action_options(note.patient)}
-    labels.update({a["code"]: a["label"] for a in _concepts(ACTION_VALUESET) if a["code"] not in labels})
+    labels.update(
+        {a["code"]: a["label"] for a in _concepts(ACTION_VALUESET) if a["code"] not in labels}
+    )
     out = [labels.get(code, code) for code in detail.get("action_codes") or []]
     if detail.get("actions"):
         out.append(detail["actions"])
@@ -996,9 +1246,14 @@ def _session_number(note):
     s, ep = note.session, note.therapy_episode
     if not ep:
         return None
-    return PsychotherapySession.objects.filter(
-        patient=note.patient, extra__therapy_episode=str(ep.pk), session_date__lt=s.session_date
-    ).exclude(psy_note__status="DRAFT").count() + 1
+    return (
+        PsychotherapySession.objects.filter(
+            patient=note.patient, extra__therapy_episode=str(ep.pk), session_date__lt=s.session_date
+        )
+        .exclude(psy_note__status="DRAFT")
+        .count()
+        + 1
+    )
 
 
 def _session_info(note):
@@ -1013,12 +1268,18 @@ def _session_info(note):
     if ep:
         episode_text = labels.get(("therapy-modality", ep.modality), ep.modality)
         if number:
-            episode_text += f", session {number}" + (f" of {ep.planned_sessions}" if ep.planned_sessions else "")
+            episode_text += f", session {number}" + (
+                f" of {ep.planned_sessions}" if ep.planned_sessions else ""
+            )
     return {
-        "date": local.strftime("%Y-%m-%d"), "time": local.strftime("%H:%M"), "duration": s.duration_minutes,
-        "clinician": _by(note.author), "session_type": s.get_session_type_display(),
+        "date": local.strftime("%Y-%m-%d"),
+        "time": local.strftime("%H:%M"),
+        "duration": s.duration_minutes,
+        "clinician": _by(note.author),
+        "session_type": s.get_session_type_display(),
         "mode": labels.get((ATTENDANCE_VALUESET, (s.extra or {}).get("attendance_mode", "")), ""),
-        "episode": episode_text, "activity": activity.title if activity else "",
+        "episode": episode_text,
+        "activity": activity.title if activity else "",
     }
 
 
@@ -1033,36 +1294,68 @@ def generate(note, user):
     _require_draft(note)
     registry = [model_row(m) for m in therapy_models(note.organization_id)]
     detail = note.safety_detail or {}
-    safety = {"answer": note.safety_answer, "concern_labels": _concern_labels(detail),
-              "description": detail.get("description", ""), "actions": _action_labels(note, detail),
-              "link": detail.get("risk_link") if note.safety_answer == org.SAFETY_YES else None,
-              "ack_reason": note.safety_ack_reason}
+    safety = {
+        "answer": note.safety_answer,
+        "concern_labels": _concern_labels(detail),
+        "description": detail.get("description", ""),
+        "actions": _action_labels(note, detail),
+        "link": detail.get("risk_link") if note.safety_answer == org.SAFETY_YES else None,
+        "ack_reason": note.safety_ack_reason,
+    }
     result = org.organize(
-        note.answers or {}, safety, _session_info(note), registry, lexicon("PSY_REPORT_CUE"),
-        detections=detections(note), resolutions=note.detection_resolutions or {},
+        note.answers or {},
+        safety,
+        _session_info(note),
+        registry,
+        lexicon("PSY_REPORT_CUE"),
+        detections=detections(note),
+        resolutions=note.detection_resolutions or {},
         confirmed_links=[link for link in note.goal_links or [] if link["status"] == "CONFIRMED"],
-        goal_links=note.goal_links or [], measure=(note.session.extra or {}).get("measure"),
-        context={"safety_plan": _safety_plan(note.patient)}, applied_models=applied_models(note),
+        goal_links=note.goal_links or [],
+        measure=(note.session.extra or {}).get("measure"),
+        context={"safety_plan": _safety_plan(note.patient)},
+        applied_models=applied_models(note),
     )
-    if not note.generated_sections and note.sections and note.sections_edited and not note.section_edits:
+    if (
+        not note.generated_sections
+        and note.sections
+        and note.sections_edited
+        and not note.section_edits
+    ):
         # A draft whose edits predate keeping them apart: keep the edited text as edits.
-        note.section_edits = {k: {"text": v, "by": _by(user), "at": _now_iso()}
-                              for k, v in note.sections.items() if v != result["sections"].get(k)}
+        note.section_edits = {
+            k: {"text": v, "by": _by(user), "at": _now_iso()}
+            for k, v in note.sections.items()
+            if v != result["sections"].get(k)
+        }
     note.generated_sections, note.models_applied = result["sections"], result["models_applied"]
     now = _now_iso()
     rules = {k: {"source": "rules", "at": now} for k in org.SECTION_KEYS}
     if psy_ai.enabled_for(note.patient):
         token = uuid.uuid4().hex
-        note.processing = {"engine": "ai", "status": "pending", "model": psy_ai.model_name(), "token": token,
-                           "requested_at": now, "requested_by": _by(user), "fixed": result["fixed"],
-                           "sections": rules}
+        note.processing = {
+            "engine": "ai",
+            "status": "pending",
+            "model": psy_ai.model_name(),
+            "token": token,
+            "requested_at": now,
+            "requested_by": _by(user),
+            "fixed": result["fixed"],
+            "sections": rules,
+        }
         transaction.on_commit(lambda: _enqueue("reword", str(note.pk), token))
     else:
         note.processing = {"engine": "rules", "status": "disabled", "at": now, "sections": rules}
     _compose_sections(note)
     note.generated_at, note.accuracy_confirmed = timezone.now(), False
-    _audit(note, user, "GENERATE", models=[m["code"] for m in note.models_applied],
-           engine=note.processing["engine"], kept_edits=sorted(note.section_edits or {}))
+    _audit(
+        note,
+        user,
+        "GENERATE",
+        models=[m["code"] for m in note.models_applied],
+        engine=note.processing["engine"],
+        kept_edits=sorted(note.section_edits or {}),
+    )
     note.save()
     return note
 
@@ -1097,7 +1390,10 @@ def blockers(note, found=None):
     if not answer:
         add("SAFETY_UNANSWERED", "Answer the safety question (PSY-S-04).")
     if answer == org.SAFETY_NOT_ASSESSED and not note.safety_ack_at:
-        add("SAFETY_NOT_ASSESSED", "Safety was not assessed — record the reason and acknowledge it before signing.")
+        add(
+            "SAFETY_NOT_ASSESSED",
+            "Safety was not assessed — record the reason and acknowledge it before signing.",
+        )
     if answer == org.SAFETY_YES:
         if not detail.get("concerns") or not detail.get("description"):
             add("SAFETY_DETAIL", "Record which concern was identified and describe it.")
@@ -1105,12 +1401,18 @@ def blockers(note, found=None):
             add("RISK_LINK", "Link the risk assessment for the safety concern.")
     unreviewed = [d for d in found if d["key"] not in (note.detection_resolutions or {})]
     if unreviewed:
-        add("DETECTION_UNREVIEWED", f"{org.DETECTION_PROMPT} Mark each flagged passage reviewed "
-                                    f"({len(found) - len(unreviewed)} of {len(found)} reviewed).")
+        add(
+            "DETECTION_UNREVIEWED",
+            f"{org.DETECTION_PROMPT} Mark each flagged passage reviewed "
+            f"({len(found) - len(unreviewed)} of {len(found)} reviewed).",
+        )
     _, undecided = _goal_progress(note)
     if undecided:
-        add("GOALS_UNRESOLVED", "Decide each treatment-plan goal suggestion (progress, no clear change, "
-                                "barrier or not relevant).")
+        add(
+            "GOALS_UNRESOLVED",
+            "Decide each treatment-plan goal suggestion (progress, no clear change, "
+            "barrier or not relevant).",
+        )
     if _translation_pending(note):
         add("TRANSLATION_PENDING", "A translation is still in progress.")
     if processing_state(note)["status"] == "pending":
@@ -1127,30 +1429,65 @@ def checklist(note, found, pending):
     codes = {b["code"] for b in pending}
     answer = note.safety_answer
     detail = note.safety_detail or {}
-    answered = sum(1 for k in org.QUESTION_KEYS if (note.answers.get(k) or {}).get("text", "").strip())
+    answered = sum(
+        1 for k in org.QUESTION_KEYS if (note.answers.get(k) or {}).get("text", "").strip()
+    )
     reviewed = sum(1 for d in found if d["key"] in (note.detection_resolutions or {}))
     suggestions, undecided = _goal_progress(note)
     labels = dict(org.SAFETY_OPTIONS)
     items = [
-        {"key": "questions", "label": "Guided questions answered", "done": answered > 0,
-         "detail": f"{answered} of {len(org.QUESTION_KEYS)} answered"},
-        {"key": "safety", "label": "Safety question answered", "done": bool(answer),
-         "detail": labels.get(answer, "Not answered")},
+        {
+            "key": "questions",
+            "label": "Guided questions answered",
+            "done": answered > 0,
+            "detail": f"{answered} of {len(org.QUESTION_KEYS)} answered",
+        },
+        {
+            "key": "safety",
+            "label": "Safety question answered",
+            "done": bool(answer),
+            "detail": labels.get(answer, "Not answered"),
+        },
     ]
     if answer == org.SAFETY_YES:
-        items.append({"key": "safety_yes", "label": "Concern described and risk assessment linked",
-                      "done": bool(detail.get("concerns") and detail.get("description") and detail.get("risk_link")),
-                      "detail": ""})
+        items.append(
+            {
+                "key": "safety_yes",
+                "label": "Concern described and risk assessment linked",
+                "done": bool(
+                    detail.get("concerns") and detail.get("description") and detail.get("risk_link")
+                ),
+                "detail": "",
+            }
+        )
     if answer == org.SAFETY_NOT_ASSESSED:
-        items.append({"key": "safety_na", "label": "Reason recorded and acknowledged",
-                      "done": bool(note.safety_ack_at), "detail": ""})
+        items.append(
+            {
+                "key": "safety_na",
+                "label": "Reason recorded and acknowledged",
+                "done": bool(note.safety_ack_at),
+                "detail": "",
+            }
+        )
     items += [
-        {"key": "flags", "label": "Flagged safety language reviewed", "done": reviewed == len(found),
-         "detail": f"{reviewed}/{len(found)}"},
-        {"key": "goals", "label": "Goal suggestions resolved", "done": not undecided,
-         "detail": f"{len(suggestions) - len(undecided)}/{len(suggestions)}"},
-        {"key": "attestation", "label": "Clinician attestation", "done": not ({"NOT_GENERATED", "ACCURACY"} & codes),
-         "detail": ATTESTATION_TEXT},
+        {
+            "key": "flags",
+            "label": "Flagged safety language reviewed",
+            "done": reviewed == len(found),
+            "detail": f"{reviewed}/{len(found)}",
+        },
+        {
+            "key": "goals",
+            "label": "Goal suggestions resolved",
+            "done": not undecided,
+            "detail": f"{len(suggestions) - len(undecided)}/{len(suggestions)}",
+        },
+        {
+            "key": "attestation",
+            "label": "Clinician attestation",
+            "done": not ({"NOT_GENERATED", "ACCURACY"} & codes),
+            "detail": ATTESTATION_TEXT,
+        },
     ]
     return {"items": items, "done": sum(1 for i in items if i["done"]), "total": len(items)}
 
@@ -1188,7 +1525,8 @@ def _record_delivery(note, user):
     activity_id = (session.extra or {}).get("activity")
     activity = (
         CarePlanActivity.objects.filter(pk=activity_id, care_plan__patient=note.patient).first()
-        if activity_id else None
+        if activity_id
+        else None
     ) or (note.therapy_episode.activity if note.therapy_episode_id else None)
     number = _session_number(note)
     service = intervention_catalogue.billing_service_for("psychotherapy")
@@ -1200,7 +1538,11 @@ def _record_delivery(note, user):
             "intervention": "Family therapy" if session.session_type == "FAMILY" else "Individual",
             "performed_at": session.session_date,
             "provider": note.author or user,
-            "note": f"Psychotherapy session {number} — signed note" if number else "Psychotherapy session — signed note",
+            "note": (
+                f"Psychotherapy session {number} — signed note"
+                if number
+                else "Psychotherapy session — signed note"
+            ),
             "billable": service is not None,
             "billing_service": service,
         },
@@ -1214,7 +1556,9 @@ def _record_delivery(note, user):
 def amend(note, user, data):
     """AT-18: a signed note's section is changed only by an audited amendment."""
     if note.status != "SIGNED":
-        raise ValidationError({"detail": "Edit the draft directly — amendments are for signed notes."})
+        raise ValidationError(
+            {"detail": "Edit the draft directly — amendments are for signed notes."}
+        )
     if not can_read(user, note):
         raise PermissionDenied("You cannot amend this note.")
     section = data.get("section")
@@ -1227,8 +1571,14 @@ def amend(note, user, data):
     if len(reason) < 3:
         raise ValidationError({"reason": "Give the reason for the amendment."})
     return PsychotherapyNoteAmendment.objects.create(
-        organization_id=note.organization_id, note=note, patient=note.patient, section=section,
-        previous_text=current, new_text=text[:20000], reason=reason[:2000], amended_by=user,
+        organization_id=note.organization_id,
+        note=note,
+        patient=note.patient,
+        section=section,
+        previous_text=current,
+        new_text=text[:20000],
+        reason=reason[:2000],
+        amended_by=user,
     )
 
 
@@ -1236,13 +1586,23 @@ def amend(note, user, data):
 
 
 def summary(note, user):
-    row = {"id": str(note.pk), "status": note.status, "session_date": note.session.session_date.isoformat(),
-           "session_type": note.session.session_type, "author": _by(note.author),
-           "therapy_episode": str(note.therapy_episode_id or ""),
-           "signed_at": note.signed_at.isoformat() if note.signed_at else None}
+    row = {
+        "id": str(note.pk),
+        "status": note.status,
+        "session_date": note.session.session_date.isoformat(),
+        "session_type": note.session.session_type,
+        "author": _by(note.author),
+        "therapy_episode": str(note.therapy_episode_id or ""),
+        "signed_at": note.signed_at.isoformat() if note.signed_at else None,
+    }
     if can_read(user, note):
-        row.update({"safety_answer": note.safety_answer, "amendments": note.amendments.count(),
-                    "draft_saved_at": note.draft_saved_at.isoformat()})
+        row.update(
+            {
+                "safety_answer": note.safety_answer,
+                "amendments": note.amendments.count(),
+                "draft_saved_at": note.draft_saved_at.isoformat(),
+            }
+        )
     else:
         row["restricted"] = True
     return row
@@ -1255,16 +1615,25 @@ def transcript(note):
     out = []
     for key in org.QUESTION_KEYS:
         answer = (note.answers or {}).get(key) or {}
-        out.append({"question": key, "title": titles[key], "text": answer.get("text", ""),
-                    "mode": org.LEGACY_MODES.get(answer.get("mode"), answer.get("mode") or "TYPED"),
-                    "answered_at": answer.get("answered_at"), "language": answer.get("language") or DEFAULT_LANGUAGE,
-                    "translation": answer.get("translation")})
+        out.append(
+            {
+                "question": key,
+                "title": titles[key],
+                "text": answer.get("text", ""),
+                "mode": org.LEGACY_MODES.get(answer.get("mode"), answer.get("mode") or "TYPED"),
+                "answered_at": answer.get("answered_at"),
+                "language": answer.get("language") or DEFAULT_LANGUAGE,
+                "translation": answer.get("translation"),
+            }
+        )
     return out
 
 
 def detail(note, user):
     if not can_read(user, note):
-        raise PermissionDenied("Psychotherapy notes are visible to the treating clinician and the care team only.")
+        raise PermissionDenied(
+            "Psychotherapy notes are visible to the treating clinician and the care team only."
+        )
     log_view(note)
     found = detections(note)
     resolutions = note.detection_resolutions or {}
@@ -1279,27 +1648,55 @@ def detail(note, user):
     return {
         **summary(note, user),
         "is_author": note.author_id == user.pk,
-        "patient": {"id": str(patient.pk), "name": patient.get_full_name(), "number": patient.citramac_number},
+        "patient": {
+            "id": str(patient.pk),
+            "name": patient.get_full_name(),
+            "number": patient.citramac_number,
+        },
         "session_number": _session_number(note),
         "watermark": org.WATERMARK if note.status == "DRAFT" else None,
-        "session": {"id": str(s.pk), "session_date": s.session_date.isoformat(), "duration_minutes": s.duration_minutes,
-                    "session_type": s.session_type, "attendance_mode": extra.get("attendance_mode", ""),
-                    "location": extra.get("location", ""), "encounter": str(note.encounter_id),
-                    "activity": extra.get("activity", ""), "measure": extra.get("measure"),
-                    "process_notes": extra.get("process_notes", "") if "process_notes" in extra else None},
-        "answers": note.answers, "selected_models": note.selected_models,
+        "session": {
+            "id": str(s.pk),
+            "session_date": s.session_date.isoformat(),
+            "duration_minutes": s.duration_minutes,
+            "session_type": s.session_type,
+            "attendance_mode": extra.get("attendance_mode", ""),
+            "location": extra.get("location", ""),
+            "encounter": str(note.encounter_id),
+            "activity": extra.get("activity", ""),
+            "measure": extra.get("measure"),
+            "process_notes": extra.get("process_notes", "") if "process_notes" in extra else None,
+        },
+        "answers": note.answers,
+        "selected_models": note.selected_models,
         "models_detected": detected_models(note) if note.status == "DRAFT" else [],
         "transcript": transcript(note),
-        "safety_answer": note.safety_answer, "safety_detail": note.safety_detail,
+        "safety_answer": note.safety_answer,
+        "safety_detail": note.safety_detail,
         "safety_action_options": safety_action_options(patient) if note.status == "DRAFT" else [],
         "not_assessed_reason": note.safety_ack_reason,
-        "safety_ack": ({"reason": note.safety_ack_reason, "at": note.safety_ack_at.isoformat(),
-                        "by": _by(note.safety_ack_by)} if note.safety_ack_at else None),
-        "alerts": [{"code": a.alert_code, "status": a.status} for a in (note.safety_alert, note.not_assessed_alert) if a],
-        "detections": [{**d, "prompt": org.DETECTION_PROMPT, "resolution": resolutions.get(d["key"])} for d in found],
+        "safety_ack": (
+            {
+                "reason": note.safety_ack_reason,
+                "at": note.safety_ack_at.isoformat(),
+                "by": _by(note.safety_ack_by),
+            }
+            if note.safety_ack_at
+            else None
+        ),
+        "alerts": [
+            {"code": a.alert_code, "status": a.status}
+            for a in (note.safety_alert, note.not_assessed_alert)
+            if a
+        ],
+        "detections": [
+            {**d, "prompt": org.DETECTION_PROMPT, "resolution": resolutions.get(d["key"])}
+            for d in found
+        ],
         "goal_suggestions": undecided,
         "goal_links": note.goal_links,
-        "sections": sections, "sections_edited": note.sections_edited,
+        "sections": sections,
+        "sections_edited": note.sections_edited,
         "edited_sections": sorted(note.section_edits or {}) if note.status == "DRAFT" else [],
         "models_applied": note.models_applied,
         "processing": processing_state(note),
@@ -1309,9 +1706,18 @@ def detail(note, user):
         "blockers": pending,
         "checklist": checklist(note, found, pending) if note.status == "DRAFT" else None,
         "rendered": org.render(sections, watermark=note.status == "DRAFT") if sections else "",
-        "amendments": [{"id": str(a.pk), "section": a.section, "previous_text": a.previous_text, "new_text": a.new_text,
-                        "reason": a.reason, "by": _by(a.amended_by), "at": a.amended_at.isoformat()}
-                       for a in note.amendments.select_related("amended_by")],
+        "amendments": [
+            {
+                "id": str(a.pk),
+                "section": a.section,
+                "previous_text": a.previous_text,
+                "new_text": a.new_text,
+                "reason": a.reason,
+                "by": _by(a.amended_by),
+                "at": a.amended_at.isoformat(),
+            }
+            for a in note.amendments.select_related("amended_by")
+        ],
         "history": note.history,
         "context": context(note, user),
     }
@@ -1332,37 +1738,63 @@ def client_list(user):
     everyone else sees that the client is in therapy. The view is audit-logged."""
     from apps.client_registry.models import Appointment, Patient
 
-    episode_patients = set(TherapyEpisode.objects.filter(ended_at__isnull=True).values_list("patient_id", flat=True))
+    episode_patients = set(
+        TherapyEpisode.objects.filter(ended_at__isnull=True).values_list("patient_id", flat=True)
+    )
     activity_patients = set(
-        CarePlanActivity.objects.exclude(decision="DECLINED").exclude(status="COMPLETED")
+        CarePlanActivity.objects.exclude(decision="DECLINED")
+        .exclude(status="COMPLETED")
         .filter(Q(action_key__in=("therapy", "family")) | Q(module="THERAPY"))
         .values_list("care_plan__patient_id", flat=True)
     )
-    patients = (Patient.objects.filter(pk__in=episode_patients | activity_patients, archived_at__isnull=True)
-                .order_by("last_name", "first_name"))
+    patients = Patient.objects.filter(
+        pk__in=episode_patients | activity_patients, archived_at__isnull=True
+    ).order_by("last_name", "first_name")
     now = timezone.now()
     rows, viewed = [], []
     for patient in patients:
-        episode = (TherapyEpisode.objects.filter(patient=patient, ended_at__isnull=True,
-                                                 confidentiality_agreed_at__isnull=False)
-                   .order_by("-created_at").first())
-        appointment = (Appointment.objects.filter(patient=patient, scheduled_for__gte=now,
-                                                  status__in=("SCHEDULED", "CHECKED_IN"))
-                       .order_by("scheduled_for").first())
+        episode = (
+            TherapyEpisode.objects.filter(
+                patient=patient, ended_at__isnull=True, confidentiality_agreed_at__isnull=False
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        appointment = (
+            Appointment.objects.filter(
+                patient=patient, scheduled_for__gte=now, status__in=("SCHEDULED", "CHECKED_IN")
+            )
+            .order_by("scheduled_for")
+            .first()
+        )
         diagnoses = _diagnoses(patient)
-        row = {"patient_id": str(patient.pk), "name": patient.get_full_name(), "number": patient.citramac_number,
-               "diagnosis": diagnoses[0] if diagnoses else "",
-               "next_appointment": appointment.scheduled_for.isoformat() if appointment else None,
-               "episode_id": str(episode.pk) if episode else None,
-               "in_therapy": patient.pk in episode_patients}
+        row = {
+            "patient_id": str(patient.pk),
+            "name": patient.get_full_name(),
+            "number": patient.citramac_number,
+            "diagnosis": diagnoses[0] if diagnoses else "",
+            "next_appointment": appointment.scheduled_for.isoformat() if appointment else None,
+            "episode_id": str(episode.pk) if episode else None,
+            "in_therapy": patient.pk in episode_patients,
+        }
         if has_full_mhp_access(user, patient):
             signed = PsychotherapyNote.objects.filter(patient=patient, status="SIGNED")
             last = signed.aggregate(last=Max("session__session_date"))["last"]
-            row.update({"sessions_recorded": signed.count(), "last_session": last.isoformat() if last else None})
+            row.update(
+                {
+                    "sessions_recorded": signed.count(),
+                    "last_session": last.isoformat() if last else None,
+                }
+            )
             viewed.append(str(patient.pk))
         else:
             row["restricted"] = True
         rows.append(row)
-    write_event(user.organization_id, "VIEW", "care_pathway.psychotherapynote", "client-list",
-                {"context": "individual_psychotherapy_list", "patients": viewed})
+    write_event(
+        user.organization_id,
+        "VIEW",
+        "care_pathway.psychotherapynote",
+        "client-list",
+        {"context": "individual_psychotherapy_list", "patients": viewed},
+    )
     return rows

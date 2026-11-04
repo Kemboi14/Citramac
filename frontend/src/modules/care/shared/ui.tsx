@@ -168,8 +168,7 @@ export const TIP_SHOW =
   "group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:delay-300 group-focus-visible/tip:visible group-focus-visible/tip:opacity-100 group-has-[:focus-visible]/tip:visible group-has-[:focus-visible]/tip:opacity-100";
 /** Marks text that has an explanation on hover — the cursor only, no underline
  * (QA 2026-10-30). */
-export const TIP_CUE =
-  "cursor-help";
+export const TIP_CUE = "cursor-help";
 
 /**
  * An explanation shown on hover (after a short delay) or keyboard focus, so a

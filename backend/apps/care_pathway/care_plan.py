@@ -23,11 +23,9 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from . import ews as ews_module
-from . import facility_time
-from . import mental_state
+from . import facility_time, mental_state
 from .intake_schema import _code
 from .models import (
-    CarePlan,
     CarePlanActivity,
     CarePlanTask,
     CarePlanVersion,
@@ -52,47 +50,134 @@ MEANING = {
 }
 
 CATALOGUE = [
-    {"key": "psych_review", "name": "Psychiatric review", "low": False, "module": "PSYCHIATRY",
-     "roles": ["psychiatrist", "clinician"],
-     "tasks": ["SBAR request built from triage, MSE, risk and vitals",
-               "Refer to on-call psychiatry or book a slot", "Medication review (allergy-checked)"]},
-    {"key": "medical_review", "name": "Medical review", "low": False, "module": "ASSESSMENT",
-     "roles": ["clinician", "psychiatrist", "nurse"],
-     "tasks": ["Medical assessment of symptoms / abnormal vital signs",
-               "Investigations where indicated", "Escalate / transfer if unstable"]},
-    {"key": "detox", "name": "Detox / withdrawal management", "low": False, "module": "NURSING",
-     "roles": ["nurse", "clinician", "psychiatrist"],
-     "tasks": ["Withdrawal monitoring per the facility protocol",
-               "Hydration and observation", "Step-down / aftercare plan"]},
-    {"key": "safety", "name": "Safety plan / enhanced observation", "low": False,
-     "module": "NURSING", "roles": ["nurse", "clinician", "psychiatrist", "therapist"],
-     "tasks": ["Written client-held safety plan", "Lethal-means counselling",
-               "Observation level reviewed", "Contact within 72 hours"]},
-    {"key": "therapy", "name": "Psychological therapy", "low": True, "module": "THERAPY",
-     "roles": ["therapist", "psychiatrist"],
-     "tasks": ["Refer to therapy service", "Share formulation",
-               "Agree modality, contract and schedule"]},
-    {"key": "admission", "name": "Inpatient admission / residential care", "low": False,
-     "module": "ADMISSION", "roles": ["nurse", "clinician", "psychiatrist"],
-     "tasks": ["Legal status recorded and rights information given", "Observation level set",
-               "Admission orders", "Allergy check before first dose", "Medication reconciliation",
-               "Nursing assessment and care plan", "Review schedule agreed"]},
-    {"key": "outpatient", "name": "Outpatient care / follow-up", "low": True, "module": "PSYCHIATRY",
-     "roles": ["clinician", "psychiatrist", "therapist", "reception"],
-     "tasks": ["Outpatient treatment plan", "Book appointments", "Outcome measures", "Follow-up plan"]},
-    {"key": "family", "name": "Family intervention", "low": True, "module": "THERAPY",
-     "roles": ["therapist", "psychiatrist"],
-     "tasks": ["Confirm consent for family involvement", "Family session / psychoeducation"]},
-    {"key": "social", "name": "Social work / case management", "low": True, "module": "THERAPY",
-     "roles": ["therapist", "clinician"],
-     "tasks": ["Housing / income / basic-needs review", "Link to community supports"]},
-    {"key": "nutrition", "name": "Nutrition / fitness", "low": True, "module": "ASSESSMENT",
-     "roles": ["therapist", "nurse"], "tasks": ["Nutrition assessment", "Fitness programme"]},
-    {"key": "referral", "name": "Referral / emergency transfer", "low": False,
-     "module": "ASSESSMENT", "roles": ["clinician", "psychiatrist"],
-     "tasks": ["Select the receiving service", "Consent to share information",
-               "Referral letter / SBAR with summary", "Confirm arrival at the receiving service",
-               "Counter-referral on discharge"]},
+    {
+        "key": "psych_review",
+        "name": "Psychiatric review",
+        "low": False,
+        "module": "PSYCHIATRY",
+        "roles": ["psychiatrist", "clinician"],
+        "tasks": [
+            "SBAR request built from triage, MSE, risk and vitals",
+            "Refer to on-call psychiatry or book a slot",
+            "Medication review (allergy-checked)",
+        ],
+    },
+    {
+        "key": "medical_review",
+        "name": "Medical review",
+        "low": False,
+        "module": "ASSESSMENT",
+        "roles": ["clinician", "psychiatrist", "nurse"],
+        "tasks": [
+            "Medical assessment of symptoms / abnormal vital signs",
+            "Investigations where indicated",
+            "Escalate / transfer if unstable",
+        ],
+    },
+    {
+        "key": "detox",
+        "name": "Detox / withdrawal management",
+        "low": False,
+        "module": "NURSING",
+        "roles": ["nurse", "clinician", "psychiatrist"],
+        "tasks": [
+            "Withdrawal monitoring per the facility protocol",
+            "Hydration and observation",
+            "Step-down / aftercare plan",
+        ],
+    },
+    {
+        "key": "safety",
+        "name": "Safety plan / enhanced observation",
+        "low": False,
+        "module": "NURSING",
+        "roles": ["nurse", "clinician", "psychiatrist", "therapist"],
+        "tasks": [
+            "Written client-held safety plan",
+            "Lethal-means counselling",
+            "Observation level reviewed",
+            "Contact within 72 hours",
+        ],
+    },
+    {
+        "key": "therapy",
+        "name": "Psychological therapy",
+        "low": True,
+        "module": "THERAPY",
+        "roles": ["therapist", "psychiatrist"],
+        "tasks": [
+            "Refer to therapy service",
+            "Share formulation",
+            "Agree modality, contract and schedule",
+        ],
+    },
+    {
+        "key": "admission",
+        "name": "Inpatient admission / residential care",
+        "low": False,
+        "module": "ADMISSION",
+        "roles": ["nurse", "clinician", "psychiatrist"],
+        "tasks": [
+            "Legal status recorded and rights information given",
+            "Observation level set",
+            "Admission orders",
+            "Allergy check before first dose",
+            "Medication reconciliation",
+            "Nursing assessment and care plan",
+            "Review schedule agreed",
+        ],
+    },
+    {
+        "key": "outpatient",
+        "name": "Outpatient care / follow-up",
+        "low": True,
+        "module": "PSYCHIATRY",
+        "roles": ["clinician", "psychiatrist", "therapist", "reception"],
+        "tasks": [
+            "Outpatient treatment plan",
+            "Book appointments",
+            "Outcome measures",
+            "Follow-up plan",
+        ],
+    },
+    {
+        "key": "family",
+        "name": "Family intervention",
+        "low": True,
+        "module": "THERAPY",
+        "roles": ["therapist", "psychiatrist"],
+        "tasks": ["Confirm consent for family involvement", "Family session / psychoeducation"],
+    },
+    {
+        "key": "social",
+        "name": "Social work / case management",
+        "low": True,
+        "module": "THERAPY",
+        "roles": ["therapist", "clinician"],
+        "tasks": ["Housing / income / basic-needs review", "Link to community supports"],
+    },
+    {
+        "key": "nutrition",
+        "name": "Nutrition / fitness",
+        "low": True,
+        "module": "ASSESSMENT",
+        "roles": ["therapist", "nurse"],
+        "tasks": ["Nutrition assessment", "Fitness programme"],
+    },
+    {
+        "key": "referral",
+        "name": "Referral / emergency transfer",
+        "low": False,
+        "module": "ASSESSMENT",
+        "roles": ["clinician", "psychiatrist"],
+        "tasks": [
+            "Select the receiving service",
+            "Consent to share information",
+            "Referral letter / SBAR with summary",
+            "Confirm arrival at the receiving service",
+            "Counter-referral on discharge",
+        ],
+    },
 ]
 BY_KEY = {a["key"]: a for a in CATALOGUE}
 
@@ -125,7 +210,11 @@ def _has(sections, row, option):
 
 
 def _last_score(patient, code):
-    return OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at").first()
+    return (
+        OutcomeScore.objects.filter(patient=patient, instrument=code)
+        .order_by("-recorded_at")
+        .first()
+    )
 
 
 def _latest_ews(patient):
@@ -183,7 +272,9 @@ def recommend(patient):
             _has(sections, "suicide", "Plan") and _has(sections, "suicide", "Access to means")
         ):
             level = "RED"
-        elif _has(sections, "suicide", "Plan") or _has(sections, "suicide", "Recent attempt/self-harm"):
+        elif _has(sections, "suicide", "Plan") or _has(
+            sections, "suicide", "Recent attempt/self-harm"
+        ):
             level = "ORANGE"
         else:
             level = "YELLOW"
@@ -201,14 +292,20 @@ def recommend(patient):
         for reason in wd["why"]:
             add("detox", level, "Triggered by " + reason)
         if wd["life_threatening"]:
-            add("medical_review", level,
-                "Withdrawal from alcohol / sedatives can be life-threatening — medical oversight")
+            add(
+                "medical_review",
+                level,
+                "Withdrawal from alcohol / sedatives can be life-threatening — medical oversight",
+            )
 
     score, vital = _latest_ews(patient)
     if score and (score["score"] >= 3 or score["single_parameter_3"] or score["glucose_low"]):
         level = "RED" if score["score"] >= 5 or score["glucose_low"] else "ORANGE"
-        add("medical_review", level,
-            f"Triggered by abnormal vital signs — {score['label']} ({facility_time.local_format(vital.recorded_at)})")
+        add(
+            "medical_review",
+            level,
+            f"Triggered by abnormal vital signs — {score['label']} ({facility_time.local_format(vital.recorded_at)})",
+        )
     if _has(sections, "medical", "Concern identified"):
         add("medical_review", "ORANGE", "Triggered by medical-safety finding")
 
@@ -220,7 +317,11 @@ def recommend(patient):
         content = str(mse.get("thought_content", "")).lower()
         psychotic = "hallucination" in perception or "delusion" in content
     if psychotic:
-        add("psych_review", "ORANGE", "Triggered by psychotic features on the mental state examination")
+        add(
+            "psych_review",
+            "ORANGE",
+            "Triggered by psychotic features on the mental state examination",
+        )
 
     for code in ("PHQ9", "PHQA"):
         row = _last_score(patient, code)
@@ -252,17 +353,28 @@ def recommend(patient):
         add("referral", "ORANGE" if sensitive else "YELLOW", why)
         add("social", "YELLOW", "Safeguarding — " + risk_text("safeguarding"))
     if _active_risk(sections, "neglect"):
-        add("social", "YELLOW", "Difficulty with self-care / vulnerability — " + risk_text("neglect"))
+        add(
+            "social",
+            "YELLOW",
+            "Difficulty with self-care / vulnerability — " + risk_text("neglect"),
+        )
 
     current = suggested_priority(patient, sections) or "GREEN"
     for need in sections.get("impr", {}).get("needs", []) or []:
         key = IMPR_MAP.get(need)
         if key:
             default = "GREEN" if BY_KEY[key]["low"] else current
-            add(key, recs.get(key, {}).get("priority", default),
-                "Selected at Intake Section 21 (clinical impression)")
+            add(
+                key,
+                recs.get(key, {}).get("priority", default),
+                "Selected at Intake Section 21 (clinical impression)",
+            )
     if not recs:
-        add("outpatient", "GREEN", "No acute risk indicators identified — routine outpatient follow-up")
+        add(
+            "outpatient",
+            "GREEN",
+            "No acute risk indicators identified — routine outpatient follow-up",
+        )
     return recs
 
 
@@ -335,20 +447,40 @@ def decide_action(plan, user, key, decision, *, priority="", instructions="", re
             raise ValidationError({"decision": "Only a recommended action can be declined."})
         if len(reason) < 5:
             raise ValidationError({"reason": "Give a reason for declining (clinical judgement)."})
-        values = {"decision": "DECLINED", "reason": reason, "priority": "",
-                  "recommended_priority": rec["priority"], "why": rec["why"], "bulk_accepted": False}
+        values = {
+            "decision": "DECLINED",
+            "reason": reason,
+            "priority": "",
+            "recommended_priority": rec["priority"],
+            "why": rec["why"],
+            "bulk_accepted": False,
+        }
     elif decision in ("ACCEPTED", "MODIFIED", "ADDED"):
-        chosen = _validate_priority(priority or (rec["priority"] if rec else ("GREEN" if spec["low"] else suggested_priority(plan.patient) or "GREEN")))
+        chosen = _validate_priority(
+            priority
+            or (
+                rec["priority"]
+                if rec
+                else ("GREEN" if spec["low"] else suggested_priority(plan.patient) or "GREEN")
+            )
+        )
         if rec and RANK[chosen] > RANK[rec["priority"]] and len(reason) < 10:
             raise ValidationError(
-                {"reason": f"Give a reason for setting the priority below the recommendation "
-                           f"({LABEL[rec['priority']]})."}
+                {
+                    "reason": f"Give a reason for setting the priority below the recommendation "
+                    f"({LABEL[rec['priority']]})."
+                }
             )
         outcome = "ADDED" if not rec else ("ACCEPTED" if chosen == rec["priority"] else "MODIFIED")
-        values = {"decision": outcome, "priority": chosen, "instructions": instructions,
-                  "reason": reason if rec and chosen != rec["priority"] else "",
-                  "recommended_priority": rec["priority"] if rec else "",
-                  "why": rec["why"] if rec else ["Added by clinician"], "bulk_accepted": False}
+        values = {
+            "decision": outcome,
+            "priority": chosen,
+            "instructions": instructions,
+            "reason": reason if rec and chosen != rec["priority"] else "",
+            "recommended_priority": rec["priority"] if rec else "",
+            "why": rec["why"] if rec else ["Added by clinician"],
+            "bulk_accepted": False,
+        }
     else:
         raise ValidationError({"decision": "Use ACCEPTED, MODIFIED, ADDED or DECLINED."})
 
@@ -369,7 +501,7 @@ def decide_action(plan, user, key, decision, *, priority="", instructions="", re
 
 @transaction.atomic
 def accept_remaining(plan, user):
-    """"Accept the N remaining recommendations as proposed": each is accepted at
+    """ "Accept the N remaining recommendations as proposed": each is accepted at
     its recommended priority and marked bulk-accepted, so the signer must confirm
     they reviewed each one before signing (RULE-05)."""
     decided = set(plan.activities.exclude(action_key="").values_list("action_key", flat=True))
@@ -422,19 +554,29 @@ def conflicts(plan):
     keys = {a.action_key for a in live}
     out = []
     current = _current_triage_priority(patient)
-    if live and current in ("RED", "ORANGE") and all(BY_KEY[a.action_key]["low"] for a in live if a.action_key):
+    if (
+        live
+        and current in ("RED", "ORANGE")
+        and all(BY_KEY[a.action_key]["low"] for a in live if a.action_key)
+    ):
         out.append(
             f"Client priority is {LABEL[current]} but the plan contains only lower-intensity actions."
         )
-    if (_has(sections, "suicide", "Plan") or _has(sections, "suicide", "Intent")) and "safety" not in keys:
+    if (
+        _has(sections, "suicide", "Plan") or _has(sections, "suicide", "Intent")
+    ) and "safety" not in keys:
         out.append("A suicidal plan or intent is recorded but the plan has no safety plan action.")
     wd = _withdrawal(patient, sections)
     if wd["active"] and wd["life_threatening"] and "detox" not in keys:
-        out.append("Alcohol / sedative withdrawal risk is active but no withdrawal-management action is planned.")
+        out.append(
+            "Alcohol / sedative withdrawal risk is active but no withdrawal-management action is planned."
+        )
     if live and _involuntary_admission(patient) and not keys & {"admission", "referral"}:
         out.append("Legal status is involuntary but no admission or transfer is planned.")
     if "detox" in keys and is_opioid(patient) and not opioid_safety_recorded(plan):
-        out.append("Opioid withdrawal plan with no naloxone or opioid-agonist-therapy discussion recorded.")
+        out.append(
+            "Opioid withdrawal plan with no naloxone or opioid-agonist-therapy discussion recorded."
+        )
     if "family" in keys and family_consent(patient) == "NO":
         out.append("Family intervention is planned but the client declined family involvement.")
     return out
@@ -472,9 +614,11 @@ def family_consent(patient):
     NOT_ASKED. The plan shows it next to the family field and never overrides it."""
     from apps.client_registry.models import ConsentRecord
 
-    latest = ConsentRecord.objects.filter(
-        patient=patient, consent_type="FAMILY_INVOLVEMENT"
-    ).order_by("-captured_at").first()
+    latest = (
+        ConsentRecord.objects.filter(patient=patient, consent_type="FAMILY_INVOLVEMENT")
+        .order_by("-captured_at")
+        .first()
+    )
     return latest.decision if latest else "NOT_ASKED"
 
 
@@ -487,9 +631,10 @@ def _current_triage_priority(patient):
 
 def needs_safety_plan(plan):
     sections = _record_view(plan.patient)
-    return bool(_active_risk(sections, "suicide")) or plan.activities.filter(
-        action_key="safety"
-    ).exclude(decision="DECLINED").exists()
+    return (
+        bool(_active_risk(sections, "suicide"))
+        or plan.activities.filter(action_key="safety").exclude(decision="DECLINED").exists()
+    )
 
 
 def safety_plan_complete(patient):
@@ -534,13 +679,20 @@ def outstanding(plan):
 def confirm_plan(plan, user, bulk_reviewed=False):
     items, found = outstanding(plan)
     if items:
-        raise ValidationError({"outstanding": items, "plan": f"Cannot sign yet — {len(items)} item(s) to complete."})
+        raise ValidationError(
+            {"outstanding": items, "plan": f"Cannot sign yet — {len(items)} item(s) to complete."}
+        )
     bulk = list(live_activities(plan).filter(bulk_accepted=True))
     if bulk and not bulk_reviewed:
-        raise ValidationError({
-            "bulk_reviewed": "Confirm you have reviewed each bulk-accepted action.",
-            "bulk": [{"key": a.action_key, "name": a.title, "priority": a.priority, "why": a.why} for a in bulk],
-        })
+        raise ValidationError(
+            {
+                "bulk_reviewed": "Confirm you have reviewed each bulk-accepted action.",
+                "bulk": [
+                    {"key": a.action_key, "name": a.title, "priority": a.priority, "why": a.why}
+                    for a in bulk
+                ],
+            }
+        )
     now = timezone.now()
     plan.version += 1
     plan.confirmed_at = now
@@ -550,9 +702,15 @@ def confirm_plan(plan, user, bulk_reviewed=False):
     snapshot = {
         "actions": [
             {
-                "key": a.action_key, "name": a.title, "decision": a.decision, "priority": a.priority,
-                "recommended_priority": a.recommended_priority, "instructions": a.instructions,
-                "reason": a.reason, "why": a.why, "bulk": a.bulk_accepted,
+                "key": a.action_key,
+                "name": a.title,
+                "decision": a.decision,
+                "priority": a.priority,
+                "recommended_priority": a.recommended_priority,
+                "instructions": a.instructions,
+                "reason": a.reason,
+                "why": a.why,
+                "bulk": a.bulk_accepted,
             }
             for a in plan.activities.all()
         ],
@@ -573,13 +731,21 @@ def confirm_plan(plan, user, bulk_reviewed=False):
         "rules_version": RULES_VERSION,
     }
     CarePlanVersion.objects.create(
-        organization_id=plan.organization_id, care_plan=plan, patient=plan.patient,
-        version=plan.version, snapshot=snapshot, conflicts=found, signed_by=user, signed_at=now,
+        organization_id=plan.organization_id,
+        care_plan=plan,
+        patient=plan.patient,
+        version=plan.version,
+        snapshot=snapshot,
+        conflicts=found,
+        signed_by=user,
+        signed_at=now,
     )
     for activity in live_activities(plan):
         sync_tasks(activity, now)
         if activity.due_at is None:
-            activity.due_at = now + timedelta(minutes=DUE_MINUTES.get(activity.priority, DUE_MINUTES["GREEN"]))
+            activity.due_at = now + timedelta(
+                minutes=DUE_MINUTES.get(activity.priority, DUE_MINUTES["GREEN"])
+            )
             activity.status = "ACTIVE" if activity.status == "PLANNED" else activity.status
             activity.save(update_fields=["due_at", "status", "updated_at"])
     plan.activities.filter(bulk_accepted=True).update(bulk_accepted=False)
@@ -597,7 +763,9 @@ def book_72h_contact(plan, user):
 
     if not plan.contact_72h_at:
         return None
-    booked = Appointment.objects.filter(episode=plan.episode, origin="CARE_PLAN", reason="CONTACT_72H")
+    booked = Appointment.objects.filter(
+        episode=plan.episode, origin="CARE_PLAN", reason="CONTACT_72H"
+    )
     same_time = booked.filter(scheduled_for=plan.contact_72h_at).first()
     if same_time:
         return same_time
@@ -609,16 +777,34 @@ def book_72h_contact(plan, user):
         return open_booking
     notes = f"With {plan.follow_up_clinician}" if plan.follow_up_clinician else ""
     return services.book_follow_up(
-        user, plan.patient,
-        {"reason": "CONTACT_72H", "scheduled_for": plan.contact_72h_at, "notes": notes,
-         "client_request_id": f"care-plan-72h:{plan.pk}:v{plan.version}"},
-        episode=plan.episode, origin="CARE_PLAN",
+        user,
+        plan.patient,
+        {
+            "reason": "CONTACT_72H",
+            "scheduled_for": plan.contact_72h_at,
+            "notes": notes,
+            "client_request_id": f"care-plan-72h:{plan.pk}:v{plan.version}",
+        },
+        episode=plan.episode,
+        origin="CARE_PLAN",
     )
 
 
 # Latest result of each instrument, carried onto the plan (AT-04: stored once,
 # read here — never re-entered). Order as the mockup's carried chips.
-CARRIED_INSTRUMENTS = ["CIWA", "COWS", "PAWSS", "AUDITC", "PHQ9", "PHQA", "EPDS", "GAD7", "MDQ", "PCL5", "CRI"]
+CARRIED_INSTRUMENTS = [
+    "CIWA",
+    "COWS",
+    "PAWSS",
+    "AUDITC",
+    "PHQ9",
+    "PHQA",
+    "EPDS",
+    "GAD7",
+    "MDQ",
+    "PCL5",
+    "CRI",
+]
 
 
 def carried_scores(patient):
@@ -629,11 +815,18 @@ def carried_scores(patient):
         row = _last_score(patient, code)
         if row:
             spec = instruments.INSTRUMENTS[code]
-            out.append({
-                "instrument": code, "name": spec["name"], "score": row.score, "max": spec["max"],
-                "band": instruments.band_for(code, row.score), "at": row.recorded_at,
-                "timepoint": row.timepoint, "approval": spec["approval"],
-            })
+            out.append(
+                {
+                    "instrument": code,
+                    "name": spec["name"],
+                    "score": row.score,
+                    "max": spec["max"],
+                    "band": instruments.band_for(code, row.score),
+                    "at": row.recorded_at,
+                    "timepoint": row.timepoint,
+                    "approval": spec["approval"],
+                }
+            )
     return out
 
 
@@ -652,7 +845,9 @@ def intake_context(patient):
         state = "complete" if signed.completeness == "COMPLETE" else "partial"
     return {
         "state": state,
-        "reason_incomplete": str((signed.sections.get("close") or {}).get("reason_incomplete", "")) if signed else "",
+        "reason_incomplete": (
+            str((signed.sections.get("close") or {}).get("reason_incomplete", "")) if signed else ""
+        ),
         "what_matters": str((sections.get("persp") or {}).get("matters", "")),
         "goals": str((sections.get("pres") or {}).get("goals", "")),
     }
@@ -660,7 +855,13 @@ def intake_context(patient):
 
 def served_catalogue():
     return [
-        {"key": a["key"], "name": a["name"], "low": a["low"], "roles": a["roles"], "tasks": a["tasks"]}
+        {
+            "key": a["key"],
+            "name": a["name"],
+            "low": a["low"],
+            "roles": a["roles"],
+            "tasks": a["tasks"],
+        }
         for a in CATALOGUE
     ]
 
@@ -683,7 +884,9 @@ def recommended_modules(patient):
     from .models import CarePlanActivity
 
     out = {}
-    for a in CarePlanActivity.objects.filter(care_plan__patient=patient).exclude(decision="DECLINED"):
+    for a in CarePlanActivity.objects.filter(care_plan__patient=patient).exclude(
+        decision="DECLINED"
+    ):
         for module in ACTION_MODULES.get(a.action_key, []):
             out.setdefault(module, []).append(a.title)
     from . import withdrawal

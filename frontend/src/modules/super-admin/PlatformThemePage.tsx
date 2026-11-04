@@ -64,7 +64,9 @@ export function PlatformThemePage() {
       </div>
 
       {loadError && (
-        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{loadError}</p>
+        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+          {loadError}
+        </p>
       )}
       {!saved && !loadError && <p className="text-sm text-ink-500">Loading…</p>}
 

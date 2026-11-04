@@ -47,8 +47,10 @@ export function RiskSection({
   const carried = asCarried(values.carried);
   const open = Object.entries(carried).filter(([, c]) => !c.confirmed);
   const label = (rowKey: string) => riskRows.find((r) => r.key === rowKey)?.label ?? rowKey;
-  const signedAt = typeof values.formulation_signed_at === "string" ? values.formulation_signed_at : "";
-  const signedBy = typeof values.formulation_signed_by === "string" ? values.formulation_signed_by : "";
+  const signedAt =
+    typeof values.formulation_signed_at === "string" ? values.formulation_signed_at : "";
+  const signedBy =
+    typeof values.formulation_signed_by === "string" ? values.formulation_signed_by : "";
 
   const setRow = (row: IntakeRiskRow, option: string, on: boolean) => {
     const current = rows[row.key] ?? [];
@@ -57,8 +59,13 @@ export function RiskSection({
     // can stand beside it (it is linked from Section 4, INT-04-07/08).
     if (!on) next = current.filter((o) => o !== option);
     else if (row.single) next = [option];
-    else if (row.none.includes(option)) next = [...current.filter((o) => !row.active.includes(o) && !row.none.includes(o)), option];
-    else next = [...current.filter((o) => !row.none.includes(o) || !row.active.includes(option)), option];
+    else if (row.none.includes(option))
+      next = [...current.filter((o) => !row.active.includes(o) && !row.none.includes(o)), option];
+    else
+      next = [
+        ...current.filter((o) => !row.none.includes(o) || !row.active.includes(option)),
+        option,
+      ];
     // A carried triage finding that is no longer present is resolved, not erased —
     // the server stamps who resolved it and when.
     const carriedKey = `${row.key}:${option}`;
@@ -77,7 +84,10 @@ export function RiskSection({
   const confirm = (keys: string[]) =>
     onPatch({
       carried: Object.fromEntries(
-        Object.entries(carried).map(([k, c]) => [k, keys.includes(k) ? { ...c, confirmed: true } : c]),
+        Object.entries(carried).map(([k, c]) => [
+          k,
+          keys.includes(k) ? { ...c, confirmed: true } : c,
+        ]),
       ),
     });
 
@@ -90,8 +100,8 @@ export function RiskSection({
   return (
     <div className="flex flex-col gap-3">
       <Callout>
-        Findings from triage keep their source — <strong>confirm or update each one, don’t
-        re-document</strong>.
+        Findings from triage keep their source —{" "}
+        <strong>confirm or update each one, don’t re-document</strong>.
       </Callout>
       {Object.keys(carried).length > 0 && (
         <div>
@@ -113,20 +123,29 @@ export function RiskSection({
                   </span>
                   {c.not_present ? (
                     <Tag>
-                      not present now{c.resolved_by ? ` · ${c.resolved_by}` : ""} — kept in the trail
+                      not present now{c.resolved_by ? ` · ${c.resolved_by}` : ""} — kept in the
+                      trail
                     </Tag>
                   ) : c.confirmed ? (
                     <Tag>confirmed ✓</Tag>
                   ) : (
                     <>
-                      <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => confirm([key])}>
+                      <button
+                        type="button"
+                        className={`${BTN} ${BTN_SM}`}
+                        onClick={() => confirm([key])}
+                      >
                         Confirm
                       </button>
                       <button
                         type="button"
                         className={`${BTN_GHOST} ${BTN_SM}`}
                         onClick={() =>
-                          setRow(riskRows.find((r) => r.key === rowKey)!, option, false)
+                          setRow(
+                            riskRows.find((r) => r.key === rowKey)!,
+                            option,
+                            false,
+                          )
                         }
                       >
                         Not present now
@@ -163,7 +182,9 @@ export function RiskSection({
                   <label
                     key={option}
                     className={`flex items-center gap-1.5 text-[12.5px] ${
-                      row.active.includes(option) ? "font-semibold text-priority-red" : "text-ink-900"
+                      row.active.includes(option)
+                        ? "font-semibold text-priority-red"
+                        : "text-ink-900"
                     }`}
                   >
                     <input
@@ -180,8 +201,22 @@ export function RiskSection({
         </div>
       </div>
 
-      <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange}
-        skip={["static", "dynamic", "protective", "change_72h", "summary", "plan", "review_by", "concern_level"]} />
+      <SchemaSection
+        spec={spec}
+        values={values}
+        vs={vs}
+        onChange={onChange}
+        skip={[
+          "static",
+          "dynamic",
+          "protective",
+          "change_72h",
+          "summary",
+          "plan",
+          "review_by",
+          "concern_level",
+        ]}
+      />
       {triggers}
 
       <div>
@@ -198,14 +233,25 @@ export function RiskSection({
               {signedBy ? ` · ${signedBy}` : ""}
             </Tag>
           ) : (
-            <Tag tone="warn">Draft — unsigned{anyActive ? " · required: an active risk is recorded" : ""}</Tag>
+            <Tag tone="warn">
+              Draft — unsigned{anyActive ? " · required: an active risk is recorded" : ""}
+            </Tag>
           )}
         </div>
         <SchemaSection
           spec={{
             ...spec,
             fields: spec.fields.filter((f) =>
-              ["static", "dynamic", "protective", "change_72h", "summary", "plan", "review_by", "concern_level"].includes(f.key),
+              [
+                "static",
+                "dynamic",
+                "protective",
+                "change_72h",
+                "summary",
+                "plan",
+                "review_by",
+                "concern_level",
+              ].includes(f.key),
             ),
           }}
           values={values}
@@ -216,7 +262,11 @@ export function RiskSection({
           type="button"
           className={`${BTN} ${BTN_SM} mt-3`}
           disabled={!formulationReady}
-          title={formulationReady ? "" : "Complete static, dynamic, protective, next 24–72 h and the summary first"}
+          title={
+            formulationReady
+              ? ""
+              : "Complete static, dynamic, protective, next 24–72 h and the summary first"
+          }
           // A truthy value asks the server to sign; it records the signer and time itself.
           onClick={() => onPatch({ formulation_signed_at: "sign" })}
         >

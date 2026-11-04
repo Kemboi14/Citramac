@@ -25,8 +25,21 @@ LINK_TOOLS = {
 }
 # Tools completed elsewhere — never block intake sign-off.
 LATER_TOOLS = {"SAFETY", "CRI"}
-TOOL_ORDER = ["SRA", "SAFETY", "PAWSS", "AUDITC", "PHQ9", "PHQA", "EPDS", "GAD7", "MDQ", "PCL5",
-              "COG", "SAFEGUARD", "CRI"]
+TOOL_ORDER = [
+    "SRA",
+    "SAFETY",
+    "PAWSS",
+    "AUDITC",
+    "PHQ9",
+    "PHQA",
+    "EPDS",
+    "GAD7",
+    "MDQ",
+    "PCL5",
+    "COG",
+    "SAFEGUARD",
+    "CRI",
+]
 _ACTIVE = {row["key"]: set(row["active"]) for row in RISK_ROWS}
 
 
@@ -91,7 +104,10 @@ def triggers(patient):
         elif finding.key == "SAFEGUARDING":
             add("SAFEGUARD", f"{finding.title} ({finding.stage.lower()}): {finding.summary}")
         elif finding.key == "SUBSTANCE:alcohol":
-            add("PAWSS", f"Alcohol use recorded at {finding.stage.lower()} — predict withdrawal risk")
+            add(
+                "PAWSS",
+                f"Alcohol use recorded at {finding.stage.lower()} — predict withdrawal risk",
+            )
 
     suicide = _active_risk(s, "suicide")
     if suicide:
@@ -109,7 +125,9 @@ def triggers(patient):
     # CIWA-Ar / COWS (withdrawal severity) belong to the withdrawal module, which
     # needs a clinical protocol source — they are not recommended here.
     current_cards = {
-        c.get("substance") for c in subs.get("substances") or [] if isinstance(c, dict) and c.get("current") == _code("Yes")
+        c.get("substance")
+        for c in subs.get("substances") or []
+        if isinstance(c, dict) and c.get("current") == _code("Yes")
     }
     if subs.get("kind") == _code("Alcohol") or _code("Alcohol") in current_cards:
         add("PAWSS", "Alcohol use recorded — predict withdrawal risk")
@@ -118,13 +136,25 @@ def triggers(patient):
     low = [x for x in ("Low mood", "Loss of interest/pleasure") if _code(x) in sx]
     if low:
         teen = age is not None and 12 <= age < 18
-        add("PHQA" if teen else "PHQ9", ("Adolescent with " if teen else "Symptoms: ") + ", ".join(x.lower() for x in low))
+        add(
+            "PHQA" if teen else "PHQ9",
+            ("Adolescent with " if teen else "Symptoms: ") + ", ".join(x.lower() for x in low),
+        )
     if low_affect:
         add("PHQA" if age is not None and age < 18 else "PHQ9", "MSE: low affect / hopelessness")
     anxious = [x for x in ("Anxiety/worry", "Panic") if _code(x) in sx]
     if anxious:
         add("GAD7", "Symptoms: " + ", ".join(x.lower() for x in anxious))
-    manic = [x for x in ("Elevated/expansive mood", "Reduced need for sleep", "Racing thoughts", "Impulsivity") if _code(x) in sx]
+    manic = [
+        x
+        for x in (
+            "Elevated/expansive mood",
+            "Reduced need for sleep",
+            "Racing thoughts",
+            "Impulsivity",
+        )
+        if _code(x) in sx
+    ]
     if manic:
         add("MDQ", "Possible manic symptoms: " + ", ".join(x.lower() for x in manic))
     if elevated_affect:
@@ -133,15 +163,28 @@ def triggers(patient):
         add("PCL5", "Symptoms: trauma symptoms")
     if _code("Trauma symptoms identified") in set(s.get("trauma", {}).get("flags", []) or []):
         add("PCL5", "Trauma section: trauma symptoms identified")
-    if _code("Memory concerns") in sx or _code("Confusion/disorientation") in sx or (age is not None and age >= 65):
-        add("COG", "Memory concerns reported" if _code("Memory concerns") in sx else "Age 65 or over / confusion reported")
+    if (
+        _code("Memory concerns") in sx
+        or _code("Confusion/disorientation") in sx
+        or (age is not None and age >= 65)
+    ):
+        add(
+            "COG",
+            (
+                "Memory concerns reported"
+                if _code("Memory concerns") in sx
+                else "Age 65 or over / confusion reported"
+            ),
+        )
     safeguard = _active_risk(s, "safeguarding")
     if safeguard:
         add("SAFEGUARD", "Safeguarding: " + ", ".join(o.lower() for o in safeguard))
     neglect = _active_risk(s, "neglect")
     if neglect:
         add("SAFEGUARD", "Vulnerability: " + ", ".join(o.lower() for o in neglect))
-    if _code("Immediate safeguarding concern identified") in set(s.get("trauma", {}).get("flags", []) or []):
+    if _code("Immediate safeguarding concern identified") in set(
+        s.get("trauma", {}).get("flags", []) or []
+    ):
         add("SAFEGUARD", "Immediate safeguarding concern (trauma section)")
     if s.get("medical", {}).get("preg_status") in (_code("Pregnant"), _code("Postpartum")):
         add("EPDS", "Pregnant or postpartum")
@@ -159,9 +202,14 @@ def status_of(patient, key, why, sections):
         return "Declined"
     if key == "SRA" and sections.get("risk", {}).get("formulation_signed_at"):
         return "Completed"
-    if key == "SAFEGUARD" and _code("Safeguarding pathway") in set(sections.get("risk", {}).get("actions", []) or []):
+    if key == "SAFEGUARD" and _code("Safeguarding pathway") in set(
+        sections.get("risk", {}).get("actions", []) or []
+    ):
         return "Completed"
-    if key in instruments.INSTRUMENTS and OutcomeScore.objects.filter(patient=patient, instrument=key).exists():
+    if (
+        key in instruments.INSTRUMENTS
+        and OutcomeScore.objects.filter(patient=patient, instrument=key).exists()
+    ):
         return "Completed"
     # Spec 6.1: a tool that needs the organisation's approval is shown, never
     # started, until an Org Admin approves it (approved_assessments.py).
@@ -179,7 +227,9 @@ def overview(patient):
     for key in TOOL_ORDER:
         status = status_of(patient, key, why, sections)
         last = (
-            OutcomeScore.objects.filter(patient=patient, instrument=key).order_by("-recorded_at").first()
+            OutcomeScore.objects.filter(patient=patient, instrument=key)
+            .order_by("-recorded_at")
+            .first()
             if key in instruments.INSTRUMENTS
             else None
         )
@@ -259,16 +309,32 @@ def decide(patient, user, key, status, reason=""):
 
 
 @transaction.atomic
-def record_assessment(patient, user, instrument, *, answers=None, total=None, positive=None,
-                      context="", note="", intake=None, detail=None, timepoint="", assessed_at=None):
+def record_assessment(
+    patient,
+    user,
+    instrument,
+    *,
+    answers=None,
+    total=None,
+    positive=None,
+    context="",
+    note="",
+    intake=None,
+    detail=None,
+    timepoint="",
+    assessed_at=None,
+):
     if instrument not in instruments.INSTRUMENTS:
         raise ValidationError({"instrument": "Unknown instrument."})
     spec = instruments.INSTRUMENTS[instrument]
     if not approved_assessments.is_approved(instrument):
         raise ValidationError({"instrument": "Not approved for this organisation."})
-    if timepoint and not LocalConcept.objects.filter(
-        valueset_id="assessment-timepoint", code=timepoint, active=True
-    ).exists():
+    if (
+        timepoint
+        and not LocalConcept.objects.filter(
+            valueset_id="assessment-timepoint", code=timepoint, active=True
+        ).exists()
+    ):
         raise ValidationError({"timepoint": "Choose the timepoint (baseline, repeat, …)."})
     recorded_at = _assessment_time(assessed_at)
     try:

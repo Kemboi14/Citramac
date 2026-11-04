@@ -48,7 +48,7 @@ class FakeHie:
         return self
 
     def _request(self, method, url, **kwargs):
-        path = url[len(BASE_URL):] if url.startswith(BASE_URL) else url
+        path = url[len(BASE_URL) :] if url.startswith(BASE_URL) else url
         self.calls.append((method, path, kwargs))
         answers = self.routes.get((method, path))
         if not answers:

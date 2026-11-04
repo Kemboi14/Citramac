@@ -20,7 +20,9 @@ class WithdrawalTests(CarePlanTestCase):
         )
 
     def status(self):
-        return self.client.get(reverse("care-client-withdrawal", args=[self.pid]), **self.auth).data["scales"]
+        return self.client.get(
+            reverse("care-client-withdrawal", args=[self.pid]), **self.auth
+        ).data["scales"]
 
     def test_scales_are_defined_with_the_expected_shape_and_max(self):
         ciwa, cows = instruments.INSTRUMENTS["CIWA"], instruments.INSTRUMENTS["COWS"]
@@ -38,8 +40,12 @@ class WithdrawalTests(CarePlanTestCase):
         self.assertEqual(ok.data["score"], 10)
         self.assertEqual(instruments.band_for("CIWA", 10), "Mild–moderate")
         self.assertEqual(instruments.band_for("CIWA", 16), "Severe")
-        self.assertEqual(self.assess("CIWA", [5] + [0] * 9).status_code, 201)  # between anchors is allowed
-        self.assertEqual(self.assess("CIWA", [0] * 9 + [5]).status_code, 400)  # orientation tops at 4
+        self.assertEqual(
+            self.assess("CIWA", [5] + [0] * 9).status_code, 201
+        )  # between anchors is allowed
+        self.assertEqual(
+            self.assess("CIWA", [0] * 9 + [5]).status_code, 400
+        )  # orientation tops at 4
         self.assertEqual(self.assess("CIWA", [0] * 9).status_code, 400)
 
     def test_cows_only_accepts_the_points_that_exist_for_each_item(self):
@@ -55,7 +61,14 @@ class WithdrawalTests(CarePlanTestCase):
         self.assertEqual(scale["latest"]["band"], "Severe")
 
     def test_configured_protocol_sets_flags_and_due_time(self):
-        cfg = {"CIWA": {"prn_threshold": 8, "severe_threshold": 20, "rescore_minutes_high": 60, "rescore_minutes_low": 240}}
+        cfg = {
+            "CIWA": {
+                "prn_threshold": 8,
+                "severe_threshold": 20,
+                "rescore_minutes_high": 60,
+                "rescore_minutes_low": 240,
+            }
+        }
         with override_settings(WITHDRAWAL_PROTOCOL=cfg):
             self.assess("CIWA", [1] * 10)
             scale = self.status()[0]
@@ -66,9 +79,24 @@ class WithdrawalTests(CarePlanTestCase):
 
     def test_unable_to_score_is_recorded_with_a_reason_and_prompts_a_retry(self):
         url = reverse("care-client-withdrawal", args=[self.pid])
-        self.assertEqual(self.client.post(url, {"instrument": "CIWA", "reason": "nope"}, format="json", **self.auth).status_code, 400)
-        self.assertEqual(self.client.post(url, {"instrument": "PHQ9", "reason": "SEDATED"}, format="json", **self.auth).status_code, 400)
-        self.assertEqual(self.client.post(url, {"instrument": "CIWA", "reason": "SEDATED"}, format="json", **self.auth).status_code, 201)
+        self.assertEqual(
+            self.client.post(
+                url, {"instrument": "CIWA", "reason": "nope"}, format="json", **self.auth
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post(
+                url, {"instrument": "PHQ9", "reason": "SEDATED"}, format="json", **self.auth
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post(
+                url, {"instrument": "CIWA", "reason": "SEDATED"}, format="json", **self.auth
+            ).status_code,
+            201,
+        )
         scale = self.status()[0]
         self.assertEqual(scale["lastAttempt"]["reason"], "SEDATED")
         self.assertIsNone(scale["latest"])

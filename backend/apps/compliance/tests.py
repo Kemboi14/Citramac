@@ -286,7 +286,9 @@ class BreachAssessmentTests(ComplianceTestCase):
 
     def test_unknown_schedule_categories_are_dropped(self):
         incident_id = self._create(self.admin).data["id"]
-        data = self._patch(incident_id, {"schedule_categories": ["SUBSTANCE_ABUSE", "MADE_UP"]}).data
+        data = self._patch(
+            incident_id, {"schedule_categories": ["SUBSTANCE_ABUSE", "MADE_UP"]}
+        ).data
         self.assertEqual(data["schedule_categories"], ["SUBSTANCE_ABUSE"])
 
     def test_not_telling_data_subjects_needs_a_lawful_ground_stated(self):
@@ -305,7 +307,10 @@ class BreachAssessmentTests(ComplianceTestCase):
         # Delay for an investigation postpones the letter; it does not remove it.
         delayed = self._patch(
             incident_id,
-            {"subjects_exemption": "INVESTIGATION", "subjects_exemption_grounds": "Police request."},
+            {
+                "subjects_exemption": "INVESTIGATION",
+                "subjects_exemption_grounds": "Police request.",
+            },
         ).data
         self.assertTrue(self._tracks(delayed)["DATA_SUBJECTS"]["required"])
 
@@ -328,17 +333,22 @@ class BreachAssessmentTests(ComplianceTestCase):
         tracks = self._tracks(data)
         notified_at = timezone.now() - timedelta(minutes=30)
         self._record(
-            tracks["DHA"]["id"], {"method": "Form HMIS 1 by email", "notified_at": notified_at.isoformat()}
+            tracks["DHA"]["id"],
+            {"method": "Form HMIS 1 by email", "notified_at": notified_at.isoformat()},
         )
         with platform_admin_context():
-            follow_up = BreachNotification.all_objects.get(incident_id=data["id"], track="DHA_FOLLOWUP")
+            follow_up = BreachNotification.all_objects.get(
+                incident_id=data["id"], track="DHA_FOLLOWUP"
+            )
         self.assertEqual(follow_up.due_at, notified_at + timedelta(hours=72))
 
     def test_steps_are_kept_in_order(self):
         incident_id = self._create(self.admin).data["id"]
         url = reverse("breach-incident-events", args=[incident_id])
         self.assertEqual(
-            self.client.post(url, {"note": " "}, format="json", **self.auth(self.admin)).status_code,
+            self.client.post(
+                url, {"note": " "}, format="json", **self.auth(self.admin)
+            ).status_code,
             400,
         )
         response = self.client.post(
@@ -365,7 +375,8 @@ class BreachAssessmentTests(ComplianceTestCase):
         )
         self.assertEqual(unknown.status_code, 400)
         clinician = self.client.get(
-            reverse("breach-incident-report", args=[incident_id, "odpc"]), **self.auth(self.clinician)
+            reverse("breach-incident-report", args=[incident_id, "odpc"]),
+            **self.auth(self.clinician),
         )
         self.assertEqual(clinician.status_code, 403)
 
@@ -380,7 +391,8 @@ class BreachAssessmentTests(ComplianceTestCase):
         missing_org = self.client.get(reverse("breach-register"), **self.auth(self.platform))
         self.assertEqual(missing_org.status_code, 404)
         platform = self.client.get(
-            f"{reverse('breach-register')}?organization={self.other_org.id}", **self.auth(self.platform)
+            f"{reverse('breach-register')}?organization={self.other_org.id}",
+            **self.auth(self.platform),
         ).content.decode()
         self.assertIn("Beta breach", platform)
         self.assertNotIn("Alpha breach", platform)

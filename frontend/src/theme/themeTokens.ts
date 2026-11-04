@@ -15,7 +15,8 @@ export interface ThemeOverrides {
   dark?: ThemePalette;
 }
 
-export type TokenGroup = "brand" | "sidebar" | "surfaces" | "text" | "accents" | "charts" | "status";
+export type TokenGroup =
+  "brand" | "sidebar" | "surfaces" | "text" | "accents" | "charts" | "status";
 
 export interface TokenDef {
   key: string;
@@ -38,43 +39,232 @@ export const TOKEN_GROUPS: { id: TokenGroup; label: string }[] = [
 ];
 
 export const THEME_TOKENS: TokenDef[] = [
-  { key: "primary", cssVar: "--green", label: "Primary", hint: "Buttons, links, focus rings, active states", group: "brand" },
-  { key: "primary_dark", cssVar: "--green-dark", label: "Secondary", hint: "Button hover, headings accent, KPI numbers", group: "brand" },
-  { key: "on_primary", cssVar: "--on-green", label: "Text on primary", hint: "Text and icons on primary buttons", group: "brand" },
+  {
+    key: "primary",
+    cssVar: "--green",
+    label: "Primary",
+    hint: "Buttons, links, focus rings, active states",
+    group: "brand",
+  },
+  {
+    key: "primary_dark",
+    cssVar: "--green-dark",
+    label: "Secondary",
+    hint: "Button hover, headings accent, KPI numbers",
+    group: "brand",
+  },
+  {
+    key: "on_primary",
+    cssVar: "--on-green",
+    label: "Text on primary",
+    hint: "Text and icons on primary buttons",
+    group: "brand",
+  },
 
-  { key: "sidebar_top", cssVar: "--sidebar-top", label: "Background (top)", hint: "Sidebar gradient start", group: "sidebar" },
-  { key: "sidebar_bottom", cssVar: "--sidebar-bottom", label: "Background (bottom)", hint: "Sidebar gradient end", group: "sidebar" },
-  { key: "sidebar_text", cssVar: "--sidebar-text", label: "Link text", hint: "Navigation labels", group: "sidebar" },
-  { key: "sidebar_text_strong", cssVar: "--sidebar-text-strong", label: "Strong text", hint: "Hovered links, your name, hover/divider tint", group: "sidebar" },
-  { key: "sidebar_muted", cssVar: "--sidebar-muted", label: "Muted text", hint: "Section headings, role, badges", group: "sidebar" },
-  { key: "sidebar_active_bg", cssVar: "--sidebar-active-bg", label: "Active item", hint: "Background of the current page's link", group: "sidebar" },
-  { key: "sidebar_active_text", cssVar: "--sidebar-active-text", label: "Active item text", hint: "Text of the current page's link", group: "sidebar" },
+  {
+    key: "sidebar_top",
+    cssVar: "--sidebar-top",
+    label: "Background (top)",
+    hint: "Sidebar gradient start",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_bottom",
+    cssVar: "--sidebar-bottom",
+    label: "Background (bottom)",
+    hint: "Sidebar gradient end",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_text",
+    cssVar: "--sidebar-text",
+    label: "Link text",
+    hint: "Navigation labels",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_text_strong",
+    cssVar: "--sidebar-text-strong",
+    label: "Strong text",
+    hint: "Hovered links, your name, hover/divider tint",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_muted",
+    cssVar: "--sidebar-muted",
+    label: "Muted text",
+    hint: "Section headings, role, badges",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_active_bg",
+    cssVar: "--sidebar-active-bg",
+    label: "Active item",
+    hint: "Background of the current page's link",
+    group: "sidebar",
+  },
+  {
+    key: "sidebar_active_text",
+    cssVar: "--sidebar-active-text",
+    label: "Active item text",
+    hint: "Text of the current page's link",
+    group: "sidebar",
+  },
 
-  { key: "bg", cssVar: "--bg", label: "Page background", hint: "Behind cards and panels", group: "surfaces" },
-  { key: "card", cssVar: "--card", label: "Card / panel", hint: "Cards, tables, modals, inputs", group: "surfaces" },
-  { key: "border", cssVar: "--border", label: "Borders", hint: "Hairlines around cards, rows and inputs", group: "surfaces" },
-  { key: "scrim", cssVar: "--scrim", label: "Backdrop", hint: "Dimmed overlay behind modals and drawers", group: "surfaces" },
-  { key: "shadow", cssVar: "--shadow-color", label: "Shadow", hint: "Card and popover shadows", group: "surfaces" },
+  {
+    key: "bg",
+    cssVar: "--bg",
+    label: "Page background",
+    hint: "Behind cards and panels",
+    group: "surfaces",
+  },
+  {
+    key: "card",
+    cssVar: "--card",
+    label: "Card / panel",
+    hint: "Cards, tables, modals, inputs",
+    group: "surfaces",
+  },
+  {
+    key: "border",
+    cssVar: "--border",
+    label: "Borders",
+    hint: "Hairlines around cards, rows and inputs",
+    group: "surfaces",
+  },
+  {
+    key: "scrim",
+    cssVar: "--scrim",
+    label: "Backdrop",
+    hint: "Dimmed overlay behind modals and drawers",
+    group: "surfaces",
+  },
+  {
+    key: "shadow",
+    cssVar: "--shadow-color",
+    label: "Shadow",
+    hint: "Card and popover shadows",
+    group: "surfaces",
+  },
 
-  { key: "ink_900", cssVar: "--ink-900", label: "Headings", hint: "Primary text and headings", group: "text" },
-  { key: "ink_700", cssVar: "--ink-700", label: "Body", hint: "Secondary text and labels", group: "text" },
-  { key: "ink_500", cssVar: "--ink-500", label: "Muted", hint: "Helper text and descriptions", group: "text" },
-  { key: "ink_400", cssVar: "--ink-400", label: "Placeholder", hint: "Placeholders and disabled text", group: "text" },
-  { key: "ink_300", cssVar: "--ink-300", label: "Subtle", hint: "Icons and borders on dark surfaces", group: "text" },
+  {
+    key: "ink_900",
+    cssVar: "--ink-900",
+    label: "Headings",
+    hint: "Primary text and headings",
+    group: "text",
+  },
+  {
+    key: "ink_700",
+    cssVar: "--ink-700",
+    label: "Body",
+    hint: "Secondary text and labels",
+    group: "text",
+  },
+  {
+    key: "ink_500",
+    cssVar: "--ink-500",
+    label: "Muted",
+    hint: "Helper text and descriptions",
+    group: "text",
+  },
+  {
+    key: "ink_400",
+    cssVar: "--ink-400",
+    label: "Placeholder",
+    hint: "Placeholders and disabled text",
+    group: "text",
+  },
+  {
+    key: "ink_300",
+    cssVar: "--ink-300",
+    label: "Subtle",
+    hint: "Icons and borders on dark surfaces",
+    group: "text",
+  },
 
-  { key: "info", cssVar: "--info", label: "Info (blue)", hint: "Informational highlights, calendar groups", group: "accents" },
-  { key: "violet", cssVar: "--violet", label: "Highlight (violet)", hint: "Secondary highlights, calendar groups", group: "accents" },
+  {
+    key: "info",
+    cssVar: "--info",
+    label: "Info (blue)",
+    hint: "Informational highlights, calendar groups",
+    group: "accents",
+  },
+  {
+    key: "violet",
+    cssVar: "--violet",
+    label: "Highlight (violet)",
+    hint: "Secondary highlights, calendar groups",
+    group: "accents",
+  },
 
-  { key: "chart_1", cssVar: "--chart-1", label: "Series 1", hint: "First chart series and bars", group: "charts" },
-  { key: "chart_2", cssVar: "--chart-2", label: "Series 2", hint: "Second chart series, bar highlight", group: "charts" },
-  { key: "chart_3", cssVar: "--chart-3", label: "Series 3", hint: "Third chart series", group: "charts" },
-  { key: "chart_4", cssVar: "--chart-4", label: "Series 4", hint: "Fourth chart series", group: "charts" },
-  { key: "chart_5", cssVar: "--chart-5", label: "Series 5", hint: "Fifth chart series", group: "charts" },
-  { key: "chart_6", cssVar: "--chart-6", label: "Series 6", hint: "Sixth chart series", group: "charts" },
+  {
+    key: "chart_1",
+    cssVar: "--chart-1",
+    label: "Series 1",
+    hint: "First chart series and bars",
+    group: "charts",
+  },
+  {
+    key: "chart_2",
+    cssVar: "--chart-2",
+    label: "Series 2",
+    hint: "Second chart series, bar highlight",
+    group: "charts",
+  },
+  {
+    key: "chart_3",
+    cssVar: "--chart-3",
+    label: "Series 3",
+    hint: "Third chart series",
+    group: "charts",
+  },
+  {
+    key: "chart_4",
+    cssVar: "--chart-4",
+    label: "Series 4",
+    hint: "Fourth chart series",
+    group: "charts",
+  },
+  {
+    key: "chart_5",
+    cssVar: "--chart-5",
+    label: "Series 5",
+    hint: "Fifth chart series",
+    group: "charts",
+  },
+  {
+    key: "chart_6",
+    cssVar: "--chart-6",
+    label: "Series 6",
+    hint: "Sixth chart series",
+    group: "charts",
+  },
 
-  { key: "danger", cssVar: "--red", label: "Danger", hint: "Risk flags, allergies, destructive actions, errors", group: "status", platformOnly: true },
-  { key: "warning", cssVar: "--amber", label: "Warning", hint: "Pending approvals, warnings, 'Soon' badges", group: "status", platformOnly: true },
-  { key: "on_status", cssVar: "--on-status", label: "Text on status", hint: "Text on solid danger/warning fills", group: "status", platformOnly: true },
+  {
+    key: "danger",
+    cssVar: "--red",
+    label: "Danger",
+    hint: "Risk flags, allergies, destructive actions, errors",
+    group: "status",
+    platformOnly: true,
+  },
+  {
+    key: "warning",
+    cssVar: "--amber",
+    label: "Warning",
+    hint: "Pending approvals, warnings, 'Soon' badges",
+    group: "status",
+    platformOnly: true,
+  },
+  {
+    key: "on_status",
+    cssVar: "--on-status",
+    label: "Text on status",
+    hint: "Text on solid danger/warning fills",
+    group: "status",
+    platformOnly: true,
+  },
 ];
 
 const TOKEN_BY_VAR = new Map(THEME_TOKENS.map((t) => [t.cssVar, t]));
@@ -142,7 +332,10 @@ export function defaultFor(mode: ThemeMode, key: string): DefaultValue {
 }
 
 /** Resolve every token for a mode: override, else followed token, else default hex. */
-export function resolvePalette(mode: ThemeMode, overrides: ThemePalette = {}): Record<string, string> {
+export function resolvePalette(
+  mode: ThemeMode,
+  overrides: ThemePalette = {},
+): Record<string, string> {
   const out: Record<string, string> = {};
   const resolve = (key: string, depth = 0): string => {
     if (out[key]) return out[key];
@@ -167,7 +360,10 @@ export function resolvePalette(mode: ThemeMode, overrides: ThemePalette = {}): R
  * where re-declaring the base variables alone wouldn't re-derive the tints
  * that tokens.css computes on :root.
  */
-export function scopedThemeVars(mode: ThemeMode, overrides: ThemePalette = {}): Record<string, string> {
+export function scopedThemeVars(
+  mode: ThemeMode,
+  overrides: ThemePalette = {},
+): Record<string, string> {
   const vars: Record<string, string> = {};
   const blocks = mode === "light" ? [LIGHT_BLOCK] : [LIGHT_BLOCK, DARK_BLOCK];
   for (const block of blocks) {
@@ -192,7 +388,13 @@ export function hexToRgb(hex: string): Rgb {
 }
 
 export function rgbToHex([r, g, b]: Rgb): string {
-  return `#${[r, g, b].map((c) => Math.round(Math.min(255, Math.max(0, c))).toString(16).padStart(2, "0")).join("")}`;
+  return `#${[r, g, b]
+    .map((c) =>
+      Math.round(Math.min(255, Math.max(0, c)))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 }
 
 /** Linear mix: weight 0 → a, 1 → b. */

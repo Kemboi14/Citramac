@@ -63,8 +63,9 @@ def describe_issues(issues):
     )
 
 
-def enqueue(organization_id, resource_type, fhir_json, idempotency_key, *, related=None,
-            retry_safe=False):
+def enqueue(
+    organization_id, resource_type, fhir_json, idempotency_key, *, related=None, retry_safe=False
+):
     """Idempotent: a second call with the same key returns the first row."""
     entry, created = FhirResourceCache.objects.get_or_create(
         organization_id=organization_id,
@@ -96,7 +97,10 @@ def _branch_for(entry):
     if entry.related_object_type != "ShrConsent" or not entry.related_object_id:
         return None
     consent = (
-        ShrConsent.objects.unscoped().select_related("branch").filter(pk=entry.related_object_id).first()
+        ShrConsent.objects.unscoped()
+        .select_related("branch")
+        .filter(pk=entry.related_object_id)
+        .first()
     )
     return consent.branch if consent else None
 

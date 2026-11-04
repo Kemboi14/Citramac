@@ -36,8 +36,14 @@ MODULES = {
 }
 
 CLINICAL_STAFF = [
-    "Psychiatrist", "Doctor", "Nurse", "Ward Nurse", "Clinical Psychologist/Therapist",
-    "Therapist", "Clinical Supervisor", "Supervisor",
+    "Psychiatrist",
+    "Doctor",
+    "Nurse",
+    "Ward Nurse",
+    "Clinical Psychologist/Therapist",
+    "Therapist",
+    "Clinical Supervisor",
+    "Supervisor",
 ]
 PRESCRIBERS = ["Psychiatrist", "Doctor"]
 
@@ -82,8 +88,12 @@ PERMISSIONS = [
         "exists, not what it says.",
         SCOPE_ORG,
         [
-            "Psychiatrist", "Doctor", "Nurse", "Ward Nurse",
-            "Clinical Psychologist/Therapist", "Therapist",
+            "Psychiatrist",
+            "Doctor",
+            "Nurse",
+            "Ward Nurse",
+            "Clinical Psychologist/Therapist",
+            "Therapist",
         ],
     ),
     (
@@ -133,7 +143,10 @@ PERMISSIONS = [
         "nursing and administrative documents.",
         SCOPE_ORG,
         [
-            "Psychiatrist", "Doctor", "Clinical Psychologist/Therapist", "Therapist",
+            "Psychiatrist",
+            "Doctor",
+            "Clinical Psychologist/Therapist",
+            "Therapist",
             "Clinical Supervisor",
         ],
     ),
@@ -400,8 +413,7 @@ ORGANISATION_ROLES = [
     (
         "nurse",
         "Nurse",
-        "Nursing care: triage, vital signs, medication administration and nursing "
-        "documents.",
+        "Nursing care: triage, vital signs, medication administration and nursing " "documents.",
         False,
         False,
     ),

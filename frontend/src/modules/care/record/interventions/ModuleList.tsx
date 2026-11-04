@@ -21,7 +21,9 @@ export function ScopeToggle({
       aria-pressed={scope === value}
       onClick={() => onChange(value)}
       className={`rounded-[7px] px-2.5 py-[5px] text-xs font-semibold transition-colors ${
-        scope === value ? "bg-surface-card text-ink-900 shadow-sm" : "text-ink-500 hover:text-ink-900"
+        scope === value
+          ? "bg-surface-card text-ink-900 shadow-sm"
+          : "text-ink-500 hover:text-ink-900"
       }`}
     >
       {label} · {count}

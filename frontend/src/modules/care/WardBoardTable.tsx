@@ -15,7 +15,9 @@ export function WardBoardTable() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!accessToken) return;
-    getWardBoardTable(accessToken).then((r) => setRows(r.results)).catch((e) => setError(errorText(e, "Couldn't load the handover table.")));
+    getWardBoardTable(accessToken)
+      .then((r) => setRows(r.results))
+      .catch((e) => setError(errorText(e, "Couldn't load the handover table.")));
   }, [accessToken]);
   return (
     <Card title="Inpatient handover">
@@ -27,23 +29,55 @@ export function WardBoardTable() {
           <table className={`${TABLE} min-w-[860px]`} aria-label="Inpatient handover">
             <thead>
               <tr>
-                {["Client", "Bed", "Day", "Legal status", "Observation", "Early warning", "Withdrawal", "Next MDT", "Due ≤ 1 h"].map((h) => (
-                  <th key={h} className={TH}>{h}</th>
+                {[
+                  "Client",
+                  "Bed",
+                  "Day",
+                  "Legal status",
+                  "Observation",
+                  "Early warning",
+                  "Withdrawal",
+                  "Next MDT",
+                  "Due ≤ 1 h",
+                ].map((h) => (
+                  <th key={h} className={TH}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(rows ?? []).map((r) => (
                 <tr key={r.patient_id}>
-                  <td className={TD}><Link className="font-semibold text-brand-green hover:underline" to={clientRecordPath(r.patient_id, "snapshot")}>{r.patient}</Link></td>
-                  <td className={TD}>{r.ward} {r.bed}</td>
+                  <td className={TD}>
+                    <Link
+                      className="font-semibold text-brand-green hover:underline"
+                      to={clientRecordPath(r.patient_id, "snapshot")}
+                    >
+                      {r.patient}
+                    </Link>
+                  </td>
+                  <td className={TD}>
+                    {r.ward} {r.bed}
+                  </td>
                   <td className={TD}>{r.day}</td>
                   <td className={TD}>{r.legal_status}</td>
                   <td className={TD}>{r.observation || "—"}</td>
-                  <td className={TD}>{r.ews || "—"} {r.ews_trend && <Tag tone={r.ews_trend === "rising" ? "risk" : "neutral"}>{r.ews_trend}</Tag>}</td>
-                  <td className={TD}>{Object.entries(r.withdrawal).map(([k, v]) => `${k} ${v.score} (${v.band})`).join(", ") || "—"}</td>
+                  <td className={TD}>
+                    {r.ews || "—"}{" "}
+                    {r.ews_trend && (
+                      <Tag tone={r.ews_trend === "rising" ? "risk" : "neutral"}>{r.ews_trend}</Tag>
+                    )}
+                  </td>
+                  <td className={TD}>
+                    {Object.entries(r.withdrawal)
+                      .map(([k, v]) => `${k} ${v.score} (${v.band})`)
+                      .join(", ") || "—"}
+                  </td>
                   <td className={TD}>{r.next_mdt ?? "—"}</td>
-                  <td className={TD}>{r.due_within_hour > 0 ? <Tag tone="warn">{r.due_within_hour}</Tag> : "—"}</td>
+                  <td className={TD}>
+                    {r.due_within_hour > 0 ? <Tag tone="warn">{r.due_within_hour}</Tag> : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

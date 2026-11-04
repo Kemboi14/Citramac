@@ -8,8 +8,8 @@ a Response by hand instead of raising (e.g. a plain validation branch in a
 ModelViewSet action).
 """
 
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.response import Response
 
 
 def error_response(code, message, http_status=status.HTTP_400_BAD_REQUEST, fields=None):

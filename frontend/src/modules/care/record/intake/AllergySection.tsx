@@ -38,7 +38,12 @@ export function AllergySection({
   const { accessToken } = useAuth();
   const [data, setData] = useState<IntakeAllergy | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ substance: "", allergy_type: "ALLERGY" as AllergyType, reaction: "", severity: "UNKNOWN" });
+  const [draft, setDraft] = useState({
+    substance: "",
+    allergy_type: "ALLERGY" as AllergyType,
+    reaction: "",
+    severity: "UNKNOWN",
+  });
   const [removing, setRemoving] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,7 +68,12 @@ export function AllergySection({
     }
   }
 
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <p className="text-[13px] text-ink-500">Loading…</p>;
+  if (!data)
+    return error ? (
+      <ErrorNote>{error}</ErrorNote>
+    ) : (
+      <p className="text-[13px] text-ink-500">Loading…</p>
+    );
 
   const edit = (record: IntakeAllergyRecord, body: Parameters<typeof updateAllergyRecord>[2]) =>
     void run((token) => updateAllergyRecord(token, record.id, body));
@@ -73,14 +83,20 @@ export function AllergySection({
       ? "No known allergies"
       : data.status === "UNKNOWN"
         ? "Allergy status unknown"
-        : active.map((r) => `${r.substance} (${vs.label("allergy-type", r.allergy_type)})`).join(", ") || "Known allergy";
+        : active
+            .map((r) => `${r.substance} (${vs.label("allergy-type", r.allergy_type)})`)
+            .join(", ") || "Known allergy";
 
   return (
     <div className="flex flex-col gap-3">
       <ErrorNote>{error}</ErrorNote>
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <Tag tone="brand">Existing allergy record: {summary}</Tag>
-        {data.info_source && <span className="text-[11px] text-ink-500">source: {vs.label("allergy-info-source", data.info_source)}</span>}
+        {data.info_source && (
+          <span className="text-[11px] text-ink-500">
+            source: {vs.label("allergy-info-source", data.info_source)}
+          </span>
+        )}
         {data.confirmed_at && (
           <Tag>
             Confirmed {formatDateTime(data.confirmed_at)}
@@ -90,11 +106,16 @@ export function AllergySection({
       </div>
       {data.status === "UNKNOWN" ? (
         <Callout tone="warning">
-          Allergy status is <strong>unknown</strong>. Ask now — prescribing stays locked until the status is recorded.
+          Allergy status is <strong>unknown</strong>. Ask now — prescribing stays locked until the
+          status is recorded.
         </Callout>
       ) : (
         <div>
-          <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => void run((t) => updateIntakeAllergy(t, patientId, { confirm: true }))}>
+          <button
+            type="button"
+            className={`${BTN} ${BTN_SM}`}
+            onClick={() => void run((t) => updateIntakeAllergy(t, patientId, { confirm: true }))}
+          >
             Confirm — unchanged
           </button>
         </div>
@@ -105,19 +126,26 @@ export function AllergySection({
         </Callout>
       )}
 
-      <h3 className="text-[13px] font-bold text-ink-900">
-        Confirm / update
-      </h3>
-      <div role="group" aria-label="Allergy status" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <h3 className="text-[13px] font-bold text-ink-900">Confirm / update</h3>
+      <div
+        role="group"
+        aria-label="Allergy status"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+      >
         {STATUSES.map((s) => (
           <button
             key={s.code}
             type="button"
             aria-pressed={data.status === s.code}
             className={`rounded-lg border px-3 py-2 text-[13px] font-semibold ${
-              data.status === s.code ? "border-brand-green bg-brand-green-tint text-brand-green-dark" : "border-surface-border text-ink-900"
+              data.status === s.code
+                ? "border-brand-green bg-brand-green-tint text-brand-green-dark"
+                : "border-surface-border text-ink-900"
             }`}
-            onClick={() => data.status !== s.code && void run((t) => updateIntakeAllergy(t, patientId, { status: s.code }))}
+            onClick={() =>
+              data.status !== s.code &&
+              void run((t) => updateIntakeAllergy(t, patientId, { status: s.code }))
+            }
           >
             {s.label}
           </button>
@@ -129,7 +157,9 @@ export function AllergySection({
           options={vs.options("allergy-info-source")}
           placeholder="— select —"
           value={data.info_source}
-          onChange={(code) => void run((t) => updateIntakeAllergy(t, patientId, { info_source: code }))}
+          onChange={(code) =>
+            void run((t) => updateIntakeAllergy(t, patientId, { info_source: code }))
+          }
         />
       </label>
 
@@ -164,7 +194,11 @@ export function AllergySection({
                         className={CELL_INPUT}
                         aria-label="Substance"
                         defaultValue={r.substance}
-                        onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== r.substance && edit(r, { substance: e.target.value.trim() })}
+                        onBlur={(e) =>
+                          e.target.value.trim() &&
+                          e.target.value.trim() !== r.substance &&
+                          edit(r, { substance: e.target.value.trim() })
+                        }
                       />
                     </td>
                     <td className={TD}>
@@ -186,7 +220,10 @@ export function AllergySection({
                         className={CELL_INPUT}
                         aria-label={`Reaction to ${r.substance}`}
                         defaultValue={r.reaction}
-                        onBlur={(e) => e.target.value.trim() !== r.reaction && edit(r, { reaction: e.target.value.trim() })}
+                        onBlur={(e) =>
+                          e.target.value.trim() !== r.reaction &&
+                          edit(r, { reaction: e.target.value.trim() })
+                        }
                       />
                     </td>
                     <td className={TD}>
@@ -197,9 +234,10 @@ export function AllergySection({
                         onChange={(e) => edit(r, { severity: e.target.value })}
                       >
                         <option value="">— select —</option>
-                        {r.severity && !vs.options("allergy-severity").some((o) => o.code === r.severity) && (
-                          <option value={r.severity}>{r.severity} (as recorded)</option>
-                        )}
+                        {r.severity &&
+                          !vs.options("allergy-severity").some((o) => o.code === r.severity) && (
+                            <option value={r.severity}>{r.severity} (as recorded)</option>
+                          )}
                         {vs.options("allergy-severity").map((o) => (
                           <option key={o.code} value={o.code}>
                             {o.display}
@@ -220,28 +258,58 @@ export function AllergySection({
                     <td className={TD}>
                       <div className="flex flex-wrap gap-1.5">
                         {r.verification_status === "UNCONFIRMED" && (
-                          <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => void run((t) => verifyAllergy(t, r.id, "CONFIRMED"))}>
+                          <button
+                            type="button"
+                            className={`${BTN} ${BTN_SM}`}
+                            onClick={() => void run((t) => verifyAllergy(t, r.id, "CONFIRMED"))}
+                          >
                             Confirm
                           </button>
                         )}
                         {r.clinical_status === "RESOLVED" ? (
-                          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => edit(r, { status: "ACTIVE" })}>
+                          <button
+                            type="button"
+                            className={`${BTN_GHOST} ${BTN_SM}`}
+                            onClick={() => edit(r, { status: "ACTIVE" })}
+                          >
                             Re-activate
                           </button>
                         ) : removing === r.id ? (
                           <>
-                            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => { setRemoving(null); edit(r, { status: "RESOLVED" }); }}>
+                            <button
+                              type="button"
+                              className={`${BTN_GHOST} ${BTN_SM}`}
+                              onClick={() => {
+                                setRemoving(null);
+                                edit(r, { status: "RESOLVED" });
+                              }}
+                            >
                               Resolved — no longer applies
                             </button>
-                            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => { setRemoving(null); edit(r, { status: "REFUTED" }); }}>
+                            <button
+                              type="button"
+                              className={`${BTN_GHOST} ${BTN_SM}`}
+                              onClick={() => {
+                                setRemoving(null);
+                                edit(r, { status: "REFUTED" });
+                              }}
+                            >
                               Refuted — not this reaction
                             </button>
-                            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setRemoving(null)}>
+                            <button
+                              type="button"
+                              className={`${BTN_GHOST} ${BTN_SM}`}
+                              onClick={() => setRemoving(null)}
+                            >
                               Cancel
                             </button>
                           </>
                         ) : (
-                          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setRemoving(r.id)}>
+                          <button
+                            type="button"
+                            className={`${BTN_GHOST} ${BTN_SM}`}
+                            onClick={() => setRemoving(r.id)}
+                          >
                             Remove
                           </button>
                         )}
@@ -253,16 +321,40 @@ export function AllergySection({
             </table>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_1fr_1fr_auto]">
-            <input className={INPUT} aria-label="New substance" placeholder="Substance, e.g. Penicillin" value={draft.substance} onChange={(e) => setDraft((d) => ({ ...d, substance: e.target.value }))} />
-            <select className={INPUT} aria-label="New reaction type" value={draft.allergy_type} onChange={(e) => setDraft((d) => ({ ...d, allergy_type: e.target.value as AllergyType }))}>
+            <input
+              className={INPUT}
+              aria-label="New substance"
+              placeholder="Substance, e.g. Penicillin"
+              value={draft.substance}
+              onChange={(e) => setDraft((d) => ({ ...d, substance: e.target.value }))}
+            />
+            <select
+              className={INPUT}
+              aria-label="New reaction type"
+              value={draft.allergy_type}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, allergy_type: e.target.value as AllergyType }))
+              }
+            >
               {vs.options("allergy-type").map((o) => (
                 <option key={o.code} value={o.code}>
                   {o.display}
                 </option>
               ))}
             </select>
-            <input className={INPUT} aria-label="New reaction" placeholder="Reaction, e.g. rash" value={draft.reaction} onChange={(e) => setDraft((d) => ({ ...d, reaction: e.target.value }))} />
-            <select className={INPUT} aria-label="New reaction severity" value={draft.severity} onChange={(e) => setDraft((d) => ({ ...d, severity: e.target.value }))}>
+            <input
+              className={INPUT}
+              aria-label="New reaction"
+              placeholder="Reaction, e.g. rash"
+              value={draft.reaction}
+              onChange={(e) => setDraft((d) => ({ ...d, reaction: e.target.value }))}
+            />
+            <select
+              className={INPUT}
+              aria-label="New reaction severity"
+              value={draft.severity}
+              onChange={(e) => setDraft((d) => ({ ...d, severity: e.target.value }))}
+            >
               {vs.options("allergy-severity").map((o) => (
                 <option key={o.code} value={o.code}>
                   {o.display}
@@ -275,8 +367,17 @@ export function AllergySection({
               disabled={!draft.substance.trim()}
               onClick={() =>
                 void run(async (token) => {
-                  const next = await addIntakeAllergy(token, patientId, { ...draft, substance: draft.substance.trim(), reaction: draft.reaction.trim() });
-                  setDraft({ substance: "", allergy_type: "ALLERGY", reaction: "", severity: "UNKNOWN" });
+                  const next = await addIntakeAllergy(token, patientId, {
+                    ...draft,
+                    substance: draft.substance.trim(),
+                    reaction: draft.reaction.trim(),
+                  });
+                  setDraft({
+                    substance: "",
+                    allergy_type: "ALLERGY",
+                    reaction: "",
+                    severity: "UNKNOWN",
+                  });
                   return next;
                 })
               }
@@ -285,8 +386,9 @@ export function AllergySection({
             </button>
           </div>
           <Callout>
-            <strong>Allergy</strong> (immune reaction) hard-stops prescribing. <strong>Intolerance</strong> and{" "}
-            <strong>ADR</strong> (e.g. dystonia on haloperidol) warn but do not block.
+            <strong>Allergy</strong> (immune reaction) hard-stops prescribing.{" "}
+            <strong>Intolerance</strong> and <strong>ADR</strong> (e.g. dystonia on haloperidol)
+            warn but do not block.
           </Callout>
         </>
       )}

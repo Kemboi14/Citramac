@@ -201,9 +201,7 @@ class ShaVisit(TenantScopedModel):
     payer_workflow_state = models.CharField(max_length=48, blank=True)
     discharge_status = models.CharField(max_length=8, blank=True)
     opened_at = models.DateTimeField(null=True, blank=True)
-    opened_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, related_name="+"
-    )
+    opened_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
     closed_at = models.DateTimeField(null=True, blank=True)
     close_reason = models.CharField(max_length=40, blank=True)
     # Append-only [{state, at, by, note}].

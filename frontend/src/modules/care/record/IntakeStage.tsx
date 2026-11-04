@@ -45,7 +45,10 @@ const STATE_MARK: Record<IntakeSectionState, { glyph: string; label: string }> =
 
 // INT-04-07 / 04-08: Section 4 "Yes" links "Past history" onto the Section 3 risk row.
 // Mirrors intake._link_past_history on the server so the register updates at once.
-const PAST_HISTORY_LINKS: Record<string, string> = { past_attempts: "suicide", past_violence: "violence" };
+const PAST_HISTORY_LINKS: Record<string, string> = {
+  past_attempts: "suicide",
+  past_violence: "violence",
+};
 const PAST_HISTORY = "Past history";
 
 function linkPastHistory(sections: IntakeSections, field: string, value: unknown): IntakeSections {
@@ -122,7 +125,11 @@ export function IntakeStage(props: RecordViewProps) {
           title="Intake & Clinical Assessment"
           subtitle="Comprehensive clinical understanding — pre-populated from Registration & Triage"
         />
-        {error ? <ErrorNote>{error}</ErrorNote> : <p className="text-[13px] text-ink-500">Loading assessment…</p>}
+        {error ? (
+          <ErrorNote>{error}</ErrorNote>
+        ) : (
+          <p className="text-[13px] text-ink-500">Loading assessment…</p>
+        )}
       </div>
     );
   }
@@ -180,10 +187,17 @@ function IntakeWorkspace({
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const [sections, setSections] = useState<IntakeSections>(initial.sections);
-  const [states, setStates] = useState<Record<string, IntakeSectionState>>(initial.section_overview);
+  const [states, setStates] = useState<Record<string, IntakeSectionState>>(
+    initial.section_overview,
+  );
   const [current, setCurrent] = useState(initial.current_section || "pres");
-  const [meta, setMeta] = useState({ outstanding: initial.outstanding_now, overview: initial.section_overview });
-  const [signed, setSigned] = useState<IntakeDraft | null>(initial.status === "SIGNED" ? initial : null);
+  const [meta, setMeta] = useState({
+    outstanding: initial.outstanding_now,
+    overview: initial.section_overview,
+  });
+  const [signed, setSigned] = useState<IntakeDraft | null>(
+    initial.status === "SIGNED" ? initial : null,
+  );
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPrevious, setShowPrevious] = useState(false);
@@ -230,7 +244,10 @@ function IntakeWorkspace({
         setToolRows(r.results);
         setToolsError(null);
       })
-      .catch((e) => !cancelled && setToolsError(errorText(e, "Couldn't load the assessment-tool triggers.")));
+      .catch(
+        (e) =>
+          !cancelled && setToolsError(errorText(e, "Couldn't load the assessment-tool triggers.")),
+      );
     return () => {
       cancelled = true;
     };
@@ -241,16 +258,21 @@ function IntakeWorkspace({
   const patch = (sectionKey: string, changes: Record<string, unknown>) => {
     setSections((prev) => ({ ...prev, [sectionKey]: { ...(prev[sectionKey] ?? {}), ...changes } }));
     setStates((prev) =>
-      (prev[sectionKey] ?? "Not started") === "Not started" ? { ...prev, [sectionKey]: "In progress" } : prev,
+      (prev[sectionKey] ?? "Not started") === "Not started"
+        ? { ...prev, [sectionKey]: "In progress" }
+        : prev,
     );
   };
   const values = sectionValues(sections, spec.key);
   const onChange = (key: string, value: unknown) => {
     patch(spec.key, { [key]: value });
-    if (spec.key === "mh" && key in PAST_HISTORY_LINKS) setSections((prev) => linkPastHistory(prev, key, value));
+    if (spec.key === "mh" && key in PAST_HISTORY_LINKS)
+      setSections((prev) => linkPastHistory(prev, key, value));
   };
-  const setState = (state: IntakeSectionState) => setStates((prev) => ({ ...prev, [spec.key]: state }));
-  const stateOf = (key: string) => (states[key] ?? meta.overview[key] ?? "Not started") as IntakeSectionState;
+  const setState = (state: IntakeSectionState) =>
+    setStates((prev) => ({ ...prev, [spec.key]: state }));
+  const stateOf = (key: string) =>
+    (states[key] ?? meta.overview[key] ?? "Not started") as IntakeSectionState;
 
   const go = (key: string) => {
     setCurrent(key);
@@ -265,7 +287,9 @@ function IntakeWorkspace({
     setState("Complete");
     const after = schema.sections.slice(index + 1);
     const target =
-      after.find((s) => s.core === spec.core && !["Complete", "Not applicable"].includes(stateOf(s.key))) ?? nextSpec;
+      after.find(
+        (s) => s.core === spec.core && !["Complete", "Not applicable"].includes(stateOf(s.key)),
+      ) ?? nextSpec;
     if (target) go(target.key);
   };
   const sectionName = (s: IntakeSectionSpec) => `Section ${s.n}`;
@@ -291,7 +315,9 @@ function IntakeWorkspace({
       onRecordChanged();
     } catch (e) {
       const fields = (e as { fields?: Record<string, unknown> })?.fields;
-      const outstanding = Array.isArray(fields?.outstanding) ? (fields?.outstanding as string[]) : [];
+      const outstanding = Array.isArray(fields?.outstanding)
+        ? (fields?.outstanding as string[])
+        : [];
       setError(
         outstanding.length
           ? `${errorText(e, "Can't sign.")} Outstanding: ${outstanding.join("; ")}`
@@ -314,7 +340,12 @@ function IntakeWorkspace({
         subtitle={`Version ${initial.version} · Registration and Triage data pre-populated — confirm or update, don’t re-ask`}
         actions={
           <>
-            <button type="button" className={BTN_GHOST} aria-expanded={showPrevious} onClick={() => setShowPrevious((v) => !v)}>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              aria-expanded={showPrevious}
+              onClick={() => setShowPrevious((v) => !v)}
+            >
               Previous assessments
             </button>
             <button
@@ -336,8 +367,10 @@ function IntakeWorkspace({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
               Intake v{signed.version} signed
-              {signed.completeness !== "COMPLETE" ? ` — ${signed.completeness.toLowerCase()}, handover recorded` : ""}. It is now
-              locked; a correction is a new version.
+              {signed.completeness !== "COMPLETE"
+                ? ` — ${signed.completeness.toLowerCase()}, handover recorded`
+                : ""}
+              . It is now locked; a correction is a new version.
             </span>
             <button type="button" className={BTN} onClick={onNewVersion}>
               Start a new version
@@ -353,9 +386,12 @@ function IntakeWorkspace({
             <ul className="flex flex-col divide-y divide-surface-border" key={listVersion}>
               {previous.map((i) => (
                 <li key={i.id} className="py-2 text-[13px]">
-                  <span className="font-semibold">v{i.version}</span> · {i.signed_at ? formatDateTime(i.signed_at) : formatDateTime(i.created_at)} ·{" "}
+                  <span className="font-semibold">v{i.version}</span> ·{" "}
+                  {i.signed_at ? formatDateTime(i.signed_at) : formatDateTime(i.created_at)} ·{" "}
                   {i.author_name || "Author not recorded"}
-                  {i.presenting_concern && <div className="text-ink-500">{i.presenting_concern}</div>}
+                  {i.presenting_concern && (
+                    <div className="text-ink-500">{i.presenting_concern}</div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -380,20 +416,28 @@ function IntakeWorkspace({
           className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
         >
           <div className="border-b border-surface-border px-2 pb-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">Assessment sections</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+              Assessment sections
+            </p>
             <p className="mt-1 text-[12px] text-ink-500">Select a section to review or update</p>
           </div>
           {groups.map(([title, specs]) => {
-            const done = specs.filter((s) => ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? "")).length;
+            const done = specs.filter((s) =>
+              ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? ""),
+            ).length;
             return (
               <details key={title} open={title.startsWith("Core") || !spec.core} className="group">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 hover:bg-surface-bg">
                   <span>{title}</span>
-                  <span className="rounded-full bg-surface-bg px-2 py-0.5 tabular-nums">{done}/{specs.length}</span>
+                  <span className="rounded-full bg-surface-bg px-2 py-0.5 tabular-nums">
+                    {done}/{specs.length}
+                  </span>
                 </summary>
                 <ul className="mt-1 flex flex-col gap-1">
                   {specs.map((s) => {
-                    const st = (states[s.key] ?? meta.overview[s.key] ?? "Not started") as IntakeSectionState;
+                    const st = (states[s.key] ??
+                      meta.overview[s.key] ??
+                      "Not started") as IntakeSectionState;
                     const mark = STATE_MARK[st];
                     return (
                       <li key={s.key}>
@@ -439,9 +483,19 @@ function IntakeWorkspace({
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span>
                   Section {spec.n} · {spec.title}{" "}
-                  <span className="text-[11px] font-semibold text-ink-500">{spec.core ? "Core" : "Extended"}</span>
+                  <span className="text-[11px] font-semibold text-ink-500">
+                    {spec.core ? "Core" : "Extended"}
+                  </span>
                 </span>
-                <Tag tone={stateOf(spec.key) === "Complete" ? "brand" : stateOf(spec.key) === "In progress" ? "warn" : "neutral"}>
+                <Tag
+                  tone={
+                    stateOf(spec.key) === "Complete"
+                      ? "brand"
+                      : stateOf(spec.key) === "In progress"
+                        ? "warn"
+                        : "neutral"
+                  }
+                >
                   {STATE_MARK[stateOf(spec.key)].glyph} {stateOf(spec.key)}
                 </Tag>
               </span>
@@ -451,12 +505,20 @@ function IntakeWorkspace({
                 <span className="flex flex-wrap gap-2">
                   {/* Only an optional section nobody has started can be set aside. */}
                   {!spec.required && stateOf(spec.key) === "Not started" && (
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("Not applicable")}>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={() => setState("Not applicable")}
+                    >
                       Not applicable
                     </button>
                   )}
                   {["Complete", "Not applicable"].includes(stateOf(spec.key)) && (
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setState("In progress")}>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={() => setState("In progress")}
+                    >
                       Re-open section
                     </button>
                   )}
@@ -488,7 +550,11 @@ function IntakeWorkspace({
                 {saveState}
               </span>
               {prevSpec && (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => go(prevSpec.key)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => go(prevSpec.key)}
+                >
                   ← {sectionName(prevSpec)}
                 </button>
               )}
@@ -498,7 +564,11 @@ function IntakeWorkspace({
                 </button>
               )}
               {nextSpec && (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => go(nextSpec.key)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => go(nextSpec.key)}
+                >
                   {sectionName(nextSpec)} →
                 </button>
               )}
@@ -549,7 +619,8 @@ function SectionBody({
   onOpenTools: () => void;
 }) {
   const hint = (keys: string[]) => <TriggerHint rows={toolRows} keys={keys} onOpen={onOpenTools} />;
-  const sources = (values._sources ?? undefined) as Record<string, { stage?: string; version?: number }> | undefined;
+  const sources = (values._sources ?? undefined) as
+    Record<string, { stage?: string; version?: number }> | undefined;
   switch (spec.kind) {
     case "risk":
       return (
@@ -564,11 +635,22 @@ function SectionBody({
         />
       );
     case "meds":
-      return <MedsSection patientId={patientId} spec={spec} values={values} vs={vs} onChange={onChange} onListChanged={onRecordChanged} />;
+      return (
+        <MedsSection
+          patientId={patientId}
+          spec={spec}
+          values={values}
+          vs={vs}
+          onChange={onChange}
+          onListChanged={onRecordChanged}
+        />
+      );
     case "allergy":
       return <AllergySection patientId={patientId} vs={vs} onChanged={onRecordChanged} />;
     case "mse":
-      return <MseSection schema={schema} values={values} vs={vs} onChange={onChange} onPatch={onPatch} />;
+      return (
+        <MseSection schema={schema} values={values} vs={vs} onChange={onChange} onPatch={onPatch} />
+      );
     case "substances":
       return (
         <SubstanceSection
@@ -591,21 +673,48 @@ function SectionBody({
             predisposing, precipitating, perpetuating and protective factors, risks and strengths.
           </Callout>
           <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} />
-          <IntakeDiagnosisTab patientId={patientId} encounterId={encounterId} onChanged={onRecordChanged} />
+          <IntakeDiagnosisTab
+            patientId={patientId}
+            encounterId={encounterId}
+            onChanged={onRecordChanged}
+          />
         </div>
       );
     case "close":
-      return <CloseSection spec={spec} values={values} vs={vs} onChange={onChange} outstanding={meta.outstanding} onSign={onSign} signing={signing} draft={draft} />;
+      return (
+        <CloseSection
+          spec={spec}
+          values={values}
+          vs={vs}
+          onChange={onChange}
+          outstanding={meta.outstanding}
+          onSign={onSign}
+          signing={signing}
+          draft={draft}
+        />
+      );
     default:
       if (spec.key === "sx") {
         // Mockup: the triggered chips sit right under the symptom list.
         const at = spec.fields.findIndex((f) => f.key === "list") + 1;
         return (
           <div>
-            <SchemaSection spec={{ ...spec, fields: spec.fields.slice(0, at) }} values={values} vs={vs} onChange={onChange} sources={sources} />
+            <SchemaSection
+              spec={{ ...spec, fields: spec.fields.slice(0, at) }}
+              values={values}
+              vs={vs}
+              onChange={onChange}
+              sources={sources}
+            />
             {hint(["PHQ9", "PHQA", "GAD7", "MDQ", "PCL5"])}
             <div className="mt-3">
-              <SchemaSection spec={{ ...spec, fields: spec.fields.slice(at) }} values={values} vs={vs} onChange={onChange} sources={sources} />
+              <SchemaSection
+                spec={{ ...spec, fields: spec.fields.slice(at) }}
+                values={values}
+                vs={vs}
+                onChange={onChange}
+                sources={sources}
+              />
             </div>
           </div>
         );
@@ -613,12 +722,20 @@ function SectionBody({
       if (spec.key === "trauma") {
         return (
           <div>
-            <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} sources={sources} />
+            <SchemaSection
+              spec={spec}
+              values={values}
+              vs={vs}
+              onChange={onChange}
+              sources={sources}
+            />
             {hint(["PCL5", "SAFEGUARD"])}
           </div>
         );
       }
-      return <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} sources={sources} />;
+      return (
+        <SchemaSection spec={spec} values={values} vs={vs} onChange={onChange} sources={sources} />
+      );
   }
 }
 
@@ -641,7 +758,13 @@ function CloseSection({
   draft: IntakeDraft;
 }) {
   const status = typeof values.status === "string" ? values.status : "";
-  const completeness = status.startsWith("COMPLETE") ? "COMPLETE" : status.startsWith("PARTIAL") ? "PARTIAL" : status.startsWith("UNABLE") ? "UNABLE" : null;
+  const completeness = status.startsWith("COMPLETE")
+    ? "COMPLETE"
+    : status.startsWith("PARTIAL")
+      ? "PARTIAL"
+      : status.startsWith("UNABLE")
+        ? "UNABLE"
+        : null;
   return (
     <div className="flex flex-col gap-3">
       {outstanding.length ? (
@@ -654,20 +777,34 @@ function CloseSection({
           </ul>
         </Callout>
       ) : (
-        <Callout tone="success">All required items are recorded — the intake can be signed as complete.</Callout>
+        <Callout tone="success">
+          All required items are recorded — the intake can be signed as complete.
+        </Callout>
       )}
       <SchemaSection
-        spec={{ ...spec, fields: spec.fields.filter((f) => f.key !== "reason_incomplete" || (completeness && completeness !== "COMPLETE")) }}
+        spec={{
+          ...spec,
+          fields: spec.fields.filter(
+            (f) => f.key !== "reason_incomplete" || (completeness && completeness !== "COMPLETE"),
+          ),
+        }}
         values={values}
         vs={vs}
         onChange={onChange}
       />
       <div>
         <span className={FIELD_LABEL}>Clinician signing</span>
-        <p className="text-[13px] text-ink-900">Your name and the time are recorded when you sign.</p>
+        <p className="text-[13px] text-ink-900">
+          Your name and the time are recorded when you sign.
+        </p>
       </div>
       <div>
-        <button type="button" className={BTN} disabled={!completeness || signing} onClick={() => completeness && onSign(completeness)}>
+        <button
+          type="button"
+          className={BTN}
+          disabled={!completeness || signing}
+          onClick={() => completeness && onSign(completeness)}
+        >
           {signing ? "Signing…" : "Sign intake"}
         </button>
       </div>

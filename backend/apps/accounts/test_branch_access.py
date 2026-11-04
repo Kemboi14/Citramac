@@ -28,11 +28,17 @@ class BranchAccessTestCase(APITestCase):
             self.org = Organization.objects.create(
                 name="Cafric", slug="cafric", facility_type="MENTAL_HEALTH_MHP"
             )
-            self.thika = Branch.objects.create(organization=self.org, name="Thika", facility_level="L3")
-            self.ruiru = Branch.objects.create(organization=self.org, name="Ruiru", facility_level="L3")
+            self.thika = Branch.objects.create(
+                organization=self.org, name="Thika", facility_level="L3"
+            )
+            self.ruiru = Branch.objects.create(
+                organization=self.org, name="Ruiru", facility_level="L3"
+            )
             self.org_admin_role = Role.objects.get(name="Org Admin", organization__isnull=True)
             self.nurse_role = Role.objects.get(name="Nurse", organization__isnull=True)
-            self.cashier_role = Role.objects.get(name="Cashier/Billing Clerk", organization__isnull=True)
+            self.cashier_role = Role.objects.get(
+                name="Cashier/Billing Clerk", organization__isnull=True
+            )
             self.therapist_role = Role.objects.get(
                 name="Clinical Psychologist/Therapist", organization__isnull=True
             )
@@ -124,9 +130,7 @@ class AssignmentTests(BranchAccessTestCase):
             [("Cashier/Billing Clerk", "Ruiru"), ("Nurse", "Thika")],
         )
         self.assertEqual(sorted(response.data["role_names"]), ["Cashier/Billing Clerk", "Nurse"])
-        self.assertEqual(
-            set(response.data["branch_access"]), {self.thika.id, self.ruiru.id}
-        )
+        self.assertEqual(set(response.data["branch_access"]), {self.thika.id, self.ruiru.id})
 
     def test_primary_branch_must_be_an_assigned_branch(self):
         response = self.client.patch(

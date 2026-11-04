@@ -114,7 +114,11 @@ export function MedsSection({
                 <td className={TD}>{row.route}</td>
                 <td className={TD}>{row.source}</td>
                 <td className={TD}>
-                  <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => void retire(row.id)}>
+                  <button
+                    type="button"
+                    className={`${BTN_GHOST} ${BTN_SM}`}
+                    onClick={() => void retire(row.id)}
+                  >
                     Stopped / remove
                   </button>
                 </td>
@@ -137,7 +141,12 @@ export function MedsSection({
         ))}
       </div>
       <div>
-        <button type="button" className={BTN} disabled={!draft.name.trim()} onClick={() => void add()}>
+        <button
+          type="button"
+          className={BTN}
+          disabled={!draft.name.trim()}
+          onClick={() => void add()}
+        >
           Add to list
         </button>
       </div>

@@ -16,8 +16,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from . import instruments
-from .models import AssessmentAttempt, OutcomeScore
 from .intake_schema import _code
+from .models import AssessmentAttempt, OutcomeScore
 
 CODES = [code for code, spec in instruments.INSTRUMENTS.items() if spec.get("withdrawal")]
 # How soon after an unscorable attempt to try again (clinical-neutral nudge, not a dose rule).
@@ -54,8 +54,16 @@ def record_attempt(patient, user, instrument, reason):
 def status(patient, code, now=None):
     now = now or timezone.now()
     cfg = protocol(code)
-    last = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at").first()
-    attempt = AssessmentAttempt.objects.filter(patient=patient, instrument=code).order_by("-recorded_at").first()
+    last = (
+        OutcomeScore.objects.filter(patient=patient, instrument=code)
+        .order_by("-recorded_at")
+        .first()
+    )
+    attempt = (
+        AssessmentAttempt.objects.filter(patient=patient, instrument=code)
+        .order_by("-recorded_at")
+        .first()
+    )
     out = {
         "instrument": code,
         "name": instruments.INSTRUMENTS[code]["name"],
@@ -78,9 +86,13 @@ def status(patient, code, now=None):
         }
         high = cfg["prn_threshold"] is not None and last.score >= cfg["prn_threshold"]
         if high:
-            out["flags"].append("At or above the facility PRN threshold — follow the withdrawal protocol")
+            out["flags"].append(
+                "At or above the facility PRN threshold — follow the withdrawal protocol"
+            )
         if cfg["severe_threshold"] is not None and last.score >= cfg["severe_threshold"]:
-            out["flags"].append("At or above the facility severe threshold — request urgent medical review")
+            out["flags"].append(
+                "At or above the facility severe threshold — request urgent medical review"
+            )
         minutes = cfg["rescore_minutes_high"] if high else cfg["rescore_minutes_low"]
         if minutes:
             out["nextDueAt"] = last.recorded_at + timedelta(minutes=minutes)
@@ -97,28 +109,49 @@ def _by(user):
 
 
 def _series(patient, code):
-    rows = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at")[:SERIES_LENGTH]
+    rows = OutcomeScore.objects.filter(patient=patient, instrument=code).order_by("-recorded_at")[
+        :SERIES_LENGTH
+    ]
     return [{"score": r.score, "at": r.recorded_at} for r in reversed(rows)]
 
 
 def _history(patient, code):
     """The latest scores and unable-to-score attempts, newest first."""
-    scores = OutcomeScore.objects.filter(patient=patient, instrument=code).select_related("recorded_by")
-    attempts = AssessmentAttempt.objects.filter(patient=patient, instrument=code).select_related("recorded_by")
+    scores = OutcomeScore.objects.filter(patient=patient, instrument=code).select_related(
+        "recorded_by"
+    )
+    attempts = AssessmentAttempt.objects.filter(patient=patient, instrument=code).select_related(
+        "recorded_by"
+    )
     rows = [
-        {"at": s.recorded_at, "score": s.score, "band": instruments.band_for(code, s.score),
-         "unable": "", "by": _by(s.recorded_by)}
+        {
+            "at": s.recorded_at,
+            "score": s.score,
+            "band": instruments.band_for(code, s.score),
+            "unable": "",
+            "by": _by(s.recorded_by),
+        }
         for s in scores.order_by("-recorded_at")[:HISTORY_LENGTH]
     ] + [
-        {"at": a.recorded_at, "score": None, "band": "", "unable": a.get_reason_display(), "by": _by(a.recorded_by)}
+        {
+            "at": a.recorded_at,
+            "score": None,
+            "band": "",
+            "unable": a.get_reason_display(),
+            "by": _by(a.recorded_by),
+        }
         for a in attempts.order_by("-recorded_at")[:HISTORY_LENGTH]
     ]
     return sorted(rows, key=lambda r: r["at"], reverse=True)[:HISTORY_LENGTH]
 
 
 def overview(patient):  # scales with any chart activity
-    return [status(patient, code) for code in CODES if OutcomeScore.objects.filter(patient=patient, instrument=code).exists()
-            or AssessmentAttempt.objects.filter(patient=patient, instrument=code).exists()]
+    return [
+        status(patient, code)
+        for code in CODES
+        if OutcomeScore.objects.filter(patient=patient, instrument=code).exists()
+        or AssessmentAttempt.objects.filter(patient=patient, instrument=code).exists()
+    ]
 
 
 def main_substance(patient):
@@ -138,7 +171,11 @@ def substance_display(patient):
     from .models import LocalConcept
 
     code = main_substance(patient)
-    concept = LocalConcept.objects.filter(valueset_id="intake-substance-kind", code=code).first() if code else None
+    concept = (
+        LocalConcept.objects.filter(valueset_id="intake-substance-kind", code=code).first()
+        if code
+        else None
+    )
     return concept.display if concept else code
 
 

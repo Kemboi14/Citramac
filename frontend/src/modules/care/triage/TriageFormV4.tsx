@@ -319,7 +319,10 @@ export function TriageFormV4({
   // Mockup triage timer: "aim 2–5 min".
   useEffect(() => {
     if (readOnly) return;
-    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    const id = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
     return () => window.clearInterval(id);
   }, [readOnly, startedAt]);
 
@@ -417,7 +420,8 @@ export function TriageFormV4({
       return {
         error: `Not a possible value — check (${range.hard_min}–${range.hard_max} ${range.unit})`,
       };
-    if (x < range.soft_min || x > range.soft_max) return { soft: `${range.label} ${raw} is unusual` };
+    if (x < range.soft_min || x > range.soft_max)
+      return { soft: `${range.label} ${raw} is unusual` };
     return {};
   }
 
@@ -443,7 +447,10 @@ export function TriageFormV4({
           aria-invalid={Boolean(check.error) || undefined}
           onChange={(e) => {
             const value = e.target.value;
-            setMany({ [k]: value, vconf: list(answersRef.current, "vconf").filter((x) => x !== k) });
+            setMany({
+              [k]: value,
+              vconf: list(answersRef.current, "vconf").filter((x) => x !== k),
+            });
           }}
         />
         {check.soft && (
@@ -592,7 +599,11 @@ export function TriageFormV4({
               <Sel k="prep" label="Any preparatory behaviour?" set="triage-v4-preparatory" />
             </>
           )}
-          <Sel k="selfharm" label="Recent self-harm / attempt (this episode)" set="triage-v4-self-harm" />
+          <Sel
+            k="selfharm"
+            label="Recent self-harm / attempt (this episode)"
+            set="triage-v4-self-harm"
+          />
         </div>
         {flagList("SELF")}
         {flags.includes("overdose") && (
@@ -605,7 +616,11 @@ export function TriageFormV4({
               <Txt k="od_substance" label="Substance(s)" />
               <Txt k="od_amount" label="Amount" placeholder="or ‘unknown’" />
               <Txt k="od_time" label="Time of ingestion" type="datetime-local" />
-              <Txt k="od_coingest" label="Co-ingestants (incl. alcohol)" placeholder="or ‘none known’" />
+              <Txt
+                k="od_coingest"
+                label="Co-ingestants (incl. alcohol)"
+                placeholder="or ‘none known’"
+              />
               <Sel k="od_intent" label="Intent" set="triage-v4-od-intent" />
             </div>
           </div>
@@ -619,12 +634,16 @@ export function TriageFormV4({
           <div className="mt-2">
             <Callout tone="danger">
               <strong>Duty to protect.</strong> Record who is at risk and who has been informed. A
-              senior decision on informing the named person and/or police is requested when you
-              sign (steps to be confirmed by legal counsel — VERIFY).
+              senior decision on informing the named person and/or police is requested when you sign
+              (steps to be confirmed by legal counsel — VERIFY).
             </Callout>
             <div className={`${FIELDGRID} mt-2`}>
               <Txt k="duty_victim" label="Named person at risk (relationship, where)" />
-              <Txt k="duty_informed" label="Who in the team has been informed" placeholder="e.g. on-call psychiatrist" />
+              <Txt
+                k="duty_informed"
+                label="Who in the team has been informed"
+                placeholder="e.g. on-call psychiatrist"
+              />
               <Sel k="duty_police" label="Police informed?" set="triage-v4-duty-police" />
               <Sel k="duty_warned" label="Named person warned?" set="triage-v4-duty-warned" />
             </div>
@@ -636,8 +655,16 @@ export function TriageFormV4({
     SAFEGUARDING: (
       <>
         <div className={FIELDGRID}>
-          <Sel k="feel_safe" label="Does the client feel safe where they live / are staying?" set="triage-v4-feel-safe" />
-          <Txt k="safeguard_note" label="Abuse, exploitation, threat or vulnerability (brief)" placeholder="Ask privately where possible" />
+          <Sel
+            k="feel_safe"
+            label="Does the client feel safe where they live / are staying?"
+            set="triage-v4-feel-safe"
+          />
+          <Txt
+            k="safeguard_note"
+            label="Abuse, exploitation, threat or vulnerability (brief)"
+            placeholder="Ask privately where possible"
+          />
         </div>
         {flagList("SAFEGUARDING")}
         {flags.includes("gbv_72h") && (
@@ -648,7 +675,11 @@ export function TriageFormV4({
               against the national GBV guideline). Offer a same-gender clinician and a chaperone.
             </Callout>
             <div className={`${FIELDGRID} mt-2`}>
-              <Txt k="gbv_incident_at" label="Time of incident (best estimate)" type="datetime-local" />
+              <Txt
+                k="gbv_incident_at"
+                label="Time of incident (best estimate)"
+                type="datetime-local"
+              />
             </div>
           </div>
         )}
@@ -676,7 +707,11 @@ export function TriageFormV4({
         actions={
           <div className="flex items-center gap-2">
             {!readOnly && <Tag>{`${mm}:${ss} · aim 2–5 min`}</Tag>}
-            <button type="button" className={BTN_GHOST} onClick={() => navigate("/clinical/triage")}>
+            <button
+              type="button"
+              className={BTN_GHOST}
+              onClick={() => navigate("/clinical/triage")}
+            >
               Back to queue
             </button>
           </div>
@@ -729,7 +764,10 @@ export function TriageFormV4({
                 <div className={`${FIELDGRID} mt-3`}>
                   <Sel k="a_allergy_status" label="Allergy status" set="triage-allergy-status" />
                   {a("a_allergy_status") === "known" && (
-                    <Txt k="a_allergy_detail" label="Allergies — updates the central allergy record" />
+                    <Txt
+                      k="a_allergy_detail"
+                      label="Allergies — updates the central allergy record"
+                    />
                   )}
                 </div>
                 {banner && banner.identity_status !== "IDENTIFIED" && (
@@ -744,9 +782,17 @@ export function TriageFormV4({
 
               <Group title="B / C — First questions">
                 <div className={FIELDGRID}>
-                  <Sel k="b_informant" label="Who is giving the information?" set="triage-informant" />
+                  <Sel
+                    k="b_informant"
+                    label="Who is giving the information?"
+                    set="triage-informant"
+                  />
                   {a("b_informant") && a("b_informant") !== "client" && (
-                    <Txt k="b_third_party" label="Name / relationship (third party)" placeholder="e.g. Sister — Jane" />
+                    <Txt
+                      k="b_third_party"
+                      label="Name / relationship (third party)"
+                      placeholder="e.g. Sister — Jane"
+                    />
                   )}
                   <Field
                     label="Is the client physically present?"
@@ -771,14 +817,24 @@ export function TriageFormV4({
                   <Txt
                     k="where_now"
                     label="Where is the client now?"
-                    placeholder={present === "no" ? "Location described by caller" : "e.g. waiting area"}
+                    placeholder={
+                      present === "no" ? "Location described by caller" : "e.g. waiting area"
+                    }
                   />
                 </div>
                 <div className="mt-3">
-                  <Txt k="c_concern" label="What has happened / what is the main concern right now?" rows={2} />
+                  <Txt
+                    k="c_concern"
+                    label="What has happened / what is the main concern right now?"
+                    rows={2}
+                  />
                 </div>
                 <div className={`${FIELDGRID} mt-3`}>
-                  <Sel k="c_onset" label="When did this begin or become worse?" set="triage-onset" />
+                  <Sel
+                    k="c_onset"
+                    label="When did this begin or become worse?"
+                    set="triage-onset"
+                  />
                 </div>
                 {a("b_informant") && (
                   <p className="mt-2 text-[12px] text-ink-500">
@@ -790,7 +846,9 @@ export function TriageFormV4({
                           : "Client report"
                         : `Third-party report (${vs.label("triage-informant", a("b_informant")).toLowerCase()})`}
                     </strong>
-                    {present === "yes" && " · vital signs: Measurement · observations: Clinician observation"}.
+                    {present === "yes" &&
+                      " · vital signs: Measurement · observations: Clinician observation"}
+                    .
                   </p>
                 )}
               </Group>
@@ -804,8 +862,15 @@ export function TriageFormV4({
 
               {present === "yes" && (
                 <>
-                  <Group title="D–J — Screening questions" aside="one question per area — detail opens only on “Yes”">
-                    <Txt k="collateral" label="Collateral informant present?" placeholder="e.g. father present — available for history" />
+                  <Group
+                    title="D–J — Screening questions"
+                    aside="one question per area — detail opens only on “Yes”"
+                  >
+                    <Txt
+                      k="collateral"
+                      label="Collateral informant present?"
+                      placeholder="e.g. father present — available for history"
+                    />
                     <div className="mt-2">
                       {groups.map((g) => screenQ(g.code, g.key, g.question, groupBody[g.code]))}
                     </div>
@@ -813,17 +878,29 @@ export function TriageFormV4({
 
                   <Group title="G — Substances">
                     <div className={FIELDGRID}>
-                      <Sel k="subst_recent" label="Recent alcohol / drug use?" set="yes-no-unknown" />
+                      <Sel
+                        k="subst_recent"
+                        label="Recent alcohol / drug use?"
+                        set="yes-no-unknown"
+                      />
                       {a("subst_recent") === "yes" && (
                         <>
                           <Txt k="subst_last_use" label="Last use (time / how long ago)" />
-                          <Sel k="subst_seizure_hx" label="Seizure history (e.g. withdrawal seizures)?" set="yes-no-unknown" />
+                          <Sel
+                            k="subst_seizure_hx"
+                            label="Seizure history (e.g. withdrawal seizures)?"
+                            set="yes-no-unknown"
+                          />
                         </>
                       )}
                     </div>
                     {a("subst_recent") === "yes" && (
                       <>
-                        <Checks k="subst_which" legend="Which substances?" set="triage-v4-substance" />
+                        <Checks
+                          k="subst_which"
+                          legend="Which substances?"
+                          set="triage-v4-substance"
+                        />
                         <YesBox
                           k="subst_withdrawal_signs"
                           label="Current withdrawal signs (tremor, sweating, agitation, yawning, gooseflesh…)"
@@ -851,21 +928,42 @@ export function TriageFormV4({
                     <div className={FIELDGRID}>
                       <Sel k="obsn_orientation" label="Orientation" set="triage-v4-orientation" />
                       <Sel k="obsn_behaviour" label="Behaviour" set="triage-v4-behaviour" />
-                      <Sel k="obsn_intox" label="Intoxication / withdrawal signs" set="triage-v4-intox-signs" />
+                      <Sel
+                        k="obsn_intox"
+                        label="Intoxication / withdrawal signs"
+                        set="triage-v4-intox-signs"
+                      />
                       <Sel k="obsn_injury" label="Visible injury" set="triage-v4-visible-injury" />
-                      {a("obsn_injury") === "yes" && <Txt k="obsn_injury_desc" label="Describe injury" />}
-                      <Sel k="obsn_communicate" label="Ability to communicate" set="triage-v4-communication" />
+                      {a("obsn_injury") === "yes" && (
+                        <Txt k="obsn_injury_desc" label="Describe injury" />
+                      )}
+                      <Sel
+                        k="obsn_communicate"
+                        label="Ability to communicate"
+                        set="triage-v4-communication"
+                      />
                     </div>
                   </Group>
 
-                  <Group title="H — Vital signs & early-warning score" aside="unusual values need confirming">
+                  <Group
+                    title="H — Vital signs & early-warning score"
+                    aside="unusual values need confirming"
+                  >
                     <div className={FIELDGRID}>
-                      <Sel k="consent_obs" label="Consent to physical observations" set="triage-v4-consent-obs" />
+                      <Sel
+                        k="consent_obs"
+                        label="Consent to physical observations"
+                        set="triage-v4-consent-obs"
+                      />
                       <Sel k="chaperone" label="Chaperone" set="triage-v4-chaperone" />
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                       {vitalInput("v_hr", "Heart rate")}
-                      <Field label="Blood pressure (mmHg)" htmlFor={fid("v_sbp")} error={vitalCheck("v_sbp").error ?? vitalCheck("v_dbp").error}>
+                      <Field
+                        label="Blood pressure (mmHg)"
+                        htmlFor={fid("v_sbp")}
+                        error={vitalCheck("v_sbp").error ?? vitalCheck("v_dbp").error}
+                      >
                         <div className="flex items-center gap-1.5">
                           <input
                             id={fid("v_sbp")}
@@ -874,7 +972,14 @@ export function TriageFormV4({
                             inputMode="numeric"
                             className={INPUT}
                             value={a("v_sbp")}
-                            onChange={(e) => setMany({ v_sbp: e.target.value, vconf: list(answersRef.current, "vconf").filter((x) => x !== "v_sbp") })}
+                            onChange={(e) =>
+                              setMany({
+                                v_sbp: e.target.value,
+                                vconf: list(answersRef.current, "vconf").filter(
+                                  (x) => x !== "v_sbp",
+                                ),
+                              })
+                            }
                           />
                           <span>/</span>
                           <input
@@ -883,17 +988,32 @@ export function TriageFormV4({
                             inputMode="numeric"
                             className={INPUT}
                             value={a("v_dbp")}
-                            onChange={(e) => setMany({ v_dbp: e.target.value, vconf: list(answersRef.current, "vconf").filter((x) => x !== "v_dbp") })}
+                            onChange={(e) =>
+                              setMany({
+                                v_dbp: e.target.value,
+                                vconf: list(answersRef.current, "vconf").filter(
+                                  (x) => x !== "v_dbp",
+                                ),
+                              })
+                            }
                           />
                         </div>
                         {["v_sbp", "v_dbp"].map((k) =>
                           vitalCheck(k).soft ? (
-                            <label key={k} className="flex items-center gap-2 text-[12px] text-priority-orange">
+                            <label
+                              key={k}
+                              className="flex items-center gap-2 text-[12px] text-priority-orange"
+                            >
                               <input
                                 type="checkbox"
                                 checked={list(answers, "vconf").includes(k)}
                                 onChange={(e) =>
-                                  set("vconf", e.target.checked ? [...list(answers, "vconf"), k] : list(answers, "vconf").filter((x) => x !== k))
+                                  set(
+                                    "vconf",
+                                    e.target.checked
+                                      ? [...list(answers, "vconf"), k]
+                                      : list(answers, "vconf").filter((x) => x !== k),
+                                  )
                                 }
                               />
                               {vitalCheck(k).soft} — I confirm it was measured correctly
@@ -905,7 +1025,9 @@ export function TriageFormV4({
                             aria-label="Blood pressure — not measured reason"
                             className={`${INPUT} !py-1 text-xs`}
                             value={a("nm_sbp")}
-                            onChange={(e) => setMany({ nm_sbp: e.target.value, nm_dbp: e.target.value })}
+                            onChange={(e) =>
+                              setMany({ nm_sbp: e.target.value, nm_dbp: e.target.value })
+                            }
                           >
                             <option value="">Measured / not measured?</option>
                             {vs.options("triage-v4-not-measured").map((o) => (
@@ -922,7 +1044,12 @@ export function TriageFormV4({
                         </div>
                       ))}
                       <Sel k="v_o2" label="Oxygen" set="triage-v4-oxygen" />
-                      <Sel k="acvpu" label="Consciousness (ACVPU)" set="triage-v4-acvpu" hint="Blank means not assessed — never assumed alert." />
+                      <Sel
+                        k="acvpu"
+                        label="Consciousness (ACVPU)"
+                        set="triage-v4-acvpu"
+                        hint="Blank means not assessed — never assumed alert."
+                      />
                       <Txt k="pupils" label="Pupils" placeholder="e.g. equal, reactive" />
                     </div>
                     <div
@@ -941,28 +1068,65 @@ export function TriageFormV4({
                     </div>
                   </Group>
 
-                  <Group title="Immediate safety instruction (waiting area)" aside={safetyRequired ? `required for ${chosen}` : "optional"}>
+                  <Group
+                    title="Immediate safety instruction (waiting area)"
+                    aside={safetyRequired ? `required for ${chosen}` : "optional"}
+                  >
                     <div className={FIELDGRID}>
-                      <Sel k="safety_obs" label="Observation level" set="triage-v4-observation-level" />
-                      <Sel k="safety_location" label="Where the person waits" set="triage-v4-location" />
-                      <Txt k="safety_observer" label="Named observer" placeholder="Who is watching?" />
-                      <Sel k="safety_observer_gender" label="Observer gender (if the client has a preference)" set="triage-v4-observer-gender" />
+                      <Sel
+                        k="safety_obs"
+                        label="Observation level"
+                        set="triage-v4-observation-level"
+                      />
+                      <Sel
+                        k="safety_location"
+                        label="Where the person waits"
+                        set="triage-v4-location"
+                      />
+                      <Txt
+                        k="safety_observer"
+                        label="Named observer"
+                        placeholder="Who is watching?"
+                      />
+                      <Sel
+                        k="safety_observer_gender"
+                        label="Observer gender (if the client has a preference)"
+                        set="triage-v4-observer-gender"
+                      />
                     </div>
-                    <YesBox k="safety_items_checked" label="Belongings checked for items that could cause harm" />
+                    <YesBox
+                      k="safety_items_checked"
+                      label="Belongings checked for items that could cause harm"
+                    />
                     {a("safety_items_checked") === "yes" && (
                       <div className={FIELDGRID}>
-                        <Txt k="safety_removed" label="What was removed" placeholder="e.g. belt, lighter, medication" />
-                        <Txt k="safety_stored" label="Where it is stored" placeholder="e.g. nurses’ station locker 3" />
+                        <Txt
+                          k="safety_removed"
+                          label="What was removed"
+                          placeholder="e.g. belt, lighter, medication"
+                        />
+                        <Txt
+                          k="safety_stored"
+                          label="Where it is stored"
+                          placeholder="e.g. nurses’ station locker 3"
+                        />
                       </div>
                     )}
                   </Group>
 
                   <details className="mb-2.5 rounded-lg border border-surface-border bg-surface-card px-[18px] py-3">
                     <summary className="cursor-pointer text-[13px] font-bold text-ink-900">
-                      Trauma-informed preferences <span className="font-normal text-ink-500">· ask, don’t assume — all optional</span>
+                      Trauma-informed preferences{" "}
+                      <span className="font-normal text-ink-500">
+                        · ask, don’t assume — all optional
+                      </span>
                     </summary>
                     <div className={`${FIELDGRID} mt-3`}>
-                      <Sel k="pref_clinician_gender" label="Preferred clinician gender" set="triage-v4-clinician-gender" />
+                      <Sel
+                        k="pref_clinician_gender"
+                        label="Preferred clinician gender"
+                        set="triage-v4-clinician-gender"
+                      />
                       <Txt k="pref_support_person" label="Support person present / wanted" />
                       <Txt k="pref_triggers" label="Known triggers" />
                       <Txt k="pref_feel_safe" label="What helps you feel safe here?" />
@@ -981,37 +1145,89 @@ export function TriageFormV4({
                   <Group title="K — Where and with whom">
                     <div className={FIELDGRID}>
                       <Sel k="r_alone" label="Is the client alone?" set="yes-no-unknown" />
-                      <Txt k="r_last_contact" label="When did the caller last see / speak with the client?" />
+                      <Txt
+                        k="r_last_contact"
+                        label="When did the caller last see / speak with the client?"
+                      />
                     </div>
                     <div className="mt-3">
-                      <Txt k="r_said_done" label="What exactly has the client said or done that is causing concern?" rows={2} />
+                      <Txt
+                        k="r_said_done"
+                        label="What exactly has the client said or done that is causing concern?"
+                        rows={2}
+                      />
                     </div>
                   </Group>
                   <Group title="K — Risk">
                     <div className={FIELDGRID}>
-                      <Sel k="r_suicide" label="Spoken about suicide / self-harm, or a recent attempt?" set="triage-v4-remote-suicide" />
-                      <Sel k="r_harm_others" label="Threatened or attempted to harm another person?" set="triage-v4-remote-harm-others" />
-                      <Sel k="r_means" label="Known access to means of serious self-harm or harm to others?" set="no-yes-unknown" />
-                      <Sel k="r_responsible" label="Is a responsible person physically with them?" set="yes-no-unknown" />
+                      <Sel
+                        k="r_suicide"
+                        label="Spoken about suicide / self-harm, or a recent attempt?"
+                        set="triage-v4-remote-suicide"
+                      />
+                      <Sel
+                        k="r_harm_others"
+                        label="Threatened or attempted to harm another person?"
+                        set="triage-v4-remote-harm-others"
+                      />
+                      <Sel
+                        k="r_means"
+                        label="Known access to means of serious self-harm or harm to others?"
+                        set="no-yes-unknown"
+                      />
+                      <Sel
+                        k="r_responsible"
+                        label="Is a responsible person physically with them?"
+                        set="yes-no-unknown"
+                      />
                     </div>
-                    <Checks k="r_mental" legend="Caller-described mental state" set="triage-v4-remote-mental" />
+                    <Checks
+                      k="r_mental"
+                      legend="Caller-described mental state"
+                      set="triage-v4-remote-mental"
+                    />
                   </Group>
                   <Group title="K — Substances & medical">
-                    <Checks k="r_substances" legend="What substances have been used?" set="triage-v4-substance" />
+                    <Checks
+                      k="r_substances"
+                      legend="What substances have been used?"
+                      set="triage-v4-substance"
+                    />
                     <div className={FIELDGRID}>
                       <Txt k="r_last_use" label="When was the last use?" />
-                      <Sel k="r_stopped_heavy" label="Recently stopped heavy alcohol / drug use?" set="no-yes-unknown" />
+                      <Sel
+                        k="r_stopped_heavy"
+                        label="Recently stopped heavy alcohol / drug use?"
+                        set="no-yes-unknown"
+                      />
                     </div>
-                    <Checks k="r_medical" legend="Caller-described medical concerns" set="triage-v4-remote-medical" />
+                    <Checks
+                      k="r_medical"
+                      legend="Caller-described medical concerns"
+                      set="triage-v4-remote-medical"
+                    />
                   </Group>
                   <Group title="Disposition — can the client be brought safely?">
                     <div className={FIELDGRID}>
                       <Sel k="r_disposition" label="Disposition" set="triage-v4-disposition" />
-                      <Txt k="r_callback_at" label="Call-back / expected arrival" type="datetime-local" />
-                      <Sel k="r_callback_owner" label="Who will call back (task owner)" set="triage-v4-callback-owner" />
+                      <Txt
+                        k="r_callback_at"
+                        label="Call-back / expected arrival"
+                        type="datetime-local"
+                      />
+                      <Sel
+                        k="r_callback_owner"
+                        label="Who will call back (task owner)"
+                        set="triage-v4-callback-owner"
+                      />
                     </div>
                     <div className="mt-3">
-                      <Txt k="r_advice" label="Safety advice given to caller" rows={2} placeholder="e.g. stay with them, remove means, call emergency services if…" />
+                      <Txt
+                        k="r_advice"
+                        label="Safety advice given to caller"
+                        rows={2}
+                        placeholder="e.g. stay with them, remove means, call emergency services if…"
+                      />
                     </div>
                   </Group>
                 </>
@@ -1040,7 +1256,9 @@ export function TriageFormV4({
                               <td className={TD}>{cells[1]}</td>
                               <td className={TD}>{cells[2]}</td>
                               <td className={TD}>
-                                {cells[3] ? `${formatDateTime(cells[3])} · ${cells[4] ?? ""}` : "On signing"}
+                                {cells[3]
+                                  ? `${formatDateTime(cells[3])} · ${cells[4] ?? ""}`
+                                  : "On signing"}
                               </td>
                             </tr>
                           );
@@ -1057,7 +1275,10 @@ export function TriageFormV4({
                 </div>
               </Group>
 
-              <Group title="N — Immediate action / disposition" aside="recommended actions are suggestions, never auto-confirmed">
+              <Group
+                title="N — Immediate action / disposition"
+                aside="recommended actions are suggestions, never auto-confirmed"
+              >
                 <fieldset>
                   <legend className="sr-only">Immediate actions</legend>
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -1082,8 +1303,16 @@ export function TriageFormV4({
                   </div>
                 </fieldset>
                 <div className={`${FIELDGRID} mt-3 items-end`}>
-                  <Txt k="n_owner" label="Responsible person / team" placeholder="Psychiatry / Nursing" />
-                  <button type="button" className={`${BTN} justify-self-start`} onClick={onRegisterTasks}>
+                  <Txt
+                    k="n_owner"
+                    label="Responsible person / team"
+                    placeholder="Psychiatry / Nursing"
+                  />
+                  <button
+                    type="button"
+                    className={`${BTN} justify-self-start`}
+                    onClick={onRegisterTasks}
+                  >
                     Register as trackable tasks
                   </button>
                 </div>
@@ -1092,7 +1321,8 @@ export function TriageFormV4({
                   <ul className="mt-3 space-y-1 text-[13px]">
                     {tasks.map((t) => (
                       <li key={t.id}>
-                        <strong>{t.action_label}</strong> · {t.owner} · {vs.label("task-status", t.status)}
+                        <strong>{t.action_label}</strong> · {t.owner} ·{" "}
+                        {vs.label("task-status", t.status)}
                         {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
                       </li>
                     ))}
@@ -1113,11 +1343,13 @@ export function TriageFormV4({
               <div className="px-4 py-3" role="status" aria-live="polite">
                 <p className="mb-2">
                   <Tag tone="warn">
-                    {evaluation.ruleset_label ?? "DEMO RULESET — REQUIRES CLINICAL GOVERNANCE SIGN-OFF"}
+                    {evaluation.ruleset_label ??
+                      "DEMO RULESET — REQUIRES CLINICAL GOVERNANCE SIGN-OFF"}
                   </Tag>
                 </p>
                 <p className="mb-2 text-[12px] text-ink-500">
-                  {evaluation.recommendation} · rules {signed?.rules_version ?? evaluation.rules_version}
+                  {evaluation.recommendation} · rules{" "}
+                  {signed?.rules_version ?? evaluation.rules_version}
                 </p>
                 {signed ? (
                   <p className="text-[13px]">{signed.recommendation_reasons}</p>
@@ -1134,7 +1366,9 @@ export function TriageFormV4({
                   <p className="text-[13px] text-ink-500">{evaluation.reasons}</p>
                 )}
                 {present === "yes" && ews && !signed && (
-                  <p className={`mt-2 text-[12.5px] font-semibold ${ews.complete ? "" : "text-priority-orange"}`}>
+                  <p
+                    className={`mt-2 text-[12.5px] font-semibold ${ews.complete ? "" : "text-priority-orange"}`}
+                  >
                     {ews.label}
                   </p>
                 )}
@@ -1142,7 +1376,11 @@ export function TriageFormV4({
                 {!readOnly && (
                   <>
                     <div className={`${GROUP_LABEL} !mt-4`}>Clinician confirms or overrides</div>
-                    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Final priority">
+                    <div
+                      className="grid grid-cols-2 gap-2"
+                      role="group"
+                      aria-label="Final priority"
+                    >
                       {PRIORITIES.map((p) => (
                         <button
                           key={p}
@@ -1168,14 +1406,21 @@ export function TriageFormV4({
                       ))}
                     </div>
                     <p className="mt-2 text-[12px] text-ink-700">
-                      <strong>{chosen} — {MEANING[chosen].title}.</strong> {MEANING[chosen].action}
+                      <strong>
+                        {chosen} — {MEANING[chosen].title}.
+                      </strong>{" "}
+                      {MEANING[chosen].action}
                     </p>
                     {override && (
                       <div className="mt-3">
                         <Field
                           label={`Override reason — ${downgrade ? "downgrade" : "upgrade"} (required)`}
                           htmlFor={fid("m_override_reason")}
-                          error={invalid.has("m_override_reason") ? "A full sentence is required" : undefined}
+                          error={
+                            invalid.has("m_override_reason")
+                              ? "A full sentence is required"
+                              : undefined
+                          }
                           hint={`At least ${reasonMin} characters. Recorded with your name and the time (audit).`}
                         >
                           <textarea
@@ -1188,18 +1433,19 @@ export function TriageFormV4({
                         </Field>
                         {downgrade && (
                           <Callout tone="warning" className="mt-2">
-                            A downgrade by a clinician who is not a senior (co-signing) clinician sends
-                            a co-signature request to the senior when you sign.
+                            A downgrade by a clinician who is not a senior (co-signing) clinician
+                            sends a co-signature request to the senior when you sign.
                           </Callout>
                         )}
                       </div>
                     )}
-                    {safetyRequired && (!a("safety_obs") || !a("safety_location") || !a("safety_observer")) && (
-                      <Callout tone="danger" className="mt-3">
-                        Required for {chosen}: observation level, where the person waits and a named
-                        observer.
-                      </Callout>
-                    )}
+                    {safetyRequired &&
+                      (!a("safety_obs") || !a("safety_location") || !a("safety_observer")) && (
+                        <Callout tone="danger" className="mt-3">
+                          Required for {chosen}: observation level, where the person waits and a
+                          named observer.
+                        </Callout>
+                      )}
                     {problems.length > 0 && (
                       <div className="mt-3" role="alert">
                         <Callout tone="danger">
@@ -1226,7 +1472,11 @@ export function TriageFormV4({
                     <p className="mt-2 text-[12px] text-ink-500">
                       <Tag>Draft — unsigned</Tag> {draftStatus}
                     </p>
-                    <button type="button" className={`${BTN_GHOST} ${BTN_SM} mt-2`} onClick={saveNow}>
+                    <button
+                      type="button"
+                      className={`${BTN_GHOST} ${BTN_SM} mt-2`}
+                      onClick={saveNow}
+                    >
                       Save draft now
                     </button>
                   </>
@@ -1234,8 +1484,10 @@ export function TriageFormV4({
                 {signed && (
                   <Callout tone="success" className="mt-3">
                     Signed {formatDateTime(signed.signed_at)} by {signed.signed_by} —{" "}
-                    {signed.decision === "OVERRIDE" ? `override: ${signed.override_reason}` : "recommendation confirmed"}.
-                    Read-only; a correction is a full re-triage (new version).
+                    {signed.decision === "OVERRIDE"
+                      ? `override: ${signed.override_reason}`
+                      : "recommendation confirmed"}
+                    . Read-only; a correction is a full re-triage (new version).
                   </Callout>
                 )}
               </div>

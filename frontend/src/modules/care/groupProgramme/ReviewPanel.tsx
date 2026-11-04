@@ -160,7 +160,12 @@ export function ReviewPanel({
             Give the reason for each flagged observation you are not recording as a risk disclosure.
           </span>
         )}
-        <button type="button" className={BTN} onClick={onConfirm} disabled={confirming || unresolved}>
+        <button
+          type="button"
+          className={BTN}
+          onClick={onConfirm}
+          disabled={confirming || unresolved}
+        >
           {confirming ? "Saving…" : "Confirm and save session"}
         </button>
         <button type="button" className={BTN_GHOST} onClick={onReturn} disabled={confirming}>

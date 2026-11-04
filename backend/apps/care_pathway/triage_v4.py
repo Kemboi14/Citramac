@@ -1058,9 +1058,9 @@ def evaluate(answers, labels=None):
     fmt = {
         "when": f" ({_label(labels, 'triage-v4-suicidality-when', when).lower()})" if when else "",
         "ews": score["label"],
-        "acvpu": f" · ACVPU {_text(a, 'acvpu')}"
-        if _text(a, "acvpu") in ("C", "V", "P", "U")
-        else "",
+        "acvpu": (
+            f" · ACVPU {_text(a, 'acvpu')}" if _text(a, "acvpu") in ("C", "V", "P", "U") else ""
+        ),
         "any3": " (a single parameter scores 3)" if score["single_parameter_3"] else "",
     }
     scope_ok = {"any"} | (
@@ -1362,9 +1362,11 @@ def vitals_text(a, labels, score=None):
         parts.append(
             f"{title} {_text(a, key)}"
             if _text(a, key)
-            else f"{title} not measured ({_label(labels, 'triage-v4-not-measured', nm).lower()})"
-            if nm
-            else f"{title} –"
+            else (
+                f"{title} not measured ({_label(labels, 'triage-v4-not-measured', nm).lower()})"
+                if nm
+                else f"{title} –"
+            )
         )
     bp = (
         f"BP {_text(a, 'v_sbp')}/{_text(a, 'v_dbp')}"

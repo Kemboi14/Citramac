@@ -436,7 +436,9 @@ class CareTask(TenantScopedModel):
     # FHIR Task.priority / executionPeriod.end / focus / owner — optional; set by
     # workflows that schedule a task (e.g. legal status reviews, LGL-WF-03).
     priority = models.CharField(
-        max_length=8, blank=True, choices=[("routine", "Routine"), ("urgent", "Urgent"), ("asap", "ASAP")]
+        max_length=8,
+        blank=True,
+        choices=[("routine", "Routine"), ("urgent", "Urgent"), ("asap", "ASAP")],
     )
     due_at = models.DateTimeField(null=True, blank=True)
     assignee = models.ForeignKey(
@@ -649,7 +651,9 @@ class AssessmentAttempt(TenantScopedModel):
         ("COMMUNICATION", "Language / communication barrier"),
         ("CONFUSED", "Confused — possible delirium"),
     ]
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="assessment_attempts")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="assessment_attempts"
+    )
     instrument = models.CharField(max_length=8)
     reason = models.CharField(max_length=14, choices=REASON_CHOICES)
     recorded_by = models.ForeignKey(
@@ -666,7 +670,11 @@ class AssessmentToolDecision(TenantScopedModel):
     the latest row per (patient, tool) is current. Recommendations themselves
     are computed from the record (care_pathway.tools), never stored."""
 
-    STATUS_CHOICES = [("ACCEPTED", "Accepted"), ("DECLINED", "Declined"), ("RECONSIDERED", "Reconsidered")]
+    STATUS_CHOICES = [
+        ("ACCEPTED", "Accepted"),
+        ("DECLINED", "Declined"),
+        ("RECONSIDERED", "Reconsidered"),
+    ]
 
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="tool_decisions")
     tool = models.CharField(max_length=24)
@@ -760,7 +768,9 @@ class CarePlanVersion(TenantScopedModel):
     class Meta(TenantScopedModel.Meta):
         ordering = ["-version"]
         constraints = [
-            models.UniqueConstraint(fields=["care_plan", "version"], name="unique_care_plan_version")
+            models.UniqueConstraint(
+                fields=["care_plan", "version"], name="unique_care_plan_version"
+            )
         ]
 
 
@@ -851,7 +861,9 @@ class SafetyPlan(TenantScopedModel):
     class Meta(TenantScopedModel.Meta):
         ordering = ["-version"]
         constraints = [
-            models.UniqueConstraint(fields=["patient", "version"], name="unique_safety_plan_version")
+            models.UniqueConstraint(
+                fields=["patient", "version"], name="unique_safety_plan_version"
+            )
         ]
 
 
@@ -884,7 +896,9 @@ class NursingCarePlanEntry(TenantScopedModel):
     FHIR: CarePlan (category nursing) with a Goal and activity, part of the
     episode's CarePlan."""
 
-    care_plan = models.ForeignKey(CarePlan, on_delete=models.PROTECT, related_name="nursing_entries")
+    care_plan = models.ForeignKey(
+        CarePlan, on_delete=models.PROTECT, related_name="nursing_entries"
+    )
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
     activity = models.ForeignKey(
         CarePlanActivity, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -1197,7 +1211,9 @@ class ObservationLevelChange(TenantScopedModel):
     """Append-only history of the client's observation level; the latest row is
     current. A change always carries a reason."""
 
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="observation_levels")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="observation_levels"
+    )
     level = models.CharField(max_length=24)
     reason = models.CharField(max_length=400)
     changed_by = models.ForeignKey(
@@ -1210,7 +1226,9 @@ class ObservationLevelChange(TenantScopedModel):
 
 
 class ObserverHandover(TenantScopedModel):
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="observer_handovers")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="observer_handovers"
+    )
     observer_name = models.CharField(max_length=150)
     observer_gender = models.CharField(max_length=10, blank=True)
     since = models.DateTimeField(default=timezone.now)
@@ -1226,7 +1244,9 @@ class ObservationEntry(TenantScopedModel):
     """A signed observation: where the client was, how they were engaging, and
     what the observer saw."""
 
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="observation_entries")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="observation_entries"
+    )
     location = models.CharField(max_length=100)
     engagement = models.CharField(max_length=100, blank=True)
     note = models.TextField()
@@ -1255,12 +1275,12 @@ class RestrictivePracticeEpisode(TenantScopedModel):
         ("MINOR", "Minor injury — treated"),
         ("REVIEW", "Injury — medical review requested"),
     ]
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="restrictive_episodes")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="restrictive_episodes"
+    )
     kind = models.CharField(max_length=24, choices=KIND_CHOICES)
     de_escalation = models.JSONField(default=list)  # which approaches were tried first
-    authorised_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, related_name="+"
-    )
+    authorised_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
     start_at = models.DateTimeField()
     end_at = models.DateTimeField(null=True, blank=True)
     injury_check = models.CharField(max_length=8, choices=INJURY_CHOICES)
@@ -1276,7 +1296,9 @@ class RestrictivePracticeEpisode(TenantScopedModel):
 
 
 class RestrictiveCheck(TenantScopedModel):
-    episode = models.ForeignKey(RestrictivePracticeEpisode, on_delete=models.PROTECT, related_name="checks")
+    episode = models.ForeignKey(
+        RestrictivePracticeEpisode, on_delete=models.PROTECT, related_name="checks"
+    )
     label = models.CharField(max_length=200)
     due_at = models.DateTimeField()
     done_at = models.DateTimeField(null=True, blank=True)
@@ -1308,14 +1330,18 @@ class RiskProposal(TenantScopedModel):
     row = models.CharField(max_length=24)
     option = models.CharField(max_length=60)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="PROPOSED")
-    decided_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     decided_at = models.DateTimeField(null=True, blank=True)
     reason = models.TextField(blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=["patient", "source_key"], name="uniq_risk_proposal_source")
+            models.UniqueConstraint(
+                fields=["patient", "source_key"], name="uniq_risk_proposal_source"
+            )
         ]
 
 
@@ -1324,7 +1350,9 @@ class CapacityAssessment(TenantScopedModel):
     assessment supersedes it, so capacity history is preserved."""
 
     ANSWER_CHOICES = [("Yes", "Yes"), ("No", "No"), ("Unsure", "Unsure")]
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="capacity_assessments")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="capacity_assessments"
+    )
     decision = models.CharField(max_length=60)
     other_decision = models.CharField(max_length=200, blank=True)
     understand = models.CharField(max_length=6, choices=ANSWER_CHOICES)
@@ -1334,7 +1362,9 @@ class CapacityAssessment(TenantScopedModel):
     outcome = models.CharField(max_length=24)
     reassess_by = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
-    assessed_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    assessed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     assessed_at = models.DateTimeField(default=timezone.now)
 
     class Meta(TenantScopedModel.Meta):
@@ -1357,10 +1387,14 @@ class VisitConsent(TenantScopedModel):
     method = models.CharField(max_length=20, blank=True)
     given_by_name = models.CharField(max_length=150, blank=True)
     warnings = models.JSONField(default=list, blank=True)
-    recorded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     recorded_at = models.DateTimeField(default=timezone.now)
     completed_at = models.DateTimeField(null=True, blank=True)  # deferred consent obtained later
-    completed_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    completed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-recorded_at"]
@@ -1372,17 +1406,33 @@ class ProgressNote(TenantScopedModel):
 
     STATUS_CHOICES = [("DRAFT", "Draft"), ("SIGNED", "Signed")]
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="progress_notes")
-    episode = models.ForeignKey("EpisodeOfCare", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
-    encounter = models.ForeignKey("clinical_encounter.Encounter", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    episode = models.ForeignKey(
+        "EpisodeOfCare", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    encounter = models.ForeignKey(
+        "clinical_encounter.Encounter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     note_type = models.CharField(max_length=24)
     text = models.TextField(blank=True)
     status = models.CharField(max_length=8, choices=STATUS_CHOICES, default="DRAFT")
-    amends = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="addenda")
-    author = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    amends = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="addenda"
+    )
+    author = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     signed_at = models.DateTimeField(null=True, blank=True)
     # The follow-up appointment this note records the contact for, if any.
     appointment = models.ForeignKey(
-        "client_registry.Appointment", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+        "client_registry.Appointment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
     )
 
     class Meta(TenantScopedModel.Meta):
@@ -1400,12 +1450,16 @@ class EpisodeOutcome(TenantScopedModel):
         ("LOST", "Lost to follow-up"),
         ("DECEASED", "Deceased"),
     ]
-    episode = models.OneToOneField("EpisodeOfCare", on_delete=models.PROTECT, related_name="outcome")
+    episode = models.OneToOneField(
+        "EpisodeOfCare", on_delete=models.PROTECT, related_name="outcome"
+    )
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
     outcome = models.CharField(max_length=12, choices=OUTCOME_CHOICES)
     destination = models.CharField(max_length=200, blank=True)
     reason = models.TextField(blank=True)
-    recorded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     recorded_at = models.DateTimeField(default=timezone.now)
 
 
@@ -1426,7 +1480,9 @@ class TherapyEpisode(TenantScopedModel):
     activity = models.ForeignKey(
         "CarePlanActivity", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    started_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    started_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     ended_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(TenantScopedModel.Meta):
@@ -1443,10 +1499,14 @@ class OatEnrolment(TenantScopedModel):
     medicine = models.CharField(max_length=20)  # served value set "oat-medicine"
     clinic = models.CharField(max_length=200)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="REFERRED")
-    prescribed_dose = models.CharField(max_length=100, blank=True)  # as written by the OAT prescriber
+    prescribed_dose = models.CharField(
+        max_length=100, blank=True
+    )  # as written by the OAT prescriber
     supervised_dispensing = models.BooleanField(default=True)
     status_reason = models.TextField(blank=True)
-    recorded_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]
@@ -1460,7 +1520,9 @@ class NaloxoneSupply(TenantScopedModel):
     outcome = models.CharField(max_length=10, choices=OUTCOME_CHOICES)
     quantity = models.PositiveSmallIntegerField(null=True, blank=True)
     training_given = models.BooleanField(default=False)
-    given_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    given_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     given_at = models.DateTimeField(default=timezone.now)
 
 
@@ -1468,9 +1530,13 @@ class LabResultAcknowledgement(TenantScopedModel):
     """A prescriber's acknowledgement of a validated lab result. Results stay in the
     lims store; this only records who saw them and when (no second store of results)."""
 
-    result = models.OneToOneField("lims.LabResult", on_delete=models.PROTECT, related_name="acknowledgement")
+    result = models.OneToOneField(
+        "lims.LabResult", on_delete=models.PROTECT, related_name="acknowledgement"
+    )
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
-    acknowledged_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    acknowledged_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     acknowledged_at = models.DateTimeField(default=timezone.now)
     note = models.TextField(blank=True)
 
@@ -1481,16 +1547,28 @@ class LegalForm(TenantScopedModel):
     form numbers and statutory references must come from the regulator, not from us
     (CLAUDE.md §6). FHIR: Consent (policy) or DocumentReference, to be confirmed."""
 
-    STATUS_CHOICES = [("DRAFT", "Draft"), ("COSIGN_REQUESTED", "Awaiting co-signature"), ("SIGNED", "Signed")]
+    STATUS_CHOICES = [
+        ("DRAFT", "Draft"),
+        ("COSIGN_REQUESTED", "Awaiting co-signature"),
+        ("SIGNED", "Signed"),
+    ]
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="legal_forms")
-    admission = models.ForeignKey("ipd_ward.Admission", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    admission = models.ForeignKey(
+        "ipd_ward.Admission", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
     form_key = models.CharField(max_length=60)
     content = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
-    prepared_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
-    signed_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    prepared_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    signed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     signed_at = models.DateTimeField(null=True, blank=True)
-    cosign_request = models.ForeignKey("CosignRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cosign_request = models.ForeignKey(
+        "CosignRequest", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
 
 # ── Group programme (v4 mockup "Group Psychotherapy" workspace) ──
@@ -1620,18 +1698,18 @@ class GroupSessionEntry(TenantScopedModel):
         ]
 
 
-# ── Psychotherapy Session note (master prompt §7) — defined in its own module ──
-from .psychotherapy_models import (  # noqa: E402,F401
-    ClinicalLexiconTerm,
-    PsychotherapyNote,
-    PsychotherapyNoteAmendment,
-    TherapyModel,
-)
-
 # ── Legal admission status (master prompt §7A, LGL-*) — defined in its own module ──
 from .legal_models import (  # noqa: E402,F401
     DischargeNotice,
     LegalDocument,
     LegalStatus,
     LegalStatusEvent,
+)
+
+# ── Psychotherapy Session note (master prompt §7) — defined in its own module ──
+from .psychotherapy_models import (  # noqa: E402,F401
+    ClinicalLexiconTerm,
+    PsychotherapyNote,
+    PsychotherapyNoteAmendment,
+    TherapyModel,
 )

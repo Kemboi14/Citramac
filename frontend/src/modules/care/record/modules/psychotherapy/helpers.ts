@@ -24,11 +24,16 @@ export function hhmm(iso: string | null | undefined) {
 export function ddmmyyyy(iso: string | null | undefined) {
   if (!iso) return "";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return Number.isNaN(d.getTime())
+    ? ""
+    : `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
 /** Parse a dd/mm/yyyy date typed by the clinician: a Date, or the error to show. */
-export function parseDdMmYyyy(text: string, today = new Date()): { date: Date } | { error: string } {
+export function parseDdMmYyyy(
+  text: string,
+  today = new Date(),
+): { date: Date } | { error: string } {
   const example = ddmmyyyy(today.toISOString());
   const m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/.exec(text);
   if (!m) return { error: `Enter the date as dd/mm/yyyy, for example ${example}.` };
@@ -43,7 +48,13 @@ export function parseDdMmYyyy(text: string, today = new Date()): { date: Date } 
 /** The session's date replaced, its time of day kept (local wall clock). */
 export function withDate(iso: string, date: Date) {
   const d = new Date(iso);
-  const out = new Date(date.getFullYear(), date.getMonth(), date.getDate(), d.getHours(), d.getMinutes());
+  const out = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+  );
   return `${out.getFullYear()}-${pad(out.getMonth() + 1)}-${pad(out.getDate())}T${pad(out.getHours())}:${pad(out.getMinutes())}`;
 }
 
@@ -71,7 +82,12 @@ export function currentStep(note: PsyNote, config: PsyConfig) {
 
 export type StepStatus = "Current" | "Done" | "Needs review" | "Open" | "Not yet";
 
-export function stepStatus(note: PsyNote, config: PsyConfig, index: number, active: number): StepStatus {
+export function stepStatus(
+  note: PsyNote,
+  config: PsyConfig,
+  index: number,
+  active: number,
+): StepStatus {
   if (index === active) return "Current";
   if (index < QUESTION_COUNT) {
     // eslint-disable-next-line security/detect-object-injection -- index within the served list.
@@ -81,7 +97,9 @@ export function stepStatus(note: PsyNote, config: PsyConfig, index: number, acti
   }
   if (index === SAFETY_STEP) {
     if (!note.safety_answer) return currentStep(note, config) >= SAFETY_STEP ? "Open" : "Not yet";
-    const pending = note.blockers.some((b) => ["SAFETY_DETAIL", "RISK_LINK", "SAFETY_NOT_ASSESSED"].includes(b.code));
+    const pending = note.blockers.some((b) =>
+      ["SAFETY_DETAIL", "RISK_LINK", "SAFETY_NOT_ASSESSED"].includes(b.code),
+    );
     return pending ? "Needs review" : "Done";
   }
   if (note.status === "SIGNED") return "Done";
@@ -133,10 +151,16 @@ export function downloadText(filename: string, text: string) {
 }
 
 export function transcriptText(note: PsyNote) {
-  return note.transcript.map((t, i) => {
-    const lines = [`Q${i + 1}. ${t.title}`, `${modeLabel(t.mode)}${t.answered_at ? ` · ${hhmm(t.answered_at)}` : ""} · ${t.language}`,
-      t.text || "(not answered)"];
-    if (t.translation?.status === "done") lines.push(`English translation (${t.translation.model}): ${t.translation.text}`);
-    return lines.join("\n");
-  }).join("\n\n");
+  return note.transcript
+    .map((t, i) => {
+      const lines = [
+        `Q${i + 1}. ${t.title}`,
+        `${modeLabel(t.mode)}${t.answered_at ? ` · ${hhmm(t.answered_at)}` : ""} · ${t.language}`,
+        t.text || "(not answered)",
+      ];
+      if (t.translation?.status === "done")
+        lines.push(`English translation (${t.translation.model}): ${t.translation.text}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
 }

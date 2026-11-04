@@ -12,10 +12,10 @@ from .models import (
     BranchIdentifierChange,
     Department,
     Organization,
-    PlatformBranding,
     PlatformAiSettings,
-    PlatformHieSettings,
+    PlatformBranding,
     PlatformEmailSettings,
+    PlatformHieSettings,
     PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
@@ -334,7 +334,10 @@ class BranchSerializer(serializers.ModelSerializer):
         if bool((attrs.get("sha_client_id") or "").strip()) != bool(
             (attrs.get("sha_client_secret") or "").strip()
         ):
-            errors["sha_client_secret"] = "Enter both the facility client ID and its secret."
+            # bandit B105 false positive: validation message.
+            errors["sha_client_secret"] = (  # nosec B105
+                "Enter both the facility client ID and its secret."
+            )
         organization = self._target_organization()
         if (
             organization is not None
@@ -960,7 +963,8 @@ class PlatformHieSettingsSerializer(serializers.ModelSerializer):
 
         secret = (validated_data.pop("client_secret", None) or "").strip()
         if validated_data.pop("remove_client_secret", False):
-            validated_data["client_secret_encrypted"] = ""
+            # bandit B105 false positive: removing the secret.
+            validated_data["client_secret_encrypted"] = ""  # nosec B105
         elif secret:
             validated_data["client_secret_encrypted"] = encrypt_value(secret)
         if validated_data.pop("rotate_callback_token", False):

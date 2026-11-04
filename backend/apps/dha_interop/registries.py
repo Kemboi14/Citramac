@@ -139,7 +139,9 @@ def facility_summary(branch):
     return {
         "status": branch.registry_status,
         "status_label": branch.get_registry_status_display() if branch.registry_status else "",
-        "checked_at": branch.registry_checked_at.isoformat() if branch.registry_checked_at else None,
+        "checked_at": (
+            branch.registry_checked_at.isoformat() if branch.registry_checked_at else None
+        ),
         "problem": branch.registry_problem,
         "official_name": record.get("officialName", ""),
         "fr_code": record.get("frCode", ""),

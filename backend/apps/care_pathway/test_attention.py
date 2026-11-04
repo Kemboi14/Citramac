@@ -13,13 +13,18 @@ class AttentionTests(CarePlanTestCase):
         self.client.post(
             reverse("care-client-assessments", args=[self.pid]),
             {"instrument": "PHQ9", "answers": [0, 0, 0, 0, 0, 0, 0, 0, 1]},
-            format="json", **self.auth,
+            format="json",
+            **self.auth,
         )
         data = self.attention()
-        self.assertTrue(any(a["key"] == "score:PHQ9:safety" and a["severity"] == "high" for a in data["alerts"]))
+        self.assertTrue(
+            any(a["key"] == "score:PHQ9:safety" and a["severity"] == "high" for a in data["alerts"])
+        )
         self.client.post(
             reverse("care-client-withdrawal", args=[self.pid]),
-            {"instrument": "CIWA", "reason": "SEDATED"}, format="json", **self.auth,
+            {"instrument": "CIWA", "reason": "SEDATED"},
+            format="json",
+            **self.auth,
         )
         self.assertTrue(any(i["key"] == "wd:CIWA" for i in self.attention()["items"]))
 

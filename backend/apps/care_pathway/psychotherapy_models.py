@@ -71,7 +71,9 @@ class TherapyModel(TenantScopedModel):
     class Meta(TenantScopedModel.Meta):
         ordering = ["order", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["organization", "code"], name="unique_therapy_model_per_org")
+            models.UniqueConstraint(
+                fields=["organization", "code"], name="unique_therapy_model_per_org"
+            )
         ]
 
     def __str__(self):
@@ -90,7 +92,9 @@ class PsychotherapyNote(TenantScopedModel):
     session = models.OneToOneField(
         "mhp_program.PsychotherapySession", on_delete=models.PROTECT, related_name="psy_note"
     )
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="psychotherapy_notes")
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="psychotherapy_notes"
+    )
     therapy_episode = models.ForeignKey(
         "TherapyEpisode", on_delete=models.PROTECT, null=True, blank=True, related_name="notes"
     )
@@ -98,7 +102,9 @@ class PsychotherapyNote(TenantScopedModel):
     encounter = models.ForeignKey(
         "clinical_encounter.Encounter", on_delete=models.PROTECT, related_name="+"
     )
-    author = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    author = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     status = models.CharField(max_length=6, choices=STATUS_CHOICES, default="DRAFT")
     # {"q1".."q5": {"text", "mode": "TYPED" | "DICTATED", "answered_at", "language",
     #  "translation": {"status": pending|done|error|unavailable, "text", "model", "at", ...}}}
@@ -174,7 +180,9 @@ class PsychotherapyNoteAmendment(TenantScopedModel):
     previous_text = models.TextField()
     new_text = models.TextField()
     reason = models.TextField()
-    amended_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, related_name="+")
+    amended_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
     amended_at = models.DateTimeField(default=timezone.now)
 
     class Meta(TenantScopedModel.Meta):

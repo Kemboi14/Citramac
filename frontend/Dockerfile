@@ -1,6 +1,6 @@
 # `base` is also the target used by infra/docker-compose.yml for local dev
 # (bind-mounted source + `npm run dev`, see infra/docker-compose.yml).
-FROM node:20-slim AS base
+FROM node:22-slim AS base
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

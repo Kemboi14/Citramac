@@ -21,20 +21,36 @@ VALUESETS = {
     # R4 participation-status binding once the national IG names one.
     "group-attendance": (
         "Group session attendance",
-        [("PRESENT", "Present"), ("ABSENT", "Absent"), ("EXCUSED", "Excused"),
-         ("DECLINED", "Declined")],
+        [
+            ("PRESENT", "Present"),
+            ("ABSENT", "Absent"),
+            ("EXCUSED", "Excused"),
+            ("DECLINED", "Declined"),
+        ],
     ),
     "missed-appointment-reason": (
         "Reason for a missed appointment",
-        [("TRANSPORT", "Transport"), ("COST", "Cost"), ("FELT_BETTER", "Felt better"),
-         ("UNWELL", "Unwell"), ("FORGOT", "Forgot"), ("UNREACHABLE", "Could not be reached"),
-         ("OTHER", "Other")],
+        [
+            ("TRANSPORT", "Transport"),
+            ("COST", "Cost"),
+            ("FELT_BETTER", "Felt better"),
+            ("UNWELL", "Unwell"),
+            ("FORGOT", "Forgot"),
+            ("UNREACHABLE", "Could not be reached"),
+            ("OTHER", "Other"),
+        ],
     ),
     "therapy-modality": (
         "Therapy modality",
-        [("CBT", "Cognitive behavioural therapy"), ("MI", "Motivational interviewing"),
-         ("TF_CBT", "Trauma-focused therapy"), ("SUPPORTIVE", "Supportive counselling"),
-         ("FAMILY", "Family therapy"), ("GROUP", "Group therapy"), ("OTHER", "Other")],
+        [
+            ("CBT", "Cognitive behavioural therapy"),
+            ("MI", "Motivational interviewing"),
+            ("TF_CBT", "Trauma-focused therapy"),
+            ("SUPPORTIVE", "Supportive counselling"),
+            ("FAMILY", "Family therapy"),
+            ("GROUP", "Group therapy"),
+            ("OTHER", "Other"),
+        ],
     ),
     "oat-medicine": (
         "Opioid agonist medicine",
@@ -42,20 +58,36 @@ VALUESETS = {
     ),
     "capacity-decision": (
         "Decision the capacity assessment is for",
-        [("ADMISSION", "Admission / inpatient treatment"), ("MEDICATION", "Medication"),
-         ("INFO_SHARING", "Sharing information with family"), ("FAMILY_INVOLVEMENT", "Family involvement in care"),
-         ("WITHDRAWAL_MGMT", "Withdrawal management"), ("OTHER", "Other (specify)")],
+        [
+            ("ADMISSION", "Admission / inpatient treatment"),
+            ("MEDICATION", "Medication"),
+            ("INFO_SHARING", "Sharing information with family"),
+            ("FAMILY_INVOLVEMENT", "Family involvement in care"),
+            ("WITHDRAWAL_MGMT", "Withdrawal management"),
+            ("OTHER", "Other (specify)"),
+        ],
     ),
     "note-type": (
         "Progress note type",
-        [("PROGRESS", "Progress note"), ("WARD_ROUND", "Ward round"), ("PHONE", "Telephone contact"),
-         ("FAMILY", "Family contact"), ("MDT", "MDT review"), ("NURSING_SHIFT", "Nursing shift note"),
-         ("FOLLOW_UP", "Follow-up contact")],
+        [
+            ("PROGRESS", "Progress note"),
+            ("WARD_ROUND", "Ward round"),
+            ("PHONE", "Telephone contact"),
+            ("FAMILY", "Family contact"),
+            ("MDT", "MDT review"),
+            ("NURSING_SHIFT", "Nursing shift note"),
+            ("FOLLOW_UP", "Follow-up contact"),
+        ],
     ),
     "episode-outcome": (
         "How the episode ended",
-        [("PLANNED", "Discharged — planned"), ("LEFT_EARLY", "Left before planned discharge"),
-         ("TRANSFERRED", "Transferred"), ("LOST", "Lost to follow-up"), ("DECEASED", "Deceased")],
+        [
+            ("PLANNED", "Discharged — planned"),
+            ("LEFT_EARLY", "Left before planned discharge"),
+            ("TRANSFERRED", "Transferred"),
+            ("LOST", "Lost to follow-up"),
+            ("DECEASED", "Deceased"),
+        ],
     ),
     # ── Registration (§1.4) ──
     "pronouns": (

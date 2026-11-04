@@ -245,12 +245,18 @@ function EwsCard({ rows, loading }: { rows: VitalRow[]; loading: boolean }) {
   return (
     <Card
       title="Early warning score"
-      aside={latest?.approval === "illustrative" ? <Tag tone="warn">Illustrative thresholds — clinical approval pending</Tag> : undefined}
+      aside={
+        latest?.approval === "illustrative" ? (
+          <Tag tone="warn">Illustrative thresholds — clinical approval pending</Tag>
+        ) : undefined
+      }
     >
       {loading ? (
         <p className="py-6 text-center text-[13px] text-ink-500">Loading…</p>
       ) : !latest ? (
-        <p className="py-4 text-[13px] text-ink-500">No observations recorded for this client yet.</p>
+        <p className="py-4 text-[13px] text-ink-500">
+          No observations recorded for this client yet.
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           <div
@@ -290,13 +296,19 @@ function EwsCard({ rows, loading }: { rows: VitalRow[]; loading: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {[...scored].reverse().slice(0, 8).map((r) => (
-                  <tr key={r.id}>
-                    <td className={TD}>{formatDateTime(r.recorded_at)}</td>
-                    <td className={TD}>{r.ews!.label}</td>
-                    <td className={TD}>{r.ews!.measured}/{r.ews!.total_parameters}{r.ews!.single_parameter_3 ? " · a parameter scores 3" : ""}</td>
-                  </tr>
-                ))}
+                {[...scored]
+                  .reverse()
+                  .slice(0, 8)
+                  .map((r) => (
+                    <tr key={r.id}>
+                      <td className={TD}>{formatDateTime(r.recorded_at)}</td>
+                      <td className={TD}>{r.ews!.label}</td>
+                      <td className={TD}>
+                        {r.ews!.measured}/{r.ews!.total_parameters}
+                        {r.ews!.single_parameter_3 ? " · a parameter scores 3" : ""}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

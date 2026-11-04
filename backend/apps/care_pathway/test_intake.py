@@ -21,8 +21,7 @@ class IntakeTestCase(CarePathwayApiTestCase):
         super().setUp()
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
         registered = self.register(allergy_status="NONE")
@@ -224,8 +223,7 @@ class RestrictedContentTests(IntakeTestCase):
                 is_active=True,
             )
             role, _ = Role.objects.get_or_create(
-                organization=None,
-                name="Front Desk", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+                organization=None, name="Front Desk", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.front_desk.roles.add(role)
         self.fd_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.front_desk)[0]}"}
@@ -246,7 +244,10 @@ class MedicationHistoryTests(IntakeTestCase):
     def test_entries_are_retired_never_deleted(self):
         url = reverse("care-client-medication-history", args=[self.pid])
         created = self.client.post(
-            url, {"name": "Olanzapine", "dose": "10 mg", "frequency": "BD"}, format="json", **self.auth
+            url,
+            {"name": "Olanzapine", "dose": "10 mg", "frequency": "BD"},
+            format="json",
+            **self.auth,
         )
         self.assertEqual(created.status_code, 201)
         entry_id = created.data["id"]
@@ -271,7 +272,10 @@ class AllergySectionTests(IntakeTestCase):
                 verification_status="UNCONFIRMED",
             )
         url = reverse("care-client-allergy", args=[self.pid])
-        self.assertEqual(self.client.get(url, **self.auth).data["records"][0]["verification_status"], "UNCONFIRMED")
+        self.assertEqual(
+            self.client.get(url, **self.auth).data["records"][0]["verification_status"],
+            "UNCONFIRMED",
+        )
         done = self.client.post(
             reverse("care-allergy-verify", args=[record.pk]),
             {"verification_status": "CONFIRMED"},
@@ -280,7 +284,9 @@ class AllergySectionTests(IntakeTestCase):
         )
         self.assertEqual(done.data["records"][0]["verification_status"], "CONFIRMED")
         self.assertEqual(
-            self.client.put(url, {"status": "ACTIVE_ALLERGIES"}, format="json", **self.auth).data["status"],
+            self.client.put(url, {"status": "ACTIVE_ALLERGIES"}, format="json", **self.auth).data[
+                "status"
+            ],
             "ACTIVE_ALLERGIES",
         )
         self.assertEqual(
@@ -293,8 +299,6 @@ class AllergySectionTests(IntakeTestCase):
             **self.auth,
         )
         self.assertEqual(bad.status_code, 400)
-
-
 
 
 class TriageCarryForwardMappingTests(IntakeTestCase):
@@ -326,18 +330,33 @@ class TriageCarryForwardMappingTests(IntakeTestCase):
 
 
 class RiskFormulationSignatureTests(IntakeTestCase):
-    FORMULATION = {"static": "a", "dynamic": "b", "protective": "c", "change_72h": "d", "summary": "e"}
+    FORMULATION = {
+        "static": "a",
+        "dynamic": "b",
+        "protective": "c",
+        "change_72h": "d",
+        "summary": "e",
+    }
 
     def risk(self):
         return self.draft().data["sections"]["risk"]
 
     def test_server_records_signer_and_time_not_the_client_value(self):
         self.draft()
-        self.save(sections={"risk": {**self.FORMULATION, "formulation_signed_at": "1999-01-01T00:00:00Z",
-                                     "formulation_signed_by": "Someone else"}})
+        self.save(
+            sections={
+                "risk": {
+                    **self.FORMULATION,
+                    "formulation_signed_at": "1999-01-01T00:00:00Z",
+                    "formulation_signed_by": "Someone else",
+                }
+            }
+        )
         risk = self.risk()
         self.assertNotEqual(risk["formulation_signed_at"], "1999-01-01T00:00:00Z")
-        self.assertEqual(risk["formulation_signed_by"], self.nurse.get_full_name() or self.nurse.get_username())
+        self.assertEqual(
+            risk["formulation_signed_by"], self.nurse.get_full_name() or self.nurse.get_username()
+        )
 
     def test_cannot_sign_an_incomplete_formulation(self):
         self.draft()
@@ -354,7 +373,11 @@ class RiskFormulationSignatureTests(IntakeTestCase):
     def test_not_present_carried_finding_is_kept_with_who_resolved_it(self):
         self.sign_triage(d_suicidal="yes")
         carried = self.risk()["carried"]
-        carried["suicide:Thoughts"] = {**carried["suicide:Thoughts"], "confirmed": True, "not_present": True}
+        carried["suicide:Thoughts"] = {
+            **carried["suicide:Thoughts"],
+            "confirmed": True,
+            "not_present": True,
+        }
         self.save(sections={"risk": {"rows": {"suicide": []}, "carried": carried}})
         entry = self.risk()["carried"]["suicide:Thoughts"]
         self.assertTrue(entry["not_present"])

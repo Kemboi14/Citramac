@@ -39,7 +39,9 @@ class Command(BaseCommand):
     help = "Read-only probe of the configured DHA HIE (UAT): prints response shapes."
 
     def add_arguments(self, parser):
-        parser.add_argument("--id-type", default="", choices=["", *registries.CLIENT_ID_TYPE_VALUES])
+        parser.add_argument(
+            "--id-type", default="", choices=["", *registries.CLIENT_ID_TYPE_VALUES]
+        )
         parser.add_argument("--id-number", default="")
 
     def handle(self, *args, **options):
@@ -72,7 +74,10 @@ class Command(BaseCommand):
             for path, params, kind in (
                 (
                     "/patients/eligibility",
-                    {"identification_type": "ClientRegistry ID", "identification_number": record["id"]},
+                    {
+                        "identification_type": "ClientRegistry ID",
+                        "identification_number": record["id"],
+                    },
                     "MEMBER_VERIFICATION",
                 ),
                 (

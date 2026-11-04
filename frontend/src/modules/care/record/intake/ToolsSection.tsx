@@ -42,7 +42,10 @@ export function ToolsSection({
   const load = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const [t, d] = await Promise.all([getClientTools(accessToken, patientId), getInstruments(accessToken)]);
+      const [t, d] = await Promise.all([
+        getClientTools(accessToken, patientId),
+        getInstruments(accessToken),
+      ]);
       setTools(t.results);
       setDefs(d.results);
     } catch (e) {
@@ -70,7 +73,12 @@ export function ToolsSection({
     }
   }
 
-  if (!tools) return error ? <ErrorNote>{error}</ErrorNote> : <p className="text-[13px] text-ink-500">Loading…</p>;
+  if (!tools)
+    return error ? (
+      <ErrorNote>{error}</ErrorNote>
+    ) : (
+      <p className="text-[13px] text-ink-500">Loading…</p>
+    );
   return (
     <div className="flex flex-col gap-4">
       <Callout>
@@ -92,12 +100,17 @@ export function ToolsSection({
                 <h3 className="text-[14px] font-semibold leading-5 text-ink-900">{tool.name}</h3>
                 {tool.why.length > 0 && (
                   <p className="mt-1 text-[12px] leading-5 text-ink-500">
-                    <strong className="font-semibold text-ink-700">Reason triggered:</strong> {tool.why.join(" · ")}
+                    <strong className="font-semibold text-ink-700">Reason triggered:</strong>{" "}
+                    {tool.why.join(" · ")}
                   </p>
                 )}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {tool.last && <Tag>{tool.last.score} · {tool.last.band}</Tag>}
+                {tool.last && (
+                  <Tag>
+                    {tool.last.score} · {tool.last.band}
+                  </Tag>
+                )}
                 <Tag tone={TONE[tool.status]}>{tool.status}</Tag>
               </div>
             </div>
@@ -109,35 +122,64 @@ export function ToolsSection({
             )}
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
               {["Recommended", "Not indicated"].includes(tool.status) && def && (
-                <button type="button" className={`${tool.status === "Recommended" ? BTN : BTN_GHOST} ${BTN_SM}`} onClick={() => void decide(tool.key, "ACCEPTED")}>
+                <button
+                  type="button"
+                  className={`${tool.status === "Recommended" ? BTN : BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => void decide(tool.key, "ACCEPTED")}
+                >
                   {tool.status === "Recommended" ? "Accept & open" : "Start anyway"}
                 </button>
               )}
               {tool.status === "Recommended" && (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setDeclining(tool.key)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => setDeclining(tool.key)}
+                >
                   Decline…
                 </button>
               )}
               {tool.status === "Declined" && (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => void decide(tool.key, "RECONSIDERED")}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => void decide(tool.key, "RECONSIDERED")}
+                >
                   Reconsider
                 </button>
               )}
               {["In progress", "Completed"].includes(tool.status) && def && (
-                <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setOpen(open === tool.key ? null : tool.key)}>
+                <button
+                  type="button"
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  onClick={() => setOpen(open === tool.key ? null : tool.key)}
+                >
                   {open === tool.key ? "Close form" : tool.last ? "Record repeat" : "Record score"}
                 </button>
               )}
               {tool.kind === "link" && (
                 <span className="text-[12px] text-ink-500">
-                  {tool.key === "SAFETY" ? "Completed in the Care Plan." : "Completed in Section 3 (risk)."}
+                  {tool.key === "SAFETY"
+                    ? "Completed in the Care Plan."
+                    : "Completed in Section 3 (risk)."}
                 </span>
               )}
             </div>
             {declining === tool.key && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input className={`${INPUT} max-w-md`} aria-label="Reason for declining" placeholder="Reason for declining (required — clinical judgement)" value={reason} onChange={(e) => setReason(e.target.value)} />
-                <button type="button" className={`${BTN} ${BTN_SM}`} disabled={reason.trim().length < 5} onClick={() => void decide(tool.key, "DECLINED", reason)}>
+                <input
+                  className={`${INPUT} max-w-md`}
+                  aria-label="Reason for declining"
+                  placeholder="Reason for declining (required — clinical judgement)"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={`${BTN} ${BTN_SM}`}
+                  disabled={reason.trim().length < 5}
+                  onClick={() => void decide(tool.key, "DECLINED", reason)}
+                >
                   Confirm decline
                 </button>
               </div>

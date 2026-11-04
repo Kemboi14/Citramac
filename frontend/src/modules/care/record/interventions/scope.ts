@@ -10,9 +10,6 @@ export function scopedModules(modules: InterventionModule[], scope: ModuleScope)
   return modules
     .map((module, index) => ({ module, index }))
     .filter(({ module }) => scope === "all" || forPlan(module))
-    .sort(
-      (a, b) =>
-        Number(forPlan(b.module)) - Number(forPlan(a.module)) || a.index - b.index,
-    )
+    .sort((a, b) => Number(forPlan(b.module)) - Number(forPlan(a.module)) || a.index - b.index)
     .map(({ module }) => module);
 }

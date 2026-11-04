@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
-import { recordAssessment, type InstrumentDef, type OutcomeScore } from "../../../../lib/carePathwayApi";
+import {
+  recordAssessment,
+  type InstrumentDef,
+  type OutcomeScore,
+} from "../../../../lib/carePathwayApi";
 import { errorText } from "../../triage/helpers";
 import { BTN, BTN_GHOST, INPUT } from "../../shared/styles";
 import { Callout, ErrorNote, SelectChoices } from "../../shared/ui";
@@ -40,7 +44,9 @@ export function AssessmentForm({
   const [total, setTotal] = useState("");
   const [positive, setPositive] = useState(false);
   const [detail, setDetail] = useState<Record<string, string | number>>({});
-  const [timepoint, setTimepoint] = useState(defaultTimepoint ?? (hasPrevious ? "REPEAT" : "BASELINE"));
+  const [timepoint, setTimepoint] = useState(
+    defaultTimepoint ?? (hasPrevious ? "REPEAT" : "BASELINE"),
+  );
   const [note, setNote] = useState("");
   const [assessedAt, setAssessedAt] = useState("");
   // Latest allowed assessment time (local), fixed when the form opens.
@@ -59,8 +65,12 @@ export function AssessmentForm({
   const ready =
     extrasDone &&
     (gated ||
-      (def.kind === "items" ? answered === def.items.length : total.trim() !== "" && Number.isInteger(Number(total))));
-  const selfHarm = (def.code === "PHQ9" && (answers[8] ?? 0) > 0) || (def.code === "EPDS" && Number(detail.item10 ?? 0) > 0);
+      (def.kind === "items"
+        ? answered === def.items.length
+        : total.trim() !== "" && Number.isInteger(Number(total))));
+  const selfHarm =
+    (def.code === "PHQ9" && (answers[8] ?? 0) > 0) ||
+    (def.code === "EPDS" && Number(detail.item10 ?? 0) > 0);
 
   async function save() {
     if (!accessToken || !ready) return;
@@ -69,7 +79,11 @@ export function AssessmentForm({
     try {
       const saved = await recordAssessment(accessToken, patientId, {
         instrument: def.code,
-        ...(gated ? {} : def.kind === "items" ? { answers: answers as number[] } : { total: Number(total) }),
+        ...(gated
+          ? {}
+          : def.kind === "items"
+            ? { answers: answers as number[] }
+            : { total: Number(total) }),
         positive: def.hasPositiveFlag ? positive : undefined,
         detail: supplementary.length ? detail : undefined,
         timepoint: timepoint || undefined,
@@ -89,43 +103,65 @@ export function AssessmentForm({
     <div className="mt-4 rounded-xl border border-surface-border bg-surface-bg p-4 sm:p-5">
       {def.approval === "illustrative" && (
         <Callout tone="warning" className="mb-4">
-          Bands and change thresholds for {def.name} are illustrative until a clinician approves them.
+          Bands and change thresholds for {def.name} are illustrative until a clinician approves
+          them.
         </Callout>
       )}
       <ErrorNote>{error}</ErrorNote>
       {def.gate &&
         supplementary
           .filter((q) => q.key === def.gate?.key)
-          .map((q) => <SupplementaryQuestion key={q.key} code={def.code} question={q} value={detail[q.key]} onChange={(v) => setDetail((d) => ({ ...d, [q.key]: v }))} />)}
+          .map((q) => (
+            <SupplementaryQuestion
+              key={q.key}
+              code={def.code}
+              question={q}
+              value={detail[q.key]}
+              onChange={(v) => setDetail((d) => ({ ...d, [q.key]: v }))}
+            />
+          ))}
       {gated ? (
-        <p className="text-[13px] text-ink-500">Threshold not met — the screen ends here with a total of 0.</p>
+        <p className="text-[13px] text-ink-500">
+          Threshold not met — the screen ends here with a total of 0.
+        </p>
       ) : def.kind === "items" ? (
         <ol className="flex flex-col gap-3">
           {def.items.map((item, index) => (
-            <li key={item.text} className="rounded-lg border border-surface-border bg-surface-card p-3.5 text-[13px] sm:p-4">
+            <li
+              key={item.text}
+              className="rounded-lg border border-surface-border bg-surface-card p-3.5 text-[13px] sm:p-4"
+            >
               <div className="mb-3 font-medium leading-5 text-ink-900">
                 {index + 1}. {item.text}
               </div>
-              <div role="radiogroup" aria-label={`${def.name} item ${index + 1}`} className="flex flex-wrap gap-2">
+              <div
+                role="radiogroup"
+                aria-label={`${def.name} item ${index + 1}`}
+                className="flex flex-wrap gap-2"
+              >
                 {item.options.map((option) => {
                   const selected = answers[index] === option.points;
                   return (
-                  <label
-                    key={option.points}
-                    className={`flex min-h-10 flex-1 basis-[9rem] cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 leading-snug transition-colors ${
-                      selected
-                        ? "border-brand-green/40 bg-brand-green-tint text-brand-green-dark"
-                        : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`${def.code}-${index}`}
-                      checked={selected}
-                      onChange={() => setAnswers((prev) => prev.map((a, i) => (i === index ? option.points : a)))}
-                    />
-                    {option.label}
-                  </label>
+                    <label
+                      key={option.points}
+                      className={`flex min-h-10 flex-1 basis-[9rem] cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 leading-snug transition-colors ${
+                        selected
+                          ? "border-brand-green/40 bg-brand-green-tint text-brand-green-dark"
+                          : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${def.code}-${index}`}
+                        checked={selected}
+                        onChange={() =>
+                          setAnswers((prev) =>
+                            prev.map((a, i) => (i === index ? option.points : a)),
+                          )
+                        }
+                      />
+                      {option.label}
+                    </label>
                   );
                 })}
               </div>
@@ -135,16 +171,31 @@ export function AssessmentForm({
       ) : (
         <label className="flex max-w-xs flex-col gap-1 text-[11px] font-semibold uppercase text-ink-500">
           {def.name} total (0–{def.max})
-          <input type="number" min={0} max={def.max} className={INPUT} value={total} onChange={(e) => setTotal(e.target.value)} />
+          <input
+            type="number"
+            min={0}
+            max={def.max}
+            className={INPUT}
+            value={total}
+            onChange={(e) => setTotal(e.target.value)}
+          />
         </label>
       )}
       {supplementary
         .filter((q) => q.key !== def.gate?.key)
         .map((q) => (
-          <SupplementaryQuestion key={q.key} code={def.code} question={q} value={detail[q.key]} onChange={(v) => setDetail((d) => ({ ...d, [q.key]: v }))} />
+          <SupplementaryQuestion
+            key={q.key}
+            code={def.code}
+            question={q}
+            value={detail[q.key]}
+            onChange={(v) => setDetail((d) => ({ ...d, [q.key]: v }))}
+          />
         ))}
       {def.positiveRule && (
-        <p className="mt-2 text-xs text-ink-500">Positive or negative is derived from the screen’s published rule when recorded.</p>
+        <p className="mt-2 text-xs text-ink-500">
+          Positive or negative is derived from the screen’s published rule when recorded.
+        </p>
       )}
       {selfHarm && (
         <Callout tone="danger" className="mt-2">
@@ -153,13 +204,21 @@ export function AssessmentForm({
       )}
       {def.hasPositiveFlag && (
         <label className="mt-2 flex items-center gap-2 text-[13px]">
-          <input type="checkbox" checked={positive} onChange={(e) => setPositive(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={positive}
+            onChange={(e) => setPositive(e.target.checked)}
+          />
           Screen positive by the instrument’s own criteria
         </label>
       )}
       <label className="mt-4 flex max-w-sm flex-col gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
         Timepoint
-        <SelectChoices options={vs.options("assessment-timepoint")} value={timepoint} onChange={setTimepoint} />
+        <SelectChoices
+          options={vs.options("assessment-timepoint")}
+          value={timepoint}
+          onChange={setTimepoint}
+        />
       </label>
       {showProvenance && (
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -176,14 +235,28 @@ export function AssessmentForm({
           <div className="flex flex-col gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
             Provider
             <span className="py-2 text-[13px] font-normal normal-case text-ink-900">
-              {profile ? [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.email : "You"} — recorded under your sign-in
+              {profile
+                ? [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.email
+                : "You"}{" "}
+              — recorded under your sign-in
             </span>
           </div>
         </div>
       )}
-      <input className={`${INPUT} mt-4`} aria-label="Note" placeholder="Brief note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+      <input
+        className={`${INPUT} mt-4`}
+        aria-label="Note"
+        placeholder="Brief note (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-surface-border pt-3">
-        <button type="button" className={BTN} disabled={!ready || saving} onClick={() => void save()}>
+        <button
+          type="button"
+          className={BTN}
+          disabled={!ready || saving}
+          onClick={() => void save()}
+        >
           {saving ? "Saving…" : "Record score"}
         </button>
         <button type="button" className={BTN_GHOST} onClick={onCancel}>
@@ -216,7 +289,12 @@ function SupplementaryQuestion({
       <div role="radiogroup" aria-label={question.text} className="flex flex-wrap gap-x-4 gap-y-1">
         {question.options.map((option) => (
           <label key={String(option.value)} className="flex items-center gap-1.5">
-            <input type="radio" name={`${code}-${question.key}`} checked={value === option.value} onChange={() => onChange(option.value)} />
+            <input
+              type="radio"
+              name={`${code}-${question.key}`}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+            />
             {option.label}
           </label>
         ))}

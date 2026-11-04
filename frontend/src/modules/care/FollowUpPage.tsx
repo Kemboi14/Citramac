@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
-import { markAppointmentMissed, markRecontacted, searchRegistrations, type RegistrationRow } from "../../lib/carePathwayApi";
+import {
+  markAppointmentMissed,
+  markRecontacted,
+  searchRegistrations,
+  type RegistrationRow,
+} from "../../lib/carePathwayApi";
 import {
   bookFollowUp,
   getFollowUps,
@@ -614,7 +619,12 @@ export function BookingForm({
           </Field>
         </div>
         <Field label="With (optional)" htmlFor="fu-provider">
-          <select id="fu-provider" className={INPUT} value={provider} onChange={(e) => setProvider(e.target.value)}>
+          <select
+            id="fu-provider"
+            className={INPUT}
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+          >
             <option value="">Not assigned</option>
             {roster.map((member) => (
               <option key={member.user_id} value={member.user_id}>

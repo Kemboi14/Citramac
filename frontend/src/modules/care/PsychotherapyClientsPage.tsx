@@ -30,11 +30,15 @@ export function PsychotherapyClientsPage() {
   }, [accessToken]);
   useEffect(load, [load]);
 
-  const openRecord = (row: PsyClientRow) => navigate(clientRecordPath(row.patient_id, "interventions"));
+  const openRecord = (row: PsyClientRow) =>
+    navigate(clientRecordPath(row.patient_id, "interventions"));
 
   return (
     <div className="flex animate-fade-in flex-col gap-5">
-      <PageHeader title="Individual Psychotherapy" subtitle="Clients listed for psychotherapy in Interventions and their recorded sessions" />
+      <PageHeader
+        title="Individual Psychotherapy"
+        subtitle="Clients listed for psychotherapy in Interventions and their recorded sessions"
+      />
       <ErrorNote>{error}</ErrorNote>
       <Card title={`Psychotherapy clients (${rows?.length ?? 0})`} bodyClassName="p-0">
         <div className="overflow-x-auto">
@@ -51,10 +55,18 @@ export function PsychotherapyClientsPage() {
             </thead>
             <tbody>
               {!rows && !error && (
-                <tr><td colSpan={6} className={`${TD} text-center text-ink-500`}>Loading…</td></tr>
+                <tr>
+                  <td colSpan={6} className={`${TD} text-center text-ink-500`}>
+                    Loading…
+                  </td>
+                </tr>
               )}
               {rows && rows.length === 0 && (
-                <tr><td colSpan={6} className={`${TD} py-6 text-center text-ink-500`}>No clients are currently listed for individual psychotherapy.</td></tr>
+                <tr>
+                  <td colSpan={6} className={`${TD} py-6 text-center text-ink-500`}>
+                    No clients are currently listed for individual psychotherapy.
+                  </td>
+                </tr>
               )}
               {rows?.map((row) => (
                 <tr key={row.patient_id} className="hover:bg-surface-bg">
@@ -65,19 +77,47 @@ export function PsychotherapyClientsPage() {
                   </td>
                   <td className={TD}>{row.diagnosis || "Not assessed"}</td>
                   <td className={TD}>
-                    {row.restricted ? <span className="text-[12px] text-ink-500">Care team only</span> : row.sessions_recorded ?? 0}
+                    {row.restricted ? (
+                      <span className="text-[12px] text-ink-500">Care team only</span>
+                    ) : (
+                      (row.sessions_recorded ?? 0)
+                    )}
                   </td>
-                  <td className={`${TD} whitespace-nowrap`}>{row.restricted ? "—" : row.last_session ? formatDate(row.last_session) : "—"}</td>
-                  <td className={`${TD} whitespace-nowrap`}>{row.next_appointment ? formatDateTime(row.next_appointment) : "—"}</td>
+                  <td className={`${TD} whitespace-nowrap`}>
+                    {row.restricted ? "—" : row.last_session ? formatDate(row.last_session) : "—"}
+                  </td>
+                  <td className={`${TD} whitespace-nowrap`}>
+                    {row.next_appointment ? formatDateTime(row.next_appointment) : "—"}
+                  </td>
                   <td className={TD}>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => openRecord(row)}>Open client record</button>
+                      <button
+                        type="button"
+                        className={`${BTN_GHOST} ${BTN_SM}`}
+                        onClick={() => openRecord(row)}
+                      >
+                        Open client record
+                      </button>
                       {row.episode_id ? (
-                        <button type="button" className={`${BTN} ${BTN_SM}`}
-                          onClick={() => setSession({ patientId: row.patient_id, episodeId: row.episode_id as string })}>Start session</button>
+                        <button
+                          type="button"
+                          className={`${BTN} ${BTN_SM}`}
+                          onClick={() =>
+                            setSession({
+                              patientId: row.patient_id,
+                              episodeId: row.episode_id as string,
+                            })
+                          }
+                        >
+                          Start session
+                        </button>
                       ) : (
-                        <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => openRecord(row)}
-                          title="No therapy episode with agreed confidentiality limits yet — set it up on the client record (Interventions › Therapy).">
+                        <button
+                          type="button"
+                          className={`${BTN} ${BTN_SM}`}
+                          onClick={() => openRecord(row)}
+                          title="No therapy episode with agreed confidentiality limits yet — set it up on the client record (Interventions › Therapy)."
+                        >
                           Start session
                         </button>
                       )}
@@ -90,11 +130,20 @@ export function PsychotherapyClientsPage() {
         </div>
       </Card>
       {rows?.some((r) => !r.episode_id) && (
-        <p className="text-[12px] text-ink-500">“Start session” opens the client record for clients without a therapy episode whose confidentiality limits have been agreed — start the episode there first.</p>
+        <p className="text-[12px] text-ink-500">
+          “Start session” opens the client record for clients without a therapy episode whose
+          confidentiality limits have been agreed — start the episode there first.
+        </p>
       )}
       {session && (
-        <PsychotherapySessionNote patientId={session.patientId} episodeId={session.episodeId}
-          onClose={() => { setSession(null); load(); }} />
+        <PsychotherapySessionNote
+          patientId={session.patientId}
+          episodeId={session.episodeId}
+          onClose={() => {
+            setSession(null);
+            load();
+          }}
+        />
       )}
     </div>
   );

@@ -15,9 +15,16 @@ from .test_care_plan import CarePlanTestCase
 
 class InterventionWorkspaceTests(CarePlanTestCase):
     def record(self, auth=None, **body):
-        payload = {"module": "psychotherapy", "intervention": "Individual", "note": "Session 1", **body}
+        payload = {
+            "module": "psychotherapy",
+            "intervention": "Individual",
+            "note": "Session 1",
+            **body,
+        }
         return self.client.post(
-            reverse("care-client-interventions", args=[self.pid]), payload, format="json",
+            reverse("care-client-interventions", args=[self.pid]),
+            payload,
+            format="json",
             **(auth or self.auth),
         )
 
@@ -25,7 +32,8 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         return self.client.post(
             reverse("care-client-activities", args=[self.pid]),
             {"title": "Psychological therapy", "goal": "CBT", "module": "THERAPY"},
-            format="json", **self.auth,
+            format="json",
+            **self.auth,
         ).data["id"]
 
     def workspace(self):
@@ -37,7 +45,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
 
     def void(self, record_id, reason, auth=None):
         return self.client.post(
-            reverse("care-intervention-void", args=[record_id]), {"reason": reason}, format="json",
+            reverse("care-intervention-void", args=[record_id]),
+            {"reason": reason},
+            format="json",
             **(auth or self.auth),
         )
 
@@ -46,7 +56,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
             BillingService.objects.filter(organization=self.org, name=name).update(rate=rate)
 
     def test_a_record_need_not_be_linked_to_a_care_plan_action(self):
-        response = self.record(module="psychiatry", intervention="Psychiatric review", note="Reviewed")
+        response = self.record(
+            module="psychiatry", intervention="Psychiatric review", note="Reviewed"
+        )
         self.assertEqual(response.status_code, 201, response.data)
         self.assertIsNone(response.data["activity"])
         self.assertEqual(response.data["activity_title"], "")
@@ -57,7 +69,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(self.record(activity=activity_id).status_code, 201)
         with platform_admin_context():
             self.assertEqual(CarePlanActivity.objects.get(pk=activity_id).status, "ACTIVE")
-        self.assertEqual(self.record(activity=activity_id, completes_activity=True).status_code, 201)
+        self.assertEqual(
+            self.record(activity=activity_id, completes_activity=True).status_code, 201
+        )
         with platform_admin_context():
             self.assertEqual(CarePlanActivity.objects.get(pk=activity_id).status, "COMPLETED")
 
@@ -66,7 +80,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertTrue(response.data["billable"])
         self.assertEqual(response.data["billing_service_name"], "Psychotherapy")
-        unpriced = self.record(module="observation_safety", intervention="Step-down review", note="Calm")
+        unpriced = self.record(
+            module="observation_safety", intervention="Step-down review", note="Calm"
+        )
         self.assertFalse(unpriced.data["billable"])
         with platform_admin_context():
             charges = ChargeItem.objects.filter(patient_id=self.pid)
@@ -89,12 +105,16 @@ class InterventionWorkspaceTests(CarePlanTestCase):
     def test_a_voided_record_leaves_billing_and_delivered_counts(self):
         self.set_rate("Psychotherapy", Decimal("5000"))
         record_id = self.record().data["id"]
-        self.assertEqual(len(self.client.get(reverse("care-billing"), **self.auth).data["events"]), 1)
+        self.assertEqual(
+            len(self.client.get(reverse("care-billing"), **self.auth).data["events"]), 1
+        )
         self.assertEqual(self.void(record_id, "no").status_code, 400)
         voided = self.void(record_id, "Recorded against the wrong client")
         self.assertEqual(voided.status_code, 200, voided.data)
         self.assertIsNotNone(voided.data["voided_at"])
-        self.assertEqual(voided.data["corrections"][0]["reason"], "Recorded against the wrong client")
+        self.assertEqual(
+            voided.data["corrections"][0]["reason"], "Recorded against the wrong client"
+        )
         self.assertEqual(self.client.get(reverse("care-billing"), **self.auth).data["events"], [])
         modules = {m["code"]: m for m in self.workspace()["modules"]}
         self.assertEqual(modules["psychotherapy"]["delivered"], 0)
@@ -104,16 +124,25 @@ class InterventionWorkspaceTests(CarePlanTestCase):
 
     def test_only_the_recording_clinician_or_an_org_admin_can_void(self):
         record_id = self.record().data["id"]
-        self.assertEqual(self.void(record_id, "Not my record", auth=self.psych_auth).status_code, 403)
+        self.assertEqual(
+            self.void(record_id, "Not my record", auth=self.psych_auth).status_code, 403
+        )
 
     def test_workspace_shape_and_recommendations_for_an_inpatient_in_withdrawal(self):
         with platform_admin_context():
             patient = Patient.objects.get(pk=self.pid)
             ward = Ward.objects.create(organization=self.org, name="Ward")
-            bed = Bed.objects.create(organization=self.org, ward=ward, bed_number="1", status="OCCUPIED")
-            Admission.objects.create(organization=self.org, patient=patient, bed=bed, admitted_by=self.nurse)
+            bed = Bed.objects.create(
+                organization=self.org, ward=ward, bed_number="1", status="OCCUPIED"
+            )
+            Admission.objects.create(
+                organization=self.org, patient=patient, bed=bed, admitted_by=self.nurse
+            )
             ClinicalAlert.objects.create(
-                organization=self.org, patient=patient, alert_code="WITHDRAWAL_RISK", label="Withdrawal risk"
+                organization=self.org,
+                patient=patient,
+                alert_code="WITHDRAWAL_RISK",
+                label="Withdrawal risk",
             )
         activity_id = self.activity()
         self.record(activity=activity_id)
@@ -123,7 +152,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(set(data), {"has_plan", "plan_signed", "actions", "modules", "context"})
         self.assertFalse(data["plan_signed"])
         action = data["actions"][0]
-        self.assertEqual((action["id"], action["records"], action["status"]), (activity_id, 1, "ACTIVE"))
+        self.assertEqual(
+            (action["id"], action["records"], action["status"]), (activity_id, 1, "ACTIVE")
+        )
         self.assertTrue(action["latest_by"])
         self.assertEqual(action["modules"], ["psychotherapy", "group_psychotherapy"])
         self.assertIn("Withdrawal risk", data["context"]["alerts"])
@@ -134,13 +165,23 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         # v4 CARE_MENU: 17 cards. Group sessions count inside the Psychotherapy card.
         self.assertEqual(len(modules), 17)
         self.assertNotIn("group_psychotherapy", modules)
-        self.assertEqual(modules["psychotherapy"]["history_modules"], ["psychotherapy", "group_psychotherapy"])
+        self.assertEqual(
+            modules["psychotherapy"]["history_modules"], ["psychotherapy", "group_psychotherapy"]
+        )
         self.assertEqual(modules["psychotherapy"]["linked_actions"], [activity_id])
-        self.assertEqual((modules["psychiatry"]["unit"], modules["psychiatry"]["sha_code"]), ("review", ""))
+        self.assertEqual(
+            (modules["psychiatry"]["unit"], modules["psychiatry"]["sha_code"]), ("review", "")
+        )
         self.assertIn("bed-day tariff", modules["observation_safety"]["note"])
         recommended = {code for code, m in modules.items() if m["recommended"]}
         self.assertTrue(
-            {"withdrawal_management", "medical_review", "admission", "psychiatric_nursing", "discharge"}
+            {
+                "withdrawal_management",
+                "medical_review",
+                "admission",
+                "psychiatric_nursing",
+                "discharge",
+            }
             <= recommended
         )
         self.assertNotIn("restrictive_practice", recommended)
@@ -149,7 +190,10 @@ class InterventionWorkspaceTests(CarePlanTestCase):
             "Diagnosis, alert, or flag references substance use or withdrawal",
         )
         self.assertEqual(modules["psychotherapy"]["action_id"], activity_id)
-        self.assertEqual((modules["psychotherapy"]["rate"], modules["psychotherapy"]["delivered"]), ("3000.00", 1))
+        self.assertEqual(
+            (modules["psychotherapy"]["rate"], modules["psychotherapy"]["delivered"]),
+            ("3000.00", 1),
+        )
         self.assertIsNone(modules["observation_safety"]["billing_service"])
         self.assertFalse(modules["observation_safety"]["billable"])
         self.assertEqual(modules["withdrawal_management"]["group"], "Treat")
@@ -170,7 +214,10 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         with platform_admin_context():
             service = BillingService.objects.get(organization=self.org, name="Admission")
             ServicePayerCode.objects.create(
-                organization=self.org, service=service, payer="SHA", payer_code="CFG-1",
+                organization=self.org,
+                service=service,
+                payer="SHA",
+                payer_code="CFG-1",
                 requires_preauth=True,
             )
         admission = {m["code"]: m for m in self.workspace()["modules"]}["admission"]

@@ -61,7 +61,9 @@ def is_pomsf(schemes):
 
 
 def _active(schemes):
-    active_values = {v.strip().upper() for v in getattr(settings, "SHA_ACTIVE_COVERAGE_STATUSES", [])}
+    active_values = {
+        v.strip().upper() for v in getattr(settings, "SHA_ACTIVE_COVERAGE_STATUSES", [])
+    }
     if not active_values:
         return False
     return any(

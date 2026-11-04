@@ -93,7 +93,9 @@ function HistoryRow({
       <tr className={voided ? "opacity-60" : undefined}>
         <td className={`${TD} whitespace-nowrap`}>
           {formatDateTime(record.performed_at)}
-          <div className="text-xs text-ink-500">{record.provider_name || "Provider not recorded"}</div>
+          <div className="text-xs text-ink-500">
+            {record.provider_name || "Provider not recorded"}
+          </div>
         </td>
         <td className={`${TD} text-right tabular-nums`}>{record.quantity}</td>
         <td className={TD}>
@@ -121,7 +123,11 @@ function HistoryRow({
         <td className={TD}>{record.next_action || "—"}</td>
         <td className={`${TD} text-right`}>
           {!voided && !fromGroup && !correcting && (
-            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setCorrecting(true)}>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => setCorrecting(true)}
+            >
               Correct
             </button>
           )}

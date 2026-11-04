@@ -683,9 +683,7 @@ class OrganizationConsoleApiTests(APITestCase):
         self.assertEqual(patch_response.status_code, 200, patch_response.data)
         # The legacy flat {"primary"} shape is still accepted and normalized
         # into the light palette.
-        self.assertEqual(
-            patch_response.data["theme_overrides"], {"light": {"primary": "#123456"}}
-        )
+        self.assertEqual(patch_response.data["theme_overrides"], {"light": {"primary": "#123456"}})
 
         full_theme = {
             "light": {"primary": "#1D5FA8", "sidebar_top": "#15457a", "card": "#ffffff"},
@@ -1484,7 +1482,9 @@ class PlatformAiSettingsApiTests(APITestCase):
         )
         self.assertEqual(self.patch({"model": "x"}, self.staff_auth).status_code, 403)
         self.assertEqual(
-            self.client.post(reverse("platform-ai-settings-test"), {}, **self.staff_auth).status_code,
+            self.client.post(
+                reverse("platform-ai-settings-test"), {}, **self.staff_auth
+            ).status_code,
             403,
         )
 
@@ -1536,7 +1536,10 @@ class PlatformAiSettingsApiTests(APITestCase):
         with patch.object(psy_ai, "_client", return_value=client) as make:
             response = self.client.post(
                 reverse("platform-ai-settings-test"),
-                {"api_key": "typed-key-not-real", "model": "claude-opus-5-5"},  # pragma: allowlist secret
+                {
+                    "api_key": "typed-key-not-real",
+                    "model": "claude-opus-5-5",
+                },  # pragma: allowlist secret
                 format="json",
                 **self.super_auth,
             )

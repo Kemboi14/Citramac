@@ -109,7 +109,13 @@ export function FieldControl({
           <input
             id={id}
             type={
-              field.type === "datetime" ? "datetime-local" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"
+              field.type === "datetime"
+                ? "datetime-local"
+                : field.type === "number"
+                  ? "number"
+                  : field.type === "date"
+                    ? "date"
+                    : "text"
             }
             className={INPUT}
             value={text(value)}
@@ -140,7 +146,9 @@ export function FieldControl({
       )}
       {control}
       {carriedFrom && (
-        <p className="text-xs leading-5 text-brand-green-dark">✓ Pre-filled from {carriedFrom} — confirm or update</p>
+        <p className="text-xs leading-5 text-brand-green-dark">
+          ✓ Pre-filled from {carriedFrom} — confirm or update
+        </p>
       )}
       {field.hint && <p className="text-xs leading-5 text-ink-700">{field.hint}</p>}
     </div>
@@ -183,7 +191,11 @@ function PillChoices({
               className="h-[15px] w-[15px]"
               checked={on}
               onChange={(e) =>
-                onChange(e.target.checked ? [...value, option.code] : value.filter((c) => c !== option.code))
+                onChange(
+                  e.target.checked
+                    ? [...value, option.code]
+                    : value.filter((c) => c !== option.code),
+                )
               }
             />
             {option.display}

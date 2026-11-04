@@ -30,10 +30,10 @@ from .models import (
     Branch,
     Department,
     Organization,
-    PlatformBranding,
     PlatformAiSettings,
-    PlatformHieSettings,
+    PlatformBranding,
     PlatformEmailSettings,
+    PlatformHieSettings,
     PlatformSmsSettings,
     Subscription,
     SubscriptionPlan,
@@ -50,9 +50,9 @@ from .serializers import (
     OrganizationStatusSerializer,
     OrganizationThemeSerializer,
     PlatformAiSettingsSerializer,
-    PlatformHieSettingsSerializer,
     PlatformBrandingSerializer,
     PlatformEmailSettingsSerializer,
+    PlatformHieSettingsSerializer,
     PlatformSmsSettingsSerializer,
     SubscriptionPlanSerializer,
     SubscriptionPolicySerializer,
@@ -666,9 +666,7 @@ class PlatformHieCallbackRegistrationView(APIView):
                 .exclude(sha_fr_code="")
             ):
                 try:
-                    results.append(
-                        {"branch": branch.name, "results": register_callbacks(branch)}
-                    )
+                    results.append({"branch": branch.name, "results": register_callbacks(branch)})
                 except ShaError as exc:
                     results.append({"branch": branch.name, "error": exc.message})
         return Response({"branches": results})
@@ -1209,4 +1207,3 @@ class OrgDashboardStatsView(APIView):
                 "ward_occupancy": ward_breakdown,
             }
         )
-

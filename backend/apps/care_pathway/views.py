@@ -22,9 +22,22 @@ from apps.sysadmin_audit.audit import log_view
 from apps.triage.models import MentalStatusExam, VitalSigns
 from config.errors import error_response
 
-from . import ews, facility_time, instruments, tools
+from . import (
+    ews,
+    facility_time,
+    findings,
+    instruments,
+)
 from . import intake as intake_service
-from . import findings, intake_schema, services, triage_rules, triage_v4, triage_v5
+from . import (
+    intake_schema,
+    services,
+    tools,
+    triage_rules,
+    triage_v4,
+    triage_v5,
+)
+from .interventions import is_clinical_staff
 from .models import (
     PRIORITY_ORDER,
     BillingService,
@@ -35,8 +48,8 @@ from .models import (
     DischargeSummary,
     EpisodeOfCare,
     IntakeAssessment,
-    MedicationHistoryEntry,
     LocalValueSet,
+    MedicationHistoryEntry,
     OutcomeScore,
     TriageAssessment,
     TriageEncounter,
@@ -48,11 +61,10 @@ from .serializers import (
     CarePlanSerializer,
     CareTaskSerializer,
     IntakeAssessmentSerializer,
-    MedicationHistorySerializer,
     InterventionRecordSerializer,
+    MedicationHistorySerializer,
     OutcomeScoreSerializer,
 )
-from .interventions import is_clinical_staff
 from .services import EFFECTIVE_STATUS_LABELS, user_display
 
 
@@ -295,9 +307,7 @@ class DuplicateCheckView(APIView):
         )
         if data.get("exclude_patient_id"):
             matches = [
-                m
-                for m in matches
-                if m["patient"].identity_status == Patient.IDENTITY_IDENTIFIED
+                m for m in matches if m["patient"].identity_status == Patient.IDENTITY_IDENTIFIED
             ]
         return Response(
             {
@@ -394,10 +404,9 @@ class PatientMergesView(APIView):
         from apps.client_registry.models import PatientMerge
 
         patient = get_object_or_404(Patient, pk=patient_id)
-        merges = (
-            PatientMerge.objects.filter(Q(temporary=patient) | Q(surviving=patient))
-            .select_related("temporary", "surviving", "merged_by", "reversal__reversed_by")
-        )
+        merges = PatientMerge.objects.filter(
+            Q(temporary=patient) | Q(surviving=patient)
+        ).select_related("temporary", "surviving", "merged_by", "reversal__reversed_by")
         return Response({"results": [_merge_row(m, request.user) for m in merges]})
 
 
@@ -632,9 +641,7 @@ def task_owner_choices(organization_id):
     from apps.accounts.models import Role
 
     codename = "clinical.care.record"
-    staff = users_with_permission([codename], organization_id).order_by(
-        "first_name", "last_name"
-    )
+    staff = users_with_permission([codename], organization_id).order_by("first_name", "last_name")
     held = Role.objects.filter(permissions__codename=codename, users__in=staff.values("pk"))
     teams = sorted(set(held.values_list("name", flat=True)))
     people = [{"id": str(u.pk), "name": user_display(u)} for u in staff]
@@ -793,7 +800,9 @@ class PsychiatryQueueView(APIView):
                 {
                     "wait_minutes": waited,
                     "target_minutes": target,
-                    "over_target": bool(waited is not None and target is not None and waited > target),
+                    "over_target": bool(
+                        waited is not None and target is not None and waited > target
+                    ),
                     "id": str(te.id),
                     "patient_id": str(te.patient_id),
                     "name": te.patient.get_full_name(),
@@ -994,7 +1003,9 @@ class ClientAttentionView(APIView):
         from . import attention
 
         patient = _patient(patient_id)
-        return Response({"alerts": attention.active_alerts(patient), "items": attention.patient_items(patient)})
+        return Response(
+            {"alerts": attention.active_alerts(patient), "items": attention.patient_items(patient)}
+        )
 
 
 class MyTasksView(APIView):
@@ -1079,7 +1090,10 @@ class PsychotherapyAssistSettingsView(APIView):
             raise PermissionDenied("Only an Org Admin can change these settings.")
         org = request.user.organization
         changes = {}
-        for key, allowed in (("ai_enabled", org.psy_ai_allowed), ("dictation_enabled", org.psy_dictation_allowed)):
+        for key, allowed in (
+            ("ai_enabled", org.psy_ai_allowed),
+            ("dictation_enabled", org.psy_dictation_allowed),
+        ):
             if key not in request.data:
                 continue
             value = bool(request.data[key])
@@ -1100,7 +1114,14 @@ class PsychotherapyAssistSettingsView(APIView):
                 setattr(org, field, value)
             org.psy_assist_changed_by = f"{user_display(request.user)} (Org Admin)"
             org.psy_assist_changed_at = timezone.now()
-            org.save(update_fields=[*changes, "psy_assist_changed_by", "psy_assist_changed_at", "updated_at"])
+            org.save(
+                update_fields=[
+                    *changes,
+                    "psy_assist_changed_by",
+                    "psy_assist_changed_at",
+                    "updated_at",
+                ]
+            )
         return Response(self._payload(org))
 
 
@@ -1362,8 +1383,12 @@ class InstrumentsView(APIView):
     """GET care/instruments/ — served definitions (items, options, bands, approval)."""
 
     def get(self, request):
-        return Response({"results": instruments.served(), "ews": {
-            "version": ews.VERSION, "approval": ews.APPROVAL}})
+        return Response(
+            {
+                "results": instruments.served(),
+                "ews": {"version": ews.VERSION, "approval": ews.APPROVAL},
+            }
+        )
 
 
 class ClientToolsView(APIView):
@@ -1389,7 +1414,9 @@ class ClientFindingsView(APIView):
         log_view(patient)
         key = request.query_params.get("key")
         if key:
-            return Response({"results": [findings.payload(f) for f in findings.history(patient, key)]})
+            return Response(
+                {"results": [findings.payload(f) for f in findings.history(patient, key)]}
+            )
         return Response({"results": [findings.payload(f) for f in findings.current(patient)]})
 
 
@@ -1443,18 +1470,23 @@ class ClientWithdrawalView(APIView):
         from . import withdrawal
 
         patient = _patient(patient_id)
-        return Response({
-            "scales": withdrawal.overview(patient),
-            "recommended": withdrawal.recommended_scale(patient),
-            "substance": withdrawal.substance_display(patient),
-            "benzodiazepine": withdrawal.is_benzodiazepine(patient),
-        })
+        return Response(
+            {
+                "scales": withdrawal.overview(patient),
+                "recommended": withdrawal.recommended_scale(patient),
+                "substance": withdrawal.substance_display(patient),
+                "benzodiazepine": withdrawal.is_benzodiazepine(patient),
+            }
+        )
 
     def post(self, request, patient_id):
         from . import withdrawal
 
         attempt = withdrawal.record_attempt(
-            _patient(patient_id), request.user, request.data.get("instrument"), request.data.get("reason")
+            _patient(patient_id),
+            request.user,
+            request.data.get("instrument"),
+            request.data.get("reason"),
         )
         return Response({"id": str(attempt.pk)}, status=status.HTTP_201_CREATED)
 
@@ -1788,7 +1820,9 @@ class ClientConsentView(APIView):
             return Response({"granted": "Required."}, status=status.HTTP_400_BAD_REQUEST)
         consent_type = request.data.get("consent_type") or "DATA_SHARING_HIE"
         if consent_type not in CLIENT_CONSENT_TYPES:
-            return Response({"consent_type": "Unknown consent type."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"consent_type": "Unknown consent type."}, status=status.HTTP_400_BAD_REQUEST
+            )
         template = ConsentTemplate.objects.filter(consent_type=consent_type, active=True).first()
         if template is None:
             return Response(
@@ -2012,9 +2046,17 @@ class DischargeFhirView(APIView):
 
 
 def _proposal_row(p):
-    return {"id": str(p.pk), "source": p.source, "row": p.row, "option": p.option, "status": p.status,
-            "reason": p.reason, "created_at": _iso(p.created_at), "decided_at": _iso(p.decided_at),
-            "decided_by": user_display(p.decided_by)}
+    return {
+        "id": str(p.pk),
+        "source": p.source,
+        "row": p.row,
+        "option": p.option,
+        "status": p.status,
+        "reason": p.reason,
+        "created_at": _iso(p.created_at),
+        "decided_at": _iso(p.decided_at),
+        "decided_by": user_display(p.decided_by),
+    }
 
 
 class ClientProposalsView(APIView):
@@ -2031,15 +2073,27 @@ class ProposalDecisionView(APIView):
         from .models import RiskProposal
 
         proposal = get_object_or_404(RiskProposal, pk=pk)
-        records.decide_proposal(proposal, request.user, request.data.get("action"), request.data.get("reason") or "")
+        records.decide_proposal(
+            proposal, request.user, request.data.get("action"), request.data.get("reason") or ""
+        )
         return Response(_proposal_row(proposal))
 
 
 def _capacity_row(a):
-    return {"id": str(a.pk), "decision": a.decision, "other_decision": a.other_decision, "understand": a.understand,
-            "retain": a.retain, "weigh": a.weigh, "communicate": a.communicate, "outcome": a.outcome,
-            "reassess_by": a.reassess_by, "note": a.note, "assessed_by": user_display(a.assessed_by),
-            "assessed_at": _iso(a.assessed_at)}
+    return {
+        "id": str(a.pk),
+        "decision": a.decision,
+        "other_decision": a.other_decision,
+        "understand": a.understand,
+        "retain": a.retain,
+        "weigh": a.weigh,
+        "communicate": a.communicate,
+        "outcome": a.outcome,
+        "reassess_by": a.reassess_by,
+        "note": a.note,
+        "assessed_by": user_display(a.assessed_by),
+        "assessed_at": _iso(a.assessed_at),
+    }
 
 
 class ClientCapacityView(APIView):
@@ -2048,10 +2102,14 @@ class ClientCapacityView(APIView):
         from .models import CapacityAssessment
 
         patient = _patient(patient_id)
-        return Response({
-            "current": [_capacity_row(a) for a in records.current_capacity(patient)],
-            "history": [_capacity_row(a) for a in CapacityAssessment.objects.filter(patient=patient)],
-        })
+        return Response(
+            {
+                "current": [_capacity_row(a) for a in records.current_capacity(patient)],
+                "history": [
+                    _capacity_row(a) for a in CapacityAssessment.objects.filter(patient=patient)
+                ],
+            }
+        )
 
     def post(self, request, patient_id):
         from . import records
@@ -2061,17 +2119,32 @@ class ClientCapacityView(APIView):
 
 
 def _consent_row(c):
-    return {"id": str(c.pk), "scope": c.scope, "party": c.party, "method": c.method,
-            "given_by_name": c.given_by_name, "warnings": c.warnings, "recorded_at": _iso(c.recorded_at),
-            "recorded_by": user_display(c.recorded_by), "completed_at": _iso(c.completed_at),
-            "open_deferred": c.party == "DEFERRED" and not c.completed_at}
+    return {
+        "id": str(c.pk),
+        "scope": c.scope,
+        "party": c.party,
+        "method": c.method,
+        "given_by_name": c.given_by_name,
+        "warnings": c.warnings,
+        "recorded_at": _iso(c.recorded_at),
+        "recorded_by": user_display(c.recorded_by),
+        "completed_at": _iso(c.completed_at),
+        "open_deferred": c.party == "DEFERRED" and not c.completed_at,
+    }
 
 
 class ClientVisitConsentView(APIView):
     def get(self, request, patient_id):
         from .models import VisitConsent
 
-        return Response({"results": [_consent_row(c) for c in VisitConsent.objects.filter(patient=_patient(patient_id))]})
+        return Response(
+            {
+                "results": [
+                    _consent_row(c)
+                    for c in VisitConsent.objects.filter(patient=_patient(patient_id))
+                ]
+            }
+        )
 
     def post(self, request, patient_id):
         from . import records
@@ -2085,20 +2158,37 @@ class VisitConsentCompleteView(APIView):
         from . import records
         from .models import VisitConsent
 
-        return Response(_consent_row(records.complete_deferred(get_object_or_404(VisitConsent, pk=pk), request.user)))
+        return Response(
+            _consent_row(
+                records.complete_deferred(get_object_or_404(VisitConsent, pk=pk), request.user)
+            )
+        )
 
 
 def _note_row(n):
-    return {"id": str(n.pk), "note_type": n.note_type, "text": n.text, "status": n.status,
-            "amends": str(n.amends_id) if n.amends_id else None, "author": user_display(n.author),
-            "created_at": _iso(n.created_at), "signed_at": _iso(n.signed_at)}
+    return {
+        "id": str(n.pk),
+        "note_type": n.note_type,
+        "text": n.text,
+        "status": n.status,
+        "amends": str(n.amends_id) if n.amends_id else None,
+        "author": user_display(n.author),
+        "created_at": _iso(n.created_at),
+        "signed_at": _iso(n.signed_at),
+    }
 
 
 class ClientNotesView(APIView):
     def get(self, request, patient_id):
         from .models import ProgressNote
 
-        return Response({"results": [_note_row(n) for n in ProgressNote.objects.filter(patient=_patient(patient_id))]})
+        return Response(
+            {
+                "results": [
+                    _note_row(n) for n in ProgressNote.objects.filter(patient=_patient(patient_id))
+                ]
+            }
+        )
 
     def post(self, request, patient_id):
         from . import records
@@ -2106,8 +2196,13 @@ class ClientNotesView(APIView):
 
         data = dict(request.data)
         if request.data.get("amends"):
-            data["amends"] = get_object_or_404(ProgressNote, pk=request.data["amends"], status="SIGNED")
-        return Response(_note_row(records.save_note(_patient(patient_id), request.user, data)), status=status.HTTP_201_CREATED)
+            data["amends"] = get_object_or_404(
+                ProgressNote, pk=request.data["amends"], status="SIGNED"
+            )
+        return Response(
+            _note_row(records.save_note(_patient(patient_id), request.user, data)),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class NoteView(APIView):
@@ -2118,13 +2213,17 @@ class NoteView(APIView):
         note = get_object_or_404(ProgressNote, pk=pk)
         if note.status == "DRAFT" and note.author_id != request.user.id:
             raise PermissionDenied("Only the author can edit a draft.")
-        return Response(_note_row(records.save_note(note.patient, request.user, request.data, note)))
+        return Response(
+            _note_row(records.save_note(note.patient, request.user, request.data, note))
+        )
 
     def post(self, request, pk):
         from . import records
         from .models import ProgressNote
 
-        return Response(_note_row(records.sign_note(get_object_or_404(ProgressNote, pk=pk), request.user)))
+        return Response(
+            _note_row(records.sign_note(get_object_or_404(ProgressNote, pk=pk), request.user))
+        )
 
 
 class ClientEpisodeOutcomeView(APIView):
@@ -2132,24 +2231,45 @@ class ClientEpisodeOutcomeView(APIView):
         from .models import EpisodeOutcome
 
         rows = EpisodeOutcome.objects.filter(patient=_patient(patient_id)).order_by("-recorded_at")
-        return Response({"results": [
-            {"episode": str(o.episode_id), "outcome": o.outcome, "destination": o.destination,
-             "reason": o.reason, "recorded_at": _iso(o.recorded_at), "by": user_display(o.recorded_by)} for o in rows]})
+        return Response(
+            {
+                "results": [
+                    {
+                        "episode": str(o.episode_id),
+                        "outcome": o.outcome,
+                        "destination": o.destination,
+                        "reason": o.reason,
+                        "recorded_at": _iso(o.recorded_at),
+                        "by": user_display(o.recorded_by),
+                    }
+                    for o in rows
+                ]
+            }
+        )
 
     def post(self, request, patient_id):
         from . import records
 
         d = request.data
-        o = records.close_episode(_patient(patient_id), request.user, d.get("outcome"),
-                                  d.get("destination") or "", d.get("reason") or "")
-        return Response({"episode": str(o.episode_id), "outcome": o.outcome}, status=status.HTTP_201_CREATED)
+        o = records.close_episode(
+            _patient(patient_id),
+            request.user,
+            d.get("outcome"),
+            d.get("destination") or "",
+            d.get("reason") or "",
+        )
+        return Response(
+            {"episode": str(o.episode_id), "outcome": o.outcome}, status=status.HTTP_201_CREATED
+        )
 
 
 class ClientNewEpisodeView(APIView):
     def post(self, request, patient_id):
         from . import records
 
-        ep = records.start_new_episode(_patient(patient_id), request.user, request.data.get("presenting") or "")
+        ep = records.start_new_episode(
+            _patient(patient_id), request.user, request.data.get("presenting") or ""
+        )
         return Response({"episode": str(ep.pk)}, status=status.HTTP_201_CREATED)
 
 
@@ -2179,7 +2299,9 @@ class ClientTherapySessionView(APIView):
     def post(self, request, patient_id):
         from . import therapy
 
-        s = therapy.record_session(_patient(patient_id), request.user, request.data.get("episode"), request.data)
+        s = therapy.record_session(
+            _patient(patient_id), request.user, request.data.get("episode"), request.data
+        )
         return Response({"id": str(s.pk)}, status=status.HTTP_201_CREATED)
 
 
@@ -2188,14 +2310,32 @@ class ClientOatView(APIView):
         from .models import NaloxoneSupply, OatEnrolment
 
         patient = _patient(patient_id)
-        return Response({
-            "enrolments": [{"id": str(o.pk), "medicine": o.medicine, "clinic": o.clinic, "status": o.status,
-                            "prescribed_dose": o.prescribed_dose, "supervised_dispensing": o.supervised_dispensing,
-                            "status_reason": o.status_reason} for o in OatEnrolment.objects.filter(patient=patient)],
-            "naloxone": [{"id": str(n.pk), "outcome": n.outcome, "quantity": n.quantity,
-                          "training_given": n.training_given, "at": _iso(n.given_at)}
-                         for n in NaloxoneSupply.objects.filter(patient=patient)],
-        })
+        return Response(
+            {
+                "enrolments": [
+                    {
+                        "id": str(o.pk),
+                        "medicine": o.medicine,
+                        "clinic": o.clinic,
+                        "status": o.status,
+                        "prescribed_dose": o.prescribed_dose,
+                        "supervised_dispensing": o.supervised_dispensing,
+                        "status_reason": o.status_reason,
+                    }
+                    for o in OatEnrolment.objects.filter(patient=patient)
+                ],
+                "naloxone": [
+                    {
+                        "id": str(n.pk),
+                        "outcome": n.outcome,
+                        "quantity": n.quantity,
+                        "training_given": n.training_given,
+                        "at": _iso(n.given_at),
+                    }
+                    for n in NaloxoneSupply.objects.filter(patient=patient)
+                ],
+            }
+        )
 
     def post(self, request, patient_id):
         from . import oat
@@ -2210,8 +2350,14 @@ class OatStatusView(APIView):
         from .models import OatEnrolment
 
         d = request.data
-        e = oat.update_status(get_object_or_404(OatEnrolment, pk=pk), request.user, d.get("status"),
-                              d.get("dose") or "", d.get("reason") or "", d.get("supervised_dispensing"))
+        e = oat.update_status(
+            get_object_or_404(OatEnrolment, pk=pk),
+            request.user,
+            d.get("status"),
+            d.get("dose") or "",
+            d.get("reason") or "",
+            d.get("supervised_dispensing"),
+        )
         return Response({"id": str(e.pk), "status": e.status})
 
 
@@ -2220,7 +2366,13 @@ class ClientNaloxoneView(APIView):
         from . import oat
 
         d = request.data
-        n = oat.record_naloxone(_patient(patient_id), request.user, d.get("outcome"), d.get("quantity"), d.get("training_given"))
+        n = oat.record_naloxone(
+            _patient(patient_id),
+            request.user,
+            d.get("outcome"),
+            d.get("quantity"),
+            d.get("training_given"),
+        )
         return Response({"id": str(n.pk)}, status=status.HTTP_201_CREATED)
 
 
@@ -2250,7 +2402,9 @@ class ClientLabsView(APIView):
     def post(self, request, patient_id):
         from . import labs
 
-        orders = labs.place_orders(_patient(patient_id), request.user, request.data.get("codes") or [])
+        orders = labs.place_orders(
+            _patient(patient_id), request.user, request.data.get("codes") or []
+        )
         return Response({"orders": [str(o.pk) for o in orders]}, status=status.HTTP_201_CREATED)
 
 
@@ -2260,7 +2414,9 @@ class LabAcknowledgeView(APIView):
 
         from . import labs
 
-        labs.acknowledge(get_object_or_404(LabResult, pk=pk), request.user, request.data.get("note") or "")
+        labs.acknowledge(
+            get_object_or_404(LabResult, pk=pk), request.user, request.data.get("note") or ""
+        )
         return Response({"acknowledged": True})
 
 
@@ -2270,16 +2426,33 @@ class ClientLegalFormsView(APIView):
         from .models import LegalForm
 
         rows = LegalForm.objects.filter(patient=_patient(patient_id))
-        return Response({
-            "catalogue": [{"key": f["key"], "title": f["title"]} for f in legal_forms.catalogue()],
-            "results": [{"id": str(f.pk), "form_key": f.form_key, "status": f.status,
-                         "signed_at": _iso(f.signed_at), "signed_by": user_display(f.signed_by)} for f in rows],
-        })
+        return Response(
+            {
+                "catalogue": [
+                    {"key": f["key"], "title": f["title"]} for f in legal_forms.catalogue()
+                ],
+                "results": [
+                    {
+                        "id": str(f.pk),
+                        "form_key": f.form_key,
+                        "status": f.status,
+                        "signed_at": _iso(f.signed_at),
+                        "signed_by": user_display(f.signed_by),
+                    }
+                    for f in rows
+                ],
+            }
+        )
 
     def post(self, request, patient_id):
         from . import legal_forms
 
-        f = legal_forms.prepare(_patient(patient_id), request.user, request.data.get("form_key"), request.data.get("content"))
+        f = legal_forms.prepare(
+            _patient(patient_id),
+            request.user,
+            request.data.get("form_key"),
+            request.data.get("content"),
+        )
         return Response({"id": str(f.pk)}, status=status.HTTP_201_CREATED)
 
 

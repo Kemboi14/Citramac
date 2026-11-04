@@ -284,7 +284,9 @@ export function QuickRecheck({
               </label>
               <SelectChoices
                 id="recheck-acvpu"
-                options={vs.options("triage-v4-acvpu").filter((o) => "ACVPU".includes(o.code) && o.code.length === 1)}
+                options={vs
+                  .options("triage-v4-acvpu")
+                  .filter((o) => "ACVPU".includes(o.code) && o.code.length === 1)}
                 placeholder="— not recorded —"
                 value={acvpu}
                 onChange={(value) => {

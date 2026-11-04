@@ -43,7 +43,9 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="mt-4 font-display text-[28px] font-bold leading-none text-ink-900">{value}</div>
+      <div className="mt-4 font-display text-[28px] font-bold leading-none text-ink-900">
+        {value}
+      </div>
       <div className="mt-1.5 text-[12.5px] font-medium text-ink-500">{label}</div>
     </div>
   );

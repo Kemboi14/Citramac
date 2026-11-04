@@ -109,8 +109,7 @@ export function RolesWorkspace({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return roles.filter(
-      (r) =>
-        !q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q),
+      (r) => !q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q),
     );
   }, [roles, query]);
 
@@ -274,8 +273,7 @@ function RoleDetail({
   const locked = role.is_locked;
   const editable = !locked && role.is_active;
   const saved = new Set(role.permissions);
-  const permissionsDirty =
-    saved.size !== draft.size || [...draft].some((id) => !saved.has(id));
+  const permissionsDirty = saved.size !== draft.size || [...draft].some((id) => !saved.has(id));
   const detailsDirty = name.trim() !== role.name || description.trim() !== role.description;
   const dirty = editable && (permissionsDirty || detailsDirty);
 
@@ -317,7 +315,9 @@ function RoleDetail({
       );
       setConfirmRetire(false);
     } catch (err) {
-      setError(errorText(err, active ? "Couldn't reactivate this role." : "Couldn't retire this role."));
+      setError(
+        errorText(err, active ? "Couldn't reactivate this role." : "Couldn't retire this role."),
+      );
     } finally {
       setBusy(false);
     }
@@ -389,9 +389,8 @@ function RoleDetail({
         )}
         {mode === "platform" && !locked && (
           <Callout tone="info" label="Not yet in use" className="mb-4">
-            Only Super Admin can open the platform console today. These permissions record what
-            this role is for and take effect once console access for platform-team roles is
-            switched on.
+            Only Super Admin can open the platform console today. These permissions record what this
+            role is for and take effect once console access for platform-team roles is switched on.
           </Callout>
         )}
 
@@ -477,9 +476,7 @@ function RoleDetail({
 
       <section className="rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-display text-base font-semibold text-ink-900">
-            Who holds this role
-          </h3>
+          <h3 className="font-display text-base font-semibold text-ink-900">Who holds this role</h3>
           {mode === "organisation" && (
             <span className="text-xs text-ink-500">
               Give or take away roles in Staff &amp; MHP Team, per branch.
@@ -651,7 +648,11 @@ function NewRoleDrawer({
         </label>
         <label className={LABEL_CLASS}>
           Start from
-          <select className={FIELD_CLASS} value={source} onChange={(e) => setSource(e.target.value)}>
+          <select
+            className={FIELD_CLASS}
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+          >
             <option value="">No permissions — choose them after</option>
             {copyable.map((r) => (
               <option key={r.id} value={r.id}>

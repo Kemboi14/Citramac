@@ -529,8 +529,10 @@ class EntrySerializer(serializers.Serializer):
             if len(data["risk_override_reason"]) < RISK_OVERRIDE_MIN:
                 words = ", ".join(sorted({f["matched"] for f in data["risk_detected"]}))
                 raise serializers.ValidationError(
-                    {"risk_disclosure": f"Possible risk language detected ({words}). Mark it as a "
-                     "risk disclosure, or give the reason it is not one."}
+                    {
+                        "risk_disclosure": f"Possible risk language detected ({words}). Mark it as a "
+                        "risk disclosure, or give the reason it is not one."
+                    }
                 )
         else:
             data["risk_override_reason"] = ""
@@ -627,15 +629,22 @@ def screen_entries(rows):
     if not isinstance(rows, list):
         raise ValidationError({"entries": "Send the entries to screen."})
     return [
-        {"patient": str(row.get("patient", "")), "flags": screen_observation(row.get("observation", ""))}
-        for row in rows if isinstance(row, dict)
+        {
+            "patient": str(row.get("patient", "")),
+            "flags": screen_observation(row.get("observation", "")),
+        }
+        for row in rows
+        if isinstance(row, dict)
     ]
 
 
 def _raise_risk_alert(user, entry):
     entry.risk_alert = ClinicalAlert.objects.create(
-        organization_id=entry.organization_id, patient=entry.patient,
-        alert_code=RISK_ALERT_CODE, label=RISK_ALERT_LABEL, raised_by=user,
+        organization_id=entry.organization_id,
+        patient=entry.patient,
+        alert_code=RISK_ALERT_CODE,
+        label=RISK_ALERT_LABEL,
+        raised_by=user,
     )
 
 

@@ -32,8 +32,12 @@ class InterventionVoidView(APIView):
     def post(self, request, pk):
         record = get_object_or_404(InterventionRecord, pk=pk)
         if record.provider_id != request.user.id and not _is_org_admin(request.user):
-            raise PermissionDenied("Only the recording clinician or an Org Admin can correct this record.")
-        record = intervention_catalogue.correct_record(request.user, record, request.data.get("reason"))
+            raise PermissionDenied(
+                "Only the recording clinician or an Org Admin can correct this record."
+            )
+        record = intervention_catalogue.correct_record(
+            request.user, record, request.data.get("reason")
+        )
         return Response(InterventionRecordSerializer(record).data)
 
 
@@ -50,14 +54,21 @@ class ObservationStateView(APIView):
 class ObservationLevelView(APIView):
     def post(self, request, patient_id):
         patient = _patient(patient_id)
-        iv.set_observation_level(patient, request.user, request.data.get("level"), request.data.get("reason"))
+        iv.set_observation_level(
+            patient, request.user, request.data.get("level"), request.data.get("reason")
+        )
         return Response(iv.observation_state(patient), status=status.HTTP_201_CREATED)
 
 
 class ObserverHandoverView(APIView):
     def post(self, request, patient_id):
         patient = _patient(patient_id)
-        iv.hand_over_observer(patient, request.user, request.data.get("observer_name"), request.data.get("observer_gender", ""))
+        iv.hand_over_observer(
+            patient,
+            request.user,
+            request.data.get("observer_name"),
+            request.data.get("observer_gender", ""),
+        )
         return Response(iv.observation_state(patient), status=status.HTTP_201_CREATED)
 
 
@@ -65,7 +76,9 @@ class ObservationEntryView(APIView):
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         d = request.data
-        iv.add_observation_entry(patient, request.user, d.get("location"), d.get("engagement", ""), d.get("note", ""))
+        iv.add_observation_entry(
+            patient, request.user, d.get("location"), d.get("engagement", ""), d.get("note", "")
+        )
         return Response(iv.observation_state(patient), status=status.HTTP_201_CREATED)
 
 
@@ -123,9 +136,14 @@ class MarAdministerView(APIView):
         entry = get_object_or_404(MedicationAdministration, pk=pk)
         d = request.data
         iv.record_administration(
-            entry, request.user, d.get("outcome"), notes=d.get("notes", ""),
-            indication=d.get("prn_indication", ""), witness=d.get("witness_name", ""),
-            own_supply=d.get("own_supply", False), override_reason=d.get("override_reason", ""),
+            entry,
+            request.user,
+            d.get("outcome"),
+            notes=d.get("notes", ""),
+            indication=d.get("prn_indication", ""),
+            witness=d.get("witness_name", ""),
+            own_supply=d.get("own_supply", False),
+            override_reason=d.get("override_reason", ""),
         )
         return Response(iv.mar_today(entry.admission.patient))
 
@@ -135,20 +153,27 @@ class MarOrderAdministerView(APIView):
     a dose against an order at one of today's dose times, or unscheduled."""
 
     def post(self, request, patient_id, item_id):
-        from apps.clinical_encounter.models import PrescriptionItem
 
         from . import services
 
         patient = _patient(patient_id)
         admission = services.current_admission(patient)
         if admission is None:
-            raise ValidationError({"detail": "This client is not admitted, so there is no MAR to record on."})
+            raise ValidationError(
+                {"detail": "This client is not admitted, so there is no MAR to record on."}
+            )
         item = get_object_or_404(iv.admission_orders(admission), pk=item_id)
         d = request.data
         iv.administer_order(
-            admission, item, request.user, d.get("outcome"), slot=d.get("slot") or "",
-            notes=d.get("notes", ""), indication=d.get("prn_indication", ""),
-            witness=d.get("witness_name", ""), own_supply=d.get("own_supply", False),
+            admission,
+            item,
+            request.user,
+            d.get("outcome"),
+            slot=d.get("slot") or "",
+            notes=d.get("notes", ""),
+            indication=d.get("prn_indication", ""),
+            witness=d.get("witness_name", ""),
+            own_supply=d.get("own_supply", False),
             override_reason=d.get("override_reason", ""),
         )
         return Response(iv.mar_today(patient), status=status.HTTP_201_CREATED)
@@ -162,7 +187,9 @@ class MarEffectView(APIView):
 
 
 def _episode_row(e):
-    cosign = CosignRequest.objects.filter(subject_type="RestrictivePracticeEpisode", subject_id=str(e.pk)).first()
+    cosign = CosignRequest.objects.filter(
+        subject_type="RestrictivePracticeEpisode", subject_id=str(e.pk)
+    ).first()
     return {
         "id": str(e.id),
         "kind": e.kind,
@@ -179,8 +206,13 @@ def _episode_row(e):
         "recorded_by": iv._name(e.recorded_by),
         "cosign_status": cosign.status if cosign else None,
         "checks": [
-            {"id": str(c.id), "label": c.label, "due_at": c.due_at, "done_at": c.done_at,
-             "done_by": iv._name(c.done_by)}
+            {
+                "id": str(c.id),
+                "label": c.label,
+                "due_at": c.due_at,
+                "done_at": c.done_at,
+                "done_by": iv._name(c.done_by),
+            }
             for c in e.checks.all()
         ],
     }
@@ -188,17 +220,21 @@ def _episode_row(e):
 
 class RestrictivePracticeView(APIView):
     def get(self, request, patient_id):
-        rows = RestrictivePracticeEpisode.objects.filter(patient_id=patient_id).prefetch_related("checks")
+        rows = RestrictivePracticeEpisode.objects.filter(patient_id=patient_id).prefetch_related(
+            "checks"
+        )
         from . import plan_extras
 
-        return Response({
-            "results": [_episode_row(e) for e in rows],
-            "de_escalation_options": iv.DE_ESCALATION,
-            "authorisers": [
-                {"id": str(u.pk), "name": iv._name(u), "senior": plan_extras.can_cosign(u)}
-                for u in iv.restrictive_authorisers(request.user.organization_id)
-            ],
-        })
+        return Response(
+            {
+                "results": [_episode_row(e) for e in rows],
+                "de_escalation_options": iv.DE_ESCALATION,
+                "authorisers": [
+                    {"id": str(u.pk), "name": iv._name(u), "senior": plan_extras.can_cosign(u)}
+                    for u in iv.restrictive_authorisers(request.user.organization_id)
+                ],
+            }
+        )
 
     def post(self, request, patient_id):
         episode = iv.record_restrictive_episode(_patient(patient_id), request.user, request.data)
@@ -236,4 +272,6 @@ class LabResultEntryView(APIView):
 
         order = get_object_or_404(LabOrder.objects.select_related("encounter__patient"), pk=pk)
         labs.enter_result(order, request.user, request.data)
-        return Response(labs.lab_overview(order.encounter.patient, request.user), status=status.HTTP_201_CREATED)
+        return Response(
+            labs.lab_overview(order.encounter.patient, request.user), status=status.HTTP_201_CREATED
+        )

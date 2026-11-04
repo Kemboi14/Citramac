@@ -29,7 +29,10 @@ export function SchemaSection({
   const change = (key: string, value: unknown) => {
     onChange(key, value);
     for (const dependent of spec.fields) {
-      if (dependent.show_when?.field === key && !dependent.show_when.in.includes(String(value ?? ""))) {
+      if (
+        dependent.show_when?.field === key &&
+        !dependent.show_when.in.includes(String(value ?? ""))
+      ) {
         onChange(dependent.key, undefined);
       }
     }
@@ -46,9 +49,7 @@ export function SchemaSection({
       {groups.map((group, index) => (
         <div key={`${group.name}-${index}`}>
           {group.name && (
-            <div className={`${GROUP_LABEL} text-xs leading-5 text-ink-700`}>
-              {group.name}
-            </div>
+            <div className={`${GROUP_LABEL} text-xs leading-5 text-ink-700`}>{group.name}</div>
           )}
           <div className={GRID}>
             {group.fields.map((field) => {
@@ -62,7 +63,11 @@ export function SchemaSection({
                   value={values[field.key]}
                   vs={vs}
                   onChange={(value) => change(field.key, value)}
-                  carriedFrom={source ? `${source.stage ?? "an earlier step"}${source.version ? ` v${source.version}` : ""}` : undefined}
+                  carriedFrom={
+                    source
+                      ? `${source.stage ?? "an earlier step"}${source.version ? ` v${source.version}` : ""}`
+                      : undefined
+                  }
                 />
               );
             })}

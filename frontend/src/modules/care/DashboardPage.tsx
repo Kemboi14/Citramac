@@ -242,11 +242,7 @@ export function DashboardPage() {
         >
           {refreshing ? "Refreshing…" : "Refresh"}
         </button>
-        <button
-          type="button"
-          className={BTN}
-          onClick={() => navigate("/clinical/registration")}
-        >
+        <button type="button" className={BTN} onClick={() => navigate("/clinical/registration")}>
           + New Registration
         </button>
       </DashboardWelcome>

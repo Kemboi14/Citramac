@@ -47,9 +47,7 @@ def current_draft(patient):
 
 def _latest_signed_triage(patient):
     return (
-        TriageAssessment.objects.filter(
-            triage_encounter__patient=patient, status="COMPLETED"
-        )
+        TriageAssessment.objects.filter(triage_encounter__patient=patient, status="COMPLETED")
         .order_by("-signed_at")
         .first()
     )
@@ -120,7 +118,9 @@ def triage_risk_items(answers):
         add("neglect", "Exploitation/vulnerability concern")
     if answers.get("j_concern") == "yes":
         add("neglect", "Difficulty with self-care")
-    if answers.get("h_concern") == "yes" or [f for f in answers.get("h_flags") or [] if f != "other"]:
+    if answers.get("h_concern") == "yes" or [
+        f for f in answers.get("h_flags") or [] if f != "other"
+    ]:
         add("medical", "Concern identified")
     # v5 (the triage spec) uses the v3 keys above, plus the duty-to-protect step.
     if answers.get("e_named") == "yes":
@@ -129,8 +129,14 @@ def triage_risk_items(answers):
 
 
 V4_MEDICAL_FLAGS = {
-    "altered_consciousness", "head_injury", "seizure", "catatonia", "nms_serotonin",
-    "major_medical", "lithium_toxicity", "clozapine",
+    "altered_consciousness",
+    "head_injury",
+    "seizure",
+    "catatonia",
+    "nms_serotonin",
+    "major_medical",
+    "lithium_toxicity",
+    "clozapine",
 }
 
 
@@ -150,7 +156,10 @@ def _triage_v4_risk_items(answers, add, items):
         if answers.get("r_harm_others") == "attempted":
             add("violence", "Recent violence")
         if set(answers.get("r_medical") or []) & {
-            "seizures", "loss_consciousness", "serious_injury", "acute_medical"
+            "seizures",
+            "loss_consciousness",
+            "serious_injury",
+            "acute_medical",
         }:
             add("medical", "Concern identified")
         return items
@@ -213,7 +222,9 @@ def _fresh_sections(patient):
             sections["risk"]["rows"].setdefault(row, []).append(option)
             sections["risk"]["carried"][f"{row}:{option}"] = {**provenance, "confirmed": False}
         informant = signed.answers.get("b_informant")
-        sections["hdr"]["sources"] = ["CLIENT"] if informant in (None, "", "client") else ["FAMILY_OTHER"]
+        sections["hdr"]["sources"] = (
+            ["CLIENT"] if informant in (None, "", "client") else ["FAMILY_OTHER"]
+        )
     if patient.referral_source and patient.referral_source != "Self-presented":
         sections["pres"]["referral_source"] = patient.referral_source
     return sections, state
@@ -279,7 +290,9 @@ def _validate_substances(cards):
     if len(set(picked)) != len(picked):
         raise ValidationError({"subs": "Each substance has one card."})
     known = set(
-        LocalConcept.objects.filter(valueset_id="intake-substance-rows").values_list("code", flat=True)
+        LocalConcept.objects.filter(valueset_id="intake-substance-rows").values_list(
+            "code", flat=True
+        )
     )
     unknown = [code for code in picked if code not in known]
     if unknown:
@@ -327,8 +340,14 @@ def save_draft(draft, user, data):
     _validate_payload(sections, section_state)
     for key, value in section_state.items():
         # A required section cannot be set aside (a state stored before this rule is left as it is).
-        if value == "Not applicable" and key in schema.REQUIRED_SECTIONS and draft.section_state.get(key) != value:
-            raise ValidationError({"section_state": f"Section “{key}” is required — it cannot be set aside."})
+        if (
+            value == "Not applicable"
+            and key in schema.REQUIRED_SECTIONS
+            and draft.section_state.get(key) != value
+        ):
+            raise ValidationError(
+                {"section_state": f"Section “{key}” is required — it cannot be set aside."}
+            )
     previous_risk = copy.deepcopy(draft.sections.get("risk", {}))
     sign_formulation = _pop_formulation_signature(sections.get("risk"), previous_risk)
     merged = copy.deepcopy(draft.sections)
@@ -377,7 +396,9 @@ def _apply_formulation_signature(risk, user, sign):
         return
     if any(not str(risk.get(key, "")).strip() for key in FORMULATION_REQUIRED):
         raise ValidationError(
-            {"risk": "Complete static, dynamic, protective, next 24–72 h and the summary before signing."}
+            {
+                "risk": "Complete static, dynamic, protective, next 24–72 h and the summary before signing."
+            }
         )
     risk["formulation_signed_at"] = timezone.now().isoformat()
     risk["formulation_signed_by"] = _user_name(user)
@@ -497,7 +518,6 @@ def risk_rows_active(sections):
 def outstanding_items(draft):
     """Required items still missing for a COMPLETE signature (mockup intakeMissing)."""
     s = draft.sections
-    state = draft.section_state
     patient = draft.patient
     missing = []
     if not str(s.get("pres", {}).get("own", "")).strip():
@@ -530,22 +550,23 @@ def outstanding_items(draft):
 
     # A diagnosis is always an ICD-11 coded record (CLAUDE.md §5: no coded
     # clinical concept as free text); the Diagnosis tab writes it.
-    if not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE").exclude(
-        verification_status="RULED_OUT"
-    ).exists():
+    if (
+        not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
+        .exclude(verification_status="RULED_OUT")
+        .exists()
+    ):
         missing.append("Section 19 At least one coded working diagnosis (provisional is fine)")
     undecided = tools.recommended_undecided(patient)
     if undecided:
         missing.append(
-            "Section 20 Accept or decline recommended tools: " + ", ".join(t["key"] for t in undecided)
+            "Section 20 Accept or decline recommended tools: "
+            + ", ".join(t["key"] for t in undecided)
         )
     return missing
 
 
 def section_overview(draft):
-    return {
-        key: draft.section_state.get(key, "Not started") for key in schema.SECTION_KEYS
-    }
+    return {key: draft.section_state.get(key, "Not started") for key in schema.SECTION_KEYS}
 
 
 @transaction.atomic
@@ -566,7 +587,9 @@ def sign_intake(draft, user, completeness, data=None):
         )
     if completeness != "COMPLETE":
         if not str(close.get("reason_incomplete", "")).strip():
-            raise ValidationError({"reason_incomplete": "Give the reason the intake is incomplete."})
+            raise ValidationError(
+                {"reason_incomplete": "Give the reason the intake is incomplete."}
+            )
         if not str(close.get("message", "")).strip():
             raise ValidationError(
                 {"message": "Write a handover message so the next clinician can continue."}
@@ -645,7 +668,12 @@ def _review_carried_findings(draft, user):
         gone = [option for option, entry in entries if entry.get("not_present")]
         if len(gone) == len(entries):
             findings.review(
-                draft.patient, key, user, action="UPDATED", stage="INTAKE", status="ABSENT",
+                draft.patient,
+                key,
+                user,
+                action="UPDATED",
+                stage="INTAKE",
+                status="ABSENT",
                 note="Not present now at intake: " + ", ".join(gone),
             )
         else:

@@ -16,7 +16,8 @@ export function WithdrawalTrend({ scale, max }: { scale: WithdrawalScale; max: n
   if (!points.length) return null;
   const plotH = H - PAD_TOP - PAD_BOTTOM;
   const y = (v: number) => PAD_TOP + plotH - (Math.min(v, max) / max) * plotH;
-  const x = (i: number) => (points.length === 1 ? W / 2 : PAD_X + (i * (W - 2 * PAD_X)) / (points.length - 1));
+  const x = (i: number) =>
+    points.length === 1 ? W / 2 : PAD_X + (i * (W - 2 * PAD_X)) / (points.length - 1);
   const threshold = scale.prnThreshold;
   const label = `${scale.name} scores over time: ${points.map((p) => p.score).join(", ")}.${threshold != null ? ` PRN threshold ${threshold}.` : ""}`;
   return (
@@ -24,7 +25,15 @@ export function WithdrawalTrend({ scale, max }: { scale: WithdrawalScale; max: n
       <line x1={0} x2={W} y1={y(0)} y2={y(0)} stroke="var(--ink-300)" strokeWidth={1} />
       {threshold != null && (
         <g>
-          <line x1={0} x2={W} y1={y(threshold)} y2={y(threshold)} stroke="var(--pri-red)" strokeWidth={1.5} strokeDasharray="5 4" />
+          <line
+            x1={0}
+            x2={W}
+            y1={y(threshold)}
+            y2={y(threshold)}
+            stroke="var(--pri-red)"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+          />
           <text x={W - 4} y={y(threshold) - 5} textAnchor="end" fontSize={11} fill="var(--ink-700)">
             PRN threshold {threshold}
           </text>
@@ -44,9 +53,24 @@ export function WithdrawalTrend({ scale, max }: { scale: WithdrawalScale; max: n
           <circle cx={x(i)} cy={y(p.score)} r={10} fill="transparent">
             <title>{`${p.score} — ${formatDateTime(p.at)}`}</title>
           </circle>
-          <circle cx={x(i)} cy={y(p.score)} r={4} fill="var(--chart-1)" stroke="var(--card)" strokeWidth={2} pointerEvents="none" />
+          <circle
+            cx={x(i)}
+            cy={y(p.score)}
+            r={4}
+            fill="var(--chart-1)"
+            stroke="var(--card)"
+            strokeWidth={2}
+            pointerEvents="none"
+          />
           {(i === points.length - 1 || points.length <= 8) && (
-            <text x={x(i)} y={y(p.score) - 9} textAnchor="middle" fontSize={11} fill="var(--ink-900)" pointerEvents="none">
+            <text
+              x={x(i)}
+              y={y(p.score) - 9}
+              textAnchor="middle"
+              fontSize={11}
+              fill="var(--ink-900)"
+              pointerEvents="none"
+            >
               {p.score}
             </text>
           )}

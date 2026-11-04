@@ -22,8 +22,8 @@ from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.models import Organization
 
-from .export import build_patient_export
 from . import breach_reports
+from .export import build_patient_export
 from .models import (
     SECOND_SCHEDULE_CATEGORIES,
     BreachIncident,
@@ -431,7 +431,9 @@ class BreachIncidentEventView(APIView):
                 occurred_at=occurred_at,
                 recorded_by=request.user,
             )
-            return Response(_incident_payload(incident, detail=True), status=status.HTTP_201_CREATED)
+            return Response(
+                _incident_payload(incident, detail=True), status=status.HTTP_201_CREATED
+            )
 
 
 class BreachReportView(APIView):
@@ -452,7 +454,9 @@ class BreachRegisterView(APIView):
     def get(self, request):
         user = request.user
         if user.is_superuser:
-            organization = get_object_or_404(Organization, pk=request.query_params.get("organization"))
+            organization = get_object_or_404(
+                Organization, pk=request.query_params.get("organization")
+            )
         else:
             _require_org_admin(user)
             organization = user.organization
@@ -477,12 +481,16 @@ class BreachOptionsView(APIView):
                 "schedule_categories": [
                     {"code": c, "label": label} for c, label in SECOND_SCHEDULE_CATEGORIES
                 ],
-                "causes": [{"code": c, "label": label} for c, label in BreachIncident.CAUSE_CHOICES],
+                "causes": [
+                    {"code": c, "label": label} for c, label in BreachIncident.CAUSE_CHOICES
+                ],
                 "subjects_exemptions": [
                     {"code": c, "label": label}
                     for c, label in BreachIncident.SUBJECTS_EXEMPTION_CHOICES
                 ],
-                "report_kinds": [{"code": c, "label": label} for c, label in breach_reports.KINDS.items()],
+                "report_kinds": [
+                    {"code": c, "label": label} for c, label in breach_reports.KINDS.items()
+                ],
             }
         )
 
@@ -550,6 +558,7 @@ class SubjectRequestsView(APIView):
             logged_by=request.user,
         )
         return Response(_request_payload(dsr), status=status.HTTP_201_CREATED)
+
 
 class SubjectRequestDecisionView(APIView):
     """POST {decision: APPROVE|DECLINE|FULFIL, identity_verification, notes}."""

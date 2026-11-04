@@ -412,7 +412,8 @@ class LoginSecurityTests(APITestCase):
         with patch.object(cache, "set", wraps=cache.set) as mock_set:
             for _ in range(2):
                 self.client.post(
-                    reverse("auth-login"), {"email": "jane@org-x.test", "password": "wrong-password"}
+                    reverse("auth-login"),
+                    {"email": "jane@org-x.test", "password": "wrong-password"},
                 )
         locked_response = self.client.post(
             reverse("auth-login"), {"email": "jane@org-x.test", "password": "Correct!Horse99"}
@@ -606,7 +607,10 @@ class DeactivationLoginTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org-deactivation", facility_type="CLINIC", status=Organization.STATUS_ACTIVE
+                name="Org",
+                slug="org-deactivation",
+                facility_type="CLINIC",
+                status=Organization.STATUS_ACTIVE,
             )
 
     def _make_user(self, **kwargs):
@@ -706,7 +710,7 @@ class DeactivationLoginTests(APITestCase):
             branch = Branch.objects.create(
                 organization=self.org, name="Main Branch", facility_level="L4"
             )
-        user = self._make_user(primary_branch=branch, mfa_enabled=True)
+        self._make_user(primary_branch=branch, mfa_enabled=True)
 
         login_response = self.client.post(
             reverse("auth-login"),
@@ -744,7 +748,10 @@ class MidSessionDeactivationTests(APITestCase):
         self.addCleanup(clear_tenant_context)
         with platform_admin_context():
             self.org = Organization.objects.create(
-                name="Org", slug="org-midsession", facility_type="CLINIC", status=Organization.STATUS_ACTIVE
+                name="Org",
+                slug="org-midsession",
+                facility_type="CLINIC",
+                status=Organization.STATUS_ACTIVE,
             )
             self.user = User.objects.create_user(
                 email="staff@org-midsession.test",
@@ -1254,15 +1261,28 @@ class RolesAndStaffConsoleApiTests(APITestCase):
                     "codename", flat=True
                 )
             )
-            psychiatrist, therapist, clerk = held("Psychiatrist"), held("Therapist"), held("Billing Clerk")
+            psychiatrist, therapist, clerk = (
+                held("Psychiatrist"),
+                held("Therapist"),
+                held("Billing Clerk"),
+            )
             org_admin = held("Org Admin")
         self.assertTrue(
-            {"clinical.medication.prescribe", "clinical.cosign", "clinical.care.record",
-             "clinical.restricted_content.view", "documents.senior"} <= psychiatrist
+            {
+                "clinical.medication.prescribe",
+                "clinical.cosign",
+                "clinical.care.record",
+                "clinical.restricted_content.view",
+                "documents.senior",
+            }
+            <= psychiatrist
         )
         self.assertNotIn("clinical.medication.prescribe", therapist)
         self.assertIn("clinical.restricted_content.view", therapist)
-        self.assertEqual(clerk & {"finance.manage", "documents.financial"}, {"finance.manage", "documents.financial"})
+        self.assertEqual(
+            clerk & {"finance.manage", "documents.financial"},
+            {"finance.manage", "documents.financial"},
+        )
         self.assertFalse([c for c in org_admin if c.startswith("platform.")])
 
     def test_staff_invite_creates_inactive_user_with_role_and_activation_invite(self):
@@ -1880,10 +1900,13 @@ class RolesAndStaffConsoleApiTests(APITestCase):
 
         from apps.notifications.models import NotificationDelivery
 
-        with mock.patch(
-            "apps.notifications.tasks.deliver_notification.apply_async",
-            side_effect=ConnectionError("broker down"),
-        ), self.captureOnCommitCallbacks(execute=True):
+        with (
+            mock.patch(
+                "apps.notifications.tasks.deliver_notification.apply_async",
+                side_effect=ConnectionError("broker down"),
+            ),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
             response = self.client.post(
                 reverse("staff-list"),
                 {
@@ -1965,7 +1988,9 @@ class RolesAndStaffConsoleApiTests(APITestCase):
             self.assertEqual(list(staff.roles.values_list("name", flat=True)), ["Billing Admin"])
 
         org_admin_refused = self.client.post(
-            url, {"role": billing.id}, format="json",
+            url,
+            {"role": billing.id},
+            format="json",
             HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
         )
         self.assertEqual(org_admin_refused.status_code, 403)
@@ -2288,7 +2313,10 @@ class SecurityPolicyEnforcementTests(APITestCase):
         self.assertEqual(token["branch_ids"], [str(branch.id)])
 
     def test_nth_plus_one_login_evicts_oldest_session(self):
-        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
         from rest_framework_simplejwt.tokens import RefreshToken
 
         policy = SecurityPolicy.get_solo()

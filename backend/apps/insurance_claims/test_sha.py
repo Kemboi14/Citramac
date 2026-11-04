@@ -38,25 +38,43 @@ class ShaFixture(APITestCase):
                 name="Org", slug=f"sha-{uuid.uuid4().hex[:6]}", facility_type="MENTAL_HEALTH_MHP"
             )
             self.branch = Branch.objects.create(
-                organization=self.org, name="Main", facility_level="L4",
-                sha_claims_enabled=True, sha_fr_code=FR,
+                organization=self.org,
+                name="Main",
+                facility_level="L4",
+                sha_claims_enabled=True,
+                sha_fr_code=FR,
             )
             self.finance = User.objects.create_user(
-                email=f"fin-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True, first_name="Finance", last_name="Clerk",
+                email=f"fin-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name="Finance",
+                last_name="Clerk",
             )
             self.finance.roles.add(Role.objects.get(name="Billing Clerk", organization=None))
             self.patient = Patient.objects.create(
-                organization=self.org, first_name="Amina", last_name="Kamau", gender="FEMALE",
-                date_of_birth="1992-03-14", payer="SHA",
+                organization=self.org,
+                first_name="Amina",
+                last_name="Kamau",
+                gender="FEMALE",
+                date_of_birth="1992-03-14",
+                payer="SHA",
             )
             PatientIdentifier.objects.create(
-                organization=self.org, patient=self.patient, kind="CLIENT_REGISTRY_ID", value=CR,
-                verified_at=timezone.now(), verified_by_source="DHA Client Registry",
+                organization=self.org,
+                patient=self.patient,
+                kind="CLIENT_REGISTRY_ID",
+                value=CR,
+                verified_at=timezone.now(),
+                verified_by_source="DHA Client Registry",
             )
             PatientIdentifier.objects.create(
-                organization=self.org, patient=self.patient, kind="NATIONAL_ID",
-                value="TEST-NID-1", verified_at=timezone.now(),
+                organization=self.org,
+                patient=self.patient,
+                kind="NATIONAL_ID",
+                value="TEST-NID-1",
+                verified_at=timezone.now(),
             )
             self.service = BillingService.objects.create(
                 organization=self.org, name="Rehabilitation programme", rate=Decimal("67200.00")
@@ -66,13 +84,21 @@ class ShaFixture(APITestCase):
             )
             ShaIntervention.objects.update_or_create(
                 code=REHAB,
-                defaults={"name": "Rehabilitation (test)", "applicable_document_types": ["DISCHARGE_SUMMARY"]},
+                defaults={
+                    "name": "Rehabilitation (test)",
+                    "applicable_document_types": ["DISCHARGE_SUMMARY"],
+                },
             )
             self.charge = ChargeItem.objects.create(
-                organization=self.org, patient=self.patient, service=self.service,
-                unit_price=Decimal("67200.00"), delivered_at=timezone.now(),
+                organization=self.org,
+                patient=self.patient,
+                service=self.service,
+                unit_price=Decimal("67200.00"),
+                delivered_at=timezone.now(),
             )
-            icd, _ = IcdCodeIndex.objects.get_or_create(code="TEST-DX", defaults={"description": "Test"})
+            icd, _ = IcdCodeIndex.objects.get_or_create(
+                code="TEST-DX", defaults={"description": "Test"}
+            )
             encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
             DiagnosisCode.objects.create(
                 organization=self.org, encounter=encounter, icd11_code=icd, is_primary=True
@@ -91,12 +117,16 @@ class ShaFixture(APITestCase):
                 "isAlive": True,
                 "whitelistedForOTP": True,
                 "facilityBiometricsEnforced": False,
-                "schemes": [{"schemeId": 1, "schemeName": "SHIF", "coverage": {"status": "COVERED"}}],
+                "schemes": [
+                    {"schemeId": 1, "schemeName": "SHIF", "coverage": {"status": "COVERED"}}
+                ],
                 "statusCode": "10",
                 **extra,
             },
         )
-        return self.post("client-sha-eligibility", [self.patient.id], {"branch": str(self.branch.id)})
+        return self.post(
+            "client-sha-eligibility", [self.patient.id], {"branch": str(self.branch.id)}
+        )
 
     def open_visit(self, hie, codes=(REHAB,), service_type="INPATIENT"):
         hie.on(
@@ -168,7 +198,12 @@ class ShaVisitTests(ShaFixture):
         body = hie.call("POST", "/claims/visit")[0][2]["json"]
         self.assertEqual(
             body,
-            {"intervention_codes": [REHAB], "patient_id": CR, "service_type": "INPATIENT", "otp": "123456"},
+            {
+                "intervention_codes": [REHAB],
+                "patient_id": CR,
+                "service_type": "INPATIENT",
+                "otp": "123456",
+            },
         )
         visit = opened.data["sha"]["visits"][0]
         self.assertEqual(visit["status"], "OPEN")
@@ -222,7 +257,9 @@ class ShaVisitTests(ShaFixture):
             self.assertTrue(authorize["is_integration"])
 
             hie.on("GET", "/claims/authorizations", {"status": "AUTHORIZED", "guid": "auth-1"})
-            hie.on("POST", "/claims/visit", {"authorization_code": "TOKEN2", "workflow_state": "DRAFT"})
+            hie.on(
+                "POST", "/claims/visit", {"authorization_code": "TOKEN2", "workflow_state": "DRAFT"}
+            )
             refreshed = self.post("sha-visit-action", [visit["id"], "refresh"])
         self.assertEqual(refreshed.data["sha"]["visits"][0]["status"], "OPEN")
         self.assertEqual(hie.call("POST", "/claims/visit")[0][2]["json"]["auth_guid"], "auth-1")
@@ -230,9 +267,15 @@ class ShaVisitTests(ShaFixture):
     def test_no_usable_fingerprints_points_to_otp(self):
         with platform_admin_context():
             visit = ShaVisit.objects.create(
-                organization=self.org, patient=self.patient, branch=self.branch, cr_id=CR,
-                service_type="OUTPATIENT", intervention_codes=[OTHER], consent_method="BIOMETRIC",
-                authorization_guid="auth-9", opened_by=self.finance,
+                organization=self.org,
+                patient=self.patient,
+                branch=self.branch,
+                cr_id=CR,
+                service_type="OUTPATIENT",
+                intervention_codes=[OTHER],
+                consent_method="BIOMETRIC",
+                authorization_guid="auth-9",
+                opened_by=self.finance,
             )
         with FakeHie() as hie:
             hie.on(
@@ -253,8 +296,10 @@ class ShaClaimTests(ShaFixture):
         visit_id = opened.data["sha"]["visits"][0]["id"]
         claim = self.post("client-billing-claims", [self.patient.id]).data["claims"][0]
         self.client.patch(
-            reverse("billing-claim", args=[claim["id"]]), {"guarantor": "Next of kin"},
-            format="json", **self.auth,
+            reverse("billing-claim", args=[claim["id"]]),
+            {"guarantor": "Next of kin"},
+            format="json",
+            **self.auth,
         )
         attached = self.post("billing-claim-sha", [claim["id"], "visit"], {"visit": visit_id})
         self.assertEqual(attached.status_code, 200, attached.data)
@@ -267,13 +312,20 @@ class ShaClaimTests(ShaFixture):
 
         with platform_admin_context():
             filed = Attachment.objects.create(
-                organization=self.org, patient=self.patient, classification="CURRENT",
-                category="CLINICAL", file=ContentFile(b"%PDF-1.4 test", name="discharge.pdf"),
+                organization=self.org,
+                patient=self.patient,
+                classification="CURRENT",
+                category="CLINICAL",
+                file=ContentFile(b"%PDF-1.4 test", name="discharge.pdf"),
             )
         return self.post(
             "billing-claim-attachments",
             [claim["id"]],
-            {"category": "DISCHARGE_SUMMARY", "file": str(filed.id), "sha_document_type": "DISCHARGE_SUMMARY"},
+            {
+                "category": "DISCHARGE_SUMMARY",
+                "file": str(filed.id),
+                "sha_document_type": "DISCHARGE_SUMMARY",
+            },
         )
 
     def test_dispatch_pushes_lines_diagnoses_documents_then_discharges(self):
@@ -294,15 +346,21 @@ class ShaClaimTests(ShaFixture):
             hie.on("POST", "/claims/lines", {"id": "line-1"})
             hie.on("POST", "/claims/diagnoses", {})
             hie.on("POST", "/claims/attachments", {"id": "att-1"})
-            hie.on("POST", "/claims/discharge", {"workflow_state": "SUBMITTED", "edi_claim_guid": "g-1"})
+            hie.on(
+                "POST",
+                "/claims/discharge",
+                {"workflow_state": "SUBMITTED", "edi_claim_guid": "g-1"},
+            )
             no_otp = self.post(
-                "billing-claim-submit", [claim["id"]],
+                "billing-claim-submit",
+                [claim["id"]],
                 {"lines_checked": True, "sha": {"discharge_reason": "RECOVERED"}},
             )
             self.assertEqual(no_otp.status_code, 400)
             self.assertEqual(no_otp.data["error"]["field"], "otp")
             submitted = self.post(
-                "billing-claim-submit", [claim["id"]],
+                "billing-claim-submit",
+                [claim["id"]],
                 {"lines_checked": True, "sha": {"discharge_reason": "RECOVERED", "otp": "654321"}},
             )
         self.assertEqual(submitted.status_code, 200, submitted.data)
@@ -332,12 +390,14 @@ class ShaClaimTests(ShaFixture):
             hie.on("POST", "/claims/diagnoses", {})
             hie.on("POST", "/claims/attachments", {"id": "att-1"})
             hie.on(
-                "POST", "/claims/discharge",
+                "POST",
+                "/claims/discharge",
                 {"error": "Bad Request", "message": "Invalid discharge OTP", "trace_id": "t-9"},
                 status=400,
             )
             refused = self.post(
-                "billing-claim-submit", [claim["id"]],
+                "billing-claim-submit",
+                [claim["id"]],
                 {"lines_checked": True, "sha": {"discharge_reason": "RECOVERED", "otp": "000000"}},
             )
         self.assertEqual(refused.status_code, 400)
@@ -365,14 +425,26 @@ class ShaCallbackTests(ShaFixture):
         self.addCleanup(lambda: PlatformHieSettings.objects.all().delete())
         with platform_admin_context():
             visit = ShaVisit.objects.create(
-                organization=self.org, patient=self.patient, branch=self.branch, cr_id=CR,
-                service_type="INPATIENT", intervention_codes=[REHAB], consent_method="OTP",
-                status="SUBMITTED", consent_token="TOKEN1", opened_by=self.finance,
+                organization=self.org,
+                patient=self.patient,
+                branch=self.branch,
+                cr_id=CR,
+                service_type="INPATIENT",
+                intervention_codes=[REHAB],
+                consent_method="OTP",
+                status="SUBMITTED",
+                consent_token="TOKEN1",
+                opened_by=self.finance,
                 payer_workflow_state="SUBMITTED_PAYER",
             )
             self.claim = InsuranceClaim.objects.create(
-                organization=self.org, patient=self.patient, payer="SHA", status="SUBMITTED",
-                claim_number="CLM-TEST-1", sha_visit=visit, total_claimed_amount=Decimal("67200"),
+                organization=self.org,
+                patient=self.patient,
+                payer="SHA",
+                status="SUBMITTED",
+                claim_number="CLM-TEST-1",
+                sha_visit=visit,
+                total_claimed_amount=Decimal("67200"),
             )
 
     def deliver(self, payload, token="secret-path-token", entity="claim"):
@@ -420,7 +492,8 @@ class ShaCallbackTests(ShaFixture):
         }
         with FakeHie() as hie:
             hie.on(
-                "GET", "/claims/preview/payer",
+                "GET",
+                "/claims/preview/payer",
                 {"results": [{"workflowState": "MEDICAL_REVIEW", "providerClaimNo": "CLM-TEST-1"}]},
             )
             with self.captureOnCommitCallbacks(execute=True):
@@ -431,7 +504,9 @@ class ShaCallbackTests(ShaFixture):
         )
         with platform_admin_context():
             claim = InsuranceClaim.objects.get(pk=self.claim.pk)
-        self.assertEqual(claim.status, "UNDER_REVIEW")  # the HIE's current state, not the callback's
+        self.assertEqual(
+            claim.status, "UNDER_REVIEW"
+        )  # the HIE's current state, not the callback's
 
     def test_registration_names_the_facility_and_never_a_placeholder(self):
         settings_row = PlatformHieSettings.get_solo()
@@ -460,7 +535,10 @@ class ShaRemittanceTests(ShaFixture):
     def test_unpublished_remittance_path_is_refused_not_guessed(self):
         with FakeHie() as hie:
             response = self.client.post(
-                reverse("sha-remittances"), {"branch": str(self.branch.id)}, format="json", **self.auth
+                reverse("sha-remittances"),
+                {"branch": str(self.branch.id)},
+                format="json",
+                **self.auth,
             )
         self.assertEqual(response.status_code, 400)
         self.assertIn("not configured", response.data["error"]["message"])

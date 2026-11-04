@@ -3,7 +3,6 @@
 Classes whose name starts with `FhirR4Conformance` run in the CI conformance step.
 """
 
-
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
@@ -42,9 +41,9 @@ class IdentifierTests(CarePathwayApiTestCase):
         self.assertEqual(response.status_code, 201)
         with platform_admin_context():
             kinds = dict(
-                PatientIdentifier.objects.filter(patient_id=response.data["patient_id"]).values_list(
-                    "kind", "value"
-                )
+                PatientIdentifier.objects.filter(
+                    patient_id=response.data["patient_id"]
+                ).values_list("kind", "value")
             )
         self.assertEqual(kinds["NATIONAL_ID"], "27730415")
         self.assertIn("CITRAMAC", kinds)
@@ -68,9 +67,7 @@ class IdentifierTests(CarePathwayApiTestCase):
         self.assertEqual(confirmed.status_code, 201)
 
     def test_temporary_arrivals_get_their_own_er_series(self):
-        response = self.register(
-            identity_status="UNKNOWN", full_name="", date_of_birth="", sex=""
-        )
+        response = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
         with platform_admin_context():
             patient = Patient.objects.get(pk=response.data["patient_id"])
         self.assertRegex(patient.citramac_number, r"^CIT-ER-\d{6}$")
@@ -116,14 +113,18 @@ class MergeTests(CarePathwayApiTestCase):
             visit = TriageEncounter.objects.get(pk=temp.data["triage_encounter_id"])
             self.assertEqual(str(visit.patient_id), permanent.data["patient_id"])
             # The old emergency number still resolves, flagged as superseded.
-            old = PatientIdentifier.objects.get(patient_id=permanent.data["patient_id"], kind="TEMPORARY")
+            old = PatientIdentifier.objects.get(
+                patient_id=permanent.data["patient_id"], kind="TEMPORARY"
+            )
             self.assertIsNotNone(old.superseded_at)
 
     def test_a_recognised_client_without_a_document_match_can_be_merged(self):
         # Spec 3.2: identifying a temporary record never leaves two records for
         # one person — a probable match (name, date of birth, sex) is offered.
         permanent = self.register(phone="0712000111")
-        other_temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        other_temp = self.register(
+            identity_status="UNKNOWN", full_name="", date_of_birth="", sex=""
+        )
         temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
         details = {
             "first_name": "Amina",
@@ -143,7 +144,11 @@ class MergeTests(CarePathwayApiTestCase):
         url = reverse("care-resolve-identity", args=[temp.data["patient_id"]])
         merged = self.client.post(
             url,
-            {**details, "merge_into_patient_id": permanent.data["patient_id"], "merge_reason": REASON},
+            {
+                **details,
+                "merge_into_patient_id": permanent.data["patient_id"],
+                "merge_reason": REASON,
+            },
             format="json",
             **self.auth,
         )
@@ -154,11 +159,17 @@ class MergeTests(CarePathwayApiTestCase):
             visit = TriageEncounter.objects.get(pk=temp.data["triage_encounter_id"])
             self.assertEqual(str(visit.patient_id), permanent.data["patient_id"])
         # Never into another temporary record.
-        third_temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
+        third_temp = self.register(
+            identity_status="UNKNOWN", full_name="", date_of_birth="", sex=""
+        )
         url = reverse("care-resolve-identity", args=[other_temp.data["patient_id"]])
         refused = self.client.post(
             url,
-            {**details, "merge_into_patient_id": third_temp.data["patient_id"], "merge_reason": REASON},
+            {
+                **details,
+                "merge_into_patient_id": third_temp.data["patient_id"],
+                "merge_reason": REASON,
+            },
             format="json",
             **self.auth,
         )
@@ -189,7 +200,9 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
 
     def setUp(self):
         super().setUp()
-        self.permanent = self.register(full_name="Brian Otieno", date_of_birth="1987-06-02", sex="MALE")
+        self.permanent = self.register(
+            full_name="Brian Otieno", date_of_birth="1987-06-02", sex="MALE"
+        )
         self.temp = self.register(identity_status="UNKNOWN", full_name="", date_of_birth="", sex="")
 
     def merge(self, **extra):
@@ -213,8 +226,12 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
 
         with platform_admin_context():
             admin = User.objects.create_user(
-                email=f"admin-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True, first_name="Org", last_name="Admin",
+                email=f"admin-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+                first_name="Org",
+                last_name="Admin",
             )
         give_role(self.org, admin, "Org Admin")
         return {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(admin)[0]}"}
@@ -268,8 +285,11 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
         give_role(self.org, self.nurse, "Nurse", "records.identity.merge")
         with platform_admin_context():
             PatientIdentifier.objects.create(
-                organization=self.org, patient_id=self.temp.data["patient_id"],
-                kind="CLIENT_REGISTRY_ID", value="CR-000123", verified_at=timezone.now(),
+                organization=self.org,
+                patient_id=self.temp.data["patient_id"],
+                kind="CLIENT_REGISTRY_ID",
+                value="CR-000123",
+                verified_at=timezone.now(),
             )
         self.assertEqual(self.merge().status_code, 200)
         with platform_admin_context():
@@ -286,8 +306,10 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
         self.assertEqual(self.merge().status_code, 200)
         # Written against the identified client after the merge: stays with them.
         later = self.register(
-            patient_id=self.permanent.data["patient_id"], full_name="Brian Otieno",
-            date_of_birth="1987-06-02", sex="MALE",
+            patient_id=self.permanent.data["patient_id"],
+            full_name="Brian Otieno",
+            date_of_birth="1987-06-02",
+            sex="MALE",
         )
         self.assertEqual(later.status_code, 201, later.data)
         with platform_admin_context():
@@ -299,7 +321,9 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
             403,
         )
         admin = self.org_admin()
-        self.assertEqual(self.client.post(url, {"reason": ""}, format="json", **admin).status_code, 400)
+        self.assertEqual(
+            self.client.post(url, {"reason": ""}, format="json", **admin).status_code, 400
+        )
         response = self.client.post(url, {"reason": "Wrong man"}, format="json", **admin)
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["reversed"]["reason"], "Wrong man")
@@ -316,9 +340,7 @@ class IdentityMergeLedgerTests(CarePathwayApiTestCase):
             number = PatientIdentifier.objects.get(kind="TEMPORARY", value=temp.citramac_number)
             self.assertEqual(number.patient_id, temp.pk)
             self.assertIsNone(number.superseded_at)
-            self.assertEqual(
-                AuditLogEntry.objects.filter(action="IDENTITY_UNMERGE").count(), 2
-            )
+            self.assertEqual(AuditLogEntry.objects.filter(action="IDENTITY_UNMERGE").count(), 2)
         again = self.client.post(url, {"reason": "Again"}, format="json", **admin)
         self.assertEqual(again.status_code, 400)
         # The temporary record can now be identified as the right person.
@@ -369,8 +391,14 @@ class ConsentGateTests(CarePathwayApiTestCase):
     def capture(self, decision, consent_type="DATA_SHARING_HIE", **extra):
         with platform_admin_context():
             return capture_consent(
-                self.patient, self.nurse, decision == "YES", "v1", "I agree …",
-                consent_type=consent_type, decision=decision, **extra,
+                self.patient,
+                self.nurse,
+                decision == "YES",
+                "v1",
+                "I agree …",
+                consent_type=consent_type,
+                decision=decision,
+                **extra,
             )
 
     def test_only_an_explicit_yes_releases_data(self):
@@ -491,9 +519,7 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
     def test_an_identifier_with_no_configured_system_is_withheld_not_invented(self):
         patient = self.patient(id_document_type="NATIONAL_ID", id_document_number="999888")
         payload, omitted = self.build(patient)
-        self.assertEqual(
-            [i for i in payload["identifier"] if i["value"] == "999888"], []
-        )
+        self.assertEqual([i for i in payload["identifier"] if i["value"] == "999888"], [])
         self.assertTrue(any("NATIONAL_ID" in item for item in omitted))
 
     def test_merged_record_links_to_the_survivor(self):
@@ -542,8 +568,13 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         patient = self.patient(next_of_kin_name="Joan Kamau", next_of_kin_is_guardian=True)
         with platform_admin_context():
             record = capture_consent(
-                patient, self.nurse, False, "v1", "text",
-                consent_type="MENTAL_HEALTH_HIE", decision="RESTRICTED",
+                patient,
+                self.nurse,
+                False,
+                "v1",
+                "text",
+                consent_type="MENTAL_HEALTH_HIE",
+                decision="RESTRICTED",
             )
             contact = EmergencyContact.objects.get(patient=patient)
             from django.utils import timezone
@@ -588,9 +619,7 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
     def test_not_asked_produces_no_consent_resource(self):
         patient = self.patient()
         with platform_admin_context():
-            record = capture_consent(
-                patient, self.nurse, False, "v1", "text", decision="NOT_ASKED"
-            )
+            record = capture_consent(patient, self.nurse, False, "v1", "text", decision="NOT_ASKED")
             self.assertIsNone(build_hie_consent(record))
 
     def test_emergency_arrival_is_valid_and_its_escort_is_not_next_of_kin(self):
@@ -910,7 +939,8 @@ class FhirR4ConformanceRegistrationExamplesTests(SimpleTestCase):
                 for consent in consents:
                     # By whom and when (CLAUDE.md §3 item 4).
                     provenance = next(
-                        r for r in resources
+                        r
+                        for r in resources
                         if r["resourceType"] == "Provenance"
                         and r["target"][0]["reference"] == f"Consent/{consent['id']}"
                     )

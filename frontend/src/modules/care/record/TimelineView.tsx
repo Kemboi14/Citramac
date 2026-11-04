@@ -64,83 +64,83 @@ export function TimelineView({ patientId }: RecordViewProps) {
 
   return (
     <div className="flex flex-col gap-4">
-    <ProgressNotes patientId={patientId} />
-    <Card
-      title="Timeline"
-      aside={
-        data ? (
-          <span className="text-[11px] font-medium text-ink-500">
-            {events.length} of {all.length} {all.length === 1 ? "event" : "events"}
-          </span>
-        ) : undefined
-      }
-    >
-      <ErrorNote>{error}</ErrorNote>
-      <div className="mb-4 flex flex-col gap-3">
-        <div role="group" aria-label="Filter events by type" className="flex flex-wrap gap-1.5">
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilter(f.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
-                  active
-                    ? "border-brand-green bg-brand-green text-on-primary"
-                    : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
-                }`}
-              >
-                {f.label}{" "}
-                <span className={active ? "opacity-80" : "text-ink-400"}>{countFor(f.key)}</span>
-              </button>
-            );
-          })}
+      <ProgressNotes patientId={patientId} />
+      <Card
+        title="Timeline"
+        aside={
+          data ? (
+            <span className="text-[11px] font-medium text-ink-500">
+              {events.length} of {all.length} {all.length === 1 ? "event" : "events"}
+            </span>
+          ) : undefined
+        }
+      >
+        <ErrorNote>{error}</ErrorNote>
+        <div className="mb-4 flex flex-col gap-3">
+          <div role="group" aria-label="Filter events by type" className="flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => {
+              const active = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilter(f.key)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+                    active
+                      ? "border-brand-green bg-brand-green text-on-primary"
+                      : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
+                  }`}
+                >
+                  {f.label}{" "}
+                  <span className={active ? "opacity-80" : "text-ink-400"}>{countFor(f.key)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="max-w-sm">
+            <label htmlFor={searchId} className="sr-only">
+              Search the timeline
+            </label>
+            <input
+              id={searchId}
+              type="search"
+              className={INPUT}
+              placeholder="Search events…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
-        <div className="max-w-sm">
-          <label htmlFor={searchId} className="sr-only">
-            Search the timeline
-          </label>
-          <input
-            id={searchId}
-            type="search"
-            className={INPUT}
-            placeholder="Search events…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
 
-      {loading && !data ? (
-        <p className="text-[13px] text-ink-500">Loading timeline…</p>
-      ) : groups.length > 0 ? (
-        <div className="flex flex-col gap-5">
-          {groups.map((group) => (
-            <section key={group.date} aria-label={group.date}>
-              <h3 className="mb-2 font-mono text-xs font-bold text-ink-700">{group.date}</h3>
-              <Timeline
-                items={group.events.map((event, index) => ({
-                  key: `${event.kind}-${event.at}-${index}`,
-                  time: formatTime(event.at),
-                  title: event.title,
-                  detail: event.detail,
-                }))}
-              />
-            </section>
-          ))}
-        </div>
-      ) : (
-        data && (
-          <p className="text-[13px] text-ink-500">
-            {all.length === 0
-              ? "No events recorded for this client yet."
-              : "No events match this filter."}
-          </p>
-        )
-      )}
-    </Card>
+        {loading && !data ? (
+          <p className="text-[13px] text-ink-500">Loading timeline…</p>
+        ) : groups.length > 0 ? (
+          <div className="flex flex-col gap-5">
+            {groups.map((group) => (
+              <section key={group.date} aria-label={group.date}>
+                <h3 className="mb-2 font-mono text-xs font-bold text-ink-700">{group.date}</h3>
+                <Timeline
+                  items={group.events.map((event, index) => ({
+                    key: `${event.kind}-${event.at}-${index}`,
+                    time: formatTime(event.at),
+                    title: event.title,
+                    detail: event.detail,
+                  }))}
+                />
+              </section>
+            ))}
+          </div>
+        ) : (
+          data && (
+            <p className="text-[13px] text-ink-500">
+              {all.length === 0
+                ? "No events recorded for this client yet."
+                : "No events match this filter."}
+            </p>
+          )
+        )}
+      </Card>
     </div>
   );
 }

@@ -1041,17 +1041,30 @@ function DischargeForm({
           {(
             [
               ["meds_reconciled", "Medicines reconciled with the client"],
-              ["teach_back", "Teach-back done: crisis plan, warning signs and reduced tolerance explained"],
+              [
+                "teach_back",
+                "Teach-back done: crisis plan, warning signs and reduced tolerance explained",
+              ],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2">
-              <input type="checkbox" checked={!!form.readiness[key]} onChange={(e) => set("readiness", { ...form.readiness, [key]: e.target.checked })} />
+              <input
+                type="checkbox"
+                checked={!!form.readiness[key]}
+                onChange={(e) => set("readiness", { ...form.readiness, [key]: e.target.checked })}
+              />
               {label}
             </label>
           ))}
           <label className="flex items-center gap-2">
             Counter-referral
-            <select className={INPUT} value={form.readiness.counter_referral ?? ""} onChange={(e) => set("readiness", { ...form.readiness, counter_referral: e.target.value })}>
+            <select
+              className={INPUT}
+              value={form.readiness.counter_referral ?? ""}
+              onChange={(e) =>
+                set("readiness", { ...form.readiness, counter_referral: e.target.value })
+              }
+            >
               <option value="">Choose…</option>
               <option value="SENT">Sent to the referring service</option>
               <option value="NO_REFERRER">No referring service</option>
@@ -1059,7 +1072,11 @@ function DischargeForm({
           </label>
           <label className="flex items-center gap-2">
             Naloxone (opioid use)
-            <select className={INPUT} value={form.readiness.naloxone ?? ""} onChange={(e) => set("readiness", { ...form.readiness, naloxone: e.target.value })}>
+            <select
+              className={INPUT}
+              value={form.readiness.naloxone ?? ""}
+              onChange={(e) => set("readiness", { ...form.readiness, naloxone: e.target.value })}
+            >
               <option value="">Not applicable / choose…</option>
               <option value="OFFERED">Offered and accepted</option>
               <option value="DECLINED">Offered and declined</option>
@@ -1067,7 +1084,13 @@ function DischargeForm({
           </label>
           <label className="flex items-center gap-2">
             No follow-up needed because
-            <input className={INPUT} value={form.readiness.no_follow_up_reason ?? ""} onChange={(e) => set("readiness", { ...form.readiness, no_follow_up_reason: e.target.value })} />
+            <input
+              className={INPUT}
+              value={form.readiness.no_follow_up_reason ?? ""}
+              onChange={(e) =>
+                set("readiness", { ...form.readiness, no_follow_up_reason: e.target.value })
+              }
+            />
           </label>
         </div>
       </Card>

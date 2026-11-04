@@ -126,8 +126,12 @@ class HieTransportTests(HieFixture):
                 (200, {"frCode": FR}),
             )
             with platform_admin_context():
-                hie_api.call("GET", "/facilities/search", transaction_type="FACILITY_LOOKUP", platform=True)
-                hie_api.call("GET", "/facilities/search", transaction_type="FACILITY_LOOKUP", platform=True)
+                hie_api.call(
+                    "GET", "/facilities/search", transaction_type="FACILITY_LOOKUP", platform=True
+                )
+                hie_api.call(
+                    "GET", "/facilities/search", transaction_type="FACILITY_LOOKUP", platform=True
+                )
         # One sign-in served the first call; the 401 forced exactly one more.
         self.assertEqual(hie.token_calls, 2)
         self.assertEqual(len(hie.calls), 3)
@@ -138,7 +142,9 @@ class HieTransportTests(HieFixture):
             hie.on("GET", "/patients/eligibility", {"memberCrNumber": CR})
             with platform_admin_context():
                 hie_api.call(
-                    "GET", "/patients/eligibility", transaction_type="MEMBER_VERIFICATION",
+                    "GET",
+                    "/patients/eligibility",
+                    transaction_type="MEMBER_VERIFICATION",
                     branch=self.branch,
                 )
         headers = hie.calls[0][2]["headers"]
@@ -159,7 +165,9 @@ class HieTransportTests(HieFixture):
             hie.on("GET", "/patients/eligibility", {})
             with platform_admin_context():
                 hie_api.call(
-                    "GET", "/patients/eligibility", transaction_type="MEMBER_VERIFICATION",
+                    "GET",
+                    "/patients/eligibility",
+                    transaction_type="MEMBER_VERIFICATION",
                     branch=self.branch,
                 )
         self.assertNotIn("X-Facility-Id", hie.calls[0][2]["headers"])
@@ -174,7 +182,10 @@ class HieTransportTests(HieFixture):
             )
             with platform_admin_context(), self.assertRaises(hie_api.HieError) as raised:
                 hie_api.call(
-                    "POST", "/claims/visit", transaction_type="CLAIM_VISIT", branch=self.branch,
+                    "POST",
+                    "/claims/visit",
+                    transaction_type="CLAIM_VISIT",
+                    branch=self.branch,
                     json_body={"patient_id": CR, "otp": "123456"},
                 )
             with platform_admin_context():
@@ -189,12 +200,17 @@ class HieTransportTests(HieFixture):
         with FakeHie() as hie:
             hie.on("POST", "/claims/lines", requests.Timeout("slow"))
             with platform_admin_context(), self.assertRaises(hie_api.HieError):
-                hie_api.call("POST", "/claims/lines", transaction_type="E_CLAIM", branch=self.branch)
+                hie_api.call(
+                    "POST", "/claims/lines", transaction_type="E_CLAIM", branch=self.branch
+                )
             self.assertEqual(len(hie.calls), 1)
             hie.on("POST", "/claims/submit", requests.Timeout("slow"))
             with platform_admin_context(), self.assertRaises(hie_api.HieError):
                 hie_api.call(
-                    "POST", "/claims/submit", transaction_type="E_CLAIM", branch=self.branch,
+                    "POST",
+                    "/claims/submit",
+                    transaction_type="E_CLAIM",
+                    branch=self.branch,
                     retry_safe=True,
                 )
         self.assertEqual(len(hie.call("POST", "/claims/submit")), 2)
@@ -210,9 +226,13 @@ class RegistryTests(HieFixture):
             hie.on("GET", "/facilities/search", record)
             with platform_admin_context():
                 registries.verify_branch_facility(self.branch)
-        self.assertEqual(hie.calls[0][2]["params"], {"identifier": FR, "identifier-type": "fr-code"})
+        self.assertEqual(
+            hie.calls[0][2]["params"], {"identifier": FR, "identifier-type": "fr-code"}
+        )
         self.assertEqual(self.branch.registry_status, Branch.REGISTRY_VERIFIED)
-        self.assertEqual(registries.facility_summary(self.branch)["sha_contract_status"], "As worded")
+        self.assertEqual(
+            registries.facility_summary(self.branch)["sha_contract_status"], "As worded"
+        )
         with FakeHie() as hie:
             hie.on("GET", "/facilities/search", {"error": "Not Found"}, status=404)
             with platform_admin_context():
@@ -315,7 +335,9 @@ class PlatformHieSettingsApiTests(APITestCase):
         self.assertTrue(response.data["has_credentials"])
         self.assertEqual(response.data["source"], "saved")
         self.assertTrue(
-            response.data["callback_url"].startswith("https://app.example.test/api/v1/integrations/dha/")
+            response.data["callback_url"].startswith(
+                "https://app.example.test/api/v1/integrations/dha/"
+            )
         )
         stored = PlatformHieSettings.get_solo()
         self.assertEqual(stored.base_url, "https://hie.example.test/api/v1")
@@ -375,12 +397,19 @@ class ShrTests(HieFixture):
                 code="TEST-DX", defaults={"description": "Test condition"}
             )
             self.encounter = Encounter.objects.create(
-                organization=self.org, patient=self.patient, episode=self.episode,
-                opened_by=self.clinician, encounter_type="PSYCHIATRY", status="CLOSED",
+                organization=self.org,
+                patient=self.patient,
+                episode=self.episode,
+                opened_by=self.clinician,
+                encounter_type="PSYCHIATRY",
+                status="CLOSED",
                 closed_at=timezone.now(),
             )
             self.dx = DiagnosisCode.objects.create(
-                organization=self.org, encounter=self.encounter, icd11_code=icd, is_primary=True,
+                organization=self.org,
+                encounter=self.encounter,
+                icd11_code=icd,
+                is_primary=True,
                 verification_status="CONFIRMED",
             )
 
@@ -388,14 +417,20 @@ class ShrTests(HieFixture):
         with platform_admin_context():
             for consent_type in types:
                 capture_consent(
-                    self.patient, self.clinician, True, "v1", "wording", consent_type=consent_type,
+                    self.patient,
+                    self.clinician,
+                    True,
+                    "v1",
+                    "wording",
+                    consent_type=consent_type,
                     decision="YES",
                 )
 
     def open_visit(self, hie):
         hie.on("POST", "/shr/consents", {"consent_id": "c-1", "otp_record": "o-1"})
         hie.on(
-            "POST", "/shr/consents/c-1/verify",
+            "POST",
+            "/shr/consents/c-1/verify",
             {"consent_token": "token-1", "visit_id": "v-1", "consent_status": "Approved"},
         )
         hie.on("GET", "/shr/security-labels", LABELS)
@@ -435,7 +470,11 @@ class ShrTests(HieFixture):
             hie.on("POST", "/shr/consents/c-2/verify", {"consent_status": "Rejected"})
             requested = self.client.post(
                 reverse("shr-client", args=[self.patient.id]),
-                {"branch": str(self.branch.id), "episode": str(self.episode.id), "visit_type": "OP"},
+                {
+                    "branch": str(self.branch.id),
+                    "episode": str(self.episode.id),
+                    "visit_type": "OP",
+                },
                 format="json",
                 **self.auth,
             )
@@ -480,7 +519,9 @@ class ShrTests(HieFixture):
         self.consent_yes(HIE_GENERAL, HIE_MENTAL_HEALTH)
         with platform_admin_context():
             Encounter.objects.create(
-                organization=self.org, patient=self.patient, episode=self.episode,
+                organization=self.org,
+                patient=self.patient,
+                episode=self.episode,
                 encounter_type="PSYCHOTHERAPY",
             )
         with FakeHie() as hie:
@@ -505,7 +546,9 @@ class ShrTests(HieFixture):
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         self.assertEqual(types, ["EpisodeOfCare", "Encounter", "Condition"])  # no psychotherapy
         encounter = bundle["entry"][1]["resource"]
-        self.assertEqual(encounter["episodeOfCare"], [{"reference": f"EpisodeOfCare/{self.episode.id}"}])
+        self.assertEqual(
+            encounter["episodeOfCare"], [{"reference": f"EpisodeOfCare/{self.episode.id}"}]
+        )
         self.assertEqual(encounter["subject"], {"reference": f"Patient/{CR}"})
         for entry in bundle["entry"]:
             codes = {s["code"] for s in entry["resource"]["meta"]["security"]}
@@ -565,8 +608,10 @@ class ShrTests(HieFixture):
     def test_only_the_care_team_may_use_the_shr(self):
         with platform_admin_context():
             outsider = User.objects.create_user(
-                email=f"x-{uuid.uuid4().hex[:6]}@org.test", password="Password123!",
-                organization=self.org, is_active=True,
+                email=f"x-{uuid.uuid4().hex[:6]}@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
             )
         auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(outsider)[0]}"}
         response = self.client.get(reverse("shr-client", args=[self.patient.id]), **auth)
@@ -584,11 +629,19 @@ class ShrOutboxTests(HieFixture):
     def test_unconfigured_hie_holds_the_bundle(self):
         with platform_admin_context():
             consent = ShrConsent.objects.create(
-                organization=self.org, patient=self.patient, branch=self.branch,
-                episode=self.episode, cr_id=CR, visit_type="OP", requested_by=self.clinician,
+                organization=self.org,
+                patient=self.patient,
+                branch=self.branch,
+                episode=self.episode,
+                cr_id=CR,
+                visit_type="OP",
+                requested_by=self.clinician,
             )
             entry = hie_client.enqueue(
-                self.org.id, hie_client.SHR_BUNDLE, {"resourceType": "Bundle", "id": "b"}, "k-2",
+                self.org.id,
+                hie_client.SHR_BUNDLE,
+                {"resourceType": "Bundle", "id": "b"},
+                "k-2",
                 related=("ShrConsent", consent.id),
             )
         with FakeHie(configured=False):

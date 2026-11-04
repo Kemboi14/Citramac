@@ -46,7 +46,8 @@ from .models import ShaTransactionLog
 
 logger = logging.getLogger(__name__)
 
-TOKEN_PATH = "/tenants/token"
+# bandit B105 false positive: URL path, not a credential.
+TOKEN_PATH = "/tenants/token"  # nosec B105
 # Refresh this long before the token's stated expiry.
 TOKEN_EARLY_REFRESH_SECONDS = 60
 # Request fields never written to the transaction log.
@@ -175,7 +176,8 @@ def get_token(creds, *, force=False):
         if token:
             return token
     try:
-        response = requests.post(
+        # bandit B113 false positive: timeout=_timeout() below.
+        response = requests.post(  # nosec B113
             f"{creds.base_url}{TOKEN_PATH}",
             data={"client_id": creds.client_id, "client_secret": creds.client_secret},
             timeout=_timeout(),

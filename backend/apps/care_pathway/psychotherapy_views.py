@@ -15,7 +15,9 @@ from .views import _patient
 
 
 def _note(pk):
-    return get_object_or_404(PsychotherapyNote.objects.select_related("session", "patient", "author"), pk=pk)
+    return get_object_or_404(
+        PsychotherapyNote.objects.select_related("session", "patient", "author"), pk=pk
+    )
 
 
 class PsyConfigView(APIView):
@@ -32,7 +34,12 @@ class TherapyModelsView(APIView):
 
     def get(self, request):
         rows = psy.therapy_models(request.user.organization_id, enabled_only=False)
-        return Response({"results": [psy.model_row(m) for m in rows], "can_configure": psy.can_configure(request.user)})
+        return Response(
+            {
+                "results": [psy.model_row(m) for m in rows],
+                "can_configure": psy.can_configure(request.user),
+            }
+        )
 
     def post(self, request):
         model = psy.add_model(request.user, request.data)
@@ -64,7 +71,10 @@ class ClientPsyNotesView(APIView):
 
     def post(self, request, patient_id):
         note, created = psy.start_or_resume(_patient(patient_id), request.user, request.data)
-        return Response(psy.detail(note, request.user), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        return Response(
+            psy.detail(note, request.user),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class PsyNoteView(APIView):

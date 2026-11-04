@@ -11,6 +11,7 @@ import { ModulePlaceholder } from "./components/ModulePlaceholder";
 // export) - keeps every page/shell as its own chunk instead of one ~700KB
 // bundle covering all three portals (Clinical/Org Admin/Super Admin), even
 // though a given user only ever loads one of them.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same constraint as React.lazy<T>, which keeps each component's own props
 function lazyNamed<T extends ComponentType<any>>(
   factory: () => Promise<Record<string, T>>,
   name: string,

@@ -64,7 +64,10 @@ from .models import (
 )
 
 ADMITTING_OFFICER_PERMISSION = "clinical.admitting_officer"
-APPLICATION_TEMPLATES = {"VOLUNTARY": VOLUNTARY_TEMPLATE, "INVOLUNTARY": INVOLUNTARY_APPLICATION_TEMPLATE}
+APPLICATION_TEMPLATES = {
+    "VOLUNTARY": VOLUNTARY_TEMPLATE,
+    "INVOLUNTARY": INVOLUNTARY_APPLICATION_TEMPLATE,
+}
 TEMPLATE_CATEGORY = {v: k for k, v in APPLICATION_TEMPLATES.items()}
 E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 TASK_FOCUS = "LegalStatus"
@@ -121,7 +124,9 @@ def mask(value):
 
 def is_admitting_officer(user):
     return bool(
-        user and user.is_authenticated and not user.is_superuser
+        user
+        and user.is_authenticated
+        and not user.is_superuser
         and active_roles(user).filter(permissions__codename=ADMITTING_OFFICER_PERMISSION).exists()
     )
 
@@ -129,7 +134,9 @@ def is_admitting_officer(user):
 def can_unmask(user):
     codename = legal_config.privacy()["unmaskPermission"]
     return bool(
-        user and user.is_authenticated and not user.is_superuser
+        user
+        and user.is_authenticated
+        and not user.is_superuser
         and active_roles(user).filter(permissions__codename=codename).exists()
     )
 
@@ -145,8 +152,16 @@ def _hwr(cred):
 def _nacada(cred):
     """NACADA accreditation / licence (PractitionerCredential.nacada_*)."""
     if cred is None:
-        return {"number": "", "category": "", "issued_on": None, "expires_on": None,
-                "verified_at": None, "verified_by": "", "has_evidence": False, "status": None}
+        return {
+            "number": "",
+            "category": "",
+            "issued_on": None,
+            "expires_on": None,
+            "verified_at": None,
+            "verified_by": "",
+            "has_evidence": False,
+            "status": None,
+        }
     return {
         "number": cred.nacada_number,
         "category": cred.nacada_category,
@@ -196,11 +211,22 @@ def _event(ls, event, user, from_state="", to_state="", **detail):
     from apps.sysadmin_audit.audit import write_event
 
     LegalStatusEvent.objects.create(
-        organization_id=ls.organization_id, legal_status=ls, event=event,
-        from_state=from_state, to_state=to_state, actor=user, actor_role=_role(user), detail=detail,
+        organization_id=ls.organization_id,
+        legal_status=ls,
+        event=event,
+        from_state=from_state,
+        to_state=to_state,
+        actor=user,
+        actor_role=_role(user),
+        detail=detail,
     )
-    write_event(ls.organization_id, "UPDATE", "care_pathway.legalstatus", ls.pk,
-                {"legal_event": event, "from": from_state, "to": to_state})
+    write_event(
+        ls.organization_id,
+        "UPDATE",
+        "care_pathway.legalstatus",
+        ls.pk,
+        {"legal_event": event, "from": from_state, "to": to_state},
+    )
 
 
 def _transition(ls, to_state, user, event=None, **detail):
@@ -215,8 +241,11 @@ def _alert(patient, code, user):
     if alert:
         return alert
     return ClinicalAlert.objects.create(
-        organization_id=patient.organization_id, patient=patient, alert_code=code,
-        label=LEGAL_ALERT_LABELS[code], raised_by=user,
+        organization_id=patient.organization_id,
+        patient=patient,
+        alert_code=code,
+        label=LEGAL_ALERT_LABELS[code],
+        raised_by=user,
     )
 
 
@@ -228,10 +257,18 @@ def _resolve_alert(patient, code, user):
 
 def _task(ls, code, label, user, *, due_at=None, priority="routine", assignee=None, owner=""):
     return CareTask.objects.create(
-        organization_id=ls.organization_id, patient=ls.patient, action_code=code, action_label=label,
-        owner=owner or (_name(assignee) if assignee else "Responsible clinician"), status="INITIATED",
-        created_by=user, priority=priority, due_at=due_at, assignee=assignee,
-        focus_type=TASK_FOCUS, focus_id=str(ls.pk),
+        organization_id=ls.organization_id,
+        patient=ls.patient,
+        action_code=code,
+        action_label=label,
+        owner=owner or (_name(assignee) if assignee else "Responsible clinician"),
+        status="INITIATED",
+        created_by=user,
+        priority=priority,
+        due_at=due_at,
+        assignee=assignee,
+        focus_type=TASK_FOCUS,
+        focus_id=str(ls.pk),
     )
 
 
@@ -260,7 +297,9 @@ def pronoun(patient):
 def client_details(patient, user=None):
     """Part A / LGL-V-03 fields, auto-populated from the central client record (RULE-01)."""
     id_value = patient.national_id or patient.passport_number
-    id_kind = "National ID" if patient.national_id else ("Passport" if patient.passport_number else "")
+    id_kind = (
+        "National ID" if patient.national_id else ("Passport" if patient.passport_number else "")
+    )
     return {
         "full_name": patient.get_full_name(),
         "address": patient.address,
@@ -268,7 +307,9 @@ def client_details(patient, user=None):
         "id_number_masked": mask(id_value),
         "id_number_present": bool(id_value),
         "gender": patient.gender,
-        "gender_form": {"MALE": "MALE", "FEMALE": "FEMALE", "OTHER": "OTHER"}.get(patient.gender, ""),
+        "gender_form": {"MALE": "MALE", "FEMALE": "FEMALE", "OTHER": "OTHER"}.get(
+            patient.gender, ""
+        ),
         "gender_other_detail": "Intersex / other" if patient.gender == "OTHER" else "",
         "pronoun": pronoun(patient),
         "age": patient.age_years,
@@ -298,7 +339,11 @@ def facility_profile(patient, episode=None):
     org = Organization.objects.filter(pk=patient.organization_id).first()
     branch = episode.branch if episode and episode.branch_id else None
     if branch is None:
-        branch = Branch.objects.filter(organization_id=patient.organization_id, is_active=True).order_by("created_at").first()
+        branch = (
+            Branch.objects.filter(organization_id=patient.organization_id, is_active=True)
+            .order_by("created_at")
+            .first()
+        )
     return {
         "organization": org.name if org else "",
         "name": branch.name if branch else (org.name if org else ""),
@@ -317,7 +362,9 @@ def facility_profile(patient, episode=None):
 def _latest_signed_triage(patient):
     return (
         TriageAssessment.objects.filter(triage_encounter__patient=patient, status="COMPLETED")
-        .select_related("signed_by").order_by("-signed_at").first()
+        .select_related("signed_by")
+        .order_by("-signed_at")
+        .first()
     )
 
 
@@ -332,11 +379,25 @@ def evidence_context(patient):
     Read-only context: nothing here ticks an assertion or alters a finding."""
     from . import intake_schema, mental_state
 
-    groups = {k: [] for k in ("danger_to_self", "danger_to_others", "unable_self_care", "incapable_decisions", "working_diagnosis")}
+    groups = {
+        k: []
+        for k in (
+            "danger_to_self",
+            "danger_to_others",
+            "unable_self_care",
+            "incapable_decisions",
+            "working_diagnosis",
+        )
+    }
     triage = _latest_signed_triage(patient)
     if triage:
         by_label = {
-            "danger_to_self": {"Suicide risk", "Acting now", "Recent self-harm / attempt", "Access to means"},
+            "danger_to_self": {
+                "Suicide risk",
+                "Acting now",
+                "Recent self-harm / attempt",
+                "Access to means",
+            },
             "danger_to_others": {"Risk to others", "Immediate danger"},
             "unable_self_care": {"Functional safety concern"},
         }
@@ -345,41 +406,71 @@ def evidence_context(patient):
                 continue
             for group, labels in by_label.items():
                 if row[0] in labels:
-                    groups[group].append({
-                        "label": row[0], "value": row[1], "source": SOURCE_CODES.get(row[2], "PREVIOUS_RECORD"),
-                        "record": "Triage (signed)", "recorded_at": _iso(triage.signed_at),
-                        "recorded_by": _name(triage.signed_by),
-                    })
+                    groups[group].append(
+                        {
+                            "label": row[0],
+                            "value": row[1],
+                            "source": SOURCE_CODES.get(row[2], "PREVIOUS_RECORD"),
+                            "record": "Triage (signed)",
+                            "recorded_at": _iso(triage.signed_at),
+                            "recorded_by": _name(triage.signed_by),
+                        }
+                    )
     row = _intake(patient)
     if row:
         record = "Intake (signed)" if row.status == row.STATUS_SIGNED else "Intake (unsigned draft)"
         at = _iso(row.signed_at or row.updated_at)
         by = _name(row.signed_by or row.author)
         rows = ((row.sections or {}).get("risk") or {}).get("rows") or {}
-        target = {"suicide": "danger_to_self", "violence": "danger_to_others", "neglect": "unable_self_care"}
+        target = {
+            "suicide": "danger_to_self",
+            "violence": "danger_to_others",
+            "neglect": "unable_self_care",
+        }
         for spec in intake_schema.RISK_ROWS:
             chosen = [o for o in (rows.get(spec["key"]) or []) if o in spec["active"]]
             if chosen and spec["key"] in target:
-                groups[target[spec["key"]]].append({
-                    "label": spec["label"], "value": ", ".join(chosen), "source": "ASSESSMENT_RESULT",
-                    "record": record, "recorded_at": at, "recorded_by": by,
-                })
+                groups[target[spec["key"]]].append(
+                    {
+                        "label": spec["label"],
+                        "value": ", ".join(chosen),
+                        "source": "ASSESSMENT_RESULT",
+                        "record": record,
+                        "recorded_at": at,
+                        "recorded_by": by,
+                    }
+                )
         mse = (row.sections or {}).get("mse") or {}
         for domain, label in (("insight", "Insight"), ("judgment", "Judgement")):
-            values = mental_state.codes(mse, domain) if mental_state.is_structured(mse) else (
-                [str(mse.get(domain))] if mse.get(domain) else []
+            values = (
+                mental_state.codes(mse, domain)
+                if mental_state.is_structured(mse)
+                else ([str(mse.get(domain))] if mse.get(domain) else [])
             )
             if values:
-                groups["incapable_decisions"].append({
-                    "label": f"MSE — {label}", "value": ", ".join(values), "source": "CLINICIAN_OBSERVATION",
-                    "record": record, "recorded_at": at, "recorded_by": by,
-                })
-    for dx in DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE").select_related("icd11_code")[:10]:
-        groups["working_diagnosis"].append({
-            "label": f"{dx.icd11_code.code} {dx.icd11_code.description}".strip(),
-            "value": dx.get_verification_status_display() or "Certainty not stated",
-            "source": "CLINICIAN_OBSERVATION", "record": "Diagnosis", "recorded_at": _iso(dx.noted_at), "recorded_by": "",
-        })
+                groups["incapable_decisions"].append(
+                    {
+                        "label": f"MSE — {label}",
+                        "value": ", ".join(values),
+                        "source": "CLINICIAN_OBSERVATION",
+                        "record": record,
+                        "recorded_at": at,
+                        "recorded_by": by,
+                    }
+                )
+    for dx in DiagnosisCode.objects.filter(
+        encounter__patient=patient, status="ACTIVE"
+    ).select_related("icd11_code")[:10]:
+        groups["working_diagnosis"].append(
+            {
+                "label": f"{dx.icd11_code.code} {dx.icd11_code.description}".strip(),
+                "value": dx.get_verification_status_display() or "Certainty not stated",
+                "source": "CLINICIAN_OBSERVATION",
+                "record": "Diagnosis",
+                "recorded_at": _iso(dx.noted_at),
+                "recorded_by": "",
+            }
+        )
     return groups
 
 
@@ -415,17 +506,30 @@ def capacity_prompt(patient):
             reasons.extend(found)
             stamp = row.signed_at or row.updated_at
             latest = max(filter(None, [latest, stamp]))
-    return {"required": bool(reasons), "text": CAPACITY_PROMPT if reasons else "", "reasons": reasons, "since": latest}
+    return {
+        "required": bool(reasons),
+        "text": CAPACITY_PROMPT if reasons else "",
+        "reasons": reasons,
+        "since": latest,
+    }
 
 
 def capacity_confirmation(patient):
     """The clinician's confirmation is the existing decision-specific capacity
     assessment for ADMISSION (no second store) — the latest one in force."""
-    return CapacityAssessment.objects.filter(patient=patient, decision="ADMISSION").order_by("-assessed_at").first()
+    return (
+        CapacityAssessment.objects.filter(patient=patient, decision="ADMISSION")
+        .order_by("-assessed_at")
+        .first()
+    )
 
 
 def active_risk(patient):
-    return ClinicalAlert.objects.filter(patient=patient, status="ACTIVE").exclude(alert_code__in=LEGAL_ALERT_CODES).exists()
+    return (
+        ClinicalAlert.objects.filter(patient=patient, status="ACTIVE")
+        .exclude(alert_code__in=LEGAL_ALERT_CODES)
+        .exists()
+    )
 
 
 # ── application lifecycle ──
@@ -458,48 +562,93 @@ def start_application(patient, user, category):
         pending = ls.pending_application
         if pending.template_id == template and pending.status == "DRAFT":
             return pending
-        raise ValidationError({"detail_message": "An application is already awaiting signature or decision for this episode."})
+        raise ValidationError(
+            {
+                "detail_message": "An application is already awaiting signature or decision for this episode."
+            }
+        )
     if ls and ls.status == "ACTIVE" and ls.category == category:
-        raise ValidationError({"category": f"The client is already admitted as {ls.get_category_display().lower()}."})
+        raise ValidationError(
+            {"category": f"The client is already admitted as {ls.get_category_display().lower()}."}
+        )
     if ls is None:
         ls = LegalStatus.objects.create(
-            organization_id=patient.organization_id, patient=patient, episode=episode,
-            config_version=legal_config.version(), category=category,
-            statutory_basis=legal_config.statutory_basis(category), created_by=user,
+            organization_id=patient.organization_id,
+            patient=patient,
+            episode=episode,
+            config_version=legal_config.version(),
+            category=category,
+            statutory_basis=legal_config.statutory_basis(category),
+            created_by=user,
         )
         _event(ls, "CREATED", user, "", "APPLICATION_DRAFT", category=category)
     doc = LegalDocument.objects.create(
-        organization_id=patient.organization_id, legal_status=ls, patient=patient, template_id=template,
-        config_version=legal_config.version(), created_by=user, content={},
+        organization_id=patient.organization_id,
+        legal_status=ls,
+        patient=patient,
+        template_id=template,
+        config_version=legal_config.version(),
+        created_by=user,
+        content={},
     )
     ls.pending_application = doc
     if ls.status != "ACTIVE":
         # Nothing in force: this application is the one the status now describes.
         ls.category, ls.statutory_basis = category, legal_config.statutory_basis(category)
-        ls.decision, ls.decision_by, ls.decision_at, ls.decision_reason, ls.decision_role = "PENDING", None, None, "", ""
+        ls.decision, ls.decision_by, ls.decision_at, ls.decision_reason, ls.decision_role = (
+            "PENDING",
+            None,
+            None,
+            "",
+            "",
+        )
         ls.status = "PENDING"
-        _transition(ls, "APPLICATION_DRAFT", user, "APPLICATION_STARTED", category=category, document=str(doc.pk))
+        _transition(
+            ls,
+            "APPLICATION_DRAFT",
+            user,
+            "APPLICATION_STARTED",
+            category=category,
+            document=str(doc.pk),
+        )
     else:
         ls.save()
-        _event(ls, "CONVERSION_APPLICATION_STARTED", user, ls.workflow_state, ls.workflow_state,
-               to_category=category, document=str(doc.pk))
+        _event(
+            ls,
+            "CONVERSION_APPLICATION_STARTED",
+            user,
+            ls.workflow_state,
+            ls.workflow_state,
+            to_category=category,
+            document=str(doc.pk),
+        )
     return doc
 
 
 def _check_draft(doc):
     if doc.status != "DRAFT":
-        raise ValidationError({"detail_message": "This form is signed and cannot be changed. Amend it instead."})
+        raise ValidationError(
+            {"detail_message": "This form is signed and cannot be changed. Amend it instead."}
+        )
 
 
 def _validate_phone(phone):
     phone = re.sub(r"[\s-]", "", phone or "")
     if phone and not E164.match(phone):
-        raise ValidationError({"applicant_phone": "Enter the phone number in international format, e.g. +2547XXXXXXXX."})
+        raise ValidationError(
+            {
+                "applicant_phone": "Enter the phone number in international format, e.g. +2547XXXXXXXX."
+            }
+        )
     return phone
 
 
 def _relationship_codes():
-    return set(LocalConcept.objects.filter(valueset_id="next-of-kin-relationship", active=True).values_list("code", flat=True))
+    return set(
+        LocalConcept.objects.filter(
+            valueset_id="next-of-kin-relationship", active=True
+        ).values_list("code", flat=True)
+    )
 
 
 def _save_applicant(doc, data):
@@ -511,7 +660,9 @@ def _save_applicant(doc, data):
     if person_id:
         person = EmergencyContact.objects.filter(pk=person_id, patient=patient).first()
         if person is None:
-            raise ValidationError({"applicant_related_person_id": "That person is not linked to this client."})
+            raise ValidationError(
+                {"applicant_related_person_id": "That person is not linked to this client."}
+            )
     fields = {}
     if "applicant_name" in data:
         fields["name"] = str(data.get("applicant_name") or "").strip()[:255]
@@ -522,14 +673,20 @@ def _save_applicant(doc, data):
     if "applicant_relationship" in data:
         code = str(data.get("applicant_relationship") or "")
         if code and code not in _relationship_codes():
-            raise ValidationError({"applicant_relationship": "Choose the relationship from the list."})
+            raise ValidationError(
+                {"applicant_relationship": "Choose the relationship from the list."}
+            )
         fields["relationship"] = code
     if "applicant_relationship_detail" in data:
-        fields["relationship_detail"] = str(data.get("applicant_relationship_detail") or "").strip()[:150]
+        fields["relationship_detail"] = str(
+            data.get("applicant_relationship_detail") or ""
+        ).strip()[:150]
     if str(data.get("applicant_id_number") or "").strip():
         fields["id_number"] = str(data["applicant_id_number"]).strip()[:64]
     if person is None and fields.get("name"):
-        person = EmergencyContact.objects.create(organization_id=patient.organization_id, patient=patient, **fields)
+        person = EmergencyContact.objects.create(
+            organization_id=patient.organization_id, patient=patient, **fields
+        )
     elif person is not None and fields:
         for key, value in fields.items():
             if key == "name" and not value:
@@ -554,7 +711,11 @@ def _save_client_identity(doc, data, user):
         elif kind == "PASSPORT" and not patient.passport_number:
             patient.passport_number = value
         else:
-            raise ValidationError({"client_id_number": "The client record already holds this identifier; correct it there."})
+            raise ValidationError(
+                {
+                    "client_id_number": "The client record already holds this identifier; correct it there."
+                }
+            )
         record_identifier(patient, getattr(PatientIdentifier, f"KIND_{kind}"), value)
         patient.save()
     gender = data.get("client_gender")
@@ -562,7 +723,9 @@ def _save_client_identity(doc, data, user):
         if gender not in ("MALE", "FEMALE", "OTHER"):
             raise ValidationError({"client_gender": "Choose Male, Female or Other."})
         if patient.gender and patient.gender != "NOT_STATED":
-            raise ValidationError({"client_gender": "Gender comes from the client record; update it there."})
+            raise ValidationError(
+                {"client_gender": "Gender comes from the client record; update it there."}
+            )
         patient.gender = gender
         patient.save()
 
@@ -575,14 +738,19 @@ def save_draft(doc, user, data):
     if doc.template_id == VOLUNTARY_TEMPLATE:
         if "notice_acknowledged" in data:
             if data["notice_acknowledged"]:
-                content["notice_acknowledged_at"] = content.get("notice_acknowledged_at") or timezone.now().isoformat()
+                content["notice_acknowledged_at"] = (
+                    content.get("notice_acknowledged_at") or timezone.now().isoformat()
+                )
                 content["notice_acknowledged_by"] = _name(user)
             else:
                 content.pop("notice_acknowledged_at", None)
                 content.pop("notice_acknowledged_by", None)
     elif doc.template_id == INVOLUNTARY_APPLICATION_TEMPLATE:
         if "assertions" in data:
-            codes = {a["code"] for a in legal_config.form(doc.template_id, doc.config_version)["assertions"]}
+            codes = {
+                a["code"]
+                for a in legal_config.form(doc.template_id, doc.config_version)["assertions"]
+            }
             chosen = [c for c in (data.get("assertions") or []) if c in codes]
             if len(chosen) != len(data.get("assertions") or []):
                 raise ValidationError({"assertions": "Choose from the listed statements."})
@@ -602,7 +770,10 @@ def save_draft(doc, user, data):
             grounds = {}
             for code in ("a", "b", "c"):
                 g = (data.get("grounds") or {}).get(code) or {}
-                grounds[code] = {"affirmed": bool(g.get("affirmed")), "narrative": str(g.get("narrative") or "").strip()}
+                grounds[code] = {
+                    "affirmed": bool(g.get("affirmed")),
+                    "narrative": str(g.get("narrative") or "").strip(),
+                }
             content["grounds"] = grounds
     doc.content = content
     doc.save()
@@ -610,9 +781,17 @@ def save_draft(doc, user, data):
 
 
 def _attachment(doc, data):
-    att = Attachment.objects.filter(pk=data.get("attachment_id"), patient=doc.patient).first() if data.get("attachment_id") else None
+    att = (
+        Attachment.objects.filter(pk=data.get("attachment_id"), patient=doc.patient).first()
+        if data.get("attachment_id")
+        else None
+    )
     if att is None:
-        raise ValidationError({"attachment_id": "Upload the scanned wet signature to the client's documents and choose it."})
+        raise ValidationError(
+            {
+                "attachment_id": "Upload the scanned wet signature to the client's documents and choose it."
+            }
+        )
     return att
 
 
@@ -630,7 +809,10 @@ def _signature(doc, data, user):
 
 def _recommendations(application):
     return LegalDocument.objects.filter(
-        application=application, template_id=RECOMMENDATION_TEMPLATE, status="SIGNED", superseded_by__isnull=True
+        application=application,
+        template_id=RECOMMENDATION_TEMPLATE,
+        status="SIGNED",
+        superseded_by__isnull=True,
     )
 
 
@@ -644,56 +826,99 @@ def sign(doc, user, data):
     now = timezone.now()
     if doc.template_id == VOLUNTARY_TEMPLATE:
         if not content.get("notice_acknowledged_at"):  # AT-21
-            raise ValidationError({"notice_acknowledged": "The applicant must acknowledge the Section 10(3) notice before signing."})
+            raise ValidationError(
+                {
+                    "notice_acknowledged": "The applicant must acknowledge the Section 10(3) notice before signing."
+                }
+            )
         signer_kind = data.get("signer_kind") or "CLIENT"
         minor_age = legal_config.operational(doc.config_version)["minorAgeYears"]
         age = patient.age_years
         if signer_kind == "CLIENT":
             if age is not None and age < minor_age:  # AT-30
-                raise ValidationError({
-                    "signer_kind": f"The client is under {minor_age}. A minor cannot self-apply; the application "
-                    "must be made through the guardian consent workflow.",
-                    "route": "GUARDIAN_CONSENT",
-                })
+                raise ValidationError(
+                    {
+                        "signer_kind": f"The client is under {minor_age}. A minor cannot self-apply; the application "
+                        "must be made through the guardian consent workflow.",
+                        "route": "GUARDIAN_CONSENT",
+                    }
+                )
             if age is None and not data.get("adult_confirmed"):
-                raise ValidationError({"adult_confirmed": "The client's age is not recorded. Confirm the client is an adult, or use the guardian workflow."})
+                raise ValidationError(
+                    {
+                        "adult_confirmed": "The client's age is not recorded. Confirm the client is an adult, or use the guardian workflow."
+                    }
+                )
             prompt = capacity_prompt(patient)
             if prompt["required"]:  # LGL-V-11: prompt; a clinician confirmation must be on record
                 confirmation = capacity_confirmation(patient)
-                if confirmation is None or (prompt["since"] and confirmation.assessed_at < prompt["since"]):
-                    raise ValidationError({"capacity": CAPACITY_PROMPT, "reasons": prompt["reasons"]})
+                if confirmation is None or (
+                    prompt["since"] and confirmation.assessed_at < prompt["since"]
+                ):
+                    raise ValidationError(
+                        {"capacity": CAPACITY_PROMPT, "reasons": prompt["reasons"]}
+                    )
                 if confirmation.outcome != "Has capacity":
-                    raise ValidationError({"capacity": f"The capacity assessment for admission records: {confirmation.outcome}. "
-                                           "A voluntary application needs the client's own capacity to consent."})
-                content = {**content, "capacity_confirmation": {
-                    "assessment_id": str(confirmation.pk), "outcome": confirmation.outcome,
-                    "assessed_at": _iso(confirmation.assessed_at), "assessed_by": _name(confirmation.assessed_by),
-                    "reasons": prompt["reasons"]}}
+                    raise ValidationError(
+                        {
+                            "capacity": f"The capacity assessment for admission records: {confirmation.outcome}. "
+                            "A voluntary application needs the client's own capacity to consent."
+                        }
+                    )
+                content = {
+                    **content,
+                    "capacity_confirmation": {
+                        "assessment_id": str(confirmation.pk),
+                        "outcome": confirmation.outcome,
+                        "assessed_at": _iso(confirmation.assessed_at),
+                        "assessed_by": _name(confirmation.assessed_by),
+                        "reasons": prompt["reasons"],
+                    },
+                }
             doc.signer_name = patient.get_full_name()
         elif signer_kind == "GUARDIAN":
-            person = EmergencyContact.objects.filter(pk=data.get("related_person_id"), patient=patient, is_guardian=True).first()
+            person = EmergencyContact.objects.filter(
+                pk=data.get("related_person_id"), patient=patient, is_guardian=True
+            ).first()
             if person is None:
-                raise ValidationError({"related_person_id": "Choose the client's recorded parent/guardian."})
+                raise ValidationError(
+                    {"related_person_id": "Choose the client's recorded parent/guardian."}
+                )
             doc.signer_related_person, doc.signer_name = person, person.name
             consent = VisitConsent.objects.create(
-                organization_id=patient.organization_id, patient=patient, scope="ADMISSION", party="GUARDIAN",
-                method=data.get("method", "")[:20], given_by_name=person.name, recorded_by=user,
-                warnings=[] if (age is not None and age < minor_age) else ["Guardian consent recorded for a client not recorded as a minor"],
+                organization_id=patient.organization_id,
+                patient=patient,
+                scope="ADMISSION",
+                party="GUARDIAN",
+                method=data.get("method", "")[:20],
+                given_by_name=person.name,
+                recorded_by=user,
+                warnings=(
+                    []
+                    if (age is not None and age < minor_age)
+                    else ["Guardian consent recorded for a client not recorded as a minor"]
+                ),
             )
             content = {**content, "guardian_consent_id": str(consent.pk)}
         else:
             raise ValidationError({"signer_kind": "The applicant is the client or their guardian."})
         doc.signer_kind = signer_kind
     elif doc.template_id == INVOLUNTARY_APPLICATION_TEMPLATE:
-        person = EmergencyContact.objects.filter(pk=content.get("applicant_related_person_id"), patient=patient).first()
+        person = EmergencyContact.objects.filter(
+            pk=content.get("applicant_related_person_id"), patient=patient
+        ).first()
         problems = {}
         if person is None or not person.name.strip():
             problems["applicant_name"] = "Record the applicant (Part B)."
         else:
             if not person.phone or not E164.match(person.phone):
-                problems["applicant_phone"] = "Record the applicant's phone number in international format."
+                problems["applicant_phone"] = (
+                    "Record the applicant's phone number in international format."
+                )
             if not person.relationship:
-                problems["applicant_relationship"] = "Record the applicant's relationship to the client."
+                problems["applicant_relationship"] = (
+                    "Record the applicant's relationship to the client."
+                )
             if not person.address.strip():
                 problems["applicant_address"] = "Record the applicant's address."
         if not content.get("assertions"):
@@ -702,7 +927,11 @@ def sign(doc, user, data):
             problems["other_description"] = "Describe the 'Other' ground."
         if problems:
             raise ValidationError(problems)
-        doc.signer_kind, doc.signer_related_person, doc.signer_name = "RELATED_PERSON", person, person.name
+        doc.signer_kind, doc.signer_related_person, doc.signer_name = (
+            "RELATED_PERSON",
+            person,
+            person.name,
+        )
     elif doc.template_id == RECOMMENDATION_TEMPLATE:
         cred = credential_status(user)
         if not cred["can_sign"]:  # AT-24
@@ -715,10 +944,17 @@ def sign(doc, user, data):
         except ValueError:
             exam = None
             problems["examination_date"] = "Record the date you examined the client."
-        encounter = Encounter.objects.filter(pk=content.get("examination_encounter_id") or None, patient=patient).first() \
-            if content.get("examination_encounter_id") else None
+        encounter = (
+            Encounter.objects.filter(
+                pk=content.get("examination_encounter_id") or None, patient=patient
+            ).first()
+            if content.get("examination_encounter_id")
+            else None
+        )
         if encounter is None:
-            problems["examination_encounter_id"] = "Link the clinical encounter (MSE / intake / psychiatric review) at which you examined the client."
+            problems["examination_encounter_id"] = (
+                "Link the clinical encounter (MSE / intake / psychiatric review) at which you examined the client."
+            )
         grounds = content.get("grounds") or {}
         for code in ("a", "b", "c"):
             g = grounds.get(code) or {}
@@ -732,7 +968,18 @@ def sign(doc, user, data):
             raise ValidationError(problems)
         doc.examination_encounter = encounter
         doc.signer_kind, doc.signer_user, doc.signer_name = "PRACTITIONER", user, cred["name"]
-        content = {**content, "credential": {k: cred[k] for k in ("registration_number", "registration_body", "registration_verified_at", "qualifications")}}
+        content = {
+            **content,
+            "credential": {
+                k: cred[k]
+                for k in (
+                    "registration_number",
+                    "registration_body",
+                    "registration_verified_at",
+                    "qualifications",
+                )
+            },
+        }
     if doc.template_id == RECOMMENDATION_TEMPLATE:
         doc.signature_method, doc.captured_by = "ELECTRONIC", user
     else:
@@ -742,12 +989,24 @@ def sign(doc, user, data):
     doc.rendered = render_snapshot(doc)
     doc.status = "SIGNED"
     doc.save()
-    _event(ls, "DOCUMENT_SIGNED", user, ls.workflow_state, ls.workflow_state,
-           document=str(doc.pk), template=doc.template_id, version=doc.version, signer_kind=doc.signer_kind)
+    _event(
+        ls,
+        "DOCUMENT_SIGNED",
+        user,
+        ls.workflow_state,
+        ls.workflow_state,
+        document=str(doc.pk),
+        template=doc.template_id,
+        version=doc.version,
+        signer_kind=doc.signer_kind,
+    )
     if doc.template_id in TEMPLATE_CATEGORY and ls.pending_application_id == doc.pk:
         if ls.status != "ACTIVE":
             _transition(ls, "APPLICATION_SIGNED", user, document=str(doc.pk))
-    elif doc.template_id == RECOMMENDATION_TEMPLATE and ls.pending_application_id == doc.application_id:
+    elif (
+        doc.template_id == RECOMMENDATION_TEMPLATE
+        and ls.pending_application_id == doc.application_id
+    ):
         required = legal_config.operational(ls.config_version)["requiredRecommendations"]
         if _recommendations(doc.application).count() >= required and ls.status != "ACTIVE":
             _transition(ls, "RECOMMENDATION_SIGNED", user, document=str(doc.pk))
@@ -759,16 +1018,30 @@ def start_recommendation(application, user):
     cred = credential_status(user)
     if not cred["can_sign"]:  # AT-24: cannot open the form
         raise PermissionDenied(cred["reason"])
-    if application.template_id != INVOLUNTARY_APPLICATION_TEMPLATE or application.status != "SIGNED":
-        raise ValidationError({"application": "A recommendation supports a signed involuntary application."})
-    existing = LegalDocument.objects.filter(application=application, template_id=RECOMMENDATION_TEMPLATE,
-                                            status="DRAFT", created_by=user).first()
+    if (
+        application.template_id != INVOLUNTARY_APPLICATION_TEMPLATE
+        or application.status != "SIGNED"
+    ):
+        raise ValidationError(
+            {"application": "A recommendation supports a signed involuntary application."}
+        )
+    existing = LegalDocument.objects.filter(
+        application=application,
+        template_id=RECOMMENDATION_TEMPLATE,
+        status="DRAFT",
+        created_by=user,
+    ).first()
     if existing:
         return existing
     return LegalDocument.objects.create(
-        organization_id=application.organization_id, legal_status=application.legal_status, patient=application.patient,
-        template_id=RECOMMENDATION_TEMPLATE, config_version=application.config_version, application=application,
-        created_by=user, content={},
+        organization_id=application.organization_id,
+        legal_status=application.legal_status,
+        patient=application.patient,
+        template_id=RECOMMENDATION_TEMPLATE,
+        config_version=application.config_version,
+        application=application,
+        created_by=user,
+        content={},
     )
 
 
@@ -776,7 +1049,9 @@ def start_recommendation(application, user):
 def amend(doc, user, reason):
     """LGL-DOC-04: a signed version is never edited; a correction is a new version."""
     if doc.status != "SIGNED":
-        raise ValidationError({"detail_message": "Only a signed form is amended; edit the draft instead."})
+        raise ValidationError(
+            {"detail_message": "Only a signed form is amended; edit the draft instead."}
+        )
     if doc.superseded_by.exists():
         raise ValidationError({"detail_message": "This version has already been amended."})
     if not (reason or "").strip():
@@ -784,17 +1059,36 @@ def amend(doc, user, reason):
     if doc.template_id == RECOMMENDATION_TEMPLATE and doc.signer_user_id != user.pk:
         raise PermissionDenied("Only the practitioner who signed a recommendation can amend it.")
     new = LegalDocument.objects.create(
-        organization_id=doc.organization_id, legal_status=doc.legal_status, patient=doc.patient,
-        template_id=doc.template_id, config_version=doc.config_version, application=doc.application,
-        version=doc.version + 1, supersedes=doc, amendment_reason=reason.strip(), created_by=user,
-        content={k: v for k, v in (doc.content or {}).items() if k not in ("credential", "capacity_confirmation")},
+        organization_id=doc.organization_id,
+        legal_status=doc.legal_status,
+        patient=doc.patient,
+        template_id=doc.template_id,
+        config_version=doc.config_version,
+        application=doc.application,
+        version=doc.version + 1,
+        supersedes=doc,
+        amendment_reason=reason.strip(),
+        created_by=user,
+        content={
+            k: v
+            for k, v in (doc.content or {}).items()
+            if k not in ("credential", "capacity_confirmation")
+        },
     )
     ls = LegalStatus.objects.select_for_update().get(pk=doc.legal_status_id)
     if ls.pending_application_id == doc.pk:
         ls.pending_application = new
         ls.save()
-    _event(ls, "DOCUMENT_AMENDMENT_STARTED", user, ls.workflow_state, ls.workflow_state,
-           supersedes=str(doc.pk), document=str(new.pk), reason=reason.strip())
+    _event(
+        ls,
+        "DOCUMENT_AMENDMENT_STARTED",
+        user,
+        ls.workflow_state,
+        ls.workflow_state,
+        supersedes=str(doc.pk),
+        document=str(new.pk),
+        reason=reason.strip(),
+    )
     return new
 
 
@@ -808,7 +1102,9 @@ def _link_admission(ls, user):
 
     admission = (
         Admission.objects.filter(patient=ls.patient, status__in=CURRENT_ADMISSION_STATUSES)
-        .filter(Q(episode=ls.episode) | Q(episode__isnull=True)).order_by("-admitted_at").first()
+        .filter(Q(episode=ls.episode) | Q(episode__isnull=True))
+        .order_by("-admitted_at")
+        .first()
     )
     if admission:
         admission.legal_status_record = ls
@@ -820,10 +1116,14 @@ def _link_admission(ls, user):
 def decide(ls, user, decision, reason=""):
     ls = LegalStatus.objects.select_for_update().get(pk=ls.pk)
     if not is_admitting_officer(user):
-        raise PermissionDenied("Only an admitting officer (ADMITTING_OFFICER permission) can record the admission decision.")
+        raise PermissionDenied(
+            "Only an admitting officer (ADMITTING_OFFICER permission) can record the admission decision."
+        )
     application = ls.pending_application
     if application is None or application.status != "SIGNED":
-        raise ValidationError({"detail_message": "There is no signed application awaiting a decision."})
+        raise ValidationError(
+            {"detail_message": "There is no signed application awaiting a decision."}
+        )
     reason = (reason or "").strip()
     category = TEMPLATE_CATEGORY[application.template_id]
     now = timezone.now()
@@ -833,11 +1133,25 @@ def decide(ls, user, decision, reason=""):
         if ls.status == "ACTIVE":  # conversion refused: the status in force is unchanged
             ls.pending_application = None
             ls.save()
-            _event(ls, "CONVERSION_REJECTED", user, ls.workflow_state, ls.workflow_state,
-                   document=str(application.pk), reason=reason, decided_at=now.isoformat())
+            _event(
+                ls,
+                "CONVERSION_REJECTED",
+                user,
+                ls.workflow_state,
+                ls.workflow_state,
+                document=str(application.pk),
+                reason=reason,
+                decided_at=now.isoformat(),
+            )
             return ls
         ls.application_document, ls.pending_application = application, None
-        ls.decision, ls.decision_by, ls.decision_role, ls.decision_at, ls.decision_reason = "REJECTED", user, _role(user), now, reason
+        ls.decision, ls.decision_by, ls.decision_role, ls.decision_at, ls.decision_reason = (
+            "REJECTED",
+            user,
+            _role(user),
+            now,
+            reason,
+        )
         ls.status = "NOT_ADMITTED"
         _transition(ls, "REJECTED", user, document=str(application.pk), reason=reason)
         return ls
@@ -848,13 +1162,25 @@ def decide(ls, user, decision, reason=""):
         required = legal_config.operational(ls.config_version)["requiredRecommendations"]
         recs = list(_recommendations(application).order_by("signed_at"))
         if len(recs) < required:  # AT-25, OQ-17
-            raise ValidationError({"decision": f"An involuntary admission cannot be recorded as Admitted until "
-                                   f"{required} signed medical recommendation(s) are on file ({len(recs)} signed)."})
+            raise ValidationError(
+                {
+                    "decision": f"An involuntary admission cannot be recorded as Admitted until "
+                    f"{required} signed medical recommendation(s) are on file ({len(recs)} signed)."
+                }
+            )
     converting = ls.status == "ACTIVE" and ls.category != category
     previous_category = ls.category
-    ls.category, ls.statutory_basis = category, legal_config.statutory_basis(category, ls.config_version)
+    ls.category, ls.statutory_basis = category, legal_config.statutory_basis(
+        category, ls.config_version
+    )
     ls.application_document, ls.pending_application = application, None
-    ls.decision, ls.decision_by, ls.decision_role, ls.decision_at, ls.decision_reason = "ADMITTED", user, _role(user), now, ""
+    ls.decision, ls.decision_by, ls.decision_role, ls.decision_at, ls.decision_reason = (
+        "ADMITTED",
+        user,
+        _role(user),
+        now,
+        "",
+    )
     ls.effective_from = now
     if category == "INVOLUNTARY":
         months = legal_config.operational(ls.config_version)["involuntaryMaxDurationMonths"]
@@ -864,8 +1190,15 @@ def decide(ls, user, decision, reason=""):
         ls.max_expiry_at = None
     ls.status = "ACTIVE"
     if converting:
-        _transition(ls, "CONVERTED_TO_VOLUNTARY" if category == "VOLUNTARY" else "ADMITTED", user,
-                    "CONVERTED", from_category=previous_category, to_category=category, document=str(application.pk))
+        _transition(
+            ls,
+            "CONVERTED_TO_VOLUNTARY" if category == "VOLUNTARY" else "ADMITTED",
+            user,
+            "CONVERTED",
+            from_category=previous_category,
+            to_category=category,
+            document=str(application.pk),
+        )
     else:
         _transition(ls, "ADMITTED", user, document=str(application.pk))
     _transition(ls, "ACTIVE", user, max_expiry_at=_iso(ls.max_expiry_at))
@@ -873,13 +1206,28 @@ def decide(ls, user, decision, reason=""):
     psychiatrist = responsible_psychiatrist(ls.patient)
     rights = legal_config.rights(ls.config_version)
     if not _open_task(ls, TASK_RIGHTS):  # LGL-WF-05, OQ-23
-        _task(ls, TASK_RIGHTS, rights["taskLabel"], user, due_at=now, priority="urgent", assignee=psychiatrist)
+        _task(
+            ls,
+            TASK_RIGHTS,
+            rights["taskLabel"],
+            user,
+            due_at=now,
+            priority="urgent",
+            assignee=psychiatrist,
+        )
     if category == "INVOLUNTARY":
         _alert(ls.patient, "INVOLUNTARY_STATUS", user)
         lead = legal_config.operational(ls.config_version)["reviewLeadDays"]
         if not _open_task(ls, TASK_EXPIRY_REVIEW):  # LGL-WF-02/03
-            _task(ls, TASK_EXPIRY_REVIEW, "Review involuntary legal status before it reaches its maximum duration",
-                  user, due_at=ls.max_expiry_at - timedelta(days=lead), priority="urgent", assignee=psychiatrist)
+            _task(
+                ls,
+                TASK_EXPIRY_REVIEW,
+                "Review involuntary legal status before it reaches its maximum duration",
+                user,
+                due_at=ls.max_expiry_at - timedelta(days=lead),
+                priority="urgent",
+                assignee=psychiatrist,
+            )
     else:
         for code in ("INVOLUNTARY_STATUS", "LEGAL_STATUS_EXPIRING", "LEGAL_STATUS_EXPIRED"):
             _resolve_alert(ls.patient, code, user)
@@ -891,7 +1239,9 @@ def end_involuntary(ls, user, reason):
     """Review outcome DISCHARGED: the admitting officer ends an involuntary status."""
     ls = LegalStatus.objects.select_for_update().get(pk=ls.pk)
     if not is_admitting_officer(user):
-        raise PermissionDenied("Only an admitting officer can record the end of an involuntary legal status.")
+        raise PermissionDenied(
+            "Only an admitting officer can record the end of an involuntary legal status."
+        )
     if ls.category != "INVOLUNTARY" or ls.status not in ("ACTIVE", "EXPIRED"):
         raise ValidationError({"detail_message": "There is no involuntary legal status in force."})
     if not (reason or "").strip():
@@ -952,9 +1302,23 @@ def _notice_risk_check(ls, user):
             return False
         notice.risk_review_prompted_at = timezone.now()
         notice.save(update_fields=["risk_review_prompted_at", "updated_at"])
-        _task(ls, TASK_LEGAL_REVIEW, RISK_REVIEW_PROMPT, user, due_at=notice.earliest_departure_at,
-              priority="urgent", assignee=responsible_psychiatrist(ls.patient))
-        _event(ls, "RISK_REVIEW_PROMPTED", user, ls.workflow_state, ls.workflow_state, notice=str(notice.pk))
+        _task(
+            ls,
+            TASK_LEGAL_REVIEW,
+            RISK_REVIEW_PROMPT,
+            user,
+            due_at=notice.earliest_departure_at,
+            priority="urgent",
+            assignee=responsible_psychiatrist(ls.patient),
+        )
+        _event(
+            ls,
+            "RISK_REVIEW_PROMPTED",
+            user,
+            ls.workflow_state,
+            ls.workflow_state,
+            notice=str(notice.pk),
+        )
     return True
 
 
@@ -962,7 +1326,9 @@ def _notice_risk_check(ls, user):
 def give_notice(ls, user, data):
     ls = LegalStatus.objects.select_for_update().get(pk=ls.pk)
     if ls.category != "VOLUNTARY" or ls.status != "ACTIVE":
-        raise ValidationError({"detail_message": "Written notice applies to a voluntary admission in force."})
+        raise ValidationError(
+            {"detail_message": "Written notice applies to a voluntary admission in force."}
+        )
     if active_notice(ls):
         raise ValidationError({"detail_message": "A written notice is already active."})
     now = timezone.now()
@@ -974,15 +1340,30 @@ def give_notice(ls, user, data):
         given_at = parsed
     from apps.accounts.models import User
 
-    given_to = User.objects.filter(pk=data.get("given_to"), organization_id=ls.organization_id).first() if data.get("given_to") else user
+    given_to = (
+        User.objects.filter(pk=data.get("given_to"), organization_id=ls.organization_id).first()
+        if data.get("given_to")
+        else user
+    )
     if given_to is None:
-        raise ValidationError({"given_to": "Choose the staff member in charge who received the notice."})
+        raise ValidationError(
+            {"given_to": "Choose the staff member in charge who received the notice."}
+        )
     statement = str(data.get("statement") or "").strip()
     doc = LegalDocument(
-        organization_id=ls.organization_id, legal_status=ls, patient=ls.patient, template_id=NOTICE_TEMPLATE,
-        config_version=ls.config_version, created_by=user, content={"statement": statement, "given_at": given_at.isoformat(),
-                                                                    "given_to": _name(given_to)},
-        signer_kind="CLIENT", signer_name=ls.patient.get_full_name(),
+        organization_id=ls.organization_id,
+        legal_status=ls,
+        patient=ls.patient,
+        template_id=NOTICE_TEMPLATE,
+        config_version=ls.config_version,
+        created_by=user,
+        content={
+            "statement": statement,
+            "given_at": given_at.isoformat(),
+            "given_to": _name(given_to),
+        },
+        signer_kind="CLIENT",
+        signer_name=ls.patient.get_full_name(),
     )
     if data.get("method") == "ELECTRONIC" and not statement:
         raise ValidationError({"statement": "Record the client's written notice in their words."})
@@ -993,19 +1374,46 @@ def give_notice(ls, user, data):
     doc.save()
     hours = legal_config.operational(ls.config_version)["voluntaryNoticePeriodHours"]
     notice = DischargeNotice.objects.create(
-        organization_id=ls.organization_id, legal_status=ls, given_at=given_at, given_to=given_to,
-        written_notice_document=doc, notice_period_hours=hours,
-        earliest_departure_at=given_at + timedelta(hours=hours), created_by=user,
+        organization_id=ls.organization_id,
+        legal_status=ls,
+        given_at=given_at,
+        given_to=given_to,
+        written_notice_document=doc,
+        notice_period_hours=hours,
+        earliest_departure_at=given_at + timedelta(hours=hours),
+        created_by=user,
     )
-    _event(ls, "DISCHARGE_NOTICE_GIVEN", user, ls.workflow_state, ls.workflow_state, notice=str(notice.pk),
-           earliest_departure_at=notice.earliest_departure_at.isoformat())
+    _event(
+        ls,
+        "DISCHARGE_NOTICE_GIVEN",
+        user,
+        ls.workflow_state,
+        ls.workflow_state,
+        notice=str(notice.pk),
+        earliest_departure_at=notice.earliest_departure_at.isoformat(),
+    )
     psychiatrist = responsible_psychiatrist(ls.patient)
-    _task(ls, TASK_NOTICE_REVIEW, "Psychiatric review before departure (written discharge notice)", user,
-          due_at=notice.earliest_departure_at, priority="urgent", assignee=psychiatrist)
+    _task(
+        ls,
+        TASK_NOTICE_REVIEW,
+        "Psychiatric review before departure (written discharge notice)",
+        user,
+        due_at=notice.earliest_departure_at,
+        priority="urgent",
+        assignee=psychiatrist,
+    )
     plan = "Discharge planning: discharge summary, discharge medication list, follow-up/continuing-care plan"
     if active_risk(ls.patient):
         plan += ", safety/crisis plan (risk active)"
-    _task(ls, TASK_NOTICE_DISCHARGE, plan, user, due_at=notice.earliest_departure_at, priority="urgent", owner="Care team")
+    _task(
+        ls,
+        TASK_NOTICE_DISCHARGE,
+        plan,
+        user,
+        due_at=notice.earliest_departure_at,
+        priority="urgent",
+        owner="Care team",
+    )
     _alert(ls.patient, "DISCHARGE_NOTICE_ACTIVE", user)
     _notice_risk_check(ls, user)
     return notice
@@ -1020,7 +1428,14 @@ def withdraw_notice(notice, user):
     notice.save(update_fields=["withdrawn_at", "withdrawn_by", "updated_at"])
     ls = notice.legal_status
     _resolve_alert(ls.patient, "DISCHARGE_NOTICE_ACTIVE", user)
-    _event(ls, "DISCHARGE_NOTICE_WITHDRAWN", user, ls.workflow_state, ls.workflow_state, notice=str(notice.pk))
+    _event(
+        ls,
+        "DISCHARGE_NOTICE_WITHDRAWN",
+        user,
+        ls.workflow_state,
+        ls.workflow_state,
+        notice=str(notice.pk),
+    )
     return notice
 
 
@@ -1044,7 +1459,11 @@ def record_departure(notice, user):
     admission = services.current_admission(ls.patient)
     if admission:
         services.save_discharge_draft(admission, user, {"disposition": "AMA"} if ama else {})
-    return {"notice": notice, "admission_id": str(admission.pk) if admission else None, "against_medical_advice": ama}
+    return {
+        "notice": notice,
+        "admission_id": str(admission.pk) if admission else None,
+        "against_medical_advice": ama,
+    }
 
 
 @transaction.atomic
@@ -1057,7 +1476,15 @@ def complete_task(task, user):
     task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
     ls = LegalStatus.objects.filter(pk=task.focus_id).first()
     if ls:
-        _event(ls, "TASK_COMPLETED", user, ls.workflow_state, ls.workflow_state, task=str(task.pk), code=task.action_code)
+        _event(
+            ls,
+            "TASK_COMPLETED",
+            user,
+            ls.workflow_state,
+            ls.workflow_state,
+            task=str(task.pk),
+            code=task.action_code,
+        )
     return task
 
 
@@ -1080,7 +1507,13 @@ def unmask(ls, user, subject, related_person_id=None):
     else:
         raise ValidationError({"subject": "client or applicant"})
     if legal_config.privacy()["logUnmaskedViews"]:
-        write_event(ls.organization_id, "VIEW", model, object_id, {"unmasked": "identity_number", "context": "legal_status", "legal_status": str(ls.pk)})
+        write_event(
+            ls.organization_id,
+            "VIEW",
+            model,
+            object_id,
+            {"unmasked": "identity_number", "context": "legal_status", "legal_status": str(ls.pk)},
+        )
     return value
 
 
@@ -1095,34 +1528,77 @@ def render_snapshot(doc):
     client = client_details(patient)
     facility = facility_profile(patient, ls.episode)
     content = doc.content or {}
-    out = {"title": form["title"], "statuteLine": form.get("statuteLine", ""), "configVersion": doc.config_version,
-           "facility": facility, "client": {k: client[k] for k in ("full_name", "address", "gender_form", "gender_other_detail", "id_kind", "pronoun")},
-           "labels": form.get("labels", {})}
+    out = {
+        "title": form["title"],
+        "statuteLine": form.get("statuteLine", ""),
+        "configVersion": doc.config_version,
+        "facility": facility,
+        "client": {
+            k: client[k]
+            for k in (
+                "full_name",
+                "address",
+                "gender_form",
+                "gender_other_detail",
+                "id_kind",
+                "pronoun",
+            )
+        },
+        "labels": form.get("labels", {}),
+    }
     name = patient.get_full_name()
     if doc.template_id == VOLUNTARY_TEMPLATE:
-        out.update({
-            "explanatoryText": legal_config.text(form["explanatoryText"]),
-            "noticeHeading": legal_config.text(form["noticeHeading"]),
-            "noticeText": legal_config.text(form["noticeText"]),
-            "noticePurpose": legal_config.text(form["noticePurpose"]),
-            "noticeAcknowledgement": legal_config.text(form["noticeAcknowledgement"]),
-            "declaration": legal_config.fill(legal_config.text(form["declaration"]), fullName=name,
-                                             address=patient.address or "", facilityName=facility["name"]),
-        })
+        out.update(
+            {
+                "explanatoryText": legal_config.text(form["explanatoryText"]),
+                "noticeHeading": legal_config.text(form["noticeHeading"]),
+                "noticeText": legal_config.text(form["noticeText"]),
+                "noticePurpose": legal_config.text(form["noticePurpose"]),
+                "noticeAcknowledgement": legal_config.text(form["noticeAcknowledgement"]),
+                "declaration": legal_config.fill(
+                    legal_config.text(form["declaration"]),
+                    fullName=name,
+                    address=patient.address or "",
+                    facilityName=facility["name"],
+                ),
+            }
+        )
     elif doc.template_id == INVOLUNTARY_APPLICATION_TEMPLATE:
-        person = EmergencyContact.objects.filter(pk=content.get("applicant_related_person_id")).first()
+        person = EmergencyContact.objects.filter(
+            pk=content.get("applicant_related_person_id")
+        ).first()
         chosen = set(content.get("assertions") or [])
-        out.update({
-            "parts": form["parts"],
-            "assertions": [{"code": a["code"], "text": a["text"], "ticked": a["code"] in chosen,
-                            "source": "THIRD_PARTY_REPORT", "sourceDetail": person.name if person else ""}
-                           for a in form["assertions"]],
-            "otherDescription": content.get("other_description", ""),
-            "applicant": {"name": person.name, "address": person.address, "phone": person.phone,
-                          "relationship": person.relationship, "relationship_detail": person.relationship_detail,
-                          "id_present": bool(person.id_number)} if person else {},
-            "declaration": legal_config.fill(legal_config.text(form["declaration"]), clientName=name),
-        })
+        out.update(
+            {
+                "parts": form["parts"],
+                "assertions": [
+                    {
+                        "code": a["code"],
+                        "text": a["text"],
+                        "ticked": a["code"] in chosen,
+                        "source": "THIRD_PARTY_REPORT",
+                        "sourceDetail": person.name if person else "",
+                    }
+                    for a in form["assertions"]
+                ],
+                "otherDescription": content.get("other_description", ""),
+                "applicant": (
+                    {
+                        "name": person.name,
+                        "address": person.address,
+                        "phone": person.phone,
+                        "relationship": person.relationship,
+                        "relationship_detail": person.relationship_detail,
+                        "id_present": bool(person.id_number),
+                    }
+                    if person
+                    else {}
+                ),
+                "declaration": legal_config.fill(
+                    legal_config.text(form["declaration"]), clientName=name
+                ),
+            }
+        )
     elif doc.template_id == RECOMMENDATION_TEMPLATE:
         exam = content.get("examination_date") or ""
         day = month = yy = ""
@@ -1132,23 +1608,52 @@ def render_snapshot(doc):
                 day, month, yy = str(d.day), d.strftime("%B"), d.strftime("%y")
             except ValueError:
                 pass
-        values = {"clientName": name, "practitionerName": doc.signer_name or "", "day": day, "month": month,
-                  "yy": yy, "pronoun": pronoun(patient)}
+        values = {
+            "clientName": name,
+            "practitionerName": doc.signer_name or "",
+            "day": day,
+            "month": month,
+            "yy": yy,
+            "pronoun": pronoun(patient),
+        }
         decls = []
         for decl in form["declarations"]:
-            entry = {"number": decl["number"], "lead": decl.get("lead", ""), "text": legal_config.fill(decl["text"], **values)}
+            entry = {
+                "number": decl["number"],
+                "lead": decl.get("lead", ""),
+                "text": legal_config.fill(decl["text"], **values),
+            }
             if decl.get("grounds"):
                 g = content.get("grounds") or {}
-                entry["grounds"] = [{"code": gr["code"], "text": legal_config.fill(gr["text"], **values),
-                                     "affirmed": bool((g.get(gr["code"]) or {}).get("affirmed")),
-                                     "narrative": (g.get(gr["code"]) or {}).get("narrative", "")} for gr in decl["grounds"]]
+                entry["grounds"] = [
+                    {
+                        "code": gr["code"],
+                        "text": legal_config.fill(gr["text"], **values),
+                        "affirmed": bool((g.get(gr["code"]) or {}).get("affirmed")),
+                        "narrative": (g.get(gr["code"]) or {}).get("narrative", ""),
+                    }
+                    for gr in decl["grounds"]
+                ]
             decls.append(entry)
-        out.update({"intro": legal_config.fill(legal_config.text(form["intro"]), **values), "declarations": decls,
-                    "credential": content.get("credential", {}), "examinationDate": exam})
+        out.update(
+            {
+                "intro": legal_config.fill(legal_config.text(form["intro"]), **values),
+                "declarations": decls,
+                "credential": content.get("credential", {}),
+                "examinationDate": exam,
+            }
+        )
     elif doc.template_id == NOTICE_TEMPLATE:
         vol = legal_config.form(VOLUNTARY_TEMPLATE, doc.config_version)
-        out.update({"noticeHeading": legal_config.text(vol["noticeHeading"]), "noticeText": legal_config.text(vol["noticeText"]),
-                    "statement": content.get("statement", ""), "givenAt": content.get("given_at"), "givenTo": content.get("given_to")})
+        out.update(
+            {
+                "noticeHeading": legal_config.text(vol["noticeHeading"]),
+                "noticeText": legal_config.text(vol["noticeText"]),
+                "statement": content.get("statement", ""),
+                "givenAt": content.get("given_at"),
+                "givenTo": content.get("given_to"),
+            }
+        )
     return out
 
 
@@ -1157,16 +1662,27 @@ def render_snapshot(doc):
 
 def document_row(doc):
     return {
-        "id": str(doc.pk), "document_number": doc.document_number, "template_id": doc.template_id,
-        "title": doc.get_template_id_display(), "version": doc.version, "status": doc.status,
+        "id": str(doc.pk),
+        "document_number": doc.document_number,
+        "template_id": doc.template_id,
+        "title": doc.get_template_id_display(),
+        "version": doc.version,
+        "status": doc.status,
         "supersedes": str(doc.supersedes_id) if doc.supersedes_id else None,
-        "superseded": doc.superseded_by.exists(), "amendment_reason": doc.amendment_reason,
+        "superseded": doc.superseded_by.exists(),
+        "amendment_reason": doc.amendment_reason,
         "application": str(doc.application_id) if doc.application_id else None,
         "content": {k: v for k, v in (doc.content or {}).items() if k != "credential"},
-        "signer_kind": doc.signer_kind, "signer_name": doc.signer_name, "signature_method": doc.signature_method,
-        "signed_at": _iso(doc.signed_at), "captured_by": _name(doc.captured_by), "created_by": _name(doc.created_by),
+        "signer_kind": doc.signer_kind,
+        "signer_name": doc.signer_name,
+        "signature_method": doc.signature_method,
+        "signed_at": _iso(doc.signed_at),
+        "captured_by": _name(doc.captured_by),
+        "created_by": _name(doc.created_by),
         "created_at": _iso(doc.created_at),
-        "examination_encounter_id": str(doc.examination_encounter_id) if doc.examination_encounter_id else None,
+        "examination_encounter_id": (
+            str(doc.examination_encounter_id) if doc.examination_encounter_id else None
+        ),
     }
 
 
@@ -1176,17 +1692,32 @@ def banner_summary(patient):
     if ls is None:
         return None
     notice = active_notice(ls)
-    label = {"PENDING": f"{ls.get_category_display().upper()} — APPLICATION PENDING",
-             "NOT_ADMITTED": "APPLICATION REJECTED", "ACTIVE": ls.get_category_display().upper(),
-             "EXPIRED": "INVOLUNTARY — EXPIRED", "DISCHARGED": "LEGAL STATUS ENDED"}.get(ls.status, ls.get_status_display().upper())
+    label = {
+        "PENDING": f"{ls.get_category_display().upper()} — APPLICATION PENDING",
+        "NOT_ADMITTED": "APPLICATION REJECTED",
+        "ACTIVE": ls.get_category_display().upper(),
+        "EXPIRED": "INVOLUNTARY — EXPIRED",
+        "DISCHARGED": "LEGAL STATUS ENDED",
+    }.get(ls.status, ls.get_status_display().upper())
     if ls.status == "ACTIVE" and ls.category == "INVOLUNTARY" and ls.max_expiry_at:
         label += f", expires {facility_time.local_format(ls.max_expiry_at, '%Y-%m-%d')}"
     return {
-        "id": str(ls.pk), "category": ls.category, "status": ls.status, "decision": ls.decision,
-        "label": label, "max_expiry_at": _iso(ls.max_expiry_at),
+        "id": str(ls.pk),
+        "category": ls.category,
+        "status": ls.status,
+        "decision": ls.decision,
+        "label": label,
+        "max_expiry_at": _iso(ls.max_expiry_at),
         "pending_conversion": bool(ls.status == "ACTIVE" and ls.pending_application_id),
-        "notice": {"given_at": _iso(notice.given_at), "earliest_departure_at": _iso(notice.earliest_departure_at),
-                   "notice_period_hours": notice.notice_period_hours} if notice else None,
+        "notice": (
+            {
+                "given_at": _iso(notice.given_at),
+                "earliest_departure_at": _iso(notice.earliest_departure_at),
+                "notice_period_hours": notice.notice_period_hours,
+            }
+            if notice
+            else None
+        ),
     }
 
 
@@ -1198,55 +1729,136 @@ def workspace(patient, user):
         ls = sweep(ls, user=None)
     episode = current_or_latest_episode(patient)
     config = legal_config.load(ls.config_version if ls else None)
-    docs = list(LegalDocument.objects.filter(legal_status=ls).select_related("captured_by", "created_by")) if ls else []
+    docs = (
+        list(
+            LegalDocument.objects.filter(legal_status=ls).select_related(
+                "captured_by", "created_by"
+            )
+        )
+        if ls
+        else []
+    )
     notice = active_notice(ls)
     tasks = CareTask.objects.filter(focus_type=TASK_FOCUS, focus_id=str(ls.pk)) if ls else []
     pending = ls.pending_application if ls else None
-    required = legal_config.operational(ls.config_version if ls else None)["requiredRecommendations"]
+    required = legal_config.operational(ls.config_version if ls else None)[
+        "requiredRecommendations"
+    ]
     return {
         "config": {
-            "version": config["version"], "provenance": config["provenance"], "forms": config["forms"],
-            "statutes": config["statutes"], "operational": legal_config.operational(ls.config_version if ls else None),
-            "rights": config["rights"], "privacy": {"maskIdentityNumbers": config["privacy"]["maskIdentityNumbers"]},
+            "version": config["version"],
+            "provenance": config["provenance"],
+            "forms": config["forms"],
+            "statutes": config["statutes"],
+            "operational": legal_config.operational(ls.config_version if ls else None),
+            "rights": config["rights"],
+            "privacy": {"maskIdentityNumbers": config["privacy"]["maskIdentityNumbers"]},
         },
         "episode_id": str(episode.pk) if episode else None,
-        "legal_status": None if ls is None else {
-            "id": str(ls.pk), "category": ls.category, "status": ls.status, "workflow_state": ls.workflow_state,
-            "decision": ls.decision, "decision_by": _name(ls.decision_by), "decision_role": ls.decision_role,
-            "decision_at": _iso(ls.decision_at), "decision_reason": ls.decision_reason,
-            "effective_from": _iso(ls.effective_from), "max_expiry_at": _iso(ls.max_expiry_at),
-            "statutory_basis": ls.statutory_basis, "config_version": ls.config_version,
-            "application_document": str(ls.application_document_id) if ls.application_document_id else None,
-            "pending_application": str(pending.pk) if pending else None,
-            "recommendation_document_ids": [str(r.pk) for r in _recommendations(pending or ls.application_document)]
-            if (pending or ls.application_document) else [],
-            "required_recommendations": required,
-        },
+        "legal_status": (
+            None
+            if ls is None
+            else {
+                "id": str(ls.pk),
+                "category": ls.category,
+                "status": ls.status,
+                "workflow_state": ls.workflow_state,
+                "decision": ls.decision,
+                "decision_by": _name(ls.decision_by),
+                "decision_role": ls.decision_role,
+                "decision_at": _iso(ls.decision_at),
+                "decision_reason": ls.decision_reason,
+                "effective_from": _iso(ls.effective_from),
+                "max_expiry_at": _iso(ls.max_expiry_at),
+                "statutory_basis": ls.statutory_basis,
+                "config_version": ls.config_version,
+                "application_document": (
+                    str(ls.application_document_id) if ls.application_document_id else None
+                ),
+                "pending_application": str(pending.pk) if pending else None,
+                "recommendation_document_ids": (
+                    [str(r.pk) for r in _recommendations(pending or ls.application_document)]
+                    if (pending or ls.application_document)
+                    else []
+                ),
+                "required_recommendations": required,
+            }
+        ),
         "banner": banner_summary(patient),
         "documents": [document_row(d) for d in docs],
-        "notice": None if notice is None else {
-            "id": str(notice.pk), "given_at": _iso(notice.given_at), "given_to": _name(notice.given_to),
-            "earliest_departure_at": _iso(notice.earliest_departure_at), "notice_period_hours": notice.notice_period_hours,
-            "written_notice_document": str(notice.written_notice_document_id),
-            "risk_review_required": bool(notice.risk_review_prompted_at) or active_risk(patient),
-            "risk_review_prompt": RISK_REVIEW_PROMPT if (notice.risk_review_prompted_at or active_risk(patient)) else "",
-        },
-        "tasks": [{"id": str(t.pk), "code": t.action_code, "label": t.action_label, "priority": t.priority,
-                   "due_at": _iso(t.due_at), "assignee": _name(t.assignee), "owner": t.owner,
-                   "completed_at": _iso(t.completed_at), "completed_by": _name(t.completed_by)} for t in tasks],
-        "history": [{"event": e.event, "from_state": e.from_state, "to_state": e.to_state, "actor": _name(e.actor),
-                     "actor_role": e.actor_role, "at": _iso(e.at), "detail": e.detail}
-                    for e in (ls.history.select_related("actor") if ls else [])],
+        "notice": (
+            None
+            if notice is None
+            else {
+                "id": str(notice.pk),
+                "given_at": _iso(notice.given_at),
+                "given_to": _name(notice.given_to),
+                "earliest_departure_at": _iso(notice.earliest_departure_at),
+                "notice_period_hours": notice.notice_period_hours,
+                "written_notice_document": str(notice.written_notice_document_id),
+                "risk_review_required": bool(notice.risk_review_prompted_at)
+                or active_risk(patient),
+                "risk_review_prompt": (
+                    RISK_REVIEW_PROMPT
+                    if (notice.risk_review_prompted_at or active_risk(patient))
+                    else ""
+                ),
+            }
+        ),
+        "tasks": [
+            {
+                "id": str(t.pk),
+                "code": t.action_code,
+                "label": t.action_label,
+                "priority": t.priority,
+                "due_at": _iso(t.due_at),
+                "assignee": _name(t.assignee),
+                "owner": t.owner,
+                "completed_at": _iso(t.completed_at),
+                "completed_by": _name(t.completed_by),
+            }
+            for t in tasks
+        ],
+        "history": [
+            {
+                "event": e.event,
+                "from_state": e.from_state,
+                "to_state": e.to_state,
+                "actor": _name(e.actor),
+                "actor_role": e.actor_role,
+                "at": _iso(e.at),
+                "detail": e.detail,
+            }
+            for e in (ls.history.select_related("actor") if ls else [])
+        ],
         "client": client_details(patient),
-        "related_persons": [related_person_row(p) for p in EmergencyContact.objects.filter(patient=patient)],
+        "related_persons": [
+            related_person_row(p) for p in EmergencyContact.objects.filter(patient=patient)
+        ],
         "next_of_kin_id": str(patient.next_of_kin_id) if patient.next_of_kin_id else None,
         "facility": facility_profile(patient, episode),
         "evidence": evidence_context(patient),
-        "capacity": {**{k: v for k, v in capacity_prompt(patient).items() if k != "since"},
-                     "confirmation": (lambda c: None if c is None else {
-                         "outcome": c.outcome, "assessed_at": _iso(c.assessed_at), "assessed_by": _name(c.assessed_by)})(capacity_confirmation(patient))},
-        "encounters": [{"id": str(e.pk), "type": e.encounter_type, "opened_at": _iso(e.opened_at)}
-                       for e in Encounter.objects.filter(patient=patient).order_by("-opened_at")[:20]],
-        "me": {"is_admitting_officer": is_admitting_officer(user), "can_unmask": can_unmask(user),
-               "credential": credential_status(user)},
+        "capacity": {
+            **{k: v for k, v in capacity_prompt(patient).items() if k != "since"},
+            "confirmation": (
+                lambda c: (
+                    None
+                    if c is None
+                    else {
+                        "outcome": c.outcome,
+                        "assessed_at": _iso(c.assessed_at),
+                        "assessed_by": _name(c.assessed_by),
+                    }
+                )
+            )(capacity_confirmation(patient)),
+        },
+        "encounters": [
+            {"id": str(e.pk), "type": e.encounter_type, "opened_at": _iso(e.opened_at)}
+            for e in Encounter.objects.filter(patient=patient).order_by("-opened_at")[:20]
+        ],
+        "me": {
+            "is_admitting_officer": is_admitting_officer(user),
+            "can_unmask": can_unmask(user),
+            "credential": credential_status(user),
+        },
     }

@@ -4,7 +4,14 @@ import { BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles";
 import { SelectChoices } from "../../shared/ui";
 import { useValueSets } from "../../shared/useValueSets";
 
-const BLANK: PlanGoal = { goal: "", action_key: "", formulation: "", owner: "", review_date: "", source: "" };
+const BLANK: PlanGoal = {
+  goal: "",
+  action_key: "",
+  formulation: "",
+  owner: "",
+  review_date: "",
+  source: "",
+};
 
 /** My goals — in the client's words, each linked to a plan action and a 5P
  * formulation heading, with an owner and a review date (FHIR Goal). Edits are
@@ -44,7 +51,9 @@ export function GoalsEditor({
           <button
             type="button"
             className={`${BTN_GHOST} ${BTN_SM}`}
-            onClick={() => update([...goals, { ...BLANK, goal: intakeGoal, source: "Intake Section 1" }])}
+            onClick={() =>
+              update([...goals, { ...BLANK, goal: intakeGoal, source: "Intake Section 1" }])
+            }
           >
             Add it as a goal
           </button>
@@ -59,15 +68,26 @@ export function GoalsEditor({
         >
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Goal (client’s words)</span>
-            <input className={INPUT} value={g.goal} onChange={(e) => change(index, { goal: e.target.value })} onBlur={() => onSave(goals)} />
+            <input
+              className={INPUT}
+              value={g.goal}
+              onChange={(e) => change(index, { goal: e.target.value })}
+              onBlur={() => onSave(goals)}
+            />
             {g.source && <span className="text-[11px] text-ink-500">From {g.source}</span>}
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Linked action</span>
-            <select className={INPUT} value={g.action_key} onChange={(e) => change(index, { action_key: e.target.value }, true)}>
+            <select
+              className={INPUT}
+              value={g.action_key}
+              onChange={(e) => change(index, { action_key: e.target.value }, true)}
+            >
               <option value="">— none —</option>
               {live.map((a) => (
-                <option key={a.key} value={a.key}>{a.name}</option>
+                <option key={a.key} value={a.key}>
+                  {a.name}
+                </option>
               ))}
             </select>
           </label>
@@ -82,14 +102,28 @@ export function GoalsEditor({
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Owner</span>
-            <input className={INPUT} value={g.owner} onChange={(e) => change(index, { owner: e.target.value })} onBlur={() => onSave(goals)} />
+            <input
+              className={INPUT}
+              value={g.owner}
+              onChange={(e) => change(index, { owner: e.target.value })}
+              onBlur={() => onSave(goals)}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Review date</span>
-            <input type="date" className={INPUT} value={g.review_date} onChange={(e) => change(index, { review_date: e.target.value }, true)} />
+            <input
+              type="date"
+              className={INPUT}
+              value={g.review_date}
+              onChange={(e) => change(index, { review_date: e.target.value }, true)}
+            />
           </label>
           <div className="flex items-end">
-            <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => update(goals.filter((_, i) => i !== index))}>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => update(goals.filter((_, i) => i !== index))}
+            >
               Remove
             </button>
           </div>
@@ -97,7 +131,11 @@ export function GoalsEditor({
       ))}
       {!disabled && (
         <div>
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setGoals((current) => [...current, { ...BLANK }])}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => setGoals((current) => [...current, { ...BLANK }])}
+          >
             Add goal
           </button>
         </div>
@@ -128,7 +166,11 @@ export function DisagreementsEditor({
   return (
     <div className="flex flex-col gap-2">
       {rows.map((r, index) => (
-        <fieldset key={index} disabled={disabled} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]">
+        <fieldset
+          key={index}
+          disabled={disabled}
+          className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]"
+        >
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Part of the plan</span>
             <SelectChoices
@@ -140,7 +182,12 @@ export function DisagreementsEditor({
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Client’s words</span>
-            <input className={INPUT} value={r.words} onChange={(e) => change(index, { words: e.target.value })} onBlur={() => onSave(rows)} />
+            <input
+              className={INPUT}
+              value={r.words}
+              onChange={(e) => change(index, { words: e.target.value })}
+              onBlur={() => onSave(rows)}
+            />
           </label>
           <div className="flex items-end">
             <button
@@ -159,7 +206,11 @@ export function DisagreementsEditor({
       ))}
       {!disabled && (
         <div>
-          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setRows((current) => [...current, { part: "", words: "" }])}>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => setRows((current) => [...current, { part: "", words: "" }])}
+          >
             Add a point of disagreement
           </button>
         </div>
