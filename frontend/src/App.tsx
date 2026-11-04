@@ -50,6 +50,7 @@ const PsychiatryQueuePage = lazyNamed(
   () => import("./modules/care/PsychiatryQueuePage"),
   "PsychiatryQueuePage",
 );
+const ReferralsPage = lazyNamed(() => import("./modules/care/ReferralsPage"), "ReferralsPage");
 const ClientRecordPage = lazyNamed(
   () => import("./modules/care/ClientRecordPage"),
   "ClientRecordPage",
@@ -381,7 +382,8 @@ function App() {
             />
             <Route path="psychotherapy/group" element={<GroupProgrammePage />} />
             <Route path="documents" element={<DocumentsPage />} />
-            <Route path="referrals" element={<PsychiatryQueuePage />} />
+            <Route path="referrals" element={<ReferralsPage />} />
+            <Route path="referrals/worklist" element={<PsychiatryQueuePage />} />
             <Route path="referrals/documents" element={<DocumentsPage />} />
             <Route path="discharge" element={<DischargePlanningPage />} />
             <Route path="follow-up" element={<FollowUpPage />} />
@@ -415,7 +417,7 @@ function App() {
             <Route path="mhp/supervision" element={<SupervisionRequestsPage />} />
             <Route path="mhp/nacada" element={<NacadaReportPage />} />
             <Route path="profile" element={<MyProfilePage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="notifications" element={<NotificationsPage showDecisionInbox />} />
 
             {/*
               Honest placeholders — nav leaves from the new mockup with no

@@ -1,42 +1,51 @@
 import { describe, expect, it } from "vitest";
 import { CLINICAL_NAV } from "./navConfig";
-import { groupContainsActive, itemMatches } from "./navMatch";
+import { groupContainsActive } from "./navMatch";
 
 const groups = CLINICAL_NAV.flatMap((group) => group.items).filter((item) => item.children);
 const leaves = groups.flatMap((group) => group.children ?? []);
 const topLevel = CLINICAL_NAV.flatMap((group) => group.items).filter((item) => item.to);
 const everyLeaf = [...leaves, ...topLevel];
-const find = (label: string) => everyLeaf.find((item) => item.label === label)!;
 const group = (label: string) => groups.find((item) => item.label === label)!;
 
 describe("clinical nav matching", () => {
-  it("matches a leaf exactly, not its sub-routes", () => {
-    expect(itemMatches(find("Admissions"), "/clinical/inpatient")).toBe(true);
-    // Ward board has its own entry; Admissions must not light up with it.
-    expect(itemMatches(find("Admissions"), "/clinical/inpatient/ward")).toBe(false);
-    expect(itemMatches(find("Ward board"), "/clinical/inpatient/ward")).toBe(true);
-  });
-
-  it("honours alsoActiveFor and keeps triage out of the left menu", () => {
-    expect(itemMatches(find("Psychiatric"), "/clinical/clients/abc/intake")).toBe(true);
-    expect(itemMatches(find("Psychiatric"), "/clinical/clientsmith")).toBe(false);
+  it("keeps removed modules and individual routes out of the left menu", () => {
+    expect(everyLeaf.some((item) => item.label === "Registration")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Psychiatric")).toBe(false);
     expect(everyLeaf.some((item) => item.label === "Triage")).toBe(false);
+    expect(groups.some((item) => item.label === "Inpatient & residential")).toBe(false);
+    expect(groups.some((item) => item.label === "Clinical")).toBe(false);
+    expect(groups.some((item) => item.label === "Appointments & follow-up")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Appointments")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Follow-up")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Individual Psychotherapy")).toBe(false);
+    expect(groups.some((item) => item.label === "Psychotherapy")).toBe(false);
+    expect(topLevel.find((item) => item.label === "Family Psychotherapy")?.to).toBe(
+      "/clinical/psychotherapy/family",
+    );
+    expect(topLevel.find((item) => item.label === "Group Psychotherapy")?.to).toBe(
+      "/clinical/psychotherapy/group",
+    );
+    expect(topLevel.find((item) => item.label === "Supervision requests")?.to).toBe(
+      "/clinical/mhp/supervision",
+    );
+    expect(topLevel.find((item) => item.label === "Referrals")?.to).toBe("/clinical/referrals");
+    expect(topLevel.find((item) => item.label === "Laboratory")?.to).toBe("/clinical/lims");
+    expect(group("Pharmacy & medication").children?.map((item) => item.label)).toEqual([
+      "Medication orders & review",
+      "Medication administration",
+    ]);
   });
 
   it("shows the client registry as a standalone menu item", () => {
     expect(topLevel.find((item) => item.label === "Client Registry")?.to).toBe(
       "/clinical/registry",
     );
-    expect(group("Clinical").children?.some((item) => item.label === "Client Registry")).toBe(
-      false,
-    );
   });
 
   it("opens the group that holds the current route", () => {
-    expect(groupContainsActive(group("Inpatient & residential"), "/clinical/discharge")).toBe(true);
     expect(groupContainsActive(group("Reports & analytics"), "/clinical/mhp/nacada")).toBe(true);
-    expect(groupContainsActive(group("Clinical"), "/clinical/mhp/supervision")).toBe(true);
-    expect(groupContainsActive(group("Laboratory"), "/clinical/discharge")).toBe(false);
+    expect(everyLeaf.some((item) => item.label === "Laboratory records")).toBe(false);
   });
 
   it("keeps all clinical menu groups collapsed by default", () => {

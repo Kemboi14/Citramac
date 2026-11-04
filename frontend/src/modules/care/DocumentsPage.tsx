@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getSignedDocuments, type SignedDocumentRow } from "../../lib/carePathwayApi";
@@ -29,6 +29,7 @@ const searchText = (row: SignedDocumentRow) =>
 
 export function DocumentsPage() {
   const { accessToken } = useAuth();
+  const { pathname } = useLocation();
   const [rows, setRows] = useState<SignedDocumentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +57,13 @@ export function DocumentsPage() {
         eyebrow="Clinical records"
         title="Documents"
         subtitle="Generate, review, sign and release documents; signed clinical documents linked to client records"
+        actions={
+          pathname === "/clinical/referrals/documents" ? (
+            <Link to="/clinical/referrals" className={BTN_GHOST}>
+              Back to Referrals
+            </Link>
+          ) : undefined
+        }
       />
 
       <div className="mb-4 flex flex-col gap-4">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
@@ -58,6 +58,7 @@ const searchText = (row: PsychiatryQueueRow) =>
 export function PsychiatryQueuePage() {
   const { accessToken, claims } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [tick, setTick] = useState(0);
   const [view, setView] = useState<View>("waiting");
   const [query, setQuery] = useState("");
@@ -114,6 +115,13 @@ export function PsychiatryQueuePage() {
         eyebrow="Clinical workflow"
         title="Psychiatry queue"
         titleTooltip="Clients with a signed triage, most urgent first. Open a client to start or continue the review."
+        actions={
+          pathname === "/clinical/referrals/worklist" ? (
+            <Link to="/clinical/referrals" className={BTN_GHOST}>
+              Back to Referrals
+            </Link>
+          ) : undefined
+        }
       />
       <ErrorNote>{error ?? openError}</ErrorNote>
 
