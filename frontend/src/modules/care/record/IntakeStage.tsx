@@ -200,6 +200,7 @@ function IntakeWorkspace({
   );
   const [signing, setSigning] = useState(false);
   const [checkingSection, setCheckingSection] = useState(false);
+  const [blockedSection, setBlockedSection] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPrevious, setShowPrevious] = useState(false);
   const [listVersion, setListVersion] = useState(0);
@@ -275,10 +276,14 @@ function IntakeWorkspace({
   const stateOf = (key: string) =>
     (states[key] ?? meta.overview[key] ?? "Not started") as IntakeSectionState;
 
-  const go = async (key: string): Promise<boolean> => {
+  const go = async (key: string, followRequiredItem = false): Promise<boolean> => {
     if (key === current) return true;
     if (checkingSection) return false;
-    if (!signed && (spec.required || outstandingForSection(meta.outstanding, spec).length > 0)) {
+    if (
+      !followRequiredItem &&
+      !signed &&
+      (spec.required || outstandingForSection(meta.outstanding, spec).length > 0)
+    ) {
       if (!accessToken) {
         setError("Couldn't verify the required items. Stay in this section and try again.");
         return false;
@@ -290,7 +295,18 @@ function IntakeWorkspace({
         setMeta({ outstanding: latest.outstanding_now, overview: latest.section_overview });
         autosave.markSaved(payload);
         const missing = outstandingForSection(latest.outstanding_now, spec);
-        if (missing.length && key !== "close") return false;
+        if (missing.length && key !== "close") {
+          setBlockedSection(spec.key);
+          const target = outstandingTarget(missing[0], schema);
+          if (target) {
+            window.requestAnimationFrame(() => {
+              const element = document.getElementById(target.targetId);
+              element?.scrollIntoView({ behavior: "smooth", block: "center" });
+              element?.focus({ preventScroll: true });
+            });
+          }
+          return false;
+        }
       } catch (e) {
         setError(errorText(e, "Couldn't verify this section. Stay here and try again."));
         return false;
@@ -298,12 +314,13 @@ function IntakeWorkspace({
         setCheckingSection(false);
       }
     }
+    setBlockedSection(null);
     setCurrent(key);
     topRef.current?.scrollIntoView({ block: "start" });
     return true;
   };
   const goToTarget = async (key: string, targetId: string) => {
-    if (!(await go(key))) return;
+    if (!(await go(key, true))) return;
     window.requestAnimationFrame(() => {
       const target = document.getElementById(targetId);
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -578,15 +595,17 @@ function IntakeWorkspace({
                 Checking required items…
               </p>
             )}
-            {!signed && outstandingForSection(meta.outstanding, spec).length > 0 && (
-              <OutstandingAlert
-                title="Complete these items before leaving this section"
-                items={outstandingForSection(meta.outstanding, spec)}
-                schema={schema}
-                className="mb-2"
-                onGoToTarget={(key, targetId) => void goToTarget(key, targetId)}
-              />
-            )}
+            {!signed &&
+              blockedSection === spec.key &&
+              outstandingForSection(meta.outstanding, spec).length > 0 && (
+                <OutstandingAlert
+                  title="Complete these items before leaving this section"
+                  items={outstandingForSection(meta.outstanding, spec)}
+                  schema={schema}
+                  className="mb-2"
+                  onGoToTarget={(key, targetId) => void goToTarget(key, targetId)}
+                />
+              )}
             <fieldset disabled={Boolean(signed)} className="min-w-0 border-0 p-0">
               <div id={`intake-section-${spec.key}`} tabIndex={-1}>
                 <SectionBody
