@@ -227,6 +227,25 @@ export function invitePlatformStaff(accessToken: string, payload: StaffInvitePay
   return apiRequest<Staff>("/platform/staff/", { method: "POST", body: payload, accessToken });
 }
 
+export interface SuperAdminInvitePayload {
+  email: string;
+  first_name: string;
+  last_name: string;
+  /** Why this person needs full access — required, written to the audit trail. */
+  reason: string;
+  /** When sign-in stops on its own; null means no end date. */
+  access_ends_at: string | null;
+}
+
+/** A second Super Admin — the same full access as the inviting Super Admin. */
+export function inviteSuperAdmin(accessToken: string, payload: SuperAdminInvitePayload) {
+  return apiRequest<Staff>("/platform/staff/", {
+    method: "POST",
+    body: { ...payload, super_admin: true },
+    accessToken,
+  });
+}
+
 export function resendPlatformStaffInvite(accessToken: string, id: string) {
   return apiRequest<Staff>(`/platform/staff/${id}/resend_invite/`, { method: "POST", accessToken });
 }

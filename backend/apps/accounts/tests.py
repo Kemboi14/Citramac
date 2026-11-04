@@ -1765,6 +1765,89 @@ class RolesAndStaffConsoleApiTests(APITestCase):
         self.assertEqual(invite_email.subject, "Welcome to CITRAMAC")
         self.assertIn(invite.token, invite_email.body)
 
+    def test_super_admin_invites_another_super_admin_with_reason_end_date_and_audit(self):
+        ends = timezone.now() + timedelta(days=14)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("platform-staff-list"),
+                {
+                    "super_admin": True,
+                    "email": "reviewer@client.test",
+                    "first_name": "Rita",
+                    "last_name": "Reviewer",
+                    "reason": "Client review of the platform",
+                    "access_ends_at": ends.isoformat(),
+                },
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data["is_superuser"])
+        with platform_admin_context():
+            staff = User.objects.get(email="reviewer@client.test")
+            invite = ActivationInvite.objects.get(user=staff, organization__isnull=True)
+            entry = AuditLogEntry.objects.get(
+                model="accounts.user",
+                object_id=str(staff.pk),
+                field_diff__has_key="super_admin_granted",
+            )
+        self.assertTrue(staff.is_superuser)
+        self.assertTrue(staff.is_staff)
+        self.assertFalse(staff.is_active)
+        self.assertIsNone(staff.organization_id)
+        self.assertEqual(staff.roles.count(), 0)
+        self.assertEqual(staff.access_ends_at, ends)
+        self.assertEqual(entry.field_diff["reason"]["new"], "Client review of the platform")
+        self.assertEqual(entry.actor_user_id, self.super_admin.id)
+        self.assertEqual(mail.outbox[-1].subject, "Welcome to CITRAMAC")
+        self.assertIn(invite.token, mail.outbox[-1].body)
+
+    def test_super_admin_invite_needs_a_reason_and_a_future_end_date(self):
+        base = {
+            "super_admin": True,
+            "email": "noreason@client.test",
+            "first_name": "No",
+            "last_name": "Reason",
+        }
+        for extra, field in (
+            ({}, "reason"),
+            ({"reason": "   "}, "reason"),
+            (
+                {
+                    "reason": "Review",
+                    "access_ends_at": (timezone.now() - timedelta(days=1)).isoformat(),
+                },
+                "access_ends_at",
+            ),
+        ):
+            response = self.client.post(
+                reverse("platform-staff-list"),
+                {**base, **extra},
+                format="json",
+                HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+            )
+            self.assertEqual(response.status_code, 400, extra)
+            self.assertIn(field, response.data)
+        with platform_admin_context():
+            self.assertFalse(User.all_objects.filter(email="noreason@client.test").exists())
+
+    def test_only_a_super_admin_can_invite_a_super_admin(self):
+        response = self.client.post(
+            reverse("platform-staff-list"),
+            {
+                "super_admin": True,
+                "email": "sneaky@client.test",
+                "first_name": "Sneaky",
+                "last_name": "Admin",
+                "reason": "Want access",
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.org_access}",
+        )
+        self.assertEqual(response.status_code, 403)
+        with platform_admin_context():
+            self.assertFalse(User.all_objects.filter(email="sneaky@client.test").exists())
+
     def test_super_admin_can_resend_invite_for_platform_staff(self):
         role = Role.objects.filter(name="Support Agent", organization__isnull=True).first()
         with self.captureOnCommitCallbacks(execute=True):

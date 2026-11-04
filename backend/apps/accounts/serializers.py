@@ -505,6 +505,27 @@ class MyProfileSerializer(serializers.ModelSerializer):
         return value
 
 
+class SuperAdminInviteSerializer(serializers.Serializer):
+    """Invites a second Super Admin (PlatformStaffViewSet._invite_super_admin).
+    No role — Super Admin is the account itself — but a reason, always."""
+
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    reason = serializers.CharField(max_length=500, trim_whitespace=True)
+    access_ends_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_email(self, value):
+        if User.all_objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate_access_ends_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Must be in the future.")
+        return value
+
+
 class StaffInviteSerializer(serializers.Serializer):
     """Provisions an inactive User + ActivationInvite — mirrors the Org
     Admin invite flow used during Organization onboarding.

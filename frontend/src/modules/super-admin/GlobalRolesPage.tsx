@@ -7,6 +7,7 @@ import { RolesWorkspace } from "../../components/RolesWorkspace";
 import {
   changePlatformStaffRole,
   invitePlatformStaff,
+  inviteSuperAdmin,
   listPlatformStaff,
   resendPlatformStaffInvite,
   unlockPlatformStaff,
@@ -22,6 +23,20 @@ const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 const SECONDARY_BUTTON_CLASS =
   "rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
+
+/** Role-select value for a Super Admin invite (an account, not a role row). */
+const SUPER_ADMIN_CHOICE = "super_admin";
+
+/** The last moment of a chosen day, in the browser's time zone. */
+function endOfDay(day: string) {
+  return new Date(`${day}T23:59:59`).toISOString();
+}
+
+function today() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 const EMPTY_INVITE: StaffInvitePayload = {
   email: "",
@@ -51,6 +66,10 @@ export function GlobalRolesPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [asSuperAdmin, setAsSuperAdmin] = useState(false);
+  const [superReason, setSuperReason] = useState("");
+  const [superEndsOn, setSuperEndsOn] = useState("");
+  const [confirmSuperAdmin, setConfirmSuperAdmin] = useState(false);
 
   const refreshStaff = async () => {
     if (!accessToken) return;
@@ -68,7 +87,8 @@ export function GlobalRolesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  // Super Admin comes with a Super Admin account; it is never handed out.
+  // The Super Admin role row is never assigned; Super Admin is an account,
+  // offered separately in the invite form (SUPER_ADMIN_CHOICE).
   const inviteRoles = roles.filter((role) => role.is_active && role.system_key !== "super_admin");
 
   const assignStaffRole = async () => {
@@ -103,9 +123,53 @@ export function GlobalRolesPage() {
     }
   };
 
+  const resetInviteForm = () => {
+    setInvite(EMPTY_INVITE);
+    setAsSuperAdmin(false);
+    setSuperReason("");
+    setSuperEndsOn("");
+  };
+
+  const sendSuperAdminInvite = async () => {
+    if (!accessToken) return;
+    setInviteError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      const created = await inviteSuperAdmin(accessToken, {
+        email: invite.email,
+        first_name: invite.first_name,
+        last_name: invite.last_name,
+        reason: superReason.trim(),
+        access_ends_at: superEndsOn ? endOfDay(superEndsOn) : null,
+      });
+      resetInviteForm();
+      setConfirmSuperAdmin(false);
+      setShowInviteForm(false);
+      setNotice(
+        `${created.first_name} ${created.last_name} was added as a Super Admin. Their invite email is queued — its status shows on their row.`,
+      );
+      await refreshStaff();
+    } catch (err) {
+      setConfirmSuperAdmin(false);
+      setInviteError(err instanceof ApiError ? err.message : "Couldn't add this person.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submitInvite = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!accessToken) return;
+    if (asSuperAdmin) {
+      if (!superReason.trim()) {
+        setInviteError("Say why this person needs Super Admin access.");
+        return;
+      }
+      setInviteError(null);
+      setConfirmSuperAdmin(true);
+      return;
+    }
     if (!invite.role) {
       setInviteError("Choose a role for this person.");
       return;
@@ -115,7 +179,7 @@ export function GlobalRolesPage() {
     setBusy(true);
     try {
       const created = await invitePlatformStaff(accessToken, invite);
-      setInvite(EMPTY_INVITE);
+      resetInviteForm();
       setShowInviteForm(false);
       setNotice(
         `${created.first_name} ${created.last_name} was added. Their invite email is queued — its status shows on their row.`,
@@ -230,8 +294,15 @@ export function GlobalRolesPage() {
               Role
               <select
                 className={FIELD_CLASS}
-                value={invite.role || ""}
-                onChange={(e) => setInvite({ ...invite, role: Number(e.target.value) })}
+                value={asSuperAdmin ? SUPER_ADMIN_CHOICE : invite.role || ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setAsSuperAdmin(value === SUPER_ADMIN_CHOICE);
+                  setInvite({
+                    ...invite,
+                    role: value && value !== SUPER_ADMIN_CHOICE ? Number(value) : 0,
+                  });
+                }}
                 required
               >
                 <option value="">Select a role…</option>
@@ -240,12 +311,43 @@ export function GlobalRolesPage() {
                     {role.name}
                   </option>
                 ))}
+                <option value={SUPER_ADMIN_CHOICE}>Super Admin (full access)</option>
               </select>
             </label>
+            {asSuperAdmin && (
+              <>
+                <p className="w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-700">
+                  A Super Admin has the same access as you: every organisation, every client record,
+                  platform settings and this team. Give it only to someone who needs all of that, and
+                  set an end date when the access is for a review.
+                </p>
+                <label className={`${LABEL_CLASS} min-w-[16rem] flex-1`}>
+                  Why do they need it?
+                  <input
+                    className={FIELD_CLASS}
+                    value={superReason}
+                    maxLength={500}
+                    onChange={(e) => setSuperReason(e.target.value)}
+                    placeholder="e.g. Client review of the platform"
+                    required
+                  />
+                </label>
+                <label className={LABEL_CLASS}>
+                  Access ends (optional)
+                  <input
+                    type="date"
+                    className={FIELD_CLASS}
+                    value={superEndsOn}
+                    min={today()}
+                    onChange={(e) => setSuperEndsOn(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
             <button type="submit" disabled={busy} className={BUTTON_CLASS}>
-              {busy ? "Adding…" : "Add and send invite"}
+              {busy ? "Adding…" : asSuperAdmin ? "Review and send invite" : "Add and send invite"}
             </button>
-            {inviteRoles.length === 0 && (
+            {inviteRoles.length === 0 && !asSuperAdmin && (
               <p className="w-full text-sm text-status-amber">
                 There are no roles to offer here yet.
               </p>
@@ -366,6 +468,35 @@ export function GlobalRolesPage() {
           </tbody>
         </table>
       </div>
+      <ConfirmDialog
+        open={confirmSuperAdmin}
+        title="Give this person Super Admin access?"
+        confirmLabel="Yes, invite as Super Admin"
+        busyLabel="Sending…"
+        tone="danger"
+        busy={busy}
+        onConfirm={sendSuperAdminInvite}
+        onCancel={() => setConfirmSuperAdmin(false)}
+      >
+        <div className="flex flex-col gap-2 text-sm text-ink-700">
+          <p>
+            <strong>
+              {invite.first_name} {invite.last_name}
+            </strong>{" "}
+            ({invite.email}) will be able to see and change everything you can, in every
+            organisation, once they accept the invite.
+          </p>
+          <p>
+            Access ends:{" "}
+            <strong>
+              {superEndsOn
+                ? new Date(endOfDay(superEndsOn)).toLocaleDateString()
+                : "no end date"}
+            </strong>
+          </p>
+          <p>Reason, kept in the audit log: “{superReason.trim()}”</p>
+        </div>
+      </ConfirmDialog>
       <ConfirmDialog
         open={pendingStaffRole !== null}
         title="Change this person's role?"

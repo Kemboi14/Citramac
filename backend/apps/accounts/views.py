@@ -28,6 +28,7 @@ from .serializers import (
     RoleSerializer,
     StaffInviteSerializer,
     StaffSerializer,
+    SuperAdminInviteSerializer,
     _covers_branch,
     validate_assignments,
 )
@@ -516,6 +517,9 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
         used before — same activate/set-password experience every other
         invited staff member gets, not a bespoke one.
         """
+        if request.data.get("super_admin") is True:
+            return self._invite_super_admin(request)
+
         serializer = StaffInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -530,8 +534,64 @@ class PlatformStaffViewSet(viewsets.ModelViewSet):
                 staff_id=data.get("staff_id", ""),
                 is_staff=True,
                 is_active=False,
+                access_starts_at=data.get("access_starts_at"),
+                access_ends_at=data.get("access_ends_at"),
             )
             staff.roles.add(role)
+
+            invite = ActivationInvite.objects.create(
+                organization=None,
+                user=staff,
+                created_by=request.user,
+                expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+            )
+            queue_activation_invite(invite)
+
+        return Response(StaffSerializer(staff).data, status=status.HTTP_201_CREATED)
+
+    def _invite_super_admin(self, request):
+        """
+        A second Super Admin: the same full access as the person inviting
+        them — every organisation, every record. Super Admin is an account
+        (`is_superuser`), not a role, so it is granted here and nowhere else:
+        only an existing Super Admin can reach this view, the reason is
+        required and written to the audit trail, and an access end date
+        (optional) stops sign-in on its own when a review is over.
+        """
+        from apps.sysadmin_audit.audit import write_event
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        serializer = SuperAdminInviteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with platform_admin_context(), transaction.atomic():
+            staff = User.objects.create_user(
+                email=data["email"],
+                organization=None,
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                is_staff=True,
+                is_superuser=True,
+                is_active=False,
+                access_ends_at=data.get("access_ends_at"),
+            )
+            write_event(
+                None,
+                AuditLogEntry.ACTION_UPDATE,
+                "accounts.user",
+                staff.pk,
+                {
+                    "super_admin_granted": {"old": None, "new": staff.email},
+                    "reason": {"old": None, "new": data["reason"]},
+                    "access_ends_at": {
+                        "old": None,
+                        "new": data["access_ends_at"].isoformat()
+                        if data.get("access_ends_at")
+                        else None,
+                    },
+                },
+            )
 
             invite = ActivationInvite.objects.create(
                 organization=None,
