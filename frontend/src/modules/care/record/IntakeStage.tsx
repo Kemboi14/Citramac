@@ -472,12 +472,6 @@ function IntakeWorkspace({
           aria-label="Intake sections"
           className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
         >
-          <div className="border-b border-surface-border px-2 pb-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-              Assessment sections
-            </p>
-            <p className="mt-1 text-[12px] text-ink-500">Select a section to review or update</p>
-          </div>
           {groups.map(([title, specs]) => {
             const done = specs.filter((s) =>
               ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? ""),
