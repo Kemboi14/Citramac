@@ -1232,13 +1232,13 @@ def journey_status_for(patient, episode, latest_triage, signed_triage):
     )
     status = {
         "triage": (
-            "in_progress"
-            if triage_in_progress
-            else ("complete" if signed_triage else "incomplete")
+            "in_progress" if triage_in_progress else ("complete" if signed_triage else "incomplete")
         ),
     }
 
-    intake = IntakeAssessment.objects.filter(patient=patient).order_by("-created_at", "-version").first()
+    intake = (
+        IntakeAssessment.objects.filter(patient=patient).order_by("-created_at", "-version").first()
+    )
     status["intake"] = (
         "complete"
         if intake and intake.status == IntakeAssessment.STATUS_SIGNED
@@ -1247,9 +1247,7 @@ def journey_status_for(patient, episode, latest_triage, signed_triage):
 
     plan = CarePlan.objects.filter(episode=episode).first() if episode else None
     status["care-plan"] = (
-        "complete"
-        if plan and plan.confirmed_at
-        else ("in_progress" if plan else "incomplete")
+        "complete" if plan and plan.confirmed_at else ("in_progress" if plan else "incomplete")
     )
 
     actions = (
@@ -1263,11 +1261,7 @@ def journey_status_for(patient, episode, latest_triage, signed_triage):
     status["interventions"] = (
         "complete"
         if actions.exists() and not actions.exclude(status="COMPLETED").exists()
-        else (
-            "in_progress"
-            if actions.exists() or intervention_exists
-            else "incomplete"
-        )
+        else ("in_progress" if actions.exists() or intervention_exists else "incomplete")
     )
 
     discharge_summaries = DischargeSummary.objects.filter(patient=patient)
@@ -1277,16 +1271,13 @@ def journey_status_for(patient, episode, latest_triage, signed_triage):
         or discharge_summaries.filter(status="COMPLETED").exists()
         else (
             "in_progress"
-            if OutcomeScore.objects.filter(patient=patient).exists()
-            or discharge_summaries.exists()
+            if OutcomeScore.objects.filter(patient=patient).exists() or discharge_summaries.exists()
             else "incomplete"
         )
     )
 
     invoices = Invoice.objects.filter(patient=patient).exclude(status="CANCELLED")
-    unbilled_charges = ChargeItem.objects.filter(
-        patient=patient, voided_at__isnull=True
-    ).exclude(
+    unbilled_charges = ChargeItem.objects.filter(patient=patient, voided_at__isnull=True).exclude(
         pk__in=InvoiceLine.objects.filter(
             charge_item__patient=patient,
             charge_item__voided_at__isnull=True,
@@ -1297,26 +1288,15 @@ def journey_status_for(patient, episode, latest_triage, signed_triage):
         if invoices.exists()
         and not invoices.exclude(status="PAID").exists()
         and not unbilled_charges.exists()
-        else (
-            "in_progress"
-            if invoices.exists()
-            or unbilled_charges.exists()
-            else "incomplete"
-        )
+        else ("in_progress" if invoices.exists() or unbilled_charges.exists() else "incomplete")
     )
 
-    follow_ups = Appointment.objects.filter(
-        patient=patient, origin__in=("DISCHARGE", "CARE_PLAN")
-    )
+    follow_ups = Appointment.objects.filter(patient=patient, origin__in=("DISCHARGE", "CARE_PLAN"))
     status["follow-up"] = (
         "complete"
         if follow_ups.filter(status="COMPLETED").exists()
         and not follow_ups.exclude(status__in=("COMPLETED", "CANCELLED")).exists()
-        else (
-            "in_progress"
-            if follow_ups.exclude(status="CANCELLED").exists()
-            else "incomplete"
-        )
+        else ("in_progress" if follow_ups.exclude(status="CANCELLED").exists() else "incomplete")
     )
     return status
 
