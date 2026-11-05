@@ -1,0 +1,21 @@
+{% extends "documents/print/base.html" %}
+
+{% block extra_css %}
+  {% if landscape %}@page { size: A4 landscape; }{% endif %}
+  .statute { text-align: center; font-weight: bold; font-size: 9pt; margin: 0 0 8pt; }
+  .notice-body table { width: 100%; border-collapse: collapse; margin: 4pt 0; }
+  .notice-body td, .notice-body th { border: 0.75pt solid #555; padding: 3pt 5pt; vertical-align: top;
+    text-align: left; font-size: 9pt; }
+  .notice-body th { width: 38%; background: #efefef; font-weight: bold; }
+  .notice-body .register td, .notice-body .register th { width: auto; font-size: 8pt; }
+  .notice-body .blank { display: inline-block; min-width: 160pt; border-bottom: 0.75pt dotted #111; }
+  .notice-body .note { border: 0.75pt solid #111; padding: 6pt 8pt; margin: 8pt 0; font-size: 8.5pt; }
+  .notice-body li { margin-bottom: 2pt; }
+{% endblock %}
+
+{% block content %}
+  {% if statute %}<div class="statute">{{ statute }}</div>{% endif %}
+  <div class="notice-body">{{ body }}</div>
+{% endblock %}
+
+{% block end_meta %}Built from the incident record — check every entry before submitting.{% endblock %}

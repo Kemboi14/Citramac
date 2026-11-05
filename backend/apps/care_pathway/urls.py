@@ -4,7 +4,7 @@ from . import group_views as gview
 from . import intervention_views as iview
 from . import legal_views as lview
 from . import outcome_views as oview
-from . import plan_views
+from . import plan_views, print_views
 from . import psychotherapy_views as psyview
 from . import triage_v4_views, views
 
@@ -98,6 +98,11 @@ urlpatterns = [
     path("care/tasks/<uuid:pk>/", views.CareTaskView.as_view(), name="care-task"),
     path("care/psychiatry/queue/", views.PsychiatryQueueView.as_view(), name="care-psych-queue"),
     path("care/documents/", views.SignedDocumentsView.as_view(), name="care-documents"),
+    path(
+        "care/assessments/<uuid:pk>/print/",
+        print_views.TriagePrintView.as_view(),
+        name="care-assessment-print",
+    ),
     path(
         "care/assessments/<uuid:pk>/", views.SignedAssessmentView.as_view(), name="care-assessment"
     ),
@@ -685,6 +690,11 @@ urlpatterns = [
         "care/discharges/<uuid:pk>/amend/",
         views.DischargeAmendView.as_view(),
         name="care-discharge-amend",
+    ),
+    path(
+        "care/discharges/<uuid:pk>/print/",
+        print_views.DischargePrintView.as_view(),
+        name="care-discharge-print",
     ),
     path(
         "care/discharges/<uuid:pk>/fhir/",

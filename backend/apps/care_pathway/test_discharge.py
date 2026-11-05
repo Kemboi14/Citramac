@@ -635,3 +635,22 @@ class WardBoardRowTests(DischargeFixture):
         self.assertEqual(rows[0]["patient_id"], str(self.patient.pk))
         self.assertEqual(rows[0]["day"], 1)
         self.assertIn("legal_status", rows[0])
+
+
+class DischargePrintTests(DischargeFixture):
+    """The discharge summary in the shared professional document layout."""
+
+    def test_signed_summary_prints_and_downloads(self):
+        self.sign()
+        with platform_admin_context():
+            summary = DischargeSummary.objects.get(admission=self.admission)
+        url = reverse("care-discharge-print", args=[summary.id])
+        preview = self.client.get(url, **self.auth)
+        self.assertEqual(preview.status_code, 200)
+        html = preview.content.decode()
+        self.assertIn("Discharge summary", html)
+        self.assertIn("Discharge medications", html)
+        self.assertNotIn("Draft — not signed", html)
+        pdf = self.client.get(url + "?output=pdf", **self.auth)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))

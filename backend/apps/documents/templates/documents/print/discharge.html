@@ -1,0 +1,70 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Client</th><td>{{ client_name }}</td></tr>
+    {% if client_number %}<tr><th>Client number</th><td>{{ client_number }}</td></tr>{% endif %}
+    {% if date_of_birth %}<tr><th>Date of birth</th><td>{{ date_of_birth }}</td></tr>{% endif %}
+    <tr><th>Admitted</th><td>{{ admitted_at }}</td></tr>
+    <tr><th>Discharged</th><td>{{ discharged_at|default:"—" }}</td></tr>
+    {% if ward %}<tr><th>Ward / bed</th><td>{{ ward }}</td></tr>{% endif %}
+    <tr><th>Disposition</th><td>{{ disposition|default:"—" }}</td></tr>
+    {% if destination %}<tr><th>Destination</th><td>{{ destination }}</td></tr>{% endif %}
+  </table>
+
+  {% if diagnoses %}
+  <h2>Diagnoses</h2>
+  <table class="grid">
+    <thead><tr><th>Code</th><th>Diagnosis</th><th>Type</th></tr></thead>
+    <tbody>{% for d in diagnoses %}<tr><td>{{ d.code }}</td><td>{{ d.label }}</td><td>{{ d.kind }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+
+  <h2>Clinical status at discharge</h2>
+  <p class="pre">{{ clinical_status|default:"Not recorded." }}</p>
+
+  <h2>Treatment summary</h2>
+  <p class="pre">{{ treatment_summary|default:"Not recorded." }}</p>
+
+  {% if legal_status %}
+  <h2>Legal status at discharge</h2>
+  <p class="pre">{{ legal_status }}</p>
+  {% endif %}
+
+  <h2>Discharge medications</h2>
+  {% if medications %}
+  <table class="grid">
+    <thead><tr><th>Medicine</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for m in medications %}
+      <tr><td>{{ m.drug }}{% if m.note %}<br><span class="muted">{{ m.note }}</span>{% endif %}</td><td>{{ m.dose }}</td><td>{{ m.route }}</td><td>{{ m.frequency }}</td><td>{{ m.duration }}</td><td>{{ m.action }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="not-recorded">None recorded.</p>{% endif %}
+
+  {% if education %}
+  <h2>Education provided</h2>
+  <ul>{% for e in education %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  <h2>Follow-up</h2>
+  <p>{{ follow_up|default:"No follow-up appointment booked." }}</p>
+{% endblock %}
+
+{% block signature %}
+  <table class="signature"><tr>
+    <td>
+      {% if signed %}
+        <div class="signed"><strong>{{ signed_by }}</strong>{% if signed_role %}<br>{{ signed_role }}{% endif %}<br>Signed electronically {{ signed_at }}</div>
+      {% else %}<div style="height:26pt"></div>{% endif %}
+      <div class="line">Discharging clinician — name, role{% if not signed %} and signature{% endif %}</div>
+    </td>
+    <td>
+      <div{% if not signed %} style="height:26pt"{% endif %}>{% if signed %}{{ signed_date }}{% endif %}</div>
+      <div class="line">Date</div>
+    </td>
+  </tr></table>
+{% endblock %}
+
+{% block end_meta %}{% if supersedes %}Amended version — replaces version {{ supersedes }}. {% endif %}{% endblock %}

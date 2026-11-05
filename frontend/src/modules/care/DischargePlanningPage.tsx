@@ -46,6 +46,7 @@ import {
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { useClientBanner } from "./shared/useClientBanner";
+import { DocumentActions } from "../../components/DocumentActions";
 
 // docs/17-DISCHARGE-AND-FOLLOW-UP.md — a discharge is a signed, versioned record
 // (FHIR Composition), never free text on the admission.
@@ -517,6 +518,11 @@ function SignedView({
         title="Discharge"
         aside={
           <div className="flex flex-wrap items-center gap-3">
+            <DocumentActions
+              path={`/care/discharges/${summary.id}/print/`}
+              filename={`discharge-summary-v${summary.version}`}
+              label={`Discharge summary v${summary.version}`}
+            />
             <AuthenticatedDownloadButton
               path={dischargeFhirPath(summary.id)}
               filename={`discharge-summary-v${summary.version}.json`}

@@ -30,6 +30,7 @@ export function DocumentActions({
   filename,
   label,
   disabled = false,
+  onDownloaded,
 }: {
   path: string;
   /** Download name without extension, e.g. "DOC-WRK-01-ABC-v1". */
@@ -37,6 +38,8 @@ export function DocumentActions({
   /** What the document is, for the dialog title and screen readers. */
   label: string;
   disabled?: boolean;
+  /** Called after the PDF downloaded — e.g. to refresh a record the download changed. */
+  onDownloaded?: () => void;
 }) {
   const { accessToken } = useAuth();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -76,6 +79,7 @@ export function DocumentActions({
       link.download = `${filename}.pdf`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      onDownloaded?.();
     } catch (err) {
       setError(message(err, "Couldn't download the PDF."));
     } finally {

@@ -29,6 +29,11 @@ urlpatterns = [
         name="subject-request-decision",
     ),
     path(
+        "subject-requests/<uuid:pk>/print/",
+        views.SubjectRequestPrintView.as_view(),
+        name="subject-request-print",
+    ),
+    path(
         "subject-requests/<uuid:pk>/export/",
         views.SubjectRequestExportView.as_view(),
         name="subject-request-export",

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -443,9 +443,11 @@ class BreachReportView(APIView):
         incident = _incident_for(request.user, pk)
         if kind not in breach_reports.KINDS:
             raise ValidationError({"kind": "Unknown report."})
+        from apps.documents import printing
+
         with platform_admin_context():
             html = breach_reports.render(kind, incident, request.user)
-        return HttpResponse(html, content_type="text/html; charset=utf-8")
+        return printing.respond(request, html, printing.safe_filename(incident.reference, kind))
 
 
 class BreachRegisterView(APIView):
@@ -467,7 +469,9 @@ class BreachRegisterView(APIView):
                 .order_by("became_aware_at")
             )
             html = breach_reports.render_register(organization, incidents, user)
-        return HttpResponse(html, content_type="text/html; charset=utf-8")
+        from apps.documents import printing
+
+        return printing.respond(request, html, "breach-register")
 
 
 class BreachOptionsView(APIView):
@@ -625,6 +629,100 @@ class SubjectRequestExportView(APIView):
             dsr.fulfilled_by, dsr.fulfilled_at = request.user, timezone.now()
             dsr.save(update_fields=["status", "fulfilled_by", "fulfilled_at", "updated_at"])
         return Response(payload)
+
+
+def _humanize(key):
+    text = str(key).replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
+
+def _record_node(value, depth=0):
+    """The export's nested record as a tree the record-copy template walks."""
+    if depth > 8:
+        return {"kind": "text", "text": str(value)}
+    if isinstance(value, dict):
+        items = [(_humanize(k), _record_node(v, depth + 1)) for k, v in value.items()]
+        return {"kind": "dict", "items": items} if items else {"kind": "empty"}
+    if isinstance(value, (list, tuple)):
+        if all(not isinstance(v, (dict, list, tuple)) for v in value):
+            # A list of plain values reads as one line ("A, B, C").
+            text = ", ".join(_record_text(v) for v in value if v not in (None, ""))
+            return {"kind": "text", "text": text} if text else {"kind": "empty"}
+        return {"kind": "list", "items": [_record_node(v, depth + 1) for v in value]}
+    if value is None or value == "":
+        return {"kind": "empty"}
+    return {"kind": "text", "text": _record_text(value)}
+
+
+def _record_text(value):
+    """A plain value as people read it: Yes / No, and timestamps in facility time."""
+    from django.utils.dateparse import parse_datetime
+
+    from apps.care_pathway import facility_time
+
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    text = str(value)
+    if len(text) > 10 and text[4:5] == "-" and text[10:11] == "T":
+        parsed = parse_datetime(text)
+        if parsed is not None:
+            return facility_time.local_format(parsed, "%d %b %Y %H:%M")
+    return text
+
+
+class SubjectRequestPrintView(APIView):
+    """GET — the record copy for an approved access request in the shared document
+    layout. Preview is logged as a view; downloading the PDF releases the copy, so
+    (like the JSON export) it is an EXPORT entry and marks the request fulfilled."""
+
+    def get(self, request, pk):
+        from apps.care_pathway import facility_time
+        from apps.documents import printing
+
+        _require_org_admin(request.user)
+        dsr = get_object_or_404(
+            DataSubjectRequest.objects.select_related("patient__organization"), pk=pk
+        )
+        if dsr.request_type not in DataSubjectRequest.EXPORTABLE:
+            raise ValidationError({"detail": "Only access and portability requests export."})
+        if dsr.status not in ("APPROVED", "FULFILLED"):
+            raise ValidationError({"detail": "Approve the request before exporting the record."})
+        payload = build_patient_export(dsr)
+        patient = dsr.patient
+        organization = patient.organization
+        context = {
+            "title": "Copy of health record",
+            "letterhead": printing.letterhead(organization, printing.default_branch(organization)),
+            "meta": [
+                ("Reference", f"DSR-{str(dsr.pk)[:8].upper()}"),
+                ("Date", facility_time.local_format(timezone.now(), "%d %b %Y")),
+            ],
+            "client_name": patient.get_full_name(),
+            "client_number": patient.citramac_number,
+            "request_type": dsr.get_request_type_display(),
+            "received_at": facility_time.local_format(dsr.received_at, "%d %b %Y"),
+            "sections": [
+                {"title": _humanize(name), "node": _record_node(value)}
+                for name, value in (payload.get("record") or {}).items()
+            ],
+            "printed_by": _name(request.user),
+        }
+        html = printing.render("documents/print/record_copy.html", context)
+        if printing.wants_pdf(request):
+            write_entry(
+                patient,
+                AuditLogEntry.ACTION_EXPORT,
+                {"data_subject_request": str(dsr.id), "output": "PDF"},
+            )
+            if dsr.status == "APPROVED":
+                dsr.status = "FULFILLED"
+                dsr.fulfilled_by, dsr.fulfilled_at = request.user, timezone.now()
+                dsr.save(update_fields=["status", "fulfilled_by", "fulfilled_at", "updated_at"])
+        else:
+            write_entry(patient, AuditLogEntry.ACTION_VIEW, {"data_subject_request": str(dsr.id)})
+        return printing.respond(
+            request, html, printing.safe_filename("health-record", patient.citramac_number)
+        )
 
 
 # ── Platform support access (legal opinion §4.2, §6) ──

@@ -1,0 +1,27 @@
+{% extends "documents/print/base.html" %}
+
+{% block extra_css %}@page { size: A4 landscape; }{% endblock %}
+
+{% block content %}
+  <p class="muted">{{ count }} staff{% if described %} · {{ described }}{% endif %}</p>
+  <table class="grid">
+    <thead><tr><th>#</th><th>Name</th><th>Staff ID</th><th>Roles and branches</th><th>Department</th><th>Duty</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for s in staff %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ s.name }}<br><span class="muted">{{ s.email }}</span></td>
+        <td>{{ s.staff_id|default:"—" }}</td>
+        <td>{% for a in s.assignments %}{{ a }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        <td>{{ s.department|default:"—" }}</td>
+        <td>{{ s.duty }}</td>
+        <td>{{ s.status }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="muted">No staff match.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
+
+{% block end_meta %}Staff roster — personal data of staff; keep it secure.{% endblock %}

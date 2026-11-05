@@ -15,6 +15,7 @@ import {
   type NacadaSummary,
 } from "../../lib/mhpExtrasApi";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { DocumentActions } from "../../components/DocumentActions";
 import {
   Callout,
   Card,
@@ -213,7 +214,14 @@ function ReportCard({
         <div className="flex flex-col gap-5 border-t border-surface-border px-4 py-4">
           {summary ? (
             <>
-              <p className="text-xs text-ink-500">{summary.definition_label}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-ink-500">{summary.definition_label}</p>
+                <DocumentActions
+                  path={`/mhp/nacada-ndo-reports/${report.id}/print/`}
+                  filename={`nacada-ndo-${report.period_start}-${report.period_end}`}
+                  label={`NACADA NDO report ${report.period_start} to ${report.period_end}`}
+                />
+              </div>
               <div className="grid gap-5 lg:grid-cols-2">
                 {summary.sections.map((section) => (
                   <SectionTable key={section.code} section={section} />

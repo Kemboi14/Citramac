@@ -141,6 +141,52 @@ class NacadaNdoReportViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         report = self.get_queryset().get(pk=report.pk)
         return Response(self.get_serializer(report).data)
 
+    @action(detail=True, methods=["get"], url_path="print")
+    def print_report(self, request, pk=None):
+        """The report in the shared professional document layout (preview / `?output=pdf`)."""
+        from apps.care_pathway import facility_time
+        from apps.documents import printing
+        from apps.sysadmin_audit.audit import write_event
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        report = self.get_object()
+        if not report.definition:
+            raise ValidationError(
+                {"report": "This report was compiled in the old format and can't be printed."}
+            )
+        summary = report.summary_data
+        organization = report.organization
+        context = {
+            "title": "NACADA National Drug Observatory report",
+            "letterhead": printing.letterhead(
+                organization, report.branch or printing.default_branch(organization)
+            ),
+            "meta": [
+                ("Reference", f"NDO-{str(report.pk)[:8].upper()}"),
+                ("Period", f"{summary.get('period_start', '')} to {summary.get('period_end', '')}"),
+            ],
+            "summary": summary,
+            "period": f"{summary.get('period_start', '')} to {summary.get('period_end', '')}",
+            "compiled_at": facility_time.local_format(report.generated_at, "%d %b %Y %H:%M"),
+            "compiled_by": _name(report.generated_by),
+            "printed_by": _name(request.user),
+        }
+        write_event(
+            report.organization_id,
+            AuditLogEntry.ACTION_VIEW,
+            "mhp_program.nacadandoreport",
+            report.pk,
+            {"output": "PDF download" if printing.wants_pdf(request) else "preview"},
+        )
+        html = printing.render("documents/print/nacada.html", context)
+        return printing.respond(
+            request,
+            html,
+            printing.safe_filename(
+                "nacada-ndo", summary.get("branch_name"), summary.get("period_end")
+            ),
+        )
+
     @action(detail=True, methods=["get"])
     def fhir(self, request, pk=None):
         report = self.get_object()

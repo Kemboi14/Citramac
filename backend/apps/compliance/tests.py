@@ -370,6 +370,12 @@ class BreachAssessmentTests(ComplianceTestCase):
             self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
             body = response.content.decode()
             self.assertNotIn("<script>alert(1)</script>", body, kind)
+        pdf = self.client.get(
+            reverse("breach-incident-report", args=[incident_id, "odpc"]) + "?output=pdf",
+            **self.auth(self.admin),
+        )
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
         unknown = self.client.get(
             reverse("breach-incident-report", args=[incident_id, "nope"]), **self.auth(self.admin)
         )
@@ -406,6 +412,40 @@ class SubjectRequestTests(ComplianceTestCase):
             format="json",
             **self.auth(self.clinician),
         ).data["id"]
+
+    def test_record_copy_prints_and_downloading_releases_it(self):
+        request_id = self._log()
+        url = reverse("subject-request-print", args=[request_id])
+        self.assertEqual(self.client.get(url, **self.auth(self.admin)).status_code, 400)
+        self.client.post(
+            reverse("subject-request-decision", args=[request_id]),
+            {"decision": "APPROVE", "identity_verification": "National ID sighted"},
+            format="json",
+            **self.auth(self.admin),
+        )
+        self.assertEqual(self.client.get(url, **self.auth(self.clinician)).status_code, 403)
+        preview = self.client.get(url, **self.auth(self.admin))
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn("Grace Alpha", preview.content.decode())
+        self.assertIn("Copy of health record", preview.content.decode())
+        listed = self.client.get(
+            reverse("subject-requests"), {"patient": str(self.patient.id)}, **self.auth(self.admin)
+        ).data
+        rows = listed["results"] if isinstance(listed, dict) else listed
+        self.assertEqual(rows[0]["status"], "APPROVED")  # a preview releases nothing
+        pdf = self.client.get(url + "?output=pdf", **self.auth(self.admin))
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                action=AuditLogEntry.ACTION_EXPORT, object_id=str(self.patient.id)
+            ).exists()
+        )
+        listed = self.client.get(
+            reverse("subject-requests"), {"patient": str(self.patient.id)}, **self.auth(self.admin)
+        ).data
+        rows = listed["results"] if isinstance(listed, dict) else listed
+        self.assertEqual(rows[0]["status"], "FULFILLED")
 
     def test_access_request_export_needs_approval_and_is_audited(self):
         request_id = self._log()

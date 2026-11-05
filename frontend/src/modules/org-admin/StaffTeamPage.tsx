@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
-import { Printer, UserPlus } from "lucide-react";
+import { DocumentActions } from "../../components/DocumentActions";
+import { UserPlus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -33,7 +34,7 @@ import {
   StaffAssignmentsEditor,
   type AssignmentRow,
 } from "./StaffAssignmentsEditor";
-import { printStaffList, STATUS_FILTERS, staffStatusKeys, type StaffFilters } from "./staffList";
+import { describeFilters, STATUS_FILTERS, staffStatusKeys, type StaffFilters } from "./staffList";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -100,7 +101,7 @@ function toDatetimeLocalInput(value: string | null) {
  * citramac_ORG-admin.html "Staff / MHP Team".
  */
 export function StaffTeamPage() {
-  const { accessToken, profile } = useAuth();
+  const { accessToken } = useAuth();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -364,16 +365,6 @@ export function StaffTeamPage() {
   const filtersActive = Object.values(filters).some(Boolean);
   const setFilter = (patch: Partial<StaffFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
-  const handlePrint = () => {
-    printStaffList({
-      organizationName: profile?.organization_name ?? "",
-      staff: visibleStaff,
-      filters,
-      branches,
-      departments,
-    });
-  };
-
   const branchOptionsFor = (rows: AssignmentRow[]) => {
     const covered = coveredBranches(rows, roles);
     return covered === null ? branches : branches.filter((b) => covered.has(b.id));
@@ -591,15 +582,15 @@ export function StaffTeamPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-60"
-          onClick={handlePrint}
+        <DocumentActions
+          path={`/staff/print/?${new URLSearchParams({
+            ids: visibleStaff.map((s) => s.id).join(","),
+            described: describeFilters({ filters, branches, departments }),
+          }).toString()}`}
+          filename="staff-list"
+          label="Staff list"
           disabled={loading || visibleStaff.length === 0}
-        >
-          <Printer size={16} />
-          Print list
-        </button>
+        />
         <button
           type="button"
           className={`${BUTTON_CLASS} flex items-center gap-2`}

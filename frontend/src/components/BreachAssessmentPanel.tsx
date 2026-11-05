@@ -1,17 +1,16 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { FileText, Printer } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { ApiError } from "../lib/apiClient";
 import {
   addBreachEvent,
-  downloadBreachRegister,
-  downloadBreachReport,
   getBreachOptions,
   updateBreachIncident,
   type BreachAssessment,
   type BreachIncident,
   type BreachOptions,
 } from "../lib/complianceApi";
+import { DocumentActions } from "./DocumentActions";
 
 const INPUT =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -52,12 +51,6 @@ function assessmentOf(incident: BreachIncident): BreachAssessment {
 
 function errorText(err: unknown, fallback: string) {
   return err instanceof ApiError ? err.message : fallback;
-}
-
-async function openHtml(blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener");
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function TextArea({
@@ -120,7 +113,6 @@ export function BreachAssessmentPanel({
   const [saved, setSaved] = useState(false);
   const [stepNote, setStepNote] = useState("");
   const [stepError, setStepError] = useState<string | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -165,16 +157,6 @@ export function BreachAssessmentPanel({
       setStepNote("");
     } catch (err) {
       setStepError(errorText(err, "Couldn't add the step."));
-    }
-  };
-
-  const openReport = async (kind: string) => {
-    if (!accessToken) return;
-    setReportError(null);
-    try {
-      await openHtml(await downloadBreachReport(accessToken, incident.id, kind));
-    } catch (err) {
-      setReportError(errorText(err, "Couldn't build the notice."));
     }
   };
 
@@ -444,46 +426,40 @@ export function BreachAssessmentPanel({
           online breach form. DHA has not published how Form HMIS 1 is lodged — confirm with the
           Agency.
         </p>
-        <div className="flex flex-wrap gap-2">
+        <ul className="flex flex-col gap-2">
           {options?.report_kinds.map((k) => (
-            <button
+            <li
               key={k.code}
-              type="button"
-              className={BTN_GHOST}
-              onClick={() => void openReport(k.code)}
+              className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border pb-2 last:border-b-0"
             >
-              <FileText size={14} />
-              {k.label}
-            </button>
+              <span className="inline-flex items-center gap-1.5 text-sm text-ink-900">
+                <FileText size={14} aria-hidden="true" />
+                {k.label}
+              </span>
+              <DocumentActions
+                path={`/compliance/breach-incidents/${incident.id}/report/${k.code}/`}
+                filename={`${incident.reference}-${k.code}`.replace(/[^A-Za-z0-9._-]+/g, "-")}
+                label={k.label}
+              />
+            </li>
           ))}
-        </div>
-        {reportError && <span className="text-sm text-status-red">{reportError}</span>}
+        </ul>
       </div>
     </div>
   );
 }
 
-/** Opens the breach register (DPA s.43(8)) for printing. */
+/** The breach register (DPA s.43(8)): preview or download as PDF. */
 export function BreachRegisterButton({ organizationId }: { organizationId?: string }) {
-  const { accessToken } = useAuth();
-  const [error, setError] = useState<string | null>(null);
+  const query = organizationId ? `?organization=${encodeURIComponent(organizationId)}` : "";
   return (
-    <span className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        className={BTN_GHOST}
-        onClick={() => {
-          if (!accessToken) return;
-          setError(null);
-          downloadBreachRegister(accessToken, organizationId)
-            .then(openHtml)
-            .catch((err) => setError(errorText(err, "Couldn't open the register.")));
-        }}
-      >
-        <Printer size={14} />
-        Breach register
-      </button>
-      {error && <span className="text-xs text-status-red">{error}</span>}
+    <span className="inline-flex flex-col items-end gap-1">
+      <span className="text-[11.5px] font-semibold text-ink-700">Breach register</span>
+      <DocumentActions
+        path={`/compliance/breach-register/${query}`}
+        filename="breach-register"
+        label="Register of personal data breaches"
+      />
     </span>
   );
 }

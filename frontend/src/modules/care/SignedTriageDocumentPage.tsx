@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Printer } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
+import { DocumentActions } from "../../components/DocumentActions";
 import { ApiError } from "../../lib/apiClient";
 import { getSignedAssessment, type TriageAssessmentRecord } from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
@@ -273,9 +273,11 @@ export function SignedTriageDocumentPage() {
             <Link to="/clinical/documents" className={BTN_GHOST}>
               Back to documents
             </Link>
-            <button type="button" className={BTN_GHOST} onClick={() => window.print()}>
-              <Printer size={14} aria-hidden="true" /> Print
-            </button>
+            <DocumentActions
+              path={`/care/assessments/${record.id}/print/`}
+              filename={`triage-${record.id.slice(0, 8)}-v${record.version}`}
+              label={`Triage assessment — ${record.name || "client"}`}
+            />
             <Link to={clientRecordPath(record.patient_id, "intake")} className={BTN}>
               Open record
             </Link>

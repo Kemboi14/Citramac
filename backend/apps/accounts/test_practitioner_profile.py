@@ -416,3 +416,21 @@ class OrganisationSetupTests(ProfileTestCase):
         value = entry.field_diff["email_host_password_encrypted"]["new"]
         self.assertTrue(value.startswith("[encrypted "))
         self.assertNotIn("ciphertext", value)
+
+
+class StaffListPrintTests(ProfileTestCase):
+    def test_org_admin_prints_the_filtered_roster(self):
+        url = reverse("staff-print-list")
+        self.assertEqual(self.client.get(url, **self.auth(self.nurse)).status_code, 403)
+        preview = self.client.get(
+            url + f"?ids={self.nurse.pk},{self.desk.pk}&described=role: Nurse",
+            **self.auth(self.admin),
+        )
+        self.assertEqual(preview.status_code, 200)
+        html = preview.content.decode()
+        self.assertIn("Ann Mutua", html)
+        self.assertIn("Mary Wanjiru", html)
+        self.assertNotIn("Peter Kamau", html)  # not among the filtered rows
+        self.assertIn("role: Nurse", html)
+        pdf = self.client.get(url + "?output=pdf", **self.auth(self.admin))
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))

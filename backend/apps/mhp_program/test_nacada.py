@@ -519,3 +519,17 @@ class FhirR4ConformanceNacadaExamplesTests(SimpleTestCase):
         totals = [g["population"][0]["count"] for g in report["group"]]
         self.assertEqual(totals, [0] * len(report["group"]))
         self.assertNotIn("measureScore", report["group"][-1])
+
+
+class NacadaPrintTests(NacadaTestCase):
+    def test_report_prints_counts_only_and_downloads(self):
+        report_id = self.compile(branch=self.thika).data["id"]
+        url = reverse("nacada-ndo-report-print-report", args=[report_id])
+        preview = self.client.get(url, **self.auth(self.admin, self.thika))
+        self.assertEqual(preview.status_code, 200)
+        html = preview.content.decode()
+        self.assertIn("NACADA National Drug Observatory report", html)
+        self.assertIn("Counts only", html)
+        pdf = self.client.get(url + "?output=pdf", **self.auth(self.admin, self.thika))
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))

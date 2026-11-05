@@ -1,0 +1,45 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Client</th><td>{{ client_name }}</td></tr>
+    {% if client_number %}<tr><th>Client number</th><td>{{ client_number }}</td></tr>{% endif %}
+    <tr><th>Final triage priority</th><td><strong>{{ priority }}</strong></td></tr>
+    <tr><th>System recommendation</th><td>{{ recommendation|default:"Not recorded" }}{% if recommendation_reasons %}<br><span class="muted">{{ recommendation_reasons }}</span>{% endif %}</td></tr>
+    <tr><th>Clinician decision</th><td>{{ decision }}</td></tr>
+    {% if override_reason %}<tr><th>Reason for override</th><td>{{ override_reason }}</td></tr>{% endif %}
+    {% if alerts %}<tr><th>Alerts</th><td>{{ alerts|join:"; " }}</td></tr>{% endif %}
+    {% if rules_version %}<tr><th>Rule set</th><td>{{ rules_version }}</td></tr>{% endif %}
+  </table>
+
+  <h2>Automatic triage summary</h2>
+  {% if findings %}
+  <table class="grid">
+    <thead><tr><th>Finding / alert</th><th>Current status</th><th>Source</th></tr></thead>
+    <tbody>{% for f in findings %}<tr><td>{{ f.finding }}</td><td>{{ f.status }}</td><td>{{ f.source }}{% if f.when %}<br><span class="muted">{{ f.when }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="not-recorded">No structured findings were recorded.</p>{% endif %}
+
+  <h2>Registered tasks</h2>
+  {% if tasks %}
+  <table class="grid">
+    <thead><tr><th>Action</th><th>Owner</th><th>Status</th><th>Date / time</th></tr></thead>
+    <tbody>{% for t in tasks %}<tr><td>{{ t.action }}</td><td>{{ t.owner }}</td><td>{{ t.status }}</td><td>{{ t.when }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="not-recorded">No tasks were registered with this triage.</p>{% endif %}
+
+  {% for section in sections %}
+  <h2>{{ section.title }}</h2>
+  <table class="fields">
+    {% for line in section.lines %}<tr><th>{{ line.label }}</th><td class="pre">{{ line.value }}</td></tr>{% endfor %}
+  </table>
+  {% endfor %}
+{% endblock %}
+
+{% block signature %}
+  <table class="signature"><tr>
+    <td><div class="signed"><strong>{{ signed_by|default:"Clinician not recorded" }}</strong><br>Signed electronically {{ signed_at }}</div>
+      <div class="line">Triage clinician</div></td>
+    <td><div>{{ signed_date }}</div><div class="line">Date</div></td>
+  </tr></table>
+{% endblock %}

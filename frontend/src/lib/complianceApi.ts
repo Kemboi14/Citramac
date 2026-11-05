@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest } from "./apiClient";
+import { apiRequest } from "./apiClient";
 
 // Mirrors backend/apps/compliance (views.py) — docs/16-DATA-PROTECTION-COMPLIANCE.md,
 // the system-side obligations from the CAFRIC legal opinion of 2 October 2026.
@@ -190,15 +190,6 @@ export function addBreachEvent(
 }
 
 /** A printable notice (ODPC, Form HMIS 1, DHA follow-up, data-subject letter) as HTML. */
-export function downloadBreachReport(accessToken: string, incidentId: string, kind: string) {
-  return apiDownload(`/compliance/breach-incidents/${incidentId}/report/${kind}/`, accessToken);
-}
-
-/** The breach register (DPA s.43(8)). Platform staff name the organisation. */
-export function downloadBreachRegister(accessToken: string, organizationId?: string) {
-  const query = organizationId ? `?organization=${encodeURIComponent(organizationId)}` : "";
-  return apiDownload(`/compliance/breach-register/${query}`, accessToken);
-}
 
 // ── Data subject requests (opinion §11) ──
 

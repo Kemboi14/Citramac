@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -254,6 +254,71 @@ class StaffViewSet(viewsets.ModelViewSet):
             )
             .order_by("first_name", "last_name")
         )
+
+    @action(detail=False, methods=["get"], url_path="print")
+    def print_list(self, request):
+        """The roster (the rows the Org Admin has filtered to, `?ids=`) in the shared
+        document layout — preview, or `?output=pdf`. Org Admin only: it lists staff
+        emails and account status."""
+        from apps.care_pathway import facility_time
+        from apps.documents import printing
+
+        from .access import is_org_admin
+
+        user = request.user
+        if user.is_superuser or not is_org_admin(user):
+            raise PermissionDenied("Only the organisation's Org Admin can print the staff list.")
+        wanted = [i for i in (request.query_params.get("ids") or "").split(",") if i]
+        staff = list(self.get_queryset())
+        if wanted:
+            order = {pk: n for n, pk in enumerate(wanted)}
+            staff = sorted((s for s in staff if str(s.pk) in order), key=lambda s: order[str(s.pk)])
+        rows = []
+        for s, data in zip(
+            staff,
+            StaffSerializer(staff, many=True, context={"request": request}).data,
+            strict=True,
+        ):
+            assignments = [
+                f"{a.get('role_name') or ''} — {a.get('branch_name') or 'All branches'}"
+                for a in data.get("assignments") or []
+            ] or [", ".join(data.get("role_names") or [])]
+            status = (
+                "Active" if s.is_active else ("Deactivated" if s.last_login else "Invite pending")
+            )
+            extra = []
+            if data.get("is_locked"):
+                extra.append("Locked")
+            if data.get("access_status") == "expired":
+                extra.append("Access expired")
+            elif data.get("access_status"):
+                extra.append("Time-limited")
+            rows.append(
+                {
+                    "name": f"{s.first_name} {s.last_name}".strip() or s.email,
+                    "email": s.email,
+                    "staff_id": s.staff_id,
+                    "assignments": assignments,
+                    "department": data.get("department_name") or "",
+                    "duty": "On duty" if s.is_on_duty else "Off duty",
+                    "status": ", ".join([status, *extra]),
+                }
+            )
+        organization = user.organization
+        context = {
+            "title": "Staff list",
+            "letterhead": printing.letterhead(organization, printing.default_branch(organization)),
+            "meta": [
+                ("Organisation", organization.name),
+                ("Date", facility_time.local_format(timezone.now(), "%d %b %Y")),
+            ],
+            "count": len(rows),
+            "described": (request.query_params.get("described") or "")[:300],
+            "staff": rows,
+            "printed_by": f"{user.first_name} {user.last_name}".strip() or user.email,
+        }
+        html = printing.render("documents/print/staff_list.html", context)
+        return printing.respond(request, html, "staff-list")
 
     def get_object(self):
         """

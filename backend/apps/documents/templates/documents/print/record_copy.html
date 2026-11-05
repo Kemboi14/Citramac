@@ -1,0 +1,20 @@
+{% extends "documents/print/base.html" %}
+
+{% block extra_css %}
+  .record-item { border: 0.5pt solid #999; padding: 3pt 5pt; margin-bottom: 4pt; page-break-inside: avoid; }
+  .record-item .fields th { width: 30%; }
+{% endblock %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Client</th><td>{{ client_name }}</td></tr>
+    {% if client_number %}<tr><th>Client number</th><td>{{ client_number }}</td></tr>{% endif %}
+    <tr><th>Request</th><td>{{ request_type }}, received {{ received_at }}</td></tr>
+  </table>
+  <div class="boxed">Copy of the client's health record provided under the Data Protection Act, 2019
+    (right of access). Produced from the record as it stood when printed.</div>
+  {% for section in sections %}
+  <h2>{{ section.title }}</h2>
+  {% include "documents/print/_node.html" with node=section.node %}
+  {% endfor %}
+{% endblock %}

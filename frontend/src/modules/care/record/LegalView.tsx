@@ -13,7 +13,6 @@ import {
   exportSubjectRequest,
   listSubjectRequests,
   logSubjectRequest,
-  type PatientRecordExport,
   type SubjectRequest,
   type SubjectRequestStatus,
   type SubjectRequestType,
@@ -26,6 +25,7 @@ import { useValueSets } from "../shared/useValueSets";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { CapacityConsentCard } from "./CapacityConsent";
+import { DocumentActions } from "../../../components/DocumentActions";
 import { AppointmentMessagesCard } from "./AppointmentMessagesCard";
 import { LegalAdmissionStatus } from "./legal/LegalAdmissionStatus";
 import { NationalHealthRecordCard } from "./legal/NationalHealthRecordCard";
@@ -981,12 +981,10 @@ function SubjectRequestItem({
     }
   };
 
-  const fetchExport = async (purpose: "download" | "print") => {
+  const fetchExport = async () => {
     if (!accessToken) return null;
     const question =
-      purpose === "download"
-        ? "Download this client's full record as FHIR JSON? The download is logged and the request is marked fulfilled."
-        : "Print a copy of this client's full record? Producing the copy is logged and the request is marked fulfilled.";
+      "Download this client's full record as FHIR JSON? The download is logged and the request is marked fulfilled.";
     if (!window.confirm(question)) return null;
     setBusy(true);
     setError(null);
@@ -1001,7 +999,7 @@ function SubjectRequestItem({
   };
 
   const download = async () => {
-    const exported = await fetchExport("download");
+    const exported = await fetchExport();
     if (!exported) return;
     const blob = new Blob([JSON.stringify(exported.fhir, null, 2)], {
       type: "application/fhir+json",
@@ -1014,13 +1012,6 @@ function SubjectRequestItem({
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    onChanged();
-  };
-
-  const print = async () => {
-    const exported = await fetchExport("print");
-    if (!exported) return;
-    printRecord(exported, r);
     onChanged();
   };
 
@@ -1127,14 +1118,13 @@ function SubjectRequestItem({
                   >
                     Download record (FHIR JSON)
                   </button>
-                  <button
-                    type="button"
-                    className={`${BTN_GHOST} ${BTN_SM}`}
+                  <DocumentActions
+                    path={`/compliance/subject-requests/${r.id}/print/`}
+                    filename={`health-record-${r.citramac_number || r.id.slice(0, 8)}`}
+                    label={`Copy of health record — ${r.patient_name}`}
                     disabled={busy}
-                    onClick={() => void print()}
-                  >
-                    Print copy
-                  </button>
+                    onDownloaded={onChanged}
+                  />
                 </>
               )}
               {open && (
@@ -1159,129 +1149,4 @@ function SubjectRequestItem({
       )}
     </section>
   );
-}
-
-// ── Print-friendly copy of the exported record ──
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
-
-function humanize(key: string) {
-  const text = key.replace(/_/g, " ").trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function printableValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") {
-    if (ISO_DATE.test(value)) return value;
-    if (ISO_DATETIME.test(value)) return formatDateTime(value);
-    return value;
-  }
-  if (Array.isArray(value) && value.every((v) => typeof v !== "object" || v === null)) {
-    return value.length ? value.map(printableValue).join(", ") : "—";
-  }
-  return String(value);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Builds DOM nodes with textContent only — record values are never parsed as HTML. */
-function appendValue(doc: Document, parent: HTMLElement, value: unknown, depth: number) {
-  if (isPlainObject(value)) {
-    const dl = doc.createElement("dl");
-    for (const [key, inner] of Object.entries(value)) {
-      const dt = doc.createElement("dt");
-      dt.textContent = humanize(key);
-      const dd = doc.createElement("dd");
-      appendValue(doc, dd, inner, depth + 1);
-      dl.append(dt, dd);
-    }
-    parent.append(dl);
-    return;
-  }
-  if (Array.isArray(value) && value.some((v) => typeof v === "object" && v !== null)) {
-    if (value.length === 0) {
-      parent.append(doc.createTextNode("None recorded"));
-      return;
-    }
-    value.forEach((item) => {
-      const block = doc.createElement("div");
-      block.className = depth > 1 ? "item nested" : "item";
-      appendValue(doc, block, item, depth + 1);
-      parent.append(block);
-    });
-    return;
-  }
-  if (Array.isArray(value) && value.length === 0 && depth <= 1) {
-    parent.append(doc.createTextNode("None recorded"));
-    return;
-  }
-  parent.append(doc.createTextNode(printableValue(value)));
-}
-
-const PRINT_CSS = `
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; margin: 24px; font-size: 12px; }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  .meta { color: #444; margin-bottom: 16px; }
-  h2 { font-size: 14px; border-bottom: 1px solid #999; padding-bottom: 3px; margin: 20px 0 8px; break-after: avoid; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; }
-  dt { font-weight: 600; color: #333; }
-  dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
-  .item { border: 1px solid #ccc; border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; break-inside: avoid; }
-  .item.nested { border-style: dashed; margin-top: 4px; }
-`;
-
-function printRecord(exported: PatientRecordExport, request: SubjectRequest) {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.position = "fixed";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-  const win = iframe.contentWindow;
-  const doc = iframe.contentDocument;
-  if (!win || !doc) {
-    iframe.remove();
-    return;
-  }
-  doc.title = `Health record — ${request.patient_name}`;
-  const style = doc.createElement("style");
-  style.textContent = PRINT_CSS;
-  doc.head.append(style);
-
-  const h1 = doc.createElement("h1");
-  h1.textContent = `Health record — ${request.patient_name}`;
-  const meta = doc.createElement("div");
-  meta.className = "meta";
-  meta.textContent = [
-    exported.facility,
-    request.citramac_number && `CITRAMAC no. ${request.citramac_number}`,
-    `Request: ${exported.request.type}, received ${formatDateTime(exported.request.received_at)}`,
-    `Generated ${formatDateTime(exported.generated_at)}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  doc.body.append(h1, meta);
-
-  for (const [section, value] of Object.entries(exported.record)) {
-    const h2 = doc.createElement("h2");
-    h2.textContent = humanize(section);
-    const body = doc.createElement("div");
-    appendValue(doc, body, value, 1);
-    doc.body.append(h2, body);
-  }
-
-  const cleanup = () => window.setTimeout(() => iframe.remove(), 500);
-  win.addEventListener("afterprint", cleanup, { once: true });
-  win.focus();
-  win.print();
-  // Browsers that block until the dialog closes have already printed by here.
-  window.setTimeout(() => {
-    if (document.body.contains(iframe)) cleanup();
-  }, 60_000);
 }

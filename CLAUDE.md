@@ -505,10 +505,16 @@ WeasyPrint (`weasyprint==70.0`; Pango + fonts in the image and CI), the download
 and embedded; the PDF engine accepts only `data:` URLs. Previews are served with a no-script CSP.
 Every preview and download is audited.
 
-Pass 1 (this change): the catalogue documents (`documents/generated/<id>/print/`), the statutory
-legal forms (`care/legal/documents/<id>/print/`), and the invoice and statement
-(`claims/clients/<id>/billing/{invoice,statement}/print/`). Pass 2: discharge summary and referral
-(printable versions), signed triage, record copy, breach notices, staff list, NACADA report.
+Covered: the catalogue documents (`documents/generated/<id>/print/`, including every referral
+letter), the statutory legal forms (`care/legal/documents/<id>/print/`), the invoice and statement
+(`claims/clients/<id>/billing/{invoice,statement}/print/`), the signed discharge summary
+(`care/discharges/<id>/print/`), the signed triage assessment (`care/assessments/<id>/print/`,
+question wording in `care_pathway/triage_print_items.py`, generated from the signed-triage page's
+table), the breach notices and register (landscape), the record copy for an access request
+(`compliance/subject-requests/<id>/print/` — downloading the PDF releases the copy: EXPORT entry,
+request fulfilled; a preview is only a VIEW), the staff list (Org Admin only, landscape) and the
+NACADA NDO report. Not covered: the v3 encounter screen's `ReferralPacket`, which holds only a
+destination and FHIR data.
 
 FHIR / HIE: layout is ours — neither FHIR nor the HIE specifies how a document looks. What the
 PDF enables: Kenya Core's DocumentReference example carries `application/pdf`, and SHA claim

@@ -1,0 +1,35 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Reporting facility</th><td>{{ summary.organization_name }} — {{ summary.branch_name }}</td></tr>
+    <tr><th>Reporting period</th><td>{{ period }}</td></tr>
+    <tr><th>Indicator set</th><td>{{ summary.definition_label }}</td></tr>
+  </table>
+  <div class="boxed">Counts only — no names, identifiers or free text. A count of 1 to 4 is shown as
+    &ldquo;&lt;5&rdquo;, and where needed the next-smallest figure is withheld too, so no individual can be identified.</div>
+
+  {% for section in summary.sections %}
+  <h2>{{ section.title }}{% if section.scope == "organization" %} <span class="muted">(organisation-wide)</span>{% endif %}</h2>
+  <table class="grid">
+    <tbody>
+      <tr><th style="text-transform:none;font-size:9pt">{{ section.total_label }}</th><td class="num"><strong>{{ section.total.display }}</strong></td></tr>
+      {% if section.median_days %}<tr><td>Median wait</td><td class="num">{{ section.median_days.display }}</td></tr>{% endif %}
+    </tbody>
+  </table>
+  {% for breakdown in section.breakdowns %}
+    <h3>{{ breakdown.title }}</h3>
+    <table class="grid">
+      <tbody>{% for row in breakdown.rows %}<tr><td>{{ row.label }}</td><td class="num">{{ row.display }}</td></tr>{% endfor %}</tbody>
+    </table>
+  {% endfor %}
+  {% for note in section.notes %}<p class="muted">Note: {{ note }}</p>{% endfor %}
+  {% endfor %}
+
+  {% if summary.notes %}
+  <h2>Notes</h2>
+  <ul>{% for note in summary.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+  {% endif %}
+{% endblock %}
+
+{% block end_meta %}Compiled {{ compiled_at }}{% if compiled_by %} by {{ compiled_by }}{% endif %}.{% endblock %}
