@@ -11,7 +11,7 @@ import { AppointmentMessages } from "./shared/AppointmentMessages";
 import { formatTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { TriageWorklistHeadCells, TriageWorklistRow } from "./shared/TriageWorklistRow";
-import { Card, ErrorNote, StatusPill, Tag, Timeline } from "./shared/ui";
+import { Card, ErrorNote, PriorityPill, StatusPill, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.3 — mockup dashboard(). Every number is
@@ -109,6 +109,12 @@ function StatCard({
   return (
     <Link
       to={to}
+      onClick={(event) => {
+        // A "#section" target is on this page: scroll to it instead of navigating.
+        if (!to.startsWith("#")) return;
+        event.preventDefault();
+        document.getElementById(to.slice(1))?.scrollIntoView({ behavior: "smooth" });
+      }}
       aria-label={`${label}: open the list`}
       className="group block rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green motion-reduce:transform-none"
     >
@@ -170,6 +176,17 @@ function QuickTile({
         {count}
       </span>
     </button>
+  );
+}
+
+function SectionHeading({ id, title, detail }: { id: string; title: string; detail: string }) {
+  return (
+    <div className="mb-3">
+      <h2 id={id} className="font-display text-[17px] font-bold text-ink-900">
+        {title}
+      </h2>
+      <p className="mt-0.5 text-[12.5px] text-ink-500">{detail}</p>
+    </div>
   );
 }
 
@@ -265,177 +282,77 @@ export function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <MyTasks />
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          value={n(data?.total_clients)}
-          label="Total Clients"
-          to="/clinical/registry"
-          change={data ? `↑ ${data.new_this_week} this week` : ""}
-          tone="up"
+      <section aria-labelledby="dashboard-mine-title" className="mb-8">
+        <SectionHeading
+          id="dashboard-mine-title"
+          title="My work"
+          detail="Only what is yours: your clients, tasks given to you or your team, decisions waiting on you, and appointments where you are the clinician."
         />
-        <StatCard
-          value={n(data?.inpatients)}
-          label="Inpatients"
-          change=""
-          to="/clinical/inpatient"
-        />
-        <StatCard
-          value={n(data?.outpatients)}
-          label="Outpatients"
-          to="/clinical/registry?care=OUTPATIENT"
-          change={data ? `↑ ${data.outpatients_new_today} new today` : ""}
-          tone="up"
-        />
-        <StatCard
-          value={n(data?.red_orange)}
-          label="RED / ORANGE"
-          to="/clinical/psychiatry"
-          change={data && data.red_orange > 0 ? "Requires attention" : ""}
-          tone="down"
-        />
-      </div>
-
-      <section className="mb-6" aria-labelledby="dashboard-quick-access-title">
-        <div className="mb-[11px]">
-          <h2 id="dashboard-quick-access-title" className="text-[15px] font-bold text-ink-900">
-            Quick access
-          </h2>
-          <p className="mt-[3px] text-xs text-ink-500">
-            Jump to the work that needs your attention.
-          </p>
-        </div>
-        <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
-          <QuickTile
-            icon={ICONS.triage}
-            title="Triage queue"
-            detail="Arrivals and re-checks due"
-            count={`${n(data?.triage_due)} due`}
-            attention={(data?.triage_due ?? 0) > 0}
-            onClick={() => navigate("/clinical/triage")}
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            value={n(data?.mine?.clients)}
+            label="My clients"
+            to="/clinical/caseload"
+            change="On your caseload"
           />
-          <QuickTile
-            icon={ICONS.psychiatry}
-            title="Psychiatry review"
-            detail="Signed referrals · priority order"
-            count={`${n(data?.psychiatry_queued)} queued`}
-            attention={(data?.psychiatry_queued ?? 0) > 0}
-            onClick={() => navigate("/clinical/psychiatry")}
-          />
-          <QuickTile
-            icon={ICONS.caseload}
-            title="My caseload"
-            detail="Clients assigned to you"
-            count={count(data?.caseload_count, "client", "clients")}
-            onClick={() => navigate("/clinical/caseload")}
-          />
-          <QuickTile
-            icon={ICONS.group}
-            title="Group Psychotherapy"
-            detail="Session attendance and linked client records"
-            count={
-              data?.group_follow_up_open
-                ? count(data.group_follow_up_open, "follow-up", "follow-ups")
-                : count(data?.group_session_count, "session", "sessions")
+          <StatCard
+            value={n(data?.mine?.tasks)}
+            label="My tasks"
+            to="#my-tasks"
+            change={
+              data?.mine && data.mine.tasks_overdue > 0 ? `${data.mine.tasks_overdue} overdue` : ""
             }
-            attention={(data?.group_follow_up_open ?? 0) > 0}
-            onClick={() => navigate("/clinical/psychotherapy/group")}
+            tone="down"
           />
-          <QuickTile
-            icon={ICONS.appointments}
-            title="Appointments"
-            detail="Today’s scheduled visits"
-            count={`${n(data?.appointments_today)} today`}
-            onClick={() => navigate("/clinical/appointments")}
+          <StatCard
+            value={n(data?.mine?.appointments_today.length)}
+            label="My appointments today"
+            to="/clinical/appointments"
+            change=""
           />
-          <QuickTile
-            icon={ICONS.followup}
-            title="Follow-up"
-            detail="Overdue and unbooked follow-ups"
-            count={`${data ? data.follow_ups_overdue + data.discharged_without_follow_up : "—"} to action`}
-            attention={
-              (data?.follow_ups_overdue ?? 0) + (data?.discharged_without_follow_up ?? 0) > 0
-            }
-            onClick={() => navigate("/clinical/follow-up")}
-          />
-          <QuickTile
-            icon={ICONS.inpatient}
-            title="Inpatient admissions"
-            detail="Current stays and bed allocation"
-            count={`${count(data?.beds_available, "bed", "beds")} free`}
-            onClick={() => navigate("/clinical/inpatient")}
+          <StatCard
+            value={n(data?.mine?.decisions)}
+            label="Decisions waiting on me"
+            to="#my-tasks"
+            change={data?.mine && data.mine.decisions > 0 ? "Co-sign or approve" : ""}
+            tone="down"
           />
         </div>
-      </section>
 
-      <Card
-        title={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Triage arrivals
-            {data && <Tag>{data.triage_due}</Tag>}
-            {data && (data.triage_overdue ?? 0) > 0 && (
-              <StatusPill tone="danger">{data.triage_overdue} overdue</StatusPill>
-            )}
-          </span>
-        }
-        aside={
-          <Link
-            to="/clinical/triage"
-            className="text-[12.5px] font-semibold text-brand-green hover:underline"
+        {data?.mine && data.mine.red_orange.length > 0 && (
+          <Card
+            title={
+              <span className="inline-flex items-center gap-2">
+                RED / ORANGE among my clients <Tag>{data.mine.red_orange.length}</Tag>
+              </span>
+            }
+            className="mb-4"
           >
-            {data && data.triage_due > data.triage_arrivals.length
-              ? `View all ${data.triage_due} →`
-              : "Open triage queue →"}
-          </Link>
-        }
-        bodyClassName="p-0 overflow-x-auto"
-        className="mb-4"
-      >
-        <table className={`${TABLE} min-w-[720px]`} aria-label="Triage arrivals and re-checks due">
-          <thead>
-            <tr>
-              <TriageWorklistHeadCells />
-            </tr>
-          </thead>
-          <tbody>
-            {data && data.triage_arrivals.length > 0 ? (
-              data.triage_arrivals.map((row) => (
-                <TriageWorklistRow
-                  key={row.id}
-                  row={row}
-                  onOpen={() => navigate(`/clinical/triage/${row.id}`)}
-                />
-              ))
-            ) : !data ? (
-              error ? (
-                <tr>
-                  <td colSpan={5} className={`${TD} text-center text-ink-500`}>
-                    —
-                  </td>
-                </tr>
-              ) : (
-                <TableSkeletonRows columns={5} rows={3} />
-              )
-            ) : (
-              <tr>
-                <td colSpan={5}>
-                  <EmptyState title="No arrivals or re-checks are due" />
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
+            <ul className="flex flex-wrap gap-2">
+              {data.mine.red_orange.map((c) => (
+                <li key={c.patient_id}>
+                  <Link
+                    to={clientRecordPath(c.patient_id, "snapshot")}
+                    className="inline-flex items-center gap-2 rounded-md border border-surface-border px-2.5 py-1.5 text-[13px] font-semibold text-ink-900 hover:border-brand-green"
+                  >
+                    <PriorityPill priority={c.priority} />
+                    {c.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div id="my-tasks" className="mb-4 scroll-mt-24">
+          <MyTasks />
+        </div>
+
         <Card
           title={
             <span className="inline-flex items-center gap-2">
-              Today&rsquo;s appointments{" "}
-              {data && <Tag>{(data.todays_appointments ?? []).length}</Tag>}
+              My appointments today{" "}
+              {data && <Tag>{(data.mine?.appointments_today ?? []).length}</Tag>}
             </span>
           }
           aside={
@@ -448,7 +365,7 @@ export function DashboardPage() {
           }
           bodyClassName="p-0 overflow-x-auto"
         >
-          <table className={`${TABLE} min-w-[560px]`} aria-label="Today's appointments">
+          <table className={`${TABLE} min-w-[560px]`} aria-label="My appointments today">
             <thead>
               <tr>
                 <th className={TH}>Time</th>
@@ -468,14 +385,14 @@ export function DashboardPage() {
                 ) : (
                   <TableSkeletonRows columns={4} rows={3} />
                 )
-              ) : (data.todays_appointments ?? []).length === 0 ? (
+              ) : (data.mine?.appointments_today ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={4}>
-                    <EmptyState title="No appointments today" />
+                    <EmptyState title="No appointments with you today" />
                   </td>
                 </tr>
               ) : (
-                (data.todays_appointments ?? []).map((a) => (
+                (data.mine?.appointments_today ?? []).map((a) => (
                   <tr key={a.id} className="hover:bg-surface-bg">
                     <td className={TD}>{formatTime(a.scheduled_for)}</td>
                     <td className={TD}>
@@ -501,70 +418,237 @@ export function DashboardPage() {
             </tbody>
           </table>
         </Card>
+      </section>
 
-        <Card title="Recent Activity">
-          {!data ? (
-            error ? (
-              <p className="text-[13px] text-ink-500">—</p>
-            ) : (
-              <PanelSkeleton lines={4} />
-            )
-          ) : data.recent_activity.length === 0 ? (
-            <EmptyState title="No recent activity">
-              Registrations, triage, admissions and discharges appear here as they happen.
-            </EmptyState>
-          ) : (
-            (() => {
-              const pages = Math.ceil(data.recent_activity.length / ACTIVITY_PAGE);
-              const page = Math.min(activityPage, pages - 1);
-              const shown = data.recent_activity.slice(
-                page * ACTIVITY_PAGE,
-                (page + 1) * ACTIVITY_PAGE,
-              );
-              return (
-                <>
-                  <Timeline
-                    items={shown.map((item, index) => ({
-                      key: `${item.at}-${page}-${index}`,
-                      time: activityTime(item.at),
-                      title: item.title,
-                      detail: item.detail,
-                    }))}
+      <section aria-labelledby="dashboard-branch-title">
+        <SectionHeading
+          id="dashboard-branch-title"
+          title="Shared with the branch"
+          detail="Everyone working at this branch sees these figures and queues — they are not assigned to you."
+        />
+
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            value={n(data?.total_clients)}
+            label="Registered clients"
+            to="/clinical/registry"
+            change={data ? `↑ ${data.new_this_week} this week` : ""}
+            tone="up"
+          />
+          <StatCard
+            value={n(data?.inpatients)}
+            label="Inpatients"
+            change=""
+            to="/clinical/inpatient"
+          />
+          <StatCard
+            value={n(data?.outpatients)}
+            label="Outpatients in care"
+            to="/clinical/registry?care=OUTPATIENT"
+            change={data ? `↑ ${data.outpatients_new_today} new today` : ""}
+            tone="up"
+          />
+          <StatCard
+            value={n(data?.red_orange)}
+            label="RED / ORANGE in care"
+            to="/clinical/psychiatry"
+            change={data && data.red_orange > 0 ? "Requires attention" : ""}
+            tone="down"
+          />
+        </div>
+
+        <section className="mb-6" aria-labelledby="dashboard-quick-access-title">
+          <div className="mb-[11px]">
+            <h2 id="dashboard-quick-access-title" className="text-[15px] font-bold text-ink-900">
+              Branch queues and pages
+            </h2>
+            <p className="mt-[3px] text-xs text-ink-500">
+              Shared worklists at this branch — open one to pick up work.
+            </p>
+          </div>
+          <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
+            <QuickTile
+              icon={ICONS.triage}
+              title="Triage queue"
+              detail="Arrivals and re-checks due"
+              count={`${n(data?.triage_due)} due`}
+              attention={(data?.triage_due ?? 0) > 0}
+              onClick={() => navigate("/clinical/triage")}
+            />
+            <QuickTile
+              icon={ICONS.psychiatry}
+              title="Psychiatry review"
+              detail="Signed referrals · priority order"
+              count={`${n(data?.psychiatry_queued)} queued`}
+              attention={(data?.psychiatry_queued ?? 0) > 0}
+              onClick={() => navigate("/clinical/psychiatry")}
+            />
+            <QuickTile
+              icon={ICONS.group}
+              title="Group Psychotherapy"
+              detail="Session attendance and linked client records"
+              count={
+                data?.group_follow_up_open
+                  ? count(data.group_follow_up_open, "follow-up", "follow-ups")
+                  : count(data?.group_session_count, "session", "sessions")
+              }
+              attention={(data?.group_follow_up_open ?? 0) > 0}
+              onClick={() => navigate("/clinical/psychotherapy/group")}
+            />
+            <QuickTile
+              icon={ICONS.appointments}
+              title="Appointments"
+              detail="All of today’s visits at the branch"
+              count={`${n(data?.appointments_today)} today`}
+              onClick={() => navigate("/clinical/appointments")}
+            />
+            <QuickTile
+              icon={ICONS.followup}
+              title="Follow-up"
+              detail="Overdue and unbooked follow-ups"
+              count={`${data ? data.follow_ups_overdue + data.discharged_without_follow_up : "—"} to action`}
+              attention={
+                (data?.follow_ups_overdue ?? 0) + (data?.discharged_without_follow_up ?? 0) > 0
+              }
+              onClick={() => navigate("/clinical/follow-up")}
+            />
+            <QuickTile
+              icon={ICONS.inpatient}
+              title="Inpatient admissions"
+              detail="Current stays and bed allocation"
+              count={`${count(data?.beds_available, "bed", "beds")} free`}
+              onClick={() => navigate("/clinical/inpatient")}
+            />
+          </div>
+        </section>
+
+        <Card
+          title={
+            <span className="inline-flex flex-wrap items-center gap-2">
+              Triage arrivals
+              {data && <Tag>{data.triage_due}</Tag>}
+              {data && (data.triage_overdue ?? 0) > 0 && (
+                <StatusPill tone="danger">{data.triage_overdue} overdue</StatusPill>
+              )}
+            </span>
+          }
+          aside={
+            <Link
+              to="/clinical/triage"
+              className="text-[12.5px] font-semibold text-brand-green hover:underline"
+            >
+              {data && data.triage_due > data.triage_arrivals.length
+                ? `View all ${data.triage_due} →`
+                : "Open triage queue →"}
+            </Link>
+          }
+          bodyClassName="p-0 overflow-x-auto"
+          className="mb-4"
+        >
+          <table
+            className={`${TABLE} min-w-[720px]`}
+            aria-label="Triage arrivals and re-checks due"
+          >
+            <thead>
+              <tr>
+                <TriageWorklistHeadCells />
+              </tr>
+            </thead>
+            <tbody>
+              {data && data.triage_arrivals.length > 0 ? (
+                data.triage_arrivals.map((row) => (
+                  <TriageWorklistRow
+                    key={row.id}
+                    row={row}
+                    onOpen={() => navigate(`/clinical/triage/${row.id}`)}
                   />
-                  {pages > 1 && (
-                    <nav
-                      aria-label="Recent activity pages"
-                      className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3"
-                    >
-                      <span className="text-[12.5px] text-ink-500">
-                        Page {page + 1} of {pages}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className={PAGER_BTN}
-                          disabled={page === 0}
-                          onClick={() => setActivityPage(page - 1)}
-                        >
-                          Previous
-                        </button>
-                        <button
-                          type="button"
-                          className={PAGER_BTN}
-                          disabled={page >= pages - 1}
-                          onClick={() => setActivityPage(page + 1)}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </nav>
-                  )}
-                </>
-              );
-            })()
-          )}
+                ))
+              ) : !data ? (
+                error ? (
+                  <tr>
+                    <td colSpan={5} className={`${TD} text-center text-ink-500`}>
+                      —
+                    </td>
+                  </tr>
+                ) : (
+                  <TableSkeletonRows columns={5} rows={3} />
+                )
+              ) : (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState title="No arrivals or re-checks are due" />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </Card>
-      </div>
+
+        <div className="mt-4">
+          <Card title="Recent activity at the branch">
+            {!data ? (
+              error ? (
+                <p className="text-[13px] text-ink-500">—</p>
+              ) : (
+                <PanelSkeleton lines={4} />
+              )
+            ) : data.recent_activity.length === 0 ? (
+              <EmptyState title="No recent activity">
+                Registrations, triage, admissions and discharges appear here as they happen.
+              </EmptyState>
+            ) : (
+              (() => {
+                const pages = Math.ceil(data.recent_activity.length / ACTIVITY_PAGE);
+                const page = Math.min(activityPage, pages - 1);
+                const shown = data.recent_activity.slice(
+                  page * ACTIVITY_PAGE,
+                  (page + 1) * ACTIVITY_PAGE,
+                );
+                return (
+                  <>
+                    <Timeline
+                      items={shown.map((item, index) => ({
+                        key: `${item.at}-${page}-${index}`,
+                        time: activityTime(item.at),
+                        title: item.title,
+                        detail: item.detail,
+                      }))}
+                    />
+                    {pages > 1 && (
+                      <nav
+                        aria-label="Recent activity pages"
+                        className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3"
+                      >
+                        <span className="text-[12.5px] text-ink-500">
+                          Page {page + 1} of {pages}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className={PAGER_BTN}
+                            disabled={page === 0}
+                            onClick={() => setActivityPage(page - 1)}
+                          >
+                            Previous
+                          </button>
+                          <button
+                            type="button"
+                            className={PAGER_BTN}
+                            disabled={page >= pages - 1}
+                            onClick={() => setActivityPage(page + 1)}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </nav>
+                    )}
+                  </>
+                );
+              })()
+            )}
+          </Card>
+        </div>
+      </section>
 
       <details className="group mt-4 overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-[18px] py-3 text-[13px] font-bold text-ink-900 [&::-webkit-details-marker]:hidden">

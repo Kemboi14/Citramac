@@ -12,9 +12,9 @@ const PAGE_SIZE = 10;
 const BUTTON =
   "rounded-md border border-surface-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50";
 
-/** Everything outstanding across the clients in care, overdue first — computed
- * from the record, so it cannot drift from it. Collapsed to a count until the
- * clinician opens it, then shown a page at a time. */
+/** The signed-in clinician's own work, overdue first — items for their clients,
+ * tasks given to them or their team, and decisions waiting on them, each saying
+ * why it is theirs. Collapsed to a count until opened, then shown a page at a time. */
 export function MyTasks() {
   const { accessToken } = useAuth();
   const [tasks, setTasks] = useState<MyTask[] | null>(null);
@@ -92,6 +92,7 @@ export function MyTasks() {
             {shown.map((t) => (
               <li key={`${t.patient_id}:${t.key}`} className="flex flex-wrap items-center gap-2">
                 <Tag tone={t.overdue ? "risk" : "neutral"}>{t.category}</Tag>
+                {t.why && <span className="text-[11.5px] font-semibold text-ink-500">{t.why}</span>}
                 <Link
                   to={clientRecordPath(t.patient_id, "snapshot")}
                   className="font-semibold text-brand-green hover:underline"

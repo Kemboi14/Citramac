@@ -699,6 +699,25 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return Response(ErasureRequestSerializer(erasure_request).data)
 
 
+def caseload_patients(user):
+    """The clients on this user's caseload: they are the registered doctor, hold a
+    care-team membership, or are the consultant on the current admission.
+    Archived clients are left out. The one definition of "my clients" — the
+    caseload page and the dashboard's "My work" both use it."""
+    from apps.ipd_ward.models import Admission
+    from apps.mhp_program.models import CareTeamMembership
+
+    care_team = CareTeamMembership.objects.filter(user=user).values("patient_id")
+    consultant = Admission.objects.filter(
+        consultant=user, status__in=("ADMITTED", "TRANSFERRED")
+    ).values("patient_id")
+    return (
+        Patient.objects.filter(archived_at__isnull=True)
+        .filter(models.Q(doctor=user) | models.Q(id__in=care_team) | models.Q(id__in=consultant))
+        .distinct()
+    )
+
+
 class CaseloadView(APIView):
     """
     "My Caseload" — docs/15-CLINICAL-WORKSPACE-V3.md §1.12 / mapping M9 (a
@@ -712,24 +731,10 @@ class CaseloadView(APIView):
     def get(self, request):
         from apps.clinical_encounter.models import DiagnosisCode
         from apps.ipd_ward.models import Admission
-        from apps.mhp_program.models import CareTeamMembership
 
         user = request.user
         current_admission_statuses = ("ADMITTED", "TRANSFERRED")
-        care_team_patient_ids = CareTeamMembership.objects.filter(user=user).values("patient_id")
-        consultant_patient_ids = Admission.objects.filter(
-            consultant=user, status__in=current_admission_statuses
-        ).values("patient_id")
-        patients = list(
-            Patient.objects.filter(archived_at__isnull=True)
-            .filter(
-                models.Q(doctor=user)
-                | models.Q(id__in=care_team_patient_ids)
-                | models.Q(id__in=consultant_patient_ids)
-            )
-            .distinct()
-            .order_by("last_name", "first_name")
-        )
+        patients = list(caseload_patients(user).order_by("last_name", "first_name"))
         patient_ids = [p.id for p in patients]
 
         admissions = {}

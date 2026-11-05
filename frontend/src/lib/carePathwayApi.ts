@@ -1415,6 +1415,15 @@ export interface CareDashboard {
   group_follow_up_open: number;
   recent_activity: { at: string; title: string; detail: string }[];
   triage_arrivals: WorklistRow[];
+  /** The signed-in clinician's own work (owner decision 2026-11-05). */
+  mine?: {
+    clients: number;
+    tasks: number;
+    tasks_overdue: number;
+    decisions: number;
+    appointments_today: CareDashboard["todays_appointments"];
+    red_orange: { patient_id: string; name: string; priority: "RED" | "ORANGE" }[];
+  };
   todays_appointments: {
     id: string;
     patient_id: string;
@@ -2271,6 +2280,8 @@ export interface MyTask extends AttentionItem {
   patient_id: string;
   patient: string;
   kind?: string;
+  /** Why it is this clinician's: "Your client", "Assigned to you", "Your team · <role>", "Decision for you". */
+  why?: string;
 }
 export interface RiskProposalRow {
   id: string;

@@ -13,7 +13,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from apps.client_registry.models import Appointment, Patient
+from apps.client_registry.models import Appointment
 from apps.triage.models import VitalSigns
 
 from . import ews, facility_time, instruments, intake
@@ -22,7 +22,6 @@ from . import mental_state, tools, withdrawal
 from .models import (
     CarePlanTask,
     ClinicalAlert,
-    EpisodeOfCare,
     MdtReview,
     OutcomeScore,
     RestrictiveCheck,
@@ -269,19 +268,73 @@ def patient_items(patient, now=None):
     return items
 
 
-def my_tasks(user, limit=200):
-    """Cross-client list, overdue first, plus decisions awaiting this user."""
-    now = timezone.now()
-    patient_ids = (
-        EpisodeOfCare.objects.filter(status__in=EpisodeOfCare.OPEN_STATUSES)
-        .values_list("patient_id", flat=True)
-        .distinct()[:limit]
-    )
-    out = []
-    for patient in Patient.objects.filter(pk__in=list(patient_ids)):
-        for item in patient_items(patient, now):
-            out.append({**item, "patient_id": str(patient.pk), "patient": patient.get_full_name()})
+def my_tasks(user):
+    """
+    What is the signed-in clinician's to do — theirs alone (owner decision
+    2026-11-05), overdue first. Each item says why it is theirs (`why`):
+
+    - "Your client": outstanding work on a client in their caseload
+      (apps.client_registry.views.caseload_patients — the same definition
+      as My Caseload).
+    - "Assigned to you": a task (CareTask) given to them by name.
+    - "Your team · <role>": a task given to a team whose role they hold and
+      not yet taken by a person.
+    - "Decision for you": a co-signature or approval addressed to them.
+
+    A task that is already listed for one of their clients is not listed twice.
+    """
+    import re
+
+    from apps.client_registry.views import caseload_patients
+
     from . import plan_extras
+    from .models import CareTask
+
+    now = timezone.now()
+    out = []
+    listed_tasks = set()
+    task_key = re.compile(r"^(?:triage:task:|legal:)(.+)$")
+    for patient in caseload_patients(user):
+        for item in patient_items(patient, now):
+            match = task_key.match(item["key"])
+            if match:
+                listed_tasks.add(match.group(1))
+            out.append(
+                {
+                    **item,
+                    "patient_id": str(patient.pk),
+                    "patient": patient.get_full_name(),
+                    "why": "Your client",
+                }
+            )
+
+    open_tasks = (
+        CareTask.objects.filter(completed_at__isnull=True)
+        .exclude(status="COMPLETED")
+        .select_related("patient")
+    )
+    role_names = list(user.roles.filter(is_active=True).values_list("name", flat=True))
+    assigned = [(t, "Assigned to you") for t in open_tasks.filter(assignee=user)]
+    team = [
+        (t, f"Your team · {t.owner}")
+        for t in open_tasks.filter(assignee__isnull=True, owner__in=role_names)
+    ]
+    for task, why in assigned + team:
+        if str(task.pk) in listed_tasks:
+            continue
+        listed_tasks.add(str(task.pk))
+        out.append(
+            {
+                "key": f"caretask:{task.pk}",
+                "category": "Task",
+                "text": task.action_label,
+                "due_at": task.due_at,
+                "overdue": bool(task.due_at and task.due_at < now),
+                "patient_id": str(task.patient_id),
+                "patient": task.patient.get_full_name(),
+                "why": why,
+            }
+        )
 
     for req, kind in plan_extras.inbox(user):
         out.append(
@@ -294,6 +347,7 @@ def my_tasks(user, limit=200):
                 "patient_id": str(req.patient_id),
                 "patient": req.patient.get_full_name(),
                 "kind": kind,
+                "why": "Decision for you",
             }
         )
     out.sort(key=lambda i: (not i["overdue"], i["due_at"] or now))

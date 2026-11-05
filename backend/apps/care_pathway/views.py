@@ -1634,17 +1634,52 @@ def _red_orange_count():
     return count
 
 
-def _todays_appointments(bounds):
-    """Today's appointments for the dashboard, in time order, with what was sent
-    to the client about each (apps.client_registry.appointment_messages)."""
+def _my_work(user, bounds):
+    """The signed-in clinician's own work (owner decision 2026-11-05): their
+    clients (caseload), their tasks, decisions waiting on them, appointments
+    today where they are the clinician, and RED / ORANGE among their clients."""
+    from apps.client_registry.views import caseload_patients
+
+    from . import attention
+
+    clients = list(caseload_patients(user))
+    tasks = attention.my_tasks(user)
+    at_risk = []
+    for patient in clients:
+        latest = (
+            TriageEncounter.objects.filter(patient_id=patient.id, triage_version__gt=0)
+            .order_by("-last_triaged_at")
+            .values_list("priority", flat=True)
+            .first()
+        )
+        if latest in ("RED", "ORANGE"):
+            at_risk.append(
+                {"patient_id": str(patient.id), "name": patient.get_full_name(), "priority": latest}
+            )
+    at_risk.sort(key=lambda r: (r["priority"] != "RED", r["name"]))
+    return {
+        "clients": len(clients),
+        "tasks": len(tasks),
+        "tasks_overdue": sum(1 for t in tasks if t["overdue"]),
+        "decisions": sum(1 for t in tasks if t.get("why") == "Decision for you"),
+        "appointments_today": _todays_appointments(bounds, provider=user),
+        "red_orange": at_risk,
+    }
+
+
+def _todays_appointments(bounds, provider=None):
+    """Today's appointments (only this clinician's, when `provider` is given), in
+    time order, with what was sent to the client about each
+    (apps.client_registry.appointment_messages)."""
     from apps.client_registry import appointment_messages
 
+    appointments = Appointment.objects.filter(
+        scheduled_for__gte=bounds[0], scheduled_for__lt=bounds[1]
+    ).exclude(status="CANCELLED")
+    if provider is not None:
+        appointments = appointments.filter(provider=provider)
     rows = []
-    for a in (
-        Appointment.objects.filter(scheduled_for__gte=bounds[0], scheduled_for__lt=bounds[1])
-        .select_related("patient", "provider")
-        .order_by("scheduled_for")[:50]
-    ):
+    for a in appointments.select_related("patient", "provider").order_by("scheduled_for")[:50]:
         rows.append(
             {
                 "id": str(a.id),
@@ -1680,6 +1715,14 @@ class DashboardView(APIView):
         )
         total = patients.count()
         inpatients = len(admitted_ids)
+        # In care as an outpatient: an open episode and not admitted (not "everyone
+        # ever registered minus inpatients", which counted discharged clients too).
+        in_care_ids = set(
+            EpisodeOfCare.objects.filter(
+                status__in=EpisodeOfCare.OPEN_STATUSES, patient__archived_at__isnull=True
+            ).values_list("patient_id", flat=True)
+        )
+        outpatients = len(in_care_ids - admitted_ids)
         beds_available = Bed.objects.filter(status="AVAILABLE").count()
         worklist = services.triage_worklist()
         caseload = CaseloadView().get(request).data["results"]
@@ -1692,12 +1735,13 @@ class DashboardView(APIView):
                 ).count(),
                 "inpatients": inpatients,
                 "beds_available": beds_available,
-                "outpatients": total - inpatients,
+                "outpatients": outpatients,
+                # New today among those outpatients — the same group as the number above.
                 "outpatients_new_today": patients.filter(
-                    registered_at__gte=today_bounds[0], registered_at__lt=today_bounds[1]
-                )
-                .exclude(id__in=admitted_ids)
-                .count(),
+                    registered_at__gte=today_bounds[0],
+                    registered_at__lt=today_bounds[1],
+                    id__in=in_care_ids - admitted_ids,
+                ).count(),
                 "red_orange": _red_orange_count(),
                 "triage_due": len(worklist),
                 "triage_overdue": sum(1 for item in worklist if item["is_overdue"]),
@@ -1715,6 +1759,7 @@ class DashboardView(APIView):
                 "recent_activity": services.recent_activity(limit=40),
                 "triage_arrivals": [_worklist_row(i) for i in worklist[:5]],
                 "todays_appointments": _todays_appointments(today_bounds),
+                "mine": _my_work(request.user, today_bounds),
                 "generated_at": _iso(now),
             }
         )

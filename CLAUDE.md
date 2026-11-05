@@ -522,3 +522,23 @@ attachments are PDF files. Attaching the PDF to a `DocumentReference` (type code
 claims is a later step, not done here. A signed document reprints from its frozen content; the
 letterhead's logo and registration numbers come from the current organisation and branch.
 Reversibility: cheap — presentation only, no record changes.
+
+### 2026-11-05 — clinical dashboard: "My work" is the clinician's own
+
+On the owner's decisions of 2026-11-05: the dashboard opens with **My work** — only what is the
+signed-in clinician's — and below it, clearly labelled, **Shared with the branch**.
+
+- **My clients** = the caseload (`client_registry.views.caseload_patients`: registered doctor,
+  care-team membership, or consultant on the current admission) — one definition for the
+  caseload page, My tasks and the dashboard.
+- **My tasks** (`attention.my_tasks`) = items for my clients, CareTasks assigned to me by name,
+  CareTasks given to a team whose role I hold and not yet taken, and decisions waiting on me; each
+  says why it is mine, and a task already listed for my client is not repeated. (It used to list
+  every client in care, up to 200 in no particular order.)
+- **My appointments today** = where I am the clinician (`provider`).
+- **RED / ORANGE among my clients** by latest triage priority.
+- Branch figures are labelled as shared. **Outpatients in care** = an open episode and not
+  admitted (it was "everyone ever registered minus inpatients"), and "new today" counts the same
+  group. Cancelled appointments are left out of every list.
+
+Not clinical data capture — no FHIR change. Reversibility: cheap (read-only views).
