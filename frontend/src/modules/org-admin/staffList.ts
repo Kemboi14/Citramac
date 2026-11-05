@@ -21,6 +21,10 @@ export const STATUS_FILTERS = [
   { key: "access_expired", label: "Access expired" },
   { key: "unlimited", label: "Unlimited access" },
   { key: "nacada_attention", label: "NACADA licence needs attention" },
+  { key: "profile_submitted", label: "Professional profile awaiting verification" },
+  { key: "profile_incomplete", label: "Professional profile not submitted" },
+  { key: "profile_returned", label: "Professional profile returned" },
+  { key: "licence_attention", label: "Practising licence expired or expiring" },
 ] as const;
 
 export function staffStatusKeys(s: Staff): string[] {
@@ -32,6 +36,14 @@ export function staffStatusKeys(s: Staff): string[] {
   else keys.push("unlimited");
   if (s.access_status === "expired") keys.push("access_expired");
   if (s.nacada_status && s.nacada_status !== "VALID") keys.push("nacada_attention");
+  const profile = s.professional_profile;
+  if (profile?.credentials_required && s.is_active) {
+    if (profile.status === "SUBMITTED") keys.push("profile_submitted");
+    if (profile.status === "DRAFT") keys.push("profile_incomplete");
+    if (profile.status === "RETURNED") keys.push("profile_returned");
+  }
+  if (profile?.licence_status === "EXPIRED" || profile?.licence_status === "EXPIRING")
+    keys.push("licence_attention");
   return keys;
 }
 

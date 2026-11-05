@@ -8,6 +8,8 @@ actually give "every write" coverage: they fire for saves from management
 commands, Celery tasks, and data migrations too, not just HTTP views.
 """
 
+import hashlib
+
 from django.conf import settings
 from django.db.models.signals import post_delete, post_save, pre_save
 
@@ -32,6 +34,15 @@ def _local_app_labels():
     } - {"sysadmin_audit"}
 
 
+def _fingerprint(value):
+    # Encrypted secrets (SMTP password, SMS keys, payer credentials) are never
+    # copied into the audit trail, not even as ciphertext — only a short hash,
+    # so the entry still shows *that* the secret changed.
+    if not value:
+        return value
+    return "[encrypted " + hashlib.sha256(str(value).encode()).hexdigest()[:8] + "]"
+
+
 def _serialize(instance, field_names=None):
     field_names = field_names or [f.name for f in instance._meta.concrete_fields]
     data = {}
@@ -39,7 +50,10 @@ def _serialize(instance, field_names=None):
         if name in SENSITIVE_FIELDS:
             continue
         value = getattr(instance, name, None)
-        data[name] = str(value) if value is not None else None
+        value = str(value) if value is not None else None
+        if name.endswith("_encrypted"):
+            value = _fingerprint(value)
+        data[name] = value
     return data
 
 
@@ -86,7 +100,10 @@ def _log_delete(sender, instance, **kwargs):
         if field.name in SENSITIVE_FIELDS:
             continue
         value = getattr(instance, field.attname, None)
-        diff[field.name] = {"old": str(value) if value is not None else None, "new": None}
+        value = str(value) if value is not None else None
+        if field.name.endswith("_encrypted"):
+            value = _fingerprint(value)
+        diff[field.name] = {"old": value, "new": None}
     write_entry(instance, AuditLogEntry.ACTION_DELETE, diff)
 
 

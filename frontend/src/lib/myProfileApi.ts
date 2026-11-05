@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { ProfessionalProfileSummary } from "./professionalProfileApi";
 
 // Mirrors apps.accounts.serializers.MyProfileSerializer — self-service
 // profile (including avatar) for every authenticated user, any role, any
@@ -20,6 +21,8 @@ export interface MyProfile {
   /** True for Org Admin and other organisation-wide accounts — may work across all branches at once. */
   all_branches: boolean;
   department_name: string | null;
+  /** Organisation staff only (null for platform accounts): what is outstanding on their professional profile. */
+  professional_profile: ProfessionalProfileSummary | null;
 }
 
 const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;

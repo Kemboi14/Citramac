@@ -58,6 +58,9 @@ def save_safety_plan(plan, data):
 
 
 def sign_safety_plan(plan, user):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     if plan.signed_at:
         raise ValidationError({"detail": "Already signed."})
     if not (plan.warning_signs.strip() or plan.people_to_ask.strip()):
@@ -196,6 +199,9 @@ def decide_cosign(req, user, action, note=""):
     note = (note or "").strip()
     now = timezone.now()
     if action == "SIGN":
+        from apps.accounts.practitioner_profile import require_current_licence
+
+        require_current_licence(user)
         if req.subject_type == "LegalForm":
             from . import legal_forms
 

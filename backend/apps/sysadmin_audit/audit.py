@@ -28,9 +28,18 @@ def write_event(organization_id, action, model, object_id, field_diff=None):
     )
 
 
+def _organization_id_of(instance):
+    # An Organization row is its own tenant: without this its changes (the
+    # NACADA reporting email, SMTP settings, theme…) were logged with no
+    # organisation and never appeared in that organisation's audit log.
+    if instance._meta.label == "tenancy.Organization":
+        return instance.pk
+    return getattr(instance, "organization_id", None)
+
+
 def write_entry(instance, action, field_diff=None):
     return write_event(
-        getattr(instance, "organization_id", None),
+        _organization_id_of(instance),
         action,
         f"{instance._meta.app_label}.{instance._meta.model_name}",
         instance.pk,

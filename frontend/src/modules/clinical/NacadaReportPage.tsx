@@ -253,7 +253,8 @@ function ReportCard({
               </button>
               {noNacadaAddress && (
                 <span className="text-xs text-ink-500">
-                  An Org Admin needs to set the NACADA reporting email first.
+                  An Org Admin needs to set the NACADA reporting email first, in Org Admin → Branch
+                  Settings → NACADA reporting.
                 </span>
               )}
             </div>
@@ -336,7 +337,9 @@ function NacadaEmailCard({
       ) : (
         <p className="text-[13px] text-ink-900">
           {settings.nacada_report_email || (
-            <span className="text-ink-500">Not set. An Org Admin can add it on this page.</span>
+            <span className="text-ink-500">
+              Not set. An Org Admin can add it in Org Admin → Branch Settings → NACADA reporting.
+            </span>
           )}
         </p>
       )}

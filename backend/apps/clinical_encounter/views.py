@@ -82,6 +82,9 @@ class EncounterViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="soap-notes/(?P<note_id>[^/.]+)/sign")
     def sign_soap_note(self, request, pk=None, note_id=None):
+        from apps.accounts.practitioner_profile import require_current_licence
+
+        require_current_licence(request.user)
         note = SoapNote.objects.get(pk=note_id, encounter_id=pk)
         note.is_locked = True
         note.signed_at = timezone.now()

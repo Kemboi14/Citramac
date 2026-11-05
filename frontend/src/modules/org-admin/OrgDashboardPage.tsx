@@ -5,6 +5,7 @@ import { ApiError } from "../../lib/apiClient";
 import { getOrgDashboardStats, type OrgDashboardStats } from "../../lib/organizationsApi";
 import { listStaff, type Staff } from "../../lib/governanceApi";
 import { DashboardWelcome } from "../../components/DashboardWelcome";
+import { OrgSetupChecklist } from "./OrgSetupChecklist";
 
 const CARD_CLASS = "rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm";
 
@@ -74,6 +75,8 @@ export function OrgDashboardPage() {
         eyebrow="Organisation dashboard"
         subtitle="Here’s your organisation’s operational overview."
       />
+
+      <OrgSetupChecklist />
 
       {loading && <p className="text-sm text-ink-500">Loading…</p>}
 

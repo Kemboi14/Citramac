@@ -67,6 +67,10 @@ _ACTION = {
     # Which person the record is about changed; nothing was created or removed.
     AuditLogEntry.ACTION_IDENTITY_MERGE: "U",
     AuditLogEntry.ACTION_IDENTITY_UNMERGE: "U",
+    # Workflow state of a staff member's professional profile.
+    AuditLogEntry.ACTION_CREDENTIAL_SUBMIT: "U",
+    AuditLogEntry.ACTION_CREDENTIAL_VERIFY: "U",
+    AuditLogEntry.ACTION_CREDENTIAL_RETURN: "U",
     AuditLogEntry.ACTION_DELETE: "D",
     AuditLogEntry.ACTION_ERASURE: "D",
 }

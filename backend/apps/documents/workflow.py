@@ -405,6 +405,9 @@ def transition(doc, spec, user, action, data):
         doc.reviewed_by, doc.reviewed_at = user, now
     elif action == "sign":
         _not_verify(spec)
+        from apps.accounts.practitioner_profile import require_current_licence
+
+        require_current_licence(user)
         if spec["highRisk"] and not doc.reviewed_by_id:
             raise ValidationError(
                 {

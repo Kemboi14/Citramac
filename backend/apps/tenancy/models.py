@@ -197,8 +197,9 @@ class Organization(TimestampedModel):
         ),
     )
     support_email = models.EmailField(blank=True)
-    # Where "Send to NACADA" emails the NDO report. Set by an Org Admin on the
-    # NACADA report page; blank means the report cannot be sent to NACADA.
+    # Where "Send to NACADA" emails the NDO report. Set by an Org Admin in
+    # Branch Settings → NACADA reporting (or on the NACADA report page); blank
+    # means the report cannot be sent to NACADA.
     nacada_report_email = models.EmailField(blank=True)
     support_phone = models.CharField(max_length=32, blank=True)
     website = models.URLField(blank=True)

@@ -24,6 +24,9 @@ class Notification(models.Model):
     CATEGORY_RETENTION = "RETENTION"
     CATEGORY_FACILITY_LICENCE = "FACILITY_LICENCE"
     CATEGORY_CARE_TASK = "CARE_TASK"
+    # A staff member's professional profile: complete it, submitted (to
+    # reviewers), verified / returned, and licence expiry reminders.
+    CATEGORY_PRACTITIONER_PROFILE = "PRACTITIONER_PROFILE"
     CATEGORY_CHOICES = [
         (CATEGORY_RISK_ALERT, "Risk Alert"),
         (CATEGORY_SYSTEM, "System"),
@@ -31,6 +34,7 @@ class Notification(models.Model):
         (CATEGORY_RETENTION, "Records Retention"),
         (CATEGORY_FACILITY_LICENCE, "Facility Licence"),
         (CATEGORY_CARE_TASK, "Task assigned"),
+        (CATEGORY_PRACTITIONER_PROFILE, "Professional profile"),
     ]
     SEVERITY_INFO = "INFO"
     SEVERITY_WARNING = "WARNING"

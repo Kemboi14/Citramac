@@ -1,3 +1,4 @@
+import type { ProfessionalProfileSummary } from "./professionalProfileApi";
 import { apiRequest } from "./apiClient";
 import type { Paginated } from "./organizationsApi";
 
@@ -102,6 +103,8 @@ export interface Staff {
   nacada_status: NacadaStatus;
   /** Never signed in: what happened to their latest activation email (from the outbox). */
   invite_email: InviteEmail | null;
+  /** Their professional profile's status (null for platform accounts). */
+  professional_profile: ProfessionalProfileSummary | null;
 }
 
 export type InviteEmailStatus = "PENDING" | "SENT" | "FAILED" | "NOT_CONFIGURED";

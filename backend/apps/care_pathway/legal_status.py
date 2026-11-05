@@ -818,6 +818,9 @@ def _recommendations(application):
 
 @transaction.atomic
 def sign(doc, user, data):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     doc = LegalDocument.objects.select_for_update().get(pk=doc.pk)
     _check_draft(doc)
     ls = LegalStatus.objects.select_for_update().get(pk=doc.legal_status_id)

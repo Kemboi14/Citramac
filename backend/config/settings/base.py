@@ -366,6 +366,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.tenancy.tasks.remind_facility_licence_renewals",
         "schedule": crontab(hour=5, minute=10),
     },
+    # Staff practising licence / NACADA accreditation / indemnity expiry
+    # reminders, to the staff member and the profile reviewers, at each of
+    # PRACTITIONER_LICENCE_REMINDER_DAYS and once expired.
+    # See apps/accounts/practitioner_notify.py.
+    "remind-practitioner-licences": {
+        "task": "apps.accounts.tasks.remind_practitioner_licences",
+        "schedule": crontab(hour=5, minute=20),
+    },
     # Records retention scan — proposes archive batches for Org Admin
     # approval and sends coming-due notices; never archives on its own.
     # Weekly, Monday 01:00 UTC. See apps/retention/services.py.
@@ -396,6 +404,13 @@ APPOINTMENT_REMINDER_HOURS_BEFORE = env.int("APPOINTMENT_REMINDER_HOURS_BEFORE",
 # licence shows as "expiring". Comma-separated in the environment.
 FACILITY_LICENSE_REMINDER_DAYS = env.list(
     "FACILITY_LICENSE_REMINDER_DAYS", cast=int, default=[60, 30, 7, 0]
+)
+
+# Configuration: days before a staff member's practising licence, NACADA
+# accreditation or indemnity cover expires that they and the profile reviewers
+# are reminded; 0 is the expiry day itself. Comma-separated in the environment.
+PRACTITIONER_LICENCE_REMINDER_DAYS = env.list(
+    "PRACTITIONER_LICENCE_REMINDER_DAYS", cast=int, default=[60, 30, 7, 0]
 )
 
 # ── Cache (rate limiting for the auth flow, docs/05-AUTHENTICATION-FLOW.md §5.5) ──

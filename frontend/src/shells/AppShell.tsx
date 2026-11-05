@@ -8,6 +8,7 @@ import type { NavGroup, NavItem } from "./navConfig";
 import { groupContainsActive, itemMatches } from "./navMatch";
 import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
 import { OfflineSyncBanner } from "./OfflineSyncBanner";
+import { ProfileCompletionBanner } from "./ProfileCompletionBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
 import { getOrganizationTheme } from "../lib/themeApi";
@@ -545,6 +546,7 @@ export function AppShell({
           <div className={focusLayout ? "h-full w-full" : "mx-auto w-full max-w-[1920px]"}>
             <ErrorBoundary resetKey={location.pathname}>
               <SubscriptionBanner />
+              <ProfileCompletionBanner />
               <OfflineSyncBanner />
               {/* Keyed on the working branch: switching branch reloads the page's data under it. */}
               <Outlet key={workingBranch} />

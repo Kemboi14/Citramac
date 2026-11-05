@@ -571,6 +571,9 @@ def section_overview(draft):
 
 @transaction.atomic
 def sign_intake(draft, user, completeness, data=None):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     if draft.status != IntakeAssessment.STATUS_DRAFT:
         raise ValidationError({"detail": "This intake is already signed."})
     if completeness not in dict(IntakeAssessment.COMPLETENESS_CHOICES):

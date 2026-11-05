@@ -44,3 +44,11 @@ def enforce_access_windows():
     if count:
         logger.info("access_window_enforced", deactivated_count=count)
     return count
+
+
+@shared_task
+def remind_practitioner_licences():
+    """Daily — see apps.accounts.practitioner_notify."""
+    from .practitioner_notify import remind_all
+
+    return remind_all()

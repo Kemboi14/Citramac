@@ -753,9 +753,26 @@ class LoginView(APIView):
 
         access, refresh = issue_tokens(user)
         _log_auth_event(user, AuditLogEntry.ACTION_LOGIN, request)
+        _sign_in_reminders(user)
         response = Response({"access": access})
         _set_refresh_cookie(response, refresh, request, remember=data.get("remember", False))
         return response
+
+
+def _sign_in_reminders(user):
+    """
+    After a successful sign-in: ask the person to complete their professional
+    profile while something is outstanding, and an Org Admin to finish the
+    organisation's setup. One notice per outstanding state, so signing in again
+    doesn't repeat it. Never blocks or fails the sign-in.
+    """
+    from apps.tenancy.setup_checklist import remind_at_sign_in as setup_reminder
+
+    from .practitioner_notify import remind_at_sign_in as profile_reminder
+
+    with platform_admin_context():
+        profile_reminder(user)
+        setup_reminder(user)
 
 
 class LoginVerifyOtpView(APIView):
@@ -824,6 +841,7 @@ class LoginVerifyOtpView(APIView):
 
         access, refresh = issue_tokens(otp.user)
         _log_auth_event(otp.user, AuditLogEntry.ACTION_LOGIN, request)
+        _sign_in_reminders(otp.user)
         response = Response({"access": access})
         _set_refresh_cookie(response, refresh, request)
         return response

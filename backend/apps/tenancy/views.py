@@ -437,6 +437,26 @@ class OrganizationEmailSettingsView(APIView):
         return Response(serializer.data)
 
 
+class OrganizationSetupChecklistView(APIView):
+    """What the Org Admin still has to fill in (apps.tenancy.setup_checklist) —
+    the Org Admin dashboard's setup card. The organisation's own Org Admin only."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from rest_framework.exceptions import PermissionDenied
+
+        from apps.accounts.access import is_org_admin
+
+        from .setup_checklist import checklist
+
+        if not is_org_admin(request.user) or request.user.organization_id != pk:
+            raise PermissionDenied(
+                "Only this organisation's Org Admin can see its setup checklist."
+            )
+        return Response({"items": checklist(request.user.organization, admin=request.user)})
+
+
 class OrganizationThemeView(APIView):
     """
     Self-service org-wide light/dark theme (every color token except the

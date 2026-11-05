@@ -677,6 +677,9 @@ def outstanding(plan):
 
 @transaction.atomic
 def confirm_plan(plan, user, bulk_reviewed=False):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     items, found = outstanding(plan)
     if items:
         raise ValidationError(

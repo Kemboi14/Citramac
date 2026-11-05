@@ -1200,6 +1200,9 @@ class ClientIntakeView(APIView):
         )
 
     def post(self, request, patient_id):
+        from apps.accounts.practitioner_profile import require_current_licence
+
+        require_current_licence(request.user)
         patient = _patient(patient_id)
         serializer = IntakeAssessmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

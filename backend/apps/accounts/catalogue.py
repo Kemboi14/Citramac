@@ -32,6 +32,7 @@ MODULES = {
     "finance": "Billing, claims & payments",
     "documents": "Clinical documents",
     "reports": "Statutory reports",
+    "staff": "Staff credentials",
     "platform": "Platform team (Softlink Options)",
 }
 
@@ -198,6 +199,18 @@ PERMISSIONS = [
         "homicidal ideation, so a senior clinician reviews the client.",
         SCOPE_ORG,
         ["Supervisor", "Clinical Supervisor"],
+    ),
+    (
+        "staff.credentials.verify",
+        "staff",
+        "Verify staff professional profiles",
+        "Be told when a staff member submits their professional profile (registration, "
+        "practising licence, qualifications and documents), check it against the uploaded "
+        "documents, and verify it or return it with what needs changing. Also told when a "
+        "staff member's licence is about to expire. Org Admin can always verify. Nobody "
+        "can verify their own profile.",
+        SCOPE_ORG,
+        ["Clinical Supervisor"],
     ),
     (
         "reports.nacada.send",
@@ -430,6 +443,23 @@ ORGANISATION_ROLES = [
         "Clinical Supervisor",
         "Clinical supervision: approves credentialed and senior documents and receives "
         "the risk alerts raised in Mental Status Exams.",
+        False,
+        False,
+    ),
+    (
+        "clinical_officer",
+        "Clinical Officer",
+        "Clinical officer: assesses and treats clients and authorises medical documents. "
+        "Starts with the same permissions as Doctor; an Org Admin can change them.",
+        False,
+        False,
+    ),
+    (
+        "counsellor",
+        "Counsellor",
+        "Counselling: individual, family and group sessions and their notes. Starts with "
+        "the same permissions as Clinical Psychologist/Therapist; an Org Admin can change "
+        "them.",
         False,
         False,
     ),

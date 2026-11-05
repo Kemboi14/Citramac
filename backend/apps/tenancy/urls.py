@@ -10,6 +10,7 @@ from .views import (
     OrganizationEmailSettingsView,
     OrganizationListCreateView,
     OrganizationLogoUploadView,
+    OrganizationSetupChecklistView,
     OrganizationSmsSettingsView,
     OrganizationSmsTestView,
     OrganizationStatusView,
@@ -54,6 +55,11 @@ urlpatterns = [
         "organizations/<uuid:pk>/logo/",
         OrganizationLogoUploadView.as_view(),
         name="platform-organization-logo",
+    ),
+    path(
+        "organizations/<uuid:pk>/setup-checklist/",
+        OrganizationSetupChecklistView.as_view(),
+        name="platform-organization-setup-checklist",
     ),
     path(
         "organizations/<uuid:pk>/email-settings/",

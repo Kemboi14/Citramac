@@ -56,6 +56,7 @@ import {
   updateOrganizationTheme,
   type OrganizationTheme,
 } from "../../lib/themeApi";
+import { NacadaReportingCard } from "./NacadaReportingCard";
 
 const LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024;
 
@@ -1071,6 +1072,8 @@ export function BranchSettingsPage() {
                 )}
               </form>
             </div>
+
+            <NacadaReportingCard />
 
             <div className={CARD_CLASS}>
               <h2 className={SECTION_TITLE_CLASS}>

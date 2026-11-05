@@ -288,6 +288,7 @@ class StaffSerializer(serializers.ModelSerializer):
     access_status = serializers.SerializerMethodField()
     nacada_status = serializers.SerializerMethodField()
     invite_email = serializers.SerializerMethodField()
+    professional_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -319,6 +320,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "access_status",
             "nacada_status",
             "invite_email",
+            "professional_profile",
         ]
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
@@ -420,6 +422,14 @@ class StaffSerializer(serializers.ModelSerializer):
         credential = getattr(obj, "practitioner_credential", None)
         return credential.nacada_status if credential else None
 
+    def get_professional_profile(self, obj):
+        """Status of the staff member's professional profile (practitioner_profile.summary)."""
+        from .practitioner_profile import summary
+
+        if not obj.organization_id:
+            return None
+        return summary(obj)
+
     def update(self, instance, validated_data):
         pairs = validated_data.pop("role_assignments", None)
         instance = super().update(instance, validated_data)
@@ -449,6 +459,9 @@ class MyProfileSerializer(serializers.ModelSerializer):
     branches = serializers.SerializerMethodField()
     all_branches = serializers.SerializerMethodField()
     department_name = serializers.CharField(source="department.name", read_only=True, default=None)
+    # What is still outstanding on the person's professional profile — drives
+    # the app-wide "complete your profile" banner.
+    professional_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -459,6 +472,7 @@ class MyProfileSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "avatar",
+            "professional_profile",
             "role_names",
             "organization_id",
             "organization_name",
@@ -468,6 +482,13 @@ class MyProfileSerializer(serializers.ModelSerializer):
             "department_name",
         ]
         read_only_fields = ["email", "organization_id"]
+
+    def get_professional_profile(self, obj):
+        from .practitioner_profile import summary
+
+        if not obj.organization_id or obj.is_superuser:
+            return None
+        return summary(obj)
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]

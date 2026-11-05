@@ -77,8 +77,8 @@ def send_report(report, user, target, confirm):
         if not address:
             raise ValidationError(
                 {
-                    "target": "No NACADA reporting email is set. An Org Admin can add it on "
-                    "this page under “NACADA reporting email”."
+                    "target": "No NACADA reporting email is set. An Org Admin can add it in "
+                    "Branch Settings under “NACADA reporting” (NACADA reporting email)."
                 }
             )
     elif target == NacadaReportSend.TARGET_SELF:

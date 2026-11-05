@@ -60,6 +60,12 @@ class AuditLogEntry(models.Model):
     # An aggregate report (counts only, no client data) emailed out of the
     # system — the NACADA NDO report.
     ACTION_REPORT_SENT = "REPORT_SENT"
+    # A staff member's professional profile submitted, verified or returned
+    # (apps.accounts.practitioner_profile — PractitionerCredentialReview holds
+    # what it said at that moment).
+    ACTION_CREDENTIAL_SUBMIT = "CREDENTIAL_SUBMIT"
+    ACTION_CREDENTIAL_VERIFY = "CREDENTIAL_VERIFY"
+    ACTION_CREDENTIAL_RETURN = "CREDENTIAL_RETURN"
     ACTION_CHOICES = [
         (ACTION_CREATE, "Create"),
         (ACTION_UPDATE, "Update"),
@@ -79,6 +85,9 @@ class AuditLogEntry(models.Model):
         (ACTION_IDENTITY_MERGE, "Temporary record merged into an identified client"),
         (ACTION_IDENTITY_UNMERGE, "Identity merge reversed"),
         (ACTION_REPORT_SENT, "Aggregate report sent by email"),
+        (ACTION_CREDENTIAL_SUBMIT, "Professional profile submitted"),
+        (ACTION_CREDENTIAL_VERIFY, "Professional profile verified"),
+        (ACTION_CREDENTIAL_RETURN, "Professional profile returned for changes"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

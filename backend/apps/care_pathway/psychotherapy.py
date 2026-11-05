@@ -1494,6 +1494,9 @@ def checklist(note, found, pending):
 
 @transaction.atomic
 def sign(note, user):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     note = PsychotherapyNote.objects.select_for_update().get(pk=note.pk)
     _require_author(user, note)
     _require_draft(note)

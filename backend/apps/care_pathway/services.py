@@ -759,6 +759,9 @@ def _record_vitals(
 
 @transaction.atomic
 def sign_triage(triage_encounter, user, payload):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     answers = payload.get("answers") or {}
     from . import triage_v4, triage_v5
 
@@ -921,6 +924,9 @@ def save_recheck_draft(triage_encounter, user, data):
 
 @transaction.atomic
 def sign_recheck(triage_encounter, user, data):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     if triage_encounter.effective_status != "RECHECK_DUE":
         raise ValidationError({"detail": "No re-check is due for this encounter."})
     if not data.get("change_since_last_check"):
@@ -2459,6 +2465,9 @@ def sign_discharge(admission, user, data=None):
     admission closed, bed freed, encounter closed, charge recorded and any
     follow-up booked — all in one transaction. The episode is left open: outpatient
     follow-up normally continues inside it, and closing it is a separate step."""
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     data = data or {}
     follow_up = data.get("follow_up")
     with transaction.atomic():

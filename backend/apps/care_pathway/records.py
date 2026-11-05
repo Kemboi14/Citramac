@@ -198,6 +198,9 @@ def save_note(patient, user, data, note=None):
 
 
 def sign_note(note, user):
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     if note.status == "SIGNED":
         raise ValidationError({"detail": "This note is already signed."})
     if not note.text.strip():
@@ -458,6 +461,9 @@ def client_follow_ups(patient, now=None):
 @transaction.atomic
 def complete_follow_up(appointment, user, note):
     """Done — with the contact recorded as a signed follow-up note on the episode."""
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     note = (note or "").strip()
     if len(note) < 3:
         raise ValidationError({"note": "Add a brief note of the contact."})

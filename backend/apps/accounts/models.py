@@ -571,6 +571,72 @@ class PractitionerCredential(TenantScopedModel):
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
+    # ── Self-service professional profile (2026-11-05) ─────────────────────
+    # The practitioner fills these in themself; an Org Admin or a holder of
+    # staff.credentials.verify verifies them (apps.accounts.practitioner_profile).
+    # VERIFY (CLAUDE.md §6): the regulator for each cadre, whether it issues a
+    # separate practising licence, and its identifier `system` URIs. The labels
+    # below are display names awaiting the owner's confirmation; no code, URI
+    # or registry value is derived from them (the HIE registry keeps using
+    # `hwr_regulator`, the four codes DHA publishes).
+    REGULATOR_CHOICES = [
+        ("KMPDC", "Kenya Medical Practitioners and Dentists Council (KMPDC)"),
+        ("COC", "Clinical Officers Council (COC)"),
+        ("NCK", "Nursing Council of Kenya (NCK)"),
+        ("CPB", "Counsellors and Psychologists Board"),
+        ("PPB", "Pharmacy and Poisons Board (PPB)"),
+        ("KMLTTB", "Kenya Medical Laboratory Technicians and Technologists Board (KMLTTB)"),
+        ("OTHER", "Other (name it)"),
+    ]
+    STATUS_DRAFT = "DRAFT"
+    STATUS_SUBMITTED = "SUBMITTED"
+    STATUS_VERIFIED = "VERIFIED"
+    STATUS_RETURNED = "RETURNED"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Not submitted"),
+        (STATUS_SUBMITTED, "Awaiting verification"),
+        (STATUS_VERIFIED, "Verified"),
+        (STATUS_RETURNED, "Returned for changes"),
+    ]
+    regulator = models.CharField(max_length=8, choices=REGULATOR_CHOICES, blank=True)
+    registration_evidence = models.FileField(
+        upload_to="credentials/registration/%Y/%m/", null=True, blank=True
+    )
+    licence_number = models.CharField("practising licence no.", max_length=64, blank=True)
+    licence_issued_on = models.DateField(null=True, blank=True)
+    licence_expires_on = models.DateField(null=True, blank=True)
+    licence_evidence = models.FileField(
+        upload_to="credentials/licence/%Y/%m/", null=True, blank=True
+    )
+    licence_verified_at = models.DateTimeField(null=True, blank=True)
+    licence_verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    qualification_evidence = models.FileField(
+        upload_to="credentials/qualification/%Y/%m/", null=True, blank=True
+    )
+    indemnity_number = models.CharField(max_length=64, blank=True)
+    indemnity_expires_on = models.DateField(null=True, blank=True)
+    indemnity_evidence = models.FileField(
+        upload_to="credentials/indemnity/%Y/%m/", null=True, blank=True
+    )
+    profile_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    returned_reason = models.TextField(blank=True)
+
+    @property
+    def licence_status(self):
+        """None (not recorded), EXPIRED, UNVERIFIED, EXPIRING (≤30 days) or VALID."""
+        if not self.licence_number.strip():
+            return None
+        if self.licence_expires_on and self.licence_expires_on < timezone.localdate():
+            return "EXPIRED"
+        if not self.licence_verified_at:
+            return "UNVERIFIED"
+        if self.licence_expires_on and (self.licence_expires_on - timezone.localdate()).days <= 30:
+            return "EXPIRING"
+        return "VALID"
+
     @property
     def nacada_status(self):
         """None (not recorded), UNVERIFIED, EXPIRED, EXPIRING (≤30 days) or VALID."""
@@ -590,3 +656,36 @@ class PractitionerCredential(TenantScopedModel):
 
     def __str__(self):
         return f"credential for {self.user_id}"
+
+
+class PractitionerCredentialReview(TenantScopedModel):
+    """
+    Append-only history of a practitioner profile: each submission, and each
+    verification or return by a reviewer, with what the profile said at that
+    moment. Never edited or deleted (a database trigger refuses both), so who
+    verified which licence, and when, survives later changes to the profile.
+    """
+
+    ACTION_SUBMITTED = "SUBMITTED"
+    ACTION_VERIFIED = "VERIFIED"
+    ACTION_RETURNED = "RETURNED"
+    ACTION_CHOICES = [
+        (ACTION_SUBMITTED, "Submitted"),
+        (ACTION_VERIFIED, "Verified"),
+        (ACTION_RETURNED, "Returned for changes"),
+    ]
+
+    credential = models.ForeignKey(
+        PractitionerCredential, on_delete=models.PROTECT, related_name="reviews"
+    )
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    action = models.CharField(max_length=12, choices=ACTION_CHOICES)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    reason = models.TextField(blank=True)
+    snapshot = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} {self.user_id}"

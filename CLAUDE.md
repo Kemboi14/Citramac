@@ -426,3 +426,41 @@ migration's reverse sends holders back to the shared definitions.
 Open for the owner: platform-team roles other than Super Admin still can't open the console (that
 needs a scoped cross-tenant read path, a security project of its own); `LEGAL_FORM_CATALOGUE`
 `signer_roles` are still role names (empty by default).
+
+### 2026-11-05 — professional profiles, Org Admin setup checklist, NACADA email in Branch Settings
+
+On the owner's decisions of 2026-11-05:
+
+1. **NACADA reporting email** is set in Org Admin → Branch Settings → NACADA reporting (it was
+   only on the clinical report page, which Org Admins never reach). Changes to `Organization`
+   fields are now audited under that organisation (`sysadmin_audit.audit.write_entry`), so they
+   appear in its own audit log; `*_encrypted` fields go into any audit diff only as a short hash.
+2. **Organisation setup checklist** (`apps/tenancy/setup_checklist.py`) on the Org Admin
+   dashboard: NACADA email, branch registration/licence, SMTP (recommended), the admin's own
+   profile, staff profiles awaiting verification or not submitted. One in-app notice at sign-in
+   per distinct set of outstanding items.
+3. **Professional profiles** (`apps/accounts/practitioner_profile.py`). Staff whose roles need a
+   registration (by `Role.system_key`, or any role carrying `clinical.care.record` /
+   `clinical.medication.prescribe`) fill in their own: regulator, registration number +
+   certificate, current practising licence number/dates + document, qualifications + certificate;
+   NACADA accreditation and indemnity cover if held. Everyone needs a mobile number. Submitting
+   notifies every Org Admin and holder of the new `staff.credentials.verify` (default: Clinical
+   Supervisor), in-app and by email; one of them verifies or returns it with a reason (never their
+   own). History is the append-only `PractitionerCredentialReview`; submit/verify/return are
+   `CREDENTIAL_*` audit entries; every document download is audited. Existing staff are reminded at
+   their next sign-in, and a banner shows until the profile is complete and verified.
+4. **Only an expired practising licence blocks signing** (`require_current_licence`, at every
+   clinical signing point). An incomplete or unverified profile never blocks. Daily reminders at
+   `PRACTITIONER_LICENCE_REMINDER_DAYS` (60/30/7/0) and once expired, for the licence, NACADA
+   accreditation and indemnity, to the person and the reviewers.
+5. **New standard roles** Clinical Officer (starts with Doctor's permissions) and Counsellor
+   (Clinical Psychologist's), copied into every organisation by `accounts 0022`.
+
+FHIR: workforce data, not patient data — `Practitioner.qualification` / `PractitionerRole.code`,
+not emitted yet, no `EpisodeOfCare` hook. Reversibility: cheap. Everything is additive and no
+signed record changes; the signing block only affects future signatures.
+
+VERIFY (owner, before go-live): the regulator for each role (`ROLE_REGULATOR`) — especially the
+radiologist and the Counsellors and Psychologists Board; whether each regulator issues a separate
+practising licence; each regulator's identifier `system` URI; whether NACADA accreditation should
+be required for any role (it is optional today).

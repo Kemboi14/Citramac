@@ -401,6 +401,9 @@ def place_order(patient, user, data):
         raise PermissionDenied(
             "Only a prescriber can place a medication order — request a psychiatrist review instead."
         )
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     if patient.allergy_status in PRESCRIBING_LOCKED:
         raise ValidationError(
             {"detail": "Prescribing locked — allergy status unknown. Record it in Intake first."}

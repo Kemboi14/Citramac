@@ -5,6 +5,7 @@ import { SaveButton } from "../components/SaveButton";
 import { PillRadio } from "../components/PillRadio";
 import { getMyProfile, updateMyProfile, type MyProfile } from "../lib/myProfileApi";
 import { useTheme } from "../theme/useTheme";
+import { ProfessionalProfileSection } from "./profile/ProfessionalProfileSection";
 
 const THEME_OPTIONS: { value: "system" | "light" | "dark"; label: string }[] = [
   { value: "system", label: "Match device" },
@@ -137,7 +138,7 @@ export function MyProfilePage() {
           </div>
           <div>
             <label className="mb-1.5 block text-[11.5px] font-semibold text-ink-700">
-              Phone number
+              Mobile phone number
             </label>
             <input
               type="tel"
@@ -166,6 +167,8 @@ export function MyProfilePage() {
           <SaveButton onSave={handleSave}>Save changes</SaveButton>
         </div>
       </div>
+
+      {profile.organization_id && <ProfessionalProfileSection key={profile.phone} />}
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="font-display text-base font-semibold text-ink-900">Appearance</h2>

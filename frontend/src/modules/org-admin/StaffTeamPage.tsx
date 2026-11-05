@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
 import { Printer, UserPlus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -22,6 +23,9 @@ import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 import { PractitionerCredentialDrawer } from "./PractitionerCredentialDrawer";
+import { ProfessionalProfileReviewDrawer } from "./ProfessionalProfileReviewDrawer";
+import { StatusPill } from "../care/shared/ui";
+import { STATUS_LABEL, STATUS_TONE } from "../../lib/professionalProfileApi";
 import {
   assignmentsFromRows,
   coveredBranches,
@@ -110,7 +114,19 @@ export function StaffTeamPage() {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<StaffFilters>(EMPTY_FILTERS);
+  // Links from notifications and the setup checklist:
+  // ?credential=<user id> opens that person's professional profile;
+  // ?credential_status=SUBMITTED|DRAFT filters the roster to match.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<StaffFilters>(() => {
+    const wanted = searchParams.get("credential_status");
+    const status =
+      wanted === "SUBMITTED" ? "profile_submitted" : wanted === "DRAFT" ? "profile_incomplete" : "";
+    return { ...EMPTY_FILTERS, status };
+  });
+  const [profileUserId, setProfileUserId] = useState<string | null>(() =>
+    searchParams.get("credential"),
+  );
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE);
   const [inviteRows, setInviteRows] = useState<AssignmentRow[]>([{ role: "", branch: "" }]);
@@ -130,6 +146,14 @@ export function StaffTeamPage() {
   });
   const [accessError, setAccessError] = useState<string | null>(null);
   const [credentialStaff, setCredentialStaff] = useState<Staff | null>(null);
+  const closeProfileDrawer = () => {
+    setProfileUserId(null);
+    if (searchParams.has("credential")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("credential");
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const refreshStaff = async () => {
     if (!accessToken) return;
@@ -454,6 +478,17 @@ export function StaffTeamPage() {
               {NACADA_BADGE[s.nacada_status].label}
             </span>
           )}
+          {s.professional_profile?.status && s.professional_profile.status !== "VERIFIED" && (
+            <StatusPill tone={STATUS_TONE[s.professional_profile.status]}>
+              Profile: {STATUS_LABEL[s.professional_profile.status]}
+            </StatusPill>
+          )}
+          {s.professional_profile?.licence_status === "EXPIRED" && (
+            <StatusPill tone="danger">Licence expired</StatusPill>
+          )}
+          {s.professional_profile?.licence_status === "EXPIRING" && (
+            <StatusPill tone="warning">Licence expiring</StatusPill>
+          )}
         </div>
       ),
     },
@@ -525,6 +560,13 @@ export function StaffTeamPage() {
           onClick={() => openAccessDrawer(s)}
         >
           Roles, Branches & Access…
+        </button>
+        <button
+          type="button"
+          className={`${itemClass} text-ink-700 hover:underline`}
+          onClick={() => setProfileUserId(s.id)}
+        >
+          Professional profile…
         </button>
         <button
           type="button"
@@ -894,6 +936,16 @@ export function StaffTeamPage() {
           credentialStaff ? `${credentialStaff.first_name} ${credentialStaff.last_name}` : undefined
         }
         onClose={() => setCredentialStaff(null)}
+      />
+
+      <ProfessionalProfileReviewDrawer
+        userId={profileUserId}
+        staffName={(() => {
+          const s = staff.find((row) => row.id === profileUserId);
+          return s ? `${s.first_name} ${s.last_name}` : undefined;
+        })()}
+        onClose={closeProfileDrawer}
+        onChanged={() => void refreshStaff()}
       />
     </div>
   );
