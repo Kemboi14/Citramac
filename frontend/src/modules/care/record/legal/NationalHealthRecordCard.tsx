@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useId, useState, type ReactNode } from "react";
 import { useAuth } from "../../../../auth/useAuth";
 import { ConfirmDialog } from "../../../../components/ConfirmDialog";
@@ -266,7 +267,7 @@ function RequestConsentForm({
       </div>
       {needsReason && (
         <Field label="Why the client cannot consent" htmlFor={`${ids}-reason`}>
-          <textarea
+          <AutoResizeTextarea
             id={`${ids}-reason`}
             className={INPUT}
             rows={2}
@@ -539,7 +540,7 @@ function ConsentPanel({ consent, onChanged }: { consent: ShrConsent; onChanged: 
             nothing will be sent or read under it.
           </p>
           <Field label="Why the client refused" htmlFor={`${ids}-refuse`}>
-            <textarea
+            <AutoResizeTextarea
               id={`${ids}-refuse`}
               className={INPUT}
               rows={2}
@@ -709,7 +710,7 @@ function ConsentPanel({ consent, onChanged }: { consent: ShrConsent; onChanged: 
           </label>
           {closeIncapable && (
             <Field label="Why the client cannot consent" htmlFor={`${ids}-close`}>
-              <textarea
+              <AutoResizeTextarea
                 id={`${ids}-close`}
                 className={INPUT}
                 rows={2}

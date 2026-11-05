@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
@@ -215,7 +216,7 @@ export function FindingsPanel({
                         </label>
                         <label className="min-w-[240px] flex-1 text-[12px]">
                           What changed / new information
-                          <textarea
+                          <AutoResizeTextarea
                             rows={2}
                             className={`${INPUT} resize-y`}
                             value={draft.note}

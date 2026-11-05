@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
@@ -260,7 +261,7 @@ export function ClientHistoryPage() {
             <div className="flex flex-col gap-3">
               <label className={LABEL_CLASS}>
                 Narrative
-                <textarea
+                <AutoResizeTextarea
                   className={FIELD_CLASS}
                   rows={3}
                   value={form.presenting_problem}
@@ -340,7 +341,7 @@ export function ClientHistoryPage() {
               </label>
               <label className={`${LABEL_CLASS} col-span-2`}>
                 Details
-                <textarea
+                <AutoResizeTextarea
                   className={FIELD_CLASS}
                   rows={2}
                   value={form.substance_use_details}
@@ -505,7 +506,7 @@ export function ClientHistoryPage() {
               {CLINICAL_HISTORY_FIELDS.map(({ key, label }) => (
                 <label key={key} className={LABEL_CLASS}>
                   {label}
-                  <textarea
+                  <AutoResizeTextarea
                     className={FIELD_CLASS}
                     rows={2}
                     // eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `CLINICAL_HISTORY_FIELDS` const array, not user input.
@@ -522,7 +523,7 @@ export function ClientHistoryPage() {
             <div className="grid grid-cols-3 gap-3">
               <label className={`${LABEL_CLASS} col-span-3`}>
                 Risk for withdrawal
-                <textarea
+                <AutoResizeTextarea
                   className={FIELD_CLASS}
                   rows={2}
                   value={form.withdrawal_risk}
@@ -560,7 +561,7 @@ export function ClientHistoryPage() {
             <div className="flex flex-col gap-3">
               <label className={LABEL_CLASS}>
                 Plan
-                <textarea
+                <AutoResizeTextarea
                   className={FIELD_CLASS}
                   rows={3}
                   value={form.plan_details}

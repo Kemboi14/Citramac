@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import {
   createContext,
   useContext,
@@ -226,7 +227,7 @@ function Txt({
   return (
     <Field label={label} htmlFor={id}>
       {rows ? (
-        <textarea
+        <AutoResizeTextarea
           id={id}
           rows={rows}
           placeholder={placeholder}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -833,7 +834,7 @@ function DischargeForm({
             htmlFor="dc-status"
             error={fieldErrors.clinical_status}
           >
-            <textarea
+            <AutoResizeTextarea
               id="dc-status"
               rows={3}
               className={INPUT}
@@ -846,7 +847,7 @@ function DischargeForm({
             htmlFor="dc-treatment"
             error={fieldErrors.treatment_summary}
           >
-            <textarea
+            <AutoResizeTextarea
               id="dc-treatment"
               rows={4}
               className={INPUT}
@@ -864,7 +865,7 @@ function DischargeForm({
               htmlFor="dc-legal"
               error={fieldErrors.legal_status_at_discharge}
             >
-              <textarea
+              <AutoResizeTextarea
                 id="dc-legal"
                 rows={2}
                 className={INPUT}

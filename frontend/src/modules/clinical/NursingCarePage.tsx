@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -235,7 +236,7 @@ export function NursingCarePage() {
           </label>
           <label className={`${LABEL_CLASS} w-full sm:w-auto sm:flex-1`}>
             Note
-            <textarea
+            <AutoResizeTextarea
               className={FIELD_CLASS}
               rows={2}
               value={noteText}

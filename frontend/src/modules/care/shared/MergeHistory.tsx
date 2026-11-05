@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
@@ -130,7 +131,7 @@ export function MergeHistory({
                   <label htmlFor={`reverse-${merge.id}`} className="text-xs font-semibold">
                     Why was this the wrong person?
                   </label>
-                  <textarea
+                  <AutoResizeTextarea
                     id={`reverse-${merge.id}`}
                     rows={2}
                     className={`${INPUT} resize-y`}

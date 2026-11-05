@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -345,7 +346,7 @@ function TreatmentPlanCard({
           <label htmlFor="plan-goals" className={GROUP_LABEL}>
             Goals
           </label>
-          <textarea
+          <AutoResizeTextarea
             id="plan-goals"
             rows={3}
             className={INPUT}

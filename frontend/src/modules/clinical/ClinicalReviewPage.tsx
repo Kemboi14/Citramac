@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
@@ -96,7 +97,7 @@ export function ClinicalReviewPage() {
         </h2>
         <label className={LABEL_CLASS}>
           Case summary
-          <textarea
+          <AutoResizeTextarea
             className={FIELD_CLASS}
             rows={3}
             value={caseSummary}

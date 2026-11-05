@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useState } from "react";
 import type { PlanWorkspace } from "../../../../lib/carePathwayApi";
 import {
@@ -106,7 +107,7 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
                     ))}
                     {evaluating?.id === n.id ? (
                       <div className="mt-1 flex flex-col gap-1">
-                        <textarea
+                        <AutoResizeTextarea
                           rows={2}
                           aria-label="Evaluation"
                           className={`${INPUT} resize-y`}
@@ -174,7 +175,7 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className={FIELD_LABEL}>Interventions</span>
-            <textarea
+            <AutoResizeTextarea
               rows={2}
               className={`${INPUT} resize-y`}
               value={draft.interventions}

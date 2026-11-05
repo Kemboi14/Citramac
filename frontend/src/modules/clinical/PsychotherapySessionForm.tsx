@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
@@ -81,7 +82,7 @@ export function PsychotherapySessionForm({
         <div className="flex flex-col gap-4">
           <label className={LABEL_CLASS}>
             Goals
-            <textarea
+            <AutoResizeTextarea
               className={FIELD_CLASS}
               rows={2}
               value={form.goals}
@@ -90,7 +91,7 @@ export function PsychotherapySessionForm({
           </label>
           <label className={LABEL_CLASS}>
             Session Notes / Summary
-            <textarea
+            <AutoResizeTextarea
               className={FIELD_CLASS}
               rows={4}
               value={form.session_notes}
@@ -119,7 +120,7 @@ export function PsychotherapySessionForm({
           </div>
           <label className={LABEL_CLASS}>
             {extraFieldsLabel}
-            <textarea
+            <AutoResizeTextarea
               className={FIELD_CLASS}
               rows={2}
               value={form.extra_notes}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -516,7 +517,7 @@ export function InpatientAdmissionsPage() {
                       {errorFor("capacity_assessed", "adm-capacity")}
                     </Field>
                     <Field label="Consent / capacity notes" htmlFor="adm-consent-notes">
-                      <textarea
+                      <AutoResizeTextarea
                         id="adm-consent-notes"
                         rows={2}
                         className={INPUT}
@@ -545,7 +546,7 @@ export function InpatientAdmissionsPage() {
                       {errorFor("next_of_kin_notification", "adm-nok")}
                     </Field>
                     <Field label="NOK notes" htmlFor="adm-nok-notes">
-                      <textarea
+                      <AutoResizeTextarea
                         id="adm-nok-notes"
                         rows={2}
                         className={INPUT}
@@ -584,7 +585,7 @@ export function InpatientAdmissionsPage() {
                 {errorFor("clinical_priority", "adm-priority")}
               </Field>
               <Field label="Reason" htmlFor="adm-reason">
-                <textarea
+                <AutoResizeTextarea
                   id="adm-reason"
                   rows={2}
                   className={INPUT}

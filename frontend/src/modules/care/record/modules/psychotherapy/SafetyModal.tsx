@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -145,7 +146,7 @@ export function SafetyModal({
             </fieldset>
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL}>Describe the concern (required)</span>
-              <textarea
+              <AutoResizeTextarea
                 className={INPUT}
                 rows={3}
                 value={description}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
 import {
   ArrowLeft,
   ArrowUp,
@@ -384,7 +385,7 @@ function SessionExtras({
           <span className={FIELD_LABEL}>
             Process notes — restricted (never shared with billing or payers)
           </span>
-          <textarea
+          <AutoResizeTextarea
             className={INPUT}
             rows={2}
             value={process}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { Search } from "lucide-react";
 import {
   cloneElement,
@@ -1188,7 +1189,7 @@ export function RegistrationPage() {
                 label="Physical description & clothing"
                 className={FULL_ROW}
               >
-                <textarea
+                <AutoResizeTextarea
                   id="reg-description"
                   rows={2}
                   maxLength={255}
@@ -1236,7 +1237,7 @@ export function RegistrationPage() {
                 label="Police / ambulance / referral information"
                 className={FULL_ROW}
               >
-                <textarea
+                <AutoResizeTextarea
                   id="reg-arrival-referral"
                   rows={2}
                   placeholder="e.g. OB number, ambulance crew, referring facility"
@@ -1250,7 +1251,7 @@ export function RegistrationPage() {
                 label="How can this person currently be identified?"
                 className={FULL_ROW}
               >
-                <textarea
+                <AutoResizeTextarea
                   id="reg-identification-notes"
                   rows={2}
                   placeholder="Names they respond to, belongings, documents found, who might know them"
@@ -1718,7 +1719,7 @@ export function RegistrationPage() {
               error={mergeReasonError}
               className="mt-3"
             >
-              <textarea
+              <AutoResizeTextarea
                 id="reg-merge-reason"
                 ref={mergeReasonRef}
                 rows={2}

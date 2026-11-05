@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../../auth/useAuth";
@@ -673,7 +674,7 @@ function InvoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocu
         </div>
       ))}
       {assertions.includes("OTHER") && (
-        <textarea
+        <AutoResizeTextarea
           className={INPUT}
           disabled={!draft}
           placeholder={labels.otherDescribe}
@@ -879,7 +880,7 @@ function RecommendationForm({ doc, data, busy, run }: PanelProps & { doc: LegalD
                         />
                         ({g.code}) {fill(g.text, values)}
                       </label>
-                      <textarea
+                      <AutoResizeTextarea
                         className={INPUT}
                         disabled={!draft}
                         placeholder={form.labels.groundNarrative}
@@ -955,7 +956,7 @@ function OfficialUse({ data, busy, run }: PanelProps) {
     <Section title="For official use only">
       {data.me.is_admitting_officer ? (
         <>
-          <textarea
+          <AutoResizeTextarea
             className={INPUT}
             placeholder="Reason (required to reject)"
             value={reason}
@@ -1006,7 +1007,7 @@ function EndStatus({ data, busy, run }: PanelProps) {
   if (!ls) return null;
   return (
     <Section title="Review outcome">
-      <textarea
+      <AutoResizeTextarea
         className={INPUT}
         placeholder="Reason for ending the involuntary status"
         value={reason}
@@ -1036,7 +1037,7 @@ function GiveNotice({ data, busy, run }: PanelProps) {
   if (!ls) return null;
   return (
     <Section title="Written notice of intention to leave">
-      <textarea
+      <AutoResizeTextarea
         className={INPUT}
         placeholder="The client's written notice, in their words"
         value={statement}

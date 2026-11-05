@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
@@ -416,7 +417,7 @@ export function QuickRecheck({
             <label htmlFor="recheck-note" className={RC_LABEL}>
               Note (optional)
             </label>
-            <textarea
+            <AutoResizeTextarea
               id="recheck-note"
               rows={2}
               placeholder="Record a brief change or observation"

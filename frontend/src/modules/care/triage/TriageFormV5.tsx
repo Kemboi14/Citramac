@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Zap } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -216,7 +217,7 @@ function Txt({
   return (
     <Field label={label} htmlFor={fid(k)} error={invalid.has(k) ? "Required" : undefined}>
       {rows ? (
-        <textarea
+        <AutoResizeTextarea
           {...common}
           rows={rows}
           className={`${INPUT} resize-y ${grow ? "[field-sizing:content] min-h-[4.5rem]" : ""}`}
@@ -1669,7 +1670,7 @@ export function TriageFormV5({
                           }
                           hint={`At least ${reasonMin} characters.`}
                         >
-                          <textarea
+                          <AutoResizeTextarea
                             id={fid("m_override_reason")}
                             rows={2}
                             className={`${INPUT} resize-y`}

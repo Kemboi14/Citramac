@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
 import {
   ArrowUp,
   Check,
@@ -392,7 +393,7 @@ export function Composer({
               onSwitch={dictation.onSwitch}
             />
           )}
-          <textarea
+          <AutoResizeTextarea
             ref={ref}
             rows={1}
             value={value}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import type { IntakeField, IntakeSections } from "../../../../lib/carePathwayApi";
 import { FIELD_LABEL, INPUT } from "../../shared/styles";
 import { CheckChoices, SelectChoices } from "../../shared/ui";
@@ -45,7 +46,7 @@ export function FieldControl({
   switch (field.type) {
     case "textarea":
       control = (
-        <textarea
+        <AutoResizeTextarea
           id={id}
           rows={field.rows ?? 2}
           className={`${INPUT} resize-y`}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
 import { ChevronDown, Copy, Download, Pencil, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { PsyConfig, PsyNote } from "../../../../../lib/psychotherapyNoteApi";
@@ -599,7 +600,7 @@ function Section({
       </div>
       {editing ? (
         <div className="mt-1.5 flex flex-col gap-1.5">
-          <textarea
+          <AutoResizeTextarea
             className={`${INPUT} min-h-[130px] font-doc text-[15px] leading-normal`}
             aria-label={`Edit ${title}`}
             rows={Math.min(14, Math.max(4, draft.split("\n").length + 1))}
@@ -846,7 +847,7 @@ function SignedFooter({
               </option>
             ))}
           </select>
-          <textarea
+          <AutoResizeTextarea
             className={INPUT}
             rows={4}
             aria-label="Amended text"

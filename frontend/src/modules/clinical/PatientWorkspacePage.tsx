@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Archive, Scale } from "lucide-react";
@@ -525,7 +526,7 @@ export function PatientWorkspacePage() {
                 </label>
                 <label className={LABEL_CLASS}>
                   Clinical description
-                  <textarea
+                  <AutoResizeTextarea
                     className={FIELD_CLASS}
                     rows={3}
                     defaultValue={selectedDiagnosis.clinical_notes}
@@ -534,7 +535,7 @@ export function PatientWorkspacePage() {
                 </label>
                 <label className={LABEL_CLASS}>
                   Diagnostic criteria met
-                  <textarea
+                  <AutoResizeTextarea
                     className={FIELD_CLASS}
                     rows={3}
                     defaultValue={selectedDiagnosis.diagnostic_criteria_met}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
@@ -216,7 +217,7 @@ export function TriageMsePage() {
           ).map(([key, label]) => (
             <label key={key} className={LABEL_CLASS}>
               {label}
-              <textarea
+              <AutoResizeTextarea
                 className={FIELD_CLASS}
                 rows={2}
                 // key comes from the fixed literal tuple above, never user input.
@@ -228,7 +229,7 @@ export function TriageMsePage() {
           ))}
           <label className={`${LABEL_CLASS} sm:col-span-2`}>
             Plan
-            <textarea
+            <AutoResizeTextarea
               className={FIELD_CLASS}
               rows={2}
               value={mse.plan}

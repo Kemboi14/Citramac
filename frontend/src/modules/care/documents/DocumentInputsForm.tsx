@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import type { DocInputs, DynamicBlock, RecipientRule, UserField } from "../../../lib/documentsApi";
@@ -130,7 +131,7 @@ export function DocumentInputsForm({
                 error={err(field.key)}
                 className="md:col-span-2"
               >
-                <textarea
+                <AutoResizeTextarea
                   id={id}
                   rows={3}
                   className={INPUT}

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
@@ -165,7 +166,7 @@ export function ClinicalEncounterPage() {
           {(["subjective", "objective", "assessment", "plan"] as const).map((key) => (
             <label key={key} className={LABEL_CLASS}>
               {key[0].toUpperCase() + key.slice(1)}
-              <textarea
+              <AutoResizeTextarea
                 className={FIELD_CLASS}
                 rows={3}
                 // key comes from the fixed literal tuple above, never user input.

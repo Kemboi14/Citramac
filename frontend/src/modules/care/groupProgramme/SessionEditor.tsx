@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import type { ReactNode } from "react";
 import type { ValueSetConcept } from "../../../lib/carePathwayApi";
 import type {
@@ -193,7 +194,7 @@ export function SessionDetailsFields({
         }
         className={correction ? "" : "sm:col-span-2 lg:col-span-3"}
       >
-        <textarea
+        <AutoResizeTextarea
           id={id("description")}
           rows={3}
           maxLength={2000}
@@ -418,7 +419,7 @@ export function SessionEditor({
                             </select>
                           </td>
                           <td className={TD}>
-                            <textarea
+                            <AutoResizeTextarea
                               className={`${INPUT} min-h-14 min-w-[190px]`}
                               rows={2}
                               maxLength={1000}

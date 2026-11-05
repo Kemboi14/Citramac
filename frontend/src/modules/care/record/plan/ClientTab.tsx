@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
 import {
@@ -186,7 +187,7 @@ export function ClientTab({
             <span className={FIELD_LABEL}>
               Rationale — required when the plan conflicts with the client’s priority
             </span>
-            <textarea
+            <AutoResizeTextarea
               rows={2}
               className={`${INPUT} resize-y`}
               defaultValue={details.rationale}
@@ -236,7 +237,7 @@ export function ClientTab({
         <fieldset disabled={disabled} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Crisis &amp; relapse plan</span>
-            <textarea
+            <AutoResizeTextarea
               rows={3}
               className={`${INPUT} resize-y`}
               defaultValue={details.crisis_plan}
@@ -250,7 +251,7 @@ export function ClientTab({
             <span className={FIELD_LABEL}>
               Family / carer involvement (consent: {FAMILY_CONSENT[ws.family_consent]})
             </span>
-            <textarea
+            <AutoResizeTextarea
               rows={3}
               className={`${INPUT} resize-y`}
               defaultValue={details.family_involvement}
@@ -268,7 +269,7 @@ export function ClientTab({
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className={FIELD_LABEL}>Advance statement &amp; treatment preferences</span>
-            <textarea
+            <AutoResizeTextarea
               rows={2}
               className={`${INPUT} resize-y`}
               defaultValue={details.advance_statement}
@@ -346,7 +347,7 @@ export function ClientTab({
               {SAFETY_KEYS.map((k) => (
                 <label key={k} className="flex flex-col gap-1">
                   <span className={FIELD_LABEL}>{labels[k]}</span>
-                  <textarea
+                  <AutoResizeTextarea
                     rows={2}
                     disabled={locked}
                     className={`${INPUT} resize-y`}

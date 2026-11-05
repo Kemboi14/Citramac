@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import type { IntakeSchema } from "../../../../lib/carePathwayApi";
 import { BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles";
 import { Callout, SelectChoices } from "../../shared/ui";
@@ -175,7 +176,7 @@ export function MseSection({
       )}
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL}>MSE summary / clinically significant findings</span>
-        <textarea
+        <AutoResizeTextarea
           rows={3}
           className={`${INPUT} resize-y`}
           value={text("summary")}

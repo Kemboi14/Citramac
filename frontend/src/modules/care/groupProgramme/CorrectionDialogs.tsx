@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../auth/useAuth";
@@ -102,7 +103,7 @@ function ReasonField({
 }) {
   return (
     <Field label="Reason for correction" htmlFor={id} error={error}>
-      <textarea
+      <AutoResizeTextarea
         id={id}
         rows={2}
         maxLength={500}
@@ -352,7 +353,7 @@ export function EntryCorrectionDialog({
               htmlFor="group-amend-observation"
               error={errors.observation}
             >
-              <textarea
+              <AutoResizeTextarea
                 id="group-amend-observation"
                 rows={4}
                 maxLength={1000}

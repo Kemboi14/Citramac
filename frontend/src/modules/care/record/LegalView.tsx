@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { useId, useState, type ReactNode } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
@@ -457,7 +458,7 @@ function AdmissionLegal({
   const text = (key: keyof LegalForm, label: string, multiline = false, type = "text") => (
     <Field label={label} htmlFor={`${id}-${key}`}>
       {multiline ? (
-        <textarea
+        <AutoResizeTextarea
           id={`${id}-${key}`}
           rows={2}
           className={INPUT}
@@ -884,7 +885,7 @@ function LogRequestForm({
           Received in writing
         </label>
         <Field label="Details" htmlFor={`${id}-details`} className="sm:col-span-2">
-          <textarea
+          <AutoResizeTextarea
             id={`${id}-details`}
             rows={2}
             className={INPUT}
@@ -1064,7 +1065,7 @@ function SubjectRequestItem({
             >
               {/* eslint-disable-next-line security/detect-object-injection -- `mode` is a typed union. */}
               <Field label={DECISION_COPY[mode].label} htmlFor={`${id}-${mode}`}>
-                <textarea
+                <AutoResizeTextarea
                   id={`${id}-${mode}`}
                   rows={2}
                   className={INPUT}

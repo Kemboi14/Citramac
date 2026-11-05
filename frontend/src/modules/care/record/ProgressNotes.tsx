@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
@@ -83,7 +84,7 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
           ))}
         </select>
         {amends && <p className="text-xs text-ink-500">Addendum to a signed note.</p>}
-        <textarea
+        <AutoResizeTextarea
           className={INPUT}
           rows={4}
           aria-label="Note"

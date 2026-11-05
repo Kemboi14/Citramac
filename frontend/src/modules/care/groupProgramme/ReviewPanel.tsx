@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import type { GroupClient, RiskFlag } from "../../../lib/groupProgrammeApi";
 import { BTN, BTN_GHOST, INPUT, TABLE, TD, TH } from "../shared/styles";
 import { clientLabel, type DraftAttendance } from "./model";
@@ -125,7 +126,7 @@ export function ReviewPanel({
                       {!entry.riskDisclosure && (
                         <label className="flex flex-col gap-1">
                           <span>Why this is not a risk disclosure (kept in the audit)</span>
-                          <textarea
+                          <AutoResizeTextarea
                             rows={2}
                             maxLength={500}
                             className={INPUT}

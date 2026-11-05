@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
 import {
@@ -344,7 +345,7 @@ export function PrescribingModule({ patientId }: { patientId: string }) {
                     override is recorded
                     {state.is_senior ? "." : " and a senior clinician is asked to co-sign it."}
                   </p>
-                  <textarea
+                  <AutoResizeTextarea
                     className={`${INPUT} mt-2`}
                     rows={2}
                     aria-label="Reason for overriding the allergy hard stop"
