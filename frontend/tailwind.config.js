@@ -98,6 +98,18 @@ export default {
         // Long-form clinical text (the psychotherapy note, questions): the
         // mockup's document face, mapped to system serifs (no web fonts).
         doc: ["ui-serif", "Georgia", "Cambria", "Times New Roman", "serif"],
+        // The device's own UI font — the client safety banner uses it so it reads
+        // the same on every screen, whatever web fonts have loaded.
+        system: [
+          "system-ui",
+          "-apple-system",
+          '"Segoe UI"',
+          "Roboto",
+          '"Helvetica Neue"',
+          "Arial",
+          '"Noto Sans"',
+          "sans-serif",
+        ],
       },
       keyframes: {
         "fade-in": {

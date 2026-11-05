@@ -103,7 +103,7 @@ export function SafetyBanner({
     <section
       aria-label="Patient safety banner"
       data-safety-banner
-      className="sticky top-0 z-[15] -mx-4 mb-4 border-b border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
+      className="sticky top-0 z-[15] -mx-4 mb-4 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
       <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(250px,1.1fr)_minmax(300px,1.8fr)_minmax(200px,.9fr)_minmax(210px,1fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
         <div className={`${cell} flex items-center gap-3.5`} aria-label="Patient identity">
@@ -118,7 +118,7 @@ export function SafetyBanner({
             {initials}
           </div>
           <div className="min-w-0">
-            <div className="line-clamp-2 break-words font-display text-xl font-extrabold leading-tight tracking-[-.4px] text-ink-900">
+            <div className="line-clamp-2 break-words text-xl font-extrabold leading-tight tracking-[-.4px] text-ink-900">
               {name}{" "}
               {banner.identity_label && (
                 <span className="ml-1 inline-block rounded-md border border-priority-orange/40 bg-priority-orange-tint px-[7px] py-px align-[3px] text-[10px] font-semibold text-priority-orange">
@@ -126,7 +126,7 @@ export function SafetyBanner({
                 </span>
               )}
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-[7px] gap-y-0.5 font-mono text-[11px] font-bold text-brand-green">
+            <div className="mt-1 flex flex-wrap gap-x-[7px] gap-y-0.5 text-[11px] font-bold tabular-nums text-brand-green">
               <span>CITRAMAC ID {banner.citramac_number || "Not recorded"}</span>
               <span className="text-ink-400">·</span>
               <span>MRN {banner.mrn || "Not recorded"}</span>
