@@ -328,6 +328,7 @@ class PatientDetailSerializer(serializers.ModelSerializer):
 class AppointmentSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     provider_name = serializers.SerializerMethodField()
+    messages = serializers.SerializerMethodField()
 
     class Meta:
         model = Appointment
@@ -346,8 +347,15 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "status",
             "notes",
             "reminder_sent_at",
+            "messages",
         ]
         read_only_fields = ["reminder_sent_at"]
+
+    def get_messages(self, obj):
+        """What was sent to the client about this appointment, and whether it went."""
+        from .appointment_messages import status
+
+        return status(obj) if obj.pk else []
 
     def get_patient_name(self, obj):
         return obj.patient.get_full_name() if obj.patient_id else ""

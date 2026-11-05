@@ -60,6 +60,25 @@ def checklist(organization, admin=None):
         }
     )
 
+    from apps.client_registry.consent import appointment_wording
+
+    wording = appointment_wording(organization.id)
+    items.append(
+        {
+            "key": "appointment_message_wording",
+            "label": "Wording for appointment messages",
+            "detail": (
+                f"Version {wording.version} is in use."
+                if wording
+                else "Not set — clients can't agree to SMS / email about their appointments, "
+                "so none are sent."
+            ),
+            "done": wording is not None,
+            "required": True,
+            "link": "/org-admin/consent-wording",
+        }
+    )
+
     items.append(
         {
             "key": "organisation_email",

@@ -1037,6 +1037,29 @@ def _ai_consent(patient):
     }
 
 
+def _appointment_messages(patient):
+    """The client's agreement to SMS / email about their appointments, per
+    channel, with the facility's wording and the contact details on file."""
+    from apps.client_registry.consent import APPOINTMENT_TYPES, appointment_wording, current_record
+
+    channels = {}
+    for channel, consent_type in APPOINTMENT_TYPES.items():
+        record = current_record(patient, consent_type)
+        channels[channel] = {
+            "decision": record.decision if record else "NOT_ASKED",
+            "captured_at": _iso(record.captured_at) if record else None,
+            "captured_by": user_display(record.captured_by) if record else "",
+            "consent_text_version": record.consent_text_version if record else "",
+        }
+    return {
+        "template": _template_payload(appointment_wording()),
+        "sms": channels["sms"],
+        "email": channels["email"],
+        "contact_phone": patient.contact_phone,
+        "contact_email": patient.contact_email,
+    }
+
+
 class ApprovedAssessmentsView(APIView):
     """The organisation's approved assessments (approved_assessments.py). GET
     for anyone in the organisation; PUT by its Org Admin, with the clinical
@@ -1144,6 +1167,7 @@ class ClientLegalView(APIView):
                     "captured_at": _iso(patient.consent_captured_at),
                 },
                 "ai_consent": _ai_consent(patient),
+                "appointment_messages": _appointment_messages(patient),
                 "data_sharing_consent": [
                     {
                         "id": str(c.id),
@@ -1610,6 +1634,34 @@ def _red_orange_count():
     return count
 
 
+def _todays_appointments(bounds):
+    """Today's appointments for the dashboard, in time order, with what was sent
+    to the client about each (apps.client_registry.appointment_messages)."""
+    from apps.client_registry import appointment_messages
+
+    rows = []
+    for a in (
+        Appointment.objects.filter(scheduled_for__gte=bounds[0], scheduled_for__lt=bounds[1])
+        .select_related("patient", "provider")
+        .order_by("scheduled_for")[:50]
+    ):
+        rows.append(
+            {
+                "id": str(a.id),
+                "patient_id": str(a.patient_id),
+                "patient": a.patient.get_full_name(),
+                "scheduled_for": _iso(a.scheduled_for),
+                "appointment_type": a.appointment_type,
+                "mode": a.get_mode_display(),
+                "status": a.status,
+                "status_label": a.get_status_display(),
+                "provider": a.provider.get_full_name() if a.provider_id else "",
+                "messages": appointment_messages.status(a),
+            }
+        )
+    return rows
+
+
 class DashboardView(APIView):
     def get(self, request):
         from apps.client_registry.views import CaseloadView
@@ -1648,6 +1700,7 @@ class DashboardView(APIView):
                 .count(),
                 "red_orange": _red_orange_count(),
                 "triage_due": len(worklist),
+                "triage_overdue": sum(1 for item in worklist if item["is_overdue"]),
                 "psychiatry_queued": len(services.psychiatry_queue()),
                 "caseload_count": len(caseload),
                 "appointments_today": Appointment.objects.filter(
@@ -1658,8 +1711,10 @@ class DashboardView(APIView):
                 "follow_ups_overdue": follow_ups["overdue"],
                 "discharged_without_follow_up": follow_ups["unbooked"],
                 **group_programme.dashboard_counts(),
-                "recent_activity": services.recent_activity(),
+                # Enough for a few pages on the dashboard (10 a page).
+                "recent_activity": services.recent_activity(limit=40),
                 "triage_arrivals": [_worklist_row(i) for i in worklist[:5]],
+                "todays_appointments": _todays_appointments(today_bounds),
                 "generated_at": _iso(now),
             }
         )
@@ -1810,7 +1865,17 @@ class ConsentTemplatesView(APIView):
         return Response(_template_payload(template), status=status.HTTP_201_CREATED)
 
 
-CLIENT_CONSENT_TYPES = ("DATA_SHARING_HIE", "AI_NOTE_PROCESSING")
+CLIENT_CONSENT_TYPES = (
+    "DATA_SHARING_HIE",
+    "AI_NOTE_PROCESSING",
+    "APPOINTMENT_SMS",
+    "APPOINTMENT_EMAIL",
+)
+# Consent types whose wording is held under another template type.
+TEMPLATE_FOR = {
+    "APPOINTMENT_SMS": "APPOINTMENT_MESSAGES",
+    "APPOINTMENT_EMAIL": "APPOINTMENT_MESSAGES",
+}
 
 
 class ClientConsentView(APIView):
@@ -1829,7 +1894,9 @@ class ClientConsentView(APIView):
             return Response(
                 {"consent_type": "Unknown consent type."}, status=status.HTTP_400_BAD_REQUEST
             )
-        template = ConsentTemplate.objects.filter(consent_type=consent_type, active=True).first()
+        template = ConsentTemplate.objects.filter(
+            consent_type=TEMPLATE_FOR.get(consent_type, consent_type), active=True
+        ).first()
         if template is None:
             return Response(
                 {

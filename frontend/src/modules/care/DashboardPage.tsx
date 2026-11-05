@@ -7,14 +7,20 @@ import { EmptyState } from "../../components/EmptyState";
 import { PanelSkeleton, TableSkeletonRows } from "../../components/Skeleton";
 import { DashboardWelcome } from "../../components/DashboardWelcome";
 import { MyTasks } from "./MyTasks";
+import { AppointmentMessages } from "./shared/AppointmentMessages";
 import { formatTime } from "./shared/format";
-import { Card, ErrorNote, Tag, Timeline } from "./shared/ui";
+import { clientRecordPath } from "./shared/recordRoutes";
+import { TriageWorklistHeadCells, TriageWorklistRow } from "./shared/TriageWorklistRow";
+import { Card, ErrorNote, StatusPill, Tag, Timeline } from "./shared/ui";
 import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.3 — mockup dashboard(). Every number is
 // served by GET /care/dashboard/; nothing here is demo text.
 
 const REFRESH_MS = 60_000;
+const ACTIVITY_PAGE = 10;
+const PAGER_BTN =
+  "rounded-md border border-surface-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50";
 
 const PATHWAY_STEPS = [
   "Registration",
@@ -188,6 +194,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [activityPage, setActivityPage] = useState(0);
 
   const load = useCallback(
     (isCancelled: () => boolean) => {
@@ -364,19 +371,216 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section
-        className="mb-4 overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm"
-        aria-labelledby="dashboard-lifecycle-title"
+      <Card
+        title={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Triage arrivals
+            {data && <Tag>{data.triage_due}</Tag>}
+            {data && (data.triage_overdue ?? 0) > 0 && (
+              <StatusPill tone="danger">{data.triage_overdue} overdue</StatusPill>
+            )}
+          </span>
+        }
+        aside={
+          <Link
+            to="/clinical/triage"
+            className="text-[12.5px] font-semibold text-brand-green hover:underline"
+          >
+            {data && data.triage_due > data.triage_arrivals.length
+              ? `View all ${data.triage_due} →`
+              : "Open triage queue →"}
+          </Link>
+        }
+        bodyClassName="p-0 overflow-x-auto"
+        className="mb-4"
       >
-        <h2
-          id="dashboard-lifecycle-title"
-          className="px-[18px] pb-[5px] pt-3.5 text-[13px] font-bold text-ink-900"
+        <table className={`${TABLE} min-w-[720px]`} aria-label="Triage arrivals and re-checks due">
+          <thead>
+            <tr>
+              <TriageWorklistHeadCells />
+            </tr>
+          </thead>
+          <tbody>
+            {data && data.triage_arrivals.length > 0 ? (
+              data.triage_arrivals.map((row) => (
+                <TriageWorklistRow
+                  key={row.id}
+                  row={row}
+                  onOpen={() => navigate(`/clinical/triage/${row.id}`)}
+                />
+              ))
+            ) : !data ? (
+              error ? (
+                <tr>
+                  <td colSpan={5} className={`${TD} text-center text-ink-500`}>
+                    —
+                  </td>
+                </tr>
+              ) : (
+                <TableSkeletonRows columns={5} rows={3} />
+              )
+            ) : (
+              <tr>
+                <td colSpan={5}>
+                  <EmptyState title="No arrivals or re-checks are due" />
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card
+          title={
+            <span className="inline-flex items-center gap-2">
+              Today&rsquo;s appointments{" "}
+              {data && <Tag>{(data.todays_appointments ?? []).length}</Tag>}
+            </span>
+          }
+          aside={
+            <Link
+              to="/clinical/appointments"
+              className="text-[12.5px] font-semibold text-brand-green hover:underline"
+            >
+              Calendar →
+            </Link>
+          }
+          bodyClassName="p-0 overflow-x-auto"
         >
-          CITRAMAC care pathway
-        </h2>
-        <p className="m-0 px-[18px] pb-3 text-[11.5px] text-ink-500">
-          One connected journey from first contact through ongoing care.
-        </p>
+          <table className={`${TABLE} min-w-[560px]`} aria-label="Today's appointments">
+            <thead>
+              <tr>
+                <th className={TH}>Time</th>
+                <th className={TH}>Client</th>
+                <th className={TH}>Status</th>
+                <th className={TH}>Messages to client</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!data ? (
+                error ? (
+                  <tr>
+                    <td colSpan={4} className={`${TD} text-center text-ink-500`}>
+                      —
+                    </td>
+                  </tr>
+                ) : (
+                  <TableSkeletonRows columns={4} rows={3} />
+                )
+              ) : (data.todays_appointments ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={4}>
+                    <EmptyState title="No appointments today" />
+                  </td>
+                </tr>
+              ) : (
+                (data.todays_appointments ?? []).map((a) => (
+                  <tr key={a.id} className="hover:bg-surface-bg">
+                    <td className={TD}>{formatTime(a.scheduled_for)}</td>
+                    <td className={TD}>
+                      <Link
+                        to={clientRecordPath(a.patient_id, "snapshot")}
+                        className="font-semibold text-ink-900 hover:text-brand-green hover:underline"
+                      >
+                        {a.patient}
+                      </Link>
+                      <div className="text-[11px] text-ink-500">
+                        {[a.appointment_type, a.mode, a.provider].filter(Boolean).join(" · ")}
+                      </div>
+                    </td>
+                    <td className={TD}>
+                      <Tag>{a.status_label}</Tag>
+                    </td>
+                    <td className={TD}>
+                      <AppointmentMessages messages={a.messages ?? []} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title="Recent Activity">
+          {!data ? (
+            error ? (
+              <p className="text-[13px] text-ink-500">—</p>
+            ) : (
+              <PanelSkeleton lines={4} />
+            )
+          ) : data.recent_activity.length === 0 ? (
+            <EmptyState title="No recent activity">
+              Registrations, triage, admissions and discharges appear here as they happen.
+            </EmptyState>
+          ) : (
+            (() => {
+              const pages = Math.ceil(data.recent_activity.length / ACTIVITY_PAGE);
+              const page = Math.min(activityPage, pages - 1);
+              const shown = data.recent_activity.slice(
+                page * ACTIVITY_PAGE,
+                (page + 1) * ACTIVITY_PAGE,
+              );
+              return (
+                <>
+                  <Timeline
+                    items={shown.map((item, index) => ({
+                      key: `${item.at}-${page}-${index}`,
+                      time: activityTime(item.at),
+                      title: item.title,
+                      detail: item.detail,
+                    }))}
+                  />
+                  {pages > 1 && (
+                    <nav
+                      aria-label="Recent activity pages"
+                      className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3"
+                    >
+                      <span className="text-[12.5px] text-ink-500">
+                        Page {page + 1} of {pages}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className={PAGER_BTN}
+                          disabled={page === 0}
+                          onClick={() => setActivityPage(page - 1)}
+                        >
+                          Previous
+                        </button>
+                        <button
+                          type="button"
+                          className={PAGER_BTN}
+                          disabled={page >= pages - 1}
+                          onClick={() => setActivityPage(page + 1)}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </nav>
+                  )}
+                </>
+              );
+            })()
+          )}
+        </Card>
+      </div>
+
+      <details className="group mt-4 overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-[18px] py-3 text-[13px] font-bold text-ink-900 [&::-webkit-details-marker]:hidden">
+          <span>
+            CITRAMAC care pathway
+            <span className="ml-2 text-[11.5px] font-normal text-ink-500">
+              One connected journey from first contact through ongoing care.
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="text-ink-500 transition-transform group-open:rotate-180"
+          >
+            ▾
+          </span>
+        </summary>
         <div
           className="overflow-x-auto px-[18px] pb-4 [scrollbar-width:thin] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
           role="region"
@@ -410,83 +614,7 @@ export function DashboardPage() {
             })}
           </ol>
         </div>
-      </section>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card title="Recent Activity">
-          {!data ? (
-            error ? (
-              <p className="text-[13px] text-ink-500">—</p>
-            ) : (
-              <PanelSkeleton lines={4} />
-            )
-          ) : data.recent_activity.length === 0 ? (
-            <EmptyState title="No recent activity">
-              Registrations, triage, admissions and discharges appear here as they happen.
-            </EmptyState>
-          ) : (
-            <Timeline
-              items={data.recent_activity.map((item, index) => ({
-                key: `${item.at}-${index}`,
-                time: activityTime(item.at),
-                title: item.title,
-                detail: item.detail,
-              }))}
-            />
-          )}
-        </Card>
-        <Card title="Triage arrivals" bodyClassName="p-0 overflow-x-auto">
-          <table className={TABLE}>
-            <thead>
-              <tr>
-                <th className={TH}>Client</th>
-                <th className={TH}>Setting</th>
-                <th className={TH}>Wait / status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data && data.triage_arrivals.length > 0 ? (
-                data.triage_arrivals.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-bg">
-                    <td className={TD}>
-                      <Link
-                        to={`/clinical/triage/${row.id}`}
-                        className="font-semibold text-ink-900 hover:text-brand-green hover:underline"
-                      >
-                        {row.name}
-                      </Link>
-                    </td>
-                    <td className={TD}>
-                      {row.setting === "INPATIENT" ? "Inpatient" : "Outpatient"}
-                    </td>
-                    <td className={TD}>
-                      <Tag>
-                        {row.wait_minutes} min · {row.status_label}
-                      </Tag>
-                    </td>
-                  </tr>
-                ))
-              ) : !data ? (
-                error ? (
-                  <tr>
-                    <td colSpan={3} className={`${TD} text-center text-ink-500`}>
-                      —
-                    </td>
-                  </tr>
-                ) : (
-                  <TableSkeletonRows columns={3} rows={3} />
-                )
-              ) : (
-                <tr>
-                  <td colSpan={3}>
-                    <EmptyState title="No arrivals or re-checks are due" />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      </div>
+      </details>
     </div>
   );
 }

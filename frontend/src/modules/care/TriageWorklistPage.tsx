@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Clock3, Info } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { getTriageWorklist, type WorklistRow } from "../../lib/carePathwayApi";
-import { formatDateTime, formatTime } from "./shared/format";
-import { BTN_GHOST, BTN_SM, TABLE, TD, TH } from "./shared/styles";
+import { formatTime } from "./shared/format";
+import { TABLE, TH } from "./shared/styles";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeletonRows } from "../../components/Skeleton";
 import { SortHeader, TableFilter } from "./shared/TableControls";
 import { useTableControls } from "./shared/useTableControls";
 import { Card, ErrorNote, PageHeader, Tip } from "./shared/ui";
+import { TriageWorklistRow } from "./shared/TriageWorklistRow";
 import { errorText } from "./triage/helpers";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.5 — mockup triageWorklist(). The server
@@ -164,52 +165,13 @@ export function TriageWorklistPage() {
                 </td>
               </tr>
             )}
-            {controls.rows.map((row) => {
-              const recheck = row.status === "RECHECK_DUE";
-              const cell = `${TD} leading-[1.45] ${row.is_overdue ? "bg-priority-red-tint" : ""}`;
-              return (
-                <tr key={row.id}>
-                  <td
-                    className={`${cell} ${row.is_overdue ? "shadow-[inset_3px_0_var(--pri-red)]" : ""}`}
-                  >
-                    <strong>
-                      {row.name || "Unknown client"} · {row.mrn || row.citramac_number}
-                    </strong>
-                    <br />
-                    <span className="text-[11px] text-ink-500">
-                      {row.citramac_number || "CITRAMAC ID not recorded"}
-                    </span>
-                  </td>
-                  <td className={cell}>
-                    {row.setting === "INPATIENT" ? "Inpatient" : "Outpatient"} · {row.status_label}
-                  </td>
-                  <td className={cell}>
-                    {recheck
-                      ? `Re-check due · last triage v${row.triage_version || 1} ${formatTime(row.last_triaged_at)}`
-                      : `${row.wait_minutes} min · triage target`}
-                    {row.is_overdue && (
-                      <>
-                        <br />
-                        <span className="text-[11px] font-bold uppercase text-priority-red">
-                          {row.recheck_overdue ? `Re-triage overdue (${row.priority})` : "Overdue"}
-                        </span>
-                      </>
-                    )}
-                  </td>
-                  <td className={cell}>{formatDateTime(row.due_at)}</td>
-                  <td className={cell}>
-                    <button
-                      type="button"
-                      className={`${BTN_GHOST} ${BTN_SM}`}
-                      aria-label={`Open ${recheck ? "re-check" : "triage"} for ${row.name || "client"}`}
-                      onClick={() => navigate(`/clinical/triage/${row.id}`)}
-                    >
-                      Open
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {controls.rows.map((row) => (
+              <TriageWorklistRow
+                key={row.id}
+                row={row}
+                onOpen={() => navigate(`/clinical/triage/${row.id}`)}
+              />
+            ))}
           </tbody>
         </table>
       </Card>

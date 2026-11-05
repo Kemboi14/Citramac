@@ -12,6 +12,7 @@ import {
 } from "../../lib/appointmentsApi";
 import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
 import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
+import { AppointmentMessages } from "../care/shared/AppointmentMessages";
 
 // Appointment types exactly as the approved mockup lists them
 // (docs/15-CLINICAL-WORKSPACE-V3.md §1.13). Stored as Appointment.appointment_type text, as
@@ -266,19 +267,20 @@ export function AppointmentsPage() {
                   <th className={TH}>Appointment</th>
                   <th className={TH}>Provider</th>
                   <th className={TH}>Status</th>
+                  <th className={TH}>Messages to client</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={5} className={`${TD} text-center text-ink-500`}>
+                    <td colSpan={6} className={`${TD} text-center text-ink-500`}>
                       Loading…
                     </td>
                   </tr>
                 )}
                 {!isLoading && visible.length === 0 && (
                   <tr>
-                    <td colSpan={5} className={`${TD} py-6 text-center text-ink-500`}>
+                    <td colSpan={6} className={`${TD} py-6 text-center text-ink-500`}>
                       {sorted.length === 0
                         ? "No upcoming appointments."
                         : "No appointments match this search."}
@@ -323,6 +325,9 @@ export function AppointmentsPage() {
                             </button>
                           </div>
                         )}
+                      </td>
+                      <td className={TD}>
+                        <AppointmentMessages messages={a.messages ?? []} />
                       </td>
                     </tr>
                   );

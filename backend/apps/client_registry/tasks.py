@@ -3,9 +3,6 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from apps.care_pathway import facility_time
-from apps.notifications.email import get_email_connection_and_sender, send_html_email
-from apps.notifications.sms import send_sms
 from apps.tenancy.context import platform_admin_context
 
 logger = structlog.get_logger(__name__)
@@ -14,89 +11,53 @@ logger = structlog.get_logger(__name__)
 @shared_task
 def send_appointment_reminders():
     """
-    Periodic scan (CELERY_BEAT_SCHEDULE, every 15 min) for the Appointments
-    Calendar's reminders — docs/07-CLINICAL-MODULES-SPEC.md §7.1. Sends an
-    email reminder when the patient has a contact_email, an SMS reminder
-    (via apps.notifications.sms, Onfon Media) when the patient has a
-    contact_phone and the appointment's branch hasn't turned off
-    `sms_reminders_enabled` — both can fire for the same appointment, since
-    a patient with both on file should get both.
+    Periodic scan (CELERY_BEAT_SCHEDULE, every 15 min): the reminder before
+    each SCHEDULED appointment due within the next
+    `APPOINTMENT_REMINDER_HOURS_BEFORE` hours that hasn't had one
+    (`reminder_sent_at` is null; a moved appointment is reset to null, so it
+    gets a fresh reminder for its new time).
 
-    Picks up every SCHEDULED appointment whose `scheduled_for` falls within
-    the next `APPOINTMENT_REMINDER_HOURS_BEFORE` hours and that hasn't had a
-    reminder sent yet (`reminder_sent_at is null`). Because the scan runs
-    often and the window is a rolling "next N hours" rather than an exact
-    "N hours from now" match, an appointment booked less than N hours out
-    still gets a reminder on the very next scan — booked-last-minute and
-    booked-far-in-advance appointments are both covered by the same query,
-    not two separate code paths. `AppointmentViewSet.perform_update` resets
-    `reminder_sent_at` to null whenever `scheduled_for` changes, so a
-    rescheduled appointment is treated as never-reminded and gets a fresh
-    one for its new time.
+    The message itself is apps.client_registry.appointment_messages: only on
+    the channels the client agreed to, discreet wording, through the
+    notification outbox so each send's outcome is recorded. An appointment
+    booked or moved inside the reminder window already got its booking message
+    for that time, so it isn't sent a second one minutes later.
 
     Runs cross-tenant under `platform_admin_context()` (Celery beat has no
-    request-bound tenant, same pattern as the terminology sync tasks), and
-    resolves each appointment's own organization's SMTP/SMS settings via
-    `apps.notifications.email`/`apps.notifications.sms` so a reminder always
-    sends through that tenant's configured mail server/SMS gateway (or the
-    platform/settings.py fallback).
+    request-bound tenant); each delivery goes through its own organisation's
+    SMTP / SMS settings.
     """
-    now = timezone.now()
-    window_end = now + timezone.timedelta(hours=settings.APPOINTMENT_REMINDER_HOURS_BEFORE)
+    from datetime import timedelta
 
+    from apps.notifications.models import NotificationDelivery
+
+    from . import appointment_messages
+
+    now = timezone.now()
+    lead = timedelta(hours=settings.APPOINTMENT_REMINDER_HOURS_BEFORE)
+    sent = 0
     with platform_admin_context():
         from .models import Appointment
 
-        due = (
-            Appointment.objects.select_related("patient", "organization", "branch").filter(
-                status="SCHEDULED",
-                reminder_sent_at__isnull=True,
-                scheduled_for__gte=now,
-                scheduled_for__lte=window_end,
-            )
-            # Keep an appointment only if at least one contact channel is on
-            # file — exclude(A="", B="") drops rows where BOTH are blank.
-            .exclude(patient__contact_email="", patient__contact_phone="")
+        due = Appointment.objects.select_related("patient", "organization", "branch").filter(
+            status="SCHEDULED",
+            reminder_sent_at__isnull=True,
+            scheduled_for__gte=now,
+            scheduled_for__lte=now + lead,
         )
-        sent = 0
         for appointment in due:
-            # Facility wall-clock time, not UTC (settings.FACILITY_TIME_ZONE).
-            when_text = facility_time.local_format(
-                appointment.scheduled_for, "%A, %d %B %Y at %H:%M"
-            )
-            if appointment.patient.contact_email:
-                connection, from_email = get_email_connection_and_sender(appointment.organization)
-                send_html_email(
-                    subject="Appointment reminder — CITRAMAC",
-                    template_name="notifications/emails/appointment_reminder_email.html",
-                    context={
-                        "patient_name": appointment.patient.get_full_name(),
-                        "organization_name": appointment.organization.name,
-                        "scheduled_for": when_text,
-                        "appointment_type": appointment.appointment_type,
-                        "location": appointment.location,
-                        "mode": appointment.get_mode_display(),
-                    },
-                    plain_message=f"Reminder: you have an appointment on {when_text}.",
-                    from_email=from_email,
-                    recipient_list=[appointment.patient.contact_email],
-                    connection=connection,
-                )
-            branch_sms_enabled = (
-                appointment.branch is None or appointment.branch.sms_reminders_enabled
-            )
-            if appointment.patient.contact_phone and branch_sms_enabled:
-                send_sms(
-                    appointment.patient.contact_phone,
-                    (
-                        f"Reminder: you have an appointment with {appointment.organization.name} "
-                        f"on {when_text}."
-                    ),
-                    organization=appointment.organization,
-                )
+            when = appointment.scheduled_for.strftime("%Y%m%dT%H%M")
+            told_recently = NotificationDelivery.objects.filter(
+                dedupe_key__in=[
+                    f"appointment:{appointment.pk}:{kind}:{when}"
+                    for kind in (appointment_messages.BOOKED, appointment_messages.RESCHEDULED)
+                ],
+                created_at__gte=appointment.scheduled_for - lead,
+            ).exists()
+            if not told_recently:
+                sent += len(appointment_messages.send(appointment, appointment_messages.REMINDER))
             appointment.reminder_sent_at = now
             appointment.save(update_fields=["reminder_sent_at"])
-            sent += 1
 
-    logger.info("appointment_reminders_sent", count=sent)
+    logger.info("appointment_reminders_queued", count=sent)
     return sent

@@ -711,15 +711,30 @@ class AttachmentAppointmentDashboardTests(APITestCase):
             response.data["results"][0]["appointment_type"], "Individual therapy session"
         )
 
+    def _agree_to_email(self):
+        from apps.care_pathway.models import ConsentTemplate
+
+        from .consent import capture_appointment_consent
+
+        ConsentTemplate.objects.create(
+            organization=self.org,
+            consent_type="APPOINTMENT_MESSAGES",
+            version="1",
+            text="Facility wording for appointment messages.",
+        )
+        capture_appointment_consent(self.patient, None, {"email": "YES"})
+
     def test_send_appointment_reminders_emails_patients_in_the_window(self):
-        from django.core import mail
         from django.test import override_settings
+
+        from apps.notifications.models import NotificationDelivery
 
         from .tasks import send_appointment_reminders
 
         with platform_admin_context():
             self.patient.contact_email = "grace@example.com"
             self.patient.save(update_fields=["contact_email"])
+            self._agree_to_email()
             due_soon = Appointment.objects.create(
                 organization=self.org,
                 patient=self.patient,
@@ -734,7 +749,7 @@ class AttachmentAppointmentDashboardTests(APITestCase):
                 appointment_type="Follow-up",
                 status="SCHEDULED",
             )
-            already_reminded = Appointment.objects.create(
+            Appointment.objects.create(
                 organization=self.org,
                 patient=self.patient,
                 scheduled_for=timezone.now() + timezone.timedelta(hours=1),
@@ -754,25 +769,29 @@ class AttachmentAppointmentDashboardTests(APITestCase):
             sent = send_appointment_reminders()
 
         self.assertEqual(sent, 1)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("grace@example.com", mail.outbox[0].to)
-
         with platform_admin_context():
+            delivery = NotificationDelivery.objects.get(
+                dedupe_key__startswith=f"appointment:{due_soon.pk}:REMINDER"
+            )
+            self.assertEqual(delivery.address, "grace@example.com")
+            # Discreet: no appointment type in the message.
+            self.assertNotIn("Psychiatric", delivery.body_text)
             due_soon.refresh_from_db()
             too_far_out.refresh_from_db()
-            already_reminded.refresh_from_db()
             cancelled.refresh_from_db()
         self.assertIsNotNone(due_soon.reminder_sent_at)
         self.assertIsNone(too_far_out.reminder_sent_at)
-        # already_reminded and cancelled were never touched by the task.
         self.assertIsNone(cancelled.reminder_sent_at)
 
-    def test_send_appointment_reminders_skips_patients_with_no_contact_email(self):
-        from django.core import mail
+    def test_send_appointment_reminders_sends_nothing_without_consent(self):
+        from apps.notifications.models import NotificationDelivery
 
         from .tasks import send_appointment_reminders
 
         with platform_admin_context():
+            self.patient.contact_email = "grace@example.com"
+            self.patient.contact_phone = "+254700000001"
+            self.patient.save(update_fields=["contact_email", "contact_phone"])
             Appointment.objects.create(
                 organization=self.org,
                 patient=self.patient,
@@ -784,7 +803,8 @@ class AttachmentAppointmentDashboardTests(APITestCase):
         sent = send_appointment_reminders()
 
         self.assertEqual(sent, 0)
-        self.assertEqual(len(mail.outbox), 0)
+        with platform_admin_context():
+            self.assertFalse(NotificationDelivery.objects.exists())
 
     def test_rescheduling_an_appointment_resets_its_reminder(self):
         with platform_admin_context():

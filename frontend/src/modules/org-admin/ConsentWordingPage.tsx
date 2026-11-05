@@ -9,8 +9,9 @@ import {
 } from "../../lib/carePathwayApi";
 import { Callout, StatusPill } from "../care/shared/ui";
 
-// Org Admin — the facility's consent wording: data sharing (HIE) and
-// AI-assisted processing of psychotherapy notes, each versioned separately. The legal
+// Org Admin — the facility's consent wording: data sharing (HIE), AI-assisted
+// processing of psychotherapy notes and SMS / email about appointments, each
+// versioned separately. The legal
 // text is set by the facility and never written or suggested by the system
 // (CLAUDE.md §6). Every consent record keeps the version the client was shown,
 // so wording is never edited in place: saving creates a new version and the
@@ -22,6 +23,11 @@ const KINDS: { type: ConsentType; label: string; subject: string }[] = [
     type: "AI_NOTE_PROCESSING",
     label: "AI-assisted notes",
     subject: "consent to AI-assisted psychotherapy note processing",
+  },
+  {
+    type: "APPOINTMENT_MESSAGES",
+    label: "Appointment messages",
+    subject: "agreement to SMS / email about appointments",
   },
 ];
 

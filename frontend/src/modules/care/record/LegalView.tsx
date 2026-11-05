@@ -26,6 +26,7 @@ import { useValueSets } from "../shared/useValueSets";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { CapacityConsentCard } from "./CapacityConsent";
+import { AppointmentMessagesCard } from "./AppointmentMessagesCard";
 import { LegalAdmissionStatus } from "./legal/LegalAdmissionStatus";
 import { NationalHealthRecordCard } from "./legal/NationalHealthRecordCard";
 
@@ -70,6 +71,13 @@ export function LegalView({ patientId, banner, onRecordChanged }: RecordViewProp
       <ErrorNote>{error}</ErrorNote>
       <LegalAdmissionStatus patientId={patientId} onChanged={refresh} />
       <ConsentCard patientId={patientId} legal={data} onSaved={refresh} />
+      {data.appointment_messages && (
+        <AppointmentMessagesCard
+          patientId={patientId}
+          consent={data.appointment_messages}
+          onSaved={refresh}
+        />
+      )}
       <NationalHealthRecordCard patientId={patientId} episodeId={banner.episode_id} />
       {data.ai_consent && (data.ai_consent.offered || data.ai_consent.decision !== "NOT_ASKED") && (
         <AiConsentCard patientId={patientId} consent={data.ai_consent} onSaved={refresh} />

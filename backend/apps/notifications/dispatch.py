@@ -136,6 +136,23 @@ def queue_email(organization_id, dedupe_key, address, email, reply_to=""):
     )
 
 
+def queue_sms(organization_id, dedupe_key, phone, text):
+    """
+    One SMS to one number through the outbox, with no in-app notice — for a
+    message to a client, who has no account (appointment messages). Sent after
+    the surrounding transaction commits, retried, and its outcome recorded on
+    the returned NotificationDelivery. None if this event already went there.
+    """
+    return _queue_delivery(
+        organization_id,
+        None,
+        dedupe_key,
+        NotificationDelivery.CHANNEL_SMS,
+        phone,
+        body_text=text,
+    )
+
+
 def notify(
     recipients,
     *,

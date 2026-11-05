@@ -706,6 +706,11 @@ class ConsentRecord(TenantScopedModel):
         # Local processing consent — never sent to the HIE (hie_client sends only
         # on DATA_SHARING_HIE). Gates psychotherapy AI assistance per client.
         ("AI_NOTE_PROCESSING", "AI-assisted processing of psychotherapy notes"),
+        # Contact about the client's own appointments (booked, moved, reminder).
+        # One decision per channel; both snapshot the facility's
+        # APPOINTMENT_MESSAGES wording (care_pathway.ConsentTemplate).
+        ("APPOINTMENT_SMS", "Appointment messages by SMS"),
+        ("APPOINTMENT_EMAIL", "Appointment messages by email"),
     ]
     DECISION_CHOICES = [
         ("NOT_ASKED", "Not yet asked"),

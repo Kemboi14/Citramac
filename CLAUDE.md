@@ -464,3 +464,30 @@ VERIFY (owner, before go-live): the regulator for each role (`ROLE_REGULATOR`) �
 radiologist and the Counsellors and Psychologists Board; whether each regulator issues a separate
 practising licence; each regulator's identifier `system` URI; whether NACADA accreditation should
 be required for any role (it is optional today).
+
+### 2026-11-05 — appointment messages by SMS / email; clinical dashboard
+
+On the owner's decisions of 2026-11-05 (mapping confirmed before building, §7):
+
+1. **Consent first.** Two new consent types, `APPOINTMENT_SMS` and `APPOINTMENT_EMAIL`, in the
+   existing append-only `ConsentRecord` store (FHIR `Consent` on the Patient — about contact, not
+   care, so not on `EpisodeOfCare`). Recorded at registration or on the client's Legal & consent
+   view, each against the facility's own `APPOINTMENT_MESSAGES` wording (Org Admin → Consent
+   wording; the system never writes consent text). Only an explicit YES sends on a channel; no
+   wording means nothing can be recorded and nothing is sent. VERIFY: a coded Consent category.
+2. **What is sent** (`apps/client_registry/appointment_messages.py`): when booked, when moved, and
+   the reminder `APPOINTMENT_REMINDER_HOURS_BEFORE` ahead (not sent if the booking message for that
+   time went inside the window). Not on cancellation. **Discreet**: organisation, branch, date and
+   time only — never type, clinician, service or anything clinical. A branch with SMS reminders
+   off sends no SMS.
+3. **Through the outbox.** Every message is a `NotificationDelivery` (dedupe key
+   `appointment:<id>:<kind>:<time>`), so its outcome is recorded and shown on the appointment and
+   the dashboard — the old reminder sent directly and marked itself sent whatever happened (§4
+   "never silent success"). FHIR: a `Communication` per message (not emitted yet).
+4. **Behaviour change:** existing clients get no reminders until their answer is recorded.
+
+Clinical dashboard: the triage card uses the same rows as the triage queue
+(`shared/TriageWorklistRow.tsx`) with priority, overdue, re-check detail and due time, plus the
+true overdue count; My tasks is collapsed with paging (10 a page); today's appointments with what
+was sent; recent activity paged; the static pathway strip is collapsible. Reversibility: cheap —
+additive, no signed record changes.

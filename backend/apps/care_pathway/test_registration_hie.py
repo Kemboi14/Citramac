@@ -453,6 +453,39 @@ class ConsentGateTests(CarePathwayApiTestCase):
             },
         )
 
+    def test_registration_records_agreement_to_appointment_messages(self):
+        from apps.care_pathway.models import ConsentTemplate
+
+        # Without the facility's wording the answer can't be recorded.
+        response = self.register(
+            full_name="No Appointment Wording", appointment_messages={"sms": "YES"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+        with platform_admin_context():
+            ConsentTemplate.objects.create(
+                organization=self.org,
+                consent_type="APPOINTMENT_MESSAGES",
+                version="2026-11",
+                text="Facility wording for appointment messages.",
+            )
+        response = self.register(
+            full_name="Faith Achieng",
+            date_of_birth="1990-02-02",
+            appointment_messages={"sms": "YES", "email": "NO"},
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        with platform_admin_context():
+            rows = {
+                r.consent_type: (r.decision, r.consent_text_version, r.consent_text_snapshot)
+                for r in ConsentRecord.objects.filter(patient_id=response.data["patient_id"])
+            }
+        self.assertEqual(
+            rows["APPOINTMENT_SMS"],
+            ("YES", "2026-11", "Facility wording for appointment messages."),
+        )
+        self.assertEqual(rows["APPOINTMENT_EMAIL"][0], "NO")
+
     def test_decisions_without_the_wording_shown_are_refused(self):
         response = self.register(full_name="No Wording", hie_consent={"general": "YES"})
         self.assertEqual(response.status_code, 400)

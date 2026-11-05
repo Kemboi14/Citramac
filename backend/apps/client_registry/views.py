@@ -442,13 +442,19 @@ class AppointmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization)
+        from . import appointment_messages
+
+        appointment = serializer.save(organization=self.request.user.organization)
+        appointment_messages.booked(appointment)
 
     def perform_update(self, serializer):
+        from . import appointment_messages
+
         instance = serializer.instance
         new_scheduled_for = serializer.validated_data.get("scheduled_for")
         if new_scheduled_for and new_scheduled_for != instance.scheduled_for:
-            serializer.save(reminder_sent_at=None)
+            appointment = serializer.save(reminder_sent_at=None)
+            appointment_messages.rescheduled(appointment)
         else:
             serializer.save()
 

@@ -1054,6 +1054,9 @@ class ConsentTemplate(TenantScopedModel):
         ("SCHOOL_COMMUNICATION", "Communicating with the client's school / university"),
         ("RELEASE_OF_INFORMATION", "Releasing health information to a named third party"),
         ("AI_NOTE_PROCESSING", "AI-assisted processing of psychotherapy notes"),
+        # What the client is told before agreeing to SMS / email about their
+        # appointments (ConsentRecord APPOINTMENT_SMS / APPOINTMENT_EMAIL).
+        ("APPOINTMENT_MESSAGES", "Appointment messages by SMS / email"),
     ]
 
     consent_type = models.CharField(max_length=32, choices=CONSENT_TYPE_CHOICES)

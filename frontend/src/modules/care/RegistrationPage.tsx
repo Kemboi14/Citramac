@@ -45,6 +45,12 @@ import {
 } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
 import { REQUIRED_MARK, errorText } from "./triage/helpers";
+import {
+  AppointmentMessagesFields,
+  appointmentMessagesPayload,
+  EMPTY_APPOINTMENT_MESSAGES,
+  type AppointmentMessagesForm,
+} from "./registration/AppointmentMessagesFields";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — mockup frontdesk(), filterClients,
 // selectExistingClientForRegistration, updateIdentityFields, registerTier1Client
@@ -460,6 +466,9 @@ export function RegistrationPage() {
   const searchSeq = useRef(0);
 
   const [consent, setConsent] = useState<ConsentForm>(EMPTY_CONSENT);
+  const [appointmentMessages, setAppointmentMessages] = useState<AppointmentMessagesForm>(
+    EMPTY_APPOINTMENT_MESSAGES,
+  );
   // Duplicate handling: exact matches block; probable ones need an explicit
   // "different person" confirmation. `mergeTarget` is set when resolving an
   // identity onto an already-registered client.
@@ -576,6 +585,7 @@ export function RegistrationPage() {
     setSelectedLabel(false);
     setForm(EMPTY_FORM);
     setConsent(EMPTY_CONSENT);
+    setAppointmentMessages(EMPTY_APPOINTMENT_MESSAGES);
     setDupMatches(null);
     setConfirmedNew(false);
     setMode("IDENTIFIED");
@@ -726,6 +736,7 @@ export function RegistrationPage() {
       hie_consent: decided ? consent : undefined,
       consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
       consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
+      appointment_messages: appointmentMessagesPayload(appointmentMessages),
       referral_source: form.referral.trim(),
       payer: form.payer,
       allergy_status: allergyStatus || undefined,
@@ -750,6 +761,7 @@ export function RegistrationPage() {
       setSelected(row);
       setForm(formFromRow(row, vs.options("next-of-kin-relationship")));
       setConsent(EMPTY_CONSENT);
+      setAppointmentMessages(EMPTY_APPOINTMENT_MESSAGES);
       setSaved(`Details saved for ${row.name}. No triage encounter was opened.`);
     } catch (err) {
       setFeedback(errorText(err, OFFLINE));
@@ -874,6 +886,7 @@ export function RegistrationPage() {
             hie_consent: decided ? consent : undefined,
             consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
             consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
+            appointment_messages: appointmentMessagesPayload(appointmentMessages),
             confirm_new_record: confirmedNew || undefined,
             referral_source: form.referral.trim() || undefined,
             payer: form.payer || undefined,
@@ -1656,6 +1669,12 @@ export function RegistrationPage() {
                       </p>
                     </div>
                   </fieldset>
+                  <div className={`min-w-0 ${FULL_ROW}`}>
+                    <AppointmentMessagesFields
+                      value={appointmentMessages}
+                      onChange={setAppointmentMessages}
+                    />
+                  </div>
                 </RegSection>
               )}
             </>

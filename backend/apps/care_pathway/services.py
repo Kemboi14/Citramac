@@ -356,6 +356,13 @@ def _capture_hie_consent(patient, user, data):
                 decision=decision,
                 purpose=data.get("consent_purpose") or "",
             )
+    # Agreement to SMS / email about appointments — recorded against the
+    # facility's own wording, which the server looks up (never the client's copy).
+    appointment_messages = data.get("appointment_messages")
+    if isinstance(appointment_messages, dict):
+        from apps.client_registry.consent import capture_appointment_consent
+
+        capture_appointment_consent(patient, user, appointment_messages)
 
 
 def _apply_next_of_kin(patient, data):
@@ -2032,7 +2039,7 @@ def book_follow_up(user, patient, data, *, episode=None, admission=None, origin=
     if episode is None:
         episode = open_episode_for(patient)
     label = concept_labels().get(("follow-up-reason", reason), reason)
-    return Appointment.objects.create(
+    appointment = Appointment.objects.create(
         organization_id=user.organization_id,
         patient=patient,
         provider=provider,
@@ -2049,6 +2056,10 @@ def book_follow_up(user, patient, data, *, episode=None, admission=None, origin=
         booked_by=user,
         client_request_id=request_id,
     )
+    from apps.client_registry import appointment_messages
+
+    appointment_messages.booked(appointment)
+    return appointment
 
 
 def _patient_ref(patient):

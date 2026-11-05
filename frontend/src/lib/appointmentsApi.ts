@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { AppointmentMessage } from "./carePathwayApi";
 
 // Mirrors apps/client_registry's Appointment — docs/07-CLINICAL-MODULES-SPEC.md
 // §7.1. Appointments Calendar — mockups/citramac_clinical_workspace.html.
@@ -26,6 +27,8 @@ export interface Appointment {
   status: AppointmentStatus;
   notes: string;
   reminder_sent_at: string | null;
+  /** What was sent to the client about it (booked / new time / reminder) and whether it went. */
+  messages: AppointmentMessage[];
 }
 
 export function listAppointments(

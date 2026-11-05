@@ -173,6 +173,8 @@ export interface RegistrationPayload extends IdentityDetails {
   hie_consent?: HieConsentPayload;
   consent_text_version?: string;
   consent_text_snapshot?: string;
+  /** Agreement to SMS / email about appointments; recorded against the facility's wording. */
+  appointment_messages?: { sms: "NOT_ASKED" | "YES" | "NO"; email: "NOT_ASKED" | "YES" | "NO" };
   confirm_new_record?: boolean;
   referral_source?: string;
   allergy_status?: string;
@@ -761,7 +763,30 @@ export function getClientSnapshot(accessToken: string, patientId: string) {
   return apiRequest<ClientSnapshot>(`/care/clients/${patientId}/snapshot/`, { accessToken });
 }
 
-export type ConsentType = "DATA_SHARING_HIE" | "AI_NOTE_PROCESSING";
+export type ConsentType =
+  | "DATA_SHARING_HIE"
+  | "AI_NOTE_PROCESSING"
+  /** Facility wording for appointment messages (a template type, not a decision). */
+  | "APPOINTMENT_MESSAGES"
+  /** The client's decision per channel, recorded against APPOINTMENT_MESSAGES wording. */
+  | "APPOINTMENT_SMS"
+  | "APPOINTMENT_EMAIL";
+
+/** One message sent to a client about an appointment (appointment_messages.status). */
+export interface AppointmentMessage {
+  kind: "BOOKED" | "RESCHEDULED" | "REMINDER";
+  label: string;
+  channel: "SMS" | "EMAIL";
+  status: "PENDING" | "SENT" | "FAILED" | "NOT_CONFIGURED";
+  at: string;
+}
+
+export interface AppointmentChannelConsent {
+  decision: "YES" | "NO" | "NOT_ASKED" | string;
+  captured_at: string | null;
+  captured_by: string;
+  consent_text_version: string;
+}
 
 export interface ConsentTemplate {
   id: string;
@@ -785,6 +810,14 @@ export interface ClientLegal {
     captured_at: string | null;
     captured_by: string;
     consent_text_version: string;
+  };
+  /** Agreement to SMS / email about the client's appointments, per channel. */
+  appointment_messages: {
+    template: ConsentTemplate | null;
+    sms: AppointmentChannelConsent;
+    email: AppointmentChannelConsent;
+    contact_phone: string;
+    contact_email: string;
   };
   data_sharing_consent: {
     id: string;
@@ -1371,6 +1404,8 @@ export interface CareDashboard {
   outpatients_new_today: number;
   red_orange: number;
   triage_due: number;
+  /** How many of the whole triage queue are overdue (not just the rows shown). */
+  triage_overdue: number;
   psychiatry_queued: number;
   caseload_count: number;
   appointments_today: number;
@@ -1380,6 +1415,18 @@ export interface CareDashboard {
   group_follow_up_open: number;
   recent_activity: { at: string; title: string; detail: string }[];
   triage_arrivals: WorklistRow[];
+  todays_appointments: {
+    id: string;
+    patient_id: string;
+    patient: string;
+    scheduled_for: string;
+    appointment_type: string;
+    mode: string;
+    status: string;
+    status_label: string;
+    provider: string;
+    messages: AppointmentMessage[];
+  }[];
   generated_at: string;
 }
 

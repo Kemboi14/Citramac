@@ -777,6 +777,9 @@ def book_72h_contact(plan, user):
         open_booking.scheduled_for = plan.contact_72h_at
         open_booking.reminder_sent_at = None
         open_booking.save(update_fields=["scheduled_for", "reminder_sent_at", "updated_at"])
+        from apps.client_registry import appointment_messages
+
+        appointment_messages.rescheduled(open_booking)
         return open_booking
     notes = f"With {plan.follow_up_clinician}" if plan.follow_up_clinician else ""
     return services.book_follow_up(
