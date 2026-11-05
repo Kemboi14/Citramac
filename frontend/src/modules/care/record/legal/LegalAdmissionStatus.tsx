@@ -6,7 +6,6 @@ import {
   amendLegalDocument,
   completeLegalTask,
   endInvoluntary,
-  fetchLegalPrint,
   getLegalWorkspace,
   giveDischargeNotice,
   recordLegalDecision,
@@ -30,6 +29,7 @@ import { useValueSets } from "../../shared/useValueSets";
 import { errorText } from "../../triage/helpers";
 import { useRecordData } from "../useRecordData";
 import { countdownText, useNow } from "./countdown";
+import { DocumentActions } from "../../../../components/DocumentActions";
 
 const VOL = "DOC-LEG-STAT-VOL-KE";
 const INV = "DOC-LEG-STAT-INV-APP-KE";
@@ -293,7 +293,7 @@ export function LegalAdmissionStatus({
           : null}
         <RightsPanel data={data} />
         <TasksPanel data={data} busy={busy} run={run} />
-        <DocumentsPanel data={data} busy={busy} run={run} setError={setError} />
+        <DocumentsPanel data={data} busy={busy} run={run} />
         <HistoryPanel data={data} />
         <p className="text-[11px] text-ink-400">
           Form wording: jurisdiction config {data.config.version}. {data.config.provenance}
@@ -1173,27 +1173,10 @@ function TasksPanel({ data, busy, run }: PanelProps) {
   );
 }
 
-function DocumentsPanel({
-  data,
-  busy,
-  run,
-  setError,
-}: PanelProps & { setError: (e: string | null) => void }) {
-  const { accessToken } = useAuth();
+function DocumentsPanel({ data, busy, run }: PanelProps) {
   const [amending, setAmending] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   if (data.documents.length === 0) return null;
-  const print = async (id: string) => {
-    if (!accessToken) return;
-    try {
-      const blob = await fetchLegalPrint(accessToken, id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      setError(errorText(err, "Couldn't open the printable form."));
-    }
-  };
   return (
     <Section title="Statutory documents">
       <ul className="flex flex-col gap-2">
@@ -1211,13 +1194,11 @@ function DocumentsPanel({
               {d.amendment_reason && (
                 <span className="text-[11.5px] text-ink-500">Amendment: {d.amendment_reason}</span>
               )}
-              <button
-                type="button"
-                className={`${BTN_GHOST} ${BTN_SM}`}
-                onClick={() => print(d.id)}
-              >
-                Print
-              </button>
+              <DocumentActions
+                path={`/care/legal/documents/${d.id}/print/`}
+                filename={`${d.document_number}-v${d.version}`.replace(/[^A-Za-z0-9._-]+/g, "-")}
+                label={`${d.title} (${d.document_number} v${d.version})`}
+              />
               {d.status === "SIGNED" && !d.superseded && d.template_id !== "LGL-NOTICE-KE" && (
                 <button
                   type="button"

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}{{ title }}{% endblock %}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 22mm 16mm;
+    @bottom-left {
+      content: string(docref);
+      font-family: "Liberation Sans", "DejaVu Sans", Arial, Helvetica, sans-serif;
+      font-size: 7.5pt; color: #444;
+    }
+    @bottom-center {
+      content: "CONFIDENTIAL \2014  health information";
+      font-family: "Liberation Sans", "DejaVu Sans", Arial, Helvetica, sans-serif;
+      font-size: 7.5pt; color: #444; letter-spacing: 0.3pt;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: "Liberation Sans", "DejaVu Sans", Arial, Helvetica, sans-serif;
+      font-size: 7.5pt; color: #444;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: #fff; }
+  body {
+    margin: 0; color: #111; background: #fff;
+    font-family: "Liberation Sans", "DejaVu Sans", Arial, Helvetica, sans-serif;
+    font-size: 9.5pt; line-height: 1.45;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .sheet { position: relative; }
+  /* On screen the preview looks like a sheet of A4. */
+  @media screen {
+    html { background: #e6e6e6; }
+    body { padding: 24px 12px; }
+    .sheet {
+      width: 210mm; max-width: 100%; min-height: 297mm; margin: 0 auto;
+      padding: 18mm 16mm 22mm; background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    }
+    .screen-footer { display: block; }
+  }
+  .screen-footer { display: none; margin-top: 18pt; border-top: 0.5pt solid #999; padding-top: 4pt;
+    font-size: 7.5pt; color: #444; text-align: center; }
+
+  /* Letterhead */
+  .letterhead { width: 100%; border-collapse: collapse; border-bottom: 1.5pt solid #111; margin-bottom: 10pt; }
+  .letterhead td { vertical-align: middle; padding: 0 0 8pt 0; }
+  .letterhead .logo { width: 30mm; padding-right: 10pt; }
+  .letterhead .logo img { max-width: 30mm; max-height: 20mm; }
+  .facility-name { font-size: 15pt; font-weight: bold; letter-spacing: 0.2pt; line-height: 1.2; }
+  .facility-branch { font-size: 10pt; font-weight: bold; color: #333; }
+  .facility-lines { font-size: 8.5pt; color: #333; margin-top: 2pt; }
+  .identifiers { text-align: right; font-size: 7.5pt; color: #333; white-space: nowrap; }
+  .identifiers div { margin-bottom: 1pt; }
+
+  /* Title block */
+  .title { font-size: 13.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.6pt;
+    margin: 4pt 0 6pt; }
+  .meta { width: 100%; border-collapse: collapse; margin-bottom: 12pt; font-size: 8.5pt; }
+  .meta th, .meta td { border: 0.75pt solid #888; padding: 3pt 5pt; text-align: left; }
+  .meta th { background: #efefef; font-weight: bold; width: 1%; white-space: nowrap; color: #222; }
+  .docref { string-set: docref content(); }
+
+  /* Body */
+  h2 { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5pt;
+    border-bottom: 0.75pt solid #555; padding-bottom: 2pt; margin: 14pt 0 5pt; page-break-after: avoid; }
+  h3 { font-size: 9.5pt; margin: 8pt 0 3pt; }
+  p { margin: 3pt 0; }
+  .fields { width: 100%; border-collapse: collapse; }
+  .fields th { width: 32%; text-align: left; vertical-align: top; font-weight: normal; color: #444;
+    padding: 2.5pt 8pt 2.5pt 0; }
+  .fields td { vertical-align: top; padding: 2.5pt 0; }
+  .fields tr { page-break-inside: avoid; }
+  .not-recorded { font-style: italic; color: #666; }
+  .source { font-size: 7.5pt; color: #555; margin-left: 4pt; }
+  ul { margin: 0; padding-left: 14pt; }
+  .pre { white-space: pre-wrap; }
+  .grid { width: 100%; border-collapse: collapse; margin-top: 4pt; }
+  .grid th, .grid td { border-bottom: 0.5pt solid #999; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+  .grid th { border-bottom: 1pt solid #111; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3pt; }
+  .grid .num { text-align: right; white-space: nowrap; }
+  .grid tr { page-break-inside: avoid; }
+  .totals { width: 55%; margin: 8pt 0 0 auto; border-collapse: collapse; }
+  .totals th, .totals td { padding: 2.5pt 4pt; text-align: left; }
+  .totals td { text-align: right; white-space: nowrap; }
+  .totals tr.grand th, .totals tr.grand td { border-top: 1pt solid #111; font-weight: bold; }
+  .boxed { border: 0.75pt solid #555; padding: 6pt 8pt; margin: 8pt 0; }
+  .muted { color: #555; }
+
+  /* Signature block */
+  .signature { width: 100%; border-collapse: collapse; margin-top: 18pt; page-break-inside: avoid; }
+  .signature td { width: 50%; vertical-align: bottom; padding: 0 12pt 0 0; }
+  .signature .line { border-top: 0.75pt solid #111; padding-top: 2pt; font-size: 8pt; color: #333; }
+  .signature .signed { font-size: 9pt; }
+  .end-meta { margin-top: 14pt; border-top: 0.5pt solid #999; padding-top: 4pt; font-size: 7.5pt;
+    color: #444; page-break-inside: avoid; }
+
+  /* Draft watermark: grey, on every page. */
+  .watermark { position: fixed; top: 42%; left: 0; right: 0; text-align: center;
+    font-size: 54pt; font-weight: bold; color: rgba(0,0,0,0.08); transform: rotate(-32deg);
+    letter-spacing: 4pt; }
+  .draft-banner { border: 1pt solid #111; text-align: center; font-weight: bold; font-size: 8.5pt;
+    letter-spacing: 0.8pt; padding: 3pt; margin-bottom: 8pt; text-transform: uppercase; }
+  {% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+<div class="sheet">
+  {% if watermark %}<div class="watermark">{{ watermark_short|default:"DRAFT" }}</div>{% endif %}
+
+  <table class="letterhead"><tr>
+    {% if letterhead.logo %}<td class="logo"><img src="{{ letterhead.logo }}" alt=""></td>{% endif %}
+    <td>
+      <div class="facility-name">{{ letterhead.name }}</div>
+      {% if letterhead.branch %}<div class="facility-branch">{{ letterhead.branch }}</div>{% endif %}
+      <div class="facility-lines">
+        {% if letterhead.address %}{{ letterhead.address }}<br>{% endif %}
+        {{ letterhead.contacts|join:"  ·  " }}
+      </div>
+    </td>
+    {% if letterhead.identifiers %}
+    <td class="identifiers">
+      {% for i in letterhead.identifiers %}<div>{{ i.label }}: <strong>{{ i.value }}</strong></div>{% endfor %}
+    </td>
+    {% endif %}
+  </tr></table>
+
+  {% if watermark %}<div class="draft-banner">{{ watermark }}</div>{% endif %}
+
+  <div class="title">{{ title }}</div>
+  {% if meta %}
+  <table class="meta"><tr>
+    {% for label, value in meta %}<th>{{ label }}</th><td{% if forloop.first %} class="docref"{% endif %}>{{ value }}</td>{% endfor %}
+  </tr></table>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  {% block signature %}{% endblock %}
+
+  <div class="end-meta">
+    {% block end_meta %}{% endblock %}
+    Printed {{ printed_at }}{% if printed_by %} by {{ printed_by }}{% endif %}.
+    Confidential health information — handle and store securely; do not disclose further without authority.
+  </div>
+  <div class="screen-footer">Preview — the downloaded PDF adds page numbers and the document reference on every page.</div>
+</div>
+</body>
+</html>

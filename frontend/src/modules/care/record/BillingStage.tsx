@@ -66,11 +66,6 @@ export function BillingStage({ patientId, onRecordChanged }: RecordViewProps) {
             }}
             accessToken={accessToken}
             patientId={patientId}
-            patientLabel={
-              current.workspace.overview.events[0]
-                ? `${current.workspace.overview.events[0].client_name} (${current.workspace.overview.events[0].client_number})`
-                : "Client"
-            }
           />
         )}
       </div>

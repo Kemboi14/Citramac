@@ -13,6 +13,7 @@ import { EmptyState } from "../../../components/EmptyState";
 import { formatDateTime } from "../shared/format";
 import { BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "../shared/styles";
 import { Card, ErrorNote, Tag } from "../shared/ui";
+import { DocumentActions } from "../../../components/DocumentActions";
 
 // DOC-UX: Documents → Select Category → Select Document → generate draft.
 // Search covers every document by name and tag (DOC-UX-02); each document
@@ -190,7 +191,7 @@ export function GeneratedDocumentsCard() {
               <th className={TH}>Status</th>
               <th className={TH}>Generated</th>
               <th className={TH}>
-                <span className="sr-only">Open</span>
+                <span className="sr-only">Open, preview or download</span>
               </th>
             </tr>
           </thead>
@@ -231,12 +232,28 @@ export function GeneratedDocumentsCard() {
                   <div className="text-[11px] text-ink-500">{row.author}</div>
                 </td>
                 <td className={TD}>
-                  <Link
-                    to={`/clinical/documents/generated/${row.id}`}
-                    className={`${BTN_GHOST} ${BTN_SM}`}
-                  >
-                    Open
-                  </Link>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <Link
+                      to={`/clinical/documents/generated/${row.id}`}
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                    >
+                      Open
+                    </Link>
+                    {row.status !== "BLOCKED_CONSENT" && (
+                      <DocumentActions
+                        path={
+                          row.legal_document_id
+                            ? `/care/legal/documents/${row.legal_document_id}/print/`
+                            : `/documents/generated/${row.id}/print/`
+                        }
+                        filename={`${row.document_number}-v${row.version}`.replace(
+                          /[^A-Za-z0-9._-]+/g,
+                          "-",
+                        )}
+                        label={`${row.name} (${row.document_number} v${row.version})`}
+                      />
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

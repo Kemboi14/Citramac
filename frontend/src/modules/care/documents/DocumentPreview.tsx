@@ -54,13 +54,13 @@ export function DocumentPreview({ doc }: { doc: GeneratedDocument }) {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
-          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[42px] font-black uppercase tracking-widest text-red-600/15">
+          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[42px] font-black uppercase tracking-widest text-black/[0.07]">
             {doc.watermark}
           </span>
         </div>
       )}
       {doc.watermark && (
-        <p className="mb-3 rounded border border-red-600 px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-red-700">
+        <p className="mb-3 rounded border border-black px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
           {doc.watermark}
         </p>
       )}
@@ -176,7 +176,7 @@ export function DocumentPreview({ doc }: { doc: GeneratedDocument }) {
       )}
 
       {c.verify_notice && (
-        <p className="mb-4 rounded border border-amber-600 px-2 py-1 text-[11.5px] text-amber-800">
+        <p className="mb-4 rounded border border-black/60 px-2 py-1 text-[11.5px] text-black">
           Structured draft of record data only — {c.verify_notice}.
         </p>
       )}

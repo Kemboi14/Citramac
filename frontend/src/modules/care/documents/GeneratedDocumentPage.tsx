@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Printer } from "lucide-react";
 import { useAuth } from "../../../auth/useAuth";
+import { DocumentActions } from "../../../components/DocumentActions";
 import { ApiError } from "../../../lib/apiClient";
 import {
   editGeneratedDocument,
@@ -141,13 +141,15 @@ export function GeneratedDocumentPage() {
             >
               Client&rsquo;s documents
             </Link>
-            <button
-              type="button"
-              className={`${BTN_GHOST} ${BTN_SM}`}
-              onClick={() => window.print()}
-            >
-              <Printer className="h-3.5 w-3.5" /> Print / PDF
-            </button>
+            <DocumentActions
+              path={
+                doc.legal_document_id
+                  ? `/care/legal/documents/${doc.legal_document_id}/print/`
+                  : `/documents/generated/${doc.id}/print/`
+              }
+              filename={`${doc.document_number}-v${doc.version}`.replace(/[^A-Za-z0-9._-]+/g, "-")}
+              label={`${doc.content?.title ?? doc.name} (${doc.document_number} v${doc.version})`}
+            />
           </>
         }
       />

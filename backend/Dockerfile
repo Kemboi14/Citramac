@@ -3,8 +3,13 @@ WORKDIR /app
 
 RUN adduser --disabled-password appuser
 
+# Pango / HarfBuzz and fonts for WeasyPrint (server-made document PDFs —
+# apps/documents/printing.py). Liberation is metric-compatible with Arial /
+# Times; DejaVu covers the remaining characters.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev gcc \
+       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+       fonts-liberation fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements/ requirements/

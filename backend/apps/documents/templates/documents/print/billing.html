@@ -1,0 +1,46 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Client</th><td>{{ client_name }}</td></tr>
+    {% if client_number %}<tr><th>Client number</th><td>{{ client_number }}</td></tr>{% endif %}
+    <tr><th>Payer</th><td>{{ payer }}</td></tr>
+    {% if coverage %}<tr><th>Cover</th><td>{{ coverage }}</td></tr>{% endif %}
+  </table>
+
+  <h2>{{ table_title }}</h2>
+  <table class="grid">
+    <thead><tr>
+      {% for column in columns %}<th{% if column.numeric %} class="num"{% endif %}>{{ column.label }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for cell in row %}<td{% if cell.numeric %} class="num"{% endif %}>{{ cell.value }}</td>{% endfor %}</tr>
+      {% empty %}
+      <tr><td colspan="{{ columns|length }}" class="muted">No billable services documented.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    {% for label, value, grand in totals %}
+    <tr{% if grand %} class="grand"{% endif %}><th>{{ label }}</th><td>{{ value }}</td></tr>
+    {% endfor %}
+  </table>
+
+  {% if payments %}
+  <h2>Payments received</h2>
+  <table class="grid">
+    <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      {% for p in payments %}
+      <tr><td>{{ p.date }}</td><td>{{ p.method }}</td><td>{{ p.reference|default:"—" }}</td><td class="num">{{ p.amount }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if note %}<p class="muted" style="margin-top:10pt">{{ note }}</p>{% endif %}
+{% endblock %}
+
+{% block end_meta %}All amounts in {{ currency }}.{% endblock %}

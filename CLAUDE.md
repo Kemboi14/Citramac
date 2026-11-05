@@ -491,3 +491,28 @@ Clinical dashboard: the triage card uses the same rows as the triage queue
 true overdue count; My tasks is collapsed with paging (10 a page); today's appointments with what
 was sent; recent activity paged; the static pathway strip is collapsible. Reversibility: cheap —
 additive, no signed record changes.
+
+### 2026-11-05 — one professional greyscale document layout; Preview and Download PDF
+
+On the owner's decisions of 2026-11-05: every printable document uses one server-rendered layout
+(`apps/documents/printing.py`, templates under `apps/documents/templates/documents/print/`):
+greyscale A4, letterhead with the organisation's logo converted to greyscale, the branch's
+contacts and registration numbers (KMPDC, facility licence, SHA facility code), a title and
+reference block, consistent sections, a signature block, and on every page the document
+reference, "Confidential" and "Page x of y". The same HTML is the on-screen Preview and, through
+WeasyPrint (`weasyprint==70.0`; Pango + fonts in the image and CI), the downloaded PDF
+(`?output=pdf`). Rendering never fetches anything remote — the logo is read from our own media
+and embedded; the PDF engine accepts only `data:` URLs. Previews are served with a no-script CSP.
+Every preview and download is audited.
+
+Pass 1 (this change): the catalogue documents (`documents/generated/<id>/print/`), the statutory
+legal forms (`care/legal/documents/<id>/print/`), and the invoice and statement
+(`claims/clients/<id>/billing/{invoice,statement}/print/`). Pass 2: discharge summary and referral
+(printable versions), signed triage, record copy, breach notices, staff list, NACADA report.
+
+FHIR / HIE: layout is ours — neither FHIR nor the HIE specifies how a document looks. What the
+PDF enables: Kenya Core's DocumentReference example carries `application/pdf`, and SHA claim
+attachments are PDF files. Attaching the PDF to a `DocumentReference` (type code VERIFY) and to SHA
+claims is a later step, not done here. A signed document reprints from its frozen content; the
+letterhead's logo and registration numbers come from the current organisation and branch.
+Reversibility: cheap — presentation only, no record changes.

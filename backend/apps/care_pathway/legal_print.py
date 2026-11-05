@@ -1,8 +1,8 @@
 """
-Printable statutory forms (LGL-DOC-03): letterhead from the tenant asset
-(Organization.logo_url), title block, statute line, numbered parts, filled
-dotted-line fields, the FOR OFFICIAL USE ONLY rule, and a footer from the
-facility profile with document ID/version and generation time (DOC-GOV-05).
+Printable statutory forms (LGL-DOC-03) in the shared greyscale document layout
+(apps.documents.printing): letterhead with the tenant's logo, title block, statute
+line, numbered parts, filled dotted-line fields, the FOR OFFICIAL USE ONLY rule,
+and on every page the document ID/version and page number (DOC-GOV-05).
 
 A signed form prints from its frozen snapshot (`rendered`) — never re-rendered
 from the current record — so the output is immutable after signing (AT-29). A
@@ -20,27 +20,6 @@ from .legal_models import (
     RECOMMENDATION_TEMPLATE,
     VOLUNTARY_TEMPLATE,
 )
-
-CSS = """
-body{font-family:"Times New Roman",Georgia,serif;color:#000;background:#fff;margin:0}
-.page{max-width:760px;margin:24px auto;padding:32px 40px;position:relative}
-.letterhead{text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:14px}
-.letterhead img{max-height:80px;max-width:260px}
-.org{font-size:18px;font-weight:bold;text-transform:uppercase;margin-top:4px}
-.statute{text-align:center;font-weight:bold;font-size:13px;margin:6px 0}
-h1{text-align:center;font-size:17px;text-decoration:underline;margin:8px 0 18px}
-h2{font-size:14px;margin:18px 0 8px;text-transform:uppercase}
-p{font-size:13.5px;line-height:1.7;margin:6px 0}
-.dots{border-bottom:1px dotted #000;padding:0 6px;min-width:180px;display:inline-block;font-weight:bold}
-.box{display:inline-block;width:12px;height:12px;border:1px solid #000;text-align:center;line-height:12px;font-size:11px;margin-right:6px}
-.notice{border:2px solid #000;padding:10px 14px;margin:12px 0}
-.official{border-top:3px double #000;margin-top:24px;padding-top:6px}
-.official-title{text-align:center;font-weight:bold;letter-spacing:1px}
-.narrative{font-size:12px;margin-left:24px;font-style:italic}
-.footer{border-top:1px solid #000;margin-top:28px;padding-top:6px;font-size:10.5px;text-align:center;line-height:1.5}
-.watermark{position:absolute;top:40%;left:0;right:0;text-align:center;font-size:64px;color:rgba(200,0,0,.15);transform:rotate(-20deg);pointer-events:none}
-@media print{.page{margin:0;max-width:none}}
-"""
 
 
 def _dots(value):
@@ -116,15 +95,8 @@ def render(doc, user):
     r["_doc_id"], r["_application_id"] = doc.pk, doc.application_id
     facility, labels, client = r["facility"], r.get("labels", {}), r["client"]
     body = []
-    if doc.status != "SIGNED":
-        body.append('<div class="watermark">DRAFT</div>')
-    logo = f'<img src="{escape(facility["logo_url"])}" alt="">' if facility.get("logo_url") else ""
-    body.append(
-        f'<div class="letterhead">{logo}<div class="org">{escape(facility.get("name") or facility.get("organization", ""))}</div></div>'
-    )
     if r.get("statuteLine"):
         body.append(f'<div class="statute">{escape(r["statuteLine"])}</div>')
-    body.append(f"<h1>{escape(r['title'])}</h1>")
     if doc.supersedes_id:
         body.append(
             f"<p><strong>Amended version {doc.version}.</strong> Reason: {escape(doc.amendment_reason)}</p>"
@@ -224,22 +196,29 @@ def render(doc, user):
         body.append(f"<p>{escape(labels['givenTo'])}: {_dots(r.get('givenTo'))}</p>")
         body.append(_signature_line(doc, labels["signature"]))
 
-    footer_lines = [
-        facility.get("name") or facility.get("organization", ""),
-        facility.get("address", ""),
-        " · ".join(
-            x for x in (facility.get("phone"), facility.get("email"), facility.get("website")) if x
+    from django.utils.safestring import mark_safe
+
+    from apps.documents import printing
+
+    signed = doc.status == "SIGNED"
+    episode = ls.episode if ls and ls.episode_id else None
+    branch = episode.branch if episode and episode.branch_id else None
+    organization = doc.patient.organization
+    context = {
+        "title": r["title"],
+        "letterhead": printing.letterhead(
+            organization, branch or printing.default_branch(organization), facility
         ),
-    ]
-    generated = facility_time.local_format(timezone.now(), "%Y-%m-%d %H:%M")
-    status = "Signed" if doc.status == "SIGNED" else "DRAFT — not signed"
-    footer_lines.append(
-        f"Document {doc.document_number} · version {doc.version} · {status} · config {r.get('configVersion', '')} · generated {generated} by {legal_status._name(user)}"
-    )
-    body.append(
-        '<div class="footer">' + "<br>".join(escape(x) for x in footer_lines if x) + "</div>"
-    )
-    return (
-        f"<!doctype html><html><head><meta charset='utf-8'><title>{escape(r['title'])}</title>"
-        f"<style>{CSS}</style></head><body><div class='page'>{''.join(body)}</div></body></html>"
-    )
+        "meta": [
+            ("Document no.", f"{doc.document_number} v{doc.version}"),
+            ("Date", facility_time.local_format(doc.signed_at or timezone.now(), "%d %b %Y")),
+            ("Status", "Signed" if signed else "Draft — not signed"),
+        ],
+        "watermark": "" if signed else "Draft — not signed",
+        "watermark_short": "DRAFT",
+        # Every value in `body` went through escape() above; the parts are fixed markup.
+        "form_body": mark_safe("".join(body)),  # nosec B308 B703 — escaped above
+        "config_version": r.get("configVersion", ""),
+        "printed_by": legal_status._name(user),
+    }
+    return printing.render("documents/print/legal_form.html", context)

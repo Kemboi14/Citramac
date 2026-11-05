@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from . import views
+from . import print_views, views
 from .views import InsuranceClaimViewSet, PreAuthorizationViewSet, RemittanceViewSet
 
 router = DefaultRouter()
@@ -30,6 +30,16 @@ urlpatterns = [
         "claims/clients/<uuid:patient_id>/billing/payments/",
         views.ClientPaymentView.as_view(),
         name="client-billing-payments",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/billing/invoice/print/",
+        print_views.InvoicePrintView.as_view(),
+        name="client-billing-invoice-print",
+    ),
+    path(
+        "claims/clients/<uuid:patient_id>/billing/statement/print/",
+        print_views.StatementPrintView.as_view(),
+        name="client-billing-statement-print",
     ),
     path(
         "claims/clients/<uuid:patient_id>/billing/export/",

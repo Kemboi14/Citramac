@@ -383,8 +383,3 @@ export function unmaskIdentity(
     accessToken,
   });
 }
-
-/** The printable form (server-rendered HTML), held in memory only. */
-export function fetchLegalPrint(accessToken: string, docId: string) {
-  return apiDownload(`/care/legal/documents/${docId}/print/`, accessToken);
-}

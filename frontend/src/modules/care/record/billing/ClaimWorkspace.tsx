@@ -20,7 +20,7 @@ import {
 import { formatDateTime, newRequestId } from "../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "../../shared/styles";
 import { Callout, Card, ErrorNote, Field, Tag } from "../../shared/ui";
-import { printDocument } from "./billingPrint";
+import { DocumentActions } from "../../../../components/DocumentActions";
 import { money, type Ask, type Run } from "./billingUtil";
 import { Kv } from "./parts";
 import { ShaAttachments, ShaClaimCard, ShaPreauthRequest, ShaSubmitForm } from "./ShaClaim";
@@ -725,13 +725,11 @@ function PayerClaimTab({
 
 function InvoiceTab({
   workspace,
-  patientLabel,
   run,
   accessToken,
   patientId,
 }: {
   workspace: BillingWorkspace;
-  patientLabel: string;
   run: Run;
   accessToken: string;
   patientId: string;
@@ -768,23 +766,6 @@ function InvoiceTab({
       </div>
     );
   }
-
-  const printInvoice = () =>
-    printDocument({
-      title: `Invoice ${invoice.number}`,
-      meta: [patientLabel, `Payer: ${workspace.payer.label}`, formatDateTime(invoice.created_at)],
-      columns: [
-        { label: "Service" },
-        { label: "Qty", numeric: true },
-        { label: "Amount", numeric: true },
-      ],
-      rows: invoice.lines.map((l) => [l.service, String(l.quantity), money(l.amount)]),
-      summary: [
-        ["Total", money(invoice.total)],
-        ["Paid (all payments)", money(workspace.totals.paid)],
-        ["Outstanding balance", money(workspace.totals.outstanding)],
-      ],
-    });
 
   const methodNeedsReference = payment.method === "MPESA" || payment.method === "INSURANCE";
 
@@ -831,9 +812,11 @@ function InvoiceTab({
         </Callout>
       )}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={printInvoice}>
-          Preview / print invoice
-        </button>
+        <DocumentActions
+          path={`/claims/clients/${patientId}/billing/invoice/print/`}
+          filename={`invoice-${invoice.number}`.replace(/[^A-Za-z0-9._-]+/g, "-")}
+          label={`Invoice ${invoice.number}`}
+        />
       </div>
 
       {canEdit && (
@@ -967,13 +950,11 @@ export function ClaimWorkspace({
   onChange,
   accessToken,
   patientId,
-  patientLabel,
 }: {
   workspace: BillingWorkspace;
   onChange: (next: BillingWorkspace) => void;
   accessToken: string;
   patientId: string;
-  patientLabel: string;
 }) {
   const [tab, setTab] = useState<"claim" | "invoice">("claim");
   const [busy, setBusy] = useState(false);
@@ -1056,32 +1037,6 @@ export function ClaimWorkspace({
     return "Not required";
   })();
 
-  const printStatement = () =>
-    printDocument({
-      title: "Statement (INS-08)",
-      meta: [
-        patientLabel,
-        `Payer: ${workspace.payer.label}`,
-        formatDateTime(new Date().toISOString()),
-      ],
-      columns: [
-        { label: "Service" },
-        { label: "Date" },
-        { label: "Amount", numeric: true },
-        { label: "Status" },
-      ],
-      rows: [...workspace.overview.events]
-        .sort((a, b) => a.delivered_at.localeCompare(b.delivered_at))
-        .map((e) => [e.service, formatDateTime(e.delivered_at), money(e.amount), e.status]),
-      summary: [
-        ["Total services", money(workspace.totals.services)],
-        ["Unbilled", money(workspace.overview.summary.unbilled.amount)],
-        ["Claimed (unpaid)", money(workspace.overview.summary.claimed.amount)],
-        ["Paid", money(workspace.totals.paid)],
-        ["Outstanding", money(workspace.totals.outstanding)],
-      ],
-    });
-
   const exportCsv = async () => {
     setError(null);
     try {
@@ -1126,9 +1081,11 @@ export function ClaimWorkspace({
               {draft ? "Add services to draft claim" : "Create claim"}
             </button>
           )}
-          <button type="button" className={BTN_GHOST} onClick={printStatement}>
-            Statement (INS-08)
-          </button>
+          <DocumentActions
+            path={`/claims/clients/${patientId}/billing/statement/print/`}
+            filename={`statement-${patientId.slice(0, 8)}`}
+            label="Statement of services (INS-08)"
+          />
           {workspace.can_edit && (
             <button type="button" className={BTN_GHOST} onClick={() => void exportCsv()}>
               Export CSV
@@ -1211,7 +1168,6 @@ export function ClaimWorkspace({
           ) : (
             <InvoiceTab
               workspace={workspace}
-              patientLabel={patientLabel}
               run={claimArea.run}
               accessToken={accessToken}
               patientId={patientId}

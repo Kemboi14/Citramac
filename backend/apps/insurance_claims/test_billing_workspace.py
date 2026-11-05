@@ -485,3 +485,27 @@ class BillingWorkspaceTests(APITestCase):
             first_payments = first.payments.count()
         self.assertEqual(first.status, "CANCELLED")
         self.assertEqual(first_payments, 2)  # payments are never moved
+
+    # printed invoice and statement (shared document layout)
+
+    def test_invoice_and_statement_print_as_preview_and_pdf(self):
+        url = reverse("client-billing-invoice-print", args=[self.patient.id])
+        self.assertEqual(self.client.get(url, **self.f_auth).status_code, 404)  # none issued yet
+        issued = self._post("client-billing-invoice", [self.patient.id])
+        number = issued.data["invoice"]["number"]
+        # Read-only staff may print what they can see; the PDF downloads.
+        preview = self.client.get(url, **self.c_auth)
+        self.assertEqual(preview.status_code, 200)
+        html = preview.content.decode()
+        self.assertIn(number, html)
+        self.assertIn("Balance due", html)
+        self.assertIn("KES 1,500.00", html)
+        download = self.client.get(url + "?output=pdf", **self.c_auth)
+        self.assertEqual(download["Content-Type"], "application/pdf")
+        self.assertTrue(download.content.startswith(b"%PDF-"))
+
+        statement = self.client.get(
+            reverse("client-billing-statement-print", args=[self.patient.id]), **self.f_auth
+        )
+        self.assertEqual(statement.status_code, 200)
+        self.assertIn("Statement of services", statement.content.decode())

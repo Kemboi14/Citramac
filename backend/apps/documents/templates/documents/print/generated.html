@@ -1,0 +1,67 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  {% if recipient %}
+  <table class="fields">
+    <tr><th>To</th><td>{{ recipient }}</td></tr>
+    {% if purpose %}<tr><th>Purpose</th><td>{{ purpose }}</td></tr>{% endif %}
+  </table>
+  {% endif %}
+
+  {% for section in sections %}
+  <h2>{{ section.title }}</h2>
+  <table class="fields">
+    {% for item in section.items %}
+    <tr>
+      <th>{{ item.label }}</th>
+      <td>
+        {% if item.list %}<ul>{% for v in item.list %}<li>{{ v }}</li>{% endfor %}</ul>
+        {% elif item.text %}<span class="pre">{{ item.text }}</span>
+        {% else %}<span class="not-recorded">Not recorded</span>{% endif %}
+        {% if item.source %}<span class="source">[{{ item.source }}]</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endfor %}
+
+  {% if monitoring %}
+  <h2>Monitoring requested</h2>
+  {% for group in monitoring %}
+    <h3>{{ group.medication }}{% if group.indication %} — {{ group.indication }}{% endif %}</h3>
+    <p>Investigations (LOINC): {{ group.codes|join:", "|default:"none selected" }}</p>
+    {% if group.latest_results %}<ul>{% for r in group.latest_results %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if clinician_comment %}
+  <h2>Clinician comment</h2>
+  <p class="pre">{{ clinician_comment }}</p>
+  {% endif %}
+
+  {% if verify_notice %}
+  <div class="boxed"><strong>Structured draft of record data only.</strong> {{ verify_notice }}.</div>
+  {% endif %}
+{% endblock %}
+
+{% block signature %}
+  <table class="signature"><tr>
+    <td>
+      {% if signed %}
+        <div class="signed"><strong>{{ signed_by }}</strong>{% if signer_credentials %}<br>{{ signer_credentials }}{% endif %}<br>Signed electronically {{ signed_at }}</div>
+      {% else %}
+        <div style="height:26pt"></div>
+      {% endif %}
+      <div class="line">Authorised clinician — name, credentials{% if not signed %} and signature{% endif %}</div>
+    </td>
+    <td>
+      <div{% if not signed %} style="height:26pt"{% endif %}>{% if signed %}{{ signed_date }}{% endif %}</div>
+      <div class="line">Date</div>
+    </td>
+  </tr></table>
+{% endblock %}
+
+{% block end_meta %}
+  Prepared by {{ author|default:"—" }}{% if organizer %} · {{ organizer }}{% endif %}.
+  {% if signed %}Content fingerprint (SHA-256) {{ content_hash_short }}.{% else %}Not signed — {{ status_label }}.{% endif %}
+{% endblock %}

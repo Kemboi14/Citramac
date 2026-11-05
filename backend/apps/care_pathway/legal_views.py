@@ -1,6 +1,6 @@
 """Legal admission status endpoints (master prompt §7A). Logic is in legal_status.py."""
 
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -63,11 +63,14 @@ class LegalDocumentPrintView(APIView):
         doc = get_object_or_404(
             LegalDocument.objects.select_related("legal_status", "patient"), pk=pk
         )
+        from apps.documents import printing
         from apps.sysadmin_audit.audit import log_view
 
         log_view(doc)
-        return HttpResponse(
-            legal_print.render(doc, request.user), content_type="text/html; charset=utf-8"
+        return printing.respond(
+            request,
+            legal_print.render(doc, request.user),
+            printing.safe_filename(doc.document_number, f"v{doc.version}"),
         )
 
 

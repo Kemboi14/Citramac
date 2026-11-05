@@ -1,0 +1,23 @@
+{% extends "documents/print/base.html" %}
+
+{% block extra_css %}
+  /* Statutory form parts: dotted fields, tick boxes, notices, official-use box. */
+.statute{text-align:center;font-weight:bold;font-size:9.5pt;margin:2pt 0 8pt}
+.form p{font-size:10pt;line-height:1.7;margin:4pt 0}
+.form h2{margin-top:12pt}
+.dots{border-bottom:0.75pt dotted #111;padding:0 4pt;min-width:150pt;display:inline-block;font-weight:bold}
+.box{display:inline-block;width:9pt;height:9pt;border:0.75pt solid #111;text-align:center;line-height:9pt;font-size:8pt;margin-right:4pt}
+.notice{border:1pt solid #111;padding:6pt 9pt;margin:8pt 0}
+.official{border-top:2pt double #111;margin-top:16pt;padding-top:4pt}
+.official-title{text-align:center;font-weight:bold;letter-spacing:1pt}
+.narrative{font-size:9pt;margin-left:18pt;font-style:italic}
+{% endblock %}
+
+{% block content %}
+<div class="form">{{ form_body }}</div>
+{% endblock %}
+
+{% block end_meta %}
+  Statutory form{% if config_version %} · wording configuration {{ config_version }}{% endif %}.
+  Identity numbers are masked on print.
+{% endblock %}

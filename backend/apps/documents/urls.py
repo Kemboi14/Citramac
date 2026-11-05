@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import print_views, views
 
 urlpatterns = [
     path("catalogue/", views.CatalogueView.as_view(), name="documents-catalogue"),
@@ -14,6 +14,11 @@ urlpatterns = [
         "generated/<uuid:pk>/",
         views.GeneratedDetailView.as_view(),
         name="documents-generated-detail",
+    ),
+    path(
+        "generated/<uuid:pk>/print/",
+        print_views.GeneratedPrintView.as_view(),
+        name="documents-print",
     ),
     path(
         "generated/<uuid:pk>/transition/",

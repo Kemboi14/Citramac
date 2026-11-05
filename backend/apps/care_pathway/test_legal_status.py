@@ -472,8 +472,8 @@ class InvoluntaryTests(LegalStatusTestCase):
             "Part B",
             "1 Example Road, Testville",
             "DOC-LEG-STAT-INV-APP-KE/",
-            "version 1",
-            "generated",
+            " v1",  # document reference + version (also on every PDF page)
+            "Printed",  # when it was printed, and by whom
         ):
             self.assertIn(expected, html)
         rec_html = self.client.get(

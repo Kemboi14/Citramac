@@ -17,5 +17,8 @@ django-structlog==10.1.0
 sentry-sdk==2.36.0
 django-prometheus==2.5.0
 Pillow==13.0.0
+# Server-made PDFs of every printable document (apps/documents/printing.py).
+# Needs Pango + fonts in the image (backend/Dockerfile).
+weasyprint==70.0
 jsonschema==4.26.0
 anthropic==1.11.0

@@ -193,6 +193,8 @@ export interface GeneratedDocumentRow {
   signed_at: string | null;
   high_risk: boolean;
   content_status: "READY" | "VERIFY";
+  /** Set when this row records the release of a signed statutory form; its print comes from the legal module. */
+  legal_document_id?: string | null;
 }
 
 export type DocInputs = Record<string, unknown>;
