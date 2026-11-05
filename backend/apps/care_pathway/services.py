@@ -13,6 +13,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
+from apps.billing.models import Invoice, InvoiceLine
 from apps.client_registry.models import AllergyRecord, Appointment, EmergencyContact, Patient
 from apps.clinical_encounter.models import DiagnosisCode, Encounter, PrescriptionItem
 from apps.dha_interop.models import NationalDrugIndex
@@ -26,16 +27,19 @@ from .models import (
     PRIORITY_ORDER,
     BillingService,
     CarePlan,
+    CarePlanActivity,
     CareTask,
     ChargeItem,
     ClinicalAlert,
     DischargeMedicationLine,
     DischargeSummary,
+    EpisodeOutcome,
     EpisodeOfCare,
     EpisodeStatusHistory,
     IntakeAssessment,
     InterventionRecord,
     LocalConcept,
+    OutcomeScore,
     TriageAssessment,
     TriageEncounter,
     TriageRecheck,
@@ -1166,7 +1170,7 @@ def _legal_banner(patient):
     return legal_status.banner_summary(patient)
 
 
-def banner_for(patient):
+def banner_for(patient, include_journey=False):
     admission = current_admission(patient)
     latest_te = TriageEncounter.objects.filter(patient=patient).order_by("-arrival_at").first()
     signed = latest_signed_triage(patient)
@@ -1175,7 +1179,7 @@ def banner_for(patient):
     team = (admission.primary_care_team if admission else "") or (
         user_display(episode.care_manager) if episode and episode.care_manager else ""
     )
-    return {
+    banner = {
         "patient_id": str(patient.id),
         "name": patient.get_full_name(),
         "preferred_name": patient.preferred_name,
@@ -1215,6 +1219,106 @@ def banner_for(patient):
             else None
         ),
     }
+    if include_journey:
+        banner["journey_status"] = journey_status_for(patient, episode, latest_te, signed)
+    return banner
+
+
+def journey_status_for(patient, episode, latest_triage, signed_triage):
+    """Read-only journey progress, derived from persisted workflow records."""
+    triage_in_progress = latest_triage and latest_triage.status in (
+        TriageEncounter.STATUS_AWAITING,
+        TriageEncounter.STATUS_IN_TRIAGE,
+    )
+    status = {
+        "triage": (
+            "in_progress"
+            if triage_in_progress
+            else ("complete" if signed_triage else "incomplete")
+        ),
+    }
+
+    intake = IntakeAssessment.objects.filter(patient=patient).order_by("-created_at", "-version").first()
+    status["intake"] = (
+        "complete"
+        if intake and intake.status == IntakeAssessment.STATUS_SIGNED
+        else ("in_progress" if intake else "incomplete")
+    )
+
+    plan = CarePlan.objects.filter(episode=episode).first() if episode else None
+    status["care-plan"] = (
+        "complete"
+        if plan and plan.confirmed_at
+        else ("in_progress" if plan else "incomplete")
+    )
+
+    actions = (
+        CarePlanActivity.objects.filter(care_plan=plan).exclude(decision="DECLINED")
+        if plan
+        else CarePlanActivity.objects.none()
+    )
+    intervention_exists = InterventionRecord.objects.filter(
+        patient=patient, voided_at__isnull=True
+    ).exists()
+    status["interventions"] = (
+        "complete"
+        if actions.exists() and not actions.exclude(status="COMPLETED").exists()
+        else (
+            "in_progress"
+            if actions.exists() or intervention_exists
+            else "incomplete"
+        )
+    )
+
+    discharge_summaries = DischargeSummary.objects.filter(patient=patient)
+    status["outcomes"] = (
+        "complete"
+        if (episode and EpisodeOutcome.objects.filter(episode=episode).exists())
+        or discharge_summaries.filter(status="COMPLETED").exists()
+        else (
+            "in_progress"
+            if OutcomeScore.objects.filter(patient=patient).exists()
+            or discharge_summaries.exists()
+            else "incomplete"
+        )
+    )
+
+    invoices = Invoice.objects.filter(patient=patient).exclude(status="CANCELLED")
+    unbilled_charges = ChargeItem.objects.filter(
+        patient=patient, voided_at__isnull=True
+    ).exclude(
+        pk__in=InvoiceLine.objects.filter(
+            charge_item__patient=patient,
+            charge_item__voided_at__isnull=True,
+        ).values("charge_item_id")
+    )
+    status["billing"] = (
+        "complete"
+        if invoices.exists()
+        and not invoices.exclude(status="PAID").exists()
+        and not unbilled_charges.exists()
+        else (
+            "in_progress"
+            if invoices.exists()
+            or unbilled_charges.exists()
+            else "incomplete"
+        )
+    )
+
+    follow_ups = Appointment.objects.filter(
+        patient=patient, origin__in=("DISCHARGE", "CARE_PLAN")
+    )
+    status["follow-up"] = (
+        "complete"
+        if follow_ups.filter(status="COMPLETED").exists()
+        and not follow_ups.exclude(status__in=("COMPLETED", "CANCELLED")).exists()
+        else (
+            "in_progress"
+            if follow_ups.exclude(status="CANCELLED").exists()
+            else "incomplete"
+        )
+    )
+    return status
 
 
 # ── Care plan, interventions, billing ──

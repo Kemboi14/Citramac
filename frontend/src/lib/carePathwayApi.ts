@@ -629,11 +629,17 @@ export interface ClientBanner {
   episode_id: string | null;
   latest_triage_encounter_id: string | null;
   latest_signed_triage_encounter_id: string | null;
+  journey_status?: Partial<Record<JourneyStageKey, JourneyStageStatus>>;
   psychiatry_encounter_id: string | null;
 }
 
-export function getClientBanner(accessToken: string, patientId: string) {
-  return apiRequest<ClientBanner>(`/care/clients/${patientId}/banner/`, { accessToken });
+export type JourneyStageKey =
+  "triage" | "intake" | "care-plan" | "interventions" | "outcomes" | "billing" | "follow-up";
+export type JourneyStageStatus = "complete" | "in_progress" | "incomplete";
+
+export function getClientBanner(accessToken: string, patientId: string, includeJourney = false) {
+  const query = includeJourney ? "?journey=true" : "";
+  return apiRequest<ClientBanner>(`/care/clients/${patientId}/banner/${query}`, { accessToken });
 }
 
 export interface VitalRow {

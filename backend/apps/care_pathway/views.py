@@ -886,7 +886,10 @@ class ClientBannerView(APIView):
     def get(self, request, patient_id):
         patient = _patient(patient_id)
         log_view(patient)
-        banner = services.banner_for(patient)
+        banner = services.banner_for(
+            patient,
+            include_journey=request.query_params.get("journey") == "true",
+        )
         if str(patient.pk) != str(patient_id):
             # Opened by a merged temporary record's id: the page moves to the client.
             banner["opened_as"] = str(patient_id)

@@ -4,14 +4,18 @@ import { ApiError } from "../../../lib/apiClient";
 import { getClientBanner, type ClientBanner } from "../../../lib/carePathwayApi";
 
 /** Loads the banner for a client; `reloadKey` refetches after a save. */
-export function useClientBanner(patientId: string | undefined, reloadKey: unknown = 0) {
+export function useClientBanner(
+  patientId: string | undefined,
+  reloadKey: unknown = 0,
+  includeJourney = false,
+) {
   const { accessToken } = useAuth();
   const [banner, setBanner] = useState<ClientBanner | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!accessToken || !patientId) return;
     let cancelled = false;
-    getClientBanner(accessToken, patientId)
+    getClientBanner(accessToken, patientId, includeJourney)
       .then((data) => {
         if (cancelled) return;
         setBanner(data);
@@ -24,6 +28,6 @@ export function useClientBanner(patientId: string | undefined, reloadKey: unknow
     return () => {
       cancelled = true;
     };
-  }, [accessToken, patientId, reloadKey]);
+  }, [accessToken, patientId, reloadKey, includeJourney]);
   return { banner, error };
 }

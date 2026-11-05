@@ -75,6 +75,40 @@ class IntakeTestCase(CarePathwayApiTestCase):
             }
         )
 
+    def test_client_banner_derives_journey_status_from_saved_records(self):
+        from . import services
+
+        with platform_admin_context():
+            patient = Patient.objects.get(pk=self.pid)
+            self.assertEqual(
+                services.banner_for(patient, include_journey=True)["journey_status"]["triage"],
+                "in_progress",
+            )
+            self.assertEqual(
+                services.banner_for(patient, include_journey=True)["journey_status"]["intake"],
+                "incomplete",
+            )
+            IntakeAssessment.objects.create(organization=self.org, patient=patient)
+            self.assertEqual(
+                services.banner_for(patient, include_journey=True)["journey_status"]["intake"],
+                "in_progress",
+            )
+            assessment = IntakeAssessment.objects.get(patient=patient)
+            assessment.status = IntakeAssessment.STATUS_SIGNED
+            assessment.save(update_fields=["status"])
+            self.assertEqual(
+                services.banner_for(patient, include_journey=True)["journey_status"]["intake"],
+                "complete",
+            )
+
+        self.sign_triage()
+        with platform_admin_context():
+            patient = Patient.objects.get(pk=self.pid)
+            self.assertEqual(
+                services.banner_for(patient, include_journey=True)["journey_status"]["triage"],
+                "complete",
+            )
+
 
 class IntakeSchemaTests(IntakeTestCase):
     def test_schema_is_served_with_required_sections_and_risk_rows(self):

@@ -18,7 +18,7 @@ const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-
  * payer codes come from the server (care/clients/<id>/interventions/workspace/);
  * nothing is kept in browser storage (CLAUDE.md §5).
  */
-export function InterventionsStage({ patientId, banner }: RecordViewProps) {
+export function InterventionsStage({ patientId, banner, onRecordChanged }: RecordViewProps) {
   const [version, setVersion] = useState(0);
   const workspace = useRecordData(
     patientId,
@@ -47,6 +47,7 @@ export function InterventionsStage({ patientId, banner }: RecordViewProps) {
   const refresh = (message: string) => {
     setStatus(message);
     setVersion((v) => v + 1);
+    onRecordChanged();
   };
 
   return (

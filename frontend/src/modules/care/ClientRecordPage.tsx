@@ -59,7 +59,7 @@ function renderView(view: RecordView, props: RecordViewProps) {
     case "outcomes":
       return <OutcomesStage {...props} />;
     case "billing":
-      return <BillingStage patientId={props.patientId} />;
+      return <BillingStage {...props} />;
     case "follow-up":
       return <FollowUpStage {...props} />;
   }
@@ -73,7 +73,11 @@ function renderView(view: RecordView, props: RecordViewProps) {
 export function ClientRecordPage() {
   const { patientId = "", view = "" } = useParams<{ patientId: string; view: string }>();
   const [reloadKey, setReloadKey] = useState(0);
-  const { banner, error } = useClientBanner(patientId || undefined, reloadKey);
+  const { banner, error } = useClientBanner(
+    patientId || undefined,
+    reloadKey,
+    JOURNEY_KEYS.has(view),
+  );
   const { selected, selectPatient } = usePatientContext();
   const onRecordChanged = useCallback(() => setReloadKey((k) => k + 1), []);
   const [registryOpen, setRegistryOpen] = useState(false);
@@ -183,7 +187,7 @@ export function ClientRecordPage() {
             : undefined
         }
       />
-      <ClientRecordNav patientId={patientId} view={active} />
+      <ClientRecordNav patientId={patientId} view={active} banner={loadedBanner} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}
       {body}

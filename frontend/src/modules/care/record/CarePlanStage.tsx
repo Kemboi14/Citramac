@@ -32,7 +32,7 @@ type Status = CarePlanActivity["status"];
  * Documented actions with goals and status, suggested actions from the
  * client's active alerts, and the system recommendation.
  */
-export function DocumentedActions({ patientId }: RecordViewProps) {
+export function DocumentedActions({ patientId, onRecordChanged }: RecordViewProps) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const formId = useId();
@@ -64,6 +64,7 @@ export function DocumentedActions({ patientId }: RecordViewProps) {
     try {
       setNote(await work());
       setVersion((v) => v + 1);
+      onRecordChanged();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Couldn't save the care plan.");
     } finally {

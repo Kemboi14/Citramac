@@ -128,7 +128,11 @@ export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordView
               patientId={patientId}
               clientName={name}
               data={followUps}
-              onChanged={(next) => (next ? setFollowUps(next) : setVersion((v) => v + 1))}
+              onChanged={(next) => {
+                if (next) setFollowUps(next);
+                else setVersion((v) => v + 1);
+                onRecordChanged();
+              }}
             />
           )}
         </div>

@@ -4,11 +4,12 @@ import { ApiError } from "../../../lib/apiClient";
 import { getBillingWorkspace, type BillingWorkspace } from "../../../lib/claimsApi";
 import { BillingOverviewView } from "../billing/BillingOverviewView";
 import { ClaimWorkspace } from "./billing/ClaimWorkspace";
+import type { RecordViewProps } from "./types";
 
 // Client record → Journey → "Billing" (doc 15 §1.9, §1.15): the billing
 // overview filtered to one client.
 
-export function BillingStage({ patientId }: { patientId: string }) {
+export function BillingStage({ patientId, onRecordChanged }: RecordViewProps) {
   const { accessToken, claims } = useAuth();
   const [result, setResult] = useState<{
     patientId: string;
@@ -59,7 +60,10 @@ export function BillingStage({ patientId }: { patientId: string }) {
         {current?.workspace && accessToken && (
           <ClaimWorkspace
             workspace={current.workspace}
-            onChange={(workspace) => setResult({ patientId, workspace, error: null })}
+            onChange={(workspace) => {
+              setResult({ patientId, workspace, error: null });
+              onRecordChanged();
+            }}
             accessToken={accessToken}
             patientId={patientId}
             patientLabel={
