@@ -395,12 +395,13 @@ function IntakeWorkspace({
   const coreSectionCount = groups[0][1].length;
   const navigationNumber = (section: IntakeSectionSpec) => {
     const sectionGroup = section.core ? groups[0][1] : groups[1][1];
-    return (section.core ? 0 : coreSectionCount) +
+    return (
+      (section.core ? 0 : coreSectionCount) +
       sectionGroup.findIndex((candidate) => candidate.key === section.key) +
-      1;
+      1
+    );
   };
-  const sectionName = (section: IntakeSectionSpec) =>
-    `Section ${navigationNumber(section)}`;
+  const sectionName = (section: IntakeSectionSpec) => `Section ${navigationNumber(section)}`;
 
   return (
     <div ref={topRef} className="mx-auto max-w-screen-2xl space-y-4">
