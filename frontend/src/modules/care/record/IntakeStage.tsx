@@ -345,7 +345,6 @@ function IntakeWorkspace({
     if (target && !(await go(target.key))) return;
     setState("Complete");
   };
-  const sectionName = (s: IntakeSectionSpec) => `Section ${s.n}`;
   const saveState = signed
     ? `Signed ${signed.signed_at ? formatDateTime(signed.signed_at) : ""}`
     : autosave.failed
@@ -393,6 +392,15 @@ function IntakeWorkspace({
     ["Core sections", schema.sections.filter((s) => s.core)],
     ["Extended sections", schema.sections.filter((s) => !s.core)],
   ];
+  const coreSectionCount = groups[0][1].length;
+  const navigationNumber = (section: IntakeSectionSpec) => {
+    const sectionGroup = section.core ? groups[0][1] : groups[1][1];
+    return (section.core ? 0 : coreSectionCount) +
+      sectionGroup.findIndex((candidate) => candidate.key === section.key) +
+      1;
+  };
+  const sectionName = (section: IntakeSectionSpec) =>
+    `Section ${navigationNumber(section)}`;
 
   return (
     <div ref={topRef} className="mx-auto max-w-screen-2xl space-y-4">
@@ -494,13 +502,14 @@ function IntakeWorkspace({
                       meta.overview[s.key] ??
                       "Not started") as IntakeSectionState;
                     const mark = STATE_MARK[st];
+                    const number = navigationNumber(s);
                     return (
                       <li key={s.key}>
                         <button
                           type="button"
                           disabled={checkingSection}
                           aria-current={current === s.key}
-                          aria-label={`Section ${s.n} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
+                          aria-label={`Section ${number} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
                           onClick={() => void go(s.key)}
                           className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                             current === s.key
@@ -512,7 +521,7 @@ function IntakeWorkspace({
                             aria-hidden
                             className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-surface-bg px-1 text-[11px] font-semibold tabular-nums text-ink-700"
                           >
-                            {s.n}
+                            {number}
                           </span>
                           <span className="min-w-0 flex-1 leading-snug">
                             {s.title}
@@ -544,7 +553,7 @@ function IntakeWorkspace({
             title={
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span>
-                  Section {spec.n} · {spec.title}{" "}
+                  {sectionName(spec)} · {spec.title}{" "}
                   <span className="text-[11px] font-semibold text-ink-500">
                     {spec.core ? "Core" : "Extended"}
                   </span>
@@ -647,7 +656,9 @@ function IntakeWorkspace({
                   className={`${BTN} ${BTN_SM}`}
                   onClick={() => void markDone()}
                 >
-                  {checkingSection ? "Checking required items…" : `✓ Mark Section ${spec.n} done`}
+                  {checkingSection
+                    ? "Checking required items…"
+                    : `✓ Mark Section ${navigationNumber(spec)} done`}
                 </button>
               )}
               {nextSpec && (
