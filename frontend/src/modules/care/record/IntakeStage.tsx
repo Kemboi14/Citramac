@@ -279,7 +279,11 @@ function IntakeWorkspace({
   const go = async (key: string, followRequiredItem = false): Promise<boolean> => {
     if (key === current) return true;
     if (checkingSection) return false;
+    const targetIndex = schema.sections.findIndex((section) => section.key === key);
+    const currentIndex = schema.sections.findIndex((section) => section.key === current);
+    const movingForward = targetIndex > currentIndex;
     if (
+      movingForward &&
       !followRequiredItem &&
       !signed &&
       (spec.required || outstandingForSection(meta.outstanding, spec).length > 0)
