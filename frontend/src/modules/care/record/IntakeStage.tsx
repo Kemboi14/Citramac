@@ -129,7 +129,7 @@ export function IntakeStage(props: RecordViewProps) {
     return (
       <div>
         <PageHeader
-          title="Intake & Clinical Assessment"
+          title="Comprehensive Mental Health and Intake Form"
           subtitle="Comprehensive clinical understanding — pre-populated from Registration & Triage"
         />
         {error ? (
@@ -414,7 +414,7 @@ function IntakeWorkspace({
   return (
     <div ref={topRef} className="mx-auto max-w-screen-2xl space-y-4">
       <PageHeader
-        title="Intake & Clinical Assessment"
+        title="Comprehensive Mental Health and Intake Form"
         subtitle={`Version ${initial.version} · Registration and Triage data pre-populated — confirm or update, don’t re-ask`}
         actions={
           <>
