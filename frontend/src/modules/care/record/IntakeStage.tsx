@@ -18,6 +18,10 @@ import {
 } from "../../../lib/carePathwayApi";
 import { FindingsPanel } from "../shared/FindingsPanel";
 import { formatDateTime } from "../shared/format";
+import {
+  SectionCompletionIcon,
+  type SectionCompletionStatus,
+} from "../shared/SectionCompletionIcon";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL } from "../shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, Tag } from "../shared/ui";
 import { useAutosaveDraft } from "../shared/useAutosaveDraft";
@@ -36,11 +40,14 @@ import { ToolsSection } from "./intake/ToolsSection";
 import { TriggerHint } from "./intake/TriggerHint";
 import type { RecordViewProps } from "./types";
 
-const STATE_MARK: Record<IntakeSectionState, { glyph: string; label: string }> = {
-  Complete: { glyph: "✓", label: "complete" },
-  "In progress": { glyph: "◐", label: "in progress" },
-  "Not applicable": { glyph: "—", label: "not applicable" },
-  "Not started": { glyph: "○", label: "not started" },
+const STATE_MARK: Record<
+  IntakeSectionState,
+  { icon: SectionCompletionStatus; label: string }
+> = {
+  Complete: { icon: "complete", label: "complete" },
+  "In progress": { icon: "in_progress", label: "in progress" },
+  "Not applicable": { icon: "not_applicable", label: "not applicable" },
+  "Not started": { icon: "incomplete", label: "not started" },
 };
 
 // INT-04-07 / 04-08: Section 4 "Yes" links "Past history" onto the Section 3 risk row.
@@ -528,16 +535,11 @@ function IntakeWorkspace({
                             {s.title}
                             {s.required && <span className="ml-0.5 text-priority-red">*</span>}
                           </span>
-                          <span
-                            aria-hidden
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                              st === "Complete" || st === "Not applicable"
-                                ? "bg-brand-green-tint font-semibold text-brand-green-dark"
-                                : "bg-surface-bg text-ink-500"
-                            }`}
-                          >
-                            {mark.glyph}
-                          </span>
+                          <SectionCompletionIcon
+                            status={mark.icon}
+                            active={current === s.key}
+                            className="h-5 w-5 shrink-0"
+                          />
                         </button>
                       </li>
                     );
@@ -568,7 +570,11 @@ function IntakeWorkspace({
                         : "neutral"
                   }
                 >
-                  {STATE_MARK[stateOf(spec.key)].glyph} {stateOf(spec.key)}
+                  <SectionCompletionIcon
+                    status={STATE_MARK[stateOf(spec.key)].icon}
+                    className="h-4 w-4"
+                  />{" "}
+                  {stateOf(spec.key)}
                 </Tag>
               </span>
             }

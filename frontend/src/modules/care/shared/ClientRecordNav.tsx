@@ -1,6 +1,6 @@
-import { Check, Circle, CircleDot } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { ClientBanner, JourneyStageStatus } from "../../../lib/carePathwayApi";
+import { SectionCompletionIcon } from "./SectionCompletionIcon";
 import {
   clientRecordPath,
   JOURNEY_KEYS,
@@ -16,11 +16,11 @@ const JOURNEY_STATUS_OPTIONS: JourneyStageStatus[] = ["complete", "in_progress",
 function statusPresentation(status: JourneyStageStatus) {
   switch (status) {
     case "complete":
-      return { label: "Complete", Icon: Check, color: "text-brand-green" };
+      return { label: "Complete" };
     case "in_progress":
-      return { label: "In progress", Icon: CircleDot, color: "text-accent-info" };
+      return { label: "In progress" };
     case "incomplete":
-      return { label: "Incomplete", Icon: Circle, color: "text-priority-orange" };
+      return { label: "Incomplete" };
   }
 }
 
@@ -49,15 +49,19 @@ function persistedStatus(
   }
 }
 
-function StageStatusIcon({ status }: { status: JourneyStageStatus }) {
-  const { Icon, color } = statusPresentation(status);
+function StageStatusIcon({
+  status,
+  active = false,
+}: {
+  status: JourneyStageStatus;
+  active?: boolean;
+}) {
   return (
-    <span
-      aria-hidden="true"
-      className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center ${color}`}
-    >
-      <Icon className={status === "complete" ? "h-[17px] w-[17px]" : "h-[16px] w-[16px]"} />
-    </span>
+    <SectionCompletionIcon
+      status={status}
+      active={active}
+      className="h-[18px] w-[18px] shrink-0"
+    />
   );
 }
 
@@ -126,7 +130,7 @@ export function ClientRecordNav({
                       : "border-transparent text-ink-700 hover:border-surface-border hover:bg-surface-bg hover:text-ink-900"
                   }`}
                 >
-                  <StageStatusIcon status={status} />
+                  <StageStatusIcon status={status} active={active} />
                   {stage.label}
                 </NavLink>
               );
