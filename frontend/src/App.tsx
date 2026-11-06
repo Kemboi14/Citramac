@@ -46,6 +46,14 @@ const TriageEncounterPage = lazyNamed(
   () => import("./modules/care/TriageEncounterPage"),
   "TriageEncounterPage",
 );
+const PsychiatryAssessmentsPage = lazyNamed(
+  () => import("./modules/care/PsychiatryAssessmentsPage"),
+  "PsychiatryAssessmentsPage",
+);
+const PsychiatryAssessmentPage = lazyNamed(
+  () => import("./modules/care/PsychiatryAssessmentPage"),
+  "PsychiatryAssessmentPage",
+);
 const PsychiatryQueuePage = lazyNamed(
   () => import("./modules/care/PsychiatryQueuePage"),
   "PsychiatryQueuePage",
@@ -353,7 +361,12 @@ function App() {
             <Route path="registration" element={<RegistrationPage />} />
             <Route path="triage" element={<TriageWorklistPage />} />
             <Route path="triage/:triageId" element={<TriageEncounterPage />} />
-            <Route path="psychiatry" element={<PsychiatryQueuePage />} />
+            <Route path="psychiatry" element={<PsychiatryAssessmentsPage />} />
+            <Route path="psychiatry/queue" element={<PsychiatryQueuePage />} />
+            <Route
+              path="psychiatry/assessments/:patientId"
+              element={<PsychiatryAssessmentPage />}
+            />
             <Route path="clients/:patientId" element={<Navigate to="triage" replace />} />
             <Route path="clients/:patientId/:view" element={<ClientRecordPage />} />
             <Route path="inpatient" element={<InpatientAdmissionsPage />} />

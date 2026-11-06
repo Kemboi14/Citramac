@@ -830,6 +830,50 @@ class PsychiatryQueueView(APIView):
         return Response({"results": rows})
 
 
+class PsychiatryModuleClientsView(APIView):
+    """The psychiatrist's caseload: clients suggested for review or with a signed intake."""
+
+    def get(self, request):
+        if not is_clinical_staff(request.user):
+            raise PermissionDenied("Only clinical staff can open the psychiatry module.")
+        from . import psychiatry_module
+
+        return Response({"results": psychiatry_module.candidates()})
+
+
+class PsychiatryWorkspaceView(APIView):
+    """POST opens (or resumes) the assessment; PUT saves the draft."""
+
+    def _check(self, request):
+        if not is_clinical_staff(request.user):
+            raise PermissionDenied("Only clinical staff can open the psychiatry module.")
+
+    def post(self, request, patient_id):
+        self._check(request)
+        from . import psychiatry_module
+
+        return Response(psychiatry_module.open_workspace(_patient(patient_id), request.user))
+
+    def put(self, request, patient_id):
+        self._check(request)
+        from . import psychiatry_module
+
+        return Response(
+            psychiatry_module.save_workspace(_patient(patient_id), request.user, request.data)
+        )
+
+
+class PsychiatrySignView(APIView):
+    def post(self, request, patient_id):
+        if not is_clinical_staff(request.user):
+            raise PermissionDenied("Only clinical staff can sign a psychiatric assessment.")
+        from . import psychiatry_module
+
+        return Response(
+            psychiatry_module.sign_workspace(_patient(patient_id), request.user, request.data)
+        )
+
+
 class SignedDocumentsView(APIView):
     def get(self, request):
         assessments = (

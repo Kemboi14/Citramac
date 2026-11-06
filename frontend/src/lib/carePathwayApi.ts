@@ -566,6 +566,115 @@ export function getPsychiatryQueue(accessToken: string) {
   return apiRequest<{ results: PsychiatryQueueRow[] }>("/care/psychiatry/queue/", { accessToken });
 }
 
+// ── Psychiatry assessment module ──
+
+export type PsychiatryFormat = "FREE_TEXT" | "STRUCTURED";
+
+export interface PsychiatryCandidate {
+  patient_id: string;
+  name: string;
+  citramac_number: string;
+  mrn: string;
+  age: number | null;
+  sex: string;
+  priority: Priority | "";
+  episode_id: string;
+  presenting_concern: string;
+  last_triaged_at: string | null;
+  intake_complete: boolean;
+  intake_signed_at: string | null;
+  suggested: boolean;
+  suggested_reason: string;
+  review: WithdrawalReview | null;
+  assessment_id: string | null;
+  assessment_status: "DRAFT" | "SIGNED" | "";
+  assessment_format: PsychiatryFormat | "";
+  assessment_updated_at: string | null;
+  assessment_signed_at: string | null;
+  alerts: string[];
+}
+
+export function getPsychiatryCandidates(accessToken: string) {
+  return apiRequest<{ results: PsychiatryCandidate[] }>("/care/psychiatry/clients/", {
+    accessToken,
+  });
+}
+
+/** Structured MSE shape shared with the intake (INT-16): domain codes plus notes. */
+export interface PsychiatryMse {
+  findings?: Record<string, string[]>;
+  [key: string]: unknown;
+}
+
+export interface PsychiatryAssessment {
+  id: string;
+  status: "DRAFT" | "SIGNED";
+  format: PsychiatryFormat;
+  free_text: string;
+  structured: Record<string, string>;
+  text: string;
+  author: string;
+  created_at: string;
+  updated_at: string;
+  signed_at: string | null;
+  can_edit: boolean;
+}
+
+export interface PsychiatryWorkspace {
+  patient_id: string;
+  encounter_id: string;
+  episode_id: string | null;
+  assessment: PsychiatryAssessment | null;
+  mse: PsychiatryMse;
+  history: {
+    id: string;
+    format: PsychiatryFormat;
+    text: string;
+    author: string;
+    signed_at: string | null;
+  }[];
+  review: WithdrawalReview | null;
+}
+
+export interface PsychiatrySaveBody {
+  format: PsychiatryFormat;
+  free_text: string;
+  structured: Record<string, string>;
+  mse: PsychiatryMse;
+}
+
+/** Opens or resumes the psychiatric assessment (idempotent). */
+export function openPsychiatryAssessment(accessToken: string, patientId: string) {
+  return apiRequest<PsychiatryWorkspace>(`/care/clients/${patientId}/psychiatry/`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+export function savePsychiatryAssessment(
+  accessToken: string,
+  patientId: string,
+  body: PsychiatrySaveBody,
+) {
+  return apiRequest<PsychiatryWorkspace>(`/care/clients/${patientId}/psychiatry/`, {
+    method: "PUT",
+    body,
+    accessToken,
+  });
+}
+
+export function signPsychiatryAssessment(
+  accessToken: string,
+  patientId: string,
+  body: PsychiatrySaveBody,
+) {
+  return apiRequest<PsychiatryWorkspace>(`/care/clients/${patientId}/psychiatry/sign/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
 export interface SignedDocumentRow {
   id: string;
   document: string;

@@ -451,7 +451,7 @@ export function DashboardPage() {
           <StatCard
             value={n(data?.red_orange)}
             label="RED / ORANGE in care"
-            to="/clinical/psychiatry"
+            to="/clinical/psychiatry/queue"
             change={data && data.red_orange > 0 ? "Requires attention" : ""}
             tone="down"
           />
@@ -481,7 +481,7 @@ export function DashboardPage() {
               detail="Signed referrals · priority order"
               count={`${n(data?.psychiatry_queued)} queued`}
               attention={(data?.psychiatry_queued ?? 0) > 0}
-              onClick={() => navigate("/clinical/psychiatry")}
+              onClick={() => navigate("/clinical/psychiatry/queue")}
             />
             <QuickTile
               icon={ICONS.group}

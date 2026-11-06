@@ -97,6 +97,21 @@ urlpatterns = [
     ),
     path("care/tasks/<uuid:pk>/", views.CareTaskView.as_view(), name="care-task"),
     path("care/psychiatry/queue/", views.PsychiatryQueueView.as_view(), name="care-psych-queue"),
+    path(
+        "care/psychiatry/clients/",
+        views.PsychiatryModuleClientsView.as_view(),
+        name="care-psych-module-clients",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/psychiatry/",
+        views.PsychiatryWorkspaceView.as_view(),
+        name="care-psych-workspace",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/psychiatry/sign/",
+        views.PsychiatrySignView.as_view(),
+        name="care-psych-sign",
+    ),
     path("care/documents/", views.SignedDocumentsView.as_view(), name="care-documents"),
     path(
         "care/assessments/<uuid:pk>/print/",

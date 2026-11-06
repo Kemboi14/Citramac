@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Archive,
   BarChart3,
+  Brain,
   Building2,
   ClipboardCheck,
   ClipboardList,
@@ -149,6 +150,12 @@ export const CLINICAL_NAV: NavGroup[] = [
       { label: "Dashboard", to: "/clinical", icon: LayoutDashboard },
       { label: "My Caseload", to: "/clinical/caseload", icon: Users },
       { label: "Client Registry", to: "/clinical/registry", icon: UsersRound },
+      {
+        label: "Psychiatry",
+        to: "/clinical/psychiatry",
+        icon: Brain,
+        matchPrefix: true,
+      },
       {
         label: "Individual Psychotherapy",
         to: "/clinical/psychotherapy/individual",

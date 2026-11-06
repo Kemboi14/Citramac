@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DocumentLibrary } from "../../../../components/DocumentLibrary";
 import { getClientFollowUps } from "../../../../lib/carePlanOutcomesApi";
-import { clientRecordPath } from "../../shared/recordRoutes";
+import { clientRecordPath, psychiatryAssessmentPath } from "../../shared/recordRoutes";
 import { BTN_GHOST, BTN_SM } from "../../shared/styles";
 import { Card, ErrorNote } from "../../shared/ui";
 import { LegalAdmissionStatus } from "../legal/LegalAdmissionStatus";
@@ -117,7 +117,7 @@ const MODULES = new Map<string, ModuleDef>(
       ],
       page: {
         label: "Open psychiatric assessment & diagnosis",
-        to: (patientId: string) => clientRecordPath(patientId, "intake"),
+        to: (patientId: string) => psychiatryAssessmentPath(patientId),
       },
     },
     admission: {

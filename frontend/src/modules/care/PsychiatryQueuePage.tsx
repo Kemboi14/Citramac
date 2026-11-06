@@ -116,11 +116,16 @@ export function PsychiatryQueuePage() {
         title="Psychiatry queue"
         titleTooltip="Clients with a signed triage, most urgent first. Open a client to start or continue the review."
         actions={
-          pathname === "/clinical/referrals/worklist" ? (
-            <Link to="/clinical/referrals" className={BTN_GHOST}>
-              Back to Referrals
+          <div className="flex flex-wrap gap-2">
+            <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM}`}>
+              Psychiatry assessments
             </Link>
-          ) : undefined
+            {pathname === "/clinical/referrals/worklist" && (
+              <Link to="/clinical/referrals" className={BTN_GHOST}>
+                Back to Referrals
+              </Link>
+            )}
+          </div>
         }
       />
       <ErrorNote>{error ?? openError}</ErrorNote>

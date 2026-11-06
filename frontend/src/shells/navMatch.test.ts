@@ -39,6 +39,12 @@ describe("clinical nav matching", () => {
     ]);
   });
 
+  it("has a Psychiatry module separate from the priority queue", () => {
+    const psychiatry = topLevel.find((item) => item.label === "Psychiatry");
+    expect(psychiatry?.to).toBe("/clinical/psychiatry");
+    expect(psychiatry?.matchPrefix).toBe(true);
+  });
+
   it("shows the client registry as a standalone menu item", () => {
     expect(topLevel.find((item) => item.label === "Client Registry")?.to).toBe(
       "/clinical/registry",

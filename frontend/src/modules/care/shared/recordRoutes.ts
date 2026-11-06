@@ -45,3 +45,8 @@ export const JOURNEY_KEYS = new Set<string>([
 export function clientRecordPath(patientId: string, view: RecordView = "triage") {
   return `/clinical/clients/${patientId}/${view}`;
 }
+
+/** The psychiatrist's assessment workspace for one client. */
+export function psychiatryAssessmentPath(patientId: string) {
+  return `/clinical/psychiatry/assessments/${patientId}`;
+}

@@ -1421,6 +1421,10 @@ class ProgressNote(TenantScopedModel):
     )
     note_type = models.CharField(max_length=24)
     text = models.TextField(blank=True)
+    # Structured capture behind a rendered note (the psychiatry module's
+    # free-text / structured assessment). The rendered, human-readable form is
+    # always `text`; this keeps the choices needed to re-open the editor.
+    data = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=8, choices=STATUS_CHOICES, default="DRAFT")
     amends = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="addenda"
