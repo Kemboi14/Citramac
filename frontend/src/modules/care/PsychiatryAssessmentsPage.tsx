@@ -84,9 +84,6 @@ export function PsychiatryAssessmentsPage() {
   const shown = rows.filter(
     (row) => inView(row, view) && (!needle || searchText(row).includes(needle)),
   );
-  const needs = counts.needs;
-  const drafts = rows.filter((row) => row.assessment_status === "DRAFT").length;
-  const intakeDone = counts.intake;
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,12 +98,6 @@ export function PsychiatryAssessmentsPage() {
         }
       />
       <ErrorNote>{error}</ErrorNote>
-
-      <div className="grid gap-2.5 sm:grid-cols-3">
-        <StatCard label="Need assessment" value={needs} />
-        <StatCard label="Drafts in progress" value={drafts} />
-        <StatCard label="Intake complete" value={intakeDone} />
-      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
@@ -282,17 +273,6 @@ export function PsychiatryAssessmentsPage() {
           </div>
         </Card>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-ink-500">
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-bold tabular-nums text-ink-900">{value}</div>
     </div>
   );
 }
