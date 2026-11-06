@@ -178,6 +178,15 @@ class ClientRegistryTests(APITestCase):
             **self._auth(self.access_a),
         )
         patient_id = create_response.data["id"]
+        from apps.care_pathway.models import ConsentTemplate
+
+        with platform_admin_context():
+            ConsentTemplate.objects.create(
+                organization=self.org_a,
+                consent_type="DATA_SHARING_HIE",
+                version="facility-2026-11",
+                text="Facility wording for sharing with the national HIE.",
+            )
 
         grant_response = self.client.post(
             reverse("patient-consent", args=[patient_id]),
@@ -191,6 +200,15 @@ class ClientRegistryTests(APITestCase):
         )
         self.assertEqual(grant_response.status_code, 201, grant_response.data)
         self.assertTrue(grant_response.data["granted"])
+        # The facility's wording is what is recorded, never the browser's copy.
+        with platform_admin_context():
+            from .models import ConsentRecord
+
+            record = ConsentRecord.objects.get(pk=grant_response.data["id"])
+            self.assertEqual(record.consent_text_version, "facility-2026-11")
+            self.assertEqual(
+                record.consent_text_snapshot, "Facility wording for sharing with the national HIE."
+            )
 
         detail_response = self.client.get(
             reverse("patient-detail", args=[patient_id]), **self._auth(self.access_a)
@@ -221,7 +239,7 @@ class ClientRegistryTests(APITestCase):
         )
         self.assertFalse(detail_after_revoke.data["consent_data_sharing"])
 
-    def test_consent_capture_requires_all_fields(self):
+    def test_consent_needs_a_decision_and_the_facilitys_wording(self):
         create_response = self.client.post(
             reverse("patient-list"),
             {
@@ -237,12 +255,21 @@ class ClientRegistryTests(APITestCase):
 
         response = self.client.post(
             reverse("patient-consent", args=[patient_id]),
-            {"granted": True},
+            {},
             format="json",
             **self._auth(self.access_a),
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "MISSING_FIELDS")
+        # Wording supplied by the browser is not enough: none is configured here.
+        no_wording = self.client.post(
+            reverse("patient-consent", args=[patient_id]),
+            {"granted": True, "consent_text_version": "v1", "consent_text_snapshot": "Typed"},
+            format="json",
+            **self._auth(self.access_a),
+        )
+        self.assertEqual(no_wording.status_code, 409)
+        self.assertEqual(no_wording.data["error"]["code"], "NO_WORDING")
 
 
 class RightToErasureTests(APITestCase):

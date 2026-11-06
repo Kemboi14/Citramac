@@ -13,7 +13,14 @@ class Encounter(TenantScopedModel):
     ClinicalOrder/Prescription/ReferralPacket (below) all hang off this.
     """
 
-    STATUS_CHOICES = [("OPEN", "Open"), ("IN_PROGRESS", "In Progress"), ("CLOSED", "Closed")]
+    STATUS_CHOICES = [
+        ("OPEN", "Open"),
+        ("IN_PROGRESS", "In Progress"),
+        ("CLOSED", "Closed"),
+        # R4 entered-in-error: opened against the wrong client, or never happened.
+        # Its subject and type cannot be edited, so this is the only correction.
+        ("ENTERED_IN_ERROR", "Entered in error"),
+    ]
     # Each type is set by the workflow that opens the encounter and never changes
     # afterwards: the SHR export decides what may leave the facility from it
     # (dha_interop.shr.SHR_ENCOUNTER_TYPES), and INPATIENT is the only one that
@@ -42,6 +49,7 @@ class Encounter(TenantScopedModel):
         related_name="encounters",
     )
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="OPEN")
+    error_reason = models.TextField(blank=True)
     opened_at = models.DateTimeField(default=timezone.now)
     closed_at = models.DateTimeField(null=True, blank=True)
 
@@ -92,13 +100,19 @@ class DiagnosisCode(TenantScopedModel):
         ("DIFFERENTIAL", "Differential"),
         ("CONFIRMED", "Confirmed"),
         ("RULED_OUT", "Ruled out"),
+        # Not a certainty and not in `intake-dx-status`: set only by the
+        # entered-in-error correction (wrong client or wrong code), with a reason.
+        ("ENTERED_IN_ERROR", "Entered in error"),
     ]
     FHIR_VERIFICATION = {
         "PROVISIONAL": "provisional",
         "DIFFERENTIAL": "differential",
         "CONFIRMED": "confirmed",
         "RULED_OUT": "refuted",
+        "ENTERED_IN_ERROR": "entered-in-error",
     }
+    # Never treated as a diagnosis the client has: not shared, billed or counted.
+    NOT_ASSERTED = ("RULED_OUT", "ENTERED_IN_ERROR")
 
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="diagnoses")
     icd11_code = models.ForeignKey(IcdCodeIndex, on_delete=models.PROTECT, related_name="+")
@@ -110,6 +124,7 @@ class DiagnosisCode(TenantScopedModel):
     )
     clinical_notes = models.TextField(blank=True)
     diagnostic_criteria_met = models.TextField(blank=True)
+    error_reason = models.TextField(blank=True)
     # Condition.recorder — who entered it. Blank only on rows from before it was kept.
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

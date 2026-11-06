@@ -5,6 +5,7 @@ import { searchIcd11, type Icd11Code } from "../../../lib/clinicalApi";
 import {
   createDiagnosis,
   listDiagnosesForPatient,
+  markDiagnosisInError,
   updateDiagnosis,
   type Diagnosis,
   type DiagnosisStatus,
@@ -59,6 +60,8 @@ export function IntakeDiagnosisTab({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  // The diagnosis being marked as entered in error, and the reason typed for it.
+  const [inError, setInError] = useState<{ id: string; reason: string } | null>(null);
 
   const term = query.trim();
   useEffect(() => {
@@ -124,6 +127,19 @@ export function IntakeDiagnosisTab({
     }
   };
 
+  const markInError = async () => {
+    if (!accessToken || !inError) return;
+    setSaveError(null);
+    try {
+      await markDiagnosisInError(accessToken, inError.id, inError.reason.trim());
+      setInError(null);
+      setVersion((v) => v + 1);
+      onChanged();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : "Couldn't mark it as entered in error.");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <Callout>
@@ -146,62 +162,114 @@ export function IntakeDiagnosisTab({
             </thead>
             <tbody>
               {diagnoses.length > 0 ? (
-                diagnoses.map((d) => (
-                  <tr key={d.id}>
-                    <td className={`${TD} font-mono text-xs font-semibold`}>{d.icd11_code}</td>
-                    <td className={TD}>
-                      {d.icd11_description} {d.is_primary && <Tag tone="brand">Primary</Tag>}
-                      <input
-                        className={`${CELL} mt-1 block w-full`}
-                        aria-label={`Specifier / note for ${d.icd11_code}`}
-                        placeholder="Specifier / note"
-                        defaultValue={d.clinical_notes}
-                        onBlur={(e) =>
-                          e.target.value.trim() !== d.clinical_notes &&
-                          void change(d, { clinical_notes: e.target.value.trim() })
-                        }
-                      />
-                    </td>
-                    <td className={TD}>
-                      <select
-                        className={CELL}
-                        aria-label={`Certainty of ${d.icd11_code}`}
-                        value={d.verification_status}
-                        onChange={(e) =>
-                          void change(d, {
-                            verification_status: e.target.value as DiagnosisVerification,
-                          })
-                        }
-                      >
-                        {!d.verification_status && <option value="">Not recorded</option>}
-                        {vs.options("intake-dx-status").map((o) => (
-                          <option key={o.code} value={o.code}>
-                            {o.display}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className={TD}>
-                      <select
-                        className={CELL}
-                        aria-label={`Clinical status of ${d.icd11_code}`}
-                        value={d.status}
-                        onChange={(e) =>
-                          void change(d, { status: e.target.value as DiagnosisStatus })
-                        }
-                      >
-                        {CLINICAL_STATUSES.map((s) => (
-                          <option key={s.code} value={s.code}>
-                            {s.display}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className={`${TD} whitespace-nowrap font-mono text-xs`}>
-                      {formatDateTime(d.noted_at)}
-                    </td>
-                  </tr>
-                ))
+                diagnoses.map((d) =>
+                  d.verification_status === "ENTERED_IN_ERROR" ? (
+                    <tr key={d.id} className="text-ink-500">
+                      <td className={`${TD} font-mono text-xs line-through`}>{d.icd11_code}</td>
+                      <td className={TD}>
+                        <span className="line-through">{d.icd11_description}</span>
+                        <span className="mt-1 block text-xs">Reason: {d.error_reason}</span>
+                      </td>
+                      <td className={TD} colSpan={2}>
+                        <Tag tone="warn">Entered in error</Tag>
+                      </td>
+                      <td className={`${TD} whitespace-nowrap font-mono text-xs`}>
+                        {formatDateTime(d.noted_at)}
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={d.id}>
+                      <td className={`${TD} font-mono text-xs font-semibold`}>{d.icd11_code}</td>
+                      <td className={TD}>
+                        {d.icd11_description} {d.is_primary && <Tag tone="brand">Primary</Tag>}
+                        <input
+                          className={`${CELL} mt-1 block w-full`}
+                          aria-label={`Specifier / note for ${d.icd11_code}`}
+                          placeholder="Specifier / note"
+                          defaultValue={d.clinical_notes}
+                          onBlur={(e) =>
+                            e.target.value.trim() !== d.clinical_notes &&
+                            void change(d, { clinical_notes: e.target.value.trim() })
+                          }
+                        />
+                      </td>
+                      <td className={TD}>
+                        <select
+                          className={CELL}
+                          aria-label={`Certainty of ${d.icd11_code}`}
+                          value={d.verification_status}
+                          onChange={(e) =>
+                            void change(d, {
+                              verification_status: e.target.value as DiagnosisVerification,
+                            })
+                          }
+                        >
+                          {!d.verification_status && <option value="">Not recorded</option>}
+                          {vs.options("intake-dx-status").map((o) => (
+                            <option key={o.code} value={o.code}>
+                              {o.display}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className={TD}>
+                        <select
+                          className={CELL}
+                          aria-label={`Clinical status of ${d.icd11_code}`}
+                          value={d.status}
+                          onChange={(e) =>
+                            void change(d, { status: e.target.value as DiagnosisStatus })
+                          }
+                        >
+                          {CLINICAL_STATUSES.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              {s.display}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className={`${TD} whitespace-nowrap font-mono text-xs`}>
+                        {formatDateTime(d.noted_at)}
+                        {inError?.id === d.id ? (
+                          <span className="mt-1 flex flex-col gap-1 font-sans">
+                            <input
+                              className={CELL}
+                              aria-label={`Why ${d.icd11_code} was entered in error`}
+                              placeholder="Why (wrong client, wrong code…)"
+                              value={inError.reason}
+                              onChange={(e) => setInError({ id: d.id, reason: e.target.value })}
+                            />
+                            <span className="flex gap-1">
+                              <button
+                                type="button"
+                                className={BTN}
+                                disabled={inError.reason.trim().length < 5}
+                                onClick={() => void markInError()}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                className={BTN}
+                                onClick={() => setInError(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="mt-1 block font-sans text-xs text-ink-500 underline"
+                            onClick={() => setInError({ id: d.id, reason: "" })}
+                          >
+                            Entered in error
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                )
               ) : (
                 <tr>
                   <td colSpan={5} className={`${TD} py-6 text-center text-ink-500`}>

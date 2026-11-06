@@ -552,7 +552,7 @@ def outstanding_items(draft):
     # clinical concept as free text); the Diagnosis tab writes it.
     if (
         not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT")
+        .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
         .exists()
     ):
         missing.append("Section 19 At least one coded working diagnosis (provisional is fine)")

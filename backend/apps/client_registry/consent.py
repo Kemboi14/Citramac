@@ -102,6 +102,36 @@ APPOINTMENT_TYPES = {"sms": APPOINTMENT_SMS, "email": APPOINTMENT_EMAIL}
 APPOINTMENT_TEMPLATE = "APPOINTMENT_MESSAGES"
 
 
+# The wording each consent decision is recorded against (ConsentTemplate type).
+# The HIE decisions (general, mental health, substance use, family) are asked
+# together under the facility's one data-sharing wording.
+WORDING_FOR = {
+    "DATA_SHARING_HIE": "DATA_SHARING_HIE",
+    "MENTAL_HEALTH_HIE": "DATA_SHARING_HIE",
+    "SUBSTANCE_USE_HIE": "DATA_SHARING_HIE",
+    "FAMILY_INVOLVEMENT": "DATA_SHARING_HIE",
+    "APPOINTMENT_SMS": "APPOINTMENT_MESSAGES",
+    "APPOINTMENT_EMAIL": "APPOINTMENT_MESSAGES",
+}
+
+
+def active_wording(organization_id, consent_type):
+    """The facility's active wording a decision of this type is recorded against,
+    or None. The server always supplies it — wording sent by a browser is never
+    stored as what the client was shown (the system never writes consent text)."""
+    from apps.care_pathway.models import ConsentTemplate
+
+    return (
+        ConsentTemplate.all_objects.filter(
+            organization_id=organization_id,
+            consent_type=WORDING_FOR.get(consent_type, consent_type),
+            active=True,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
 def appointment_wording(organization_id=None):
     """The facility's active APPOINTMENT_MESSAGES wording, or None if not set."""
     from apps.care_pathway.models import ConsentTemplate

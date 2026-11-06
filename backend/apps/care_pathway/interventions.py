@@ -952,7 +952,7 @@ def build_sbar(patient, user):
         "; ".join(
             f"{d.icd11_code.code} {d.icd11_code.description}"
             for d in DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-            .exclude(verification_status="RULED_OUT")
+            .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
             .select_related("icd11_code")
         )
         or "none recorded"

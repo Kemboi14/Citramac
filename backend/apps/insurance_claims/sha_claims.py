@@ -599,13 +599,68 @@ def _primary_intervention(visit):
     return visit.intervention_codes[0] if visit.intervention_codes else ""
 
 
+def _audit_diagnosis_disclosure(claim, visit, codes, endpoint):
+    """Diagnoses leaving for SHA are a disclosure of mental-health information:
+    audited on the client with the codes, never any narrative."""
+    from apps.sysadmin_audit.audit import write_event
+    from apps.sysadmin_audit.models import AuditLogEntry
+
+    if not codes:
+        return
+    write_event(
+        claim.organization_id,
+        AuditLogEntry.ACTION_HIE_DISCLOSURE,
+        "client_registry.patient",
+        claim.patient_id,
+        {
+            "recipient": "SHA",
+            "endpoint": endpoint,
+            "claim": str(claim.id),
+            "icd11_codes": list(codes),
+            "facility": visit.branch.sha_fr_code,
+        },
+    )
+
+
+def _visit_window(visit):
+    """The day the SHA visit opened (or was requested), for scoping a visit with no episode."""
+    return timezone.localdate(visit.opened_at or visit.created_at)
+
+
+def visit_diagnosis_codes(claim, visit):
+    """ICD-11 codes for THIS visit only — the diagnoses on its episode's encounters
+    (or, for a visit with no episode, encounters opened since it opened). Never
+    every diagnosis the client has had: SHA is told what this claim is for."""
+    from apps.clinical_encounter.models import DiagnosisCode
+
+    rows = DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE").exclude(
+        verification_status__in=DiagnosisCode.NOT_ASSERTED
+    )
+    if visit.episode_id:
+        rows = rows.filter(encounter__episode_id=visit.episode_id)
+    else:
+        rows = rows.filter(encounter__opened_at__date__gte=_visit_window(visit))
+    codes = []
+    for code in rows.order_by("-is_primary", "-noted_at").values_list("icd11_code_id", flat=True):
+        if code not in codes:
+            codes.append(code)
+    return codes
+
+
+def _charge_outside_visit(charge, visit):
+    if charge is None:
+        return False
+    if visit.episode_id and charge.episode_id:
+        return charge.episode_id != visit.episode_id
+    return timezone.localdate(charge.delivered_at) < _visit_window(visit)
+
+
 def sync_claim(claim, user):
     """
     Push what is not yet on the HIE claim: lines (each added once, remembered
     by GUID), coded diagnoses, and labelled attachments. Safe to call again —
     every item records that it was sent.
     """
-    from apps.clinical_encounter.models import DiagnosisCode
 
     visit = claim.sha_visit
     if visit is None or visit.status != ShaVisit.STATUS_OPEN:
@@ -616,7 +671,17 @@ def sync_claim(claim, user):
     branch, org = visit.branch, claim.organization_id
     sent = {"lines": 0, "diagnoses": 0, "attachments": 0}
 
-    for line in claim.lines.filter(sha_line_guid=""):
+    lines = list(claim.lines.filter(sha_line_guid="").select_related("charge_item"))
+    outside = [
+        line.service_name for line in lines if _charge_outside_visit(line.charge_item, visit)
+    ]
+    if outside:
+        raise ShaError(
+            "Not part of this SHA visit: " + ", ".join(outside) + ". Remove them from the claim "
+            "or bill them against the visit they were delivered in.",
+            field="lines",
+        )
+    for line in lines:
         code = line.payer_code or _primary_intervention(visit)
         if code not in visit.intervention_codes:
             raise ShaError(
@@ -645,13 +710,9 @@ def sync_claim(claim, user):
         line.save(update_fields=["sha_line_guid", "updated_at"])
         sent["lines"] += 1
 
-    codes = [
-        d.icd11_code_id
-        for d in DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT")
-        .order_by("-is_primary", "-noted_at")
-    ]
+    codes = visit_diagnosis_codes(claim, visit)
     already = set(claim.sha_diagnoses or [])
+    disclosed = []
     for icd in codes:
         if icd in already:
             continue
@@ -670,7 +731,9 @@ def sync_claim(claim, user):
                 },
             )
         already.add(icd)
+        disclosed.append(icd)
         sent["diagnoses"] += 1
+    _audit_diagnosis_disclosure(claim, visit, disclosed, "/claims/diagnoses")
     claim.sha_diagnoses = sorted(already)
     claim.save(update_fields=["sha_diagnoses", "updated_at"])
 
@@ -934,13 +997,9 @@ def create_preauth(claim, line, user, *, service_start, service_end, notificatio
         raise ShaError(
             "Enter the email SHA notifies about this request.", field="notification_email"
         )
-    from apps.clinical_encounter.models import DiagnosisCode
-
     diagnoses = [
-        {"consent_token": visit.consent_token, "icd_code": d.icd11_code_id}
-        for d in DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT")
-        .order_by("-is_primary", "-noted_at")
+        {"consent_token": visit.consent_token, "icd_code": code}
+        for code in visit_diagnosis_codes(claim, visit)
     ]
     if not diagnoses:
         raise ShaError("Record the coded (ICD-11) diagnosis first.", field="diagnosis")
@@ -996,6 +1055,7 @@ def create_preauth(claim, line, user, *, service_start, service_end, notificatio
         data=data,
         files=files or None,
     )
+    _audit_diagnosis_disclosure(claim, visit, [d["icd_code"] for d in diagnoses], "/preauths")
     body = body or {}
     state = str(body.get("status") or "ACTIVE")
     pre_auth = PreAuthorization.objects.create(

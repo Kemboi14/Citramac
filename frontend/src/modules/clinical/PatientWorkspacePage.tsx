@@ -391,7 +391,10 @@ export function PatientWorkspacePage() {
               <Link className="text-brand-green hover:underline" to="/clinical/inpatient">
                 Inpatient Admissions
               </Link>
-              <Link className="text-brand-green hover:underline" to="/clinical/mhp/individual">
+              <Link
+                className="text-brand-green hover:underline"
+                to="/clinical/psychotherapy/individual"
+              >
                 Individual Psychotherapy
               </Link>
             </div>

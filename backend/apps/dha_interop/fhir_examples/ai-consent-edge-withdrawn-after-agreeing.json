@@ -3,6 +3,7 @@
   "type": "collection",
   "entry": [
     {
+      "fullUrl": "urn:uuid:66666666-6666-4666-8666-666666666666",
       "resource": {
         "resourceType": "Patient",
         "id": "66666666-6666-4666-8666-666666666666",
@@ -39,6 +40,7 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:c6666666-6666-4666-8666-666666666666",
       "resource": {
         "resourceType": "Consent",
         "id": "c6666666-6666-4666-8666-666666666666",
@@ -57,26 +59,30 @@
           }
         ],
         "patient": {
-          "reference": "Patient/66666666-6666-4666-8666-666666666666"
+          "reference": "urn:uuid:66666666-6666-4666-8666-666666666666"
         },
         "dateTime": "2026-10-22T11:40:00+03:00",
         "performer": [
           {
-            "reference": "Patient/66666666-6666-4666-8666-666666666666"
+            "reference": "urn:uuid:66666666-6666-4666-8666-666666666666"
           }
         ],
         "provision": {
           "type": "deny"
+        },
+        "policyRule": {
+          "text": "Facility consent wording, version v1"
         }
       }
     },
     {
+      "fullUrl": "urn:uuid:3c3b7423-93ae-55ae-9bd1-433e8e95be84",
       "resource": {
         "resourceType": "Provenance",
-        "id": "prov-c6666666-6666-4666-8666-666666666666",
+        "id": "3c3b7423-93ae-55ae-9bd1-433e8e95be84",
         "target": [
           {
-            "reference": "Consent/c6666666-6666-4666-8666-666666666666"
+            "reference": "urn:uuid:c6666666-6666-4666-8666-666666666666"
           }
         ],
         "recorded": "2026-10-22T11:40:00+03:00",

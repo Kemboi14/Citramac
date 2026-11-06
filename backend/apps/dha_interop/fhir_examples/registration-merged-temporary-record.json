@@ -3,6 +3,7 @@
   "type": "collection",
   "entry": [
     {
+      "fullUrl": "urn:uuid:22222222-2222-4222-8222-222222222222",
       "resource": {
         "resourceType": "Patient",
         "id": "22222222-2222-4222-8222-222222222222",
@@ -35,7 +36,7 @@
         "link": [
           {
             "other": {
-              "reference": "Patient/33333333-3333-4333-8333-333333333333"
+              "reference": "urn:uuid:33333333-3333-4333-8333-333333333333"
             },
             "type": "replaced-by"
           }
@@ -43,6 +44,7 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:33333333-3333-4333-8333-333333333333",
       "resource": {
         "resourceType": "Patient",
         "id": "33333333-3333-4333-8333-333333333333",
@@ -65,11 +67,11 @@
             "value": "202609CAFR-041"
           },
           {
-            "use": "usual",
+            "use": "official",
             "type": {
               "text": "National ID"
             },
-            "system": "https://example.org/VERIFY/national-id",
+            "system": "https://fhir.dha.go.ke/fhir/identifier/nationalid",
             "value": "30418822"
           },
           {
@@ -95,7 +97,7 @@
         "link": [
           {
             "other": {
-              "reference": "Patient/22222222-2222-4222-8222-222222222222"
+              "reference": "urn:uuid:22222222-2222-4222-8222-222222222222"
             },
             "type": "replaces"
           }
@@ -103,15 +105,16 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:b63ed258-9f62-570c-babc-d45e19dad42e",
       "resource": {
         "resourceType": "Provenance",
-        "id": "prov-merge-44444444-4444-4444-8444-444444444444",
+        "id": "b63ed258-9f62-570c-babc-d45e19dad42e",
         "target": [
           {
-            "reference": "Patient/22222222-2222-4222-8222-222222222222"
+            "reference": "urn:uuid:22222222-2222-4222-8222-222222222222"
           },
           {
-            "reference": "Patient/33333333-3333-4333-8333-333333333333"
+            "reference": "urn:uuid:33333333-3333-4333-8333-333333333333"
           }
         ],
         "recorded": "2026-10-14T11:20:00+03:00",

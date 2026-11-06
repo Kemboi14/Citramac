@@ -158,18 +158,6 @@ const NursingCarePage = lazyNamed(
   () => import("./modules/clinical/NursingCarePage"),
   "NursingCarePage",
 );
-const IndividualPsychotherapyPage = lazyNamed(
-  () => import("./modules/clinical/IndividualPsychotherapyPage"),
-  "IndividualPsychotherapyPage",
-);
-const FamilyTherapyPage = lazyNamed(
-  () => import("./modules/clinical/FamilyTherapyPage"),
-  "FamilyTherapyPage",
-);
-const GroupPsychotherapyPage = lazyNamed(
-  () => import("./modules/clinical/GroupPsychotherapyPage"),
-  "GroupPsychotherapyPage",
-);
 const GroupProgrammePage = lazyNamed(
   () => import("./modules/care/groupProgramme/GroupProgrammePage"),
   "GroupProgrammePage",
@@ -408,9 +396,20 @@ function App() {
             <Route path="pharmacy" element={<PharmacyPage />} />
             {/* One admission flow (legal status first): the old ADT screen redirects. */}
             <Route path="ipd" element={<Navigate to="/clinical/inpatient" replace />} />
-            <Route path="mhp/individual" element={<IndividualPsychotherapyPage />} />
-            <Route path="mhp/family" element={<FamilyTherapyPage />} />
-            <Route path="mhp/group" element={<GroupPsychotherapyPage />} />
+            {/* The v3 session pages are retired: sessions are recorded in the
+                psychotherapy module, which enforces the therapy contract. */}
+            <Route
+              path="mhp/individual"
+              element={<Navigate to="/clinical/psychotherapy/individual" replace />}
+            />
+            <Route
+              path="mhp/family"
+              element={<Navigate to="/clinical/psychotherapy/family" replace />}
+            />
+            <Route
+              path="mhp/group"
+              element={<Navigate to="/clinical/psychotherapy/group" replace />}
+            />
             <Route path="mhp/supervision" element={<SupervisionRequestsPage />} />
             <Route path="mhp/nacada" element={<NacadaReportPage />} />
             <Route path="profile" element={<MyProfilePage />} />

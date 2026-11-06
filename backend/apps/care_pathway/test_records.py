@@ -137,3 +137,19 @@ class NoteAndEpisodeTests(RecordsTestCase):
         new = self.post("care-client-new-episode", {})
         self.assertEqual(new.status_code, 201)
         self.assertEqual(self.post("care-client-new-episode", {}).status_code, 400)
+
+
+class ClientRecordReadAuditTests(RecordsTestCase):
+    def test_every_read_of_the_client_record_is_audited_on_the_client(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        self.assertEqual(self.get("care-client-notes").status_code, 200)
+        with platform_admin_context():
+            entry = AuditLogEntry.objects.filter(
+                action=AuditLogEntry.ACTION_VIEW,
+                model="client_registry.patient",
+                object_id=self.pid,
+                field_diff__route="care-client-notes",
+            ).get()
+            self.assertEqual(str(entry.actor_user_id), str(self.nurse.id))
+            self.assertEqual(entry.organization_id, self.org.id)

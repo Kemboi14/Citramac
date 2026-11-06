@@ -21,10 +21,9 @@ INVITE_TTL_DAYS = 7
 
 # docs/04-MULTI-TENANCY.md §4.4's MENTAL_HEALTH_MHP bundle, expressed as the
 # app labels actually present in settings.LOCAL_APPS for this deployment.
-# This deployment never installs apps.ris_pacs/theatre/mch/mortuary at all
-# (see config/settings/base.py), so a GENERAL_HOSPITAL bundle has no meaning
-# here — this command deliberately only knows how to onboard the one
-# facility type this build can actually serve.
+# This build has no general-hospital modules (see config/settings/base.py), so
+# a GENERAL_HOSPITAL bundle has no meaning here — this command deliberately
+# only knows how to onboard the one facility type this build can serve.
 MENTAL_HEALTH_MHP_BUNDLE = [
     "client_registry",
     "triage",

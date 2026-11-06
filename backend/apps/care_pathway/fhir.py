@@ -37,6 +37,7 @@ from fhir.resources.R4B.documentreference import (
 from fhir.resources.R4B.encounter import Encounter, EncounterHospitalization
 from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 from fhir.resources.R4B.flag import Flag
+from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.narrative import Narrative
 from fhir.resources.R4B.observation import Observation
 from fhir.resources.R4B.period import Period
@@ -68,7 +69,19 @@ _ENCOUNTER_STATUS = {
     "COMPLETED": "finished",
     "RECHECK_COMPLETED": "finished",
 }
-_TASK_STATUS = {"INITIATED": "requested", "PENDING": "ready", "COMPLETED": "completed"}
+
+
+# PENDING is "in progress" (psychiatric_review.py: the review has been opened);
+# R4 `ready` would say it has not started.
+def _episode_period(episode):
+    """EpisodeOfCare.period — with its end once the episode is finished or cancelled."""
+    return Period(
+        start=episode.period_start.isoformat(),
+        end=episode.period_end.isoformat() if episode.period_end else None,
+    )
+
+
+_TASK_STATUS = {"INITIATED": "requested", "PENDING": "in-progress", "COMPLETED": "completed"}
 
 
 def _local(valueset, code, display=None):
@@ -124,7 +137,7 @@ def build_triage_bundle(triage_encounter):
                 status=te.episode.status,
                 statusHistory=history or None,
                 patient=Reference(reference=patient_ref),
-                period=Period(start=te.episode.period_start.isoformat()),
+                period=_episode_period(te.episode),
             ),
         )
     )
@@ -478,7 +491,7 @@ def build_discharge_bundle(summary):
                     ]
                     or None,
                     patient=Reference(reference=patient_ref),
-                    period=Period(start=episode.period_start.isoformat()),
+                    period=_episode_period(episode),
                 ),
             )
         )
@@ -540,7 +553,9 @@ def build_discharge_bundle(summary):
             )
         )
 
-    author = _actor(summary.signed_by)
+    # A document's references must resolve inside it, and no Practitioner is
+    # emitted (workforce data, not yet profiled): the signer is named, not linked.
+    author = Reference(display=_actor(summary.signed_by).display)
     composition = Composition(
         id=str(summary.id),
         status="amended" if summary.supersedes_id else "final",
@@ -579,5 +594,12 @@ def build_discharge_bundle(summary):
     entries = [BundleEntry(fullUrl=composition_ref, resource=composition)]
     entries += [BundleEntry(fullUrl=url, resource=resource) for url, resource in resources]
     entries.append(BundleEntry(fullUrl=_urn("Provenance", summary.id), resource=provenance))
-    bundle = Bundle(type="document", entry=entries)
+    # bdl-9 / bdl-10: a document carries its own identity and assembly time.
+    # urn:ietf:rfc:3986 is the base-spec system for a value that is itself a URI.
+    bundle = Bundle(
+        type="document",
+        identifier=Identifier(system="urn:ietf:rfc:3986", value=f"urn:uuid:{summary.id}"),
+        timestamp=summary.signed_at.isoformat(),
+        entry=entries,
+    )
     return json.loads(bundle.json())

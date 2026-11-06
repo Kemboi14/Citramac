@@ -3,6 +3,7 @@
   "type": "collection",
   "entry": [
     {
+      "fullUrl": "urn:uuid:44444444-4444-4444-8444-444444444444",
       "resource": {
         "resourceType": "Patient",
         "id": "44444444-4444-4444-8444-444444444444",
@@ -39,6 +40,7 @@
       }
     },
     {
+      "fullUrl": "urn:uuid:c4444444-4444-4444-8444-444444444444",
       "resource": {
         "resourceType": "Consent",
         "id": "c4444444-4444-4444-8444-444444444444",
@@ -53,20 +55,23 @@
         },
         "category": [
           {
-            "text": "Sharing mental-health information on the HIE \u2014 restricted to the treating facility"
+            "text": "Sharing mental-health information on the HIE — restricted to the treating facility"
           }
         ],
         "patient": {
-          "reference": "Patient/44444444-4444-4444-8444-444444444444"
+          "reference": "urn:uuid:44444444-4444-4444-8444-444444444444"
         },
         "dateTime": "2026-10-12T09:02:00+03:00",
         "performer": [
           {
-            "reference": "Patient/44444444-4444-4444-8444-444444444444"
+            "reference": "urn:uuid:44444444-4444-4444-8444-444444444444"
           }
         ],
         "provision": {
           "type": "deny"
+        },
+        "policyRule": {
+          "text": "Facility consent wording, version v1"
         }
       }
     }

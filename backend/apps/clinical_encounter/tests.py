@@ -202,3 +202,58 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(str(response.data["results"][0]["patient"]), str(self.patient.id))
+
+
+class EnteredInErrorTests(ClinicalEncounterAndTriageTests):
+    """R4 entered-in-error: the only correction for a record whose subject or code
+    is fixed. Needs a reason, is audited, and takes it out of what is shared."""
+
+    def _mark(self, name, pk, reason="Opened on the wrong client"):
+        return self.client.post(
+            reverse(name, args=[pk]), {"reason": reason}, format="json", **self.auth
+        )
+
+    def test_an_encounter_in_error_takes_its_diagnoses_with_it_and_is_audited(self):
+        from apps.dha_interop.fhir_mapper import build_condition_resource
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        from .models import DiagnosisCode
+
+        encounter_id = self._open_encounter()
+        dx = self._add_diagnosis(encounter_id, "6A70").data
+        self.assertEqual(
+            self._mark("encounter-entered-in-error", encounter_id, "x").status_code, 400
+        )
+        marked = self._mark("encounter-entered-in-error", encounter_id)
+        self.assertEqual(marked.status_code, 200, marked.data)
+        self.assertEqual(marked.data["status"], "ENTERED_IN_ERROR")
+        self.assertEqual(self._mark("encounter-entered-in-error", encounter_id).status_code, 400)
+        closed = self.client.post(reverse("encounter-close", args=[encounter_id]), **self.auth)
+        self.assertEqual(closed.status_code, 400)
+        with platform_admin_context():
+            diagnosis = DiagnosisCode.objects.get(pk=dx["id"])
+            self.assertEqual(diagnosis.verification_status, "ENTERED_IN_ERROR")
+            condition = build_condition_resource(diagnosis, "urn:citramac:patient:x")
+            self.assertEqual(condition.verificationStatus.coding[0].code, "entered-in-error")
+            self.assertIsNone(condition.clinicalStatus)
+            entry = AuditLogEntry.objects.get(
+                model="clinical_encounter.encounter",
+                object_id=encounter_id,
+                field_diff__has_key="entered_in_error",
+            )
+            self.assertEqual(entry.field_diff["entered_in_error"], "Opened on the wrong client")
+            self.assertEqual(entry.field_diff["diagnoses"], [dx["id"]])
+
+    def test_a_diagnosis_in_error_needs_the_action_and_is_then_frozen(self):
+        encounter_id = self._open_encounter()
+        dx = self._add_diagnosis(encounter_id, "6A70").data
+        url = reverse("diagnosis-code-detail", args=[dx["id"]])
+        direct = self.client.patch(
+            url, {"verification_status": "ENTERED_IN_ERROR"}, format="json", **self.auth
+        )
+        self.assertEqual(direct.status_code, 400)
+        marked = self._mark("diagnosis-code-entered-in-error", dx["id"], "Wrong code chosen")
+        self.assertEqual(marked.data["verification_status"], "ENTERED_IN_ERROR")
+        self.assertEqual(marked.data["error_reason"], "Wrong code chosen")
+        edit = self.client.patch(url, {"clinical_notes": "x"}, format="json", **self.auth)
+        self.assertEqual(edit.status_code, 400)

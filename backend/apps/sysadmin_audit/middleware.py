@@ -29,10 +29,44 @@ class AuditMiddleware:
 
         try:
             response = self.get_response(request)
+            log_client_record_read(request, response)
         finally:
             clear_audit_context()
         response["X-Request-ID"] = request_id
         return response
+
+
+def log_client_record_read(request, response):
+    """CLAUDE.md §4: an AuditEvent on every access to a psychiatric record. Every
+    successful read of a URL that names a client (`<patient_id>` — the whole
+    client record, care/clients/<id>/…) writes one VIEW entry on that client,
+    naming the route. Runs while the request's tenant context is still bound
+    (TenantMiddleware wraps this one), so the entry lands in the client's own
+    organisation. Never the response content."""
+    if request.method != "GET" or not 200 <= response.status_code < 300:
+        return
+    match = getattr(request, "resolver_match", None)
+    patient_id = (match.kwargs or {}).get("patient_id") if match else None
+    user = getattr(request, "user", None)
+    if not patient_id or user is None or not user.is_authenticated:
+        return
+    from apps.tenancy.context import get_current_organization_id
+
+    from .audit import write_event
+    from .models import AuditLogEntry
+
+    # The organisation the request is working in (a support session's client
+    # organisation), not necessarily the user's own.
+    organization_id = get_current_organization_id() or user.organization_id
+    if not organization_id:
+        return
+    write_event(
+        organization_id,
+        AuditLogEntry.ACTION_VIEW,
+        "client_registry.patient",
+        patient_id,
+        {"route": match.view_name or match.route},
+    )
 
 
 def get_client_ip(request):

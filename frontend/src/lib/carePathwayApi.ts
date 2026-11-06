@@ -170,9 +170,8 @@ export interface RegistrationPayload extends IdentityDetails {
   next_of_kin_is_guardian?: boolean;
   guardian_legal_status?: string;
   next_of_kin_may_be_informed?: boolean;
+  /** Recorded against the facility's active data-sharing wording, looked up by the server. */
   hie_consent?: HieConsentPayload;
-  consent_text_version?: string;
-  consent_text_snapshot?: string;
   /** Agreement to SMS / email about appointments; recorded against the facility's wording. */
   appointment_messages?: { sms: "NOT_ASKED" | "YES" | "NO"; email: "NOT_ASKED" | "YES" | "NO" };
   confirm_new_record?: boolean;

@@ -1,6 +1,6 @@
 """
 Fail the build when HL7's official FHIR validator reports an error in the
-published Shared Health Record examples (CLAUDE.md §2 rung 4, §3 item 5).
+published FHIR examples (CLAUDE.md §2 rung 4, §3 item 5).
 
 The validator's exit status does not reflect validation errors, so CI runs it
 with `-output <file>` and this script reads the OperationOutcome(s) it writes.

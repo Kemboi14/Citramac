@@ -133,6 +133,24 @@ class RegistryCoverageTests(TestCase):
         ]
         self.assertEqual(missing, [])
 
+    def test_every_registered_model_is_classified(self):
+        """Mental-health, financial, administrative or general clinical — decided
+        for every table, so none silently gets the shorter retention period."""
+        from apps.retention.registry import (
+            ADMINISTRATIVE_MODELS,
+            FINANCIAL_MODELS,
+            GENERAL_CLINICAL_MODELS,
+            MENTAL_HEALTH_MODELS,
+        )
+
+        classified = (
+            MENTAL_HEALTH_MODELS
+            | FINANCIAL_MODELS
+            | ADMINISTRATIVE_MODELS
+            | GENERAL_CLINICAL_MODELS
+        )
+        self.assertEqual(sorted(set(PATIENT_PATHS) - classified), [])
+
     def test_every_registry_path_resolves_to_patient(self):
         for label, path in PATIENT_PATHS.items():
             model = django_apps.get_model(label)

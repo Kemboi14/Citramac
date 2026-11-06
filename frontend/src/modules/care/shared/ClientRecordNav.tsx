@@ -58,11 +58,7 @@ function StageStatusIcon({
   active?: boolean;
 }) {
   return (
-    <SectionCompletionIcon
-      status={status}
-      active={active}
-      className="h-[18px] w-[18px] shrink-0"
-    />
+    <SectionCompletionIcon status={status} active={active} className="h-[18px] w-[18px] shrink-0" />
   );
 }
 

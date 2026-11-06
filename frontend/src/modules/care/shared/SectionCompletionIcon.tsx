@@ -1,8 +1,4 @@
-export type SectionCompletionStatus =
-  | "complete"
-  | "in_progress"
-  | "incomplete"
-  | "not_applicable";
+export type SectionCompletionStatus = "complete" | "in_progress" | "incomplete" | "not_applicable";
 
 const COLOR: Record<SectionCompletionStatus, string> = {
   complete: "#28a745",
@@ -40,9 +36,7 @@ export function SectionCompletionIcon({
         <path d="M10 2a8 8 0 0 0 0 16V2Z" fill="currentColor" fillOpacity=".3" />
       )}
       <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.7" />
-      {status === "in_progress" && (
-        <path d="M10 2v16" stroke="currentColor" strokeWidth="1.25" />
-      )}
+      {status === "in_progress" && <path d="M10 2v16" stroke="currentColor" strokeWidth="1.25" />}
       {status === "not_applicable" && (
         <path d="M6.5 10h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       )}

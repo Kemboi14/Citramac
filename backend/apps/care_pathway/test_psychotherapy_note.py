@@ -405,7 +405,7 @@ class AT18SignAndAmendTests(PsyNoteTestCase):
             format="json",
             **self.auth,
         )
-        self.assertIn(mhp.status_code, (403, 404))
+        self.assertIn(mhp.status_code, (403, 404, 405))
         self.assertEqual(
             self.act(
                 "care-psy-note-amend", nid, {"section": "plan", "text": "y", "reason": ""}

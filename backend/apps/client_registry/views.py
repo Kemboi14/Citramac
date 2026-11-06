@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.retention.mixins import NoHardDeleteMixin
+from apps.sysadmin_audit.mixins import AuditedReadMixin
 from config.errors import error_response
 
 from .consent import capture_consent
@@ -49,7 +50,7 @@ def _generate_citramac_number(organization, temporary=False):
     return generate_citramac_number(organization, temporary=temporary)
 
 
-class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.4 — Module 1."""
 
     @action(detail=False, methods=["get"], url_path="registry")
@@ -268,6 +269,9 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 "This client has no identifier the Client Registry can search — enter one.",
                 fields={"identification_number": ["Enter an identifier to search with."]},
             )
+        from apps.sysadmin_audit.audit import write_event
+        from apps.sysadmin_audit.models import AuditLogEntry
+
         try:
             record = registries.search_client(patient.organization_id, id_type, number)
         except registries.RegistryError as exc:
@@ -276,6 +280,18 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 exc.message,
                 fields={exc.field: [exc.message]} if exc.field else None,
             )
+        # The identifier went to DHA: audited on the client (type only, never the number).
+        write_event(
+            patient.organization_id,
+            AuditLogEntry.ACTION_HIE_DISCLOSURE,
+            "client_registry.patient",
+            patient.id,
+            {
+                "recipient": "DHA Client Registry",
+                "identification_type": id_type,
+                "matched": record is not None,
+            },
+        )
         searched = {"identification_type": id_type, "identification_number": number}
         if not request.data.get("confirm"):
             return Response(
@@ -391,27 +407,32 @@ class PatientViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                     )
                 # `granted` is derived: only an explicit YES is a grant.
                 granted = decision == "YES"
-            consent_text_version = request.data.get("consent_text_version")
-            consent_text_snapshot = request.data.get("consent_text_snapshot")
-            if granted is None or not consent_text_version or not consent_text_snapshot:
+            if granted is None:
+                return Response(
+                    {"error": {"code": "MISSING_FIELDS", "message": "granted is required."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from .consent import active_wording
+
+            # The facility's own wording, looked up here — never the browser's copy.
+            wording = active_wording(patient.organization_id, consent_type)
+            if wording is None:
                 return Response(
                     {
                         "error": {
-                            "code": "MISSING_FIELDS",
-                            "message": (
-                                "granted, consent_text_version, and consent_text_snapshot "
-                                "are all required."
-                            ),
+                            "code": "NO_WORDING",
+                            "message": "No consent wording is configured for this facility. "
+                            "An Org Admin must set it before consent can be recorded.",
                         }
                     },
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_409_CONFLICT,
                 )
             record = capture_consent(
                 patient,
                 request.user,
                 granted,
-                consent_text_version,
-                consent_text_snapshot,
+                wording.version,
+                wording.text,
                 consent_type=consent_type,
                 decision=decision,
                 purpose=request.data.get("purpose") or "",
@@ -459,7 +480,7 @@ class AppointmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
             serializer.save()
 
 
-class AttachmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class AttachmentViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     Global document manager — mockups/citramac_clinical_workspace.html's
     "Attachments" nav item. Per-patient upload/list continues to also be

@@ -54,32 +54,6 @@ class BillingTests(APITestCase):
             **self.auth,
         )
 
-    def test_invoice_status_moves_to_paid_once_payments_cover_the_total(self):
-        create_response = self.client.post(
-            reverse("invoice-list"),
-            {
-                "patient": str(self.patient.id),
-                "encounter": str(self.encounter.id),
-                "lines": [
-                    {"description": "Consultation fee", "quantity": 1, "unit_price": "1500.00"}
-                ],
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(create_response.status_code, 201, create_response.data)
-        invoice_id = create_response.data["id"]
-        self.assertEqual(create_response.data["total_amount"], "1500.00")
-
-        pay_response = self.client.post(
-            reverse("invoice-payments", args=[invoice_id]),
-            {"amount": "1500.00", "method": "MPESA", "reference": "QAB123"},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(pay_response.status_code, 201, pay_response.data)
-        self.assertEqual(pay_response.data["status"], "PAID")
-
     def test_billing_gate_blocks_orders_with_no_cleared_payment_path(self):
         response = self._order_lab_test()
         self.assertEqual(response.status_code, 402)

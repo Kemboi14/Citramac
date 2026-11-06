@@ -1,6 +1,11 @@
 {
   "resourceType": "Bundle",
+  "identifier": {
+    "system": "urn:ietf:rfc:3986",
+    "value": "urn:uuid:2ccbb752-cdb8-490c-866e-9296cfac76ed"
+  },
   "type": "document",
+  "timestamp": "2026-10-08T10:28:11.628910Z",
   "entry": [
     {
       "fullUrl": "urn:citramac:composition:2ccbb752-cdb8-490c-866e-9296cfac76ed",
@@ -20,7 +25,6 @@
         "date": "2026-10-08T10:28:11.628910Z",
         "author": [
           {
-            "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
             "display": "Wanjiru Kariuki"
           }
         ],
@@ -30,7 +34,6 @@
             "mode": "legal",
             "time": "2026-10-08T10:28:11.628910Z",
             "party": {
-              "reference": "urn:citramac:practitioner:78e856e1-2751-4e98-be5a-812c28224781",
               "display": "Wanjiru Kariuki"
             }
           }

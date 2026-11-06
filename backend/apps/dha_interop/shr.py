@@ -38,6 +38,7 @@ substances; Kenya Core requires coded active ingredients), referrals (no
 destination FR code recorded).
 """
 
+import json
 import uuid
 
 from django.core.cache import cache
@@ -428,6 +429,7 @@ def _shared_encounters(consent):
             patient=consent.patient, episode=consent.episode, opened_at__date__gte=since
         )
         .filter(encounter_type__in=SHR_ENCOUNTER_TYPES)
+        .exclude(status="ENTERED_IN_ERROR")
         .select_related("opened_by__practitioner_credential")
         .order_by("opened_at")
     )
@@ -515,7 +517,7 @@ def _condition_resource(consent, diagnosis, security):
     HL7's condition-clinical / condition-ver-status, which a profile cannot
     loosen, and Kenya Core binds them (required) to its own code systems — one
     coding from each satisfies both."""
-    verification = diagnosis.verification_status or "PROVISIONAL"
+    verification = diagnosis.verification_status
     resource = {
         "resourceType": "Condition",
         "id": str(diagnosis.id),
@@ -581,9 +583,22 @@ def build_bundle(consent, labels):
         .order_by("-is_primary", "noted_at")
     )
     refuted = [d for d in diagnoses if d.verification_status == "RULED_OUT"]
-    diagnoses = [d for d in diagnoses if d.verification_status != "RULED_OUT"]
+    in_error = [d for d in diagnoses if d.verification_status == "ENTERED_IN_ERROR"]
+    # Kenya Core requires a verification status, and blank means the certainty
+    # was never stated — sending it as provisional would assert what nobody did.
+    unstated = [d for d in diagnoses if not d.verification_status]
+    diagnoses = [
+        d for d in diagnoses if d.verification_status not in DiagnosisCode.NOT_ASSERTED + ("",)
+    ]
     if refuted:
         omissions.append(f"{len(refuted)} ruled-out diagnosis(es) not shared.")
+    if in_error:
+        omissions.append(f"{len(in_error)} diagnosis(es) entered in error not shared.")
+    if unstated:
+        omissions.append(
+            f"{len(unstated)} diagnosis(es) with no recorded certainty not shared — "
+            "record provisional, differential or confirmed to share them."
+        )
     sud = _sud_programme(consent.patient) or any(
         "SUD" in condition_labels(consent.branch, consent.organization_id, d.icd11_code_id)
         for d in diagnoses
@@ -594,7 +609,9 @@ def build_bundle(consent, labels):
         entries.append(_encounter_resource(consent, encounter, security, omissions))
     for diagnosis in diagnoses:
         entries.append(_condition_resource(consent, diagnosis, security))
-    key = "|".join([str(consent.id)] + [e["resourceType"] + "/" + e["id"] for e in entries])
+    # The id follows the content, not just which resources are in it: a corrected
+    # diagnosis is a new bundle (sent), the same content again is not.
+    key = str(consent.id) + "|" + json.dumps(entries, sort_keys=True, default=str)
     bundle = {
         "resourceType": "Bundle",
         "id": str(uuid.uuid5(BUNDLE_NAMESPACE, key)),
@@ -677,9 +694,6 @@ def preview(consent):
 
 def send_visit(consent, user):
     """Gate, then queue durably and attempt delivery. Returns the outbox row."""
-    from apps.sysadmin_audit.audit import write_event
-    from apps.sysadmin_audit.models import AuditLogEntry
-
     bundle, omissions, problems, sud = prepare(consent)
     if problems:
         raise ShrError("Not sent: " + " ".join(problems))
@@ -688,30 +702,18 @@ def send_visit(consent, user):
     ).first()
     if already is not None and already.status in ("SENT", "RECEIVED"):
         return already  # this exact content is already in the national record
-    with transaction.atomic():
-        entry = hie_client.enqueue(
-            consent.organization_id,
-            hie_client.SHR_BUNDLE,
-            bundle,
-            f"shr:{bundle['id']}",
-            related=("ShrConsent", consent.id),
-            retry_safe=False,
-        )
-        write_event(
-            consent.organization_id,
-            AuditLogEntry.ACTION_HIE_DISCLOSURE,
-            "client_registry.patient",
-            consent.patient_id,
-            {
-                "bundle_id": bundle["id"],
-                "resources": [
-                    f"{e['resource']['resourceType']}/{e['resource']['id']}"
-                    for e in bundle["entry"]
-                ],
-                "labels": ["R", "PSY"] + (["SUD"] if sud else []),
-                "facility": consent.branch.sha_fr_code,
-            },
-        )
+    # A person pressing Send is the resend of a FAILED or REJECTED bundle: the id is
+    # stable for this content, so it is not a blind retry. The disclosure itself is
+    # audited by hie_client.deliver when the SHR accepts it, not here.
+    entry = hie_client.enqueue(
+        consent.organization_id,
+        hie_client.SHR_BUNDLE,
+        bundle,
+        f"shr:{bundle['id']}",
+        related=("ShrConsent", consent.id),
+        retry_safe=False,
+        resend=True,
+    )
     if entry.status in ("CACHED", "RETRY", "REJECTED"):
         hie_client.deliver(entry)
         entry.refresh_from_db()

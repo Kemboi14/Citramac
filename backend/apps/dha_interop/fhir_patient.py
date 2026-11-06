@@ -15,6 +15,7 @@ CLAUDE.md rules applied here:
 """
 
 import logging
+import uuid
 
 from django.conf import settings
 from fhir.resources.R4B.address import Address
@@ -60,22 +61,42 @@ def identifier_system(kind, organization=None):
     return (settings.FHIR_NATIONAL_IDENTIFIER_SYSTEMS.get(kind) or "") or None
 
 
+KENYA_CORE_SLICES = ("nationalId", "shaNumber", "phoneNumber", "householdNumber")
+
+
+def _kenya_core_slice_systems():
+    """Systems of the Kenya Core Patient identifier slices, read from the vendored
+    package: each fixes `use` to official and allows one identifier."""
+    from .fhir_validation import kenya_core
+
+    return {kenya_core.identifier_system(name) for name in KENYA_CORE_SLICES}
+
+
 def _identifiers(patient):
     """(fhir identifiers, omitted descriptions). Superseded identifiers are kept
-    but marked `use=old`, so an emergency number still resolves after a merge."""
+    but marked `use=old`, so an emergency number still resolves after a merge —
+    except in a Kenya Core slice, which allows only the current one (official)."""
     out, omitted = [], []
+    slice_systems = _kenya_core_slice_systems()
     for row in patient.identifiers.all():
         system = identifier_system(row.kind, patient.organization)
         if not system:
             omitted.append(f"{row.kind}: no FHIR system configured")
             continue
+        if system in slice_systems:
+            if row.superseded_at:
+                omitted.append(f"{row.kind}: superseded — Kenya Core carries only the current one")
+                continue
+            use = "official"
+        elif row.superseded_at:
+            use = "old"
+        else:
+            use = "temp" if row.kind == "TEMPORARY" else "usual"
         out.append(
             Identifier(
                 system=system,
                 value=row.value,
-                use=(
-                    "old" if row.superseded_at else ("temp" if row.kind == "TEMPORARY" else "usual")
-                ),
+                use=use,
                 type=CodeableConcept(text=row.get_kind_display()),
             )
         )
@@ -150,14 +171,14 @@ def build_patient_resource(patient):
     if patient.merged_into_id:
         links.append(
             PatientLink(
-                other=Reference(reference=f"Patient/{patient.merged_into_id}"),
+                other=Reference(reference=f"urn:uuid:{patient.merged_into_id}"),
                 type="replaced-by",
             )
         )
     # The surviving record names each temporary record it absorbed.
     for merged_id in patient.merged_from.order_by("merged_at").values_list("id", flat=True):
         links.append(
-            PatientLink(other=Reference(reference=f"Patient/{merged_id}"), type="replaces")
+            PatientLink(other=Reference(reference=f"urn:uuid:{merged_id}"), type="replaces")
         )
     security = [
         Coding(
@@ -217,15 +238,28 @@ def build_hie_consent(record):
         status="active",
         scope=CodeableConcept(coding=[Coding(system=CONSENT_SCOPE_SYSTEM, code="patient-privacy")]),
         category=[CodeableConcept(text=label)],
-        patient=Reference(reference=f"Patient/{record.patient_id}"),
+        patient=Reference(reference=f"urn:uuid:{record.patient_id}"),
         dateTime=record.captured_at.isoformat(),
-        performer=[Reference(reference=f"Patient/{record.patient_id}")],
-        policyRule=None,
+        performer=[Reference(reference=f"urn:uuid:{record.patient_id}")],
+        # ppc-1: the policy the decision was made under is the facility's own
+        # wording, by version (no coded policy for it is verified — text only).
+        policyRule=CodeableConcept(
+            text=f"Facility consent wording, version {record.consent_text_version}"
+        ),
         provision=ConsentProvision(
             type="permit" if permit else "deny",
             period=period,
         ),
     )
+
+
+_PROVENANCE_NAMESPACE = uuid.UUID("5b0f3c1e-8d2a-4e6f-9a7b-1c3d5e7f9a2b")
+
+
+def provenance_id(kind, target_id):
+    """A stable UUID for the Provenance of one event, so a bundle entry can be
+    addressed as urn:uuid like every other resource here."""
+    return str(uuid.uuid5(_PROVENANCE_NAMESPACE, f"{kind}:{target_id}"))
 
 
 def build_merge_provenance(merge):
@@ -237,10 +271,10 @@ def build_merge_provenance(merge):
     user = merge.merged_by
     name = (user.get_full_name() if hasattr(user, "get_full_name") else "") or str(user)
     return Provenance(
-        id=f"prov-merge-{merge.id}",
+        id=provenance_id("merge", merge.id),
         target=[
-            Reference(reference=f"Patient/{merge.temporary_id}"),
-            Reference(reference=f"Patient/{merge.surviving_id}"),
+            Reference(reference=f"urn:uuid:{merge.temporary_id}"),
+            Reference(reference=f"urn:uuid:{merge.surviving_id}"),
         ],
         recorded=merge.merged_at.isoformat(),
         activity=CodeableConcept(text="Temporary record merged into an identified client"),
@@ -258,8 +292,8 @@ def build_registration_provenance(patient, user, recorded_at):
     """Who recorded the registration, when, for whom (CLAUDE.md §3 item 4)."""
     name = (user.get_full_name() if hasattr(user, "get_full_name") else "") or str(user)
     return Provenance(
-        id=f"prov-{patient.id}",
-        target=[Reference(reference=f"Patient/{patient.id}")],
+        id=provenance_id("registration", patient.id),
+        target=[Reference(reference=f"urn:uuid:{patient.id}")],
         recorded=recorded_at.isoformat(),
         agent=[
             ProvenanceAgent(

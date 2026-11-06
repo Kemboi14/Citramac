@@ -1,6 +1,8 @@
 from .audit import log_view, write_event
 from .models import AuditLogEntry
 
+FREE_TEXT_PARAMS = ("q", "search", "query", "name")
+
 
 class AuditedReadMixin:
     """CLAUDE.md §4: an AuditEvent on every access to a psychiatric record.
@@ -22,6 +24,14 @@ class AuditedReadMixin:
             AuditLogEntry.ACTION_VIEW,
             f"{model._meta.app_label}.{model._meta.model_name}",
             "list",
-            {"filters": {k: v for k, v in request.query_params.items() if k != "page"}},
+            {
+                "filters": {
+                    # A free-text search is often a name: record that one was
+                    # given, never what was typed.
+                    k: ("(search)" if k in FREE_TEXT_PARAMS else v)
+                    for k, v in request.query_params.items()
+                    if k != "page"
+                }
+            },
         )
         return response

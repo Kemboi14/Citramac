@@ -167,7 +167,7 @@ def _requires_preauth(code, payer):
 def _primary_diagnosis(patient):
     return (
         DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT")
+        .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
         .select_related("icd11_code")
         .order_by("-is_primary", "-noted_at")
         .first()
@@ -441,7 +441,7 @@ def _review(user, claim, lines_checked):
     claim.diagnoses_snapshot = [
         {"system": "ICD-11", "code": d.icd11_code_id, "is_primary": d.is_primary}
         for d in DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE")
-        .exclude(verification_status="RULED_OUT")
+        .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
         .order_by("-is_primary", "-noted_at")
     ]
     claim.checklist_snapshot = items

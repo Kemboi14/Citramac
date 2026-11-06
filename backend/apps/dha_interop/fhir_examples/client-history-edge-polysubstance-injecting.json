@@ -1,6 +1,11 @@
 {
   "resourceType": "Bundle",
+  "identifier": {
+    "system": "urn:ietf:rfc:3986",
+    "value": "urn:uuid:c174467c-1288-4c3b-ae56-2445062bb957"
+  },
   "type": "document",
+  "timestamp": "2026-10-21T06:28:58.050235Z",
   "entry": [
     {
       "fullUrl": "urn:citramac:composition:c174467c-1288-4c3b-ae56-2445062bb957",

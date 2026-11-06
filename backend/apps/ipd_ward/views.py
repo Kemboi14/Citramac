@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import _has_org_admin_role
 from apps.retention.mixins import NoHardDeleteMixin
+from apps.sysadmin_audit.mixins import AuditedReadMixin
 
 from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
 from .serializers import (
@@ -101,7 +102,7 @@ class BedViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
-class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     ADT — docs/07-CLINICAL-MODULES-SPEC.md §7.7. `admission_type` distinguishes
     voluntary (client-consented) from involuntary (Mental Health Act Cap. 248
@@ -228,7 +229,7 @@ class AdmissionViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return Response(AdmissionSerializer(admission).data)
 
 
-class MedicationAdministrationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class MedicationAdministrationViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = MedicationAdministrationSerializer
 
     def get_queryset(self):
@@ -255,7 +256,7 @@ class MedicationAdministrationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return Response(MedicationAdministrationSerializer(entry).data)
 
 
-class NursingNoteViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class NursingNoteViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = NursingNoteSerializer
 
     def get_queryset(self):

@@ -40,10 +40,7 @@ import { ToolsSection } from "./intake/ToolsSection";
 import { TriggerHint } from "./intake/TriggerHint";
 import type { RecordViewProps } from "./types";
 
-const STATE_MARK: Record<
-  IntakeSectionState,
-  { icon: SectionCompletionStatus; label: string }
-> = {
+const STATE_MARK: Record<IntakeSectionState, { icon: SectionCompletionStatus; label: string }> = {
   Complete: { icon: "complete", label: "complete" },
   "In progress": { icon: "in_progress", label: "in progress" },
   "Not applicable": { icon: "not_applicable", label: "not applicable" },
@@ -128,9 +125,7 @@ export function IntakeStage(props: RecordViewProps) {
   if (!schema || !draft) {
     return (
       <div>
-        <PageHeader
-          title="Comprehensive Mental Health and Addiction Intake"
-        />
+        <PageHeader title="Comprehensive Mental Health and Addiction Intake" />
         {error ? (
           <ErrorNote>{error}</ErrorNote>
         ) : (
@@ -509,10 +504,7 @@ function IntakeWorkspace({
               : ""
         }`}
       >
-        <div
-          id="intake-section-navigation"
-          className={showSectionNav ? "min-w-0" : "hidden"}
-        >
+        <div id="intake-section-navigation" className={showSectionNav ? "min-w-0" : "hidden"}>
           <nav
             aria-label="Intake sections"
             className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
@@ -593,9 +585,7 @@ function IntakeWorkspace({
                     {spec.core ? "Core" : "Extended"}
                   </span>
                 </span>
-                <Tag
-                  tone="neutral"
-                >
+                <Tag tone="neutral">
                   <SectionCompletionIcon
                     status={STATE_MARK[stateOf(spec.key)].icon}
                     monochrome

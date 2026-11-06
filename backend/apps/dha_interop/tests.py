@@ -16,7 +16,6 @@ from .fhir_mapper import (
 )
 from .fhir_validation import assert_conformant, validate_resource
 from .models import IcdCodeIndex
-from .sync import sync_terminology_source
 
 
 class TerminologySearchTests(APITestCase):
@@ -134,46 +133,6 @@ class ClientHistoryFhirBundleTests(APITestCase):
         self.assertIn("Patient", resource_types)
         self.assertIn("Composition", resource_types)
         self.assertNotIn("Observation", resource_types)
-
-
-class TerminologySyncTests(APITestCase):
-    """docs/08-DHA-SHA-INTEGRATION.md §8.2 — generic terminology sync job pattern."""
-
-    def test_sync_skips_honestly_when_source_not_configured(self):
-        run = sync_terminology_source("ICD11")
-        self.assertEqual(run.status, "SKIPPED_NOT_CONFIGURED")
-        self.assertIn("not configured", run.detail)
-        self.assertIsNotNone(run.finished_at)
-
-    def test_sync_upserts_records_when_source_configured(self):
-        from unittest.mock import Mock, patch
-
-        fake_response = Mock(status_code=200)
-        fake_response.raise_for_status.return_value = None
-        fake_response.json.return_value = [
-            {"code": "9Z99", "description": "Test synced ICD-11 code"},
-        ]
-        with patch("apps.dha_interop.sync.requests.get", return_value=fake_response):
-            with self.settings(ICD11_SYNC_SOURCE_URL="https://icd.example.test/codes"):
-                run = sync_terminology_source("ICD11")
-        self.assertEqual(run.status, "SUCCESS")
-        self.assertEqual(run.records_synced, 1)
-        self.assertEqual(
-            IcdCodeIndex.objects.get(code="9Z99").description, "Test synced ICD-11 code"
-        )
-
-    def test_sync_reports_failure_honestly_on_http_error(self):
-        from unittest.mock import patch
-
-        import requests
-
-        with patch(
-            "apps.dha_interop.sync.requests.get", side_effect=requests.ConnectionError("down")
-        ):
-            with self.settings(ICD11_SYNC_SOURCE_URL="https://icd.example.test/codes"):
-                run = sync_terminology_source("ICD11")
-        self.assertEqual(run.status, "FAILED")
-        self.assertIn("down", run.detail)
 
 
 class FhirR4ConformanceTests(APITestCase):

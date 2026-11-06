@@ -16,12 +16,14 @@ import {
   checkRegistrationDuplicates,
   getClientBanner,
   getRegistration,
+  listConsentTemplates,
   registerArrival,
   resolveIdentity,
   searchRegistrations,
   updateRegistration,
   type ClientBanner,
   type ConsentDecision,
+  type ConsentTemplate,
   type DuplicateMatch,
   type IdentityDetails,
   type IdentityStatus,
@@ -106,16 +108,6 @@ const DESCRIPTION_REQUIRED =
   "Add a brief description or reported temporary alias so this unidentified arrival can be distinguished safely.";
 const OFFLINE =
   "Couldn't reach the server, so nothing was saved. Check your connection and submit again — a retry will not create a duplicate record.";
-
-// Wording shown to the client before they decide. VERIFY: legal/DPO approval of
-// this text is required before go-live; the snapshot stored with every decision
-// is exactly this string (docs/09 §9.5), so changing it must bump the version.
-const CONSENT_TEXT_VERSION = "registration-hie-v1-draft";
-const CONSENT_TEXT = [
-  "We would like to share your health information with the national Health Information Exchange so other clinicians involved in your care can see it.",
-  "You can say yes, no, or share only within this facility, and you can choose separately for mental-health and substance-use information.",
-  "You can change your mind at any time. Saying no will never stop you getting care.",
-].join(" ");
 
 const CONSENT_FIELDS: {
   key: keyof ConsentForm;
@@ -466,6 +458,24 @@ export function RegistrationPage() {
   const searchSeq = useRef(0);
 
   const [consent, setConsent] = useState<ConsentForm>(EMPTY_CONSENT);
+  // The facility's own data-sharing wording (Org Admin → Consent wording). The
+  // server records every decision against it; with none set, nothing is asked.
+  const [hieWording, setHieWording] = useState<ConsentTemplate | null | undefined>(undefined);
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    listConsentTemplates(accessToken)
+      .then((r) => {
+        if (cancelled) return;
+        setHieWording(
+          r.results.find((t) => t.consent_type === "DATA_SHARING_HIE" && t.active) ?? null,
+        );
+      })
+      .catch(() => !cancelled && setHieWording(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
   const [appointmentMessages, setAppointmentMessages] = useState<AppointmentMessagesForm>(
     EMPTY_APPOINTMENT_MESSAGES,
   );
@@ -734,8 +744,6 @@ export function RegistrationPage() {
       guardian_legal_status: form.nokGuardian ? form.guardianStatus.trim() || undefined : undefined,
       next_of_kin_may_be_informed: form.nokMayInform || undefined,
       hie_consent: decided ? consent : undefined,
-      consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
-      consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
       appointment_messages: appointmentMessagesPayload(appointmentMessages),
       referral_source: form.referral.trim(),
       payer: form.payer,
@@ -884,8 +892,6 @@ export function RegistrationPage() {
               : undefined,
             next_of_kin_may_be_informed: form.nokMayInform || undefined,
             hie_consent: decided ? consent : undefined,
-            consent_text_version: decided ? CONSENT_TEXT_VERSION : undefined,
-            consent_text_snapshot: decided ? CONSENT_TEXT : undefined,
             appointment_messages: appointmentMessagesPayload(appointmentMessages),
             confirm_new_record: confirmedNew || undefined,
             referral_source: form.referral.trim() || undefined,
@@ -1580,94 +1586,111 @@ export function RegistrationPage() {
                     <legend className="text-base font-semibold text-ink-900">
                       Privacy &amp; sharing
                     </legend>
-                    <div className="mt-4 overflow-hidden rounded-[14px] border border-surface-border">
-                      <div className="grid min-[701px]:grid-cols-2">
-                        {CONSENT_FIELDS.map(({ key, title, label, sensitive }, index) => {
-                          const value = consent[key];
-                          const status = CONSENT_STATUS[value] ?? CONSENT_STATUS.NOT_ASKED;
-                          const options = vs
-                            .options("hie-consent-decision")
-                            .filter(
-                              (o) =>
-                                o.code !== "NOT_ASKED" &&
-                                !(key === "family" && o.code === "RESTRICTED"),
-                            );
-                          return (
-                            <div
-                              key={key}
-                              role="radiogroup"
-                              aria-labelledby={`reg-consent-${key}`}
-                              className={`flex flex-col gap-3 border-surface-border px-[18px] py-4 ${
-                                index < CONSENT_FIELDS.length - 1 ? "border-b" : ""
-                              } ${index % 2 === 0 ? "min-[701px]:border-r" : ""} ${
-                                index >= CONSENT_FIELDS.length - 2 ? "min-[701px]:border-b-0" : ""
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2.5">
-                                <div className="min-w-0">
-                                  <h4
-                                    id={`reg-consent-${key}`}
-                                    className="text-[14px] font-semibold text-ink-900"
-                                  >
-                                    <Tip tip={label}>
-                                      <span className={TIP_CUE}>{title}</span>
-                                    </Tip>
-                                    {sensitive && (
-                                      <span className="ml-1.5 rounded-full bg-status-amber-tint px-[7px] py-px text-[11px] font-semibold text-status-amber">
-                                        Sensitive
-                                      </span>
-                                    )}
-                                  </h4>
-                                </div>
-                                <span
-                                  className={`flex-none whitespace-nowrap rounded-full px-2.5 py-[3px] text-xs font-semibold ${status.tone}`}
-                                >
-                                  {key === "family" ? status.family : status.label}
-                                </span>
-                              </div>
-                              <div className="flex overflow-hidden rounded-[10px] border border-surface-border">
-                                {options.map((o) => {
-                                  const checked = value === o.code;
-                                  return (
-                                    <label
-                                      key={o.code}
-                                      className="relative flex-1 cursor-pointer border-r border-surface-border last:border-r-0"
+                    {hieWording === null && (
+                      <Callout tone="warning" role="status" className="mt-3">
+                        Your Org Admin hasn&rsquo;t set the facility&rsquo;s data-sharing wording
+                        (Consent wording), so these questions can&rsquo;t be asked yet. Nothing is
+                        shared with the HIE until a decision is recorded.
+                      </Callout>
+                    )}
+                    {hieWording && (
+                      <div className="mt-4 overflow-hidden rounded-[14px] border border-surface-border">
+                        <blockquote className="whitespace-pre-wrap border-b border-surface-border bg-surface-bg px-[18px] py-3 text-[13px] leading-relaxed text-ink-900">
+                          {hieWording.text}
+                          <span className="mt-1 block text-[11px] text-ink-500">
+                            Facility wording · version {hieWording.version}
+                          </span>
+                        </blockquote>
+                        <div className="grid min-[701px]:grid-cols-2">
+                          {CONSENT_FIELDS.map(({ key, title, label, sensitive }, index) => {
+                            const value = consent[key];
+                            const status = CONSENT_STATUS[value] ?? CONSENT_STATUS.NOT_ASKED;
+                            const options = vs
+                              .options("hie-consent-decision")
+                              .filter(
+                                (o) =>
+                                  o.code !== "NOT_ASKED" &&
+                                  !(key === "family" && o.code === "RESTRICTED"),
+                              );
+                            return (
+                              <div
+                                key={key}
+                                role="radiogroup"
+                                aria-labelledby={`reg-consent-${key}`}
+                                className={`flex flex-col gap-3 border-surface-border px-[18px] py-4 ${
+                                  index < CONSENT_FIELDS.length - 1 ? "border-b" : ""
+                                } ${index % 2 === 0 ? "min-[701px]:border-r" : ""} ${
+                                  index >= CONSENT_FIELDS.length - 2 ? "min-[701px]:border-b-0" : ""
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2.5">
+                                  <div className="min-w-0">
+                                    <h4
+                                      id={`reg-consent-${key}`}
+                                      className="text-[14px] font-semibold text-ink-900"
                                     >
-                                      <input
-                                        type="radio"
-                                        name={`reg-consent-${key}`}
-                                        value={o.code}
-                                        checked={checked}
-                                        onChange={() =>
-                                          setConsent((prev) => ({
-                                            ...prev,
-                                            [key]: o.code as ConsentDecision,
-                                          }))
-                                        }
-                                        className="peer absolute inset-0 cursor-pointer opacity-0"
-                                      />
-                                      <span
-                                        className={`block px-1.5 py-[9px] text-center text-[13px] font-medium peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-brand-green ${
-                                          checked
-                                            ? CONSENT_STATUS[o.code].solid
-                                            : "text-ink-500 hover:bg-surface-bg"
-                                        }`}
+                                      <Tip tip={label}>
+                                        <span className={TIP_CUE}>{title}</span>
+                                      </Tip>
+                                      {sensitive && (
+                                        <span className="ml-1.5 rounded-full bg-status-amber-tint px-[7px] py-px text-[11px] font-semibold text-status-amber">
+                                          Sensitive
+                                        </span>
+                                      )}
+                                    </h4>
+                                  </div>
+                                  <span
+                                    className={`flex-none whitespace-nowrap rounded-full px-2.5 py-[3px] text-xs font-semibold ${status.tone}`}
+                                  >
+                                    {key === "family" ? status.family : status.label}
+                                  </span>
+                                </div>
+                                <div className="flex overflow-hidden rounded-[10px] border border-surface-border">
+                                  {options.map((o) => {
+                                    const checked = value === o.code;
+                                    return (
+                                      <label
+                                        key={o.code}
+                                        className="relative flex-1 cursor-pointer border-r border-surface-border last:border-r-0"
                                       >
-                                        {o.code === "RESTRICTED" ? "This facility only" : o.display}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
+                                        <input
+                                          type="radio"
+                                          name={`reg-consent-${key}`}
+                                          value={o.code}
+                                          checked={checked}
+                                          onChange={() =>
+                                            setConsent((prev) => ({
+                                              ...prev,
+                                              [key]: o.code as ConsentDecision,
+                                            }))
+                                          }
+                                          className="peer absolute inset-0 cursor-pointer opacity-0"
+                                        />
+                                        <span
+                                          className={`block px-1.5 py-[9px] text-center text-[13px] font-medium peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-brand-green ${
+                                            checked
+                                              ? CONSENT_STATUS[o.code].solid
+                                              : "text-ink-500 hover:bg-surface-bg"
+                                          }`}
+                                        >
+                                          {o.code === "RESTRICTED"
+                                            ? "This facility only"
+                                            : o.display}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
+                        <p className="border-t border-surface-border bg-surface-bg px-[18px] py-3 text-[13px] text-ink-500">
+                          Nothing is sent to the HIE until the client says Yes. Saying No never
+                          affects their care.
+                        </p>
                       </div>
-                      <p className="border-t border-surface-border bg-surface-bg px-[18px] py-3 text-[13px] text-ink-500">
-                        Nothing is sent to the HIE until the client says Yes. Saying No never
-                        affects their care.
-                      </p>
-                    </div>
+                    )}
                   </fieldset>
                   <div className={`min-w-0 ${FULL_ROW}`}>
                     <AppointmentMessagesFields

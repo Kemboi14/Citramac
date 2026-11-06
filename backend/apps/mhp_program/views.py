@@ -154,9 +154,11 @@ class ReviewOfSystemEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, vie
         serializer.save(organization=self.request.user.organization, clinician=self.request.user)
 
 
-class PsychotherapySessionViewSet(
-    NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet
-):
+class PsychotherapySessionViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
+    """Read-only. Sessions are written only by the psychotherapy workflow
+    (care_pathway.therapy / psychotherapy), which enforces the therapy contract
+    and confidentiality terms; the v3 session pages that wrote here are retired."""
+
     full_serializer_class = PsychotherapySessionSerializer
     restricted_serializer_class = PsychotherapySessionRestrictedSerializer
 
@@ -176,20 +178,6 @@ class PsychotherapySessionViewSet(
             queryset = queryset.filter(patient_id=patient)
         return queryset
 
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, therapist=self.request.user)
-
-    def perform_update(self, serializer):
-        # A session documented through the psychotherapy note workflow is
-        # changed only there: drafts by their author, signed notes by audited
-        # amendment (master prompt PSY-SIGN, AT-18).
-        if hasattr(serializer.instance, "psy_note"):
-            raise PermissionDenied(
-                "This session's note is managed in the psychotherapy session workflow — "
-                "a signed note is changed by amendment."
-            )
-        super().perform_update(serializer)
-
 
 class CareTeamMembershipViewSet(viewsets.ModelViewSet):
     """Org Admin/Supervisor tool for assigning the care team — docs/07 §7.14.7."""
@@ -203,8 +191,9 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
-class SudRehabPlanViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
-    """docs/07-CLINICAL-MODULES-SPEC.md §7.14.4."""
+class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
+    """Archive, read-only: SUD care is planned in the care plan (care_pathway) now.
+    Kept for the records and old-format NACADA counts that cite them."""
 
     full_serializer_class = SudRehabPlanSerializer
     restricted_serializer_class = SudRehabPlanRestrictedSerializer
@@ -216,16 +205,10 @@ class SudRehabPlanViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.M
             .order_by("-started_at")
         )
 
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, case_manager=self.request.user)
 
-
-class UrineDrugScreenViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
-    """
-    docs/09-SECURITY-COMPLIANCE.md §9.3 explicitly names UrineDrugScreen
-    among the records the elevated MHP privacy tier gates — panel_results
-    is SUD screening data, not just metadata.
-    """
+class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
+    """Archive, read-only, with SudRehabPlan. Still behind the elevated MHP
+    privacy tier — panel_results is SUD screening data, not just metadata."""
 
     full_serializer_class = UrineDrugScreenSerializer
     restricted_serializer_class = UrineDrugScreenRestrictedSerializer
@@ -233,9 +216,6 @@ class UrineDrugScreenViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewset
 
     def get_queryset(self):
         return UrineDrugScreen.objects.select_related("plan__patient").order_by("-collected_at")
-
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, collected_by=self.request.user)
 
 
 class ClinicalReviewViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):

@@ -425,6 +425,24 @@ class ConsentGateTests(CarePathwayApiTestCase):
             self.assertFalse(may_send_to_hie(self.patient))
 
     def test_registration_captures_separate_sensitive_category_decisions(self):
+        from apps.care_pathway.models import ConsentTemplate
+
+        decisions = {
+            "general": "YES",
+            "mental_health": "RESTRICTED",
+            "substance_use": "NO",
+            "family": "NOT_ASKED",
+        }
+        refused = self.register(full_name="No Wording Yet", hie_consent=decisions)
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("hie_consent", str(refused.data))
+        with platform_admin_context():
+            ConsentTemplate.objects.create(
+                organization=self.org,
+                consent_type="DATA_SHARING_HIE",
+                version="facility-2026-11",
+                text="Facility wording for the HIE.",
+            )
         response = self.register(
             full_name="Grace Wanjiru",
             date_of_birth="1985-01-27",
@@ -452,6 +470,13 @@ class ConsentGateTests(CarePathwayApiTestCase):
                 "SUBSTANCE_USE_HIE": "NO",
             },
         )
+        with platform_admin_context():
+            versions = set(
+                ConsentRecord.objects.filter(patient_id=response.data["patient_id"]).values_list(
+                    "consent_text_version", flat=True
+                )
+            )
+        self.assertEqual(versions, {"facility-2026-11"})  # not the "v1" the browser sent
 
     def test_registration_records_agreement_to_appointment_messages(self):
         from apps.care_pathway.models import ConsentTemplate
@@ -534,6 +559,29 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         self.assertEqual(payload["meta"]["security"][0]["code"], "R")
         self.assertEqual(payload["contact"][0]["name"]["text"], "Joan Kamau")
         self.assertEqual(omitted, [])
+
+    @override_settings(
+        FHIR_NATIONAL_IDENTIFIER_SYSTEMS={
+            "NATIONAL_ID": "https://fhir.dha.go.ke/fhir/identifier/nationalid"
+        }
+    )
+    def test_a_kenya_core_slice_identifier_is_official_and_only_the_current_one(self):
+        from django.utils import timezone
+
+        patient = self.patient(id_document_type="NATIONAL_ID", id_document_number="27730415")
+        with platform_admin_context():
+            old = patient.identifiers.get(kind="NATIONAL_ID")
+            old.superseded_at = timezone.now()
+            old.save(update_fields=["superseded_at"])
+            patient.identifiers.create(
+                organization=patient.organization, kind="NATIONAL_ID", value="33334444"
+            )
+        payload, omitted = self.build(patient)
+        national = [
+            i for i in payload["identifier"] if i["system"].endswith("/identifier/nationalid")
+        ]
+        self.assertEqual([(i["value"], i["use"]) for i in national], [("33334444", "official")])
+        self.assertTrue(any("superseded" in item for item in omitted))
 
     def test_unidentified_patient_gets_a_valid_temporary_name(self):
         patient = self.patient(

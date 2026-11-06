@@ -106,22 +106,25 @@ class MhpCareTeamRestrictionTests(APITestCase):
         for row in response.data["results"]:
             self.assertNotIn("session_notes", row)
 
-    def test_unrelated_clinician_cannot_rewrite_session_notes(self):
+    def test_sessions_are_written_only_by_the_psychotherapy_workflow(self):
+        """The v3 session pages are retired: this endpoint is read-only for everyone,
+        care team included — sessions are written through care_pathway.therapy."""
         url = reverse("psychotherapy-session-detail", args=[self.session.id])
-        response = self.client.patch(
-            url, {"session_notes": "overwritten"}, format="json", **self._auth(self.access_other)
+        for access in (self.access_other, self.access_assigned):
+            response = self.client.patch(
+                url, {"session_notes": "overwritten"}, format="json", **self._auth(access)
+            )
+            self.assertEqual(response.status_code, 405)
+        created = self.client.post(
+            reverse("psychotherapy-session-list"),
+            {},
+            format="json",
+            **self._auth(self.access_assigned),
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(created.status_code, 405)
         with platform_admin_context():
             self.session.refresh_from_db()
         self.assertEqual(self.session.session_notes, "Highly sensitive trauma-processing content.")
-
-    def test_care_team_member_can_still_edit(self):
-        url = reverse("psychotherapy-session-detail", args=[self.session.id])
-        response = self.client.patch(
-            url, {"modality": "CBT"}, format="json", **self._auth(self.access_assigned)
-        )
-        self.assertEqual(response.status_code, 200, response.data)
 
     def test_sessions_cannot_be_deleted(self):
         url = reverse("psychotherapy-session-detail", args=[self.session.id])
@@ -160,37 +163,23 @@ class MhpExtensionsTests(APITestCase):
         self.access, _ = issue_tokens(self.case_manager)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
 
-    def test_create_sud_rehab_plan_defaults_to_intake_phase(self):
-        from .models import SudRehabPlan
-
-        response = self.client.post(
-            reverse("sud-rehab-plan-list"),
-            {"patient": str(self.patient.id), "substances_of_concern": "Alcohol"},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["current_phase"], "INTAKE")
-        with platform_admin_context():
-            plan = SudRehabPlan.objects.get(pk=response.data["id"])
-            self.assertEqual(plan.case_manager_id, self.case_manager.id)
-
-    def test_urine_drug_screen_stores_panel_results_as_json(self):
-        from .models import SudRehabPlan
+    def test_sud_rehab_plans_and_drug_screens_are_a_read_only_archive(self):
+        from .models import SudRehabPlan, UrineDrugScreen
 
         with platform_admin_context():
             plan = SudRehabPlan.objects.create(organization=self.org, patient=self.patient)
-        response = self.client.post(
-            reverse("urine-drug-screen-list"),
-            {
-                "plan": str(plan.id),
-                "panel_results": {"amphetamine": "negative", "cannabinoids": "positive"},
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["panel_results"]["cannabinoids"], "positive")
+            UrineDrugScreen.objects.create(
+                organization=self.org, plan=plan, panel_results={"cannabinoids": "positive"}
+            )
+        for name, body in (
+            ("sud-rehab-plan-list", {"patient": str(self.patient.id)}),
+            ("urine-drug-screen-list", {"plan": str(plan.id), "panel_results": {}}),
+        ):
+            self.assertEqual(
+                self.client.post(reverse(name), body, format="json", **self.auth).status_code, 405
+            )
+        listed = self.client.get(reverse("urine-drug-screen-list"), **self.auth)
+        self.assertEqual(listed.status_code, 200)
 
     def test_supervision_request_lifecycle(self):
         create_response = self.client.post(

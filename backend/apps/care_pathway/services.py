@@ -326,15 +326,20 @@ def _record_allergies(patient, items, user, source, verification):
 def _capture_hie_consent(patient, user, data):
     """HIE / family-involvement consent decisions captured at registration.
     Each decision is its own append-only ConsentRecord."""
-    from apps.client_registry.consent import capture_consent
+    from apps.client_registry.consent import active_wording, capture_consent
     from apps.client_registry.models import ConsentRecord
 
     consent = data.get("hie_consent") or {}
+    asked = any(v and v != "NOT_ASKED" for v in consent.values()) if consent else False
+    wording = active_wording(patient.organization_id, "DATA_SHARING_HIE") if asked else None
+    if asked and wording is None:
+        raise ValidationError(
+            {
+                "hie_consent": "Your Org Admin hasn't set the facility's data-sharing wording "
+                "(Consent wording), so the client's sharing decisions can't be recorded."
+            }
+        )
     if consent:
-        if not (data.get("consent_text_version") and data.get("consent_text_snapshot")):
-            raise ValidationError(
-                {"consent_text_version": "The consent wording shown to the client is required."}
-            )
         for key, consent_type in (
             ("general", "DATA_SHARING_HIE"),
             ("mental_health", "MENTAL_HEALTH_HIE"),
@@ -350,8 +355,8 @@ def _capture_hie_consent(patient, user, data):
                 patient,
                 user,
                 decision == "YES",
-                data["consent_text_version"],
-                data["consent_text_snapshot"],
+                wording.version,
+                wording.text,
                 consent_type=consent_type,
                 decision=decision,
                 purpose=data.get("consent_purpose") or "",

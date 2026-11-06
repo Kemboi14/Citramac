@@ -1,11 +1,5 @@
 import { ChevronDown, List, ListOrdered } from "lucide-react";
-import {
-  useRef,
-  useState,
-  type FocusEvent,
-  type KeyboardEvent,
-  type MouseEvent,
-} from "react";
+import { useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { BTN_GHOST, INPUT } from "../../shared/styles";
 
@@ -35,16 +29,13 @@ export function continueListOnEnter(value: string, start: number, end: number) {
   const markerEnd = lineStart + marker.indent.length + marker.marker.length + marker.spacing.length;
   const lineContent = line.slice(markerEnd - lineStart);
   if (!lineContent.trim()) {
-    const nextValue =
-      value.slice(0, lineStart) + marker.indent + value.slice(lineEnd);
+    const nextValue = value.slice(0, lineStart) + marker.indent + value.slice(lineEnd);
     const caret = lineStart + marker.indent.length;
     return { value: nextValue, selectionStart: caret, selectionEnd: caret };
   }
 
   const nextMarker =
-    marker.kind === "numbered"
-      ? `${Number.parseInt(marker.marker, 10) + 1}.`
-      : marker.marker;
+    marker.kind === "numbered" ? `${Number.parseInt(marker.marker, 10) + 1}.` : marker.marker;
   const insertion = `\n${marker.indent}${nextMarker} `;
   const nextValue = value.slice(0, start) + insertion + value.slice(end);
   const caret = start + insertion.length;
@@ -63,7 +54,8 @@ export function formatSelectedLines(
   const blockEnd = nextNewline === -1 ? value.length : nextNewline;
   const lines = value.slice(blockStart, blockEnd).split("\n");
   const nonEmpty = lines.filter((line) => line.trim());
-  const removeList = nonEmpty.length > 0 && nonEmpty.every((line) => listMarker(line)?.kind === kind);
+  const removeList =
+    nonEmpty.length > 0 && nonEmpty.every((line) => listMarker(line)?.kind === kind);
   let number = 0;
   const formatted = lines
     .map((line) => {
@@ -109,12 +101,7 @@ export function ListTextarea({
   function applyList(kind: ListKind) {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const result = formatSelectedLines(
-      value,
-      textarea.selectionStart,
-      textarea.selectionEnd,
-      kind,
-    );
+    const result = formatSelectedLines(value, textarea.selectionStart, textarea.selectionEnd, kind);
     onChange(result.value);
     requestAnimationFrame(() => {
       textarea.focus();
@@ -148,11 +135,7 @@ export function ListTextarea({
       onBlurCapture={handleBlur}
     >
       {active && (
-        <div
-          role="toolbar"
-          aria-label="Text list formatting"
-          className="flex items-center gap-1"
-        >
+        <div role="toolbar" aria-label="Text list formatting" className="flex items-center gap-1">
           <button
             type="button"
             className={`${BTN_GHOST} !min-h-8 !gap-1 !px-2 !py-1`}

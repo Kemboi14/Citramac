@@ -64,9 +64,17 @@ def describe_issues(issues):
 
 
 def enqueue(
-    organization_id, resource_type, fhir_json, idempotency_key, *, related=None, retry_safe=False
+    organization_id,
+    resource_type,
+    fhir_json,
+    idempotency_key,
+    *,
+    related=None,
+    retry_safe=False,
+    resend=False,
 ):
-    """Idempotent: a second call with the same key returns the first row."""
+    """Idempotent: a second call with the same key returns the first row.
+    `resend` — a person asked to send again: a FAILED row is queued once more."""
     entry, created = FhirResourceCache.objects.get_or_create(
         organization_id=organization_id,
         idempotency_key=idempotency_key,
@@ -81,7 +89,8 @@ def enqueue(
             "next_attempt_at": timezone.now(),
         },
     )
-    if not created and entry.status in ("CACHED", "RETRY", "REJECTED"):
+    requeue = ("CACHED", "RETRY", "REJECTED") + (("FAILED",) if resend else ())
+    if not created and entry.status in requeue:
         # A corrected resource replaces an unsent / rejected one under the same key.
         entry.fhir_json = fhir_json
         entry.status = "CACHED"
@@ -90,19 +99,76 @@ def enqueue(
     return entry
 
 
-def _branch_for(entry):
-    """The facility a queued SHR bundle is sent on behalf of (its consent's branch)."""
+def _consent_for(entry):
+    """The SHR visit consent a queued bundle belongs to (and so its facility)."""
     from .models import ShrConsent
 
     if entry.related_object_type != "ShrConsent" or not entry.related_object_id:
         return None
-    consent = (
+    return (
         ShrConsent.objects.unscoped()
-        .select_related("branch")
+        .select_related("branch", "patient")
         .filter(pk=entry.related_object_id)
         .first()
     )
-    return consent.branch if consent else None
+
+
+def _bundle_labels(bundle):
+    codes = set()
+    for e in bundle.get("entry", []):
+        for label in e.get("resource", {}).get("meta", {}).get("security", []):
+            codes.add(label.get("code"))
+    order = ["R", "PSY", "SUD"]
+    return sorted((c for c in codes if c), key=lambda c: (order.index(c) if c in order else 9, c))
+
+
+def _consent_withdrawn(consent, bundle):
+    """Why this queued bundle may no longer go (empty = it may). Consent is checked
+    again at delivery: a bundle queued while the HIE was down must not be sent
+    after the client withdrew."""
+    from apps.client_registry.consent import (
+        HIE_GENERAL,
+        HIE_MENTAL_HEALTH,
+        HIE_SUBSTANCE_USE,
+        may_send_to_hie,
+    )
+
+    # Closing the visit is not a withdrawal: what was approved for it may still go.
+    if consent.status not in (
+        consent.STATUS_APPROVED,
+        consent.STATUS_CLOSING,
+        consent.STATUS_CLOSED,
+    ):
+        return "the client has not approved this SHR visit"
+    needed = [HIE_GENERAL, HIE_MENTAL_HEALTH]
+    if "SUD" in _bundle_labels(bundle):
+        needed.append(HIE_SUBSTANCE_USE)
+    for consent_type in needed:
+        if not may_send_to_hie(consent.patient, consent_type):
+            return "the client no longer agrees to this sharing"
+    return ""
+
+
+def _audit_disclosure(entry, consent):
+    from apps.sysadmin_audit.audit import write_event
+    from apps.sysadmin_audit.models import AuditLogEntry
+
+    bundle = entry.fhir_json
+    write_event(
+        entry.organization_id,
+        AuditLogEntry.ACTION_HIE_DISCLOSURE,
+        "client_registry.patient",
+        consent.patient_id,
+        {
+            "bundle_id": bundle.get("id"),
+            "resources": [
+                f"{e['resource']['resourceType']}/{e['resource']['id']}"
+                for e in bundle.get("entry", [])
+            ],
+            "labels": _bundle_labels(bundle),
+            "facility": consent.branch.sha_fr_code,
+        },
+    )
 
 
 def deliver(entry):
@@ -116,13 +182,21 @@ def deliver(entry):
         )
         entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
         return entry
-    branch = _branch_for(entry)
-    if branch is None:
+    consent = _consent_for(entry)
+    if consent is None:
         entry.status = "FAILED"
         entry.next_attempt_at = None
         entry.transmission_detail = "The bundle's SHR consent (and so its facility) is missing."
         entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
         return entry
+    withdrawn = _consent_withdrawn(consent, entry.fhir_json)
+    if withdrawn:
+        entry.status = "FAILED"
+        entry.next_attempt_at = None
+        entry.transmission_detail = f"Not sent: {withdrawn}."
+        entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
+        return entry
+    branch = consent.branch
     entry.attempts += 1
     try:
         body = hie_api.call(
@@ -160,6 +234,7 @@ def deliver(entry):
         f"Accepted by the SHR (mediator_id {mediator}). {(body or {}).get('message', '')}".strip()
     )
     entry.save()
+    _audit_disclosure(entry, consent)
     return entry
 
 

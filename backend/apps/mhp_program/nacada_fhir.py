@@ -26,6 +26,8 @@ and any Measure they publish; UCUM is not used for the median wait until its
 system URI is vendored, so the unit is text only.
 """
 
+import uuid
+
 MEASURE_CANONICAL = "urn:citramac:measure:nacada-ndo"
 INDICATOR_SYSTEM = "urn:citramac:codesystem:nacada-ndo-indicator"
 STRATIFIER_SYSTEM = "urn:citramac:codesystem:nacada-ndo-stratifier"
@@ -124,13 +126,18 @@ def build_measure_report(report_id, summary, generated_at, branch_id):
     }
 
 
+# Provenance ids derive from the report id, so the entry is a stable urn:uuid.
+PROVENANCE_NAMESPACE = uuid.UUID("9c4e2a7b-3f1d-4b8e-a6c2-7d5e9f1b3a4c")
+
+
 def build_bundle(report_id, summary, generated_at, branch_id, compiled_by):
     """Collection Bundle: the MeasureReport and the Provenance saying who
     compiled it and when (CLAUDE.md §3 item 4)."""
     measure_report = build_measure_report(report_id, summary, generated_at, branch_id)
+    provenance_id = str(uuid.uuid5(PROVENANCE_NAMESPACE, f"compiled:{report_id}"))
     provenance = {
         "resourceType": "Provenance",
-        "id": f"{report_id}-compiled",
+        "id": provenance_id,
         "target": [{"reference": f"urn:uuid:{report_id}"}],
         "recorded": generated_at,
         "activity": {"text": "Compiled from the facility's records"},
@@ -142,7 +149,7 @@ def build_bundle(report_id, summary, generated_at, branch_id, compiled_by):
         "timestamp": generated_at,
         "entry": [
             {"fullUrl": f"urn:uuid:{report_id}", "resource": measure_report},
-            {"resource": provenance},
+            {"fullUrl": f"urn:uuid:{provenance_id}", "resource": provenance},
         ],
     }
 

@@ -281,6 +281,13 @@ class RegistryTests(HieFixture):
         self.assertEqual(cr.value, CR)
         self.assertIsNotNone(cr.verified_at)
         self.assertEqual(nid.verified_by_source, registries.CLIENT_REGISTRY_SOURCE)
+        with platform_admin_context():
+            lookups = AuditLogEntry.objects.filter(
+                action=AuditLogEntry.ACTION_HIE_DISCLOSURE, object_id=str(self.patient.id)
+            )
+            # One per lookup sent (shown, wrong, confirmed); the type, never the number.
+            self.assertEqual(lookups.count(), 3)
+            self.assertNotIn("TEST-NID-1", json.dumps([e.field_diff for e in lookups]))
 
     def test_practitioner_lookup_uses_the_published_regulator_enum(self):
         with platform_admin_context():
@@ -528,6 +535,13 @@ class ShrTests(HieFixture):
             Encounter.objects.create(
                 organization=self.org, patient=self.patient, episode=self.episode
             )
+            # Certainty never stated: not sent as "provisional", listed as omitted.
+            DiagnosisCode.objects.create(
+                organization=self.org,
+                encounter=self.encounter,
+                icd11_code=self.dx.icd11_code,
+                verification_status="",
+            )
         with FakeHie() as hie:
             consent_id = self.open_visit(hie)
             hie.on("POST", "/shr/bundles", {"mediator_id": "x", "status": "accepted"})
@@ -535,6 +549,10 @@ class ShrTests(HieFixture):
                 reverse("shr-consent-action", args=[consent_id, "preview"]), {}, **self.auth
             )
             self.assertEqual(preview.data["problems"], [])
+            self.assertTrue(
+                any("no recorded certainty" in o for o in preview.data["omissions"]),
+                preview.data["omissions"],
+            )
             sent = self.client.post(
                 reverse("shr-consent-action", args=[consent_id, "send"]), {}, **self.auth
             )
@@ -564,6 +582,87 @@ class ShrTests(HieFixture):
             audit = AuditLogEntry.objects.filter(action=AuditLogEntry.ACTION_HIE_DISCLOSURE)
             self.assertEqual(audit.count(), 1)
             self.assertEqual(audit.get().field_diff["labels"], ["R", "PSY"])
+
+    def send(self, consent_id):
+        return self.client.post(
+            reverse("shr-consent-action", args=[consent_id, "send"]), {}, **self.auth
+        )
+
+    def test_a_failed_send_can_be_resent_and_a_correction_is_a_new_bundle(self):
+        self.consent_yes(HIE_GENERAL, HIE_MENTAL_HEALTH)
+        with FakeHie() as hie:
+            consent_id = self.open_visit(hie)
+            hie.sequence(
+                "POST",
+                "/shr/bundles",
+                (503, {"message": "upstream timeout"}),
+                (200, {"mediator_id": "m-1", "status": "accepted"}),
+                (200, {"mediator_id": "m-2", "status": "accepted"}),
+            )
+            failed = self.send(consent_id)
+            self.assertEqual(failed.data["sends"][0]["status"], "FAILED", failed.data)
+            with platform_admin_context():
+                # Nothing was disclosed, so nothing is audited as a disclosure.
+                self.assertFalse(
+                    AuditLogEntry.objects.filter(
+                        action=AuditLogEntry.ACTION_HIE_DISCLOSURE
+                    ).exists()
+                )
+            resent = self.send(consent_id)
+            self.assertEqual(resent.data["sends"][0]["status"], "SENT", resent.data)
+            with platform_admin_context():
+                DiagnosisCode.objects.filter(pk=self.dx.pk).update(status="RESOLVED")
+            corrected = self.send(consent_id)
+        posts = hie.call("POST", "/shr/bundles")
+        self.assertEqual(len(posts), 3)
+        first, second, third = (p[2]["json"]["id"] for p in posts)
+        self.assertEqual(first, second)  # the resend is the same bundle
+        self.assertNotEqual(second, third)  # the correction is a new one
+        self.assertEqual(corrected.status_code, 200, corrected.data)
+        with platform_admin_context():
+            self.assertEqual(
+                AuditLogEntry.objects.filter(action=AuditLogEntry.ACTION_HIE_DISCLOSURE).count(),
+                2,
+            )
+
+    def test_a_queued_bundle_is_not_sent_after_the_client_withdraws(self):
+        self.consent_yes(HIE_GENERAL, HIE_MENTAL_HEALTH)
+        from unittest.mock import patch
+
+        with FakeHie() as hie:
+            consent_id = self.open_visit(hie)
+            # The HIE is unreachable when the bundle is sent: it waits in the outbox.
+            real_call = hie_api.call
+
+            def bundles_down(method, path, **kwargs):
+                if path == "/shr/bundles":
+                    raise hie_api.HieNotConfigured("down for the test")
+                return real_call(method, path, **kwargs)
+
+            with patch("apps.dha_interop.hie_client.hie_api.call", side_effect=bundles_down):
+                queued = self.send(consent_id)
+        self.assertEqual(queued.data["sends"][0]["status"], "CACHED", queued.data)
+        with platform_admin_context():
+            capture_consent(
+                self.patient,
+                self.clinician,
+                False,
+                "v1",
+                "wording",
+                consent_type=HIE_MENTAL_HEALTH,
+                decision="NO",
+            )
+        with FakeHie() as hie:
+            hie.on("POST", "/shr/bundles", {"mediator_id": "x", "status": "accepted"})
+            hie_client.drain_outbox()
+        self.assertEqual(hie.call("POST", "/shr/bundles"), [])
+        with platform_admin_context():
+            entry = FhirResourceCache.objects.get(related_object_id=consent_id)
+            self.assertEqual(entry.status, "FAILED")
+            self.assertIn("no longer agrees", entry.transmission_detail)
+            self.assertFalse(
+                AuditLogEntry.objects.filter(action=AuditLogEntry.ACTION_HIE_DISCLOSURE).exists()
+            )
 
     def test_a_missing_psy_label_in_the_catalogue_blocks_sending(self):
         self.consent_yes(HIE_GENERAL, HIE_MENTAL_HEALTH)
@@ -641,7 +740,18 @@ class ShrOutboxTests(HieFixture):
                 cr_id=CR,
                 visit_type="OP",
                 requested_by=self.clinician,
+                status=ShrConsent.STATUS_APPROVED,
             )
+            for consent_type in (HIE_GENERAL, HIE_MENTAL_HEALTH):
+                capture_consent(
+                    self.patient,
+                    self.clinician,
+                    True,
+                    "v1",
+                    "wording",
+                    consent_type=consent_type,
+                    decision="YES",
+                )
             entry = hie_client.enqueue(
                 self.org.id,
                 hie_client.SHR_BUNDLE,

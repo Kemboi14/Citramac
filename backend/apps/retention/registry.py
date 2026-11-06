@@ -123,6 +123,25 @@ PATIENT_PATHS = {
 # substance use retention period; any row in FINANCIAL_MODELS, to the
 # financial one. The period applied is the longest that applies.
 MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mhp_program.")} | {
+    # Every encounter, diagnosis and inpatient stay here is mental-health care:
+    # they are as revealing as the notes, and decide the same retention period.
+    "clinical_encounter.Encounter",
+    "clinical_encounter.SoapNote",
+    "clinical_encounter.DiagnosisCode",
+    "clinical_encounter.ClinicalOrder",
+    "clinical_encounter.Prescription",
+    "clinical_encounter.PrescriptionItem",
+    "clinical_encounter.ReferralPacket",
+    "pharmacy.DispenseRecord",
+    "ipd_ward.Admission",
+    "ipd_ward.MedicationAdministration",
+    "ipd_ward.NursingNote",
+    "care_pathway.EpisodeOfCare",
+    "care_pathway.EpisodeStatusHistory",
+    "care_pathway.TriageEncounter",
+    "care_pathway.ClinicalAlert",
+    "care_pathway.ClinicalFinding",
+    "care_pathway.CareTask",
     "triage.MentalStatusExam",
     "care_pathway.TriageAssessment",
     "care_pathway.TriageRecheck",
@@ -182,6 +201,20 @@ FINANCIAL_MODELS = {
     "insurance_claims.ShaVisit",
     "insurance_claims.ShaEligibilityCheck",
     "care_pathway.ChargeItem",
+}
+
+
+# Clinical, but not specific to mental-health care (a blood test, an allergy,
+# a pulse). Every label in PATIENT_PATHS is in at least one of these four sets
+# (tests.RegistryCoverageTests), so a new table is always classified.
+GENERAL_CLINICAL_MODELS = {
+    "client_registry.AllergyRecord",
+    "client_registry.Attachment",
+    "client_registry.PatientIdentifier",
+    "triage.VitalSigns",
+    "lims.LabOrder",
+    "lims.LabSpecimen",
+    "lims.LabResult",
 }
 
 

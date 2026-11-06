@@ -576,3 +576,56 @@ On the owner's decisions of 2026-11-06 (mapping for the note copy confirmed befo
    carries nothing that reveals the legal basis, and no treatment Consent (that is the visit's
    VisitConsent). The substance-use Observation is category `social-history` with a text-only
    code. VERIFY: a LOINC code for it, before any is emitted.
+5. **SHR send queue.** The bundle id follows the content, so a corrected diagnosis is a new
+   bundle and the same content is not sent twice. A person may resend a FAILED bundle (same id,
+   so not a blind retry). Consent is checked again at delivery, so a bundle queued while the HIE
+   was down is not sent after the client withdraws (closing the visit is not a withdrawal).
+   HIE_DISCLOSURE is audited when the SHR accepts the bundle, not when it is queued. A diagnosis
+   with no stated certainty is never sent as "provisional"; it is listed as omitted.
+6. **Kenya Core identifier slices** (nationalId, shaNumber, …, read from the vendored package)
+   are `use=official`, and only the current one is carried; a superseded one is withheld.
+7. **SHA claims are scoped to the visit.** Only the diagnoses on the visit's episode (or, with no
+   episode, encounters since it opened) are sent, and a charge from outside the visit is refused
+   by name. Each diagnosis send is an HIE_DISCLOSURE (codes only); so is each Client Registry
+   lookup (identifier type, never the number).
+8. **Entered in error** (R4 `entered-in-error`) is the correction for an encounter or diagnosis
+   whose subject or code is fixed: a reason, audited, and an encounter takes its diagnoses with
+   it. Not a certainty in `intake-dx-status`. Such records are never shared, billed or counted.
+   Task `PENDING` is R4 `in-progress`; a finished episode carries `period.end`.
+9. **Every read of the client record is audited.** One VIEW entry per successful GET of a
+   `care/clients/<id>/…` URL (route named, never content), plus the inpatient, registry and
+   attachment detail/list reads; a free-text search term is recorded as "(search)", never what
+   was typed. Every client-record table is classified (mental health, financial, administrative
+   or general clinical) and a test fails if a new one is not; encounters, diagnoses, prescriptions,
+   admissions and episodes are now mental-health records for retention and audit labelling.
+10. **Consent wording is the facility's, looked up by the server.** Registration and the patient
+    consent endpoint record each decision against the active Consent wording (Org Admin →
+    Consent wording; HIE decisions share the data-sharing wording). Text sent by a browser is
+    ignored. With no wording set, no decision is recorded, and registration says so. The
+    system-written draft text registration used to send (and store as "shown") is gone.
+11. **Removed:** the never-installed radiology / theatre / MCH / mortuary scaffolding; the
+    terminology "sync" stub and its nightly tasks (it would load any JSON into the code tables);
+    the generic invoice create/edit API (invoices are issued and paid in the billing workspace);
+    writes to `mhp/psychotherapy-sessions`, `mhp/sud-rehab-plans` and `mhp/urine-drug-screens`
+    (read-only archives now) and the v3 session pages (their routes redirect).
+12. **Conformance.** Every published example (all 34) passes HL7's validator in CI, not just
+    the SHR ones. Document bundles carry `identifier` (`urn:ietf:rfc:3986` + `urn:uuid:`) and
+    `timestamp` (bdl-9/10). Collection entries all have a `urn:uuid:` fullUrl, and their
+    references resolve inside the bundle. Consent carries the wording version in `policyRule`
+    (ppc-1, text only). A discharge summary names its signer rather than linking a Practitioner
+    the bundle doesn't contain.
+
+Still open from this programme, each waiting on an owner decision: nursing shift notes into
+ProgressNote (they were never signed: copy as drafts, or as a separate unsigned-final status?);
+retiring v3/v4 triage signing (the test fixtures sign v3-shaped triages and need rebuilding on
+v5); freezing the free-text legal fields of admissions made before 2026-10-22 (current legacy
+inpatients still need review dates kept); and drug coding from Kenya Core (prescribe by
+`generic-products-cs` product or `active-components-cs` ingredient; allergies coded by
+ingredient, which Kenya Core requires); and the ICD-11 code list, which is still the 16-code
+"illustrative stub" seeded by `dha_interop 0002` from memory (§6). Replacing it with an import
+from WHO's ICD-11 MMS release, and blocking unverified codes, would stop diagnosis recording and
+SHA billing until the import is run. The legacy identifier columns on Patient stay: every
+save copies them into PatientIdentifier rows, which are what FHIR reads.
+
+Reversibility: cheap. Everything is additive or removes unused write paths. Entered-in-error and
+the consent rule change only future records, and no signed record is changed.

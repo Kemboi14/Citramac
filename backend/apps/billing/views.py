@@ -1,40 +1,10 @@
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.retention.mixins import NoHardDeleteMixin
-
-from .models import CostCenter, Invoice, InvoiceLine
-from .permissions import IsFinanceOrReadOnly
-from .serializers import CostCenterSerializer, InvoiceSerializer, PaymentSerializer
-
-
-class InvoiceViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
-    """docs/10-API-SPECIFICATION.md §10.11 — Module 10."""
-
-    serializer_class = InvoiceSerializer
-    permission_classes = [IsFinanceOrReadOnly]
-
-    def get_queryset(self):
-        return Invoice.objects.select_related("patient").order_by("-created_at")
-
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, created_by=self.request.user)
-
-    @action(detail=True, methods=["get", "post"])
-    def payments(self, request, pk=None):
-        invoice = self.get_object()
-        if request.method == "POST":
-            serializer = PaymentSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save(
-                invoice=invoice, organization=invoice.organization, received_by=request.user
-            )
-            invoice.refresh_from_db()
-            return Response(InvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
-        return Response(PaymentSerializer(invoice.payments.all(), many=True).data)
+from .models import CostCenter, InvoiceLine
+from .serializers import CostCenterSerializer
 
 
 class CostCenterViewSet(viewsets.ModelViewSet):

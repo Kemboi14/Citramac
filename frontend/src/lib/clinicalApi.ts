@@ -299,14 +299,6 @@ export function searchIcd11(accessToken: string, query: string) {
   });
 }
 
-export function createPsychotherapySession(accessToken: string, payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>("/mhp/psychotherapy-sessions/", {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
 export function createBiopsychosocialAssessment(
   accessToken: string,
   payload: Record<string, unknown>,

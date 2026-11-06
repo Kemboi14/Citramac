@@ -17,6 +17,7 @@ from fhir.resources.R4B.composition import Composition, CompositionSection
 from fhir.resources.R4B.condition import Condition
 from fhir.resources.R4B.dosage import Dosage
 from fhir.resources.R4B.encounter import Encounter
+from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.medicationrequest import MedicationRequest
 from fhir.resources.R4B.observation import Observation
 from fhir.resources.R4B.reference import Reference
@@ -54,7 +55,12 @@ def build_condition_resource(diagnosis, patient_ref):
     never stated carries none rather than a guessed one, and a refuted
     diagnosis carries no clinical status (it is not active, it never was)."""
     verification = diagnosis.FHIR_VERIFICATION.get(diagnosis.verification_status)
-    clinical = None if verification == "refuted" else _CLINICAL_STATUS.get(diagnosis.status)
+    # R4 con-3/con-5: no clinicalStatus on a refuted or entered-in-error Condition.
+    clinical = (
+        None
+        if verification in ("refuted", "entered-in-error")
+        else _CLINICAL_STATUS.get(diagnosis.status)
+    )
     return Condition(
         id=str(diagnosis.id),
         subject=Reference(reference=patient_ref),
@@ -311,5 +317,12 @@ def build_client_history_bundle(assessment):
     composition_ref = _urn("Composition", assessment.id)
     entries.insert(0, BundleEntry(fullUrl=composition_ref, resource=composition))
 
-    bundle = Bundle(type="document", entry=entries)
+    # bdl-9 / bdl-10: a document carries its own identity and assembly time.
+    # urn:ietf:rfc:3986 is the base-spec system for a value that is itself a URI.
+    bundle = Bundle(
+        type="document",
+        identifier=Identifier(system="urn:ietf:rfc:3986", value=f"urn:uuid:{assessment.id}"),
+        timestamp=assessment.updated_at.isoformat(),
+        entry=entries,
+    )
     return json.loads(bundle.model_dump_json(exclude_none=True))

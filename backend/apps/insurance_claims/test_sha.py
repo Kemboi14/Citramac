@@ -382,6 +382,46 @@ class ShaClaimTests(ShaFixture):
         self.assertEqual(data["status"], "SUBMITTED")
         self.assertIn("DHA HIE", data["status_history"][-1]["note"])
 
+    def test_only_this_visits_diagnoses_and_charges_go_to_sha(self):
+        """An old episode's diagnosis is never disclosed with this claim, and a
+        charge from before the visit is refused, naming it."""
+        month_ago = timezone.now() - timezone.timedelta(days=30)
+        with platform_admin_context():
+            old_icd, _ = IcdCodeIndex.objects.get_or_create(
+                code="TEST-OLD", defaults={"description": "Old"}
+            )
+            old = Encounter.objects.create(organization=self.org, patient=self.patient)
+            Encounter.objects.filter(pk=old.pk).update(opened_at=month_ago)
+            DiagnosisCode.objects.create(organization=self.org, encounter=old, icd11_code=old_icd)
+        with FakeHie() as hie:
+            claim = self.ready_claim(hie)
+            hie.on("POST", "/claims/lines", {"id": "line-1"})
+            hie.on("POST", "/claims/diagnoses", {})
+            synced = self.post("billing-claim-sha", [claim["id"], "sync"])
+            self.assertEqual(synced.status_code, 200, synced.data)
+            sent = [c[2]["json"]["icd_code"] for c in hie.call("POST", "/claims/diagnoses")]
+            self.assertEqual(sent, ["TEST-DX"])
+            with platform_admin_context():
+                from apps.sysadmin_audit.models import AuditLogEntry
+
+                disclosure = AuditLogEntry.objects.get(
+                    action=AuditLogEntry.ACTION_HIE_DISCLOSURE, object_id=str(self.patient.id)
+                )
+                self.assertEqual(disclosure.field_diff["icd11_codes"], ["TEST-DX"])
+
+            with platform_admin_context():
+                ChargeItem.objects.create(
+                    organization=self.org,
+                    patient=self.patient,
+                    service=self.service,
+                    unit_price=Decimal("100.00"),
+                    delivered_at=month_ago,
+                )
+            self.post("client-billing-claims", [self.patient.id])
+            refused = self.post("billing-claim-sha", [claim["id"], "sync"])
+        self.assertEqual(refused.status_code, 400, refused.data)
+        self.assertIn("Not part of this SHA visit", refused.data["error"]["message"])
+
     def test_an_hie_refusal_leaves_the_claim_a_draft(self):
         with FakeHie() as hie:
             claim = self.ready_claim(hie)

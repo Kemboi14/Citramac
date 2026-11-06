@@ -60,15 +60,10 @@ THIRD_PARTY_APPS = [
     "django_structlog",
 ]
 
-# One entry per app in apps/, mirrors docs/02-TECH-STACK-AND-ARCHITECTURE.md §2.5.
-# Apps are scaffolded ahead of their build phase (docs/11-ROADMAP-AND-PHASES.md) but
-# stay logic-free until their phase begins.
-#
-# This deployment is strictly a mental-health/MHP facility (CAfRIC), not a
-# general hospital — apps.ris_pacs/theatre/mch/mortuary (Modules 5/8/9/12) are
-# general-hospital-only per docs/07-CLINICAL-MODULES-SPEC.md §7.14 and are
-# deliberately not installed; their app directories stay in apps/ as inert
-# scaffolding (matching docs/02 §2.5's repo layout) but are never registered.
+# One entry per app in apps/. This deployment is a mental-health / MHP facility,
+# not a general hospital: the general-hospital modules (radiology, theatre,
+# maternal & child health, mortuary) were never built and their empty
+# scaffolding was removed on 2026-11-06.
 LOCAL_APPS = [
     "apps.tenancy",
     "apps.accounts",
@@ -286,9 +281,6 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
-# Nightly terminology mirror sync — docs/08-DHA-SHA-INTEGRATION.md §8.2. Each
-# task honestly no-ops (SKIPPED_NOT_CONFIGURED) until its source URL setting
-# is set, so enabling beat here is safe even with no live source configured.
 CELERY_BEAT_SCHEDULE = {
     # Durable HIE outbox (CLAUDE.md §4): deliver queued / retry-due resources.
     "drain-hie-outbox": {
@@ -304,18 +296,6 @@ CELERY_BEAT_SCHEDULE = {
     "recheck-facility-registry-nightly": {
         "task": "apps.dha_interop.tasks.recheck_facility_registry",
         "schedule": crontab(hour=3, minute=0),
-    },
-    "sync-icd11-nightly": {
-        "task": "apps.dha_interop.tasks.sync_icd11",
-        "schedule": crontab(hour=2, minute=0),
-    },
-    "sync-loinc-nightly": {
-        "task": "apps.dha_interop.tasks.sync_loinc",
-        "schedule": crontab(hour=2, minute=15),
-    },
-    "sync-national-drug-index-nightly": {
-        "task": "apps.dha_interop.tasks.sync_national_drug_index",
-        "schedule": crontab(hour=2, minute=30),
     },
     # Appointments Calendar email reminders (docs/07-CLINICAL-MODULES-SPEC.md
     # §7.1) — runs every 15 minutes so a reminder goes out close to the
@@ -620,13 +600,6 @@ FHIR_PSYCH_CONFIDENTIALITY_CODE = env("FHIR_PSYCH_CONFIDENTIALITY_CODE", default
 CLINICAL_RECORD_MINIMUM_RETENTION_YEARS = env.int(
     "CLINICAL_RECORD_MINIMUM_RETENTION_YEARS", default=7
 )
-
-# Terminology mirror sync sources (docs/08-DHA-SHA-INTEGRATION.md §8.2) —
-# empty by default; apps.dha_interop.sync honestly records a
-# SKIPPED_NOT_CONFIGURED run rather than fabricating a sync when unset.
-ICD11_SYNC_SOURCE_URL = env("ICD11_SYNC_SOURCE_URL", default="")
-LOINC_SYNC_SOURCE_URL = env("LOINC_SYNC_SOURCE_URL", default="")
-NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL = env("NATIONAL_DRUG_INDEX_SYNC_SOURCE_URL", default="")
 
 # ── Observability (docs/12-DEVOPS-DEPLOYMENT.md §12.5) ────────────────────
 # Structured JSON logging in every environment except local dev (where a

@@ -10,6 +10,29 @@ from apps.sysadmin_audit.mixins import AuditedReadMixin
 from .models import DiagnosisCode, Encounter
 from .serializers import DiagnosisCodeSerializer, EncounterSerializer
 
+ERROR_STATUS = "ENTERED_IN_ERROR"
+
+
+def _error_reason(request):
+    reason = str(request.data.get("reason") or "").strip()
+    if len(reason) < 5:
+        raise ValidationError({"reason": "Say why this was entered in error."})
+    return reason
+
+
+def _audit_error(instance, reason, extra=None):
+    from apps.sysadmin_audit.audit import write_event
+    from apps.sysadmin_audit.models import AuditLogEntry
+
+    write_event(
+        instance.organization_id,
+        AuditLogEntry.ACTION_UPDATE,
+        f"{instance._meta.app_label}.{instance._meta.model_name}",
+        instance.pk,
+        {"entered_in_error": reason, **(extra or {})},
+    )
+
+
 # The only type a client may open through this endpoint. Triage, intake,
 # psychiatry, psychotherapy and inpatient encounters are opened by their own
 # workflows (care_pathway, ipd_ward), which set the type themselves.
@@ -54,9 +77,35 @@ class EncounterViewSet(
             episode=get_or_open_episode(patient, self.request.user),
         )
 
+    @action(detail=True, methods=["post"], url_path="entered-in-error")
+    def entered_in_error(self, request, pk=None):
+        """The only correction for an encounter opened against the wrong client (its
+        subject can't change): R4 entered-in-error, with a reason, audited. Its
+        diagnoses go with it — they were recorded against the same mistake."""
+        from django.db import transaction
+
+        encounter = self.get_object()
+        if encounter.status == ERROR_STATUS:
+            raise ValidationError({"detail": "Already marked as entered in error."})
+        reason = _error_reason(request)
+        with transaction.atomic():
+            encounter.status = ERROR_STATUS
+            encounter.error_reason = reason
+            encounter.closed_at = encounter.closed_at or timezone.now()
+            encounter.save(update_fields=["status", "error_reason", "closed_at"])
+            diagnoses = list(encounter.diagnoses.exclude(verification_status=ERROR_STATUS))
+            for diagnosis in diagnoses:
+                diagnosis.verification_status = ERROR_STATUS
+                diagnosis.error_reason = reason
+                diagnosis.save(update_fields=["verification_status", "error_reason"])
+            _audit_error(encounter, reason, {"diagnoses": [str(d.pk) for d in diagnoses]})
+        return Response(EncounterSerializer(encounter).data)
+
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
         encounter = self.get_object()
+        if encounter.status == ERROR_STATUS:
+            raise ValidationError({"detail": "This encounter was entered in error."})
         if encounter.status != "CLOSED":
             encounter.status = "CLOSED"
             encounter.closed_at = timezone.now()
@@ -83,3 +132,17 @@ class DiagnosisCodeViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelVi
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, recorded_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="entered-in-error")
+    def entered_in_error(self, request, pk=None):
+        """Recorded against the wrong client or with the wrong code — not a clinical
+        judgement (that is "ruled out"). R4 entered-in-error, with a reason, audited."""
+        diagnosis = self.get_object()
+        if diagnosis.verification_status == ERROR_STATUS:
+            raise ValidationError({"detail": "Already marked as entered in error."})
+        reason = _error_reason(request)
+        diagnosis.verification_status = ERROR_STATUS
+        diagnosis.error_reason = reason
+        diagnosis.save(update_fields=["verification_status", "error_reason"])
+        _audit_error(diagnosis, reason)
+        return Response(DiagnosisCodeSerializer(diagnosis).data)
