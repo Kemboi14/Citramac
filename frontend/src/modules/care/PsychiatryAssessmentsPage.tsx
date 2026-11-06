@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, ClipboardPlus, Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import {
@@ -91,11 +91,6 @@ export function PsychiatryAssessmentsPage() {
         eyebrow="Clinical workflow"
         title="Psychiatry"
         subtitle="Assess, examine mental state, diagnose and prescribe in one place. Clients appear here when triage or withdrawal review suggests a psychiatric review, or when their intake is signed."
-        actions={
-          <Link to="/clinical/psychiatry/queue" className={`${BTN_GHOST} ${BTN_SM}`}>
-            Open priority queue
-          </Link>
-        }
       />
       <ErrorNote>{error}</ErrorNote>
 
