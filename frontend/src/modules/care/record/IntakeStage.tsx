@@ -521,7 +521,7 @@ function IntakeWorkspace({
                           onClick={() => void go(s.key)}
                           className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                             current === s.key
-                              ? "border-brand-green/30 bg-brand-green-tint font-semibold text-brand-green-dark"
+                              ? "border-surface-border bg-surface-bg font-semibold text-ink-900"
                               : "border-transparent text-ink-900 hover:border-surface-border hover:bg-surface-bg"
                           }`}
                         >
@@ -537,7 +537,7 @@ function IntakeWorkspace({
                           </span>
                           <SectionCompletionIcon
                             status={mark.icon}
-                            active={current === s.key}
+                            monochrome
                             className="h-5 w-5 shrink-0"
                           />
                         </button>
@@ -562,16 +562,11 @@ function IntakeWorkspace({
                   </span>
                 </span>
                 <Tag
-                  tone={
-                    stateOf(spec.key) === "Complete"
-                      ? "brand"
-                      : stateOf(spec.key) === "In progress"
-                        ? "warn"
-                        : "neutral"
-                  }
+                  tone="neutral"
                 >
                   <SectionCompletionIcon
                     status={STATE_MARK[stateOf(spec.key)].icon}
+                    monochrome
                     className="h-4 w-4"
                   />{" "}
                   {stateOf(spec.key)}

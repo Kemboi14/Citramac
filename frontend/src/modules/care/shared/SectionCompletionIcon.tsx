@@ -14,17 +14,25 @@ const COLOR: Record<SectionCompletionStatus, string> = {
 export function SectionCompletionIcon({
   status,
   active = false,
+  monochrome = false,
   className = "h-[18px] w-[18px]",
 }: {
   status: SectionCompletionStatus;
   active?: boolean;
+  monochrome?: boolean;
   className?: string;
 }) {
   return (
     <svg
       aria-hidden="true"
       className={className}
-      style={{ color: active && status === "in_progress" ? "#007bff" : COLOR[status] }}
+      style={{
+        color: monochrome
+          ? "#5f736c"
+          : active && status === "in_progress"
+            ? "#007bff"
+            : COLOR[status],
+      }}
       viewBox="0 0 20 20"
       fill="none"
     >
