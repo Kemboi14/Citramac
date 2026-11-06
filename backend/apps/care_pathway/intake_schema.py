@@ -792,7 +792,7 @@ SECTIONS = [
     {
         "key": "medical",
         "n": "7",
-        "title": "Medical history, examination & physical baseline",
+        "title": "Medical & Neurological History",
         "core": False,
         "fields": [
             multi("conditions", "Medical conditions", "intake-medical-conditions"),
