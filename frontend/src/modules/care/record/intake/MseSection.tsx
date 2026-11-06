@@ -1,9 +1,9 @@
-import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import type { IntakeSchema } from "../../../../lib/carePathwayApi";
 import { BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles";
 import { Callout, SelectChoices } from "../../shared/ui";
 import type { ValueSetsApi } from "../../shared/useValueSets";
 import type { SectionValues } from "./fields";
+import { ListTextarea } from "./ListTextarea";
 
 const SPHERES = [
   { key: "orient_time", label: "Orientation — time" },
@@ -176,11 +176,10 @@ export function MseSection({
       )}
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL}>MSE summary / clinically significant findings</span>
-        <AutoResizeTextarea
+        <ListTextarea
           rows={3}
-          className={`${INPUT} resize-y`}
           value={text("summary")}
-          onChange={(e) => onChange("summary", e.target.value)}
+          onChange={(value) => onChange("summary", value)}
         />
       </label>
     </div>

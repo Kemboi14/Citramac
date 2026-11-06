@@ -129,7 +129,7 @@ export function IntakeStage(props: RecordViewProps) {
     return (
       <div>
         <PageHeader
-          title="Comprehensive Mental Health and Intake Form"
+          title="Comprehensive Mental Health and Addiction Intake"
         />
         {error ? (
           <ErrorNote>{error}</ErrorNote>
@@ -413,7 +413,7 @@ function IntakeWorkspace({
   return (
     <div ref={topRef} className="mx-auto max-w-screen-2xl space-y-4">
       <PageHeader
-        title="Comprehensive Mental Health and Intake Form"
+        title="Comprehensive Mental Health and Addiction Intake"
         actions={
           <>
             <button
