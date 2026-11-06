@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
@@ -214,6 +214,7 @@ function IntakeWorkspace({
   // Mockup: the Information trail opens from a "Trail" button, so the section
   // form keeps the full width by default.
   const [showTrail, setShowTrail] = useState(false);
+  const [showSectionNav, setShowSectionNav] = useState(true);
   const trailId = useId();
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -483,72 +484,105 @@ function IntakeWorkspace({
         reviewedElsewhere={reviewedInIntake(sections)}
       />
 
+      <div className="mb-2 flex justify-end">
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          aria-expanded={showSectionNav}
+          aria-controls="intake-section-navigation"
+          onClick={() => setShowSectionNav((visible) => !visible)}
+        >
+          {showSectionNav ? (
+            <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen aria-hidden="true" className="h-4 w-4" />
+          )}
+          {showSectionNav ? "Hide sections" : "Show sections"}
+        </button>
+      </div>
       <div
-        className={`grid grid-cols-1 items-start gap-4 xl:grid-cols-[248px_minmax(0,1fr)] ${
-          showTrail ? "2xl:grid-cols-[248px_minmax(0,1fr)_300px]" : ""
+        className={`grid grid-cols-1 items-start gap-4 ${
+          showSectionNav
+            ? showTrail
+              ? "xl:grid-cols-[248px_minmax(0,1fr)] 2xl:grid-cols-[248px_minmax(0,1fr)_300px]"
+              : "xl:grid-cols-[248px_minmax(0,1fr)]"
+            : showTrail
+              ? "2xl:grid-cols-[minmax(0,1fr)_300px]"
+              : ""
         }`}
       >
-        <nav
-          aria-label="Intake sections"
-          className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
+        <div
+          id="intake-section-navigation"
+          className={showSectionNav ? "min-w-0" : "hidden"}
         >
-          {groups.map(([title, specs]) => {
-            const done = specs.filter((s) =>
-              ["Complete", "Not applicable"].includes(states[s.key] ?? meta.overview[s.key] ?? ""),
-            ).length;
-            return (
-              <details key={title} open={title.startsWith("Core") || !spec.core} className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 hover:bg-surface-bg">
-                  <span>{title}</span>
-                  <span className="rounded-full bg-surface-bg px-2 py-0.5 tabular-nums">
-                    {done}/{specs.length}
-                  </span>
-                </summary>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {specs.map((s) => {
-                    const st = (states[s.key] ??
-                      meta.overview[s.key] ??
-                      "Not started") as IntakeSectionState;
-                    const mark = STATE_MARK[st];
-                    const number = navigationNumber(s);
-                    return (
-                      <li key={s.key}>
-                        <button
-                          type="button"
-                          disabled={checkingSection}
-                          aria-current={current === s.key}
-                          aria-label={`Section ${number} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
-                          onClick={() => void go(s.key)}
-                          className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
-                            current === s.key
-                              ? "border-surface-border bg-surface-bg font-semibold text-ink-900"
-                              : "border-transparent text-ink-900 hover:border-surface-border hover:bg-surface-bg"
-                          }`}
-                        >
-                          <span
-                            aria-hidden
-                            className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-surface-bg px-1 text-[11px] font-semibold tabular-nums text-ink-700"
+          <nav
+            aria-label="Intake sections"
+            className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-3 shadow-sm"
+          >
+            {groups.map(([title, specs]) => {
+              const done = specs.filter((s) =>
+                ["Complete", "Not applicable"].includes(
+                  states[s.key] ?? meta.overview[s.key] ?? "",
+                ),
+              ).length;
+              return (
+                <details
+                  key={title}
+                  open={title.startsWith("Core") || !spec.core}
+                  className="group"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 hover:bg-surface-bg">
+                    <span>{title}</span>
+                    <span className="rounded-full bg-surface-bg px-2 py-0.5 tabular-nums">
+                      {done}/{specs.length}
+                    </span>
+                  </summary>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {specs.map((s) => {
+                      const st = (states[s.key] ??
+                        meta.overview[s.key] ??
+                        "Not started") as IntakeSectionState;
+                      const mark = STATE_MARK[st];
+                      const number = navigationNumber(s);
+                      return (
+                        <li key={s.key}>
+                          <button
+                            type="button"
+                            disabled={checkingSection}
+                            aria-current={current === s.key}
+                            aria-label={`Section ${number} · ${s.title} — ${mark.label}${s.required ? ", required" : ""}`}
+                            onClick={() => void go(s.key)}
+                            className={`flex min-h-10 w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
+                              current === s.key
+                                ? "border-surface-border bg-surface-bg font-semibold text-ink-900"
+                                : "border-transparent text-ink-900 hover:border-surface-border hover:bg-surface-bg"
+                            }`}
                           >
-                            {number}
-                          </span>
-                          <span className="min-w-0 flex-1 leading-snug">
-                            {s.title}
-                            {s.required && <span className="ml-0.5 text-priority-red">*</span>}
-                          </span>
-                          <SectionCompletionIcon
-                            status={mark.icon}
-                            monochrome
-                            className="h-5 w-5 shrink-0"
-                          />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </details>
-            );
-          })}
-        </nav>
+                            <span
+                              aria-hidden
+                              className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-surface-bg px-1 text-[11px] font-semibold tabular-nums text-ink-700"
+                            >
+                              {number}
+                            </span>
+                            <span className="min-w-0 flex-1 leading-snug">
+                              {s.title}
+                              {s.required && <span className="ml-0.5 text-priority-red">*</span>}
+                            </span>
+                            <SectionCompletionIcon
+                              status={mark.icon}
+                              monochrome
+                              className="h-5 w-5 shrink-0"
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
+              );
+            })}
+          </nav>
+        </div>
 
         <div className="min-w-0">
           <Card
@@ -677,7 +711,14 @@ function IntakeWorkspace({
           </Card>
         </div>
         {showTrail && (
-          <div id={trailId} className="order-first lg:col-span-2 2xl:order-none 2xl:col-span-1">
+          <div
+            id={trailId}
+            className={
+              showSectionNav
+                ? "order-first lg:col-span-2 2xl:order-none 2xl:col-span-1"
+                : "order-last 2xl:col-span-1"
+            }
+          >
             <InformationTrail patientId={patientId} version={listVersion} />
           </div>
         )}
