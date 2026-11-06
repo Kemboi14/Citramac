@@ -214,7 +214,7 @@ function IntakeWorkspace({
   // Mockup: the Information trail opens from a "Trail" button, so the section
   // form keeps the full width by default.
   const [showTrail, setShowTrail] = useState(false);
-  const [showSectionNav, setShowSectionNav] = useState(true);
+  const [showSectionNav, setShowSectionNav] = useState(false);
   const trailId = useId();
   const topRef = useRef<HTMLDivElement>(null);
 
