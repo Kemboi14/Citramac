@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import type { ClientBanner, JourneyStageStatus } from "../../../lib/carePathwayApi";
 import { SectionCompletionIcon } from "./SectionCompletionIcon";
@@ -74,6 +75,7 @@ export function ClientRecordNav({
   view: RecordView;
   banner?: Pick<ClientBanner, "journey_status" | "latest_signed_triage_encounter_id"> | null;
 }) {
+  const [showStatusKey, setShowStatusKey] = useState(false);
   const activeTop = JOURNEY_KEYS.has(view) ? "journey" : view;
   const stageStatus = (key: JourneyNavKey): JourneyStageStatus => {
     if (key !== "snapshot") {
@@ -114,7 +116,7 @@ export function ClientRecordNav({
             aria-label="Client care journey"
             className="mb-1 flex items-center gap-1 overflow-x-auto rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-[0_2px_8px_rgba(16,48,42,.04)]"
           >
-            {JOURNEY_STAGES.map((stage) => {
+            {JOURNEY_STAGES.filter((stage) => stage.key !== "snapshot").map((stage) => {
               const active = stage.key === view;
               const status = stageStatus(stage.key);
               const { label } = statusPresentation(status);
@@ -135,19 +137,31 @@ export function ClientRecordNav({
                 </NavLink>
               );
             })}
+            <button
+              type="button"
+              aria-expanded={showStatusKey}
+              aria-controls="journey-status-key"
+              onClick={() => setShowStatusKey((visible) => !visible)}
+              className="ml-auto flex min-h-9 flex-none items-center rounded-md px-2.5 text-xs font-semibold text-ink-500 hover:bg-surface-bg hover:text-ink-900"
+            >
+              {showStatusKey ? "Hide status key" : "Status key"}
+            </button>
           </nav>
-          <div
-            role="group"
-            aria-label="Journey stage status"
-            className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-500"
-          >
-            {JOURNEY_STATUS_OPTIONS.map((status) => (
-              <span key={status} className="inline-flex items-center gap-1">
-                <StageStatusIcon status={status} />
-                {statusPresentation(status).label}
-              </span>
-            ))}
-          </div>
+          {showStatusKey && (
+            <div
+              id="journey-status-key"
+              role="group"
+              aria-label="Journey stage status"
+              className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-500"
+            >
+              {JOURNEY_STATUS_OPTIONS.map((status) => (
+                <span key={status} className="inline-flex items-center gap-1">
+                  <StageStatusIcon status={status} />
+                  {statusPresentation(status).label}
+                </span>
+              ))}
+            </div>
+          )}
         </>
       )}
     </>
