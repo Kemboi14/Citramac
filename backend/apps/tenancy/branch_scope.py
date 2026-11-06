@@ -36,7 +36,9 @@ BRANCH_SCOPED = {
     "care_pathway.CarePlanTask": ("activity__care_plan__episode__branch",),
     "care_pathway.ChargeItem": ("episode__branch",),
     "care_pathway.DischargeSummary": ("episode__branch",),
-    "care_pathway.ProgressNote": ("episode__branch",),
+    # encounter__branch too: a copied v3 SOAP note may have no episode, and must
+    # stay in its encounter's branch rather than become organisation-wide.
+    "care_pathway.ProgressNote": ("episode__branch", "encounter__branch"),
     "care_pathway.PsychotherapyNote": ("episode__branch",),
     "care_pathway.LegalStatus": ("episode__branch",),
     "care_pathway.LegalForm": ("admission__episode__branch",),

@@ -1437,6 +1437,15 @@ class ProgressNote(TenantScopedModel):
         blank=True,
         related_name="+",
     )
+    # Set only on the copy of a v3 SOAP note (soap_archive.py); the SoapNote row
+    # itself is kept unchanged as the archive it was copied from.
+    source_soap_note = models.OneToOneField(
+        "clinical_encounter.SoapNote",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="progress_note_copy",
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]

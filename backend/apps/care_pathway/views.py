@@ -2283,10 +2283,19 @@ class VisitConsentCompleteView(APIView):
         )
 
 
+def _note_type_display(code):
+    """Includes inactive codes, which the served value set leaves out."""
+    from .models import LocalConcept
+
+    concept = LocalConcept.objects.filter(valueset_id="note-type", code=code).first()
+    return concept.display if concept else code
+
+
 def _note_row(n):
     return {
         "id": str(n.pk),
         "note_type": n.note_type,
+        "note_type_display": _note_type_display(n.note_type),
         "text": n.text,
         "status": n.status,
         "amends": str(n.amends_id) if n.amends_id else None,

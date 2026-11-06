@@ -43,6 +43,11 @@
         "subject": {
           "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
         },
+        "episodeOfCare": [
+          {
+            "reference": "urn:citramac:episodeofcare:6d1e2a4b-8c3f-4b7e-9a51-2f0c7d9e3b18"
+          }
+        ],
         "period": {
           "start": "2026-10-21T06:28:57.627113Z"
         }
@@ -56,6 +61,9 @@
         "status": "final",
         "subject": {
           "reference": "urn:citramac:patient:092074cf-6f0b-4df0-af30-37d13db42558"
+        },
+        "encounter": {
+          "reference": "urn:citramac:encounter:3f872c33-b2fe-4131-beeb-bb62cbe8ad8d"
         },
         "occurrenceDateTime": "2026-10-21T06:28:57.627113Z",
         "note": [

@@ -139,7 +139,7 @@ export const AUDITOR_NAV: NavGroup[] = [
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.1 — the owner-approved grouped clinical
 // sidebar (mockups/citramac_clinical_workspace.html), item for item and in
 // order. Every group starts collapsed and opens when the current route is
-// inside it. Client History, SOAP, Triage & MSE, Clinical Review, Attachments,
+// inside it. Client History, Clinical Review, Attachments,
 // and MHP sessions keep their routes without sidebar entries. The Audit log is
 // deliberately absent here: it is an Org Admin / Auditor screen (ORG_ADMIN_NAV).
 export const CLINICAL_NAV: NavGroup[] = [

@@ -542,3 +542,37 @@ signed-in clinician's — and below it, clearly labelled, **Shared with the bran
   group. Cancelled appointments are left out of every list.
 
 Not clinical data capture — no FHIR change. Reversibility: cheap (read-only views).
+
+### 2026-11-06 — one note store; v3 encounter screens retired; HIE/FHIR R4 tightening
+
+On the owner's decisions of 2026-11-06 (mapping for the note copy confirmed before building, §7):
+
+1. **Clinical notes: one store.** This closes the open §5 item from 2026-10-21. Every v3
+   `clinical_encounter.SoapNote` is copied once into `care_pathway.ProgressNote` (migration
+   `care_pathway 0053`, logic in `soap_archive.py`). The copy keeps the note's patient, encounter,
+   episode, author, times and status (signed stays signed, an unsigned note becomes a draft). Its
+   text is the Subjective / Objective / Assessment / Plan sections under headings. Its type is
+   `SOAP_V3`, an inactive `note-type` code, so it labels these copies but can never be used for a
+   new note. `source_soap_note` links each copy to its original. SoapNote rows are a read-only
+   archive and are never edited. A correction is an addendum of an ordinary type. ProgressNote is
+   branch-scoped by its episode *and* its encounter, so a copy with no episode stays in its
+   encounter's branch. R4: DocumentReference (not emitted yet). Reversibility: cheap. The copy
+   is additive, and reversing removes only copies that have no addendum.
+2. **v3 screens retired.** The Triage & MSE and Clinical Encounter (SOAP) pages are gone, along
+   with their encounter endpoints (vitals, MSE, SOAP, orders, prescriptions, referrals) and the
+   `offline_sync` push/pull API. Their old routes redirect. The in-memory offline queue from the
+   2026-09-29 amendment went with them, because those screens were its only users.
+   `offline_sync` rows stay as an archive. Pharmacy prescribes through the same structured
+   prescribing module as the client record. Signed v3/v4 triages are unchanged.
+3. **Encounter.** Opened through the API only as `OUTPATIENT` (the other types are opened by
+   their own workflows), joins the client's open `EpisodeOfCare`, and its subject, type and
+   episode never change. `encounter_type` is a coded choice. A diagnosis's encounter and ICD-11
+   code are fixed once it is recorded, and `recorded_by` (`Condition.recorder`) is kept.
+4. **What leaves the facility.** The SHR shares encounters by allow-list (`SHR_ENCOUNTER_TYPES`
+   = triage, intake, psychiatry, inpatient, outpatient), never by deny-list, so psychotherapy and
+   untyped encounters stay in the facility. The referral document bundle and its "transmit" path
+   were removed (DHA has no destination for them, per 2026-10-23). The admission bundle is the
+   Encounter (class IMP, in its episode) plus a RiskAssessment only when a risk was recorded. It
+   carries nothing that reveals the legal basis, and no treatment Consent (that is the visit's
+   VisitConsent). The substance-use Observation is category `social-history` with a text-only
+   code. VERIFY: a LOINC code for it, before any is emitted.

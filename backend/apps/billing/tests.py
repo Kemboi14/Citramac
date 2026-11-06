@@ -41,6 +41,19 @@ class BillingTests(APITestCase):
         self.access, _ = issue_tokens(self.clinician)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
 
+    def _order_lab_test(self):
+        """A lab order — one of the order paths behind the billing gate."""
+        from apps.dha_interop.models import LoincCodeIndex
+
+        with platform_admin_context():
+            loinc = LoincCodeIndex.objects.get(code="2345-7")
+        return self.client.post(
+            reverse("lab-order-list"),
+            {"encounter": str(self.encounter.id), "loinc_code": loinc.code},
+            format="json",
+            **self.auth,
+        )
+
     def test_invoice_status_moves_to_paid_once_payments_cover_the_total(self):
         create_response = self.client.post(
             reverse("invoice-list"),
@@ -68,12 +81,7 @@ class BillingTests(APITestCase):
         self.assertEqual(pay_response.data["status"], "PAID")
 
     def test_billing_gate_blocks_orders_with_no_cleared_payment_path(self):
-        response = self.client.post(
-            reverse("encounter-orders", args=[self.encounter.id]),
-            {"order_type": "LAB", "details": "FBC"},
-            format="json",
-            **self.auth,
-        )
+        response = self._order_lab_test()
         self.assertEqual(response.status_code, 402)
         self.assertEqual(response.data["error"]["code"], "BILLING_NOT_CLEARED")
 
@@ -87,12 +95,7 @@ class BillingTests(APITestCase):
             )
             invoice.payments.create(organization=self.org, amount=1000, method="CASH")
 
-        response = self.client.post(
-            reverse("encounter-orders", args=[self.encounter.id]),
-            {"order_type": "LAB", "details": "FBC"},
-            format="json",
-            **self.auth,
-        )
+        response = self._order_lab_test()
         self.assertEqual(response.status_code, 201, response.data)
 
     def test_billing_gate_allows_orders_with_verified_sha_coverage(self):
@@ -103,12 +106,7 @@ class BillingTests(APITestCase):
                 sha_verified=True,
                 sha_premium_compliant=True,
             )
-        response = self.client.post(
-            reverse("encounter-orders", args=[self.encounter.id]),
-            {"order_type": "LAB", "details": "FBC"},
-            format="json",
-            **self.auth,
-        )
+        response = self._order_lab_test()
         self.assertEqual(response.status_code, 201, response.data)
 
     def test_billing_gate_allows_orders_with_approved_pre_authorization(self):
@@ -119,12 +117,7 @@ class BillingTests(APITestCase):
                 encounter=self.encounter,
                 status="APPROVED",
             )
-        response = self.client.post(
-            reverse("encounter-orders", args=[self.encounter.id]),
-            {"order_type": "LAB", "details": "FBC"},
-            format="json",
-            **self.auth,
-        )
+        response = self._order_lab_test()
         self.assertEqual(response.status_code, 201, response.data)
 
     def test_check_billing_clearance_raises_with_clear_reason(self):

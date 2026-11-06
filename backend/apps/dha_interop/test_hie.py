@@ -524,6 +524,10 @@ class ShrTests(HieFixture):
                 episode=self.episode,
                 encounter_type="PSYCHOTHERAPY",
             )
+            # A blank (legacy) type is not on the SHR allow-list either.
+            Encounter.objects.create(
+                organization=self.org, patient=self.patient, episode=self.episode
+            )
         with FakeHie() as hie:
             consent_id = self.open_visit(hie)
             hie.on("POST", "/shr/bundles", {"mediator_id": "x", "status": "accepted"})
@@ -544,7 +548,8 @@ class ShrTests(HieFixture):
         bundle = posts[0][2]["json"]
         self.assertEqual(bundle["type"], "collection")
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
-        self.assertEqual(types, ["EpisodeOfCare", "Encounter", "Condition"])  # no psychotherapy
+        # Only the PSYCHIATRY encounter: no psychotherapy, no untyped encounter.
+        self.assertEqual(types, ["EpisodeOfCare", "Encounter", "Condition"])
         encounter = bundle["entry"][1]["resource"]
         self.assertEqual(
             encounter["episodeOfCare"], [{"reference": f"EpisodeOfCare/{self.episode.id}"}]

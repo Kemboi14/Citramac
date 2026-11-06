@@ -27,8 +27,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/clinical/notifications": "Notifications",
   "/clinical/registry": "Client Registry",
   "/clinical/patient": "Client Workspace",
-  "/clinical/triage-mse": "Triage & MSE",
-  "/clinical/encounter": "Clinical Encounter",
   "/clinical/attachments": "Attachments",
   "/clinical/caseload": "My Caseload",
   "/clinical/discharge": "Discharge Planning",

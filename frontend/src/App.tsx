@@ -158,11 +158,6 @@ const NursingCarePage = lazyNamed(
   () => import("./modules/clinical/NursingCarePage"),
   "NursingCarePage",
 );
-const TriageMsePage = lazyNamed(() => import("./modules/clinical/TriageMsePage"), "TriageMsePage");
-const ClinicalEncounterPage = lazyNamed(
-  () => import("./modules/clinical/ClinicalEncounterPage"),
-  "ClinicalEncounterPage",
-);
 const IndividualPsychotherapyPage = lazyNamed(
   () => import("./modules/clinical/IndividualPsychotherapyPage"),
   "IndividualPsychotherapyPage",
@@ -404,9 +399,11 @@ function App() {
             <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="client-history" element={<ClientHistoryPage />} />
             <Route path="ipd/nursing" element={<NursingCarePage />} />
-            <Route path="triage-mse" element={<TriageMsePage />} />
+            {/* The v3 Triage & MSE and encounter (SOAP) screens were retired: triage is
+                the v5 worklist, notes are progress notes on the client record. */}
+            <Route path="triage-mse" element={<Navigate to="/clinical/triage" replace />} />
             <Route path="review" element={<ClinicalReviewPage />} />
-            <Route path="encounter" element={<ClinicalEncounterPage />} />
+            <Route path="encounter" element={<Navigate to="/clinical/registry" replace />} />
             <Route path="lims" element={<LimsPage />} />
             <Route path="pharmacy" element={<PharmacyPage />} />
             {/* One admission flow (legal status first): the old ADT screen redirects. */}

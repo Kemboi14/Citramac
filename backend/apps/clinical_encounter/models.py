@@ -14,13 +14,25 @@ class Encounter(TenantScopedModel):
     """
 
     STATUS_CHOICES = [("OPEN", "Open"), ("IN_PROGRESS", "In Progress"), ("CLOSED", "Closed")]
+    # Each type is set by the workflow that opens the encounter and never changes
+    # afterwards: the SHR export decides what may leave the facility from it
+    # (dha_interop.shr.SHR_ENCOUNTER_TYPES), and INPATIENT is the only one that
+    # becomes Encounter.class IMP.
+    TYPE_CHOICES = [
+        ("TRIAGE", "Triage"),
+        ("INTAKE", "Intake"),
+        ("PSYCHIATRY", "Psychiatry review"),
+        ("PSYCHOTHERAPY", "Psychotherapy"),
+        ("INPATIENT", "Inpatient stay"),
+        ("OUTPATIENT", "Outpatient visit"),
+    ]
 
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="encounters")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     opened_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    encounter_type = models.CharField(max_length=100, blank=True)
+    encounter_type = models.CharField(max_length=100, blank=True, choices=TYPE_CHOICES)
     # CLAUDE.md §4 — every encounter hangs off an EpisodeOfCare.
     episode = models.ForeignKey(
         "care_pathway.EpisodeOfCare",
@@ -98,6 +110,10 @@ class DiagnosisCode(TenantScopedModel):
     )
     clinical_notes = models.TextField(blank=True)
     diagnostic_criteria_met = models.TextField(blank=True)
+    # Condition.recorder — who entered it. Blank only on rows from before it was kept.
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-noted_at"]

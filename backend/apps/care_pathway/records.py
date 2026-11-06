@@ -173,7 +173,11 @@ def complete_deferred(consent, user):
 def _check_type(note_type):
     from .models import LocalConcept
 
-    if not LocalConcept.objects.filter(valueset_id="note-type", code=note_type).exists():
+    # Active codes only: an inactive one (SOAP_V3, the copied v3 notes) labels
+    # existing notes but is never used for a new one.
+    if not LocalConcept.objects.filter(
+        valueset_id="note-type", code=note_type, active=True
+    ).exists():
         raise ValidationError({"note_type": "Choose the note type."})
 
 

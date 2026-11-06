@@ -1,11 +1,9 @@
 """
-HL7 FHIR resource mapping — docs/08-DHA-SHA-INTEGRATION.md §8.1.
+FHIR R4 4.0.1 resources built from our models.
 
-Builds real, schema-validated FHIR resources (via the `fhir.resources`
-library's R4B models — the technical-correction release of R4, functionally
-equivalent for the resource types used here) from internal ORM models. Do
-not hand-roll FHIR JSON without schema validation, per the doc's explicit
-instruction.
+Constructed with `fhir.resources.R4B` classes — the documented construction-only
+exception (CLAUDE.md, 2026-09-18). R4B is not R4: conformance is checked against
+HL7's R4 4.0.1 schema (fhir_validation), never against the library.
 """
 
 import json
@@ -17,7 +15,6 @@ from fhir.resources.R4B.codeableconcept import CodeableConcept
 from fhir.resources.R4B.coding import Coding
 from fhir.resources.R4B.composition import Composition, CompositionSection
 from fhir.resources.R4B.condition import Condition
-from fhir.resources.R4B.consent import Consent
 from fhir.resources.R4B.dosage import Dosage
 from fhir.resources.R4B.encounter import Encounter
 from fhir.resources.R4B.medicationrequest import MedicationRequest
@@ -109,112 +106,34 @@ def build_medication_request_resource(item, patient_ref):
 
 def build_observation_resource(substance_use_entry, patient_ref):
     """
-    Substance-use screening finding, from a Client History intake's
-    `SubstanceUseEntry` (docs/07-CLINICAL-MODULES-SPEC.md §7.14.1). Closes a
-    real, already-documented gap: docs/08-DHA-SHA-INTEGRATION.md §8.1 names
-    `Observation` as a target resource for this app; nothing constructed one
-    until now. Coded with the same LOINC substance-use-screening panel code
-    used elsewhere for this exact concept (screening in the past 12 months),
-    following this module's existing convention of real-system coding
-    (`http://loinc.org`) rather than a custom `urn:citramac:*` code.
+    Substance-use finding from a Client History intake's `SubstanceUseEntry`.
+    `code` is text only: no LOINC code for it has been verified (CLAUDE.md §6 —
+    VERIFY: the LOINC code for substance use, from loinc.org), and a plausible
+    wrong code is worse than none.
     """
     effective_date = substance_use_entry.last_use or substance_use_entry.first_use
     note_text = " · ".join(filter(None, [substance_use_entry.frequency, substance_use_entry.route]))
     return Observation(
         id=str(substance_use_entry.id),
         status="final",
-        code=CodeableConcept(
-            coding=[
-                Coding(
-                    system="http://loinc.org",
-                    code="74013-4",
-                    display="Alcohol and/or Substance Use in the past 12 Months",
-                )
-            ]
-        ),
+        category=[
+            CodeableConcept(
+                coding=[
+                    Coding(
+                        # hl7.terminology.r4 7.4.0 (a Kenya Core dependency).
+                        system="http://terminology.hl7.org/CodeSystem/observation-category",
+                        code="social-history",
+                        display="Social History",
+                    )
+                ]
+            )
+        ],
+        code=CodeableConcept(text="Substance use"),
         subject=Reference(reference=patient_ref),
         effectiveDateTime=effective_date.isoformat() if effective_date else None,
         valueCodeableConcept=CodeableConcept(text=substance_use_entry.substance),
         note=[Annotation(text=note_text)] if note_text else None,
     )
-
-
-def build_referral_bundle(referral_packet):
-    """
-    Composition + Patient + Condition(s) + MedicationRequest(s) referencing
-    the encounter's diagnoses/prescriptions — docs/08-DHA-SHA-INTEGRATION.md
-    §8.1: "Every E-Referral builds a FHIR Bundle ... and transmits it to the
-    National Health Information Exchange (HIE) endpoint." Returns the Bundle
-    as a plain JSON-safe dict, the form stored on `ReferralPacket.fhir_bundle_json`
-    and transmitted by `hie_client.transmit_referral`.
-    """
-    encounter = referral_packet.encounter
-    patient = encounter.patient
-    patient_ref = _urn("Patient", patient.id)
-
-    patient_resource = build_patient_resource(patient)
-    entries = [BundleEntry(fullUrl=patient_ref, resource=patient_resource)]
-
-    section_references = []
-    for diagnosis in encounter.diagnoses.select_related("icd11_code").all():
-        condition_ref = _urn("Condition", diagnosis.id)
-        entries.append(
-            BundleEntry(
-                fullUrl=condition_ref,
-                resource=build_condition_resource(diagnosis, patient_ref),
-            )
-        )
-        section_references.append(Reference(reference=condition_ref))
-
-    for prescription in encounter.prescriptions.prefetch_related("items__drug").all():
-        for item in prescription.items.all():
-            med_ref = _urn("MedicationRequest", item.id)
-            entries.append(
-                BundleEntry(
-                    fullUrl=med_ref,
-                    resource=build_medication_request_resource(item, patient_ref),
-                )
-            )
-            section_references.append(Reference(reference=med_ref))
-
-    author_name = "CITRAMAC System"
-    if encounter.opened_by_id:
-        full_name = f"{encounter.opened_by.first_name} {encounter.opened_by.last_name}".strip()
-        if full_name:
-            author_name = full_name
-
-    composition = Composition(
-        id=str(referral_packet.id),
-        status="final",
-        type=CodeableConcept(
-            coding=[
-                Coding(
-                    system="http://loinc.org",
-                    code="57133-1",
-                    display="Referral note",
-                )
-            ]
-        ),
-        subject=Reference(reference=patient_ref),
-        date=referral_packet.created_at.isoformat(),
-        author=[Reference(display=author_name)],
-        title=f"Referral to {referral_packet.destination_facility}",
-        section=(
-            [CompositionSection(title="Clinical Summary", entry=section_references)]
-            if section_references
-            else None
-        ),
-    )
-    composition_ref = _urn("Composition", referral_packet.id)
-    entries.insert(0, BundleEntry(fullUrl=composition_ref, resource=composition))
-
-    bundle = Bundle(type="document", entry=entries)
-    # `.model_dump_json()` (not `.model_dump()`) so dates serialize to proper
-    # FHIR ISO8601 strings — `.model_dump()` leaves native `datetime` objects
-    # in the tree, which the plain `models.JSONField` encoder can't
-    # serialize on save. (Pydantic v1's `.json()` did the same thing but is
-    # deprecated since Pydantic v2.)
-    return json.loads(bundle.model_dump_json(exclude_none=True))
 
 
 _ENCOUNTER_STATUS_MAP = {
@@ -223,20 +142,11 @@ _ENCOUNTER_STATUS_MAP = {
     "DISCHARGED": "finished",
 }
 
-_CONSENT_STATUS_MAP = {
-    "OBTAINED": "active",
-    "PENDING": "proposed",
-    "DECLINED": "rejected",
-    "": "proposed",
-}
 
-
-def build_encounter_resource(admission, patient_ref):
-    """
-    Inpatient Encounter for an Admission — docs/07-CLINICAL-MODULES-SPEC.md
-    §7.7. No Encounter FHIR builder existed before this; ADT admissions
-    otherwise had no FHIR representation at all.
-    """
+def build_encounter_resource(admission, patient_ref, episode_ref=None):
+    """The inpatient stay: R4 Encounter class IMP, inside its EpisodeOfCare
+    (CLAUDE.md §4). Its id is the clinical Encounter the admission opened, the
+    same id the SHR uses, so one stay is one Encounter everywhere."""
     from fhir.resources.R4B.period import Period
 
     period_kwargs = {"start": admission.admitted_at.isoformat()}
@@ -244,7 +154,7 @@ def build_encounter_resource(admission, patient_ref):
         period_kwargs["end"] = admission.discharged_at.isoformat()
 
     return Encounter(
-        id=str(admission.id),
+        id=str(admission.encounter_id or admission.id),
         status=_ENCOUNTER_STATUS_MAP.get(admission.status, "unknown"),
         class_fhir=Coding(
             system="http://terminology.hl7.org/CodeSystem/v3-ActCode",
@@ -252,6 +162,7 @@ def build_encounter_resource(admission, patient_ref):
             display="inpatient encounter",
         ),
         subject=Reference(reference=patient_ref),
+        episodeOfCare=[Reference(reference=episode_ref)] if episode_ref else None,
         period=Period(**period_kwargs),
         reasonCode=(
             [CodeableConcept(text=admission.reason_for_admission)]
@@ -261,54 +172,27 @@ def build_encounter_resource(admission, patient_ref):
     )
 
 
-def build_consent_resource(admission, patient_ref):
-    """
-    Treatment consent for a Voluntary Admission — distinct from the
-    HIE-data-sharing Consent captured on Patient/ConsentRecord. No Consent
-    FHIR builder existed before this.
-    """
-    return Consent(
-        id=str(admission.id),
-        status=_CONSENT_STATUS_MAP.get(admission.consent_status, "proposed"),
-        scope=CodeableConcept(
-            coding=[
-                Coding(
-                    system="http://terminology.hl7.org/CodeSystem/consentscope",
-                    code="treatment",
-                    display="Treatment",
-                )
-            ]
-        ),
-        category=[
-            CodeableConcept(
-                coding=[
-                    Coding(
-                        system="http://loinc.org",
-                        code="59284-0",
-                        display="Patient Consent",
-                    )
-                ]
-            )
-        ],
-        patient=Reference(reference=patient_ref),
-        dateTime=admission.consent_at.isoformat() if admission.consent_at else None,
+_RISK_LABELS = {
+    "risk_self_harm": "Self-harm / suicide risk",
+    "risk_to_others": "Risk to others",
+    "risk_absconding": "Absconding / wandering risk",
+    "risk_medical": "Medical / physical risk",
+}
+
+
+def _has_admission_risk(admission):
+    # ROUTINE is the default level every admission starts with — not a recorded risk.
+    return bool(
+        any(getattr(admission, field) for field in _RISK_LABELS)
+        or admission.observation_level not in ("", "ROUTINE")
+        or admission.risk_summary
     )
 
 
-def build_risk_assessment_resource(admission, patient_ref):
-    """
-    Admission-time risk assessment for an Involuntary Admission (legal
-    order under the Mental Health Act, Cap. 248) — the only risk-assessment
-    FHIR representation before this was Encounter-level via MSE, never tied
-    to an inpatient Admission.
-    """
-    risk_labels = {
-        "risk_self_harm": "Self-harm / suicide risk",
-        "risk_to_others": "Risk to others",
-        "risk_absconding": "Absconding / wandering risk",
-        "risk_medical": "Medical / physical risk",
-    }
-    active_risks = [label for field, label in risk_labels.items() if getattr(admission, field)]
+def build_risk_assessment_resource(admission, patient_ref, encounter_ref=None):
+    """The risk recorded at admission. Built from what was recorded, whatever the
+    admission's legal basis — which resource is present must not reveal it."""
+    active_risks = [label for field, label in _RISK_LABELS.items() if getattr(admission, field)]
     note_lines = []
     if active_risks:
         note_lines.append("Identified risks: " + ", ".join(active_risks))
@@ -321,42 +205,34 @@ def build_risk_assessment_resource(admission, patient_ref):
         id=str(admission.id),
         status="final",
         subject=Reference(reference=patient_ref),
+        encounter=Reference(reference=encounter_ref) if encounter_ref else None,
         occurrenceDateTime=admission.admitted_at.isoformat(),
         note=[Annotation(text="\n".join(note_lines))] if note_lines else None,
     )
 
 
 def build_admission_bundle(admission):
-    """
-    Encounter + (Consent for a voluntary admission, or RiskAssessment for an
-    involuntary one) — surfaced via AdmissionViewSet.fhir, not auto-
-    transmitted to the HIE (no submission pipeline exists for these resource
-    types yet, matching the honest real-vs-stub pattern used elsewhere in
-    this module rather than faking a transmission).
-    """
+    """Encounter (class IMP, in its episode) + the admission RiskAssessment when
+    any risk was recorded. Served by AdmissionViewSet.fhir for review; never
+    transmitted. Legal status has no R4 home and is not in it (legal_models.py);
+    treatment consent is the admission's VisitConsent, not a field here."""
     patient = admission.patient
     patient_ref = _urn("Patient", patient.id)
-    encounter_ref = _urn("Encounter", admission.id)
+    encounter_ref = _urn("Encounter", admission.encounter_id or admission.id)
+    episode_ref = _urn("EpisodeOfCare", admission.episode_id) if admission.episode_id else None
 
     entries = [
         BundleEntry(fullUrl=patient_ref, resource=build_patient_resource(patient)),
         BundleEntry(
-            fullUrl=encounter_ref, resource=build_encounter_resource(admission, patient_ref)
+            fullUrl=encounter_ref,
+            resource=build_encounter_resource(admission, patient_ref, episode_ref),
         ),
     ]
-
-    if admission.admission_type == "INVOLUNTARY":
-        risk_ref = _urn("RiskAssessment", admission.id)
+    if _has_admission_risk(admission):
         entries.append(
             BundleEntry(
-                fullUrl=risk_ref, resource=build_risk_assessment_resource(admission, patient_ref)
-            )
-        )
-    else:
-        consent_ref = _urn("Consent", admission.id)
-        entries.append(
-            BundleEntry(
-                fullUrl=consent_ref, resource=build_consent_resource(admission, patient_ref)
+                fullUrl=_urn("RiskAssessment", admission.id),
+                resource=build_risk_assessment_resource(admission, patient_ref, encounter_ref),
             )
         )
 

@@ -19,8 +19,20 @@ class EncounterAdmin(admin.ModelAdmin):
 
 @admin.register(SoapNote)
 class SoapNoteAdmin(admin.ModelAdmin):
+    """Read-only archive: each note was copied into ProgressNote (care_pathway
+    0052) and is kept unchanged as the record the copy was made from."""
+
     list_display = ["encounter", "author", "is_locked", "signed_at"]
     list_filter = ["is_locked"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(DiagnosisCode)

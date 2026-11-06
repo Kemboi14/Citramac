@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
-import { useEnsureEncounter } from "../../clinical/useEnsureEncounter";
+import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
-import { createPrescription, type PrescriptionItem } from "../../lib/clinicalApi";
+import type { MedicationOrder } from "../../lib/carePathwayApi";
 import {
   dispenseMedication,
   listStores,
-  searchDrugIndex,
   type DispenseRecord,
-  type DrugIndexEntry,
   type Store,
 } from "../../lib/pharmacyApi";
+import { PrescribingModule } from "../care/record/modules/PrescribingModule";
 import { PageHeader } from "../care/shared/ui";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
@@ -22,24 +21,18 @@ const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
 /**
- * Module 6 — e-prescribe then dispense with FEFO batch selection, gated on
- * the same POS billing-clearance check as lab orders —
- * docs/07-CLINICAL-MODULES-SPEC.md §7.6, §7.10.
+ * Prescribe, then dispense with FEFO batch selection. Orders are placed through
+ * the same structured prescribing module as the client record (allergy lock and
+ * hard stop, acknowledged warnings, coded route, prescriber and licence checks,
+ * billing clearance) and land in the one MedicationRequest store; dispensing is
+ * against one of those orders.
  */
 export function PharmacyPage() {
   const { accessToken } = useAuth();
-  const { hasClient, encounterId, patientName, error: encounterError } = useEnsureEncounter();
+  const { selected } = usePatientContext();
 
-  const [drugQuery, setDrugQuery] = useState("");
-  const [drugMatches, setDrugMatches] = useState<DrugIndexEntry[]>([]);
-  const [prescribeForm, setPrescribeForm] = useState({
-    dose: "",
-    route: "Oral",
-    frequency: "Once daily",
-    duration: "30 days",
-  });
-  const [prescribedItem, setPrescribedItem] = useState<PrescriptionItem | null>(null);
-
+  const [orders, setOrders] = useState<MedicationOrder[]>([]);
+  const [orderId, setOrderId] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -60,49 +53,16 @@ export function PharmacyPage() {
       });
   }, [accessToken]);
 
-  if (encounterError) return <p className="text-status-red">{encounterError}</p>;
-  if (!hasClient) return <ClientPicker action="prescribe or dispense for" />;
-  if (!encounterId) return <p className="text-ink-500">Opening an encounter for this client…</p>;
+  if (!selected) return <ClientPicker action="prescribe or dispense for" />;
 
-  const runDrugSearch = async () => {
-    if (!accessToken || !drugQuery.trim()) return;
-    setError(null);
-    try {
-      setDrugMatches(await searchDrugIndex(accessToken, drugQuery));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Drug search failed.");
-    }
-  };
-
-  const prescribe = async (drugCode: string) => {
-    if (!accessToken) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const prescription = await createPrescription(
-        accessToken,
-        encounterId,
-        drugCode,
-        prescribeForm.dose,
-        prescribeForm.route,
-        prescribeForm.frequency,
-        prescribeForm.duration,
-      );
-      setPrescribedItem(prescription.items[0] ?? null);
-      setDispensed(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't create the prescription.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const order = orders.find((o) => o.id === orderId) ?? null;
 
   const dispense = async () => {
-    if (!accessToken || !prescribedItem || !storeId) return;
+    if (!accessToken || !order || !storeId) return;
     setError(null);
     setBusy(true);
     try {
-      setDispensed(await dispenseMedication(accessToken, prescribedItem.id, storeId, quantity));
+      setDispensed(await dispenseMedication(accessToken, order.id, storeId, quantity));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't dispense — check billing/stock.");
     } finally {
@@ -116,95 +76,45 @@ export function PharmacyPage() {
       <PageHeader
         eyebrow="Pharmacy & medication"
         title={"Medication orders & review"}
-        subtitle={patientName}
+        subtitle={selected.patientName}
       />
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">1. Prescribe</h2>
-        <div className="flex gap-2">
-          <input
-            className={`${FIELD_CLASS} flex-1`}
-            placeholder="Search National Drug Index, e.g. fluoxetine"
-            value={drugQuery}
-            onChange={(e) => setDrugQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && runDrugSearch()}
-          />
-          <button type="button" className={BUTTON_CLASS} onClick={runDrugSearch}>
-            Search
-          </button>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className={LABEL_CLASS}>
-            Dose
-            <input
-              className={FIELD_CLASS}
-              value={prescribeForm.dose}
-              onChange={(e) => setPrescribeForm((f) => ({ ...f, dose: e.target.value }))}
-            />
-          </label>
-          <label className={LABEL_CLASS}>
-            Route
-            <input
-              className={FIELD_CLASS}
-              value={prescribeForm.route}
-              onChange={(e) => setPrescribeForm((f) => ({ ...f, route: e.target.value }))}
-            />
-          </label>
-          <label className={LABEL_CLASS}>
-            Frequency
-            <input
-              className={FIELD_CLASS}
-              value={prescribeForm.frequency}
-              onChange={(e) => setPrescribeForm((f) => ({ ...f, frequency: e.target.value }))}
-            />
-          </label>
-          <label className={LABEL_CLASS}>
-            Duration
-            <input
-              className={FIELD_CLASS}
-              value={prescribeForm.duration}
-              onChange={(e) => setPrescribeForm((f) => ({ ...f, duration: e.target.value }))}
-            />
-          </label>
-        </div>
-
-        {drugMatches.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {drugMatches.map((d) => (
-              <li
-                key={d.code}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm"
-              >
-                <span>
-                  <span className="font-semibold">{d.generic_name}</span> {d.strength} ({d.form})
-                </span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="text-sm font-semibold text-brand-green hover:underline"
-                  onClick={() => prescribe(d.code)}
-                >
-                  Prescribe
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {prescribedItem && (
-          <p className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
-            Prescribed {prescribedItem.drug} — {prescribedItem.dose}, {prescribedItem.route}
-          </p>
-        )}
+        <PrescribingModule
+          key={selected.patientId}
+          patientId={selected.patientId}
+          onOrdersChange={setOrders}
+        />
       </div>
 
-      {prescribedItem && (
-        <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-          <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
-            2. Dispense (FEFO + POS Gate)
-          </h2>
+      <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
+        <h2 className="mb-4 font-display text-base font-semibold text-ink-900">
+          2. Dispense (FEFO + POS Gate)
+        </h2>
+        {orders.length === 0 ? (
+          <p className="text-sm text-ink-500">No medication orders for this client yet.</p>
+        ) : (
           <div className="flex flex-wrap items-end gap-3">
+            <label className={LABEL_CLASS}>
+              Order
+              <select
+                className={FIELD_CLASS}
+                value={orderId}
+                onChange={(e) => {
+                  setOrderId(e.target.value);
+                  setDispensed(null);
+                }}
+              >
+                <option value="">Choose an order…</option>
+                {orders.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.drug} — {o.dose}, {o.route}
+                    {o.is_prn ? " PRN" : o.frequency ? `, ${o.frequency}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className={LABEL_CLASS}>
               Store
               <select
@@ -229,18 +139,23 @@ export function PharmacyPage() {
                 onChange={(e) => setQuantity(Number(e.target.value))}
               />
             </label>
-            <button type="button" disabled={busy} className={BUTTON_CLASS} onClick={dispense}>
+            <button
+              type="button"
+              disabled={busy || !order || !storeId}
+              className={BUTTON_CLASS}
+              onClick={dispense}
+            >
               Dispense
             </button>
           </div>
-          {dispensed && (
-            <div className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
-              Dispensed {dispensed.reduce((sum, r) => sum + r.quantity_dispensed, 0)} unit(s) across{" "}
-              {dispensed.length} batch(es) (earliest-expiring first).
-            </div>
-          )}
-        </div>
-      )}
+        )}
+        {dispensed && (
+          <div className="mt-4 rounded-sm bg-brand-green-tint px-3 py-2 text-sm text-brand-green-dark">
+            Dispensed {dispensed.reduce((sum, r) => sum + r.quantity_dispensed, 0)} unit(s) across{" "}
+            {dispensed.length} batch(es) (earliest-expiring first).
+          </div>
+        )}
+      </div>
 
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>

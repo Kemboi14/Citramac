@@ -1,14 +1,6 @@
 from rest_framework import serializers
 
-from .models import (
-    ClinicalOrder,
-    DiagnosisCode,
-    Encounter,
-    Prescription,
-    PrescriptionItem,
-    ReferralPacket,
-    SoapNote,
-)
+from .models import DiagnosisCode, Encounter
 
 
 class EncounterSerializer(serializers.ModelSerializer):
@@ -24,24 +16,7 @@ class EncounterSerializer(serializers.ModelSerializer):
             "opened_at",
             "closed_at",
         ]
-        read_only_fields = ["opened_by", "opened_at"]
-
-
-class SoapNoteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SoapNote
-        fields = [
-            "id",
-            "encounter",
-            "subjective",
-            "objective",
-            "assessment",
-            "plan",
-            "author",
-            "signed_at",
-            "is_locked",
-        ]
-        read_only_fields = ["encounter", "author", "signed_at", "is_locked"]
+        read_only_fields = ["opened_by", "opened_at", "status", "closed_at", "branch"]
 
 
 class DiagnosisCodeSerializer(serializers.ModelSerializer):
@@ -62,76 +37,18 @@ class DiagnosisCodeSerializer(serializers.ModelSerializer):
             "verification_status",
             "clinical_notes",
             "diagnostic_criteria_met",
+            "recorded_by",
         ]
-        read_only_fields = ["noted_at"]
+        read_only_fields = ["noted_at", "recorded_by"]
 
-
-class ClinicalOrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ClinicalOrder
-        fields = [
-            "id",
-            "encounter",
-            "order_type",
-            "details",
-            "ordered_by",
-            "ordered_at",
-            "status",
-        ]
-        read_only_fields = ["encounter", "ordered_by", "ordered_at"]
-
-
-class PrescriptionItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PrescriptionItem
-        fields = [
-            "id",
-            "prescription",
-            "drug",
-            "dose",
-            "route",
-            "frequency",
-            "duration",
-            "allergy_check_passed",
-            "interaction_check_passed",
-            "pediatric_dose_flag",
-            "is_prn",
-            "prn_max_per_24h",
-            "indication",
-            "controlled_drug",
-            "check_findings",
-            "allergy_override_reason",
-        ]
-        read_only_fields = ["prescription", "check_findings", "allergy_override_reason"]
-
-
-class PrescriptionSerializer(serializers.ModelSerializer):
-    items = PrescriptionItemSerializer(many=True, required=False)
-
-    class Meta:
-        model = Prescription
-        fields = ["id", "encounter", "prescribed_by", "prescribed_at", "items"]
-        read_only_fields = ["encounter", "prescribed_by", "prescribed_at"]
-
-    def create(self, validated_data):
-        items_data = validated_data.pop("items", [])
-        prescription = Prescription.objects.create(**validated_data)
-        for item_data in items_data:
-            PrescriptionItem.objects.create(
-                prescription=prescription, organization=prescription.organization, **item_data
-            )
-        return prescription
-
-
-class ReferralPacketSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReferralPacket
-        fields = [
-            "id",
-            "encounter",
-            "destination_facility",
-            "fhir_bundle_json",
-            "status",
-            "sent_at",
-        ]
-        read_only_fields = ["encounter", "fhir_bundle_json", "status", "sent_at"]
+    def update(self, instance, validated_data):
+        # Condition.subject/encounter and Condition.code are fixed once recorded:
+        # a wrong code is ruled out and a new diagnosis recorded, never rewritten.
+        for field in ("encounter", "icd11_code"):
+            if field in validated_data and validated_data[field] != getattr(instance, field):
+                raise serializers.ValidationError(
+                    {
+                        field: "Can't be changed once recorded — rule this one out and record a new diagnosis."
+                    }
+                )
+        return super().update(instance, validated_data)

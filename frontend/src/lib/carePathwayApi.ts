@@ -2323,6 +2323,8 @@ export interface VisitConsentRow {
 export interface ProgressNoteRow {
   id: string;
   note_type: string;
+  /** The type's label, inactive types (archived v3 SOAP notes) included. */
+  note_type_display: string;
   text: string;
   status: "DRAFT" | "SIGNED";
   amends: string | null;

@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -10,7 +8,7 @@ from apps.dha_interop.models import IcdCodeIndex
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .models import SoapNote
+from .models import Encounter
 
 
 class ClinicalEncounterAndTriageTests(APITestCase):
@@ -45,94 +43,73 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         self.assertEqual(response.status_code, 201, response.data)
         return response.data["id"]
 
-    def test_vitals_computes_bmi_and_bsa(self):
-        encounter_id = self._open_encounter()
-        response = self.client.post(
-            reverse("encounter-vitals", args=[encounter_id]),
-            {"height_cm": "170.0", "weight_kg": "65.0", "esi_acuity_level": 3},
+    def _add_diagnosis(self, encounter_id, code, primary=True):
+        return self.client.post(
+            reverse("diagnosis-code-list"),
+            {"encounter": encounter_id, "icd11_code": code, "is_primary": primary},
             format="json",
             **self.auth,
         )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertAlmostEqual(float(response.data["bmi"]), 22.5, places=1)
-        self.assertGreater(float(response.data["bsa"]), 1.7)
 
-    @patch("apps.notifications.tasks.notify_supervisors_of_risk.delay")
-    def test_mse_positive_risk_escalates_to_supervisor(self, mock_notify):
-        encounter_id = self._open_encounter()
-        response = self.client.post(
-            reverse("encounter-mse", args=[encounter_id]),
-            {
-                "appearance": "Disheveled",
-                "risk_assessment": {
-                    "suicidal_ideation": True,
-                    "homicidal_ideation": False,
-                    "notes": "...",
-                },
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertTrue(response.data["risk_escalated_to_supervisor"])
-        mock_notify.assert_called_once()
+    def test_outpatient_encounter_joins_the_clients_episode(self):
+        """CLAUDE.md §4: every encounter hangs off an EpisodeOfCare."""
+        from apps.care_pathway.models import EpisodeOfCare
 
-    @patch("apps.notifications.tasks.notify_supervisors_of_risk.delay")
-    def test_mse_negative_risk_does_not_escalate(self, mock_notify):
-        encounter_id = self._open_encounter()
-        response = self.client.post(
-            reverse("encounter-mse", args=[encounter_id]),
-            {
-                "appearance": "Well-groomed",
-                "risk_assessment": {"suicidal_ideation": False, "homicidal_ideation": False},
-            },
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertFalse(response.data["risk_escalated_to_supervisor"])
-        mock_notify.assert_not_called()
-
-    def test_soap_note_locks_after_signing(self):
-        encounter_id = self._open_encounter()
-        create_response = self.client.post(
-            reverse("encounter-soap-notes", args=[encounter_id]),
-            {"subjective": "Patient reports...", "plan": "Continue therapy"},
-            format="json",
-            **self.auth,
-        )
-        note_id = create_response.data["id"]
-
-        sign_response = self.client.post(
-            reverse("encounter-sign-soap-note", args=[encounter_id, note_id]), **self.auth
-        )
-        self.assertEqual(sign_response.status_code, 200, sign_response.data)
-        self.assertTrue(sign_response.data["is_locked"])
-
+        first = self._open_encounter()
+        second = self._open_encounter()
         with platform_admin_context():
-            note = SoapNote.all_objects.get(pk=note_id)
-            with self.assertRaises(PermissionError):
-                note.subjective = "edited after signing"
-                note.save()
+            episodes = EpisodeOfCare.objects.filter(patient=self.patient)
+            self.assertEqual(episodes.count(), 1)
+            for encounter_id in (first, second):
+                self.assertEqual(Encounter.objects.get(pk=encounter_id).episode, episodes.get())
+
+    def test_only_an_outpatient_visit_can_be_opened_here(self):
+        response = self.client.post(
+            reverse("encounter-list"),
+            {"patient": str(self.patient.id), "encounter_type": "PSYCHOTHERAPY"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("encounter_type", response.data)
+
+    def test_encounter_who_and_type_cannot_be_changed(self):
+        """The SHR decides what may leave the facility from these; no update path."""
+        encounter_id = self._open_encounter()
+        url = reverse("encounter-detail", args=[encounter_id])
+        for method in (self.client.patch, self.client.put):
+            response = method(url, {"encounter_type": "INPATIENT"}, format="json", **self.auth)
+            self.assertEqual(response.status_code, 405)
+
+    def test_close_sets_finished_time(self):
+        encounter_id = self._open_encounter()
+        response = self.client.post(reverse("encounter-close", args=[encounter_id]), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "CLOSED")
+        self.assertIsNotNone(response.data["closed_at"])
+
+    def test_reading_an_encounter_is_audited(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        encounter_id = self._open_encounter()
+        self.client.get(reverse("encounter-detail", args=[encounter_id]), **self.auth)
+        self.client.get(reverse("encounter-list") + f"?patient={self.patient.id}", **self.auth)
+        with platform_admin_context():
+            views = AuditLogEntry.objects.filter(
+                action=AuditLogEntry.ACTION_VIEW, model="clinical_encounter.encounter"
+            )
+            self.assertTrue(views.filter(object_id=encounter_id).exists())
+            self.assertTrue(views.filter(object_id="list").exists())
 
     def test_diagnosis_requires_valid_icd11_fk(self):
         encounter_id = self._open_encounter()
         with platform_admin_context():
             code = IcdCodeIndex.objects.get(code="6A70")
-        response = self.client.post(
-            reverse("encounter-diagnoses", args=[encounter_id]),
-            {"icd11_code": code.code, "is_primary": True},
-            format="json",
-            **self.auth,
-        )
+        response = self._add_diagnosis(encounter_id, code.code)
         self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["recorded_by"], self.clinician.id)
 
-        bad_response = self.client.post(
-            reverse("encounter-diagnoses", args=[encounter_id]),
-            {"icd11_code": "NOT-A-REAL-CODE", "is_primary": False},
-            format="json",
-            **self.auth,
-        )
+        bad_response = self._add_diagnosis(encounter_id, "NOT-A-REAL-CODE", False)
         self.assertEqual(bad_response.status_code, 400)
 
     def test_encounter_is_tenant_isolated(self):
@@ -155,72 +132,13 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_referral_builds_a_real_fhir_bundle_with_patient_and_condition(self):
-        """docs/08-DHA-SHA-INTEGRATION.md §8.1 — real, schema-validated FHIR Bundle."""
-        encounter_id = self._open_encounter()
-        with platform_admin_context():
-            code = IcdCodeIndex.objects.get(code="6A70")
-        self.client.post(
-            reverse("encounter-diagnoses", args=[encounter_id]),
-            {"icd11_code": code.code, "is_primary": True},
-            format="json",
-            **self.auth,
-        )
-
-        response = self.client.post(
-            reverse("encounter-referrals", args=[encounter_id]),
-            {"destination_facility": "Kenyatta National Hospital"},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201, response.data)
-        bundle = response.data["fhir_bundle_json"]
-        self.assertEqual(bundle["resourceType"], "Bundle")
-        resource_types = {entry["resource"]["resourceType"] for entry in bundle["entry"]}
-        self.assertEqual(resource_types, {"Composition", "Patient", "Condition"})
-
-    def test_send_referral_reports_honest_failure_with_no_hie_endpoint_configured(self):
-        """
-        The DHA HIE takes referrals only as a Shared Health Record
-        ServiceRequest addressed to an FR code; a free-text destination
-        cannot be delivered — the send action must say so, not fabricate a
-        SENT status.
-        """
-        encounter_id = self._open_encounter()
-        create_response = self.client.post(
-            reverse("encounter-referrals", args=[encounter_id]),
-            {"destination_facility": "Kenyatta National Hospital"},
-            format="json",
-            **self.auth,
-        )
-        referral_id = create_response.data["id"]
-
-        send_response = self.client.post(
-            reverse("encounter-send-referral", args=[encounter_id, referral_id]), **self.auth
-        )
-        self.assertEqual(send_response.status_code, 200, send_response.data)
-        self.assertEqual(send_response.data["transmission_status"], "FAILED")
-        self.assertEqual(send_response.data["referral"]["status"], "DRAFT")
-
     def test_diagnosis_list_is_filterable_by_patient_across_encounters(self):
         """Diagnoses tab — cross-encounter, patient-scoped diagnosis list."""
         with platform_admin_context():
             code = IcdCodeIndex.objects.get(code="6A70")
 
-        first_encounter_id = self._open_encounter()
-        self.client.post(
-            reverse("encounter-diagnoses", args=[first_encounter_id]),
-            {"icd11_code": code.code, "is_primary": True},
-            format="json",
-            **self.auth,
-        )
-        second_encounter_id = self._open_encounter()
-        self.client.post(
-            reverse("encounter-diagnoses", args=[second_encounter_id]),
-            {"icd11_code": code.code, "is_primary": False},
-            format="json",
-            **self.auth,
-        )
+        self._add_diagnosis(self._open_encounter(), code.code)
+        self._add_diagnosis(self._open_encounter(), code.code, False)
 
         response = self.client.get(
             reverse("diagnosis-code-list") + f"?patient={self.patient.id}", **self.auth
@@ -233,13 +151,7 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         with platform_admin_context():
             code = IcdCodeIndex.objects.get(code="6A70")
         encounter_id = self._open_encounter()
-        create_response = self.client.post(
-            reverse("encounter-diagnoses", args=[encounter_id]),
-            {"icd11_code": code.code, "is_primary": True},
-            format="json",
-            **self.auth,
-        )
-        diagnosis_id = create_response.data["id"]
+        diagnosis_id = self._add_diagnosis(encounter_id, code.code).data["id"]
 
         response = self.client.patch(
             reverse("diagnosis-code-detail", args=[diagnosis_id]),
@@ -254,6 +166,17 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["status"], "HISTORICAL")
         self.assertIn("excessive worry", response.data["clinical_notes"])
+
+        with platform_admin_context():
+            other = IcdCodeIndex.objects.exclude(code=code.code).first()
+        for field, value in (("icd11_code", other.code), ("encounter", self._open_encounter())):
+            response = self.client.patch(
+                reverse("diagnosis-code-detail", args=[diagnosis_id]),
+                {field: value},
+                format="json",
+                **self.auth,
+            )
+            self.assertEqual(response.status_code, 400, field)
 
     def test_encounter_list_filters_by_patient(self):
         self._open_encounter()

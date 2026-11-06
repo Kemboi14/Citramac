@@ -64,7 +64,9 @@ ACT_CODE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ActCode"  # Kenya Co
 LABEL_CACHE_SECONDS = 24 * 3600
 # Bundle ids are derived, so the same visit content always has the same id.
 BUNDLE_NAMESPACE = uuid.UUID("6f1f6f0e-5a11-4c6b-9b8e-2f6b0e0c51a7")
-NEVER_SENT_ENCOUNTER_TYPES = ("PSYCHOTHERAPY",)
+# Allow-list, not deny-list: an encounter is shared only when its type is one of
+# these. Psychotherapy (and any blank or legacy free-text type) never leaves.
+SHR_ENCOUNTER_TYPES = ("TRIAGE", "INTAKE", "PSYCHIATRY", "INPATIENT", "OUTPATIENT")
 
 EPISODE_TYPE_VS = "https://fhir.dha.go.ke/terminology/ValueSet/episode-of-care-type-vs"
 ENCOUNTER_STATUS_VS = "https://fhir.dha.go.ke/terminology/ValueSet/encounter-status-vs"
@@ -425,7 +427,7 @@ def _shared_encounters(consent):
         Encounter.objects.filter(
             patient=consent.patient, episode=consent.episode, opened_at__date__gte=since
         )
-        .exclude(encounter_type__in=NEVER_SENT_ENCOUNTER_TYPES)
+        .filter(encounter_type__in=SHR_ENCOUNTER_TYPES)
         .select_related("opened_by__practitioner_credential")
         .order_by("opened_at")
     )

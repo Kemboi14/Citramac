@@ -1,19 +1,21 @@
 from django.test import SimpleTestCase
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
-from apps.clinical_encounter.models import Encounter, ReferralPacket
+from apps.clinical_encounter.models import Encounter
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
 from apps.tenancy.models import Organization
 
-from .fhir_mapper import build_admission_bundle, build_client_history_bundle, build_referral_bundle
+from .fhir_mapper import (
+    build_admission_bundle,
+    build_client_history_bundle,
+    build_condition_resource,
+)
 from .fhir_validation import assert_conformant, validate_resource
-from .hie_client import transmit_referral
-from .models import FhirResourceCache, IcdCodeIndex, NationalDrugIndex
+from .models import IcdCodeIndex
 from .sync import sync_terminology_source
 
 
@@ -55,74 +57,6 @@ class TerminologySearchTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.data, list)
-
-
-class FhirMapperAndHieClientTests(APITestCase):
-    """docs/08-DHA-SHA-INTEGRATION.md §8.1 — real FHIR Bundle construction + honest HIE stub."""
-
-    def setUp(self):
-        self.addCleanup(clear_tenant_context)
-        with platform_admin_context():
-            self.org = Organization.objects.create(
-                name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
-            )
-            self.patient = Patient.objects.create(
-                organization=self.org,
-                first_name="Faith",
-                last_name="Mwangi",
-                gender="FEMALE",
-                date_of_birth="1997-03-14",
-            )
-            self.encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
-            self.referral = ReferralPacket.objects.create(
-                organization=self.org, encounter=self.encounter, destination_facility="KNH"
-            )
-
-    def test_build_referral_bundle_is_a_valid_fhir_document_bundle(self):
-        with platform_admin_context():
-            bundle = build_referral_bundle(self.referral)
-        self.assertEqual(bundle["resourceType"], "Bundle")
-        self.assertEqual(bundle["type"], "document")
-        composition = bundle["entry"][0]["resource"]
-        self.assertEqual(composition["resourceType"], "Composition")
-        patient_resource = next(
-            e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Patient"
-        )
-        self.assertEqual(patient_resource["name"][0]["family"], "Mwangi")
-
-    def test_build_referral_bundle_includes_diagnoses(self):
-        with platform_admin_context():
-            from apps.clinical_encounter.models import DiagnosisCode
-
-            DiagnosisCode.objects.create(
-                organization=self.org,
-                encounter=self.encounter,
-                icd11_code=IcdCodeIndex.objects.get(code="6A70"),
-                is_primary=True,
-            )
-            bundle = build_referral_bundle(self.referral)
-        conditions = [
-            e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Condition"
-        ]
-        self.assertEqual(len(conditions), 1)
-        self.assertEqual(conditions[0]["code"]["coding"][0]["code"], "6A70")
-
-    def test_referral_is_recorded_but_never_sent_with_the_reason(self):
-        """The DHA HIE takes referrals only as an SHR ServiceRequest addressed to an
-        FR code; a free-text destination cannot be delivered — FAILED, saying why."""
-        from unittest.mock import patch
-
-        with patch("apps.dha_interop.hie_api.requests.request") as request:
-            with platform_admin_context():
-                bundle = build_referral_bundle(self.referral)
-                cache_entry = transmit_referral(self.referral, bundle)
-        request.assert_not_called()
-        self.assertEqual(cache_entry.status, "FAILED")
-        self.assertIn("FR code", cache_entry.transmission_detail)
-        with platform_admin_context():
-            self.assertEqual(
-                FhirResourceCache.objects.filter(related_object_id=self.referral.id).count(), 1
-            )
 
 
 class ClientHistoryFhirBundleTests(APITestCase):
@@ -179,7 +113,9 @@ class ClientHistoryFhirBundleTests(APITestCase):
         observation = next(
             e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Observation"
         )
-        self.assertEqual(observation["code"]["coding"][0]["system"], "http://loinc.org")
+        # CLAUDE.md §6: no LOINC code is verified for this yet — text only.
+        self.assertEqual(observation["code"], {"text": "Substance use"})
+        self.assertEqual(observation["category"][0]["coding"][0]["code"], "social-history")
         self.assertEqual(observation["valueCodeableConcept"]["text"], "Alcohol")
 
     def test_build_client_history_bundle_without_substance_entries_still_builds(self):
@@ -282,46 +218,6 @@ class FhirR4ConformanceTests(APITestCase):
     def test_validator_accepts_a_conformant_resource(self):
         self.assertEqual(validate_resource({"resourceType": "Patient", "gender": "female"}), [])
 
-    def test_referral_bundle_with_diagnosis_and_prescription_is_r4_conformant(self):
-        from apps.clinical_encounter.models import DiagnosisCode, Prescription, PrescriptionItem
-
-        with platform_admin_context():
-            encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
-            DiagnosisCode.objects.create(
-                organization=self.org,
-                encounter=encounter,
-                icd11_code=IcdCodeIndex.objects.get(code="6A70"),
-                is_primary=True,
-            )
-            drug = NationalDrugIndex.objects.create(
-                code="RX-CONF-001", generic_name="Fluoxetine", form="Capsule", strength="20mg"
-            )
-            prescription = Prescription.objects.create(organization=self.org, encounter=encounter)
-            PrescriptionItem.objects.create(
-                organization=self.org,
-                prescription=prescription,
-                drug=drug,
-                dose="20mg",
-                route="Oral",
-                frequency="Once daily",
-                duration="30 days",
-            )
-            referral = ReferralPacket.objects.create(
-                organization=self.org, encounter=encounter, destination_facility="KNH"
-            )
-            bundle = build_referral_bundle(referral)
-        assert_conformant(bundle)
-
-    def test_referral_bundle_with_no_diagnoses_or_prescriptions_is_r4_conformant(self):
-        """Edge case: a referral with nothing but the Composition + Patient."""
-        with platform_admin_context():
-            encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
-            referral = ReferralPacket.objects.create(
-                organization=self.org, encounter=encounter, destination_facility="KNH"
-            )
-            bundle = build_referral_bundle(referral)
-        assert_conformant(bundle)
-
     def test_admission_bundle_for_voluntary_admission_is_r4_conformant(self):
         from apps.ipd_ward.models import Admission, Bed, Ward
 
@@ -334,17 +230,15 @@ class FhirR4ConformanceTests(APITestCase):
                 bed=bed,
                 admission_type="VOLUNTARY",
                 reason_for_admission="Stabilization",
-                consent_status="OBTAINED",
-                consent_at=timezone.now(),
             )
             bundle = build_admission_bundle(admission)
         assert_conformant(bundle)
+        types = [e["resource"]["resourceType"] for e in bundle["entry"]]
+        self.assertEqual(types, ["Patient", "Encounter"])
 
     def test_admission_bundle_for_involuntary_admission_with_risk_flags_is_r4_conformant(self):
-        """
-        Edge case: Mental Health Act (Cap. 248) involuntary admission with
-        active risk flags — the RiskAssessment branch, not the Consent one.
-        """
+        """Edge case: risk flags recorded at an involuntary admission. The bundle
+        carries the RiskAssessment and nothing that names the legal basis."""
         from apps.ipd_ward.models import Admission, Bed, Ward
 
         with platform_admin_context():
@@ -359,10 +253,12 @@ class FhirR4ConformanceTests(APITestCase):
                 risk_to_others=False,
                 observation_level="CLOSE",
                 risk_summary="Actively suicidal on presentation; continuous observation ordered.",
-                legal_status="Cap. 248 s.14 order",
             )
             bundle = build_admission_bundle(admission)
         assert_conformant(bundle)
+        types = [e["resource"]["resourceType"] for e in bundle["entry"]]
+        self.assertEqual(types, ["Patient", "Encounter", "RiskAssessment"])
+        self.assertNotIn("INVOLUNTARY", str(bundle).upper())
 
     def test_client_history_bundle_with_substance_entry_is_r4_conformant(self):
         from apps.mhp_program.models import BiopsychosocialAssessment, SubstanceUseEntry
@@ -398,6 +294,8 @@ class FhirR4ConformanceTests(APITestCase):
     def test_condition_carries_verification_and_clinical_status(self):
         """A ruled-out diagnosis must travel as `refuted` — both statuses are R4
         modifier elements, so leaving them off asserts the diagnosis."""
+        import json
+
         from apps.clinical_encounter.models import DiagnosisCode
 
         with platform_admin_context():
@@ -419,16 +317,15 @@ class FhirR4ConformanceTests(APITestCase):
                 icd11_code=IcdCodeIndex.objects.get(code="6B00"),
                 verification_status="",
             )
-            referral = ReferralPacket.objects.create(
-                organization=self.org, encounter=encounter, destination_facility="KNH"
-            )
-            bundle = build_referral_bundle(referral)
-        assert_conformant(bundle)
-        conditions = {
-            e["resource"]["code"]["coding"][0]["code"]: e["resource"]
-            for e in bundle["entry"]
-            if e["resource"]["resourceType"] == "Condition"
-        }
+            resources = [
+                build_condition_resource(d, "urn:citramac:patient:x")
+                for d in encounter.diagnoses.select_related("icd11_code")
+            ]
+        conditions = {}
+        for resource in resources:
+            data = json.loads(resource.model_dump_json(exclude_none=True))
+            self.assertEqual(validate_resource(data), [])
+            conditions[data["code"]["coding"][0]["code"]] = data
         confirmed, refuted = conditions["6A70"], conditions["6A60"]
         self.assertEqual(confirmed["verificationStatus"]["coding"][0]["code"], "confirmed")
         self.assertEqual(confirmed["clinicalStatus"]["coding"][0]["code"], "active")
@@ -438,8 +335,8 @@ class FhirR4ConformanceTests(APITestCase):
 
 
 class FhirR4ConformanceInteropExamplesTests(SimpleTestCase):
-    """Published referral, admission and client-history examples (CLAUDE.md §3
-    item 8): a routine case, an edge case and a refusal or omission for each."""
+    """Published admission and client-history examples (CLAUDE.md §3 item 8): a
+    routine case, an edge case and a refusal or omission for each."""
 
     def _folder(self):
         from pathlib import Path
@@ -461,35 +358,26 @@ class FhirR4ConformanceInteropExamplesTests(SimpleTestCase):
 
         from .fhir_validation.validator import validate_bundle
 
-        for kind in ("referral", "admission", "client-history"):
+        for kind in ("admission", "client-history"):
             paths = sorted(self._folder().glob(f"{kind}-*.json"))
             self.assertGreaterEqual(len(paths), 3, kind)
             for path in paths:
                 with self.subTest(example=path.name):
                     self.assertEqual(validate_bundle(json.loads(path.read_text())), {})
 
-    def test_ruled_out_diagnosis_is_sent_as_refuted(self):
-        bundle = self._load("referral-edge-provisional-and-ruled-out-diagnoses")
-        statuses = sorted(
-            c["verificationStatus"]["coding"][0]["code"]
-            for c in self._resources(bundle, "Condition")
-        )
-        self.assertEqual(statuses, ["provisional", "refuted"])
+    def test_admission_never_names_its_legal_basis(self):
+        for path in sorted(self._folder().glob("admission-*.json")):
+            with self.subTest(example=path.name):
+                bundle = self._load(path.stem)
+                self.assertEqual(self._resources(bundle, "Consent"), [])
+                self.assertNotIn("INVOLUNTARY", path.read_text().upper())
 
-    def test_declined_admission_consent_is_rejected(self):
-        bundle = self._load("admission-refusal-voluntary-consent-declined")
-        self.assertEqual(self._resources(bundle, "Consent")[0]["status"], "rejected")
-
-    def test_involuntary_admission_carries_risk_not_consent(self):
+    def test_involuntary_admission_carries_its_recorded_risk(self):
         bundle = self._load("admission-edge-involuntary-with-risk-flags")
         self.assertEqual(len(self._resources(bundle, "RiskAssessment")), 1)
-        self.assertEqual(self._resources(bundle, "Consent"), [])
 
     def test_omissions_send_only_what_was_recorded(self):
-        for name in (
-            "referral-omission-no-diagnosis-or-prescription",
-            "client-history-omission-draft-nothing-recorded",
-        ):
+        for name in ("client-history-omission-draft-nothing-recorded",):
             with self.subTest(example=name):
                 types = [e["resource"]["resourceType"] for e in self._load(name)["entry"]]
                 self.assertEqual(types, ["Composition", "Patient"])

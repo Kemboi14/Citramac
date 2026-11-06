@@ -288,73 +288,6 @@ export function listEncountersForPatient(accessToken: string, patientId: string)
   return apiRequest<Paginated<EncounterRow>>(`/encounters/?patient=${patientId}`, { accessToken });
 }
 
-export function submitVitals(
-  accessToken: string,
-  encounterId: string,
-  payload: Record<string, unknown>,
-) {
-  return apiRequest<Record<string, unknown>>(`/encounters/${encounterId}/vitals/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
-export function submitMse(
-  accessToken: string,
-  encounterId: string,
-  payload: Record<string, unknown>,
-) {
-  return apiRequest<Record<string, unknown>>(`/encounters/${encounterId}/mse/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
-export function submitSoapNote(
-  accessToken: string,
-  encounterId: string,
-  payload: Record<string, unknown>,
-) {
-  return apiRequest<{ id: string }>(`/encounters/${encounterId}/soap-notes/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
-export function signSoapNote(accessToken: string, encounterId: string, noteId: string) {
-  return apiRequest<Record<string, unknown>>(
-    `/encounters/${encounterId}/soap-notes/${noteId}/sign/`,
-    {
-      method: "POST",
-      accessToken,
-    },
-  );
-}
-
-export function createLabOrder(accessToken: string, encounterId: string, details: string) {
-  return apiRequest<Record<string, unknown>>(`/encounters/${encounterId}/orders/`, {
-    method: "POST",
-    body: { order_type: "LAB", details },
-    accessToken,
-  });
-}
-
-export function addDiagnosis(
-  accessToken: string,
-  encounterId: string,
-  icd11Code: string,
-  isPrimary: boolean,
-) {
-  return apiRequest<Record<string, unknown>>(`/encounters/${encounterId}/diagnoses/`, {
-    method: "POST",
-    body: { icd11_code: icd11Code, is_primary: isPrimary },
-    accessToken,
-  });
-}
-
 export interface Icd11Code {
   code: string;
   description: string;
@@ -362,36 +295,6 @@ export interface Icd11Code {
 
 export function searchIcd11(accessToken: string, query: string) {
   return apiRequest<Icd11Code[]>(`/terminology/icd11/search/?q=${encodeURIComponent(query)}`, {
-    accessToken,
-  });
-}
-
-export interface PrescriptionItem {
-  id: string;
-  drug: string;
-  dose: string;
-  route: string;
-  frequency: string;
-  duration: string;
-}
-
-export interface Prescription {
-  id: string;
-  items: PrescriptionItem[];
-}
-
-export function createPrescription(
-  accessToken: string,
-  encounterId: string,
-  drugCode: string,
-  dose: string,
-  route: string,
-  frequency: string,
-  duration: string,
-) {
-  return apiRequest<Prescription>(`/encounters/${encounterId}/prescriptions/`, {
-    method: "POST",
-    body: { items: [{ drug: drugCode, dose, route, frequency, duration }] },
     accessToken,
   });
 }

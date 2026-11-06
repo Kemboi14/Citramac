@@ -50,10 +50,24 @@ const EMPTY: OrderForm = {
  * goes to a senior for co-signature), warnings must be acknowledged, and with
  * allergy status unknown prescribing is locked. Allergy and duplicate checks only —
  * no interaction, maximum-dose or QTc rules are applied (no licensed source). */
-export function PrescribingModule({ patientId }: { patientId: string }) {
+export function PrescribingModule({
+  patientId,
+  onOrdersChange,
+}: {
+  patientId: string;
+  /** Called with the order list whenever it is loaded or an order is placed. */
+  onOrdersChange?: (orders: PrescribingState["orders"]) => void;
+}) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
-  const [state, setState] = useState<PrescribingState | null>(null);
+  const [state, setPrescribingState] = useState<PrescribingState | null>(null);
+  const setState = useCallback(
+    (next: PrescribingState) => {
+      setPrescribingState(next);
+      onOrdersChange?.(next.orders);
+    },
+    [onOrdersChange],
+  );
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<DrugIndexEntry[]>([]);
@@ -71,7 +85,7 @@ export function PrescribingModule({ patientId }: { patientId: string }) {
     } catch (e) {
       setError(errorText(e, "Couldn't load prescribing."));
     }
-  }, [accessToken, patientId]);
+  }, [accessToken, patientId, setState]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount.
     void load();

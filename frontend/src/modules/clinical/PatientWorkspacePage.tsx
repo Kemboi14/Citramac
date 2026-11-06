@@ -320,13 +320,6 @@ export function PatientWorkspacePage() {
           </span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={BUTTON_CLASS}
-            onClick={() => navigate("/clinical/encounter")}
-          >
-            + New encounter
-          </button>
           {patient?.patient_category === "INPATIENT" && (
             <button
               type="button"
@@ -375,27 +368,22 @@ export function PatientWorkspacePage() {
             </h2>
             {encounters.length === 0 && <p className="text-sm text-ink-500">No encounters yet.</p>}
             {encounters.slice(0, 5).map((e) => (
-              <button
+              <div
                 key={e.id}
-                type="button"
-                onClick={() => {
-                  setEncounter(e.id);
-                  navigate("/clinical/encounter");
-                }}
-                className="flex w-full items-center justify-between border-t border-surface-bg py-2.5 text-left first:border-t-0 hover:bg-brand-green-tint-2"
+                className="flex w-full items-center justify-between border-t border-surface-bg py-2.5 first:border-t-0"
               >
                 <span className="text-sm text-ink-700">{e.encounter_type || "Encounter"}</span>
                 <span className="text-xs text-ink-500">
                   {new Date(e.opened_at).toLocaleDateString()} · {e.status}
                 </span>
-              </button>
+              </div>
             ))}
           </section>
           <section className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
             <h2 className="mb-3 font-display text-base font-semibold text-ink-900">Quick links</h2>
             <div className="flex flex-col gap-2 text-sm">
-              <Link className="text-brand-green hover:underline" to="/clinical/triage-mse">
-                Triage &amp; MSE
+              <Link className="text-brand-green hover:underline" to="/clinical/triage">
+                Triage
               </Link>
               <Link className="text-brand-green hover:underline" to="/clinical/review">
                 Clinical Review
@@ -682,14 +670,9 @@ export function PatientWorkspacePage() {
           <h2 className="mb-4 font-display text-base font-semibold text-ink-900">All encounters</h2>
           {encounters.length === 0 && <p className="text-sm text-ink-500">No encounters yet.</p>}
           {encounters.map((e) => (
-            <button
+            <div
               key={e.id}
-              type="button"
-              onClick={() => {
-                setEncounter(e.id);
-                navigate("/clinical/encounter");
-              }}
-              className="flex w-full items-center justify-between border-t border-surface-bg py-2.5 text-left first:border-t-0 hover:bg-brand-green-tint-2"
+              className="flex w-full items-center justify-between border-t border-surface-bg py-2.5 first:border-t-0"
             >
               <span className="text-sm text-ink-700">{e.encounter_type || "Encounter"}</span>
               <span className="text-xs text-ink-500">
@@ -701,7 +684,7 @@ export function PatientWorkspacePage() {
               <span className={`${STATUS_BADGE} bg-brand-green-tint text-brand-green-dark`}>
                 {e.status}
               </span>
-            </button>
+            </div>
           ))}
         </section>
       )}

@@ -259,7 +259,9 @@ class IpdWardTests(APITestCase):
         response = self.client.get(reverse("ipd-admission-eligible-patients"), **self.auth)
         self.assertEqual(response.data, [])
 
-    def test_fhir_action_returns_encounter_and_consent_for_voluntary_admission(self):
+    def test_fhir_action_returns_encounter_only_when_no_risk_was_recorded(self):
+        """Treatment consent is the admission's VisitConsent, not part of this bundle;
+        a routine observation level is the default, not a recorded risk."""
         with platform_admin_context():
             admission = Admission.objects.create(
                 organization=self.org,
@@ -267,12 +269,11 @@ class IpdWardTests(APITestCase):
                 bed=self.bed_a,
                 admitted_by=self.nurse,
                 admission_type="VOLUNTARY",
-                consent_status="OBTAINED",
             )
         response = self.client.get(reverse("ipd-admission-fhir", args=[admission.id]), **self.auth)
         self.assertEqual(response.status_code, 200, response.data)
         resource_types = [entry["resource"]["resourceType"] for entry in response.data["entry"]]
-        self.assertEqual(resource_types, ["Patient", "Encounter", "Consent"])
+        self.assertEqual(resource_types, ["Patient", "Encounter"])
 
     def test_fhir_action_returns_risk_assessment_for_involuntary_admission(self):
         with platform_admin_context():

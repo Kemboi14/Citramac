@@ -1648,12 +1648,15 @@ def _clinical_timeline_events(patient):
                 "detail": at.get_reason_display(),
             }
         )
+    note_types = dict(
+        LocalConcept.objects.filter(valueset_id="note-type").values_list("code", "display")
+    )
     for n in ProgressNote.objects.filter(patient=patient, status="SIGNED"):
         out.append(
             {
                 "at": n.signed_at,
                 "kind": "note",
-                "title": f"Progress note — {n.note_type}",
+                "title": f"Progress note — {note_types.get(n.note_type, n.note_type)}",
                 "detail": f"{(n.text or '')[:140]} — {user_display(n.author)}",
             }
         )

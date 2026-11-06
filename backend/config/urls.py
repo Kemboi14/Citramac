@@ -49,7 +49,6 @@ urlpatterns = [
     path("api/v1/", include("apps.lims.urls")),
     path("api/v1/", include("apps.pharmacy.urls")),
     path("api/v1/", include("apps.ipd_ward.urls")),
-    path("api/v1/", include("apps.offline_sync.urls")),
     path("api/v1/notifications/", include("apps.notifications.urls")),
     path("api/v1/retention/", include("apps.retention.urls")),
     path("api/v1/compliance/", include("apps.compliance.urls")),

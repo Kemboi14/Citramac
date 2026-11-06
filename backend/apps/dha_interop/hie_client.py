@@ -207,30 +207,3 @@ def drain_outbox(limit=50):
             deliver(entry)
             delivered += 1
     return delivered
-
-
-def transmit_referral(referral_packet, bundle_json):
-    """
-    Referral document Bundle: recorded, not sent. The national exchange takes
-    referrals only as an SHR ServiceRequest addressed to the destination
-    facility's FR code, and a referral packet records its destination as free
-    text — so there is nowhere to deliver this bundle. FAILED with that reason,
-    never a silent success.
-    """
-    entry = enqueue(
-        referral_packet.organization_id,
-        "Bundle",
-        bundle_json,
-        f"referral:{referral_packet.id}",
-        related=("ReferralPacket", referral_packet.id),
-        retry_safe=False,
-    )
-    entry.status = "FAILED"
-    entry.next_attempt_at = None
-    entry.transmission_detail = (
-        "Not transmitted: the DHA HIE accepts referrals only as a Shared Health Record "
-        "ServiceRequest addressed to the destination facility's FR code, and this referral "
-        "records its destination as free text."
-    )
-    entry.save(update_fields=["status", "next_attempt_at", "transmission_detail", "updated_at"])
-    return entry

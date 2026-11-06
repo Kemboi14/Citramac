@@ -117,7 +117,7 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
               <Tag tone={n.status === "SIGNED" ? "brand" : "warn"}>
                 {n.status === "SIGNED" ? "Signed" : "Draft — unsigned"}
               </Tag>
-              <strong>{vs.label("note-type", n.note_type)}</strong>
+              <strong>{n.note_type_display || vs.label("note-type", n.note_type)}</strong>
               <span className="text-ink-500">
                 {n.author}, {formatDateTime(n.signed_at ?? n.created_at)}
               </span>
@@ -127,7 +127,13 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
                   className={`${BTN_GHOST} ${BTN_SM}`}
                   onClick={() => {
                     setAmends(n.id);
-                    setType(n.note_type);
+                    // An archived type (SOAP_V3) can't be used for a new note:
+                    // its addendum is filed as an ordinary progress note.
+                    setType(
+                      vs.options("note-type").some((o) => o.code === n.note_type)
+                        ? n.note_type
+                        : "PROGRESS",
+                    );
                     setDraftId(null);
                     setText("");
                   }}

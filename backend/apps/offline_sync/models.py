@@ -2,6 +2,10 @@ from django.db import models
 
 from apps.tenancy.models import TenantScopedModel
 
+# Archive only (2026-11-06): the browser offline queue and its push/pull
+# endpoints were removed with the v3 Triage & MSE and SOAP screens, their only
+# users. These rows record what earlier offline sessions wrote and are kept.
+
 
 class SyncableRecord(TenantScopedModel):
     """
