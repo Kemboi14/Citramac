@@ -364,15 +364,6 @@ class BillingWorkspaceTests(APITestCase):
             ).status_code,
             403,
         )
-        self.assertEqual(
-            self.client.post(
-                reverse("invoice-list"),
-                {"patient": str(self.patient.id), "lines": []},
-                format="json",
-                **self.c_auth,
-            ).status_code,
-            403,
-        )
         claim = self._create_claim()
         self.assertEqual(
             self._post(

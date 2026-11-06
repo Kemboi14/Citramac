@@ -624,12 +624,12 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         payload, _ = self.build(temp)
         self.assertFalse(payload["active"])
         self.assertEqual(payload["link"][0]["type"], "replaced-by")
-        self.assertEqual(payload["link"][0]["other"]["reference"], f"Patient/{permanent.pk}")
+        self.assertEqual(payload["link"][0]["other"]["reference"], f"urn:uuid:{permanent.pk}")
         # The survivor names the record it replaced, and the merge has a Provenance.
         survivor, _ = self.build(permanent)
         self.assertTrue(survivor["active"])
         self.assertEqual(
-            survivor["link"], [{"other": {"reference": f"Patient/{temp.pk}"}, "type": "replaces"}]
+            survivor["link"], [{"other": {"reference": f"urn:uuid:{temp.pk}"}, "type": "replaces"}]
         )
         from apps.client_registry.models import PatientMerge
         from apps.dha_interop.fhir_patient import build_merge_provenance
@@ -640,7 +640,7 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
         self.assertEqual(validate_resource(provenance), [], provenance)
         self.assertEqual(
             [t["reference"] for t in provenance["target"]],
-            [f"Patient/{temp.pk}", f"Patient/{permanent.pk}"],
+            [f"urn:uuid:{temp.pk}", f"urn:uuid:{permanent.pk}"],
         )
         self.assertEqual(provenance["reason"][0]["text"], REASON)
         self.assertTrue(provenance["agent"][0]["who"]["display"])
@@ -1023,7 +1023,7 @@ class FhirR4ConformanceRegistrationExamplesTests(SimpleTestCase):
                         r
                         for r in resources
                         if r["resourceType"] == "Provenance"
-                        and r["target"][0]["reference"] == f"Consent/{consent['id']}"
+                        and r["target"][0]["reference"] == f"urn:uuid:{consent['id']}"
                     )
                     self.assertTrue(provenance["agent"][0]["who"]["display"])
 
