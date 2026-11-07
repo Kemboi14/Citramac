@@ -1,12 +1,14 @@
 """
-One printed form for every document the system produces (owner decision
-2026-11-05): a professional, greyscale A4 layout with the facility
+One printed form for every document the system produces (owner decisions
+2026-11-05, colour 2026-11-07): a professional A4 layout with the facility
 letterhead, a title block, the document's identifiers, a signature block and
-a footer with "page x of y" — the same for every organisation, so a document
-from any facility looks like it came from a health service, not an app.
+a footer with "page x of y". The layout is the same for every organisation;
+its accent colour is the organisation's own theme (`brand_colours()`), and
+body text stays black on white so it reads and photocopies cleanly.
 
 - `letterhead()` — the facility as it should appear: name, branch, contacts,
-  registration numbers and the organisation's logo converted to greyscale.
+  registration numbers, the organisation's logo in its own colours and its
+  brand colours.
 - `render()` — Django template → HTML, for the on-screen preview.
 - `pdf()` — the same HTML → PDF (WeasyPrint), for Download, for attaching to
   claims, and as the attachment of a FHIR DocumentReference (Kenya Core's
@@ -21,6 +23,7 @@ own media storage and embedded, and the PDF engine refuses every other URL.
 import base64
 import io
 import mimetypes
+import re
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -39,30 +42,107 @@ PREVIEW_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; fra
 # ── letterhead ──────────────────────────────────────────────────────────────
 
 
+DEFAULT_BRAND = "#006e51"  # the product's default primary (frontend themeTokens)
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _rgb(hex_colour):
+    return tuple(int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+
+
+def _hex(rgb):
+    return "#" + "".join(f"{max(0, min(255, round(c))):02x}" for c in rgb)
+
+
+def _mix(colour, other, weight):
+    """`colour` moved `weight` (0–1) of the way towards `other`."""
+    a, b = _rgb(colour), _rgb(other)
+    return _hex(x + (y - x) * weight for x, y in zip(a, b, strict=True))
+
+
+def _luminance(colour):
+    def channel(c):
+        c /= 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (channel(c) for c in _rgb(colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_on_white(colour):
+    return 1.05 / (_luminance(colour) + 0.05)
+
+
+def _readable(colour, minimum=4.5):
+    """`colour`, darkened only as far as needed to read as text on white paper."""
+    for step in range(0, 101, 5):
+        candidate = _mix(colour, "#000000", step / 100)
+        if _contrast_on_white(candidate) >= minimum:
+            return candidate
+    return "#000000"
+
+
+def _theme_colour(theme, key):
+    value = ((theme or {}).get("light") or {}).get(key) if isinstance(theme, dict) else None
+    return value.lower() if isinstance(value, str) and _HEX.match(value) else ""
+
+
+def brand_colours(organization):
+    """
+    The organisation's accent for its documents, from the same theme the app
+    uses (light palette): its own theme, else the colour on its branded login,
+    else the platform theme, else the product default. Every value is a
+    validated #rrggbb, so it can go straight into the stylesheet.
+
+    - `accent` — rules and borders (the brand colour as chosen)
+    - `text` — headings in the brand colour, darkened if needed to read on white
+    - `tint` — a pale wash of it, behind table headings
+    """
+    theme = getattr(organization, "theme_overrides", None)
+    primary = _theme_colour(theme, "primary")
+    if not primary:
+        login = (getattr(organization, "primary_color", "") or "").lower()
+        if _HEX.match(login) and login != DEFAULT_BRAND:
+            primary = login
+    if not primary:
+        try:
+            from apps.tenancy.models import PlatformBranding
+
+            primary = _theme_colour(PlatformBranding.get_solo().theme_overrides, "primary")
+        except Exception:  # noqa: BLE001 — branding must never stop a document printing
+            primary = ""
+    primary = primary or DEFAULT_BRAND
+    dark = _theme_colour(theme, "primary_dark") or _mix(primary, "#000000", 0.27)
+    return {
+        "accent": primary,
+        "text": _readable(dark),
+        "tint": _mix(primary, "#ffffff", 0.9),
+    }
+
+
 @lru_cache(maxsize=64)
-def _greyscale_logo(path, modified):
-    """The stored logo as a greyscale data URI (cached per file version)."""
+def _embedded_logo(path, modified):
+    """The stored logo as a data URI in its own colours (cached per file version)."""
     with default_storage.open(path, "rb") as handle:
         raw = handle.read()
     mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
     if mime == "image/svg+xml":
-        # Vector logos are embedded as they are; CSS can't grey them in the PDF engine.
         return f"data:{mime};base64,{base64.b64encode(raw).decode()}"
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     with Image.open(io.BytesIO(raw)) as image:
         image.thumbnail((600, 240))
-        alpha = image.getchannel("A") if "A" in image.getbands() else None
-        grey = ImageOps.grayscale(image.convert("RGB"))
-        if alpha is not None:
-            grey = Image.merge("LA", (grey, alpha))
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert(
+                "RGBA" if "transparency" in image.info or "A" in image.getbands() else "RGB"
+            )
         out = io.BytesIO()
-        grey.save(out, format="PNG", optimize=True)
+        image.save(out, format="PNG", optimize=True)
     return f"data:image/png;base64,{base64.b64encode(out.getvalue()).decode()}"
 
 
 def logo_data_uri(logo_url):
-    """Our own uploaded logo, greyscale and embedded — or "" (never fetched remotely)."""
+    """Our own uploaded logo, embedded — or "" (never fetched remotely)."""
     if not logo_url:
         return ""
     media = "/" + settings.MEDIA_URL.strip("/") + "/"
@@ -73,7 +153,7 @@ def logo_data_uri(logo_url):
     try:
         if ".." in stored.split("/") or not default_storage.exists(stored):
             return ""
-        return _greyscale_logo(stored, default_storage.get_modified_time(stored).timestamp())
+        return _embedded_logo(stored, default_storage.get_modified_time(stored).timestamp())
     except Exception:  # noqa: BLE001 — a broken logo must never stop a document printing
         logger.warning("document_logo_unavailable", logo=stored)
         return ""
@@ -83,8 +163,8 @@ def letterhead(organization, branch=None, snapshot=None):
     """
     How the facility appears at the top of a document. `snapshot` (the facility
     block frozen into a signed document) wins for names and contacts, so a signed
-    document reprints as it was signed; the logo and registration numbers come
-    from the organisation and branch.
+    document reprints as it was signed; the logo, brand colours and registration
+    numbers come from the organisation and branch.
     """
     snapshot = snapshot or {}
     org_name = organization.name if organization else ""
@@ -126,6 +206,7 @@ def letterhead(organization, branch=None, snapshot=None):
         "contacts": [c for c in contacts if c],
         "identifiers": identifiers,
         "logo": logo_data_uri(getattr(organization, "logo_url", "")),
+        "brand": brand_colours(organization),
     }
 
 

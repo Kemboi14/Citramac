@@ -1,5 +1,5 @@
 """
-Printable statutory forms (LGL-DOC-03) in the shared greyscale document layout
+Printable statutory forms (LGL-DOC-03) in the shared document layout
 (apps.documents.printing): letterhead with the tenant's logo, title block, statute
 line, numbered parts, filled dotted-line fields, the FOR OFFICIAL USE ONLY rule,
 and on every page the document ID/version and page number (DOC-GOV-05).

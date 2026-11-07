@@ -492,11 +492,11 @@ true overdue count; My tasks is collapsed with paging (10 a page); today's appoi
 was sent; recent activity paged; the static pathway strip is collapsible. Reversibility: cheap —
 additive, no signed record changes.
 
-### 2026-11-05 — one professional greyscale document layout; Preview and Download PDF
+### 2026-11-05 — one professional document layout; Preview and Download PDF
 
 On the owner's decisions of 2026-11-05: every printable document uses one server-rendered layout
 (`apps/documents/printing.py`, templates under `apps/documents/templates/documents/print/`):
-greyscale A4, letterhead with the organisation's logo converted to greyscale, the branch's
+A4, letterhead with the organisation's logo, the branch's
 contacts and registration numbers (KMPDC, facility licence, SHA facility code), a title and
 reference block, consistent sections, a signature block, and on every page the document
 reference, "Confidential" and "Page x of y". The same HTML is the on-screen Preview and, through
@@ -629,3 +629,16 @@ save copies them into PatientIdentifier rows, which are what FHIR reads.
 
 Reversibility: cheap. Everything is additive or removes unused write paths. Entered-in-error and
 the consent rule change only future records, and no signed record is changed.
+
+### 2026-11-07 — documents in the organisation's colours
+
+On the owner's instruction ("make documents follow org themes, greyscale is boring"), the
+2026-11-05 layout is no longer greyscale. Every printed document takes its accent from the
+organisation's own theme (`printing.brand_colours`): the light-mode `primary` / `primary_dark`
+in `Organization.theme_overrides`, else its branded-login `primary_color`, else the platform
+theme, else the product default. The colour goes on the letterhead rule, facility name, title,
+section headings and table-heading tints; body text stays black on white, a pale brand is
+darkened for headings until it reads on white (4.5:1), and only validated `#rrggbb` values
+reach the stylesheet. The logo is embedded in its own colours. Like the logo, the colour comes
+from the current theme, so a signed document reprints in today's colours with its content
+unchanged. Reversibility: cheap — presentation only, no record changes.

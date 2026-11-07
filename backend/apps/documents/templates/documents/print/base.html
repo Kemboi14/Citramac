@@ -23,6 +23,12 @@
       font-size: 7.5pt; color: #444;
     }
   }
+  /* The organisation's own colours (printing.brand_colours: validated hex). */
+  :root {
+    --brand: {{ letterhead.brand.accent|default:"#006e51" }};
+    --brand-text: {{ letterhead.brand.text|default:"#00513c" }};
+    --brand-tint: {{ letterhead.brand.tint|default:"#e6f1ee" }};
+  }
   * { box-sizing: border-box; }
   html { background: #fff; }
   body {
@@ -47,11 +53,11 @@
     font-size: 7.5pt; color: #444; text-align: center; }
 
   /* Letterhead */
-  .letterhead { width: 100%; border-collapse: collapse; border-bottom: 1.5pt solid #111; margin-bottom: 10pt; }
+  .letterhead { width: 100%; border-collapse: collapse; border-bottom: 2pt solid var(--brand); margin-bottom: 10pt; }
   .letterhead td { vertical-align: middle; padding: 0 0 8pt 0; }
   .letterhead .logo { width: 30mm; padding-right: 10pt; }
   .letterhead .logo img { max-width: 30mm; max-height: 20mm; }
-  .facility-name { font-size: 15pt; font-weight: bold; letter-spacing: 0.2pt; line-height: 1.2; }
+  .facility-name { font-size: 15pt; font-weight: bold; color: var(--brand-text); letter-spacing: 0.2pt; line-height: 1.2; }
   .facility-branch { font-size: 10pt; font-weight: bold; color: #333; }
   .facility-lines { font-size: 8.5pt; color: #333; margin-top: 2pt; }
   .identifiers { text-align: right; font-size: 7.5pt; color: #333; white-space: nowrap; }
@@ -59,15 +65,15 @@
 
   /* Title block */
   .title { font-size: 13.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.6pt;
-    margin: 4pt 0 6pt; }
+    margin: 4pt 0 6pt; color: var(--brand-text); }
   .meta { width: 100%; border-collapse: collapse; margin-bottom: 12pt; font-size: 8.5pt; }
   .meta th, .meta td { border: 0.75pt solid #888; padding: 3pt 5pt; text-align: left; }
-  .meta th { background: #efefef; font-weight: bold; width: 1%; white-space: nowrap; color: #222; }
+  .meta th { background: var(--brand-tint); font-weight: bold; width: 1%; white-space: nowrap; color: var(--brand-text); }
   .docref { string-set: docref content(); }
 
   /* Body */
   h2 { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5pt;
-    border-bottom: 0.75pt solid #555; padding-bottom: 2pt; margin: 14pt 0 5pt; page-break-after: avoid; }
+    color: var(--brand-text); border-bottom: 0.75pt solid var(--brand); padding-bottom: 2pt; margin: 14pt 0 5pt; page-break-after: avoid; }
   h3 { font-size: 9.5pt; margin: 8pt 0 3pt; }
   p { margin: 3pt 0; }
   .fields { width: 100%; border-collapse: collapse; }
@@ -81,14 +87,14 @@
   .pre { white-space: pre-wrap; }
   .grid { width: 100%; border-collapse: collapse; margin-top: 4pt; }
   .grid th, .grid td { border-bottom: 0.5pt solid #999; padding: 3pt 4pt; text-align: left; vertical-align: top; }
-  .grid th { border-bottom: 1pt solid #111; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3pt; }
+  .grid th { border-bottom: 1pt solid var(--brand); background: var(--brand-tint); color: var(--brand-text); font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3pt; }
   .grid .num { text-align: right; white-space: nowrap; }
   .grid tr { page-break-inside: avoid; }
   .totals { width: 55%; margin: 8pt 0 0 auto; border-collapse: collapse; }
   .totals th, .totals td { padding: 2.5pt 4pt; text-align: left; }
   .totals td { text-align: right; white-space: nowrap; }
-  .totals tr.grand th, .totals tr.grand td { border-top: 1pt solid #111; font-weight: bold; }
-  .boxed { border: 0.75pt solid #555; padding: 6pt 8pt; margin: 8pt 0; }
+  .totals tr.grand th, .totals tr.grand td { border-top: 1pt solid var(--brand); font-weight: bold; }
+  .boxed { border: 0.75pt solid var(--brand); padding: 6pt 8pt; margin: 8pt 0; }
   .muted { color: #555; }
 
   /* Signature block */
@@ -96,7 +102,7 @@
   .signature td { width: 50%; vertical-align: bottom; padding: 0 12pt 0 0; }
   .signature .line { border-top: 0.75pt solid #111; padding-top: 2pt; font-size: 8pt; color: #333; }
   .signature .signed { font-size: 9pt; }
-  .end-meta { margin-top: 14pt; border-top: 0.5pt solid #999; padding-top: 4pt; font-size: 7.5pt;
+  .end-meta { margin-top: 14pt; border-top: 0.5pt solid var(--brand); padding-top: 4pt; font-size: 7.5pt;
     color: #444; page-break-inside: avoid; }
 
   /* Draft watermark: grey, on every page. */

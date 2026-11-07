@@ -90,7 +90,7 @@ def _profile(incident):
 
 
 def _page(organization, title, statute, body, user, landscape=False):
-    """The notice in the shared greyscale document layout (apps.documents.printing)."""
+    """The notice in the shared document layout (apps.documents.printing)."""
     from django.utils.safestring import mark_safe
 
     from apps.documents import printing
