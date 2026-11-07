@@ -294,50 +294,52 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-format-tab"
         className={`min-w-0 ${activeSection === "psych-format" ? "" : "hidden"}`}
       >
-      <Card
-        title="Assessment format"
-        aside={
-          <span className="text-[12px] text-ink-500">
-            {assessment ? `Last saved ${formatDateTime(assessment.updated_at)}` : "New assessment"}
-          </span>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={FIELD_LABEL}>Choose how to record this assessment</span>
-          <div
-            role="group"
-            aria-label="Assessment format"
-            className="ml-auto flex rounded-xl border border-surface-border bg-surface-bg p-1"
-          >
-            {(
-              [
-                ["STRUCTURED", "Structured"],
-                ["FREE_TEXT", "Free text"],
-              ] as [PsychiatryFormat, string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={format === value}
-                disabled={readOnly}
-                onClick={() => setFormat(value)}
-                className={`rounded-[9px] px-3.5 py-2 text-[13px] font-semibold transition-colors ${
-                  format === value
-                    ? "bg-brand-green text-on-primary"
-                    : "text-ink-900 hover:bg-surface-card"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+        <Card
+          title="Assessment format"
+          aside={
+            <span className="text-[12px] text-ink-500">
+              {assessment
+                ? `Last saved ${formatDateTime(assessment.updated_at)}`
+                : "New assessment"}
+            </span>
+          }
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={FIELD_LABEL}>Choose how to record this assessment</span>
+            <div
+              role="group"
+              aria-label="Assessment format"
+              className="ml-auto flex rounded-xl border border-surface-border bg-surface-bg p-1"
+            >
+              {(
+                [
+                  ["STRUCTURED", "Structured"],
+                  ["FREE_TEXT", "Free text"],
+                ] as [PsychiatryFormat, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={format === value}
+                  disabled={readOnly}
+                  onClick={() => setFormat(value)}
+                  className={`rounded-[9px] px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+                    format === value
+                      ? "bg-brand-green text-on-primary"
+                      : "text-ink-900 hover:bg-surface-card"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <p className="mt-2 text-[12.5px] leading-5 text-ink-700">
-          Structured mode separates presenting concern, history, risk, formulation and plan. Free
-          text mode records the same assessment as one narrative. The mental state examination,
-          diagnosis and orders stay structured either way.
-        </p>
-      </Card>
+          <p className="mt-2 text-[12.5px] leading-5 text-ink-700">
+            Structured mode separates presenting concern, history, risk, formulation and plan. Free
+            text mode records the same assessment as one narrative. The mental state examination,
+            diagnosis and orders stay structured either way.
+          </p>
+        </Card>
       </div>
 
       <div
@@ -346,45 +348,45 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-assessment-tab"
         className={`min-w-0 ${activeSection === "psych-assessment" ? "" : "hidden"}`}
       >
-      <Card
-        title="Assessment"
-        aside={
-          <Tag tone={format === "STRUCTURED" ? "brand" : "neutral"}>
-            {format === "STRUCTURED" ? "Structured" : "Free text"}
-          </Tag>
-        }
-      >
-        {format === "STRUCTURED" ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {STRUCTURED_FIELDS.map((field) => (
-              <Field key={field.key} label={field.label} hint={field.hint}>
-                <AutoResizeTextarea
-                  className={`${INPUT} min-h-[112px]`}
-                  rows={4}
-                  value={structured[field.key] ?? ""}
-                  disabled={readOnly}
-                  onChange={(event) =>
-                    setStructured((current) => ({ ...current, [field.key]: event.target.value }))
-                  }
-                />
-              </Field>
-            ))}
-          </div>
-        ) : (
-          <Field
-            label="Psychiatric assessment — free text"
-            hint="History, mental state, risk, formulation and plan in your own structure."
-          >
-            <AutoResizeTextarea
-              className={`${INPUT} min-h-[280px]`}
-              rows={12}
-              value={freeText}
-              disabled={readOnly}
-              onChange={(event) => setFreeText(event.target.value)}
-            />
-          </Field>
-        )}
-      </Card>
+        <Card
+          title="Assessment"
+          aside={
+            <Tag tone={format === "STRUCTURED" ? "brand" : "neutral"}>
+              {format === "STRUCTURED" ? "Structured" : "Free text"}
+            </Tag>
+          }
+        >
+          {format === "STRUCTURED" ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {STRUCTURED_FIELDS.map((field) => (
+                <Field key={field.key} label={field.label} hint={field.hint}>
+                  <AutoResizeTextarea
+                    className={`${INPUT} min-h-[112px]`}
+                    rows={4}
+                    value={structured[field.key] ?? ""}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      setStructured((current) => ({ ...current, [field.key]: event.target.value }))
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+          ) : (
+            <Field
+              label="Psychiatric assessment — free text"
+              hint="History, mental state, risk, formulation and plan in your own structure."
+            >
+              <AutoResizeTextarea
+                className={`${INPUT} min-h-[280px]`}
+                rows={12}
+                value={freeText}
+                disabled={readOnly}
+                onChange={(event) => setFreeText(event.target.value)}
+              />
+            </Field>
+          )}
+        </Card>
       </div>
 
       <div
@@ -393,23 +395,23 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-mse-tab"
         className={`min-w-0 ${activeSection === "psych-mse" ? "" : "hidden"}`}
       >
-      <Card title="Mental state examination (MSE)" aside={<Tag tone="brand">One MSE store</Tag>}>
-        {!schema ? (
-          schemaError ? (
-            <ErrorNote>{schemaError}</ErrorNote>
+        <Card title="Mental state examination (MSE)" aside={<Tag tone="brand">One MSE store</Tag>}>
+          {!schema ? (
+            schemaError ? (
+              <ErrorNote>{schemaError}</ErrorNote>
+            ) : (
+              <p className="text-[13px] text-ink-500">Loading MSE options…</p>
+            )
           ) : (
-            <p className="text-[13px] text-ink-500">Loading MSE options…</p>
-          )
-        ) : (
-          <MseSection
-            schema={schema}
-            values={mse as Record<string, unknown>}
-            vs={vs}
-            onChange={(key, value) => setMse((current) => ({ ...current, [key]: value }))}
-            onPatch={(patch) => setMse((current) => ({ ...current, ...patch }))}
-          />
-        )}
-      </Card>
+            <MseSection
+              schema={schema}
+              values={mse as Record<string, unknown>}
+              vs={vs}
+              onChange={(key, value) => setMse((current) => ({ ...current, [key]: value }))}
+              onPatch={(patch) => setMse((current) => ({ ...current, ...patch }))}
+            />
+          )}
+        </Card>
       </div>
 
       <div
@@ -418,11 +420,11 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-diagnosis-tab"
         className={`min-w-0 ${activeSection === "psych-diagnosis" ? "" : "hidden"}`}
       >
-      <IntakeDiagnosisTab
-        patientId={patientId}
-        encounterId={workspace.encounter_id}
-        onChanged={() => undefined}
-      />
+        <IntakeDiagnosisTab
+          patientId={patientId}
+          encounterId={workspace.encounter_id}
+          onChanged={() => undefined}
+        />
       </div>
 
       <div
@@ -431,11 +433,11 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-medication-tab"
         className={`min-w-0 ${activeSection === "psych-medication" ? "" : "hidden"}`}
       >
-      <Card title="Medication" aside={<Tag>MedicationRequest</Tag>} bodyClassName="">
-        <div className="p-[18px]">
-          <PrescribingModule patientId={patientId} />
-        </div>
-      </Card>
+        <Card title="Medication" aside={<Tag>MedicationRequest</Tag>} bodyClassName="">
+          <div className="p-[18px]">
+            <PrescribingModule patientId={patientId} />
+          </div>
+        </Card>
       </div>
 
       <div
@@ -444,29 +446,32 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-previous-tab"
         className={`min-w-0 ${activeSection === "psych-previous" ? "" : "hidden"}`}
       >
-      <Card title="Previous psychiatric assessments">
-        {workspace.history.length === 0 ? (
-          <EmptyState title="No previous signed assessments">
-            Signed assessments for this client will appear here with their author and time.
-          </EmptyState>
-        ) : (
-          <ol className="flex flex-col gap-2">
-            {workspace.history.map((entry) => (
-              <li key={entry.id} className="rounded-lg border border-surface-border bg-surface-bg">
-                <details>
-                  <summary className="cursor-pointer px-3.5 py-2.5 text-[13px] font-semibold text-ink-900">
-                    {formatDateTime(entry.signed_at)} · {entry.author} ·{" "}
-                    {entry.format === "FREE_TEXT" ? "Free text" : "Structured"}
-                  </summary>
-                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap border-t border-surface-border px-3.5 py-3 font-system text-[12.5px] leading-5 text-ink-700">
-                    {entry.text}
-                  </pre>
-                </details>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Card>
+        <Card title="Previous psychiatric assessments">
+          {workspace.history.length === 0 ? (
+            <EmptyState title="No previous signed assessments">
+              Signed assessments for this client will appear here with their author and time.
+            </EmptyState>
+          ) : (
+            <ol className="flex flex-col gap-2">
+              {workspace.history.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="rounded-lg border border-surface-border bg-surface-bg"
+                >
+                  <details>
+                    <summary className="cursor-pointer px-3.5 py-2.5 text-[13px] font-semibold text-ink-900">
+                      {formatDateTime(entry.signed_at)} · {entry.author} ·{" "}
+                      {entry.format === "FREE_TEXT" ? "Free text" : "Structured"}
+                    </summary>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap border-t border-surface-border px-3.5 py-3 font-system text-[12.5px] leading-5 text-ink-700">
+                      {entry.text}
+                    </pre>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
       </div>
 
       {!readOnly && (
