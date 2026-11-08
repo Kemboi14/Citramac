@@ -520,3 +520,22 @@ class NotificationApiTests(TestCase):
         self.assertEqual([n["title"] for n in by_category["results"]], ["Renew"])
         unread = self.client.get(url, {"unread": "true"}, **self.auth).json()
         self.assertEqual([n["title"] for n in unread["results"]], ["Mine"])
+
+
+class NoSmtpEmailBackendTests(TestCase):
+    """production.py's no-SMTP fallback: nothing sent, nothing of the message logged."""
+
+    def test_sends_nothing_and_never_logs_the_body_or_address(self):
+        from django.core.mail import EmailMessage
+
+        from .backends import NoSmtpEmailBackend
+
+        message = EmailMessage(
+            "Your sign-in code", "Your verification code is 123456.", to=["clinician@org.test"]
+        )
+        with self.assertLogs(level="WARNING") as captured:
+            sent = NoSmtpEmailBackend().send_messages([message])
+        self.assertEqual(sent, 0)
+        logged = " ".join(captured.output)
+        self.assertNotIn("123456", logged)
+        self.assertNotIn("clinician@org.test", logged)

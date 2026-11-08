@@ -249,6 +249,40 @@ class MhpExtensionsTests(APITestCase):
         self.assertEqual(complete_response.status_code, 200)
         self.assertEqual(complete_response.data["status"], "COMPLETED")
 
+    def test_supervision_cannot_be_self_taken_or_completed_by_someone_else(self):
+        request_id = self.client.post(
+            reverse("supervision-request-list"),
+            {"patient": str(self.patient.id), "topic": "Boundaries"},
+            format="json",
+            **self.auth,
+        ).data["id"]
+        schedule = reverse("supervision-request-schedule", args=[request_id])
+        complete = reverse("supervision-request-complete", args=[request_id])
+        self.assertEqual(self.client.post(complete, **self.auth).status_code, 400)  # not scheduled
+        self.assertEqual(self.client.post(schedule, **self.auth).status_code, 403)  # own request
+        sup = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"}
+        self.assertEqual(self.client.post(schedule, **sup).status_code, 200)
+        self.assertEqual(self.client.post(complete, **self.auth).status_code, 403)  # not theirs
+
+    def test_clinical_review_needs_a_senior_who_is_not_the_requester(self):
+        with platform_admin_context():
+            self.supervisor.roles.add(Role.objects.get(name="Psychiatrist", organization=None))
+        review_id = self.client.post(
+            reverse("clinical-review-list"),
+            {"patient": str(self.patient.id), "case_summary": "Complex dual diagnosis."},
+            format="json",
+            **self.auth,
+        ).data["id"]
+        decide = reverse("clinical-review-decide", args=[review_id])
+        body = {"status": "APPROVED", "review_notes": "Agree."}
+        self.assertEqual(
+            self.client.post(decide, body, format="json", **self.auth).status_code, 403
+        )
+        sup = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"}
+        self.assertEqual(self.client.post(decide, body, format="json", **sup).status_code, 200)
+        again = self.client.post(decide, {"status": "CHANGES_REQUESTED"}, format="json", **sup)
+        self.assertEqual(again.status_code, 400)
+
     def test_mhp_team_roster_reports_caseload_from_care_team_memberships(self):
         with platform_admin_context():
             CareTeamMembership.objects.create(

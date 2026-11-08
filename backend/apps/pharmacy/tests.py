@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.clinical_encounter.models import Encounter, Prescription, PrescriptionItem
@@ -35,6 +35,14 @@ class PharmacyFefoTests(APITestCase):
             self.encounter = Encounter.objects.create(organization=self.org, patient=self.patient)
             self.clinician = User.objects.create_user(
                 email="clinician@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
+            )
+            # Dispensing needs pharmacy.dispense (the Pharmacist role).
+            self.clinician.roles.add(Role.objects.get(name="Pharmacist", organization=None))
+            self.other_staff = User.objects.create_user(
+                email="reception@org.test",
                 password="Password123!",
                 organization=self.org,
                 is_active=True,
@@ -140,6 +148,29 @@ class PharmacyFefoTests(APITestCase):
                 user=self.clinician,
                 organization=self.org,
             )
+
+    def test_only_a_pharmacist_dispenses_and_a_dispense_is_never_edited(self):
+        other = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.other_staff)[0]}"}
+        response = self.client.post(
+            reverse("pharmacy-dispense-list"),
+            {
+                "prescription_item": str(self.prescription_item.id),
+                "quantity_dispensed": 1,
+                "store": str(self.store.id),
+            },
+            format="json",
+            **other,
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            self.client.patch(
+                reverse("pharmacy-dispense-detail", args=[self.prescription_item.id]),
+                {"quantity_dispensed": 9},
+                format="json",
+                **self.auth,
+            ).status_code,
+            405,
+        )
 
     def test_dispense_endpoint_blocked_by_pos_gate_with_no_cleared_billing(self):
         response = self.client.post(

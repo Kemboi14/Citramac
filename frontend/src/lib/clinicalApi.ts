@@ -205,21 +205,9 @@ export function createPatient(accessToken: string, payload: NewPatientPayload) {
   return apiRequest<PatientDetail>("/patients/", { method: "POST", body: payload, accessToken });
 }
 
-export function updatePatient(
-  accessToken: string,
-  patientId: string,
-  payload: Partial<NewPatientPayload>,
-) {
-  return apiRequest<PatientDetail>(`/patients/${patientId}/`, {
-    method: "PATCH",
-    body: payload,
-    accessToken,
-  });
-}
-
 const PATIENT_PHOTO_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-/** Separate multipart call — keeps `createPatient`/`updatePatient` plain-JSON. */
+/** Separate multipart call — keeps `createPatient` plain-JSON. */
 export function uploadPatientPhoto(accessToken: string, patientId: string, photo: File) {
   if (photo.size > PATIENT_PHOTO_MAX_SIZE_BYTES) {
     throw new Error("Client photo must be 5MB or smaller.");
@@ -295,17 +283,6 @@ export interface Icd11Code {
 
 export function searchIcd11(accessToken: string, query: string) {
   return apiRequest<Icd11Code[]>(`/terminology/icd11/search/?q=${encodeURIComponent(query)}`, {
-    accessToken,
-  });
-}
-
-export function createBiopsychosocialAssessment(
-  accessToken: string,
-  payload: Record<string, unknown>,
-) {
-  return apiRequest<Record<string, unknown>>("/mhp/biopsychosocial-assessments/", {
-    method: "POST",
-    body: payload,
     accessToken,
   });
 }

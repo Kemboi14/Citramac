@@ -235,7 +235,9 @@ class InterventionRecordSerializer(serializers.ModelSerializer):
             "void_reason",
             "corrections",
         ]
-        read_only_fields = ["voided_at", "void_reason", "corrections"]
+        # The provider is whoever records the delivery: naming someone else
+        # would attribute care (and a charge) to a clinician who didn't record it.
+        read_only_fields = ["provider", "voided_at", "void_reason", "corrections"]
         # Optional for a module record (defaults to the module's name, below).
         extra_kwargs = {"intervention": {"required": False, "allow_blank": True}}
 

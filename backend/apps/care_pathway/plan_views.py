@@ -11,6 +11,7 @@ from apps.accounts.access import users_with_permission
 from apps.accounts.models import User
 
 from . import care_plan, plan_extras, services
+from .access import clinical_only
 from .models import (
     CarePlanTask,
     CosignRequest,
@@ -273,6 +274,7 @@ class CarePlanDetailsView(APIView):
 
 
 class CarePlanConfirmView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
@@ -362,6 +364,7 @@ class SafetyPlanView(APIView):
 
 
 class SafetyPlanSignView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         plan = SafetyPlan.objects.filter(patient=patient, signed_at__isnull=True).first()

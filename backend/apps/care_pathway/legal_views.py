@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import legal_config, legal_print, legal_status
+from .access import clinical_only
 from .legal_models import DischargeNotice, LegalDocument, LegalStatus
 from .models import CareTask
 from .views import _is_org_admin, _patient
@@ -94,6 +95,7 @@ class LegalEndView(APIView):
 
 
 class LegalNoticeView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         notice = legal_status.give_notice(
             get_object_or_404(LegalStatus, pk=pk), request.user, request.data
@@ -108,6 +110,7 @@ class LegalNoticeView(APIView):
 
 
 class LegalNoticeWithdrawView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         notice = legal_status.withdraw_notice(
             get_object_or_404(DischargeNotice, pk=pk), request.user
@@ -116,6 +119,7 @@ class LegalNoticeWithdrawView(APIView):
 
 
 class LegalNoticeDepartView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         out = legal_status.record_departure(get_object_or_404(DischargeNotice, pk=pk), request.user)
         return Response(

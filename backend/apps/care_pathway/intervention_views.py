@@ -12,6 +12,7 @@ from apps.ipd_ward.models import MedicationAdministration
 
 from . import intervention_catalogue
 from . import interventions as iv
+from .access import clinical_only
 from .models import CosignRequest, InterventionRecord, RestrictiveCheck, RestrictivePracticeEpisode
 from .serializers import InterventionRecordSerializer
 from .views import _is_org_admin, _patient, _vital_row
@@ -52,6 +53,7 @@ class ObservationStateView(APIView):
 
 
 class ObservationLevelView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         iv.set_observation_level(

@@ -329,13 +329,6 @@ export function transitionDocument(
   });
 }
 
-export function listReleaseAuthorizations(accessToken: string, patientId: string) {
-  return apiRequest<{ results: ReleaseAuthorization[] }>(
-    `/documents/authorizations/?patient=${encodeURIComponent(patientId)}`,
-    { accessToken },
-  );
-}
-
 export interface AuthorizationPayload {
   patient_id: string;
   consent_type: string;

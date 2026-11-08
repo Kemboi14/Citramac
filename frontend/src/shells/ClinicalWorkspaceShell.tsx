@@ -24,6 +24,10 @@ const PAGE_TITLES: Record<string, string> = {
   "/clinical/psychotherapy/*": "Outpatient Care",
   "/clinical/documents": "Clinical Documents",
   "/clinical/documents/*": "Signed Triage Assessment",
+  // More specific than documents/* (longest prefix wins), so a new or
+  // generated document isn't titled as a signed triage.
+  "/clinical/documents/new/*": "New Document",
+  "/clinical/documents/generated/*": "Clinical Document",
   "/clinical/reports": "Reports & Analytics",
   "/clinical/profile": "My Profile",
   "/clinical/notifications": "Notifications",

@@ -19,7 +19,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env")
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="django-insecure-change-me-in-env")
+# The committed defaults below are for development only. Production raises a
+# CRITICAL platform security alert while either is still in use
+# (apps.security.evaluate.default_secret_problems).
+DEFAULT_SECRET_KEY = (
+    "django-insecure-change-me-in-env"  # nosec B105 - dev-only default, flagged in production
+)
+DEFAULT_FIELD_ENCRYPTION_KEY = "9Z1XUaU8qUf7ln091SpHloEM-TCNclM3dVaFT5ZtpuA="  # nosec B105
+SECRET_KEY = env("DJANGO_SECRET_KEY", default=DEFAULT_SECRET_KEY)
 
 # Fernet key for at-rest encryption of tenant secrets (apps/tenancy/crypto.py),
 # e.g. Branch.sha_api_credentials_encrypted — docs/04-MULTI-TENANCY.md §4.5.
@@ -27,9 +34,7 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default="django-insecure-change-me-in-env"
 # reproducible across a fresh clone; every real environment must set a real
 # generated key (`python -c "from cryptography.fernet import Fernet;
 # print(Fernet.generate_key().decode())"`) via FIELD_ENCRYPTION_KEY.
-FIELD_ENCRYPTION_KEY = env(
-    "FIELD_ENCRYPTION_KEY", default="9Z1XUaU8qUf7ln091SpHloEM-TCNclM3dVaFT5ZtpuA="
-)
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default=DEFAULT_FIELD_ENCRYPTION_KEY)
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 

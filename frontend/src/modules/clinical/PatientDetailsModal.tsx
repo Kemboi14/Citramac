@@ -27,7 +27,7 @@ const CARE_LABEL: Record<string, string> = {
 /**
  * Read-only "Client Registration Details" — the second clinical-workspace
  * mockup's full-field dump opened from a patient's "View details" button.
- * Every field mirrors `PatientRegistrationModal`'s sections exactly, sourced
+ * Every field mirrors the registration sections exactly, sourced
  * from the same `PatientDetailSerializer` payload. The National Client
  * Registry section is the one action here: a confirmed match adds a verified
  * Client Registry ID and hands the refreshed record to `onPatientChanged`.

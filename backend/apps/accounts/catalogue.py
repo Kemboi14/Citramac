@@ -29,6 +29,7 @@ MODULES = {
     "records": "Client records & identity",
     "legal": "Mental health law & legal forms",
     "laboratory": "Laboratory",
+    "pharmacy": "Pharmacy",
     "finance": "Billing, claims & payments",
     "documents": "Clinical documents",
     "reports": "Statutory reports",
@@ -123,6 +124,15 @@ PERMISSIONS = [
         "Everyone else sees a result only once it is validated and published.",
         SCOPE_ORG,
         ["Lab Technician", "Auditor"],
+    ),
+    (
+        "pharmacy.dispense",
+        "pharmacy",
+        "Dispense medication",
+        "Dispense against a prescription from pharmacy stock (earliest-expiring in-date "
+        "batch first). A dispense is recorded once and never edited.",
+        SCOPE_ORG,
+        ["Pharmacist"],
     ),
     (
         "laboratory.results.validate",

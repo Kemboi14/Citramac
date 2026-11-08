@@ -1,6 +1,6 @@
 from django.db import transaction
 from rest_framework import status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
@@ -75,6 +75,9 @@ class DispenseRecordViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """
 
     serializer_class = DispenseRecordSerializer
+    # A dispense is recorded once: changing its quantity or prescription after
+    # the fact would leave the stock ledger unexplained.
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         return DispenseRecord.objects.select_related("prescription_item", "stock_item").order_by(
@@ -85,6 +88,10 @@ class DispenseRecordViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         # One transaction: the stock taken and the dispense records written
         # together, or neither.
+        from apps.accounts.access import has_permission
+
+        if not (request.user.is_superuser or has_permission(request.user, "pharmacy.dispense")):
+            raise PermissionDenied("You don't have permission to dispense medication.")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         prescription_item = serializer.validated_data["prescription_item"]

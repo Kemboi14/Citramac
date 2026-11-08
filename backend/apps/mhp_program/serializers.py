@@ -230,7 +230,19 @@ class ClinicalReviewSerializer(serializers.ModelSerializer):
             "requested_at",
             "reviewed_at",
         ]
-        read_only_fields = ["requested_by", "status", "requested_at", "reviewed_at"]
+        # The reviewer and their notes are set only by `decide`.
+        read_only_fields = [
+            "requested_by",
+            "reviewer",
+            "review_notes",
+            "status",
+            "requested_at",
+            "reviewed_at",
+        ]
+
+    def update(self, instance, validated_data):
+        validated_data.pop("patient", None)  # fixed once requested
+        return super().update(instance, validated_data)
 
 
 class SupervisionRequestSerializer(serializers.ModelSerializer):
@@ -247,7 +259,12 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
             "requested_at",
             "completed_at",
         ]
-        read_only_fields = ["requested_by", "status", "requested_at", "completed_at"]
+        # The supervisor is whoever takes the request (`schedule`).
+        read_only_fields = ["requested_by", "supervisor", "status", "requested_at", "completed_at"]
+
+    def update(self, instance, validated_data):
+        validated_data.pop("patient", None)  # fixed once requested
+        return super().update(instance, validated_data)
 
 
 class MhpTeamRosterSerializer(serializers.Serializer):

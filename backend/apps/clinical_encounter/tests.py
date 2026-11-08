@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.dha_interop.models import IcdCodeIndex
@@ -23,6 +23,11 @@ class ClinicalEncounterAndTriageTests(APITestCase):
             self.clinician = User.objects.create_user(
                 email="doc@org.test", password="Password123!", organization=self.org, is_active=True
             )
+            # Diagnoses are clinical writes (clinical.care.record).
+            self.clinical_role, _ = Role.objects.get_or_create(
+                organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
+            self.clinician.roles.add(self.clinical_role)
             self.patient = Patient.objects.create(
                 organization=self.org,
                 first_name="Faith",
@@ -123,6 +128,7 @@ class ClinicalEncounterAndTriageTests(APITestCase):
                 organization=other_org,
                 is_active=True,
             )
+            other_clinician.roles.add(self.clinical_role)
         other_access, _ = issue_tokens(other_clinician)
 
         encounter_id = self._open_encounter()

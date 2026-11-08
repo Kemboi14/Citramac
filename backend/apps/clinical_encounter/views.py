@@ -131,12 +131,24 @@ class DiagnosisCodeViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelVi
         return queryset
 
     def perform_create(self, serializer):
+        from apps.care_pathway.access import require
+
+        require(self.request.user)  # a diagnosis is clinical (and feeds claims)
         serializer.save(organization=self.request.user.organization, recorded_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from apps.care_pathway.access import require
+
+        require(self.request.user)
+        serializer.save()
 
     @action(detail=True, methods=["post"], url_path="entered-in-error")
     def entered_in_error(self, request, pk=None):
         """Recorded against the wrong client or with the wrong code — not a clinical
         judgement (that is "ruled out"). R4 entered-in-error, with a reason, audited."""
+        from apps.care_pathway.access import require
+
+        require(request.user)
         diagnosis = self.get_object()
         if diagnosis.verification_status == ERROR_STATUS:
             raise ValidationError({"detail": "Already marked as entered in error."})

@@ -37,12 +37,6 @@ export interface Ward {
   bed_count: number;
 }
 
-export function listWards(accessToken: string, branchId?: string) {
-  return apiRequest<Paginated<Ward>>(`/ipd/wards/${branchId ? `?branch=${branchId}` : ""}`, {
-    accessToken,
-  });
-}
-
 export function createWard(
   accessToken: string,
   payload: { name: string; branch?: string; ward_type?: string },
@@ -231,14 +225,6 @@ export function listEligibleAdmissionPatients(accessToken: string, options?: { a
 
 export function getAdmissionFhirBundle(accessToken: string, admissionId: string) {
   return apiRequest<Record<string, unknown>>(`/ipd/admissions/${admissionId}/fhir/`, {
-    accessToken,
-  });
-}
-
-export function transferAdmission(accessToken: string, admissionId: string, newBedId: string) {
-  return apiRequest<Admission>(`/ipd/admissions/${admissionId}/transfer/`, {
-    method: "POST",
-    body: { bed: newBedId },
     accessToken,
   });
 }

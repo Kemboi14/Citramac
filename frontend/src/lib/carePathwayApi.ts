@@ -479,14 +479,6 @@ export function completePsychiatricReview(
   });
 }
 
-export function updateCareTask(accessToken: string, id: string, status: CareTask["status"]) {
-  return apiRequest<CareTask>(`/care/tasks/${id}/`, {
-    method: "PATCH",
-    body: { status },
-    accessToken,
-  });
-}
-
 export interface RecheckPayload {
   change_since_last_check: string;
   distress_behaviour: string;
@@ -1462,10 +1454,6 @@ export function getBillingOverview(accessToken: string) {
   return apiRequest<BillingOverview>("/care/billing/", { accessToken });
 }
 
-export function getClientBilling(accessToken: string, patientId: string) {
-  return apiRequest<BillingOverview>(`/care/clients/${patientId}/billing/`, { accessToken });
-}
-
 export interface BillingService {
   id: string;
   name: string;
@@ -1745,14 +1733,6 @@ export function getIntakeAllergy(accessToken: string, patientId: string) {
   return apiRequest<IntakeAllergy>(`/care/clients/${patientId}/allergy/`, { accessToken });
 }
 
-export function setIntakeAllergyStatus(
-  accessToken: string,
-  patientId: string,
-  status: IntakeAllergy["status"],
-) {
-  return updateIntakeAllergy(accessToken, patientId, { status });
-}
-
 /** Status, source of information, or `confirm: true` ("Confirm — unchanged"). */
 export function updateIntakeAllergy(
   accessToken: string,
@@ -1937,13 +1917,6 @@ export function updatePlanDetails(
   return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/details/`, {
     method: "PATCH",
     body,
-    accessToken,
-  });
-}
-
-export function confirmPlan(accessToken: string, patientId: string) {
-  return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/confirm/`, {
-    method: "POST",
     accessToken,
   });
 }

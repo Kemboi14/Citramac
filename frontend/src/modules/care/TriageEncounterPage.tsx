@@ -79,9 +79,18 @@ export function TriageEncounterPage() {
     );
   }
 
+  // A refresh that fails after the encounter is open keeps the last good copy
+  // on screen and says so (the error used to be stored but never shown).
+  const stale = error ? (
+    <div className="mx-auto mb-3 max-w-[1600px]">
+      <ErrorNote>{error}</ErrorNote>
+    </div>
+  ) : null;
+
   if (detail.status === "RECHECK_DUE") {
     return (
       <div className="mx-auto max-w-[1600px]">
+        {stale}
         <Breadcrumbs
           items={[
             { label: "Triage", to: "/clinical/triage" },
@@ -120,35 +129,44 @@ export function TriageEncounterPage() {
   // form it was signed with, exactly as it was signed.
   if (detail.schema === "v5") {
     return (
-      <TriageFormV5
-        key={`${detail.id}:${formKey}`}
-        detail={detail}
-        banner={banner}
-        bannerError={bannerError}
-        onSigned={() => setReloadKey((k) => k + 1)}
-      />
+      <>
+        {stale}
+        <TriageFormV5
+          key={`${detail.id}:${formKey}`}
+          detail={detail}
+          banner={banner}
+          bannerError={bannerError}
+          onSigned={() => setReloadKey((k) => k + 1)}
+        />
+      </>
     );
   }
 
   if (detail.schema === "v4") {
     return (
-      <TriageFormV4
+      <>
+        {stale}
+        <TriageFormV4
+          key={`${detail.id}:${formKey}`}
+          detail={detail}
+          banner={banner}
+          bannerError={bannerError}
+          onSigned={() => setReloadKey((k) => k + 1)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {stale}
+      <TriageForm
         key={`${detail.id}:${formKey}`}
         detail={detail}
         banner={banner}
         bannerError={bannerError}
         onSigned={() => setReloadKey((k) => k + 1)}
       />
-    );
-  }
-
-  return (
-    <TriageForm
-      key={`${detail.id}:${formKey}`}
-      detail={detail}
-      banner={banner}
-      bannerError={bannerError}
-      onSigned={() => setReloadKey((k) => k + 1)}
-    />
+    </>
   );
 }

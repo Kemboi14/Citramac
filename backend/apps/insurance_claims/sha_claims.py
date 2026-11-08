@@ -581,6 +581,8 @@ def close_visit(visit, user, reason_type, reason_text):
 def attach_visit(claim, visit, user):
     if claim.payer != "SHA":
         raise ShaError("Only an SHA claim is billed against an SHA visit.")
+    if claim.status != "DRAFT":
+        raise ShaError("Only a draft claim can be billed against a visit.", field="status")
     if visit.patient_id != claim.patient_id:
         raise ShaError("That visit belongs to another client.", field="visit")
     if visit.status != ShaVisit.STATUS_OPEN:
@@ -916,7 +918,11 @@ def hie_api_call_retry_safe(method, path, *, visit, organization_id, json_body):
 
 def resubmit(claim, user):
     """After the payer returned the claim and it has been corrected."""
+    if claim.status != "RETURNED":
+        raise ShaError("Only a claim SHA returned can be resubmitted.", field="status")
     visit = claim.sha_visit
+    if visit is None or not visit.consent_token:
+        raise ShaError("This claim has no SHA visit to resubmit against.", field="visit")
     _call(
         "POST",
         "/claims/lines/resubmit",

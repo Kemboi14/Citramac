@@ -37,6 +37,7 @@ from . import (
     triage_v4,
     triage_v5,
 )
+from .access import clinical_only
 from .interventions import is_clinical_staff
 from .models import (
     PRIORITY_ORDER,
@@ -626,6 +627,7 @@ class TriageEvaluateView(APIView):
 
 
 class TriageSignView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         te = _triage(pk)
         assessment = services.sign_triage(te, request.user, request.data)
@@ -726,6 +728,14 @@ class CareTaskView(APIView):
                 task, request.user, request.data.get("outcome"), request.data.get("outcome_note")
             )
             return Response(CareTaskSerializer(task).data)
+        from . import legal_status
+
+        if task.focus_type == legal_status.TASK_FOCUS:
+            # Legal-status tasks are completed through Legal & consent, which
+            # writes the LegalStatus event; a bare status change would skip it.
+            raise ValidationError(
+                {"status": "Complete this task from the client's Legal & consent view."}
+            )
         serializer = CareTaskSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         done = serializer.validated_data.get("status", task.status) == "COMPLETED"
@@ -745,12 +755,14 @@ class TriageRecheckDraftView(APIView):
 
 
 class TriageRecheckSignView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         recheck = services.sign_recheck(_triage(pk), request.user, request.data)
         return Response(_recheck_payload(recheck), status=status.HTTP_201_CREATED)
 
 
 class TriageFullRetriageView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         te = services.request_full_retriage(_triage(pk))
         return Response({"status": te.effective_status})
@@ -1308,6 +1320,7 @@ class ClientIntakeDraftView(APIView):
 
 
 class ClientIntakeSignView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         draft = intake_service.current_draft(patient)
@@ -1374,6 +1387,7 @@ class AllergyVerifyView(APIView):
         record = get_object_or_404(AllergyRecord, pk=pk)
         return Response(allergies.update_record(record, request.user, request.data))
 
+    @clinical_only()
     def post(self, request, pk):
         record = get_object_or_404(AllergyRecord, pk=pk)
         verdict = request.data.get("verification_status")
@@ -1424,6 +1438,7 @@ class ClientToolsView(APIView):
 
 
 class ToolDecisionView(APIView):
+    @clinical_only()
     def post(self, request, patient_id, tool):
         patient = _patient(patient_id)
         tools.decide(
@@ -1451,6 +1466,7 @@ class ClientFindingReviewView(APIView):
     """Confirm a finding unchanged, or update it — a new version; the previous
     value stays in the history."""
 
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         data = request.data
@@ -1967,6 +1983,7 @@ class ClientConsentView(APIView):
 
 
 class ResolveAlertView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         alert = get_object_or_404(ClinicalAlert, pk=pk)
         if alert.status != "RESOLVED":
@@ -2183,6 +2200,7 @@ class ClientProposalsView(APIView):
 
 
 class ProposalDecisionView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         from . import records
         from .models import RiskProposal
@@ -2316,6 +2334,7 @@ class ClientNotesView(APIView):
             }
         )
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import records
         from .models import ProgressNote
@@ -2334,6 +2353,7 @@ class ClientNotesView(APIView):
 
 
 class NoteView(APIView):
+    @clinical_only()
     def put(self, request, pk):
         from . import records
         from .models import ProgressNote
@@ -2346,6 +2366,7 @@ class NoteView(APIView):
             _note_row(records.save_note(note.patient, request.user, request.data, note))
         )
 
+    @clinical_only()
     def post(self, request, pk):
         from . import records
         from .models import ProgressNote
@@ -2385,6 +2406,7 @@ class ClientEpisodeOutcomeView(APIView):
             }
         )
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import records
 
@@ -2483,6 +2505,7 @@ class ClientOatView(APIView):
 
 
 class OatStatusView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         from . import oat
         from .models import OatEnrolment
@@ -2500,6 +2523,7 @@ class OatStatusView(APIView):
 
 
 class ClientNaloxoneView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         from . import oat
 

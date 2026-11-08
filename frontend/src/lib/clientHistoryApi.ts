@@ -97,18 +97,6 @@ export function createClientHistory(
   });
 }
 
-export function updateClientHistory(
-  accessToken: string,
-  id: string,
-  payload: Partial<ClientHistoryRecord>,
-) {
-  return apiRequest<ClientHistoryRecord>(`/mhp/biopsychosocial-assessments/${id}/`, {
-    method: "PATCH",
-    body: payload,
-    accessToken,
-  });
-}
-
 export function addSubstanceUseEntry(accessToken: string, payload: Omit<SubstanceUseEntry, "id">) {
   return apiRequest<SubstanceUseEntry>("/mhp/substance-use-entries/", {
     method: "POST",

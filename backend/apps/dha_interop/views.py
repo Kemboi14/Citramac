@@ -107,9 +107,14 @@ class PatientShrView(APIView):
 
         patient = self._patient(request, patient_id)
         data = request.data
+        from apps.accounts.access import visible_branch_ids
+
         branch = Branch.objects.filter(
             pk=data.get("branch"), organization_id=patient.organization_id, is_active=True
         ).first()
+        allowed = visible_branch_ids(request.user)
+        if branch is not None and allowed is not None and str(branch.pk) not in allowed:
+            branch = None  # not a branch this user works at
         episode = EpisodeOfCare.objects.filter(pk=data.get("episode"), patient=patient).first()
         try:
             if branch is None:

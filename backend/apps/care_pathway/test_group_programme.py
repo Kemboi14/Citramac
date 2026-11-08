@@ -29,6 +29,7 @@ RISK_NOTE = "Disclosed thoughts of self-harm during the check-in round."
 class GroupProgrammeTestCase(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()
+        self.make_clinical()
         self.amina = self.register().data["patient_id"]
         self.brian = self.register(full_name="Brian Otieno Ouma", sex="MALE").data["patient_id"]
         self.carol = self.register(full_name="Carol Achieng Odhiambo").data["patient_id"]

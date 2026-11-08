@@ -54,7 +54,7 @@ def apply_identity_claims(token, user):
     token["last_name"] = user.last_name
 
 
-def issue_tokens(user):
+def issue_tokens(user, remember=False):
     """
     Embeds organization_id, branch_ids[], and role in the JWT claims so
     TenantMiddleware-equivalent scoping can happen without an extra DB hop —
@@ -83,6 +83,11 @@ def issue_tokens(user):
     refresh = RefreshToken.for_user(user)
     refresh.set_exp(lifetime=timedelta(minutes=policy.session_timeout_minutes))
     apply_identity_claims(refresh, user)
+    if remember:
+        # Carried through every rotation, so RefreshView keeps the cookie
+        # persistent for a "remember me" sign-in (it was dropped on the first
+        # refresh).
+        refresh["remember"] = True
 
     access = refresh.access_token
     access.set_exp(lifetime=timedelta(minutes=policy.token_expiry_minutes))

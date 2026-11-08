@@ -80,6 +80,26 @@ def compute_tenant_security(organization_id):
     }
 
 
+def default_secret_problems():
+    """Which committed development secrets this deployment still uses (production only).
+
+    The signing key forges any session token and the field key decrypts every
+    stored credential, so either default in a real deployment is critical. It
+    is raised as an alert rather than refusing to start: changing the field key
+    makes already-encrypted secrets unreadable, so it needs a planned rotation.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "ALERT_ON_DEFAULT_SECRETS", False):
+        return []
+    problems = []
+    if settings.SECRET_KEY == settings.DEFAULT_SECRET_KEY:
+        problems.append("DJANGO_SECRET_KEY (signs every session token)")
+    if settings.FIELD_ENCRYPTION_KEY == settings.DEFAULT_FIELD_ENCRYPTION_KEY:
+        problems.append("FIELD_ENCRYPTION_KEY (encrypts stored credentials)")
+    return problems
+
+
 def evaluate_security_alerts(organization_ids):
     """
     Upserts open SecurityAlert rows from live thresholds and auto-resolves
@@ -88,6 +108,19 @@ def evaluate_security_alerts(organization_ids):
     queries per org) and always reflects current reality rather than a
     stale periodic snapshot.
     """
+    problems = default_secret_problems()
+    _sync_alert(
+        None,
+        SecurityAlert.CATEGORY_DEFAULT_SECRETS,
+        triggered=bool(problems),
+        severity=SecurityAlert.SEVERITY_CRITICAL,
+        description=(
+            "This deployment still uses the committed development value of "
+            + " and ".join(problems)
+            + ". Set a generated secret in the environment."
+        ),
+    )
+
     policy = SecurityPolicy.get_solo()
     failed_login_threshold = (
         policy.max_failed_login_attempts * FAILED_LOGIN_ALERT_THRESHOLD_MULTIPLIER

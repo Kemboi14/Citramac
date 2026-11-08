@@ -21,6 +21,8 @@ from django.template.loader import render_to_string
 
 from apps.tenancy.crypto import decrypt_value
 
+from .backends import smtp_not_configured
+
 logger = structlog.get_logger(__name__)
 
 SMTP_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -141,7 +143,7 @@ def get_email_connection_and_sender(organization=None):
 
     if platform_kwargs is not None:
         fallback_connection = get_connection(backend=SMTP_BACKEND, **platform_kwargs)
-    elif settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
+    elif smtp_not_configured(settings.EMAIL_BACKEND):
         # production.py's no-SMTP stub only prints mail — not a delivery
         # route, so an org failure is raised rather than "sent" there.
         fallback_connection = None

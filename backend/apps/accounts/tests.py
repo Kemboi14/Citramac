@@ -382,13 +382,15 @@ class LoginSecurityTests(APITestCase):
         self.assertEqual(response.status_code, 423)
         self.assertEqual(response.data["error"]["code"], "ACCOUNT_LOCKED")
 
-    def test_no_mfa_login_issues_tokens_directly(self):
+    def test_mfa_is_required_even_when_the_account_flag_is_off(self):
+        """MFA is a mandatory control: the per-user flag (Django admin) can't
+        switch the second factor off."""
         response = self.client.post(
             reverse("auth-login"), {"email": "jane@org-x.test", "password": "Correct!Horse99"}
         )
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("access", response.data)
-        self.assertNotIn("requires_otp", response.data)
+        self.assertNotIn("access", response.data)
+        self.assertTrue(response.data["requires_otp"])
 
     def test_lockout_threshold_and_duration_follow_security_policy(self):
         """
@@ -483,7 +485,8 @@ class TimeBoundAccessTests(APITestCase):
             {"email": "locum@org-timebound.test", "password": "Correct!Horse99"},
         )
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("access", response.data)
+        # Password accepted; MFA is mandatory, so the second factor follows.
+        self.assertTrue(response.data["requires_otp"])
 
     def test_already_issued_token_is_rejected_once_window_closes(self):
         """
@@ -850,7 +853,10 @@ class NoOrganizationLoginTests(APITestCase):
                 mfa_enabled=False,
             )
 
-    def test_no_organization_flag_rejected_for_org_scoped_account(self):
+    def test_no_organization_flag_is_only_cosmetic_for_an_org_account(self):
+        """Discovery gives generic branding to accounts it won't link to an
+        organisation, so signing in from that page must still work: the
+        password and the second factor decide, not the page."""
         response = self.client.post(
             reverse("auth-login"),
             {
@@ -859,8 +865,8 @@ class NoOrganizationLoginTests(APITestCase):
                 "no_organization": True,
             },
         )
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.data["error"]["code"], "ORGANIZATION_REQUIRED")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["requires_otp"])
 
     def test_no_organization_flag_succeeds_for_platform_staff_account(self):
         response = self.client.post(
@@ -872,7 +878,8 @@ class NoOrganizationLoginTests(APITestCase):
             },
         )
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("access", response.data)
+        # Password accepted; MFA is mandatory, so the second factor follows.
+        self.assertTrue(response.data["requires_otp"])
 
     def test_normal_login_without_flag_is_unaffected_for_org_scoped_account(self):
         response = self.client.post(
@@ -880,7 +887,8 @@ class NoOrganizationLoginTests(APITestCase):
             {"email": "org-person@org-z.test", "password": "Correct!Horse99"},
         )
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("access", response.data)
+        # Password accepted; MFA is mandatory, so the second factor follows.
+        self.assertTrue(response.data["requires_otp"])
 
     def test_wrong_password_with_no_organization_flag_still_generic(self):
         """No enumeration: a bad password + the flag looks identical to a normal bad password."""
@@ -945,12 +953,30 @@ class TenantDiscoveryTests(APITestCase):
         self.assertNotIn("email", response.data["tenant"])
         self.assertNotIn("user", response.data)
 
-    def test_unknown_domain_returns_generic_not_found(self):
+    def test_unknown_domain_returns_generic_branding(self):
         response = self.client.post(
             reverse("auth-tenant-discovery"), {"email": "someone@unknown-domain.test"}
         )
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.data["error"]["code"], "TENANT_NOT_FOUND")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["tenant"])
+
+    def test_an_account_is_not_linked_to_its_org_by_an_unclaimed_domain(self):
+        """Discovery must not tell anyone which facility a person works at."""
+        with platform_admin_context():
+            org = Organization.objects.get(name="CAfRIC Centre")
+            User.objects.create_user(
+                email="clinician@gmail.test",
+                password="Password123!",
+                organization=org,
+                is_active=True,
+            )
+        known = self.client.post(
+            reverse("auth-tenant-discovery"), {"email": "clinician@gmail.test"}
+        )
+        unknown = self.client.post(reverse("auth-tenant-discovery"), {"email": "nobody@gmail.test"})
+        self.assertEqual(known.status_code, unknown.status_code)
+        self.assertEqual(known.data, unknown.data)
+        self.assertIsNone(known.data["tenant"])
 
     def test_discovery_rate_limit_follows_security_policy(self):
         """
@@ -1113,20 +1139,29 @@ class RememberMeCookieTests(APITestCase):
                 mfa_enabled=False,
             )
 
-    def test_remember_true_persists_refresh_cookie(self):
+    def _sign_in(self, remember):
         response = self.client.post(
             reverse("auth-login"),
-            {"email": "jane@org-r.test", "password": "Correct!Horse99", "remember": True},
+            {"email": "jane@org-r.test", "password": "Correct!Horse99", "remember": remember},
         )
         self.assertEqual(response.status_code, 200, response.data)
+        code = _extract_code(mail.outbox[-1].body)
+        verified = self.client.post(
+            reverse("auth-login-verify-otp"),
+            {"otp_token": response.data["otp_token"], "otp": code},
+        )
+        self.assertEqual(verified.status_code, 200, verified.data)
+        return verified
+
+    def test_remember_true_persists_refresh_cookie_through_mfa_and_refresh(self):
+        response = self._sign_in(True)
         self.assertGreater(response.cookies["refresh_token"]["max-age"], 0)
+        refreshed = self.client.post(reverse("auth-refresh"), {}, format="json")
+        self.assertEqual(refreshed.status_code, 200, refreshed.data)
+        self.assertGreater(refreshed.cookies["refresh_token"]["max-age"], 0)
 
     def test_remember_false_is_a_session_cookie(self):
-        response = self.client.post(
-            reverse("auth-login"),
-            {"email": "jane@org-r.test", "password": "Correct!Horse99", "remember": False},
-        )
-        self.assertEqual(response.status_code, 200, response.data)
+        response = self._sign_in(False)
         self.assertEqual(response.cookies["refresh_token"]["max-age"], "")
 
 

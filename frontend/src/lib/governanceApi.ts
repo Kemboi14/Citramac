@@ -264,10 +264,3 @@ export function changePlatformStaffRole(accessToken: string, id: string, role: n
 export function unlockPlatformStaff(accessToken: string, id: string) {
   return apiRequest<Staff>(`/platform/staff/${id}/unlock/`, { method: "POST", accessToken });
 }
-
-export function resetPlatformStaffCredentials(accessToken: string, id: string) {
-  return apiRequest<{ detail: string }>(`/platform/staff/${id}/reset_credentials/`, {
-    method: "POST",
-    accessToken,
-  });
-}

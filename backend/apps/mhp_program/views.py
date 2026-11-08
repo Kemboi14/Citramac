@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -85,6 +86,13 @@ class CareTeamRestrictedMixin:
                 "Only this client's care team or an Org Admin can change this record.",
                 code="not_on_care_team",
             )
+        # The record stays filed under the client it was written about.
+        patient = serializer.validated_data.get("patient")
+        if patient is not None and patient != self.patient_accessor(serializer.instance):
+            raise PermissionDenied("A record can't be moved to another client.")
+        assessment = serializer.validated_data.get("assessment")
+        if assessment is not None and assessment.pk != serializer.instance.assessment_id:
+            raise PermissionDenied("An entry can't be moved to another assessment.")
         serializer.save()
 
 
@@ -135,6 +143,14 @@ class SubstanceUseEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, views
         return queryset
 
     def perform_create(self, serializer):
+        # Adding to an assessment is writing to that client's restricted record.
+        if not has_full_mhp_access(
+            self.request.user, serializer.validated_data["assessment"].patient
+        ):
+            raise PermissionDenied(
+                "Only this client's care team or an Org Admin can add to this assessment.",
+                code="not_on_care_team",
+            )
         serializer.save(organization=self.request.user.organization)
 
 
@@ -151,6 +167,14 @@ class ReviewOfSystemEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, vie
         return queryset
 
     def perform_create(self, serializer):
+        # Adding to an assessment is writing to that client's restricted record.
+        if not has_full_mhp_access(
+            self.request.user, serializer.validated_data["assessment"].patient
+        ):
+            raise PermissionDenied(
+                "Only this client's care team or an Org Admin can add to this assessment.",
+                code="not_on_care_team",
+            )
         serializer.save(organization=self.request.user.organization, clinician=self.request.user)
 
 
@@ -262,9 +286,26 @@ class ClinicalReviewViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
 
+    def perform_update(self, serializer):
+        # Only the case summary can be edited, and only by the requester while
+        # the review is still open; the decision goes through `decide`.
+        review = serializer.instance
+        if review.requested_by_id != self.request.user.id or review.status == "APPROVED":
+            raise PermissionDenied("Only the requester can edit an open review request.")
+        serializer.save()
+
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def decide(self, request, pk=None):
-        review = self.get_object()
+        from apps.accounts.access import has_permission
+
+        if not has_permission(request.user, "clinical.cosign"):
+            raise PermissionDenied("Deciding a clinical review needs a senior clinician.")
+        review = ClinicalReview.objects.select_for_update().get(pk=self.get_object().pk)
+        if review.requested_by_id == request.user.id:
+            raise PermissionDenied("Nobody reviews their own case.")
+        if review.status == "APPROVED":
+            return Response({"error": "This review has already been approved."}, status=400)
         decision = request.data.get("status")
         if decision not in ("APPROVED", "CHANGES_REQUESTED"):
             return Response({"error": "status must be APPROVED or CHANGES_REQUESTED"}, status=400)
@@ -287,17 +328,39 @@ class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
 
+    def perform_update(self, serializer):
+        request_ = serializer.instance
+        if request_.requested_by_id != self.request.user.id or request_.status != "OPEN":
+            raise PermissionDenied("Only the requester can edit an open supervision request.")
+        serializer.save()
+
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def schedule(self, request, pk=None):
-        supervision_request = self.get_object()
+        supervision_request = SupervisionRequest.objects.select_for_update().get(
+            pk=self.get_object().pk
+        )
+        if supervision_request.status != "OPEN":
+            return Response(
+                {"error": "This request is already scheduled or completed."}, status=400
+            )
+        if supervision_request.requested_by_id == request.user.id:
+            raise PermissionDenied("Nobody supervises their own request.")
         supervision_request.status = "SCHEDULED"
         supervision_request.supervisor = request.user
         supervision_request.save(update_fields=["status", "supervisor"])
         return Response(SupervisionRequestSerializer(supervision_request).data)
 
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def complete(self, request, pk=None):
-        supervision_request = self.get_object()
+        supervision_request = SupervisionRequest.objects.select_for_update().get(
+            pk=self.get_object().pk
+        )
+        if supervision_request.status != "SCHEDULED":
+            return Response({"error": "Only a scheduled request can be completed."}, status=400)
+        if supervision_request.supervisor_id != request.user.id:
+            raise PermissionDenied("Only the supervisor who took the request completes it.")
         supervision_request.status = "COMPLETED"
         supervision_request.completed_at = timezone.now()
         supervision_request.notes = request.data.get("notes", supervision_request.notes)

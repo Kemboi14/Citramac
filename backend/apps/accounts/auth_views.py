@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.security.models import SecurityPolicy
+from apps.security.models import MANDATORY_CONTROLS, SecurityPolicy
 from apps.sysadmin_audit.middleware import get_client_ip
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
@@ -97,6 +97,10 @@ def _email_domain(email):
     return email.strip().rsplit("@", 1)[-1].casefold()
 
 
+def _remember_key(otp_token):
+    return f"login-remember:{otp_token}"
+
+
 def _set_refresh_cookie(response, refresh_str, request, remember=False):
     response.set_cookie(
         REFRESH_COOKIE_NAME,
@@ -129,17 +133,6 @@ def _log_auth_event(user, action, request, extra_object_id=None):
     )
 
 
-TENANT_NOT_FOUND_ERROR = {
-    "error": {
-        "code": "TENANT_NOT_FOUND",
-        "message": (
-            "We couldn't continue with the information provided. "
-            "Please contact your organisation administrator."
-        ),
-    }
-}
-
-
 class TenantDiscoveryView(APIView):
     """
     docs/14-TENANT-BRANDED-LOGIN-UX.md — the pre-login step that shows a
@@ -151,15 +144,13 @@ class TenantDiscoveryView(APIView):
     discloses is "does any CITRAMAC tenant use this email domain", no more
     sensitive than knowing a company's own public domain name.
 
-    Three possible outcomes: a real org match (branding returned), a
-    platform-staff match (`{"tenant": null}`, 200 — organization_id=None,
-    picked up by TenantLoginStep.tsx's generic-branding/no_organization
-    handling, the same path `/login/platform-staff` used before it was
-    folded into this flow), or genuinely not found (404). Distinguishing
-    platform-staff from not-found is a deliberate, accepted trade-off: it
-    lets email alone route someone straight to sign-in with no separate
-    URL to know about, at the cost of a narrow signal ("is this email one
-    of Softlink's own staff") — not tenant or patient data.
+    Two possible outcomes: an organisation that claims the email's domain
+    (its branding returned), or `{"tenant": null}` (200, generic platform
+    branding) for everything else: platform staff, an unknown email, and an
+    account whose organisation doesn't claim the domain. Since 2026-11-08 an
+    unknown email is no longer a 404, so the answer can't be used to check
+    whether a person has an account or where they work; the password and
+    second factor decide the sign-in.
     """
 
     permission_classes = [AllowAny]
@@ -194,26 +185,22 @@ class TenantDiscoveryView(APIView):
         email = serializer.validated_data["email"].strip().casefold()
 
         with platform_admin_context():
-            # An exact-email match on a real, already-provisioned account
-            # always wins over the domain guess below — it's the only way
-            # to tell a platform-staff account (organization_id=None) apart
-            # from an org staff member whose email just happens to share a
-            # domain with a registered tenant (e.g. the same domain used to
-            # invite that org's staff at some point). Without this, a
-            # Platform Super Admin discovering their own email here could
-            # get shown a real organization's branding instead of the
-            # platform's, purely because of a domain coincidence — see the
-            # domain-only fallback further down, which still applies for an
-            # email that isn't a real account yet.
+            # An exact-email match is used only where it reveals nothing the
+            # domain doesn't: a platform-staff account (the accepted signal in
+            # the docstring), or an account whose organisation itself claims
+            # the email's domain (picking the right one when two claim it).
+            # An account whose organisation doesn't claim the domain (a public
+            # mail address, say) is never linked to it here: that used to tell
+            # anyone which facility a given person works at.
             existing_user = User.all_objects.filter(email__iexact=email).first()
+            org = None
             if existing_user is not None:
                 if existing_user.organization_id is None:
-                    # Platform staff — a real match, not a failure, so
-                    # unlike the not-found path below this isn't audit-logged
-                    # (a successful org match a few lines down isn't either).
                     return Response({"tenant": None}, status=status.HTTP_200_OK)
-                org = existing_user.organization
-            else:
+                own = existing_user.organization
+                if own.is_active and domain in (own.email_domains or []):
+                    org = own
+            if org is None:
                 org = (
                     Organization.objects.filter(is_active=True)
                     .filter(email_domains__contains=[domain])
@@ -222,10 +209,14 @@ class TenantDiscoveryView(APIView):
                 )
 
         if org is None:
+            # Same answer for an unknown email and an account whose
+            # organisation doesn't claim this domain: generic branding, and the
+            # password step decides. (Was a 404 for one and a branded match for
+            # the other.)
             _log_auth_event(
                 None, AuditLogEntry.ACTION_DISCOVERY_FAILED, request, extra_object_id=domain
             )
-            return Response(TENANT_NOT_FOUND_ERROR, status=status.HTTP_404_NOT_FOUND)
+            return Response({"tenant": None}, status=status.HTTP_200_OK)
 
         return Response(
             {
@@ -710,26 +701,15 @@ class LoginView(APIView):
                     status.HTTP_403_FORBIDDEN,
                 )
 
-        # Checking this before password verification would let
-        # `no_organization` be used to probe whether an email belongs to an
-        # organisation. `no_organization=True` is sent whenever
-        # TenantDiscoveryStep resolved a platform-staff email
-        # (`{"tenant": null}`, no real organization) — see
-        # TenantDiscoveryView's docstring and docs/14-TENANT-BRANDED-LOGIN-UX.md.
-        # Not counted against the lockout counter: a correct password with
-        # the wrong flag is a routing mistake, not a credential guess, and
-        # counting it would let anyone lock out a real org user for free by
-        # replaying their own valid password against this endpoint.
-        if data.get("no_organization") and user.organization_id is not None:
-            _log_auth_event(user, AuditLogEntry.ACTION_LOGIN_FAILED, request, extra_object_id=email)
-            return _error(
-                "ORGANIZATION_REQUIRED",
-                "This sign-in page is for platform staff accounts only. Please sign in from "
-                "your organisation's login page.",
-                status.HTTP_403_FORBIDDEN,
-            )
+        # `no_organization` (sent when discovery returned generic branding) is
+        # no longer refused for an organisation account: discovery now gives
+        # generic branding to any email it won't link to an organisation (so it
+        # can't be used to look up who works where), and the password and
+        # second factor decide the sign-in, not which page it started from.
 
-        if user.mfa_enabled:
+        # MFA is a mandatory control (apps.security.models.MANDATORY_CONTROLS):
+        # it applies to every account, whatever the per-user flag says.
+        if user.mfa_enabled or MANDATORY_CONTROLS["mfa_required"]:
             try:
                 enforce_rate_limit(
                     f"login-otp-send:{user.id}",
@@ -746,6 +726,11 @@ class LoginView(APIView):
             with platform_admin_context():
                 otp, code = OneTimePassword.issue(user, OneTimePassword.PURPOSE_LOGIN_2FA)
             channel = _dispatch_login_otp(user, code, otp.purpose)
+            # The cookie is set when the second factor is verified; keep the
+            # "remember me" choice until then (it used to be lost there).
+            from django.core.cache import cache
+
+            cache.set(_remember_key(otp.token), bool(data.get("remember")), timeout=30 * 60)
             return Response(
                 {
                     "requires_otp": True,
@@ -755,11 +740,12 @@ class LoginView(APIView):
                 }
             )
 
-        access, refresh = issue_tokens(user)
+        remember = bool(data.get("remember", False))
+        access, refresh = issue_tokens(user, remember=remember)
         _log_auth_event(user, AuditLogEntry.ACTION_LOGIN, request)
         _sign_in_reminders(user)
         response = Response({"access": access})
-        _set_refresh_cookie(response, refresh, request, remember=data.get("remember", False))
+        _set_refresh_cookie(response, refresh, request, remember=remember)
         return response
 
 
@@ -843,11 +829,15 @@ class LoginVerifyOtpView(APIView):
             if not account_still_valid:
                 return _generic_error()
 
-        access, refresh = issue_tokens(otp.user)
+        from django.core.cache import cache
+
+        remember = bool(cache.get(_remember_key(otp.token), False))
+        cache.delete(_remember_key(otp.token))
+        access, refresh = issue_tokens(otp.user, remember=remember)
         _log_auth_event(otp.user, AuditLogEntry.ACTION_LOGIN, request)
         _sign_in_reminders(otp.user)
         response = Response({"access": access})
-        _set_refresh_cookie(response, refresh, request)
+        _set_refresh_cookie(response, refresh, request, remember=remember)
         return response
 
 
@@ -938,7 +928,7 @@ class RefreshView(APIView):
         access.set_exp(lifetime=timedelta(minutes=policy.token_expiry_minutes))
 
         response = Response({"access": str(access)})
-        _set_refresh_cookie(response, str(refresh), request)
+        _set_refresh_cookie(response, str(refresh), request, remember=bool(refresh.get("remember")))
         return response
 
 

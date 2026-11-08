@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from apps.sysadmin_audit.audit import log_view
 
 from . import group_programme as gp
+from .access import clinical_only
 from .models import GroupProgrammeCategory, GroupSession, GroupSessionEntry
 from .services import user_display
 from .views import _patient
@@ -70,6 +71,7 @@ class GroupWorkspaceView(APIView):
 class GroupSessionsView(APIView):
     """POST care/group-programme/sessions/ — confirm a reviewed session."""
 
+    @clinical_only()
     def post(self, request):
         session = gp.confirm_session(request.user, request.data)
         detail, entries = gp.session_detail(session)
@@ -82,6 +84,7 @@ class GroupScreenView(APIView):
     """POST care/group-programme/screen/ {entries: [{patient, observation}]} —
     possible risk language per observation, shown at review. Nothing stored."""
 
+    @clinical_only()
     def post(self, request):
         return Response({"results": gp.screen_entries(request.data.get("entries"))})
 
@@ -99,6 +102,7 @@ class GroupSessionView(APIView):
             log_view(entry)
         return Response(detail)
 
+    @clinical_only()
     def patch(self, request, pk):
         session = gp.correct_session(request.user, _session(pk), request.data)
         detail, entries = gp.session_detail(session)
@@ -110,6 +114,7 @@ class GroupSessionView(APIView):
 class GroupEntryView(APIView):
     """PATCH care/group-programme/entries/<id>/ — correct one client's entry."""
 
+    @clinical_only()
     def patch(self, request, pk):
         entry = get_object_or_404(GroupSessionEntry, pk=pk)
         entry = gp.correct_entry(request.user, entry, request.data)
@@ -122,6 +127,7 @@ class GroupEntryView(APIView):
 class GroupEntryFollowUpCompleteView(APIView):
     """POST …/entries/<id>/follow-up/complete/ — from the client's record card."""
 
+    @clinical_only()
     def post(self, request, pk):
         entry = gp.complete_follow_up(request.user, get_object_or_404(GroupSessionEntry, pk=pk))
         results, entries = gp.client_entries(entry.patient)

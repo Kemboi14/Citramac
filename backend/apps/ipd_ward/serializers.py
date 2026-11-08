@@ -195,6 +195,20 @@ class AdmissionSerializer(serializers.ModelSerializer):
     )
 
     def validate(self, attrs):
+        # Who the admission is about, and the encounter it is, never change:
+        # moving it would carry its legal status and record to another client.
+        if self.instance is not None:
+            for field in ("patient", "encounter"):
+                if field in attrs and attrs[field] != getattr(self.instance, field):
+                    raise serializers.ValidationError(
+                        {field: "This can't be changed on an existing admission."}
+                    )
+        else:
+            encounter = attrs.get("encounter")
+            if encounter is not None and encounter.patient_id != attrs["patient"].pk:
+                raise serializers.ValidationError(
+                    {"encounter": "That encounter belongs to another client."}
+                )
         if self.instance is not None and self.instance.legal_status_record_id:
             owned = {
                 field: "Set by the client's legal admission status — use Legal & consent."

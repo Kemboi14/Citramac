@@ -29,8 +29,14 @@ def _spec(key):
 
 
 def _may_sign(user, spec):
+    # A form configured without named signer roles is signed by a credentialed
+    # clinician (documents.credentialed), never by anyone at all.
     roles = spec.get("signer_roles") or []
-    return not roles or active_roles(user).filter(name__in=roles).exists()
+    if not roles:
+        from apps.accounts.access import has_permission
+
+        return has_permission(user, "documents.credentialed")
+    return active_roles(user).filter(name__in=roles).exists()
 
 
 def prepare(patient, user, form_key, content, admission=None):
@@ -50,8 +56,10 @@ def sign(form, user):
     from apps.accounts.practitioner_profile import require_current_licence
 
     require_current_licence(user)
-    if form.status == "SIGNED":
-        raise ValidationError({"detail": "This form is already signed."})
+    # Locked so a double submit can't sign twice or open two co-sign requests.
+    form = LegalForm.objects.select_for_update().get(pk=form.pk)
+    if form.status in ("SIGNED", "COSIGN_REQUESTED"):
+        raise ValidationError({"detail": "This form is already signed or awaiting a co-signature."})
     spec = _spec(form.form_key)
     if _may_sign(user, spec):
         form.status, form.signed_by, form.signed_at = "SIGNED", user, timezone.now()

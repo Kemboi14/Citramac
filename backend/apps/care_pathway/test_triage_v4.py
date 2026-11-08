@@ -182,6 +182,7 @@ class RulesetTests(SimpleTestCase):
 class TriageV4ApiTests(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()
+        self.make_clinical()
         self.te_id = self.register().data["triage_encounter_id"]
         with platform_admin_context():
             self.psych = User.objects.create_user(

@@ -54,6 +54,31 @@ class SecurityConsoleApiTests(APITestCase):
         self.assertIn(SecurityAlert.CATEGORY_FAILED_LOGINS, categories)
         self.assertIn(SecurityAlert.CATEGORY_MFA_ADOPTION, categories)
 
+    def test_default_secrets_raise_a_critical_platform_alert_in_production(self):
+        from django.conf import settings
+        from django.test import override_settings
+
+        with override_settings(
+            ALERT_ON_DEFAULT_SECRETS=True,
+            SECRET_KEY=settings.DEFAULT_SECRET_KEY,
+            FIELD_ENCRYPTION_KEY=settings.DEFAULT_FIELD_ENCRYPTION_KEY,
+        ):
+            self.client.get(reverse("security-dashboard"), **self.auth)
+        alert = SecurityAlert.objects.get(
+            organization_id=None, category=SecurityAlert.CATEGORY_DEFAULT_SECRETS
+        )
+        self.assertEqual(alert.severity, SecurityAlert.SEVERITY_CRITICAL)
+        self.assertIn("FIELD_ENCRYPTION_KEY", alert.description)
+        # Once real secrets are set, the alert resolves itself.
+        with override_settings(
+            ALERT_ON_DEFAULT_SECRETS=True,
+            SECRET_KEY="a-generated-secret-key-for-this-test-only",  # nosec B106
+            FIELD_ENCRYPTION_KEY="Zm9yLXRoaXMtdGVzdC1vbmx5LW5vdC1hLXJlYWwta2V5PQ==",
+        ):
+            self.client.get(reverse("security-dashboard"), **self.auth)
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, SecurityAlert.STATUS_RESOLVED)
+
     def test_alert_investigate_then_resolve_workflow(self):
         self.client.get(reverse("security-dashboard"), **self.auth)
         alert = SecurityAlert.objects.filter(organization_id=self.org.id).first()

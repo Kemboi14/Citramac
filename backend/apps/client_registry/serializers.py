@@ -302,6 +302,35 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "legal_hold",
         ]
 
+    # Each of these has its own audited flow once the client exists: allergy
+    # status (the allergy review, which unlocks prescribing), identity (resolve
+    # or merge), national identifiers (verified identifier slices), and consent
+    # (ConsentRecord against the facility's wording). A plain PATCH must not
+    # change them.
+    PROTECTED_ON_UPDATE = (
+        "allergy_status",
+        "identity_status",
+        "upi",
+        "uhid_number",
+        "consent_data_sharing",
+        "consent_captured_at",
+    )
+
+    def update(self, instance, validated_data):
+        changed = [
+            f
+            for f in self.PROTECTED_ON_UPDATE
+            if f in validated_data and validated_data[f] != getattr(instance, f)
+        ]
+        if changed:
+            raise serializers.ValidationError(
+                {
+                    f: "This is changed through its own workflow, not by editing the record."
+                    for f in changed
+                }
+            )
+        return super().update(instance, validated_data)
+
     def validate(self, attrs):
         # Name, sex and date of birth became optional at model level for the
         # unidentified / unknown-identity registration tiers (docs/15 §1.4).
@@ -350,6 +379,19 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "messages",
         ]
         read_only_fields = ["reminder_sent_at"]
+
+    def validate_branch(self, value):
+        # Only a branch the booking user can see; otherwise a user limited to
+        # one branch could book into (or move a client to) another.
+        from apps.accounts.access import visible_branch_ids
+
+        request = self.context.get("request")
+        if value is None or request is None:
+            return value
+        allowed = visible_branch_ids(request.user)
+        if allowed is not None and str(value.pk) not in allowed:
+            raise serializers.ValidationError("You can't book appointments at that branch.")
+        return value
 
     def get_messages(self, obj):
         """What was sent to the client about this appointment, and whether it went."""

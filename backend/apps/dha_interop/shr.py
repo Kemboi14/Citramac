@@ -239,6 +239,11 @@ def verify_consent(consent, user, *, otp="", approve=True, rejection_reason=""):
     closing = consent.status == ShrConsent.STATUS_CLOSING
     if consent.status not in (ShrConsent.STATUS_PENDING, ShrConsent.STATUS_CLOSING):
         raise ShrError("This consent is not awaiting an OTP.")
+    if closing and not approve:
+        # DHA's verify endpoint completes a closure with the performer's OTP; it
+        # has no refusal for a closure (sharedhealthrecord.openapi.json, verify).
+        # A "refuse" here used to mark the visit closed anyway.
+        raise ShrError("A visit closure is completed with the OTP; it can't be refused.")
     payload = {"otp_record": consent.otp_record}
     if approve:
         if not (otp or "").strip():

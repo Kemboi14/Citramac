@@ -99,6 +99,16 @@ class CarePathwayApiTestCase(APITestCase):
             )
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.nurse)[0]}"}
 
+    def make_clinical(self, user=None, role_name="Nurse"):
+        """Clinical writes need clinical.care.record (a clinical role); the
+        base user starts with no role, like front desk."""
+        user = user or self.nurse
+        with platform_admin_context():
+            role, _ = Role.objects.get_or_create(
+                organization=None, name=role_name, defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
+            )
+            user.roles.add(role)
+
     def register(self, **data):
         payload = {
             "client_request_id": str(uuid.uuid4()),
@@ -410,6 +420,7 @@ class RegistrationEditTests(CarePathwayApiTestCase):
 class TriageFlowTests(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()
+        self.make_clinical()
         self.te_id = self.register().data["triage_encounter_id"]
 
     def test_draft_is_saved_server_side_and_returns_live_evaluation(self):
@@ -578,6 +589,7 @@ class TriageFlowTests(CarePathwayApiTestCase):
 class JourneyAndBillingTests(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()
+        self.make_clinical()
         response = self.register()
         self.patient_id = response.data["patient_id"]
         self.te_id = response.data["triage_encounter_id"]

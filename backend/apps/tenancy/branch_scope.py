@@ -53,6 +53,7 @@ BRANCH_SCOPED = {
     "clinical_encounter.DiagnosisCode": ("encounter__branch",),
     "clinical_encounter.ClinicalOrder": ("encounter__branch",),
     "clinical_encounter.Prescription": ("encounter__branch",),
+    "clinical_encounter.PrescriptionItem": ("prescription__encounter__branch",),
     "clinical_encounter.ReferralPacket": ("encounter__branch",),
     "triage.VitalSigns": ("encounter__branch",),
     "triage.MentalStatusExam": ("encounter__branch",),

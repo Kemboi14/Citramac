@@ -21,8 +21,8 @@ getPlatformBranding()
 
 // A tab opened before a deploy still references the previous build's chunk
 // names, which no longer exist. Reload once to pick up the new build instead
-// of leaving that screen blank. The offline queue's beforeunload warning still
-// applies, so pending clinical work is never discarded silently.
+// of leaving that screen blank. Forms with unsaved changes warn before unload
+// (shared/useAutosaveDraft), so typed clinical work is never discarded silently.
 window.addEventListener("vite:preloadError", (event) => {
   const KEY = "citramac.chunk-reload-at";
   let last = 0;

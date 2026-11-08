@@ -41,10 +41,6 @@ export interface StockItem {
   quantity_on_hand: number;
 }
 
-export function listStockItems(accessToken: string) {
-  return apiRequest<Paginated<StockItem>>("/pharmacy/stock-items/", { accessToken });
-}
-
 export interface DispenseRecord {
   id: string;
   prescription_item: string;

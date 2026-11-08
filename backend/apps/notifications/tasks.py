@@ -161,10 +161,11 @@ def _send_delivery_email(delivery):
     """Returns (status, error)."""
     from django.conf import settings
 
+    from .backends import smtp_not_configured
     from .models import NotificationDelivery
 
     connection, from_email = _resolve_connection(delivery.organization_id)
-    if connection is None and settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
+    if connection is None and smtp_not_configured(settings.EMAIL_BACKEND):
         # production.py's no-SMTP fallback prints mail to the container log.
         # For an event notice that is not delivery, so it is recorded as such.
         return NotificationDelivery.STATUS_NOT_CONFIGURED, "No SMTP server is configured."
