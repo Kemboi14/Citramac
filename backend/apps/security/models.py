@@ -119,7 +119,7 @@ class SecurityAlert(models.Model):
 
     CATEGORY_FAILED_LOGINS = "FAILED_LOGINS"
     CATEGORY_MFA_ADOPTION = "MFA_ADOPTION"
-    CATEGORY_DEFAULT_SECRETS = "DEFAULT_SECRETS"
+    CATEGORY_DEFAULT_SECRETS = "DEFAULT_SECRETS"  # pragma: allowlist secret
     CATEGORY_CHOICES = [
         (CATEGORY_FAILED_LOGINS, "Failed login spike"),
         (CATEGORY_MFA_ADOPTION, "Low MFA adoption"),

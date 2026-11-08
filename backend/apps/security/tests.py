@@ -72,8 +72,8 @@ class SecurityConsoleApiTests(APITestCase):
         # Once real secrets are set, the alert resolves itself.
         with override_settings(
             ALERT_ON_DEFAULT_SECRETS=True,
-            SECRET_KEY="a-generated-secret-key-for-this-test-only",  # nosec B106
-            FIELD_ENCRYPTION_KEY="Zm9yLXRoaXMtdGVzdC1vbmx5LW5vdC1hLXJlYWwta2V5PQ==",
+            SECRET_KEY="a-generated-secret-key-for-this-test-only",  # nosec B106  # pragma: allowlist secret
+            FIELD_ENCRYPTION_KEY="Zm9yLXRoaXMtdGVzdC1vbmx5LW5vdC1hLXJlYWwta2V5PQ==",  # pragma: allowlist secret
         ):
             self.client.get(reverse("security-dashboard"), **self.auth)
         alert.refresh_from_db()
