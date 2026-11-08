@@ -40,6 +40,11 @@ DEBUG = env.bool("DJANGO_DEBUG", default=False)
 # real public hostname isn't known to a generic probe definition.
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[]) + ["localhost"]
 
+# How many reverse proxies in front of Django append to X-Forwarded-For
+# (apps.sysadmin_audit.middleware.get_client_ip). Kubernetes: 1 (ingress-nginx).
+# The demo VPS: 2 (host nginx, then ingress-nginx).
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=1)
+
 # ── Applications ──────────────────────────────────────────────────────────
 DJANGO_APPS = [
     "django.contrib.admin",

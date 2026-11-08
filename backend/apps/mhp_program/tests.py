@@ -98,6 +98,47 @@ class MhpCareTeamRestrictionTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("session_notes", response.data)
 
+    def test_clinician_cannot_add_themselves_to_a_care_team(self):
+        """Membership opens the full record, so only the Org Admin assigns it."""
+        response = self.client.post(
+            reverse("care-team-membership-list"),
+            {
+                "patient": str(self.patient.id),
+                "user": str(self.other_clinician.id),
+                "role": "THERAPIST",
+            },
+            format="json",
+            **self._auth(self.access_other),
+        )
+        self.assertEqual(response.status_code, 403)
+        with platform_admin_context():
+            self.assertFalse(CareTeamMembership.objects.filter(user=self.other_clinician).exists())
+        response = self.client.get(
+            reverse("psychotherapy-session-detail", args=[self.session.id]),
+            **self._auth(self.access_other),
+        )
+        self.assertNotIn("session_notes", response.data)
+
+    def test_clinician_sees_only_their_own_care_team_memberships(self):
+        response = self.client.get(
+            reverse("care-team-membership-list"), **self._auth(self.access_other)
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"], [])
+
+    def test_org_admin_assigns_a_care_team_member(self):
+        response = self.client.post(
+            reverse("care-team-membership-list"),
+            {
+                "patient": str(self.patient.id),
+                "user": str(self.other_clinician.id),
+                "role": "THERAPIST",
+            },
+            format="json",
+            **self._auth(self.access_org_admin),
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
     def test_list_view_also_restricts_per_object(self):
         response = self.client.get(
             reverse("psychotherapy-session-list"), **self._auth(self.access_other)

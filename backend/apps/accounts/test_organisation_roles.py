@@ -317,3 +317,10 @@ class OrganisationOwnedRolesTests(APITestCase):
                 )
             )
         self.assertEqual(told, {"sup@amani.test"})
+        from django.core import mail
+
+        # Email leaves the platform: it never names the client.
+        for message in mail.outbox:
+            self.assertNotIn("A Client", message.body)
+            for alternative, _ in getattr(message, "alternatives", []):
+                self.assertNotIn("A Client", alternative)

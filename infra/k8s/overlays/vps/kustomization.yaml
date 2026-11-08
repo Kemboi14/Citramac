@@ -47,6 +47,9 @@ configMapGenerator:
     literals:
       - DJANGO_SETTINGS_MODULE=config.settings.production
       - DJANGO_DEBUG=False
+      # Host nginx (TLS) → ingress-nginx → Django: two proxies append to
+      # X-Forwarded-For (apps.sysadmin_audit.middleware.get_client_ip).
+      - TRUSTED_PROXY_COUNT=2
 
 # No registry to pull from — images are built with `docker build` and
 # imported straight into k3s's containerd (`k3s ctr images import`), and

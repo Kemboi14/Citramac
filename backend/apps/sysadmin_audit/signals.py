@@ -17,6 +17,25 @@ from .audit import write_entry
 from .models import AuditLogEntry
 
 SENSITIVE_FIELDS = {"password", "code_hash"}
+# Live secrets kept in plain columns: activation / set-password tokens, SHA
+# consent and authorisation tokens, password history hashes, and outgoing
+# message bodies (an activation email carries its link). Like `*_encrypted`
+# fields, the trail keeps only a short hash, so it still shows *that* the
+# value changed but never holds the value itself.
+FINGERPRINTED_FIELDS = {
+    "token",
+    "consent_token",
+    "authorization_token",
+    "password_hash",
+    "body_text",
+    "html_context",
+}
+
+
+def _is_fingerprinted(name):
+    return name.endswith("_encrypted") or name in FINGERPRINTED_FIELDS
+
+
 _PRE_SAVE_SNAPSHOTS = {}
 
 
@@ -51,7 +70,7 @@ def _serialize(instance, field_names=None):
             continue
         value = getattr(instance, name, None)
         value = str(value) if value is not None else None
-        if name.endswith("_encrypted"):
+        if _is_fingerprinted(name):
             value = _fingerprint(value)
         data[name] = value
     return data
@@ -101,7 +120,7 @@ def _log_delete(sender, instance, **kwargs):
             continue
         value = getattr(instance, field.attname, None)
         value = str(value) if value is not None else None
-        if field.name.endswith("_encrypted"):
+        if _is_fingerprinted(field.name):
             value = _fingerprint(value)
         diff[field.name] = {"old": value, "new": None}
     write_entry(instance, AuditLogEntry.ACTION_DELETE, diff)

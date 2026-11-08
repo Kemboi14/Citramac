@@ -80,6 +80,33 @@ class IpdWardTests(APITestCase):
             self.bed_a.refresh_from_db()
         self.assertEqual(self.bed_a.status, "OCCUPIED")
 
+    def test_an_occupied_bed_cannot_be_given_again(self):
+        active_legal_status(self.patient, self.nurse)
+        with platform_admin_context():
+            self.bed_a.status = "OCCUPIED"
+            self.bed_a.save(update_fields=["status"])
+        response = self.admit()
+        self.assertEqual(response.status_code, 400, response.data)
+        with platform_admin_context():
+            self.assertFalse(Admission.objects.filter(patient=self.patient).exists())
+
+    def test_transfer_refuses_an_occupied_or_unknown_bed(self):
+        with platform_admin_context():
+            self.bed_a.status = "OCCUPIED"
+            self.bed_a.save(update_fields=["status"])
+            self.bed_b.status = "OCCUPIED"
+            self.bed_b.save(update_fields=["status"])
+            admission = Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed_a, admitted_by=self.nurse
+            )
+        url = reverse("ipd-admission-transfer", args=[admission.id])
+        for bed in (str(self.bed_b.id), "not-a-bed", None):
+            response = self.client.post(url, {"bed": bed}, format="json", **self.auth)
+            self.assertEqual(response.status_code, 400, (bed, response.data))
+        with platform_admin_context():
+            admission.refresh_from_db()
+        self.assertEqual(admission.bed_id, self.bed_a.id)
+
     def test_legacy_discharge_endpoint_is_retired_and_changes_nothing(self):
         # Discharge is a signed record made in Discharge planning
         # (apps.care_pathway); the old free-text endpoint must not bypass it.

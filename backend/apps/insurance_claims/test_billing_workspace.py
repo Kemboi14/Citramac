@@ -476,6 +476,11 @@ class BillingWorkspaceTests(APITestCase):
             first_payments = first.payments.count()
         self.assertEqual(first.status, "CANCELLED")
         self.assertEqual(first_payments, 2)  # payments are never moved
+        with platform_admin_context():
+            second = Invoice.objects.get(patient=self.patient, version=2)
+            # …but they still count towards the re-issued bill (800 of 2500).
+            self.assertEqual(second.amount_paid, Decimal("800.00"))
+            self.assertEqual(second.status, "PARTIALLY_PAID")
 
     # printed invoice and statement (shared document layout)
 

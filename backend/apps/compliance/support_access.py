@@ -18,7 +18,13 @@ CLINICAL_ROUTE = re.compile(
     r"patients|appointments|attachments|encounters|diagnoses|mhp|lab|pharmacy|ipd|clinical|"
     r"sync|billing|invoices|payments|claims|pre-authorizations|erasure-requests|compliance/subject-requests|"
     r"retention/(patients|archived|batches)|"
-    r"care/(?!valuesets/|triage/thresholds/|consent-templates/|billing-services/)"
+    # Every care/ route except shared configuration. (The lookahead used to
+    # sit after "care/", where the "(/|$)" below could never match, so no
+    # care/ route was gated at all.)
+    r"care(?!/(valuesets|triage/thresholds|consent-templates|billing-services)(/|$))|"
+    # Generated documents, disclosures and release authorisations; the national
+    # SHR (consents, a client's shared record); a client's FHIR audit trail.
+    r"documents(?!/catalogue/)|shr|fhir"
     r")(/|$)"
 )
 

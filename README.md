@@ -17,8 +17,10 @@ anything clinical.
   SHA claims.
 - FHIR: resources are built with `fhir.resources.R4B` (documented exception,
   CLAUDE.md 2026-09-18) and every build checks them against HL7's R4 4.0.1
-  schema. That is rung 2 of the conformance ladder; rungs 3–4 (profiles and a
-  published implementation guide) wait on the national IG.
+  schema (rung 2). The national IG, Kenya Core 1.0.0, is vendored in
+  `backend/apps/dha_interop/fhir_validation/kenya_core/`, and CI runs HL7's
+  validator over every published example against it (rung 4 for the SHR
+  profiles; CLAUDE.md 2026-10-23).
 - Published examples (routine, edge case, refusal/omission) live next to the
   code that builds them, in each app's `fhir_examples/`.
 - Open `VERIFY:` items (codes, canonical URLs, statutes) are marked in code and

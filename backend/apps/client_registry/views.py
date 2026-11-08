@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -643,8 +644,35 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         return ErasureRequest.objects.select_related("patient").order_by("-created_at")
 
+    OPEN_STATUSES = (ErasureRequest.STATUS_PENDING, ErasureRequest.STATUS_RETENTION_CONFLICT)
+
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
+
+    def perform_update(self, serializer):
+        # The patient is fixed when the request is made, and nothing changes
+        # once anyone has signed it off: an approval must cover exactly what
+        # will be erased.
+        request_ = serializer.instance
+        if "patient" in serializer.validated_data and (
+            serializer.validated_data["patient"].pk != request_.patient_id
+        ):
+            raise ValidationError({"patient": "The client on an erasure request can't be changed."})
+        if (
+            request_.status != ErasureRequest.STATUS_PENDING
+            or request_.org_admin_approved_by_id
+            or request_.compliance_officer_approved_by_id
+        ):
+            raise ValidationError(
+                {"detail": "This request has been signed off or decided and can't be changed."}
+            )
+        serializer.save()
+
+    def _open_request(self):
+        erasure_request = self.get_object()
+        if erasure_request.status not in self.OPEN_STATUSES:
+            raise ValidationError({"detail": "This request has already been decided."})
+        return erasure_request
 
     @action(detail=True, methods=["post"], url_path="approve-org-admin")
     def approve_org_admin(self, request, pk=None):
@@ -653,7 +681,9 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 {"error": {"code": "FORBIDDEN", "message": "Requires the Org Admin role."}},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        erasure_request = self.get_object()
+        erasure_request = self._open_request()
+        if erasure_request.compliance_officer_approved_by_id == request.user.id:
+            raise PermissionDenied("The two sign-offs must be given by two different people.")
         erasure_request.org_admin_approved_by = request.user
         erasure_request.org_admin_approved_at = timezone.now()
         erasure_request.save(update_fields=["org_admin_approved_by", "org_admin_approved_at"])
@@ -671,7 +701,9 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        erasure_request = self.get_object()
+        erasure_request = self._open_request()
+        if erasure_request.org_admin_approved_by_id == request.user.id:
+            raise PermissionDenied("The two sign-offs must be given by two different people.")
         erasure_request.compliance_officer_approved_by = request.user
         erasure_request.compliance_officer_approved_at = timezone.now()
         erasure_request.save(
@@ -686,7 +718,7 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
                 {"error": {"code": "FORBIDDEN", "message": "Requires Org Admin or Auditor."}},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        erasure_request = self.get_object()
+        erasure_request = self._open_request()
         erasure_request.status = ErasureRequest.STATUS_REJECTED
         erasure_request.rejection_reason = request.data.get("rejection_reason", "")
         erasure_request.save(update_fields=["status", "rejection_reason"])
@@ -694,7 +726,12 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def execute(self, request, pk=None):
-        erasure_request = self.get_object()
+        if not (_is_org_admin(request.user) or _is_compliance_officer(request.user)):
+            return Response(
+                {"error": {"code": "FORBIDDEN", "message": "Requires Org Admin or Auditor."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        erasure_request = self._open_request()
         if not erasure_request.is_fully_approved:
             return Response(
                 {

@@ -2,7 +2,7 @@ name: CI
 
 # Lint + test on every PR and on every push to master. Phase 8 adds the
 # deploy pipeline (build-and-scan.yml, deploy-*.yml, terraform-*.yml) per
-# docs/12-DEVOPS-DEPLOYMENT.md §12.5, gated on this workflow passing.
+# docs/12-DEVOPS-DEPLOYMENT.md §12.5 (removed 2026-10-21; `git show f80b45b:docs/12-DEVOPS-DEPLOYMENT.md`), gated on this workflow passing.
 
 on:
   pull_request:

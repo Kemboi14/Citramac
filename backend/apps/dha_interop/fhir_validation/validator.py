@@ -16,10 +16,10 @@ real, independently-sourced R4 schema is what actually enforces the pinned
 
 Rung 2 only: the base R4 schema makes almost every element optional (see
 CLAUDE.md §2), so a resource passing here is schema-valid, not necessarily
-complete or clinically sound. Reaching rung 3/4 needs real StructureDefinitions
-bound to a published implementation guide, which does not exist for this
-system yet (see docs/DHA-CERTIFICATION-SUBMISSION-READINESS.md) — out of
-scope for this module by design, not an oversight.
+complete or clinically sound. Profile conformance is checked elsewhere: the
+national IG, Kenya Core 1.0.0, is vendored in `kenya_core/` and read by
+`kenya_core.py`, and CI runs HL7's own validator over every published example
+against it (rung 4, CLAUDE.md amendment 2026-10-23; scripts/hl7_validator_gate.py).
 """
 
 import json

@@ -180,15 +180,48 @@ class PsychotherapySessionViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyMode
 
 
 class CareTeamMembershipViewSet(viewsets.ModelViewSet):
-    """Org Admin/Supervisor tool for assigning the care team — docs/07 §7.14.7."""
+    """The client's care team (docs/07 §7.14.7, at git f80b45b).
+
+    Membership opens the client's full MHP content (``has_full_mhp_access``)
+    and puts them on the member's caseload, so only the Org Admin assigns or
+    removes it. Anyone else sees only their own memberships: who is on which
+    client's team is itself sensitive.
+    """
 
     serializer_class = CareTeamMembershipSerializer
 
     def get_queryset(self):
-        return CareTeamMembership.objects.select_related("patient", "user")
+        from apps.accounts.access import is_org_admin
+
+        qs = CareTeamMembership.objects.select_related("patient", "user").order_by("-assigned_at")
+        if self.request.user.is_superuser or is_org_admin(self.request.user):
+            return qs
+        return qs.filter(user=self.request.user)
+
+    def _require_org_admin(self):
+        from apps.accounts.access import is_org_admin
+
+        if not is_org_admin(self.request.user):
+            raise PermissionDenied("Only the Org Admin assigns a client's care team.")
+
+    def _check_member(self, serializer):
+        member = serializer.validated_data.get("user")
+        if member is not None and member.organization_id != self.request.user.organization_id:
+            raise PermissionDenied("A care-team member must belong to this organisation.")
 
     def perform_create(self, serializer):
+        self._require_org_admin()
+        self._check_member(serializer)
         serializer.save(organization=self.request.user.organization)
+
+    def perform_update(self, serializer):
+        self._require_org_admin()
+        self._check_member(serializer)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_org_admin()
+        instance.delete()
 
 
 class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):

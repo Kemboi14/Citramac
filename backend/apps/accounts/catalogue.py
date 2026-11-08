@@ -125,6 +125,15 @@ PERMISSIONS = [
         ["Lab Technician", "Auditor"],
     ),
     (
+        "laboratory.results.validate",
+        "laboratory",
+        "Validate laboratory results",
+        "Pass a laboratory result through quality-control validation, which publishes it "
+        "to the ordering clinicians. A validated result can no longer be changed.",
+        SCOPE_ORG,
+        ["Lab Technician"],
+    ),
+    (
         "finance.manage",
         "finance",
         "Manage billing, claims & payments",

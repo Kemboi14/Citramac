@@ -1,4 +1,6 @@
+from django.db import transaction
 from rest_framework import status, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
@@ -45,6 +47,16 @@ class DrugStockItemViewSet(viewsets.ModelViewSet):
             moved_by=self.request.user,
         )
 
+    def perform_update(self, serializer):
+        # Stock on hand changes only through movements (receipt, dispense), so
+        # the ledger always explains it. A batch's details may be corrected.
+        new = serializer.validated_data.get("quantity_on_hand")
+        if new is not None and new != serializer.instance.quantity_on_hand:
+            raise ValidationError(
+                {"quantity_on_hand": "Stock on hand changes only through a stock movement."}
+            )
+        serializer.save()
+
 
 class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = StockMovementSerializer
@@ -69,7 +81,10 @@ class DispenseRecordViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
             "-dispensed_at"
         )
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
+        # One transaction: the stock taken and the dispense records written
+        # together, or neither.
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         prescription_item = serializer.validated_data["prescription_item"]

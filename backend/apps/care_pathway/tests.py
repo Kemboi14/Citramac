@@ -590,40 +590,15 @@ class JourneyAndBillingTests(CarePathwayApiTestCase):
         self.assertIn("suicide risk", plan.data["recommendation"])
         self.assertEqual(plan.data["suggestions"][0]["title"], "Safety plan / enhanced observation")
 
-    def test_intake_mse_is_stored_once_in_the_mse_table(self):
-        from apps.triage.models import MentalStatusExam
-
+    def test_one_shot_signed_intake_is_no_longer_accepted(self):
+        """An intake is drafted and signed through the sectioned flow only."""
         response = self.client.post(
             reverse("care-client-intake", args=[self.patient_id]),
-            {"mse_mood": "Anxious", "mse_affect": "Restricted"},
+            {"presenting_concern": "Anxiety", "gad7_score": 14},
             format="json",
             **self.auth,
         )
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["mse_mood"], "Anxious")
-        with platform_admin_context():
-            exam = MentalStatusExam.objects.get(pk=response.data["mse"])
-        self.assertEqual((exam.mood, exam.affect), ("Anxious", "Restricted"))
-
-    def test_intake_records_outcome_scores(self):
-        response = self.client.post(
-            reverse("care-client-intake", args=[self.patient_id]),
-            {"presenting_concern": "Anxiety", "gad7_score": 14, "phq9_score": 8},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 201)
-        outcomes = self.client.get(
-            reverse("care-client-outcomes", args=[self.patient_id]), **self.auth
-        ).data["results"]
-        self.assertEqual(sorted(o["instrument"] for o in outcomes), ["GAD7", "PHQ9"])
-        too_high = self.client.post(
-            reverse("care-client-intake", args=[self.patient_id]),
-            {"gad7_score": 30},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(too_high.status_code, 400)
+        self.assertEqual(response.status_code, 405)
 
     def _activity(self):
         return self.client.post(

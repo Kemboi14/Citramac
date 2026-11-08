@@ -46,12 +46,8 @@ class InsuranceClaimsTests(APITestCase):
             format="json",
             **self.auth,
         )
-        self.assertEqual(create_response.status_code, 201, create_response.data)
-        response = self.client.post(
-            f"/api/v1/claims/pre-authorizations/{create_response.data['id']}/submit-to-sha/",
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 404)
+        # Read-only: requested from a claim line in the billing workspace only.
+        self.assertEqual(create_response.status_code, 405, create_response.data)
 
     def test_e_claim_submit_to_sha_refuses_an_unreviewed_claim(self):
         """No submission path skips the finance review: a claim with no lines
@@ -62,9 +58,14 @@ class InsuranceClaimsTests(APITestCase):
             format="json",
             **self.auth,
         )
-        self.assertEqual(create_response.status_code, 201, create_response.data)
-        self.assertEqual(create_response.data["total_claimed_amount"], "0.00")
-        claim_id = create_response.data["id"]
+        # Claims are made in the billing workspace, never through this endpoint.
+        self.assertEqual(create_response.status_code, 405, create_response.data)
+        from .models import InsuranceClaim
+
+        with platform_admin_context():
+            claim_id = InsuranceClaim.objects.create(
+                organization=self.org, patient=self.patient, created_by=self.clinician
+            ).id
 
         submit_response = self.client.post(
             reverse("e-claim-submit-to-sha", args=[claim_id]),

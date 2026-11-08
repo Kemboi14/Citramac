@@ -18,6 +18,7 @@ illustrative JSON bodies, noted where they happen:
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
@@ -106,7 +107,10 @@ def _set_refresh_cookie(response, refresh_str, request, remember=False):
         # this only controls whether the *browser* keeps offering it back.
         max_age=REFRESH_COOKIE_MAX_AGE if remember else None,
         httponly=True,
-        secure=not request.META.get("wsgi.url_scheme") == "http",
+        # TLS ends at the proxy, so the WSGI scheme is always "http" in
+        # production; request.is_secure() reads SECURE_PROXY_SSL_HEADER, and
+        # production (SESSION_COOKIE_SECURE) always marks it Secure.
+        secure=request.is_secure() or settings.SESSION_COOKIE_SECURE,
         samesite="Lax",
     )
 

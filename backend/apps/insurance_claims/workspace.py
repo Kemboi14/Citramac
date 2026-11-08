@@ -734,6 +734,8 @@ def issue_invoice(user, patient):
     if previous is not None:
         previous.status = "CANCELLED"
         previous.save(update_fields=["status"])
+        # Payments made against the earlier version count towards this one.
+        invoice.refresh_status()
     return invoice, True
 
 

@@ -1069,18 +1069,6 @@ export function listIntakeAssessments(accessToken: string, patientId: string) {
   });
 }
 
-export function saveIntakeAssessment(
-  accessToken: string,
-  patientId: string,
-  payload: IntakePayload,
-) {
-  return apiRequest<IntakeAssessment>(`/care/clients/${patientId}/intake/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
 export interface OutcomeSummary {
   instrument: string;
   name: string;
@@ -2437,6 +2425,8 @@ export interface ProgressNoteRow {
   status: "DRAFT" | "SIGNED";
   amends: string | null;
   author: string;
+  /** Only the author may re-open, edit or sign a draft. */
+  author_id: string | null;
   created_at: string;
   signed_at: string | null;
 }

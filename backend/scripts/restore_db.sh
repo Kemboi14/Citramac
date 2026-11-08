@@ -29,5 +29,7 @@ START=$(date +%s)
 pg_restore --no-owner --no-privileges --dbname="$TARGET_URL" --jobs=4 "$DUMP_FILE"
 END=$(date +%s)
 
-echo "Restore complete in $((END - START))s. Connection string for the integrity check:"
-echo "$TARGET_URL"
+# The connection string carries the password, so it is never printed (logs
+# keep it). Point DATABASE_URL at the scratch database by name instead.
+echo "Restore complete in $((END - START))s into '$TARGET_DB'."
+echo "For the integrity check, use DATABASE_URL with the database name '$TARGET_DB'."

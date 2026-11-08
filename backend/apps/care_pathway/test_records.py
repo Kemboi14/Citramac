@@ -116,6 +116,17 @@ class NoteAndEpisodeTests(RecordsTestCase):
         empty = self.post("care-client-notes", {"note_type": "PHONE", "text": " "})
         self.assertEqual(self.post("care-note", {}, empty.data["id"]).status_code, 400)
 
+    def test_only_the_author_signs_a_note_and_stays_its_author(self):
+        n = self.post("care-client-notes", {"note_type": "WARD_ROUND", "text": "Settled overnight"})
+        author = n.data["author"]
+        other = self.client.post(
+            reverse("care-note", args=[n.data["id"]]), {}, format="json", **self.psych_auth
+        )
+        self.assertEqual(other.status_code, 403)
+        signed = self.post("care-note", {}, n.data["id"])
+        self.assertEqual(signed.data["status"], "SIGNED")
+        self.assertEqual(signed.data["author"], author)
+
     def test_closing_an_episode_needs_a_reason_when_unplanned_and_writes_status_history(self):
         self.assertEqual(
             self.post("care-client-episode-outcome", {"outcome": "LOST"}).status_code, 400

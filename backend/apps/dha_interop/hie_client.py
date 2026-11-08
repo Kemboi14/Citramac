@@ -19,8 +19,8 @@ CLAUDE.md §4 "Fail safely":
 DHA publishes no endpoint for pushing a Patient (the Client Registry is
 read through GET /patients) nor for a free-standing referral document;
 registration identity is reconciled by a Client Registry lookup instead
-(apps.dha_interop.registries) and referrals reach the SHR only as a
-ServiceRequest addressed to a facility's FR code.
+(apps.dha_interop.registries). Referrals are not sent at all: no destination
+FR code is captured, so shr.py lists them as omitted (CLAUDE.md 2026-10-23).
 """
 
 import logging

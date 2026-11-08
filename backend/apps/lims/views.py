@@ -1,8 +1,11 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from apps.accounts.access import has_permission
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
 from apps.retention.mixins import NoHardDeleteMixin
 
@@ -76,10 +79,26 @@ class LabResultViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         result.lab_order.status = "RESULT_PENDING"
         result.lab_order.save(update_fields=["status"])
 
+    def perform_update(self, serializer):
+        if serializer.instance.is_validated:
+            raise ValidationError({"detail": "A validated result can no longer be changed."})
+        serializer.save()
+
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def validate(self, request, pk=None):
         """Senior lab scientist review & approval gate — docs/07-CLINICAL-MODULES-SPEC.md §7.4."""
-        result = LabResult.objects.get(pk=pk)
+        if not (
+            request.user.is_superuser or has_permission(request.user, "laboratory.results.validate")
+        ):
+            raise PermissionDenied("You don't have permission to validate laboratory results.")
+        result = self.get_queryset().select_for_update(of=("self",)).filter(pk=pk).first()
+        if result is None:
+            from django.http import Http404
+
+            raise Http404
+        if result.is_validated:
+            raise ValidationError({"detail": "This result is already validated."})
         result.is_validated = True
         result.validated_by = request.user
         result.validated_at = timezone.now()

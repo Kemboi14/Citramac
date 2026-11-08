@@ -33,8 +33,10 @@ from .serializers import (
 from .sha_eligibility import ShaError
 
 
-class PreAuthorizationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
-    """docs/10-API-SPECIFICATION.md §10.11 — Module 11."""
+class PreAuthorizationViewSet(viewsets.ReadOnlyModelViewSet):
+    """docs/10-API-SPECIFICATION.md §10.11 — Module 11. Read-only: a
+    pre-authorisation is requested from a claim line in the billing workspace
+    (workspace.request_preauth), never created or edited here."""
 
     serializer_class = PreAuthorizationSerializer
     permission_classes = [IsFinanceOrReadOnly]
@@ -42,19 +44,17 @@ class PreAuthorizationViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         return PreAuthorization.objects.select_related("patient").order_by("-id")
 
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization)
 
+class InsuranceClaimViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only: a claim is made from priced charges in the billing workspace
+    (workspace.create_claim) and changed only there, so it can't be created
+    empty or have its client, encounter or invoice rewritten after submission."""
 
-class InsuranceClaimViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = InsuranceClaimSerializer
     permission_classes = [IsFinanceOrReadOnly]
 
     def get_queryset(self):
         return InsuranceClaim.objects.select_related("patient").order_by("-id")
-
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, created_by=self.request.user)
 
     @action(detail=True, methods=["post"], url_path="submit-to-sha")
     def submit_to_sha(self, request, pk=None):

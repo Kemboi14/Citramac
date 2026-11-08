@@ -77,8 +77,22 @@ def get_client_ip(request):
     shared (and trivially exhausted) global budget instead of a per-client
     one. Used by this middleware's own audit `source_ip`, and imported
     directly by apps.accounts.auth_views/throttling for the same reason.
+
+    Only the entries our own proxies appended are trusted. Each proxy appends
+    the address it received the request from, so with TRUSTED_PROXY_COUNT
+    proxies the client is the Nth entry from the right; anything to its left
+    was sent by the client and can say anything. (The leftmost entry used to
+    be taken, which let any client choose its own IP for rate limits,
+    lockouts and the audit trail.)
     """
+    from django.conf import settings
+
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+        entries = [e.strip() for e in forwarded_for.split(",") if e.strip()]
+        count = max(int(getattr(settings, "TRUSTED_PROXY_COUNT", 1)), 1)
+        if entries:
+            # Fewer entries than proxies means every entry was appended by a
+            # proxy, so the leftmost is the nearest thing to the client.
+            return entries[-count] if len(entries) >= count else entries[0]
     return request.META.get("REMOTE_ADDR")

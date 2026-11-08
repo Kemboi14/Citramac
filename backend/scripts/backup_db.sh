@@ -18,7 +18,9 @@ mkdir -p "$OUTPUT_DIR"
 TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
 OUTPUT_FILE="${OUTPUT_DIR}/citramac-${TIMESTAMP}.dump"
 
-echo "Backing up $DATABASE_URL -> $OUTPUT_FILE"
+# Never print DATABASE_URL: it carries the password. Host and database only.
+DB_DISPLAY="$(echo "$DATABASE_URL" | sed -E 's#^[a-z]+://([^@]*@)?##; s#\?.*$##')"
+echo "Backing up $DB_DISPLAY -> $OUTPUT_FILE"
 START=$(date +%s)
 pg_dump --format=custom --no-owner --no-privileges --dbname="$DATABASE_URL" --file="$OUTPUT_FILE"
 END=$(date +%s)

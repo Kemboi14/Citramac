@@ -4,11 +4,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import CostCenter, InvoiceLine
+from .permissions import IsFinanceOrReadOnly
 from .serializers import CostCenterSerializer
 
 
 class CostCenterViewSet(viewsets.ModelViewSet):
     serializer_class = CostCenterSerializer
+    # Everyone reads; only finance creates or changes a cost centre.
+    permission_classes = [IsFinanceOrReadOnly]
 
     def get_queryset(self):
         return CostCenter.objects.all()

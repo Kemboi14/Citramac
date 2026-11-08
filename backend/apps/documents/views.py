@@ -335,6 +335,9 @@ class ReleaseAuthorizationView(APIView):
         rows = ConsentRecord.objects.filter(
             patient=patient, consent_type__in=RELEASE_CONSENT_TYPES
         ).select_related("captured_by")
+        # The client is named in the query string, so the per-client read audit
+        # (which keys on the URL) doesn't see this read; record it here.
+        log_view(patient)
         return Response(
             {
                 "results": [_consent_payload(r) for r in rows],

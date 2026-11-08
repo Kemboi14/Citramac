@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
@@ -47,7 +50,7 @@ class PharmacyFefoTests(APITestCase):
                 store=self.store,
                 drug=self.drug,
                 batch_number="A1",
-                expiry_date="2026-01-01",
+                expiry_date=timezone.localdate() + timedelta(days=30),
                 quantity_on_hand=5,
             )
             self.batch_expiring_later = DrugStockItem.objects.create(
@@ -55,7 +58,7 @@ class PharmacyFefoTests(APITestCase):
                 store=self.store,
                 drug=self.drug,
                 batch_number="A2",
-                expiry_date="2027-01-01",
+                expiry_date=timezone.localdate() + timedelta(days=365),
                 quantity_on_hand=10,
             )
             prescription = Prescription.objects.create(
@@ -97,6 +100,36 @@ class PharmacyFefoTests(APITestCase):
         self.assertEqual(len(consumed), 2)
         self.assertEqual(self.batch_expiring_soon.quantity_on_hand, 0)
         self.assertEqual(self.batch_expiring_later.quantity_on_hand, 7)
+
+    def test_fefo_never_dispenses_an_expired_batch(self):
+        with platform_admin_context():
+            expired = DrugStockItem.objects.create(
+                organization=self.org,
+                store=self.store,
+                drug=self.drug,
+                batch_number="OLD",
+                expiry_date=timezone.localdate() - timedelta(days=1),
+                quantity_on_hand=50,
+            )
+            consumed = dispense_fefo(
+                store=self.store,
+                drug=self.drug,
+                quantity=3,
+                user=self.clinician,
+                organization=self.org,
+            )
+            expired.refresh_from_db()
+        self.assertEqual(consumed[0][0].id, self.batch_expiring_soon.id)
+        self.assertEqual(expired.quantity_on_hand, 50)
+
+    def test_stock_on_hand_changes_only_through_movements(self):
+        response = self.client.patch(
+            reverse("pharmacy-stock-item-detail", args=[self.batch_expiring_later.id]),
+            {"quantity_on_hand": 999},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_fefo_raises_when_stock_is_insufficient(self):
         with platform_admin_context(), self.assertRaises(InsufficientStock):

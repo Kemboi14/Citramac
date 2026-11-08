@@ -7,7 +7,9 @@ class LabOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = LabOrder
         fields = ["id", "encounter", "loinc_code", "ordered_by", "ordered_at", "status"]
-        read_only_fields = ["ordered_by", "ordered_at"]
+        # Status follows the workflow (specimen, result, validation); a PATCH
+        # must never be able to mark an order validated.
+        read_only_fields = ["ordered_by", "ordered_at", "status"]
 
 
 class LabSpecimenSerializer(serializers.ModelSerializer):

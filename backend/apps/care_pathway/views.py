@@ -19,7 +19,7 @@ from apps.client_registry.models import AllergyRecord, Appointment, ConsentRecor
 from apps.clinical_encounter.models import DiagnosisCode
 from apps.ipd_ward.models import Admission, Bed
 from apps.sysadmin_audit.audit import log_view
-from apps.triage.models import MentalStatusExam, VitalSigns
+from apps.triage.models import VitalSigns
 from config.errors import error_response
 
 from . import (
@@ -55,7 +55,6 @@ from .models import (
     TriageEncounter,
 )
 from .serializers import (
-    MSE_FIELDS,
     BillingServiceSerializer,
     CarePlanActivitySerializer,
     CarePlanSerializer,
@@ -1270,56 +1269,10 @@ class ClientIntakeView(APIView):
             }
         )
 
-    def post(self, request, patient_id):
-        from apps.accounts.practitioner_profile import require_current_licence
-
-        require_current_licence(request.user)
-        patient = _patient(patient_id)
-        serializer = IntakeAssessmentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        episode = services.get_or_open_episode(patient, request.user)
-        encounter = services.clinical_encounter_for(patient, episode, request.user)
-        mse_values = {
-            mse_field: serializer.validated_data.pop(field, "")
-            for field, mse_field in MSE_FIELDS.items()
-        }
-        mse = None
-        if any(mse_values.values()):
-            mse = MentalStatusExam.objects.create(
-                organization=request.user.organization,
-                encounter=encounter,
-                recorded_by=request.user,
-                **mse_values,
-            )
-        intake = serializer.save(
-            organization=request.user.organization,
-            patient=patient,
-            episode=episode,
-            encounter=encounter,
-            mse=mse,
-            author=request.user,
-            # A one-shot save is a signed record (the sectioned flow uses the
-            # draft + sign endpoints instead).
-            status="SIGNED",
-            completeness="COMPLETE",
-            signed_at=timezone.now(),
-            signed_by=request.user,
-            version=IntakeAssessment.objects.filter(patient=patient).count() + 1,
-        )
-        for instrument, score in (("GAD7", intake.gad7_score), ("PHQ9", intake.phq9_score)):
-            if score is not None:
-                OutcomeScore.objects.create(
-                    organization=request.user.organization,
-                    patient=patient,
-                    instrument=instrument,
-                    score=score,
-                    source_intake=intake,
-                    recorded_by=request.user,
-                )
-        return Response(
-            IntakeAssessmentSerializer(intake, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+    # No POST: an intake is drafted and signed section by section
+    # (care/clients/<id>/intake/draft/ and …/sign/), which checks what is
+    # outstanding, reviews carried findings and raises the withdrawal review.
+    # The one-shot signed save that skipped all three was removed 2026-11-08.
 
 
 class IntakeSchemaView(APIView):
@@ -2344,6 +2297,8 @@ def _note_row(n):
         "status": n.status,
         "amends": str(n.amends_id) if n.amends_id else None,
         "author": user_display(n.author),
+        # Lets the author re-open their own draft (only the author may edit or sign it).
+        "author_id": str(n.author_id) if n.author_id else None,
         "created_at": _iso(n.created_at),
         "signed_at": _iso(n.signed_at),
     }
@@ -2365,13 +2320,15 @@ class ClientNotesView(APIView):
         from . import records
         from .models import ProgressNote
 
+        patient = _patient(patient_id)
         data = dict(request.data)
         if request.data.get("amends"):
+            # An addendum corrects a signed note about the same client only.
             data["amends"] = get_object_or_404(
-                ProgressNote, pk=request.data["amends"], status="SIGNED"
+                ProgressNote, pk=request.data["amends"], status="SIGNED", patient=patient
             )
         return Response(
-            _note_row(records.save_note(_patient(patient_id), request.user, data)),
+            _note_row(records.save_note(patient, request.user, data)),
             status=status.HTTP_201_CREATED,
         )
 
@@ -2382,6 +2339,7 @@ class NoteView(APIView):
         from .models import ProgressNote
 
         note = get_object_or_404(ProgressNote, pk=pk)
+        _refuse_psychiatry_note(note)
         if note.status == "DRAFT" and note.author_id != request.user.id:
             raise PermissionDenied("Only the author can edit a draft.")
         return Response(
@@ -2392,9 +2350,18 @@ class NoteView(APIView):
         from . import records
         from .models import ProgressNote
 
-        return Response(
-            _note_row(records.sign_note(get_object_or_404(ProgressNote, pk=pk), request.user))
-        )
+        note = get_object_or_404(ProgressNote, pk=pk)
+        _refuse_psychiatry_note(note)
+        return Response(_note_row(records.sign_note(note, request.user)))
+
+
+def _refuse_psychiatry_note(note):
+    """A psychiatric assessment is edited and signed in the psychiatry module,
+    which keeps its structured data and checks it has content before signing."""
+    from .psychiatry_module import NOTE_TYPE
+
+    if note.note_type == NOTE_TYPE and note.status == "DRAFT":
+        raise ValidationError({"detail": "Edit and sign this assessment in the psychiatry module."})
 
 
 class ClientEpisodeOutcomeView(APIView):

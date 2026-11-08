@@ -179,6 +179,32 @@ class AppendOnlyAndCoverageTests(TestCase):
             ).exists()
         )
 
+    def test_live_tokens_are_never_copied_into_the_trail(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.accounts.models import ActivationInvite
+
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Token Org", slug="token-org", facility_type="CLINIC"
+            )
+            user = User.objects.create_user(
+                email="invitee@token.test", password="Password123!", organization=org
+            )
+            invite = ActivationInvite.objects.create(
+                organization=org, user=user, expires_at=timezone.now() + timedelta(days=1)
+            )
+            entry = AuditLogEntry.objects.get(
+                model="accounts.activationinvite",
+                object_id=str(invite.pk),
+                action=AuditLogEntry.ACTION_CREATE,
+            )
+        recorded = entry.field_diff["token"]["new"]
+        self.assertNotIn(invite.token, str(entry.field_diff))
+        self.assertTrue(recorded.startswith("[encrypted "))
+
     def test_delete_entries_keep_the_deleted_values(self):
         from apps.tenancy.models import SubscriptionPlan
 

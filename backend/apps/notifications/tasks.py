@@ -135,15 +135,17 @@ def notify_supervisors_of_risk(organization_id, encounter_id, patient_name):
             organization_id=organization_id,
         )
 
+    # Email leaves the platform's access controls, so it never names the
+    # client (dispatch.py content rule); the in-app notice above does.
     supervisor_emails = [s.email for s in supervisors]
     connection, from_email = _resolve_connection(organization_id)
     send_html_email(
         subject="URGENT: Risk flag raised on a Mental Status Exam",
         template_name="notifications/emails/risk_alert_email.html",
-        context={"patient_name": patient_name, "encounter_id": encounter_id},
+        context={"encounter_id": encounter_id},
         plain_message=(
-            f"A Mental Status Exam for {patient_name} (encounter {encounter_id}) flagged "
-            "positive suicidal or homicidal ideation. Please review immediately."
+            f"A Mental Status Exam (encounter {encounter_id}) flagged positive suicidal "
+            "or homicidal ideation. Sign in to review it immediately."
         ),
         from_email=from_email,
         recipient_list=supervisor_emails,

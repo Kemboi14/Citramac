@@ -73,7 +73,15 @@ class Invoice(TenantScopedModel):
 
     @property
     def amount_paid(self):
-        return sum((payment.amount for payment in self.payments.all()), start=0)
+        """Payments against this invoice and every version it replaced: a
+        re-issued invoice is the same bill, so money received against an
+        earlier version still counts (the payments themselves never move)."""
+        total, invoice, seen = 0, self, set()
+        while invoice is not None and invoice.pk not in seen:
+            seen.add(invoice.pk)
+            total += sum((payment.amount for payment in invoice.payments.all()), start=0)
+            invoice = invoice.supersedes
+        return total
 
     def refresh_status(self):
         total, paid = self.total_amount, self.amount_paid

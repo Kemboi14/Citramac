@@ -335,6 +335,57 @@ class RightToErasureTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"]["code"], "APPROVALS_INCOMPLETE")
 
+    def _approve_both(self, request_id):
+        self.client.post(
+            reverse("erasure-request-approve-org-admin", args=[request_id]), **self.org_admin_auth
+        )
+        self.client.post(
+            reverse("erasure-request-approve-compliance", args=[request_id]), **self.auditor_auth
+        )
+
+    def test_approved_request_cannot_be_pointed_at_another_client(self):
+        with platform_admin_context():
+            other = Patient.objects.create(
+                organization=self.org,
+                first_name="Grace",
+                last_name="Otieno",
+                gender="FEMALE",
+                date_of_birth="1990-01-01",
+            )
+        request_id = self._create_request()
+        self._approve_both(request_id)
+        response = self.client.patch(
+            reverse("erasure-request-detail", args=[request_id]),
+            {"patient": str(other.id)},
+            format="json",
+            **self.records_officer_auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        with platform_admin_context():
+            other.refresh_from_db()
+            self.assertEqual(other.first_name, "Grace")
+
+    def test_only_admin_or_auditor_executes_and_only_once(self):
+        request_id = self._create_request()
+        self._approve_both(request_id)
+        url = reverse("erasure-request-execute", args=[request_id])
+        self.assertEqual(self.client.post(url, **self.records_officer_auth).status_code, 403)
+        self.assertEqual(self.client.post(url, **self.org_admin_auth).status_code, 200)
+        self.assertEqual(self.client.post(url, **self.org_admin_auth).status_code, 400)
+
+    def test_one_person_cannot_give_both_sign_offs(self):
+        with platform_admin_context():
+            self.org_admin.roles.add(Role.objects.get(name="Auditor", organization__isnull=True))
+        request_id = self._create_request()
+        self.client.post(
+            reverse("erasure-request-approve-org-admin", args=[request_id]), **self.org_admin_auth
+        )
+        response = self.client.post(
+            reverse("erasure-request-approve-compliance", args=[request_id]),
+            **self.org_admin_auth,
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_only_org_admin_can_approve_as_org_admin(self):
         request_id = self._create_request()
         response = self.client.post(

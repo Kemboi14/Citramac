@@ -17,12 +17,14 @@ import { errorText } from "../triage/helpers";
 /** Progress notes for any discipline: write, sign, never edit. A correction is an
  * addendum that points at the signed note. Drafts are kept on the server. */
 export function ProgressNotes({ patientId }: { patientId: string }) {
-  const { accessToken } = useAuth();
+  const { accessToken, claims } = useAuth();
   const vs = useValueSets();
   const [notes, setNotes] = useState<ProgressNoteRow[]>([]);
   const [type, setType] = useState("");
   const [text, setText] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
+  // What the server holds for the note being written; anything else is unsaved.
+  const [savedText, setSavedText] = useState("");
   const [amends, setAmends] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +40,7 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
     if (!accessToken) return null;
     if (draftId) {
       await saveNote(accessToken, draftId, text);
+      setSavedText(text);
       return draftId;
     }
     const created = await createNote(accessToken, patientId, {
@@ -46,8 +49,12 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
       ...(amends ? { amends } : {}),
     });
     setDraftId(created.id);
+    setSavedText(text);
     return created.id;
   }
+  const unsaved = text.trim() !== "" && text !== savedText;
+  const UNSAVED_TITLE = "Save or sign the note you're writing first.";
+
   async function act(sign: boolean) {
     setError(null);
     try {
@@ -55,6 +62,7 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
       if (sign && id && accessToken) {
         await signNote(accessToken, id);
         setDraftId(null);
+        setSavedText("");
         setText("");
         setType("");
         setAmends(null);
@@ -121,10 +129,33 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
               <span className="text-ink-500">
                 {n.author}, {formatDateTime(n.signed_at ?? n.created_at)}
               </span>
+              {n.status === "DRAFT" &&
+                n.author_id === claims?.user_id &&
+                n.note_type !== "PSYCHIATRY" &&
+                n.id !== draftId && (
+                  <button
+                    type="button"
+                    className={`${BTN_GHOST} ${BTN_SM}`}
+                    disabled={unsaved}
+                    title={unsaved ? UNSAVED_TITLE : ""}
+                    onClick={() => {
+                      setDraftId(n.id);
+                      setType(n.note_type);
+                      setAmends(n.amends);
+                      setText(n.text);
+                      setSavedText(n.text);
+                    }}
+                  >
+                    Continue draft
+                  </button>
+                )}
               {n.status === "SIGNED" && (
                 <button
                   type="button"
                   className={`${BTN_GHOST} ${BTN_SM}`}
+                  // Starting an addendum would drop the draft being written.
+                  disabled={unsaved}
+                  title={unsaved ? UNSAVED_TITLE : ""}
                   onClick={() => {
                     setAmends(n.id);
                     // An archived type (SOAP_V3) can't be used for a new note:
@@ -135,6 +166,7 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
                         : "PROGRESS",
                     );
                     setDraftId(null);
+                    setSavedText("");
                     setText("");
                   }}
                 >

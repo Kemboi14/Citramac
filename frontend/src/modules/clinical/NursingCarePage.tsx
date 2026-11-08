@@ -16,6 +16,7 @@ import {
   type NursingNote,
 } from "../../lib/ipdApi";
 import { PageHeader } from "../care/shared/ui";
+import { formErrorSummary } from "../../lib/formErrors";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
 
@@ -131,8 +132,18 @@ export function NursingCarePage() {
 
   const administer = async (entryId: string, status: MarStatus) => {
     if (!accessToken) return;
-    await administerMarEntry(accessToken, entryId, status);
-    refresh();
+    setError(null);
+    try {
+      await administerMarEntry(accessToken, entryId, status);
+      refresh();
+    } catch (err) {
+      // e.g. a controlled drug needs a witness, a PRN dose an indication, a
+      // declined dose a reason: record those on the client record's MAR.
+      setError(
+        formErrorSummary(err, "Couldn't record the dose.") +
+          " Doses that need a witness, indication or reason are recorded on the client record's MAR.",
+      );
+    }
   };
 
   const addNote = async () => {

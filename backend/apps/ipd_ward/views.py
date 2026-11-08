@@ -1,7 +1,8 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from apps.accounts.permissions import _has_org_admin_role
@@ -124,6 +125,7 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
             queryset = queryset.filter(patient_id=params["patient"])
         return queryset
 
+    @transaction.atomic
     def perform_create(self, serializer):
         from apps.care_pathway.models import BillingService, ChargeItem
         from apps.care_pathway.services import get_or_open_episode
@@ -131,6 +133,11 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
 
         patient = serializer.validated_data["patient"]
         user = self.request.user
+        _take_bed(serializer.validated_data.get("bed"))
+        if Admission.objects.filter(
+            patient=patient, status__in=("ADMITTED", "TRANSFERRED")
+        ).exists():
+            raise ValidationError({"patient": "This client is already admitted."})
         # The admission is an Encounter (class IMP) inside the client's
         # EpisodeOfCare — CLAUDE.md §4, docs/15-CLINICAL-WORKSPACE-V3.md §1.10.
         episode = get_or_open_episode(patient, user)
@@ -214,10 +221,30 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
             }
         )
 
+    def perform_update(self, serializer):
+        # A bed changes only by transfer, which frees the old bed and checks
+        # the new one is free.
+        bed = serializer.validated_data.get("bed")
+        if bed is not None and bed.pk != serializer.instance.bed_id:
+            raise ValidationError({"bed": "Move the client with a transfer."})
+        serializer.save()
+
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def transfer(self, request, pk=None):
         admission = self.get_object()
-        new_bed = Bed.objects.get(pk=request.data["bed"])
+        if admission.status not in ("ADMITTED", "TRANSFERRED"):
+            raise ValidationError({"detail": "Only a current admission can be transferred."})
+        new_bed = (
+            Bed.objects.filter(pk=request.data.get("bed")).first()
+            if _is_uuid(request.data.get("bed"))
+            else None
+        )
+        if new_bed is None:
+            raise ValidationError({"bed": "Choose the bed to move to."})
+        if new_bed.pk == admission.bed_id:
+            raise ValidationError({"bed": "The client is already in this bed."})
+        _take_bed(new_bed)
         old_bed = admission.bed
         admission.bed = new_bed
         admission.status = "TRANSFERRED"
@@ -229,8 +256,32 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
         return Response(AdmissionSerializer(admission).data)
 
 
+def _is_uuid(value):
+    import uuid
+
+    try:
+        uuid.UUID(str(value))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _take_bed(bed):
+    """Lock the bed and make sure nobody else is in it before it is given."""
+    if bed is None:
+        return
+    locked = Bed.objects.select_for_update().get(pk=bed.pk)
+    if locked.status != "AVAILABLE":
+        raise ValidationError(
+            {"bed": f"Bed {locked.bed_number} is {locked.get_status_display().lower()}."}
+        )
+
+
 class MedicationAdministrationViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = MedicationAdministrationSerializer
+    # A recorded dose is never edited in place: status, who gave it and when
+    # are set only by `administer` (the same checks as the client record's MAR).
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         queryset = MedicationAdministration.objects.select_related("admission").order_by(
@@ -247,12 +298,21 @@ class MedicationAdministrationViewSet(AuditedReadMixin, NoHardDeleteMixin, views
     @action(detail=True, methods=["post"])
     def administer(self, request, pk=None):
         """Digital MAR checklist confirmation — docs/07-CLINICAL-MODULES-SPEC.md §7.7."""
+        from apps.care_pathway.interventions import record_administration
+
         entry = self.get_object()
-        entry.status = request.data.get("status", "ADMINISTERED")
-        entry.administered_by = request.user
-        entry.administered_at = timezone.now()
-        entry.notes = request.data.get("notes", entry.notes)
-        entry.save(update_fields=["status", "administered_by", "administered_at", "notes"])
+        # The same rules as the client record's MAR (care_pathway.interventions):
+        # one recording per dose, a reason to decline or withhold, a witness for
+        # a controlled drug, an indication and the 24 h limit for PRN.
+        entry = record_administration(
+            entry,
+            request.user,
+            request.data.get("status", "ADMINISTERED"),
+            notes=request.data.get("notes", ""),
+            indication=request.data.get("prn_indication", ""),
+            witness=request.data.get("witness_name", ""),
+            override_reason=request.data.get("override_reason", ""),
+        )
         return Response(MedicationAdministrationSerializer(entry).data)
 
 

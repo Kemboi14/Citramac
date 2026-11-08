@@ -2542,6 +2542,10 @@ def amend_discharge(summary, user):
             treatment_summary=summary.treatment_summary,
             legal_status_at_discharge=summary.legal_status_at_discharge,
             education=summary.education,
+            # The readiness checklist answered for the signed version carries
+            # over; it was being dropped, so a HOME discharge amendment failed
+            # its readiness check until every answer was entered again.
+            readiness=dict(summary.readiness or {}),
             follow_up_appointment=summary.follow_up_appointment,
             author=user,
             draft_saved_at=timezone.now(),

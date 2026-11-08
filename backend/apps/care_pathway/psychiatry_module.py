@@ -361,7 +361,7 @@ def sign_workspace(patient, user, data):
         payload.get("mse") or {},
     ):
         raise ValidationError({"detail": "Record the assessment or mental state before signing."})
-    records.sign_note(note, user)
+    note = records.sign_note(note, user)
     return _workspace_state(patient, note.encounter, note, user)
 
 

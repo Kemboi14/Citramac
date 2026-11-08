@@ -103,6 +103,38 @@ class LimsTests(APITestCase):
             self.lab_order.refresh_from_db()
         self.assertEqual(self.lab_order.status, "RESULT_VALIDATED")
 
+    def test_clinician_cannot_validate_a_result(self):
+        response = self.client.post(
+            reverse("lab-result-validate", args=[self.result.id]),
+            **self._auth(self.access_clinician),
+        )
+        self.assertEqual(response.status_code, 403)
+        with platform_admin_context():
+            self.result.refresh_from_db()
+        self.assertFalse(self.result.is_validated)
+
+    def test_validated_result_and_order_status_cannot_be_rewritten(self):
+        self.client.post(
+            reverse("lab-result-validate", args=[self.result.id]),
+            **self._auth(self.access_lab_tech),
+        )
+        edit = self.client.patch(
+            reverse("lab-result-detail", args=[self.result.id]),
+            {"result_value": "12"},
+            format="json",
+            **self._auth(self.access_lab_tech),
+        )
+        self.assertEqual(edit.status_code, 400)
+        order = self.client.patch(
+            reverse("lab-order-detail", args=[self.lab_order.id]),
+            {"status": "ORDERED"},
+            format="json",
+            **self._auth(self.access_clinician),
+        )
+        with platform_admin_context():
+            self.lab_order.refresh_from_db()
+        self.assertEqual(self.lab_order.status, "RESULT_VALIDATED", order.status_code)
+
     def test_clinician_sees_result_after_validation(self):
         with platform_admin_context():
             self.result.is_validated = True

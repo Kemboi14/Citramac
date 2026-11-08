@@ -15,11 +15,15 @@ def dispense_fefo(store, drug, quantity, user, organization):
     until `quantity` is satisfied, logging a StockMovement per batch touched.
     Returns the list of (DrugStockItem, quantity_taken) tuples consumed.
     """
+    from apps.care_pathway.facility_time import local_date
+
     remaining = quantity
     consumed = []
+    # An expired batch is never dispensed: it stays on hand (for return or
+    # destruction) but FEFO skips it. A batch expiring today is still usable.
     batches = (
         DrugStockItem.objects.select_for_update()
-        .filter(store=store, drug=drug, quantity_on_hand__gt=0)
+        .filter(store=store, drug=drug, quantity_on_hand__gt=0, expiry_date__gte=local_date())
         .order_by("expiry_date")
     )
     for batch in batches:
@@ -42,6 +46,6 @@ def dispense_fefo(store, drug, quantity, user, organization):
         available = quantity - remaining
         raise InsufficientStock(
             f"Only {available} of {quantity} requested units are available for this drug "
-            f"across all batches at {store}."
+            f"across all in-date batches at {store}."
         )
     return consumed

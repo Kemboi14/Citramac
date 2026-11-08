@@ -293,6 +293,7 @@ class SignedRecordProtectionTests(DischargeFixture):
                 "Fluoxetine started and titrated; attended group therapy.",
             )
             self.assertEqual(versions[1].medications.count(), 1)
+            self.assertEqual(versions[1].readiness, versions[0].readiness)
             # An amendment does not discharge or charge a second time.
             self.assertEqual(ChargeItem.objects.filter(service__name="Discharge").count(), 1)
         self.refresh(self.admission)

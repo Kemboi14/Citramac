@@ -6,7 +6,7 @@ new record (CLAUDE.md §3 item 7), never an edit of a signed one.
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from . import instruments, services
 from .models import (
@@ -205,12 +205,19 @@ def sign_note(note, user):
     from apps.accounts.practitioner_profile import require_current_licence
 
     require_current_licence(user)
-    if note.status == "SIGNED":
-        raise ValidationError({"detail": "This note is already signed."})
-    if not note.text.strip():
-        raise ValidationError({"text": "A note cannot be signed empty."})
-    note.status, note.signed_at, note.author = "SIGNED", timezone.now(), user
-    note.save()
+    with transaction.atomic():
+        # Lock the row so two signers can't both pass the status check.
+        note = ProgressNote.objects.select_for_update().get(pk=note.pk)
+        if note.status == "SIGNED":
+            raise ValidationError({"detail": "This note is already signed."})
+        # The signature attests the author's own note: nobody signs another
+        # clinician's draft, and the author is never replaced by the signer.
+        if note.author_id != user.id:
+            raise PermissionDenied("Only the note's author can sign it.")
+        if not note.text.strip():
+            raise ValidationError({"text": "A note cannot be signed empty."})
+        note.status, note.signed_at = "SIGNED", timezone.now()
+        note.save(update_fields=["status", "signed_at", "updated_at"])
     return note
 
 

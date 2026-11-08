@@ -75,5 +75,16 @@ class SupervisionRequestAdmin(admin.ModelAdmin):
 
 @admin.register(NacadaNdoReport)
 class NacadaNdoReportAdmin(admin.ModelAdmin):
+    """A compiled report is never edited (its snapshot is what was sent)."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     list_display = ["period_start", "period_end", "status", "generated_at"]
     list_filter = ["status"]

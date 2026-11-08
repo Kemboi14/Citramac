@@ -101,6 +101,31 @@ class SupportAccessTests(ComplianceTestCase):
         response = self.client.get(reverse("patient-list"), **self.auth(self.platform))
         self.assertEqual(response.status_code, 403)
 
+    def test_every_client_record_route_needs_a_grant(self):
+        """The clinical core lives under care/, plus documents, the SHR and the
+        FHIR audit trail; shared configuration stays reachable."""
+        from .support_access import is_clinical_route
+
+        for path in (
+            "/api/v1/care/clients/00000000-0000-0000-0000-000000000000/notes/",
+            "/api/v1/care/triage/",
+            "/api/v1/care/dashboard/",
+            "/api/v1/documents/generated/",
+            "/api/v1/documents/authorizations/",
+            "/api/v1/shr/consents/00000000-0000-0000-0000-000000000000/verify/",
+            "/api/v1/fhir/AuditEvent/",
+        ):
+            self.assertTrue(is_clinical_route(path), path)
+        for path in (
+            "/api/v1/care/valuesets/",
+            "/api/v1/care/triage/thresholds/",
+            "/api/v1/documents/catalogue/",
+            "/api/v1/platform/branding/",
+        ):
+            self.assertFalse(is_clinical_route(path), path)
+        response = self.client.get(reverse("care-dashboard"), **self.auth(self.platform))
+        self.assertEqual(response.status_code, 403)
+
     def test_grant_scopes_platform_staff_to_that_facility_and_is_audited(self):
         grant_id = self._approved_grant()
         response = self.client.get(

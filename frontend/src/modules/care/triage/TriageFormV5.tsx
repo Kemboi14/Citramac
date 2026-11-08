@@ -491,15 +491,24 @@ export function TriageFormV5({
     return () => window.clearInterval(id);
   }, [readOnly, startedAt]);
 
+  // The latest token, read at unmount. Depending on accessToken itself made
+  // every token refresh (about every 4 min) run this cleanup: it cancelled
+  // the pending autosave and fired an extra save whose errors were dropped.
+  const tokenRef = useRef(accessToken);
+  useEffect(() => {
+    tokenRef.current = accessToken;
+  }, [accessToken]);
+
   // Leaving with an unsaved change flushes it rather than dropping it.
   useEffect(() => {
     return () => {
       window.clearTimeout(timer.current);
-      if (pending.current && !closed.current && accessToken) {
-        saveTriageDraft(accessToken, detail.id, answersRef.current).catch(() => undefined);
+      const token = tokenRef.current;
+      if (pending.current && !closed.current && token) {
+        saveTriageDraft(token, detail.id, answersRef.current).catch(() => undefined);
       }
     };
-  }, [accessToken, detail.id]);
+  }, [detail.id]);
 
   function saveNow() {
     window.clearTimeout(timer.current);

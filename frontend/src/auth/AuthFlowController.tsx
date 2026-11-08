@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { verifyOtp } from "../lib/authApi";
 import { EmailConfirmStep } from "./steps/EmailConfirmStep";
@@ -40,6 +40,22 @@ export function AuthFlowController({
   const [state, setState] = useState<FlowState>(
     flowType === "ACTIVATION" ? { step: "identify" } : { step: "email_entry" },
   );
+  const done = state.step === "done";
+
+  // Screen E — deliberately does not auto-login; redirect to standard login.
+  // In an effect: navigating during render is a side effect React Router warns about.
+  useEffect(() => {
+    if (!done) return;
+    navigate("/login", {
+      replace: true,
+      state: {
+        toast:
+          flowType === "ACTIVATION"
+            ? "Account activated. Please sign in."
+            : "Password reset. Please sign in.",
+      },
+    });
+  }, [done, flowType, navigate]);
 
   if (flowType === "ACTIVATION" && !activationToken) {
     return (
@@ -92,16 +108,6 @@ export function AuthFlowController({
       );
 
     case "done":
-      // Screen E — deliberately does not auto-login; redirect to standard login.
-      navigate("/login", {
-        replace: true,
-        state: {
-          toast:
-            flowType === "ACTIVATION"
-              ? "Account activated. Please sign in."
-              : "Password reset. Please sign in.",
-        },
-      });
-      return null;
+      return null; // the effect above redirects to /login
   }
 }
