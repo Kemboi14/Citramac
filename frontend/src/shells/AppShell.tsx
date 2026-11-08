@@ -90,9 +90,9 @@ export function AppShell({
   pageTitles?: Record<string, string>;
   /** Replaces the topbar's plain search box (brand variant), e.g. with a working client search. */
   searchSlot?: ReactNode;
-  /** Full-height workspaces (e.g. Group Psychotherapy): the sidebar collapses to its
-   * icon rail on entry and the user's own setting comes back on leaving; the page
-   * gets the whole content area with no padding (v4 mockup `showPage`). */
+  /** Full-height workspaces (e.g. Group Psychotherapy): the page gets the whole
+   * content area with no padding (v4 mockup `showPage`). The sidebar is left as
+   * the user set it. */
   focusRoutes?: string[];
 }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(readStoredCollapse);
@@ -122,17 +122,10 @@ export function AppShell({
         ),
       ),
   );
-  // Entering a focus route remembers the user's own collapse setting and shows the
-  // rail; leaving restores it. Done while rendering so the first paint is right.
+  // A focus route only changes the content area's layout. The sidebar keeps the
+  // user's own setting: forcing it to the icon rail on entry hid the navigation
+  // every time Group Psychotherapy was opened.
   const focusLayout = Boolean(focusRoutes?.includes(location.pathname));
-  const [collapseBeforeFocus, setCollapseBeforeFocus] = useState<boolean | null>(null);
-  if (focusLayout && collapseBeforeFocus === null) {
-    setCollapseBeforeFocus(desktopCollapsed);
-    setDesktopCollapsed(true);
-  } else if (!focusLayout && collapseBeforeFocus !== null) {
-    setDesktopCollapsed(collapseBeforeFocus);
-    setCollapseBeforeFocus(null);
-  }
   const pageTitle =
     resolvePageTitle(pageTitles, location.pathname) ??
     navGroups
@@ -203,15 +196,13 @@ export function AppShell({
   }, [accessToken, claims?.organization_id]);
 
   useEffect(() => {
-    // The rail forced by a focus route is not the user's preference — don't store it.
-    if (collapseBeforeFocus !== null) return;
     try {
       localStorage.setItem(COLLAPSE_KEY, desktopCollapsed ? "1" : "0");
     } catch {
       // Best-effort only — a private window or blocked storage just means
       // the collapse preference won't persist across reloads.
     }
-  }, [desktopCollapsed, collapseBeforeFocus]);
+  }, [desktopCollapsed]);
 
   const toggleSidebar = () => {
     if (isDesktop) {
