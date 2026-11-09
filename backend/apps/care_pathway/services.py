@@ -1133,6 +1133,16 @@ def triage_worklist():
     return items
 
 
+def queued_triage_encounter_ids():
+    """{patient_id: triage encounter id} for every client in the triage queue —
+    the visit the dashboard and the triage queue open for them (the most
+    urgent one first, in the queue's own order)."""
+    out = {}
+    for item in triage_worklist():
+        out.setdefault(item["te"].patient_id, item["te"].pk)
+    return out
+
+
 def setting_for(patient, admission=None, triage_encounter=None):
     admission = admission if admission is not None else current_admission(patient)
     if admission:
@@ -1223,7 +1233,13 @@ def banner_for(patient, include_journey=False):
         # BAN-10 / LGL-DATA-01 — legal admission status + notice countdown.
         "legal_status": _legal_banner(patient),
         "episode_id": str(episode.id) if episode else None,
-        "latest_triage_encounter_id": str(latest_te.id) if latest_te else None,
+        # The visit the dashboard opens for this client: the one waiting in the
+        # triage queue, else the latest.
+        "latest_triage_encounter_id": (
+            str(queued_triage_encounter_ids().get(patient.pk) or latest_te.id)
+            if latest_te
+            else None
+        ),
         "latest_signed_triage_encounter_id": str(signed.id) if signed else None,
         "psychiatry_encounter_id": (
             str(signed.psychiatry_encounter_id)

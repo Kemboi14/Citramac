@@ -1145,6 +1145,54 @@ class CaseloadTests(APITestCase):
         )
         self.assertEqual([row["name"] for row in queue.data["results"]], ["Recheck Test"])
 
+    def test_client_registry_row_opens_the_visit_the_dashboard_opens(self):
+        from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
+        from apps.clinical_encounter.models import Encounter
+
+        patient = self._patient("Queued", doctor=self.clinician)
+        now = timezone.now()
+        with platform_admin_context():
+            episode = EpisodeOfCare.objects.create(
+                organization=self.org, patient=patient, status="active", period_start=now
+            )
+
+            def visit(**fields):
+                encounter = Encounter.objects.create(
+                    organization=self.org, patient=patient, episode=episode
+                )
+                return TriageEncounter.objects.create(
+                    organization=self.org,
+                    patient=patient,
+                    episode=episode,
+                    encounter=encounter,
+                    client_request_id=str(encounter.id),
+                    **fields,
+                )
+
+            # Waiting in the triage queue (a re-check due), then a later visit
+            # that is already completed and not due.
+            queued = visit(
+                arrival_at=now - timedelta(hours=3),
+                due_at=now - timedelta(hours=3),
+                status=TriageEncounter.STATUS_COMPLETED,
+                triage_version=1,
+                last_triaged_at=now - timedelta(hours=3),
+                next_recheck_at=now - timedelta(minutes=5),
+            )
+            visit(
+                arrival_at=now - timedelta(hours=1),
+                due_at=now - timedelta(hours=1),
+                status=TriageEncounter.STATUS_COMPLETED,
+                triage_version=1,
+                last_triaged_at=now - timedelta(hours=1),
+            )
+
+        dashboard = self.client.get(reverse("care-dashboard"), **self.auth).data
+        (arrival,) = [r for r in dashboard["triage_arrivals"] if r["patient_id"] == str(patient.pk)]
+        self.assertEqual(arrival["id"], str(queued.pk))
+        response = self.client.get(reverse("patient-registry"), **self.auth)
+        self.assertEqual(response.data["results"][0]["triage_encounter_id"], str(queued.pk))
+
 
 class IdentifiedPatientValidationTests(APITestCase):
     """Names became optional for the unidentified/unknown tiers (docs/15 §1.4);

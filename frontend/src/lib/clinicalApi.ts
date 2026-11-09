@@ -43,6 +43,8 @@ export interface ClientRegistryRow {
   allergy_status: string;
   allergies: string[];
   responsible_team: string;
+  /** The triage visit the dashboard opens for this client (queued, else latest). */
+  triage_encounter_id: string | null;
 }
 
 export type ClientRegistryCategory =
