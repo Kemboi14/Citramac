@@ -255,13 +255,11 @@ export function TriageFormV4({
   banner,
   bannerError,
   onSigned,
-  embedded = false,
 }: {
   detail: TriageEncounterDetail;
   banner: ClientBanner | null;
   bannerError: string | null;
   onSigned: () => void;
-  embedded?: boolean;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -696,7 +694,7 @@ export function TriageFormV4({
 
   return (
     <div className="clinical-readable mx-auto max-w-[1600px]">
-      {!embedded && (
+      {
         <>
           <Breadcrumbs
             items={[
@@ -706,7 +704,7 @@ export function TriageFormV4({
           />
           <SafetyBanner banner={banner} error={bannerError} />
         </>
-      )}
+      }
       <EncounterContext detail={detail} banner={banner} />
       <PageHeader
         title="What does this person need right now, and how urgently?"
@@ -714,7 +712,7 @@ export function TriageFormV4({
         actions={
           <div className="flex items-center gap-2">
             {!readOnly && <Tag>{`${mm}:${ss} · aim 2–5 min`}</Tag>}
-            {!embedded && (
+            {
               <button
                 type="button"
                 className={BTN_GHOST}
@@ -722,7 +720,7 @@ export function TriageFormV4({
               >
                 Back to queue
               </button>
-            )}
+            }
           </div>
         }
       />

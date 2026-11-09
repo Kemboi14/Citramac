@@ -102,13 +102,9 @@ const RC_LABEL = "text-xs font-semibold text-ink-900";
 export function QuickRecheck({
   detail,
   onFullRetriage,
-  embedded = false,
-  onSigned,
 }: {
   detail: TriageEncounterDetail;
   onFullRetriage: () => void;
-  embedded?: boolean;
-  onSigned?: () => void;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -210,8 +206,7 @@ export function QuickRecheck({
     try {
       await signRecheck(accessToken, detail.id, latest.current);
       done.current = true;
-      if (embedded) onSigned?.();
-      else navigate("/clinical/triage");
+      navigate("/clinical/triage");
     } catch (err) {
       setError(
         errorText(
@@ -441,7 +436,7 @@ export function QuickRecheck({
           {draftStatus}
         </span>
         <div className="flex w-full flex-wrap items-center gap-2 min-[561px]:w-auto [&>button]:flex-auto min-[561px]:[&>button]:flex-none">
-          {!embedded && (
+          {
             <button
               type="button"
               className={BTN_GHOST}
@@ -449,7 +444,7 @@ export function QuickRecheck({
             >
               Back
             </button>
-          )}
+          }
           <button type="button" className={BTN_GHOST} disabled={busy} onClick={onFull}>
             Open full re-triage
           </button>

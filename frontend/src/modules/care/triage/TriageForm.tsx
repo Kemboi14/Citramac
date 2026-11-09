@@ -301,15 +301,11 @@ export function TriageForm({
   banner,
   bannerError,
   onSigned,
-  embedded = false,
-  onSafetyBannerOverridesChange,
 }: {
   detail: TriageEncounterDetail;
   banner: ClientBanner | null;
   bannerError: string | null;
   onSigned: () => void;
-  embedded?: boolean;
-  onSafetyBannerOverridesChange?: (overrides: BannerOverrides | null) => void;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -604,9 +600,6 @@ export function TriageForm({
     if (signed?.final_priority) next.priority = signed.final_priority;
     return next;
   }, [allergyDetail, allergyEdited, allergyStatus, banner, signed?.final_priority]);
-  useEffect(() => {
-    if (embedded) onSafetyBannerOverridesChange?.(overrides);
-  }, [embedded, onSafetyBannerOverridesChange, overrides]);
 
   const sexLabel = banner?.sex ? vs.label("sex", banner.sex) : "";
   const identityLine = banner
@@ -622,7 +615,7 @@ export function TriageForm({
 
   return (
     <div className="clinical-readable mx-auto max-w-[1600px]">
-      {!embedded && (
+      {
         <>
           <Breadcrumbs
             items={[
@@ -632,22 +625,16 @@ export function TriageForm({
           />
           <SafetyBanner banner={banner} error={bannerError} overrides={overrides} />
         </>
-      )}
+      }
       <EncounterContext detail={detail} banner={banner} />
 
       <PageHeader
         title="Initial triage"
         subtitle="Safety screen and immediate disposition · Not the full assessment"
         actions={
-          !embedded && (
-            <button
-              type="button"
-              className={BTN_GHOST}
-              onClick={() => navigate("/clinical/triage")}
-            >
-              Back to queue
-            </button>
-          )
+          <button type="button" className={BTN_GHOST} onClick={() => navigate("/clinical/triage")}>
+            Back to queue
+          </button>
         }
       />
       {vs.error && (
@@ -1311,7 +1298,7 @@ export function TriageForm({
               )}
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 min-[561px]:w-auto [&>button]:flex-auto min-[561px]:[&>button]:flex-none">
-              {!embedded && (
+              {
                 <button
                   type="button"
                   className={BTN_GHOST}
@@ -1319,7 +1306,7 @@ export function TriageForm({
                 >
                   Back
                 </button>
-              )}
+              }
               <button type="button" className={BTN_GHOST} disabled={readOnly} onClick={saveNow}>
                 Save draft
               </button>

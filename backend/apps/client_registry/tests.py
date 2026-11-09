@@ -1110,6 +1110,41 @@ class CaseloadTests(APITestCase):
         self.assertEqual(row["allergies"], ["Penicillin"])
         self.assertEqual(row["responsible_team"], "clinician@org-caseload.test · Ward A team")
 
+    def test_client_registry_shows_a_due_recheck_as_the_triage_queue_does(self):
+        from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
+        from apps.clinical_encounter.models import Encounter
+
+        patient = self._patient("Recheck", doctor=self.clinician)
+        now = timezone.now()
+        with platform_admin_context():
+            episode = EpisodeOfCare.objects.create(
+                organization=self.org, patient=patient, status="active", period_start=now
+            )
+            encounter = Encounter.objects.create(
+                organization=self.org, patient=patient, episode=episode
+            )
+            TriageEncounter.objects.create(
+                organization=self.org,
+                patient=patient,
+                episode=episode,
+                encounter=encounter,
+                client_request_id=str(encounter.id),
+                due_at=now - timedelta(hours=2),
+                status=TriageEncounter.STATUS_COMPLETED,
+                priority="YELLOW",
+                triage_version=1,
+                last_triaged_at=now - timedelta(hours=2),
+                next_recheck_at=now - timedelta(minutes=5),
+            )
+
+        response = self.client.get(reverse("patient-registry"), **self.auth)
+        self.assertEqual(response.data["results"][0]["status"], "Re-check due")
+
+        queue = self.client.get(
+            reverse("patient-registry"), {"category": "awaiting-triage"}, **self.auth
+        )
+        self.assertEqual([row["name"] for row in queue.data["results"]], ["Recheck Test"])
+
 
 class IdentifiedPatientValidationTests(APITestCase):
     """Names became optional for the unidentified/unknown tiers (docs/15 §1.4);

@@ -5,7 +5,7 @@ import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
 import { MergeHistory } from "./shared/MergeHistory";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
-import { SafetyBanner, type BannerOverrides } from "./shared/SafetyBanner";
+import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
@@ -85,17 +85,6 @@ export function ClientRecordPage() {
   const { selected, selectPatient } = usePatientContext();
   const onRecordChanged = useCallback(() => setReloadKey((k) => k + 1), []);
   const [registryOpen, setRegistryOpen] = useState(false);
-  const [bannerOverrideState, setBannerOverrideState] = useState<{
-    patientId: string;
-    view: string;
-    overrides: BannerOverrides | null;
-  } | null>(null);
-  const onSafetyBannerOverridesChange = useCallback(
-    (overrides: BannerOverrides | null) => {
-      setBannerOverrideState({ patientId, view, overrides });
-    },
-    [patientId, view],
-  );
 
   // Keep the older clinical screens pointed at this client.
   const bannerId = banner?.patient_id;
@@ -115,13 +104,17 @@ export function ClientRecordPage() {
   const active = view as RecordView;
   const loadedBanner = banner && banner.patient_id === patientId ? banner : null;
 
+  const triageScreen =
+    active === "triage" &&
+    Boolean(
+      loadedBanner?.latest_triage_encounter_id ?? loadedBanner?.latest_signed_triage_encounter_id,
+    );
   let body = null;
   if (loadedBanner) {
     const props: RecordViewProps = {
       patientId,
       banner: loadedBanner,
       onRecordChanged,
-      onSafetyBannerOverridesChange,
     };
     const needsSignedTriage =
       JOURNEY_KEYS.has(active) &&
@@ -142,16 +135,18 @@ export function ClientRecordPage() {
   return (
     <div className="clinical-readable">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <Breadcrumbs
-          items={[
-            { label: "My Caseload", to: "/clinical/caseload" },
-            {
-              label: loadedBanner
-                ? loadedBanner.name.trim() || "Temporary client (unnamed)"
-                : "Client",
-            },
-          ]}
-        />
+        {!triageScreen && (
+          <Breadcrumbs
+            items={[
+              { label: "My Caseload", to: "/clinical/caseload" },
+              {
+                label: loadedBanner
+                  ? loadedBanner.name.trim() || "Temporary client (unnamed)"
+                  : "Client",
+              },
+            ]}
+          />
+        )}
         {loadedBanner && (
           <div className="mb-2 flex flex-wrap gap-2">
             {loadedBanner.identity_status === "IDENTIFIED" && (
@@ -182,15 +177,9 @@ export function ClientRecordPage() {
         onClose={() => setRegistryOpen(false)}
         onConfirmed={onRecordChanged}
       />
-      <SafetyBanner
-        banner={loadedBanner}
-        error={error}
-        overrides={
-          bannerOverrideState?.patientId === patientId && bannerOverrideState.view === view
-            ? (bannerOverrideState.overrides ?? undefined)
-            : undefined
-        }
-      />
+      {/* The triage screen carries its own breadcrumbs and safety banner (live
+          with the form) — the same screen the dashboard opens. */}
+      {!triageScreen && <SafetyBanner banner={loadedBanner} error={error} />}
       <ClientRecordNav patientId={patientId} view={active} banner={loadedBanner} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}

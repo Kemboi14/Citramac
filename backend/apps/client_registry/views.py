@@ -58,8 +58,11 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
     def registry(self, request):
         """Read-time registry view over patients and their current care records."""
         from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
+        from apps.care_pathway.services import EFFECTIVE_STATUS_LABELS
         from apps.ipd_ward.models import Admission
         from apps.mhp_program.models import BiopsychosocialAssessment
+
+        TRIAGE_QUEUE_STATES = ("AWAITING", "IN_TRIAGE", "RECHECK_DUE")
 
         patients = list(
             self.get_queryset()
@@ -137,12 +140,14 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
                 if admission
                 else levels_of_care.get(patient.id) or patient.patient_category
             )
+            # Triage states as the triage queue and dashboard show them
+            # (services.triage_worklist): a completed triage whose re-check
+            # time has come is "Re-check due", not the episode's status.
+            triage_state = triage.effective_status if triage else ""
             if admission:
                 status_label = "Inpatient"
-            elif triage and triage.status == TriageEncounter.STATUS_AWAITING:
-                status_label = "Awaiting triage"
-            elif triage and triage.status == TriageEncounter.STATUS_IN_TRIAGE:
-                status_label = "In triage"
+            elif triage_state in TRIAGE_QUEUE_STATES:
+                status_label = EFFECTIVE_STATUS_LABELS[triage_state]
             elif episode:
                 status_label = episode.get_status_display()
             else:
@@ -189,7 +194,8 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
             ]
         category = request.query_params.get("category")
         if category == "awaiting-triage":
-            rows = [row for row in rows if row["status"] in ("Awaiting triage", "In triage")]
+            queue_labels = {EFFECTIVE_STATUS_LABELS[state] for state in TRIAGE_QUEUE_STATES}
+            rows = [row for row in rows if row["status"] in queue_labels]
         elif category == "emergency":
             rows = [row for row in rows if row["priority"] in ("RED", "ORANGE")]
         elif category in ("INPATIENT", "OUTPATIENT", "RESIDENTIAL"):

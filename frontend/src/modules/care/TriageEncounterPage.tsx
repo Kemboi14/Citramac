@@ -24,6 +24,22 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 export function TriageEncounterPage() {
   const { triageId } = useParams();
+  return <TriageEncounterScreen triageId={triageId} />;
+}
+
+/**
+ * The one triage screen. The triage queue and dashboard open it at
+ * /clinical/triage/:triageId; the client record's Triage tab shows the same
+ * screen for the client's latest encounter, so the two can never differ.
+ * `onChanged` lets a host refresh what it shows after a signature.
+ */
+export function TriageEncounterScreen({
+  triageId,
+  onChanged,
+}: {
+  triageId: string | undefined;
+  onChanged?: () => void;
+}) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<TriageEncounterDetail | null>(null);
@@ -136,7 +152,10 @@ export function TriageEncounterPage() {
           detail={detail}
           banner={banner}
           bannerError={bannerError}
-          onSigned={() => setReloadKey((k) => k + 1)}
+          onSigned={() => {
+            setReloadKey((k) => k + 1);
+            onChanged?.();
+          }}
         />
       </>
     );
@@ -151,7 +170,10 @@ export function TriageEncounterPage() {
           detail={detail}
           banner={banner}
           bannerError={bannerError}
-          onSigned={() => setReloadKey((k) => k + 1)}
+          onSigned={() => {
+            setReloadKey((k) => k + 1);
+            onChanged?.();
+          }}
         />
       </>
     );
@@ -165,7 +187,10 @@ export function TriageEncounterPage() {
         detail={detail}
         banner={banner}
         bannerError={bannerError}
-        onSigned={() => setReloadKey((k) => k + 1)}
+        onSigned={() => {
+          setReloadKey((k) => k + 1);
+          onChanged?.();
+        }}
       />
     </>
   );
