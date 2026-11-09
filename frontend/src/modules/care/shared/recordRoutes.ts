@@ -4,8 +4,8 @@ export const RECORD_VIEWS = [
   { key: "snapshot", label: "Snapshot" },
   { key: "timeline", label: "Timeline" },
   { key: "charts", label: "Charts" },
-  { key: "mse", label: "MSE" },
   { key: "legal", label: "Legal & consent" },
+  { key: "mse", label: "MSE" },
   { key: "journey", label: "Journey" },
 ] as const;
 
@@ -24,8 +24,8 @@ export type RecordView =
   | "snapshot"
   | "timeline"
   | "charts"
-  | "mse"
   | "legal"
+  | "mse"
   | "triage"
   | "intake"
   | "care-plan"
