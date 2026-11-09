@@ -20,6 +20,7 @@ from apps.accounts import practitioner_notify, practitioner_profile
 from apps.accounts.access import set_assignments
 from apps.accounts.models import (
     PractitionerCredential,
+    PractitionerCredentialItem,
     PractitionerCredentialReview,
     Role,
     User,
@@ -87,6 +88,32 @@ class ProfileTestCase(APITestCase):
             **self.auth(user),
         )
 
+    def add_item(self, user, data, content=PDF, name="doc.pdf"):
+        body = dict(data)
+        if content is not None:
+            body["file"] = SimpleUploadedFile(name, content, content_type="application/pdf")
+        return self.client.post(
+            reverse("me-professional-profile-items"), body, format="multipart", **self.auth(user)
+        )
+
+    def add_licence(self, user, expires_on, issuer="Nursing Council of Kenya (NCK)", **extra):
+        response = self.add_item(
+            user,
+            {
+                "kind": "LICENCE",
+                "issuer": issuer,
+                "number": extra.pop("number", "LIC-2026-1"),
+                "issued_on": str(min(timezone.localdate(), expires_on) - timedelta(days=300)),
+                "expires_on": str(expires_on),
+            },
+            **extra,
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data
+
+    def item_ids(self, data, kind=None):
+        return [i["id"] for i in data["items"] if kind is None or i["kind"] == kind]
+
     def submit(self, user):
         return self.client.post(reverse("me-professional-profile-submit"), **self.auth(user))
 
@@ -98,15 +125,26 @@ class ProfileTestCase(APITestCase):
                 "phone": "+254700000001",
                 "regulator": "NCK",
                 "registration_number": "NCK-123",
-                "licence_number": "LIC-2026-1",
-                "licence_issued_on": str(timezone.localdate() - timedelta(days=10)),
-                "licence_expires_on": str(expires_on),
-                "qualifications": "BSc Nursing",
             },
         )
         self.assertEqual(response.status_code, 200, response.data)
-        for kind in ("registration", "licence", "qualification"):
-            self.assertEqual(self.upload(user, kind).status_code, 200)
+        self.assertEqual(self.upload(user, "registration").status_code, 200)
+        self.add_licence(user, expires_on)
+        response = self.add_item(
+            user, {"kind": "DEGREE", "title": "BSc Nursing", "issuer": "University of Nairobi"}
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def licence_on_file(self, user, expires_on, number="LIC-1", issuer="NCK"):
+        cred = practitioner_profile.credential_for(user, create=True)
+        return PractitionerCredentialItem.objects.create(
+            organization_id=cred.organization_id,
+            credential=cred,
+            kind="LICENCE",
+            issuer=issuer,
+            number=number,
+            expires_on=expires_on,
+        )
 
     def notices(self, user):
         with platform_admin_context():
@@ -124,9 +162,10 @@ class RequirementTests(ProfileTestCase):
         self.assertEqual(data["suggested_regulators"], ["NCK"])
         keys = {i["key"] for i in data["missing_items"]}
         self.assertTrue(
-            {"phone", "regulator", "registration_number", "licence_number", "licence_evidence"}
+            {"phone", "regulator", "registration_number", "registration_evidence", "licence"}
             <= keys
         )
+        self.assertIn("qualification", keys)
         self.assertTrue(data["needs_action"])
 
     def test_front_desk_needs_only_a_phone_number(self):
@@ -150,50 +189,173 @@ class EditingTests(ProfileTestCase):
         with platform_admin_context():
             cred = PractitionerCredential.objects.get(user=self.nurse)
         self.assertIsNone(cred.registration_verified_at)
-        self.assertIsNone(cred.licence_verified_at)
+        self.assertFalse(cred.items.filter(verified_at__isnull=False).exists())
         self.assertEqual(cred.profile_status, "DRAFT")
 
     def test_an_unknown_regulator_and_bad_dates_are_refused(self):
         self.assertEqual(self.put_profile(self.nurse, {"regulator": "XYZ"}).status_code, 400)
         self.assertEqual(
-            self.put_profile(self.nurse, {"licence_expires_on": "soon"}).status_code, 400
+            self.add_item(self.nurse, {"kind": "LICENCE", "expires_on": "soon"}).status_code, 400
         )
-        response = self.put_profile(
-            self.nurse, {"licence_issued_on": "2026-05-01", "licence_expires_on": "2026-04-01"}
+        response = self.add_item(
+            self.nurse, {"kind": "LICENCE", "issued_on": "2026-05-01", "expires_on": "2026-04-01"}
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.add_item(self.nurse, {"kind": "PHD"}).status_code, 400)
+        with platform_admin_context():
+            self.assertFalse(PractitionerCredentialItem.objects.exists())
 
     def test_uploads_must_be_small_and_what_they_say_they_are(self):
-        self.assertEqual(self.upload(self.nurse, "licence", PDF, "x.exe").status_code, 400)
-        self.assertEqual(self.upload(self.nurse, "licence", PNG, "x.pdf").status_code, 400)
+        self.assertEqual(self.upload(self.nurse, "registration", PDF, "x.exe").status_code, 400)
+        self.assertEqual(self.upload(self.nurse, "registration", PNG, "x.pdf").status_code, 400)
         big = b"%PDF-" + b"0" * (10 * 1024 * 1024)
-        self.assertEqual(self.upload(self.nurse, "licence", big, "x.pdf").status_code, 400)
-        self.assertEqual(self.upload(self.nurse, "licence", PNG, "x.png").status_code, 200)
+        self.assertEqual(self.upload(self.nurse, "registration", big, "x.pdf").status_code, 400)
+        self.assertEqual(self.upload(self.nurse, "registration", PNG, "x.png").status_code, 200)
         self.assertEqual(self.upload(self.nurse, "unknown").status_code, 400)
+        self.assertEqual(self.upload(self.nurse, "licence").status_code, 400)  # an entry now
+        # An entry's document is checked the same way, and a bad one adds nothing.
+        bad = self.add_item(self.nurse, {"kind": "DEGREE", "title": "BSc"}, PNG, "x.pdf")
+        self.assertEqual(bad.status_code, 400)
+        with platform_admin_context():
+            self.assertFalse(PractitionerCredentialItem.objects.exists())
 
     def test_documents_open_for_their_owner_and_reviewers_only_and_are_audited(self):
-        self.upload(self.nurse, "licence")
+        self.upload(self.nurse, "registration")
+        data = self.add_licence(self.nurse, timezone.localdate() + timedelta(days=100))
+        (item_id,) = self.item_ids(data)
         own = self.client.get(
-            reverse("me-professional-profile-document", args=["licence"]), **self.auth(self.nurse)
+            reverse("me-professional-profile-document", args=["registration"]),
+            **self.auth(self.nurse),
         )
         self.assertEqual(own.status_code, 200)
-        url = reverse("staff-credential-document", args=[self.nurse.pk, "licence"])
-        self.assertEqual(self.client.get(url, **self.auth(self.desk)).status_code, 403)
-        self.assertEqual(self.client.get(url, **self.auth(self.admin)).status_code, 200)
+        own_item = self.client.get(
+            reverse("me-professional-profile-item-document", args=[item_id]),
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(own_item.status_code, 200)
+        for url in (
+            reverse("staff-credential-document", args=[self.nurse.pk, "registration"]),
+            reverse("staff-credential-item-document", args=[self.nurse.pk, item_id]),
+        ):
+            self.assertEqual(self.client.get(url, **self.auth(self.desk)).status_code, 403)
+            self.assertEqual(self.client.get(url, **self.auth(self.admin)).status_code, 200)
+        # Someone else's entry is not reachable through my own profile.
+        other = self.client.get(
+            reverse("me-professional-profile-item-document", args=[item_id]),
+            **self.auth(self.supervisor),
+        )
+        self.assertEqual(other.status_code, 404)
         with platform_admin_context():
             views = AuditLogEntry.objects.filter(
                 action=AuditLogEntry.ACTION_VIEW,
                 model="accounts.practitionercredential",
                 organization_id=self.org.id,
             )
-            self.assertEqual(views.count(), 2)
+            self.assertEqual(views.count(), 4)
+
+
+class ManyCredentialsTests(ProfileTestCase):
+    def test_every_licence_and_qualification_has_its_own_document(self):
+        today = timezone.localdate()
+        self.complete_profile(self.nurse)
+        # A second licence and two more qualifications, one without its document yet.
+        self.add_licence(
+            self.nurse,
+            today + timedelta(days=200),
+            issuer="Counsellors and Psychologists Board",
+            number="CPB-9",
+        )
+        self.add_item(self.nurse, {"kind": "DIPLOMA", "title": "Dip. Addiction Counselling"})
+        data = self.add_item(
+            self.nurse, {"kind": "CERTIFICATE", "title": "Motivational interviewing"}, None
+        ).data
+        self.assertEqual(len(data["items"]), 5)
+        self.assertEqual(len(self.item_ids(data, "LICENCE")), 2)
+        waiting = [i for i in data["items"] if not i["document_uploaded"]]
+        self.assertEqual([i["title"] for i in waiting], ["Motivational interviewing"])
+        self.assertIn(
+            "Motivational interviewing (upload)", [m["label"] for m in data["missing_items"]]
+        )
+        self.assertEqual(self.submit(self.nurse).status_code, 400)
+        url = reverse("me-professional-profile-item-document", args=[waiting[0]["id"]])
+        response = self.client.post(
+            url,
+            {"file": SimpleUploadedFile("c.pdf", PDF, content_type="application/pdf")},
+            format="multipart",
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["missing_items"], [])
+        self.assertEqual(self.submit(self.nurse).status_code, 200)
+        # The Mental Health Act forms' qualifications line follows the entries.
+        with platform_admin_context():
+            cred = PractitionerCredential.objects.get(user=self.nurse)
+        self.assertEqual(
+            cred.qualifications,
+            "BSc Nursing, Dip. Addiction Counselling, Motivational interviewing",
+        )
+        # Verifying stamps every entry.
+        self.client.post(
+            reverse("staff-credential-verify", args=[self.nurse.pk]), **self.auth(self.admin)
+        )
+        with platform_admin_context():
+            self.assertFalse(cred.items.filter(verified_at__isnull=True).exists())
+
+    def test_a_licence_and_a_qualification_are_both_needed(self):
+        self.complete_profile(self.nurse)
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        for item_id in self.item_ids(data, "DEGREE"):
+            self.client.delete(
+                reverse("me-professional-profile-item", args=[item_id]), **self.auth(self.nurse)
+            )
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        self.assertEqual([m["key"] for m in data["missing_items"]], ["qualification"])
+        # Removed, not deleted: the row and its document are kept.
+        with platform_admin_context():
+            removed = PractitionerCredentialItem.objects.get(kind="DEGREE")
+        self.assertIsNotNone(removed.removed_at)
+        self.assertTrue(removed.evidence)
+
+    def test_a_renewal_supersedes_the_expired_licence_from_the_same_regulator(self):
+        today = timezone.localdate()
+        with platform_admin_context():
+            self.licence_on_file(self.nurse, today - timedelta(days=5), "OLD", "NCK")
+            self.assertIn("expired", practitioner_profile.signing_block_reason(self.nurse))
+            self.licence_on_file(self.nurse, today + timedelta(days=360), "NEW", " nck ")
+            self.assertIsNone(practitioner_profile.signing_block_reason(self.nurse))
+            # A licence from another regulator that has lapsed still blocks.
+            self.licence_on_file(self.nurse, today - timedelta(days=1), "CPB-1", "CPB")
+            self.assertIn("CPB", practitioner_profile.signing_block_reason(self.nurse))
+            cred = PractitionerCredential.objects.get(user=self.nurse)
+            self.assertEqual(sorted(i.number for i in cred.current_licences()), ["CPB-1", "NEW"])
+            self.assertEqual(cred.licence_status, "EXPIRED")
+
+    def test_editing_an_entry_clears_its_verification_only(self):
+        self.complete_profile(self.nurse)
+        self.submit(self.nurse)
+        self.client.post(
+            reverse("staff-credential-verify", args=[self.nurse.pk]), **self.auth(self.admin)
+        )
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        (licence_id,) = self.item_ids(data, "LICENCE")
+        response = self.client.patch(
+            reverse("me-professional-profile-item", args=[licence_id]),
+            {"number": "LIC-2027-1"},
+            format="json",
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        items = {i["kind"]: i for i in response.data["items"]}
+        self.assertIsNone(items["LICENCE"]["verified_at"])
+        self.assertIsNotNone(items["DEGREE"]["verified_at"])
+        self.assertEqual(response.data["status"], "DRAFT")
 
 
 class WorkflowTests(ProfileTestCase):
     def test_submitting_needs_everything_required(self):
         response = self.submit(self.nurse)
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Practising licence number", response.data["error"]["message"])
+        self.assertIn("A practising licence;", response.data["error"]["message"])
 
     def test_an_expired_licence_cannot_be_submitted(self):
         self.complete_profile(self.nurse, expires_on=timezone.localdate() - timedelta(days=1))
@@ -228,7 +390,8 @@ class WorkflowTests(ProfileTestCase):
         with platform_admin_context():
             cred = PractitionerCredential.objects.get(user=self.nurse)
         self.assertEqual(cred.registration_verified_by_id, self.supervisor.pk)
-        self.assertEqual(cred.licence_status, "VALID")
+        with platform_admin_context():
+            self.assertEqual(cred.licence_status, "VALID")
         self.assertTrue([n for n in self.notices(self.nurse) if "verified" in n.title])
 
         self.complete_profile(self.supervisor)
@@ -258,7 +421,7 @@ class WorkflowTests(ProfileTestCase):
         self.assertEqual(len(returned), 1)
         self.assertIn("unreadable", returned[0].body)
         # Fix it and submit again.
-        self.upload(self.nurse, "licence")
+        self.upload(self.nurse, "registration")
         self.assertEqual(self.submit(self.nurse).status_code, 200)
 
     def test_changing_a_verified_licence_needs_verifying_again(self):
@@ -267,10 +430,17 @@ class WorkflowTests(ProfileTestCase):
         self.client.post(
             reverse("staff-credential-verify", args=[self.nurse.pk]), **self.auth(self.admin)
         )
-        self.put_profile(self.nurse, {"licence_number": "LIC-2027-1"})
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        (licence_id,) = self.item_ids(data, "LICENCE")
+        self.client.patch(
+            reverse("me-professional-profile-item", args=[licence_id]),
+            {"expires_on": str(timezone.localdate() + timedelta(days=700))},
+            format="json",
+            **self.auth(self.nurse),
+        )
         with platform_admin_context():
             cred = PractitionerCredential.objects.get(user=self.nurse)
-        self.assertIsNone(cred.licence_verified_at)
+            self.assertIsNone(cred.items.get(kind="LICENCE").verified_at)
         self.assertIsNotNone(cred.registration_verified_at)
         self.assertEqual(cred.profile_status, "DRAFT")
 
@@ -279,7 +449,8 @@ class WorkflowTests(ProfileTestCase):
         self.submit(self.nurse)
         with platform_admin_context():
             review = PractitionerCredentialReview.objects.get(user=self.nurse)
-            self.assertEqual(review.snapshot["licence_number"], "LIC-2026-1")
+            numbers = [i["number"] for i in review.snapshot["items"] if i["kind"] == "LICENCE"]
+            self.assertEqual(numbers, ["LIC-2026-1"])
             with self.assertRaises(DatabaseError), transaction.atomic():
                 PractitionerCredentialReview.objects.filter(pk=review.pk).update(reason="x")
             with self.assertRaises(DatabaseError), transaction.atomic():
@@ -295,13 +466,10 @@ class SigningBlockTests(ProfileTestCase):
         with platform_admin_context():
             # Nothing recorded, and an incomplete profile: no block.
             self.assertIsNone(practitioner_profile.signing_block_reason(self.nurse))
-            cred = practitioner_profile.credential_for(self.nurse, create=True)
-            cred.licence_number = "LIC-1"
-            cred.licence_expires_on = timezone.localdate()
-            cred.save()
+            licence = self.licence_on_file(self.nurse, timezone.localdate())
             self.assertIsNone(practitioner_profile.signing_block_reason(self.nurse))
-            cred.licence_expires_on = timezone.localdate() - timedelta(days=1)
-            cred.save()
+            licence.expires_on = timezone.localdate() - timedelta(days=1)
+            licence.save()
             self.assertIn("expired", practitioner_profile.signing_block_reason(self.nurse))
             with self.assertRaises(PermissionDenied):
                 practitioner_profile.require_current_licence(self.nurse)
@@ -316,10 +484,7 @@ class SigningBlockTests(ProfileTestCase):
             text = "Seen today."
 
         with platform_admin_context():
-            cred = practitioner_profile.credential_for(self.nurse, create=True)
-            cred.licence_number = "LIC-1"
-            cred.licence_expires_on = timezone.localdate() - timedelta(days=3)
-            cred.save()
+            self.licence_on_file(self.nurse, timezone.localdate() - timedelta(days=3))
             with self.assertRaises(PermissionDenied):
                 sign_note(Note(), self.nurse)
 
@@ -359,10 +524,7 @@ class ReminderTests(ProfileTestCase):
     def test_expiry_reminders_go_once_per_stage(self):
         today = timezone.localdate()
         with platform_admin_context():
-            cred = practitioner_profile.credential_for(self.nurse, create=True)
-            cred.licence_number = "LIC-1"
-            cred.licence_expires_on = today + timedelta(days=25)
-            cred.save()
+            cred = self.licence_on_file(self.nurse, today + timedelta(days=25)).credential
             first = practitioner_notify.remind_all(today)
             again = practitioner_notify.remind_all(today)
         self.assertEqual(first[str(cred.pk)], ["licence:T-30"])

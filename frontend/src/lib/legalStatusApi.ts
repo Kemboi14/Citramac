@@ -124,7 +124,6 @@ export interface NacadaUpdate {
 export interface CredentialUpdate {
   registration_number?: string;
   registration_body?: string;
-  qualifications?: string;
   registration_verified?: boolean;
   mha_recommendation_approved?: boolean;
   hwr_regulator?: HwrRegulator;

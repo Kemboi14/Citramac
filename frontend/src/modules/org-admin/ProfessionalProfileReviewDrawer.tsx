@@ -7,12 +7,14 @@ import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { Callout, StatusPill } from "../care/shared/ui";
 import {
   downloadStaffDocument,
+  downloadStaffItemDocument,
   getStaffCredential,
   openBlob,
   returnStaffCredential,
   STATUS_LABEL,
   STATUS_TONE,
   verifyStaffCredential,
+  type CredentialItem,
   type DocumentKind,
   type ProfessionalProfile,
 } from "../../lib/professionalProfileApi";
@@ -80,6 +82,15 @@ export function ProfessionalProfileReviewDrawer({
     }
   };
 
+  const viewItem = async (itemId: string) => {
+    if (!accessToken || !userId) return;
+    try {
+      openBlob(await downloadStaffItemDocument(accessToken, userId, itemId));
+    } catch (err) {
+      setError(message(err, "Couldn't open the document."));
+    }
+  };
+
   const verify = async () => {
     if (!accessToken || !userId) return;
     setError(null);
@@ -105,6 +116,70 @@ export function ProfessionalProfileReviewDrawer({
       throw err;
     }
   };
+
+  const docLink = (uploaded: boolean, open: () => void) =>
+    uploaded ? (
+      <button
+        type="button"
+        className="font-semibold text-brand-green-dark hover:underline"
+        onClick={open}
+      >
+        View
+      </button>
+    ) : (
+      <span className="font-semibold text-status-red">Not uploaded</span>
+    );
+
+  const docRow = (kind: DocumentKind) => {
+    // eslint-disable-next-line security/detect-object-injection -- `kind` is a fixed union.
+    const doc = profile?.documents[kind];
+    if (!doc) return null;
+    return (
+      <div className={ROW}>
+        <span className={KEY}>{doc.label}</span>
+        {docLink(doc.uploaded, () => void view(kind))}
+      </div>
+    );
+  };
+
+  const itemRow = (item: CredentialItem) => {
+    const licence = item.kind === "LICENCE";
+    const kindName = profile?.item_kinds.find((k) => k.value === item.kind)?.label ?? item.kind;
+    return (
+      <div key={item.id} className="border-b border-surface-border py-2 text-[13px]">
+        <div className="flex justify-between gap-3">
+          <span className="font-medium text-ink-900">
+            {licence ? item.issuer || kindName : item.title || kindName}
+          </span>
+          {docLink(item.document_uploaded, () => void viewItem(item.id))}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-500">
+          <span>{kindName}</span>
+          {licence ? (
+            <span>
+              · {item.number || "no number"} · {day(item.issued_on)} – {day(item.expires_on)}
+            </span>
+          ) : (
+            <span>
+              {item.issuer ? `· ${item.issuer}` : ""}
+              {item.issued_on ? ` · ${day(item.issued_on)}` : ""}
+              {item.number ? ` · No. ${item.number}` : ""}
+            </span>
+          )}
+          {licence && item.in_force === false && <StatusPill>Superseded</StatusPill>}
+          {licence && item.in_force && item.licence_status === "EXPIRED" && (
+            <StatusPill tone="danger">Expired</StatusPill>
+          )}
+          {item.verified_at && (
+            <StatusPill tone="success">Verified {day(item.verified_at)}</StatusPill>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const licences = profile?.items.filter((i) => i.kind === "LICENCE") ?? [];
+  const qualifications = profile?.items.filter((i) => i.kind !== "LICENCE") ?? [];
 
   const reviewable = Boolean(profile?.can_review && profile.status === "SUBMITTED");
   const f = profile?.fields;
@@ -239,64 +314,43 @@ export function ProfessionalProfileReviewDrawer({
                 <span className={KEY}>Registration number</span>
                 <span className={VAL}>{f.registration_number || "—"}</span>
               </div>
-              <div className={ROW}>
-                <span className={KEY}>Qualifications</span>
-                <span className={VAL}>{f.qualifications || "—"}</span>
-              </div>
+              {docRow("registration")}
 
-              <div className={SUBHEAD}>Practising licence</div>
-              <div className={ROW}>
-                <span className={KEY}>Licence number</span>
-                <span className={VAL}>{f.licence_number || "—"}</span>
-              </div>
-              <div className={ROW}>
-                <span className={KEY}>Valid</span>
-                <span className={VAL}>
-                  {day(f.licence_issued_on)} – {day(f.licence_expires_on)}
-                </span>
-              </div>
+              <div className={SUBHEAD}>Practising licences</div>
+              {licences.length === 0 && <p className="text-[13px] text-ink-400">None recorded.</p>}
+              {licences.map(itemRow)}
+
+              <div className={SUBHEAD}>Degrees, diplomas and certificates</div>
+              {qualifications.length === 0 && (
+                <p className="text-[13px] text-ink-400">None recorded.</p>
+              )}
+              {qualifications.map(itemRow)}
 
               {(f.nacada_number || f.indemnity_number) && <div className={SUBHEAD}>Other</div>}
               {f.nacada_number && (
-                <div className={ROW}>
-                  <span className={KEY}>NACADA accreditation</span>
-                  <span className={VAL}>
-                    {f.nacada_number}
-                    {f.nacada_category ? ` · ${f.nacada_category}` : ""} · until{" "}
-                    {day(f.nacada_expires_on)}
-                  </span>
-                </div>
+                <>
+                  <div className={ROW}>
+                    <span className={KEY}>NACADA accreditation</span>
+                    <span className={VAL}>
+                      {f.nacada_number}
+                      {f.nacada_category ? ` · ${f.nacada_category}` : ""} · until{" "}
+                      {day(f.nacada_expires_on)}
+                    </span>
+                  </div>
+                  {docRow("nacada")}
+                </>
               )}
               {f.indemnity_number && (
-                <div className={ROW}>
-                  <span className={KEY}>Indemnity cover</span>
-                  <span className={VAL}>
-                    {f.indemnity_number} · until {day(f.indemnity_expires_on)}
-                  </span>
-                </div>
-              )}
-
-              <div className={SUBHEAD}>Documents</div>
-              {(Object.keys(profile.documents) as DocumentKind[]).map((kind) => {
-                // eslint-disable-next-line security/detect-object-injection -- `kind` comes from the object's own keys.
-                const doc = profile.documents[kind];
-                return (
-                  <div key={kind} className={ROW}>
-                    <span className={KEY}>{doc.label}</span>
-                    {doc.uploaded ? (
-                      <button
-                        type="button"
-                        className="font-semibold text-brand-green-dark hover:underline"
-                        onClick={() => void view(kind)}
-                      >
-                        View
-                      </button>
-                    ) : (
-                      <span className="text-ink-400">Not uploaded</span>
-                    )}
+                <>
+                  <div className={ROW}>
+                    <span className={KEY}>Indemnity cover</span>
+                    <span className={VAL}>
+                      {f.indemnity_number} · until {day(f.indemnity_expires_on)}
+                    </span>
                   </div>
-                );
-              })}
+                  {docRow("indemnity")}
+                </>
+              )}
               <p className="mt-2 text-[11.5px] text-ink-500">
                 Opening a document is recorded in the audit log.
               </p>

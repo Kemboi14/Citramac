@@ -173,8 +173,9 @@ def profile_reviewed(cred, review):
 
 # ── expiry reminders ───────────────────────────────────────────────────────
 
+# Single dates on the profile. Practising licences are entries of their own
+# (PractitionerCredentialItem) — each licence in force is reminded separately.
 EXPIRING = (
-    ("licence", "licence_expires_on", "licence_number", "practising licence"),
     ("nacada", "nacada_expires_on", "nacada_number", "NACADA accreditation"),
     ("indemnity", "indemnity_expires_on", "indemnity_number", "professional indemnity cover"),
 )
@@ -184,7 +185,7 @@ def _date(value):
     return f"{value:%d %b %Y}"
 
 
-def _expiry_notice(cred, kind, label, expires_on, stage, days):
+def _expiry_notice(cred, kind, label, expires_on, stage, days, key_part=None):
     from .practitioner_profile import reviewers
 
     user = cred.user
@@ -204,7 +205,7 @@ def _expiry_notice(cred, kind, label, expires_on, stage, days):
         severity = Notification.SEVERITY_WARNING if stage <= 30 else Notification.SEVERITY_INFO
         own = [f"Your {label} is valid until {end}."]
     own.append("Once it is renewed, record the new number, dates and document in your profile.")
-    key = f"practitioner-expiry:{cred.pk}:{kind}:{expires_on}:{stage}"
+    key = f"practitioner-expiry:{cred.pk}:{key_part or kind}:{expires_on}:{stage}"
     notify(
         [user],
         category=CATEGORY,
@@ -231,22 +232,33 @@ def _expiry_notice(cred, kind, label, expires_on, stage, days):
 def process_credential(cred, offsets, today):
     from apps.tenancy.subscription_lifecycle import reminder_stage
 
-    outcomes = []
+    due = [
+        ("licence", entry.expires_on, _licence_label(entry), f"licence:{entry.pk}")
+        for entry in cred.current_licences()
+        if entry.expires_on is not None
+    ]
     for kind, date_attr, number_attr, label in EXPIRING:
         expires_on = getattr(cred, date_attr)
-        if expires_on is None or not str(getattr(cred, number_attr) or "").strip():
-            continue
+        if expires_on is not None and str(getattr(cred, number_attr) or "").strip():
+            due.append((kind, expires_on, label, kind))
+    outcomes = []
+    for kind, expires_on, label, key_part in due:
         days = (expires_on - today).days
         if days < 0:
-            _expiry_notice(cred, kind, label, expires_on, "EXPIRED", days)
+            _expiry_notice(cred, kind, label, expires_on, "EXPIRED", days, key_part)
             outcomes.append(f"{kind}:EXPIRED")
             continue
         stage = reminder_stage(days, offsets)
         if stage is None:
             continue
-        _expiry_notice(cred, kind, label, expires_on, stage, days)
+        _expiry_notice(cred, kind, label, expires_on, stage, days, key_part)
         outcomes.append(f"{kind}:T-{stage}")
     return outcomes
+
+
+def _licence_label(entry):
+    issuer = entry.issuer.strip()
+    return f"practising licence from {issuer}" if issuer else "practising licence"
 
 
 def remind_all(today=None):
@@ -255,20 +267,24 @@ def remind_all(today=None):
 
     from apps.tenancy.context import platform_admin_context
 
-    from .models import PractitionerCredential
+    from .models import PractitionerCredential, PractitionerCredentialItem
 
     offsets = settings.PRACTITIONER_LICENCE_REMINDER_DAYS
     today = today or timezone.localdate()
     window_end = today + timedelta(days=max(offsets, default=0))
     outcomes = {}
     with platform_admin_context():
-        due = Q()
+        due = Q(
+            items__kind=PractitionerCredentialItem.KIND_LICENCE,
+            items__removed_at__isnull=True,
+            items__expires_on__lte=window_end,
+        )
         for _, date_attr, _, _ in EXPIRING:
             due |= Q(**{f"{date_attr}__lte": window_end})
         credentials = list(
-            PractitionerCredential.objects.select_related("user", "user__organization").filter(
-                due, user__is_active=True
-            )
+            PractitionerCredential.objects.select_related("user", "user__organization")
+            .filter(due, user__is_active=True)
+            .distinct()
         )
         for cred in credentials:
             try:

@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from datetime import date
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.hashers import check_password, make_password
@@ -602,19 +603,9 @@ class PractitionerCredential(TenantScopedModel):
     registration_evidence = models.FileField(
         upload_to="credentials/registration/%Y/%m/", null=True, blank=True
     )
-    licence_number = models.CharField("practising licence no.", max_length=64, blank=True)
-    licence_issued_on = models.DateField(null=True, blank=True)
-    licence_expires_on = models.DateField(null=True, blank=True)
-    licence_evidence = models.FileField(
-        upload_to="credentials/licence/%Y/%m/", null=True, blank=True
-    )
-    licence_verified_at = models.DateTimeField(null=True, blank=True)
-    licence_verified_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
-    )
-    qualification_evidence = models.FileField(
-        upload_to="credentials/qualification/%Y/%m/", null=True, blank=True
-    )
+    # Practising licences, degrees, diplomas and certificates are
+    # PractitionerCredentialItem rows (`items`), as many as the person holds,
+    # each with its own document (2026-11-09).
     indemnity_number = models.CharField(max_length=64, blank=True)
     indemnity_expires_on = models.DateField(null=True, blank=True)
     indemnity_evidence = models.FileField(
@@ -624,18 +615,36 @@ class PractitionerCredential(TenantScopedModel):
     submitted_at = models.DateTimeField(null=True, blank=True)
     returned_reason = models.TextField(blank=True)
 
+    def active_items(self):
+        return self.items.filter(removed_at__isnull=True)
+
+    def current_licences(self):
+        """
+        The practising licences in force: the latest-expiring licence from each
+        issuer. A renewal recorded as a new entry supersedes the old one from
+        the same regulator; licences from different regulators stand side by
+        side.
+        """
+        latest = {}
+        for item in self.active_items().filter(kind=PractitionerCredentialItem.KIND_LICENCE):
+            key = " ".join(item.issuer.lower().split())
+            rank = (item.expires_on or date.min, item.created_at)
+            held = latest.get(key)
+            if held is None or rank > (held.expires_on or date.min, held.created_at):
+                latest[key] = item
+        return sorted(latest.values(), key=lambda i: (i.expires_on or date.max, i.issuer))
+
     @property
     def licence_status(self):
-        """None (not recorded), EXPIRED, UNVERIFIED, EXPIRING (≤30 days) or VALID."""
-        if not self.licence_number.strip():
-            return None
-        if self.licence_expires_on and self.licence_expires_on < timezone.localdate():
-            return "EXPIRED"
-        if not self.licence_verified_at:
-            return "UNVERIFIED"
-        if self.licence_expires_on and (self.licence_expires_on - timezone.localdate()).days <= 30:
-            return "EXPIRING"
-        return "VALID"
+        """
+        None (no licence recorded), EXPIRED, UNVERIFIED, EXPIRING (≤30 days) or
+        VALID — the worst state among the licences in force.
+        """
+        states = [item.licence_status for item in self.current_licences()]
+        for state in ("EXPIRED", "UNVERIFIED", "EXPIRING", "VALID"):
+            if state in states:
+                return state
+        return None
 
     @property
     def nacada_status(self):
@@ -656,6 +665,83 @@ class PractitionerCredential(TenantScopedModel):
 
     def __str__(self):
         return f"credential for {self.user_id}"
+
+
+class PractitionerCredentialItem(TenantScopedModel):
+    """
+    One practising licence, degree, diploma or certificate a practitioner
+    holds, with its own document. A person may hold many of each: licences
+    from more than one regulator, a renewal next to the licence it replaced,
+    and every qualification they want on record.
+
+    FHIR (not emitted yet): one `Practitioner.qualification` each (identifier
+    = number, period = issued/expires, issuer = the regulator or institution,
+    code = the qualification). Workforce data, not patient data. VERIFY
+    (CLAUDE.md §6): the regulators' identifier `system` URIs and any
+    qualification code system — none is invented; title and issuer are
+    recorded as written on the document.
+
+    Removing an entry hides it (`removed_at`); the row and its file are kept,
+    and the review snapshots record what was there when.
+    """
+
+    KIND_LICENCE = "LICENCE"
+    KIND_DEGREE = "DEGREE"
+    KIND_DIPLOMA = "DIPLOMA"
+    KIND_CERTIFICATE = "CERTIFICATE"
+    KIND_OTHER = "OTHER"
+    KIND_CHOICES = [
+        (KIND_LICENCE, "Practising licence"),
+        (KIND_DEGREE, "Degree"),
+        (KIND_DIPLOMA, "Diploma"),
+        (KIND_CERTIFICATE, "Certificate"),
+        (KIND_OTHER, "Other qualification"),
+    ]
+    QUALIFICATION_KINDS = (KIND_DEGREE, KIND_DIPLOMA, KIND_CERTIFICATE, KIND_OTHER)
+
+    credential = models.ForeignKey(
+        PractitionerCredential, on_delete=models.CASCADE, related_name="items"
+    )
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    # A qualification's name as on the certificate (e.g. "MBChB"); for a
+    # licence, optional (e.g. "Annual practising licence 2027").
+    title = models.CharField(max_length=150, blank=True)
+    # The regulator that issued the licence, or the awarding institution.
+    issuer = models.CharField(max_length=150, blank=True)
+    number = models.CharField(max_length=64, blank=True)
+    issued_on = models.DateField(null=True, blank=True)
+    expires_on = models.DateField(null=True, blank=True)
+    evidence = models.FileField(upload_to="credentials/items/%Y/%m/", null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+
+    @property
+    def is_licence(self):
+        return self.kind == self.KIND_LICENCE
+
+    @property
+    def licence_status(self):
+        """For a licence: EXPIRED, UNVERIFIED, EXPIRING (≤30 days) or VALID."""
+        today = timezone.localdate()
+        if self.expires_on and self.expires_on < today:
+            return "EXPIRED"
+        if not self.verified_at:
+            return "UNVERIFIED"
+        if self.expires_on and (self.expires_on - today).days <= 30:
+            return "EXPIRING"
+        return "VALID"
+
+    def __str__(self):
+        return f"{self.kind} for {self.credential_id}"
 
 
 class PractitionerCredentialReview(TenantScopedModel):

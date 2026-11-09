@@ -295,9 +295,10 @@ class PractitionerCredentialView(APIView):
                 cred.hwr_regulator, cred.hwr_record, cred.hwr_checked_at = regulator, {}, None
         if "hwr_puid" in data:
             cred.hwr_puid = str(data.get("hwr_puid") or "").strip()[:64]
-        for field in ("registration_body", "qualifications"):
-            if field in data:
-                setattr(cred, field, str(data.get(field) or "").strip()[:255])
+        # `qualifications` is written from the practitioner's own qualification
+        # entries (apps.accounts.practitioner_profile), never typed here.
+        if "registration_body" in data:
+            cred.registration_body = str(data.get("registration_body") or "").strip()[:150]
         _apply_nacada(cred, data, request.user, now)
         if data.get("registration_verified") is True:
             if not cred.registration_number:

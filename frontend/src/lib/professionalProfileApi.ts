@@ -2,12 +2,43 @@ import { apiDownload, apiRequest } from "./apiClient";
 import type { StatusTone } from "../modules/care/shared/ui";
 
 // Mirrors apps.accounts.practitioner_profile — a staff member's professional
-// profile (registration, practising licence, qualifications, documents), the
-// submit → verify / return workflow, and the reviewer's side of it.
+// profile (registration, practising licences, degrees / diplomas /
+// certificates, documents), the submit → verify / return workflow, and the
+// reviewer's side of it. A person may hold many licences and qualifications;
+// each is an entry with its own document.
 
 export type ProfileStatus = "DRAFT" | "SUBMITTED" | "VERIFIED" | "RETURNED";
 export type CredentialState = "EXPIRED" | "UNVERIFIED" | "EXPIRING" | "VALID" | null;
-export type DocumentKind = "registration" | "licence" | "qualification" | "indemnity" | "nacada";
+/** The profile's single documents. Licences and qualifications carry their own. */
+export type DocumentKind = "registration" | "indemnity" | "nacada";
+export type ItemKind = "LICENCE" | "DEGREE" | "DIPLOMA" | "CERTIFICATE" | "OTHER";
+
+/** A practising licence, degree, diploma or certificate (PractitionerCredentialItem). */
+export interface CredentialItem {
+  id: string;
+  kind: ItemKind;
+  label: string;
+  title: string;
+  /** The regulator that issued a licence, or the awarding institution. */
+  issuer: string;
+  number: string;
+  issued_on: string | null;
+  expires_on: string | null;
+  document_uploaded: boolean;
+  verified_at: string | null;
+  verified_by: string;
+  /** Licences only: whether it is the one in force from its regulator. */
+  in_force: boolean | null;
+  licence_status: CredentialState;
+}
+
+export interface CredentialItemFields {
+  title?: string;
+  issuer?: string;
+  number?: string;
+  issued_on?: string | null;
+  expires_on?: string | null;
+}
 
 /** The compact status (practitioner_profile.summary) — on /me/profile/ and each staff row. */
 export interface ProfessionalProfileSummary {
@@ -30,10 +61,6 @@ export interface ProfessionalProfileFields {
   regulator: string;
   registration_body: string;
   registration_number: string;
-  qualifications: string;
-  licence_number: string;
-  licence_issued_on: string | null;
-  licence_expires_on: string | null;
   indemnity_number: string;
   indemnity_expires_on: string | null;
   nacada_number: string;
@@ -50,12 +77,12 @@ export interface ProfessionalProfile extends ProfessionalProfileSummary {
   verified: {
     registration_at: string | null;
     registration_by: string;
-    licence_at: string | null;
-    licence_by: string;
     nacada_at: string | null;
     nacada_by: string;
   };
   documents: Record<DocumentKind, { label: string; uploaded: boolean }>;
+  item_kinds: { value: ItemKind; label: string }[];
+  items: CredentialItem[];
   reviews: {
     action: "SUBMITTED" | "VERIFIED" | "RETURNED";
     actor: string;
@@ -116,6 +143,56 @@ export function downloadMyProfessionalDocument(accessToken: string, kind: Docume
   return apiDownload(`/me/professional-profile/documents/${kind}/`, accessToken);
 }
 
+export function addMyCredentialItem(
+  accessToken: string,
+  kind: ItemKind,
+  fields: CredentialItemFields,
+  file?: File | null,
+) {
+  const body = new FormData();
+  body.set("kind", kind);
+  for (const [key, value] of Object.entries(fields)) body.set(key, value ?? "");
+  if (file) body.set("file", file);
+  return apiRequest<ProfessionalProfile>("/me/professional-profile/items/", {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
+export function updateMyCredentialItem(
+  accessToken: string,
+  itemId: string,
+  fields: CredentialItemFields,
+) {
+  return apiRequest<ProfessionalProfile>(`/me/professional-profile/items/${itemId}/`, {
+    method: "PATCH",
+    body: fields,
+    accessToken,
+  });
+}
+
+export function removeMyCredentialItem(accessToken: string, itemId: string) {
+  return apiRequest<ProfessionalProfile>(`/me/professional-profile/items/${itemId}/`, {
+    method: "DELETE",
+    accessToken,
+  });
+}
+
+export function uploadMyCredentialItemDocument(accessToken: string, itemId: string, file: File) {
+  const body = new FormData();
+  body.set("file", file);
+  return apiRequest<ProfessionalProfile>(`/me/professional-profile/items/${itemId}/document/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
+export function downloadMyCredentialItemDocument(accessToken: string, itemId: string) {
+  return apiDownload(`/me/professional-profile/items/${itemId}/document/`, accessToken);
+}
+
 // ── reviewers (Org Admin, staff.credentials.verify) ──
 
 export function getStaffCredential(accessToken: string, userId: string) {
@@ -124,6 +201,10 @@ export function getStaffCredential(accessToken: string, userId: string) {
 
 export function downloadStaffDocument(accessToken: string, userId: string, kind: DocumentKind) {
   return apiDownload(`/staff-credentials/${userId}/documents/${kind}/`, accessToken);
+}
+
+export function downloadStaffItemDocument(accessToken: string, userId: string, itemId: string) {
+  return apiDownload(`/staff-credentials/${userId}/items/${itemId}/document/`, accessToken);
 }
 
 export function verifyStaffCredential(accessToken: string, userId: string) {

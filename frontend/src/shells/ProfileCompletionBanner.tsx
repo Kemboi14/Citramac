@@ -34,10 +34,10 @@ export function ProfileCompletionBanner() {
     text = `Your professional profile was returned: ${summary.returned_reason}`;
   } else if (summary.licence_status === "EXPIRING") {
     pill = "Expiring";
-    text = "Your practising licence expires soon. Record the renewal on your profile.";
+    text = "A practising licence expires soon. Add the renewed licence on your profile.";
   } else if (summary.needs_action) {
     text = summary.credentials_required
-      ? "Complete your professional profile — registration, practising licence, qualifications and documents — and submit it for verification."
+      ? "Complete your professional profile — registration, practising licences and qualifications, each with its document — and submit it for verification."
       : "Add your mobile phone number to your profile.";
   } else {
     return null;

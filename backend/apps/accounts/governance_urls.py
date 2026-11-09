@@ -28,6 +28,21 @@ urlpatterns = [
         name="me-professional-profile-document",
     ),
     path(
+        "me/professional-profile/items/",
+        practitioner_views.MyCredentialItemsView.as_view(),
+        name="me-professional-profile-items",
+    ),
+    path(
+        "me/professional-profile/items/<uuid:item_id>/",
+        practitioner_views.MyCredentialItemView.as_view(),
+        name="me-professional-profile-item",
+    ),
+    path(
+        "me/professional-profile/items/<uuid:item_id>/document/",
+        practitioner_views.MyCredentialItemDocumentView.as_view(),
+        name="me-professional-profile-item-document",
+    ),
+    path(
         "staff-credentials/<uuid:user_id>/",
         practitioner_views.StaffCredentialView.as_view(),
         name="staff-credential",
@@ -36,6 +51,11 @@ urlpatterns = [
         "staff-credentials/<uuid:user_id>/documents/<str:kind>/",
         practitioner_views.StaffCredentialDocumentView.as_view(),
         name="staff-credential-document",
+    ),
+    path(
+        "staff-credentials/<uuid:user_id>/items/<uuid:item_id>/document/",
+        practitioner_views.StaffCredentialItemDocumentView.as_view(),
+        name="staff-credential-item-document",
     ),
     path(
         "staff-credentials/<uuid:user_id>/verify/",

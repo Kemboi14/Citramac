@@ -5,11 +5,16 @@ The staff member, under /me/professional-profile/:
     GET, PUT                 read / edit their own profile
     POST submit/             submit it for verification
     GET, POST documents/<kind>/   download / upload a document
+    POST items/              add a licence, degree, diploma or certificate
+                             (multipart, its document as `file`, optional)
+    PATCH, DELETE items/<id>/          edit / remove an entry
+    GET, POST items/<id>/document/     download / upload an entry's document
 
 A reviewer (Org Admin or staff.credentials.verify), under
 /staff-credentials/<user_id>/:
     GET                      the staff member's profile
     GET documents/<kind>/    a document (every download is audited)
+    GET items/<id>/document/ an entry's document (audited)
     POST verify/             verify a submitted profile
     POST return/             return it with what needs changing ({"reason"})
 """
@@ -30,27 +35,37 @@ def _staff_only(user):
         raise PermissionDenied("Only an organisation's staff have a professional profile.")
 
 
-def _document_response(request, target, kind):
+def _file_response(cred, target, field, document):
     from apps.sysadmin_audit.audit import write_event
     from apps.sysadmin_audit.models import AuditLogEntry
 
+    write_event(
+        cred.organization_id,
+        AuditLogEntry.ACTION_VIEW,
+        "accounts.practitionercredential",
+        cred.pk,
+        {"document": document, "practitioner": str(target.pk)},
+    )
+    return FileResponse(
+        field.open("rb"), as_attachment=False, filename=field.name.rsplit("/", 1)[-1]
+    )
+
+
+def _document_response(request, target, kind):
     if kind not in profile.DOCUMENT_KINDS:
         raise NotFound("Unknown document.")
     cred = profile.credential_for(target)
     attr = profile.DOCUMENT_KINDS[kind][0]
     if cred is None or not getattr(cred, attr):
         raise NotFound("No document uploaded.")
-    write_event(
-        cred.organization_id,
-        AuditLogEntry.ACTION_VIEW,
-        "accounts.practitionercredential",
-        cred.pk,
-        {"document": kind, "practitioner": str(target.pk)},
-    )
-    field = getattr(cred, attr)
-    return FileResponse(
-        field.open("rb"), as_attachment=False, filename=field.name.rsplit("/", 1)[-1]
-    )
+    return _file_response(cred, target, getattr(cred, attr), kind)
+
+
+def _item_document_response(request, target, item_id):
+    entry = profile.item_for(target, item_id)
+    if not entry.evidence:
+        raise NotFound("No document uploaded.")
+    return _file_response(entry.credential, target, entry.evidence, f"item:{entry.pk}")
 
 
 class MyProfessionalProfileView(APIView):
@@ -92,6 +107,49 @@ class MyProfessionalDocumentView(APIView):
         return Response(profile.detail(request.user))
 
 
+class MyCredentialItemsView(APIView):
+    """Add a licence or qualification; its document may come in the same request."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        _staff_only(request.user)
+        profile.add_item(request.user, request.data, request.FILES.get("file"))
+        return Response(profile.detail(request.user), status=201)
+
+
+class MyCredentialItemView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def patch(self, request, item_id):
+        _staff_only(request.user)
+        if not isinstance(request.data, dict):
+            raise ValidationError({"detail": "Send the entry's fields as an object."})
+        profile.update_item(request.user, item_id, request.data)
+        return Response(profile.detail(request.user))
+
+    def delete(self, request, item_id):
+        _staff_only(request.user)
+        profile.remove_item(request.user, item_id)
+        return Response(profile.detail(request.user))
+
+
+class MyCredentialItemDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request, item_id):
+        _staff_only(request.user)
+        return _item_document_response(request, request.user, item_id)
+
+    def post(self, request, item_id):
+        _staff_only(request.user)
+        profile.store_item_document(request.user, item_id, request.FILES.get("file"))
+        return Response(profile.detail(request.user))
+
+
 def _target(request, user_id):
     from .models import User
 
@@ -120,6 +178,13 @@ class StaffCredentialDocumentView(APIView):
 
     def get(self, request, user_id, kind):
         return _document_response(request, _target(request, user_id), kind)
+
+
+class StaffCredentialItemDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id, item_id):
+        return _item_document_response(request, _target(request, user_id), item_id)
 
 
 class StaffCredentialVerifyView(APIView):

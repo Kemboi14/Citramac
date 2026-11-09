@@ -15,15 +15,20 @@ Owner decisions of 2026-11-05 (CLAUDE.md amendment of that date):
   blocked only when a practising licence with a recorded expiry date has
   expired (`signing_block_reason`).
 
-FHIR (not emitted in this pass): the profile is `Practitioner.qualification`
-(identifier, period, issuer = the regulator), the role `PractitionerRole.code`.
+A practitioner may hold many practising licences, degrees, diplomas and
+certificates (2026-11-09): each is a PractitionerCredentialItem with its own
+document, and every document the profile asks for has its upload next to it.
+
+FHIR (not emitted in this pass): each licence and qualification is a
+`Practitioner.qualification` (identifier, period, issuer = the regulator or
+institution), the role `PractitionerRole.code`.
 Workforce data, not patient data — no EpisodeOfCare hook. VERIFY (§6): each
 regulator's identifier `system` URI; the regulator for each cadre (below).
 """
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 VERIFY_PERMISSION = "staff.credentials.verify"
 
@@ -51,13 +56,15 @@ ROLE_REGULATOR = {
 # A role the organisation made itself is a clinical one if it can record care.
 CLINICAL_PERMISSIONS = ("clinical.care.record", "clinical.medication.prescribe")
 
+# The profile's single documents. Licences and qualifications carry their own
+# (PractitionerCredentialItem.evidence).
 DOCUMENT_KINDS = {
     "registration": ("registration_evidence", "Registration certificate"),
-    "licence": ("licence_evidence", "Current practising licence"),
-    "qualification": ("qualification_evidence", "Qualification certificate"),
     "indemnity": ("indemnity_evidence", "Professional indemnity cover"),
     "nacada": ("nacada_evidence", "NACADA accreditation certificate"),
 }
+ITEM_TEXT_FIELDS = {"title": 150, "issuer": 150, "number": 64}
+ITEM_DATE_FIELDS = ("issued_on", "expires_on")
 DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
 _SIGNATURES = {
     ".pdf": (b"%PDF-",),
@@ -71,11 +78,9 @@ _SIGNATURES = {
 TEXT_FIELDS = {
     "registration_number": 64,
     "registration_body": 150,
-    "qualifications": 255,
-    "licence_number": 64,
     "indemnity_number": 64,
 }
-DATE_FIELDS = ("licence_issued_on", "licence_expires_on", "indemnity_expires_on")
+DATE_FIELDS = ("indemnity_expires_on",)
 
 
 def _name(user):
@@ -158,46 +163,73 @@ def missing_items(user, cred=None):
         items.append({"key": "registration_number", "label": "Registration number"})
     if no_file("registration_evidence"):
         items.append({"key": "registration_evidence", "label": "Registration certificate (upload)"})
-    if blank("licence_number"):
-        items.append({"key": "licence_number", "label": "Practising licence number"})
-    if cred is None or cred.licence_expires_on is None:
-        items.append({"key": "licence_expires_on", "label": "Practising licence expiry date"})
-    elif cred.licence_expires_on < timezone.localdate():
+
+    entries = list(cred.active_items()) if cred is not None else []
+    licences = [i for i in entries if i.is_licence]
+    if not licences:
+        items.append({"key": "licence", "label": "A practising licence"})
+    if not [i for i in entries if not i.is_licence]:
         items.append(
-            {
-                "key": "licence_expires_on",
-                "label": f"A current practising licence (the one recorded expired on "
-                f"{cred.licence_expires_on:%d %b %Y})",
-            }
+            {"key": "qualification", "label": "A qualification (degree, diploma or certificate)"}
         )
-    if no_file("licence_evidence"):
-        items.append({"key": "licence_evidence", "label": "Practising licence (upload)"})
-    if blank("qualifications"):
-        items.append({"key": "qualifications", "label": "Qualifications"})
-    if no_file("qualification_evidence"):
-        items.append(
-            {"key": "qualification_evidence", "label": "Highest qualification certificate (upload)"}
-        )
+    for entry in entries:
+        name = item_label(entry)
+        key = f"item:{entry.pk}"
+        if entry.is_licence:
+            if not entry.issuer.strip():
+                items.append({"key": f"{key}:issuer", "label": f"{name}: who issued it"})
+            if not entry.number.strip():
+                items.append({"key": f"{key}:number", "label": f"{name}: licence number"})
+            if entry.expires_on is None:
+                items.append({"key": f"{key}:expires_on", "label": f"{name}: expiry date"})
+        elif not entry.title.strip():
+            items.append({"key": f"{key}:title", "label": f"{name}: its name"})
+        if not entry.evidence:
+            items.append({"key": f"{key}:evidence", "label": f"{name} (upload)"})
+    today = timezone.localdate()
+    for entry in cred.current_licences() if cred is not None else []:
+        if entry.expires_on and entry.expires_on < today:
+            items.append(
+                {
+                    "key": f"item:{entry.pk}:current",
+                    "label": f"A current practising licence (the one from "
+                    f"{entry.issuer or 'your regulator'} expired on {entry.expires_on:%d %b %Y})",
+                }
+            )
     return items
+
+
+def item_label(entry):
+    """How an entry is named to the person and their reviewers."""
+    kind = dict(entry.KIND_CHOICES)[entry.kind]
+    if entry.is_licence:
+        detail = entry.number.strip() or entry.issuer.strip()
+        return f"{kind} {detail}".strip()
+    return entry.title.strip() or kind
 
 
 def signing_block_reason(user):
     """
     Why this user may not sign a clinical record now, or None. Only an expired
     practising licence blocks (owner decision 2026-11-05) — an incomplete or
-    unverified profile never does.
+    unverified profile never does. With several licences, the one in force
+    from each regulator counts (a renewal supersedes the licence it replaced);
+    any of those having expired blocks.
     """
     if not credentials_required(user):
         return None
     cred = credential_for(user)
-    if cred is None or cred.licence_expires_on is None:
+    if cred is None:
         return None
-    if cred.licence_expires_on < timezone.localdate():
-        return (
-            f"Your practising licence expired on {cred.licence_expires_on:%d %b %Y}. "
-            "Record your renewed licence in My Profile → Professional profile before signing "
-            "clinical records."
-        )
+    today = timezone.localdate()
+    for entry in cred.current_licences():
+        if entry.expires_on and entry.expires_on < today:
+            source = f" from {entry.issuer}" if entry.issuer.strip() else ""
+            return (
+                f"Your practising licence{source} expired on {entry.expires_on:%d %b %Y}. "
+                "Record your renewed licence in My Profile → Professional profile before signing "
+                "clinical records."
+            )
     return None
 
 
@@ -223,6 +255,7 @@ def summary(user):
     required = credentials_required(user)
     cred = credential_for(user)
     missing = missing_items(user, cred)
+    in_force = cred.current_licences() if cred else []
     return {
         "credentials_required": required,
         "suggested_regulators": suggested_regulators(user) if required else [],
@@ -231,7 +264,8 @@ def summary(user):
         "returned_reason": cred.returned_reason if cred else "",
         "missing_items": missing,
         "needs_action": needs_action(user, cred),
-        "licence_expires_on": _iso(cred.licence_expires_on) if cred else None,
+        # The soonest expiry among the licences in force.
+        "licence_expires_on": _iso(in_force[0].expires_on) if in_force else None,
         "licence_status": cred.licence_status if cred else None,
         "nacada_status": cred.nacada_status if cred else None,
         "signing_block": signing_block_reason(user) or "",
@@ -240,7 +274,7 @@ def summary(user):
 
 def detail(user):
     """Everything on the profile, for the practitioner and their reviewers."""
-    from .models import PractitionerCredential
+    from .models import PractitionerCredential, PractitionerCredentialItem
 
     cred = credential_for(user)
     out = summary(user)
@@ -253,10 +287,6 @@ def detail(user):
         "regulator": "",
         "registration_body": "",
         "registration_number": "",
-        "qualifications": "",
-        "licence_number": "",
-        "licence_issued_on": None,
-        "licence_expires_on": None,
         "indemnity_number": "",
         "indemnity_expires_on": None,
         "nacada_number": "",
@@ -272,8 +302,6 @@ def detail(user):
     out["verified"] = {
         "registration_at": _iso(cred.registration_verified_at) if cred else None,
         "registration_by": _name(cred.registration_verified_by) if cred else "",
-        "licence_at": _iso(cred.licence_verified_at) if cred else None,
-        "licence_by": _name(cred.licence_verified_by) if cred else "",
         "nacada_at": _iso(cred.nacada_verified_at) if cred else None,
         "nacada_by": _name(cred.nacada_verified_by) if cred else "",
     }
@@ -281,6 +309,15 @@ def detail(user):
         kind: {"label": label, "uploaded": bool(cred and getattr(cred, attr))}
         for kind, (attr, label) in DOCUMENT_KINDS.items()
     }
+    out["item_kinds"] = [
+        {"value": v, "label": label} for v, label in PractitionerCredentialItem.KIND_CHOICES
+    ]
+    in_force = {i.pk for i in cred.current_licences()} if cred else set()
+    out["items"] = (
+        [_item_out(i, i.pk in in_force) for i in cred.active_items().select_related("verified_by")]
+        if cred
+        else []
+    )
     out["reviews"] = (
         [
             {
@@ -295,6 +332,25 @@ def detail(user):
         else []
     )
     return out
+
+
+def _item_out(entry, in_force=False):
+    return {
+        "id": str(entry.pk),
+        "kind": entry.kind,
+        "label": item_label(entry),
+        "title": entry.title,
+        "issuer": entry.issuer,
+        "number": entry.number,
+        "issued_on": _iso(entry.issued_on),
+        "expires_on": _iso(entry.expires_on),
+        "document_uploaded": bool(entry.evidence),
+        "verified_at": _iso(entry.verified_at),
+        "verified_by": _name(entry.verified_by),
+        # A licence: whether it is the one in force from its regulator, and its state.
+        "in_force": in_force if entry.is_licence else None,
+        "licence_status": entry.licence_status if entry.is_licence else None,
+    }
 
 
 # ── editing ────────────────────────────────────────────────────────────────
@@ -355,8 +411,6 @@ def update_own(user, data):
         if key == "registration_number":
             cred.registration_verified_at = cred.registration_verified_by = None
             cred.hwr_record, cred.hwr_checked_at = {}, None
-        if key == "licence_number":
-            cred.licence_verified_at = cred.licence_verified_by = None
     for key in DATE_FIELDS:
         if key not in data:
             continue
@@ -365,11 +419,6 @@ def update_own(user, data):
             continue
         setattr(cred, key, value)
         changed = True
-        if key.startswith("licence_"):
-            cred.licence_verified_at = cred.licence_verified_by = None
-    if cred.licence_issued_on and cred.licence_expires_on:
-        if cred.licence_expires_on <= cred.licence_issued_on:
-            raise ValidationError({"licence_expires_on": "Must be after the issue date."})
     nacada = data.get("nacada")
     if isinstance(nacada, dict):
         before = (
@@ -425,13 +474,132 @@ def store_document(user, kind, upload):
     setattr(cred, attr, upload)
     if kind == "registration":
         cred.registration_verified_at = cred.registration_verified_by = None
-    elif kind == "licence":
-        cred.licence_verified_at = cred.licence_verified_by = None
     elif kind == "nacada":
         cred.nacada_verified_at = cred.nacada_verified_by = None
     _back_to_draft(cred)
     cred.save()
     return cred
+
+
+# ── licences and qualifications (many of each) ─────────────────────────────
+
+
+def _own_item(user, item_id, cred=None):
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    cred = cred or credential_for(user)
+    if cred is None:
+        raise NotFound("No such entry.")
+    try:
+        return cred.active_items().get(pk=item_id)
+    except (cred.items.model.DoesNotExist, DjangoValidationError, ValueError):
+        raise NotFound("No such entry.") from None
+
+
+def _apply_item(entry, data):
+    """Copy the editable fields from `data`; True when something changed."""
+    changed = False
+    for key, size in ITEM_TEXT_FIELDS.items():
+        if key in data:
+            value = str(data.get(key) or "").strip()[:size]
+            if value != getattr(entry, key):
+                setattr(entry, key, value)
+                changed = True
+    for key in ITEM_DATE_FIELDS:
+        if key in data:
+            value = _parse_date(data.get(key), key)
+            if value != getattr(entry, key):
+                setattr(entry, key, value)
+                changed = True
+    if entry.issued_on and entry.issued_on > timezone.localdate():
+        raise ValidationError({"issued_on": "Can't be in the future."})
+    if entry.issued_on and entry.expires_on and entry.expires_on <= entry.issued_on:
+        raise ValidationError({"expires_on": "Must be after the issue date."})
+    return changed
+
+
+def _qualifications_line(cred):
+    """`PractitionerCredential.qualifications` — the line the Mental Health Act
+    forms print — is written from the qualification entries, never typed
+    separately, so the two can't disagree."""
+    titles = [
+        e.title.strip()
+        for e in cred.active_items().exclude(kind=cred.items.model.KIND_LICENCE)
+        if e.title.strip()
+    ]
+    line = ", ".join(dict.fromkeys(titles))[:255]
+    if line != cred.qualifications:
+        cred.qualifications = line
+        cred.save(update_fields=["qualifications", "updated_at"])
+
+
+@transaction.atomic
+def add_item(user, data, upload=None):
+    """Add a licence, degree, diploma or certificate — optionally with its document."""
+    from .models import PractitionerCredentialItem
+
+    kind = str(data.get("kind") or "").strip()
+    if kind not in dict(PractitionerCredentialItem.KIND_CHOICES):
+        raise ValidationError({"kind": "Choose a licence, degree, diploma or certificate."})
+    if upload is not None:
+        check_upload(upload)
+    cred = credential_for(user, create=True)
+    entry = PractitionerCredentialItem(
+        credential=cred, organization_id=cred.organization_id, kind=kind
+    )
+    _apply_item(entry, data)
+    if upload is not None:
+        entry.evidence = upload
+    entry.save()
+    _back_to_draft(cred)
+    cred.save()
+    _qualifications_line(cred)
+    return entry
+
+
+@transaction.atomic
+def update_item(user, item_id, data):
+    """Edit an entry. Any change clears its verification and sends the
+    profile back to draft, to be submitted again."""
+    cred = credential_for(user)
+    entry = _own_item(user, item_id, cred)
+    if _apply_item(entry, data):
+        entry.verified_at = entry.verified_by = None
+        entry.save()
+        _back_to_draft(cred)
+        cred.save()
+        _qualifications_line(cred)
+    return entry
+
+
+@transaction.atomic
+def store_item_document(user, item_id, upload):
+    check_upload(upload)
+    cred = credential_for(user)
+    entry = _own_item(user, item_id, cred)
+    entry.evidence = upload
+    entry.verified_at = entry.verified_by = None
+    entry.save()
+    _back_to_draft(cred)
+    cred.save()
+    return entry
+
+
+@transaction.atomic
+def remove_item(user, item_id):
+    """Take an entry off the profile. The row and its document are kept."""
+    cred = credential_for(user)
+    entry = _own_item(user, item_id, cred)
+    entry.removed_at, entry.removed_by = timezone.now(), user
+    entry.save(update_fields=["removed_at", "removed_by", "updated_at"])
+    _back_to_draft(cred)
+    cred.save()
+    _qualifications_line(cred)
+
+
+def item_for(target, item_id):
+    """An entry on `target`'s profile, for download."""
+    return _own_item(target, item_id)
 
 
 # ── workflow ───────────────────────────────────────────────────────────────
@@ -442,10 +610,20 @@ def _snapshot(cred):
         "regulator": cred.regulator,
         "registration_body": cred.registration_body,
         "registration_number": cred.registration_number,
-        "licence_number": cred.licence_number,
-        "licence_issued_on": _iso(cred.licence_issued_on),
-        "licence_expires_on": _iso(cred.licence_expires_on),
         "qualifications": cred.qualifications,
+        "items": [
+            {
+                "id": str(e.pk),
+                "kind": e.kind,
+                "title": e.title,
+                "issuer": e.issuer,
+                "number": e.number,
+                "issued_on": _iso(e.issued_on),
+                "expires_on": _iso(e.expires_on),
+                "document": bool(e.evidence),
+            }
+            for e in cred.active_items()
+        ],
         "indemnity_number": cred.indemnity_number,
         "indemnity_expires_on": _iso(cred.indemnity_expires_on),
         "nacada_number": cred.nacada_number,
@@ -568,7 +746,9 @@ def verify(reviewer, target):
         )
     now = timezone.now()
     cred.registration_verified_at, cred.registration_verified_by = now, reviewer
-    cred.licence_verified_at, cred.licence_verified_by = now, reviewer
+    cred.active_items().filter(verified_at__isnull=True).update(
+        verified_at=now, verified_by=reviewer, updated_at=now
+    )
     if cred.nacada_number.strip():
         cred.nacada_verified_at, cred.nacada_verified_by = now, reviewer
     cred.profile_status = cred.STATUS_VERIFIED

@@ -642,3 +642,29 @@ darkened for headings until it reads on white (4.5:1), and only validated `#rrgg
 reach the stylesheet. The logo is embedded in its own colours. Like the logo, the colour comes
 from the current theme, so a signed document reprints in today's colours with its content
 unchanged. Reversibility: cheap — presentation only, no record changes.
+
+### 2026-11-09 — professional profiles: many licences and qualifications, every document beside its upload
+
+On the owner's instruction ("every document needed … must be next to a place to upload it; a
+practitioner can have many licences and degrees or certs"): practising licences, degrees,
+diplomas and certificates are entries of their own (`accounts.PractitionerCredentialItem`), as
+many as the person holds, each with its own document. Choosing to add one shows its upload slot
+at once (a file picked before saving goes with the entry). The registration certificate, NACADA
+certificate and indemnity cover sit next to their own fields; there is no separate documents list.
+
+- A profile needs at least one licence and one qualification, and every entry its document.
+- The licence in force is the latest-expiring one from each regulator, so a renewal added as a new
+  entry supersedes the old one. Signing is blocked when any regulator's licence in force has
+  expired (the 2026-11-05 rule, generalised). Each one is reminded separately.
+- Editing an entry or its document clears only that entry's verification and returns the profile
+  to draft. Verify stamps every entry. Removing an entry hides it (`removed_at`); the row and file
+  are kept, and review snapshots list the entries.
+- `PractitionerCredential.qualifications` (the line the Mental Health Act forms print) is written
+  from the qualification entries and is no longer editable in the Org Admin credential drawer.
+
+FHIR: each entry is a `Practitioner.qualification` (not emitted yet). Workforce data, no
+`EpisodeOfCare` hook. VERIFY items unchanged (regulator identifier systems, no qualification code
+system invented). Migration `accounts 0025` copies each profile's single licence and its
+qualifications line + certificate into entries, keeping the files and verification. Reversible
+(checked forward and back). Reversibility: cheap. No signed record changes, and signed MHA forms
+keep the qualifications they were signed with.

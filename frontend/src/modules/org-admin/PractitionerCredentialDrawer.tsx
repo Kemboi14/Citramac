@@ -36,7 +36,6 @@ const INLINE_FIELDS = [
 interface FormState {
   registration_number: string;
   registration_body: string;
-  qualifications: string;
   registration_verified: boolean;
   mha_recommendation_approved: boolean;
   hwr_regulator: HwrRegulator;
@@ -65,7 +64,6 @@ function formFromCredential(c: Credential): FormState {
   return {
     registration_number: c.registration_number,
     registration_body: c.registration_body,
-    qualifications: c.qualifications,
     registration_verified: Boolean(c.registration_verified_at),
     mha_recommendation_approved: c.mha_recommendation_approved,
     hwr_regulator: c.hwr_regulator,
@@ -217,7 +215,6 @@ export function PractitionerCredentialDrawer({
     return {
       registration_number: number,
       registration_body: f.registration_body.trim(),
-      qualifications: f.qualifications.trim(),
       mha_recommendation_approved: f.mha_recommendation_approved,
       hwr_regulator: f.hwr_regulator,
       hwr_puid: f.hwr_puid.trim(),
@@ -348,14 +345,16 @@ export function PractitionerCredentialDrawer({
               onChange={(e) => updateForm({ registration_body: e.target.value })}
             />
           </label>
-          <label className={LABEL_CLASS}>
+          <div className={LABEL_CLASS}>
             Qualifications
-            <input
-              className={FIELD_CLASS}
-              value={form.qualifications}
-              onChange={(e) => updateForm({ qualifications: e.target.value })}
-            />
-          </label>
+            <div className="text-sm text-ink-900">
+              {credential.qualifications || "—"}
+            </div>
+            <span className={`block ${HELP_CLASS}`}>
+              From the degrees, diplomas and certificates on the practitioner&apos;s professional
+              profile, each with its certificate.
+            </span>
+          </div>
           <label className="flex items-start gap-2 text-sm text-ink-700">
             <input
               type="checkbox"
