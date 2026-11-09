@@ -254,11 +254,14 @@ export function TriageFormV4({
   detail,
   banner,
   bannerError,
+  showHeader = true,
   onSigned,
 }: {
   detail: TriageEncounterDetail;
   banner: ClientBanner | null;
   bannerError: string | null;
+  /** False inside the client record, which shows its own breadcrumbs and banner on top. */
+  showHeader?: boolean;
   onSigned: () => void;
 }) {
   const { accessToken } = useAuth();
@@ -694,7 +697,7 @@ export function TriageFormV4({
 
   return (
     <div className="clinical-readable mx-auto max-w-[1600px]">
-      {
+      {showHeader && (
         <>
           <Breadcrumbs
             items={[
@@ -704,7 +707,7 @@ export function TriageFormV4({
           />
           <SafetyBanner banner={banner} error={bannerError} />
         </>
-      }
+      )}
       <EncounterContext detail={detail} banner={banner} />
       <PageHeader
         title="What does this person need right now, and how urgently?"

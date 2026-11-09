@@ -104,11 +104,6 @@ export function ClientRecordPage() {
   const active = view as RecordView;
   const loadedBanner = banner && banner.patient_id === patientId ? banner : null;
 
-  const triageScreen =
-    active === "triage" &&
-    Boolean(
-      loadedBanner?.latest_triage_encounter_id ?? loadedBanner?.latest_signed_triage_encounter_id,
-    );
   let body = null;
   if (loadedBanner) {
     const props: RecordViewProps = {
@@ -135,18 +130,16 @@ export function ClientRecordPage() {
   return (
     <div className="clinical-readable">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        {!triageScreen && (
-          <Breadcrumbs
-            items={[
-              { label: "My Caseload", to: "/clinical/caseload" },
-              {
-                label: loadedBanner
-                  ? loadedBanner.name.trim() || "Temporary client (unnamed)"
-                  : "Client",
-              },
-            ]}
-          />
-        )}
+        <Breadcrumbs
+          items={[
+            { label: "My Caseload", to: "/clinical/caseload" },
+            {
+              label: loadedBanner
+                ? loadedBanner.name.trim() || "Temporary client (unnamed)"
+                : "Client",
+            },
+          ]}
+        />
         {loadedBanner && (
           <div className="mb-2 flex flex-wrap gap-2">
             {loadedBanner.identity_status === "IDENTIFIED" && (
@@ -177,9 +170,7 @@ export function ClientRecordPage() {
         onClose={() => setRegistryOpen(false)}
         onConfirmed={onRecordChanged}
       />
-      {/* The triage screen carries its own breadcrumbs and safety banner (live
-          with the form) — the same screen the dashboard opens. */}
-      {!triageScreen && <SafetyBanner banner={loadedBanner} error={error} />}
+      <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} banner={loadedBanner} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {loadedBanner && <GroupRecordEntries patientId={patientId} />}

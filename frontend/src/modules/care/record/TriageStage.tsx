@@ -6,7 +6,8 @@ import type { RecordViewProps } from "./types";
 
 /**
  * The client record's Triage tab shows the same triage screen the dashboard and
- * triage queue open (/clinical/triage/:id), for the client's latest encounter.
+ * triage queue open (/clinical/triage/:id), for the client's latest encounter,
+ * under the record's own client banner.
  */
 export function TriageStage({ banner, onRecordChanged }: RecordViewProps) {
   const encounterId = banner.latest_triage_encounter_id ?? banner.latest_signed_triage_encounter_id;
@@ -29,6 +30,11 @@ export function TriageStage({ banner, onRecordChanged }: RecordViewProps) {
   }
 
   return (
-    <TriageEncounterScreen key={encounterId} triageId={encounterId} onChanged={onRecordChanged} />
+    <TriageEncounterScreen
+      key={encounterId}
+      triageId={encounterId}
+      onChanged={onRecordChanged}
+      inClientRecord
+    />
   );
 }

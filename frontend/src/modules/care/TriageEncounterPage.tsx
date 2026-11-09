@@ -31,14 +31,18 @@ export function TriageEncounterPage() {
  * The one triage screen. The triage queue and dashboard open it at
  * /clinical/triage/:triageId; the client record's Triage tab shows the same
  * screen for the client's latest encounter, so the two can never differ.
- * `onChanged` lets a host refresh what it shows after a signature.
+ * `onChanged` lets a host refresh what it shows after a signature. Inside
+ * the client record (`inClientRecord`) the record's own breadcrumbs and
+ * client banner stay on top, so the screen leaves out its copies.
  */
 export function TriageEncounterScreen({
   triageId,
   onChanged,
+  inClientRecord = false,
 }: {
   triageId: string | undefined;
   onChanged?: () => void;
+  inClientRecord?: boolean;
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -90,7 +94,7 @@ export function TriageEncounterScreen({
   if (!detail) {
     return (
       <div className="mx-auto max-w-[1600px]" aria-busy="true">
-        <SafetyBanner banner={null} />
+        {!inClientRecord && <SafetyBanner banner={null} />}
       </div>
     );
   }
@@ -107,13 +111,19 @@ export function TriageEncounterScreen({
     return (
       <div className="mx-auto max-w-[1600px]">
         {stale}
-        <Breadcrumbs
-          items={[
-            { label: "Triage", to: "/clinical/triage" },
-            { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter" },
-          ]}
-        />
-        <SafetyBanner banner={banner} error={bannerError} />
+        {!inClientRecord && (
+          <>
+            <Breadcrumbs
+              items={[
+                { label: "Triage", to: "/clinical/triage" },
+                {
+                  label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter",
+                },
+              ]}
+            />
+            <SafetyBanner banner={banner} error={bannerError} />
+          </>
+        )}
         <EncounterContext detail={detail} banner={banner} />
         <PageHeader
           title="Triage re-check"
@@ -152,6 +162,7 @@ export function TriageEncounterScreen({
           detail={detail}
           banner={banner}
           bannerError={bannerError}
+          showHeader={!inClientRecord}
           onSigned={() => {
             setReloadKey((k) => k + 1);
             onChanged?.();
@@ -170,6 +181,7 @@ export function TriageEncounterScreen({
           detail={detail}
           banner={banner}
           bannerError={bannerError}
+          showHeader={!inClientRecord}
           onSigned={() => {
             setReloadKey((k) => k + 1);
             onChanged?.();
@@ -187,6 +199,7 @@ export function TriageEncounterScreen({
         detail={detail}
         banner={banner}
         bannerError={bannerError}
+        showHeader={!inClientRecord}
         onSigned={() => {
           setReloadKey((k) => k + 1);
           onChanged?.();
