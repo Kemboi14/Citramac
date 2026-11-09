@@ -347,9 +347,7 @@ export function PractitionerCredentialDrawer({
           </label>
           <div className={LABEL_CLASS}>
             Qualifications
-            <div className="text-sm text-ink-900">
-              {credential.qualifications || "—"}
-            </div>
+            <div className="text-sm text-ink-900">{credential.qualifications || "—"}</div>
             <span className={`block ${HELP_CLASS}`}>
               From the degrees, diplomas and certificates on the practitioner&apos;s professional
               profile, each with its certificate.

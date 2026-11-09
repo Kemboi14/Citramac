@@ -97,8 +97,7 @@ function MseEditor({
 
   const onChange = (key: string, value: unknown) =>
     setValues((prev) => ({ ...prev, [key]: value }));
-  const onPatch = (patch: Record<string, unknown>) =>
-    setValues((prev) => ({ ...prev, ...patch }));
+  const onPatch = (patch: Record<string, unknown>) => setValues((prev) => ({ ...prev, ...patch }));
 
   const saveState = signed
     ? `Signed ${draft.signed_at ? formatDateTime(draft.signed_at) : ""}`
@@ -119,8 +118,8 @@ function MseEditor({
       />
       {signed && (
         <Callout tone="warning">
-          This intake is signed and cannot be edited. Start a new version under Intake to update
-          the MSE.
+          This intake is signed and cannot be edited. Start a new version under Intake to update the
+          MSE.
         </Callout>
       )}
       <Card

@@ -77,14 +77,17 @@ export function MseSection({
   const domainByKey = new Map(schema.mseDomains.map((d) => [d.key, d] as const));
   const sections = GROUPS.map((group) => ({
     ...group,
-    domains: group.keys
-      .map((k) => domainByKey.get(k))
-      .filter((d): d is MseDomain => Boolean(d)),
+    domains: group.keys.map((k) => domainByKey.get(k)).filter((d): d is MseDomain => Boolean(d)),
   })).filter((group) => group.domains.length > 0);
   const groupedKeys = new Set(GROUPS.flatMap((g) => g.keys));
   const ungrouped = schema.mseDomains.filter((d) => !groupedKeys.has(d.key));
   if (ungrouped.length > 0) {
-    sections.push({ title: "Additional domains", hint: "", domains: ungrouped });
+    sections.push({
+      title: "Additional domains",
+      hint: "",
+      keys: ungrouped.map((d) => d.key),
+      domains: ungrouped,
+    });
   }
 
   return (
@@ -209,7 +212,9 @@ export function MseSection({
                 <input
                   className={`${INPUT} bg-surface-card`}
                   aria-label={`Notes — ${domain.label}`}
-                  placeholder={domain.valueset ? "Add note (optional)" : "In the client’s own words"}
+                  placeholder={
+                    domain.valueset ? "Add note (optional)" : "In the client’s own words"
+                  }
                   value={text(domain.key)}
                   onChange={(e) => onChange(domain.key, e.target.value)}
                 />
