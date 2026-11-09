@@ -1145,7 +1145,7 @@ class CaseloadTests(APITestCase):
         )
         self.assertEqual([row["name"] for row in queue.data["results"]], ["Recheck Test"])
 
-    def test_client_registry_row_opens_the_visit_the_dashboard_opens(self):
+    def test_client_record_triage_opens_the_visit_the_dashboard_opens(self):
         from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
         from apps.clinical_encounter.models import Encounter
 
@@ -1190,8 +1190,9 @@ class CaseloadTests(APITestCase):
         dashboard = self.client.get(reverse("care-dashboard"), **self.auth).data
         (arrival,) = [r for r in dashboard["triage_arrivals"] if r["patient_id"] == str(patient.pk)]
         self.assertEqual(arrival["id"], str(queued.pk))
-        response = self.client.get(reverse("patient-registry"), **self.auth)
-        self.assertEqual(response.data["results"][0]["triage_encounter_id"], str(queued.pk))
+        # The client record's Triage tab opens the same visit.
+        banner = self.client.get(reverse("care-client-banner", args=[patient.pk]), **self.auth)
+        self.assertEqual(banner.data["latest_triage_encounter_id"], str(queued.pk))
 
 
 class IdentifiedPatientValidationTests(APITestCase):
