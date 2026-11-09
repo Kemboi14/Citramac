@@ -10,6 +10,8 @@ from .crypto import encrypt_value
 from .models import (
     Branch,
     BranchIdentifierChange,
+    BranchRegulatoryFile,
+    BranchRegulatoryRecord,
     Department,
     Organization,
     PlatformAiSettings,
@@ -217,6 +219,82 @@ class BranchIdentifierChangeSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class BranchRegulatoryFileSerializer(serializers.ModelSerializer):
+    uploaded_at = serializers.DateTimeField(source="created_at", read_only=True)
+    uploaded_by_email = serializers.CharField(
+        source="uploaded_by.email", read_only=True, default=""
+    )
+
+    class Meta:
+        model = BranchRegulatoryFile
+        fields = ["id", "original_name", "size", "uploaded_at", "uploaded_by_email"]
+        read_only_fields = fields
+
+
+class BranchRegulatoryRecordSerializer(serializers.ModelSerializer):
+    """A branch's regulatory document and its files (never their contents or
+    storage paths — files are fetched through the audited download endpoint)."""
+
+    regulator_label = serializers.CharField(source="get_regulator_display", read_only=True)
+    regulator_display = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    days_remaining = serializers.IntegerField(read_only=True, allow_null=True)
+    created_by_email = serializers.CharField(source="created_by.email", read_only=True, default="")
+    files = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BranchRegulatoryRecord
+        fields = [
+            "id",
+            "branch",
+            "regulator",
+            "regulator_label",
+            "regulator_name",
+            "regulator_display",
+            "document_type",
+            "number",
+            "issued_on",
+            "valid_until",
+            "status",
+            "days_remaining",
+            "created_at",
+            "created_by_email",
+            "files",
+        ]
+        read_only_fields = ["id", "branch", "created_at"]
+
+    def get_files(self, record):
+        visible = [f for f in record.files.all() if f.removed_at is None]
+        return BranchRegulatoryFileSerializer(visible, many=True).data
+
+    def validate_document_type(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter the document type as written on it.")
+        return value
+
+    def validate(self, attrs):
+        errors = {}
+        regulator = attrs.get("regulator")
+        name = (attrs.get("regulator_name") or "").strip()
+        if regulator == BranchRegulatoryRecord.REGULATOR_OTHER:
+            if not name:
+                errors["regulator_name"] = "Name the regulator, as written on the document."
+            attrs["regulator_name"] = name
+        else:
+            attrs["regulator_name"] = ""
+        attrs["number"] = (attrs.get("number") or "").strip()
+        issued_on = attrs.get("issued_on")
+        valid_until = attrs.get("valid_until")
+        if issued_on and issued_on > timezone.localdate():
+            errors["issued_on"] = "The issue date can't be in the future."
+        if issued_on and valid_until and valid_until <= issued_on:
+            errors["valid_until"] = "Valid until must be after the issue date."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
 
 class BranchSerializer(serializers.ModelSerializer):

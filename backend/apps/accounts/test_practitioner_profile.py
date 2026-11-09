@@ -20,6 +20,7 @@ from apps.accounts import practitioner_notify, practitioner_profile
 from apps.accounts.access import set_assignments
 from apps.accounts.models import (
     PractitionerCredential,
+    PractitionerCredentialDocument,
     PractitionerCredentialItem,
     PractitionerCredentialReview,
     Role,
@@ -222,29 +223,23 @@ class EditingTests(ProfileTestCase):
     def test_documents_open_for_their_owner_and_reviewers_only_and_are_audited(self):
         self.upload(self.nurse, "registration")
         data = self.add_licence(self.nurse, timezone.localdate() + timedelta(days=100))
-        (item_id,) = self.item_ids(data)
-        own = self.client.get(
-            reverse("me-professional-profile-document", args=["registration"]),
-            **self.auth(self.nurse),
-        )
-        self.assertEqual(own.status_code, 200)
-        own_item = self.client.get(
-            reverse("me-professional-profile-item-document", args=[item_id]),
-            **self.auth(self.nurse),
-        )
-        self.assertEqual(own_item.status_code, 200)
-        for url in (
-            reverse("staff-credential-document", args=[self.nurse.pk, "registration"]),
-            reverse("staff-credential-item-document", args=[self.nurse.pk, item_id]),
-        ):
+        (item,) = data["items"]
+        (reg_file,) = data["documents"]["registration"]["files"]
+        (item_file,) = item["files"]
+        for file_id in (reg_file["id"], item_file["id"]):
+            own = self.client.get(
+                reverse("me-professional-profile-file", args=[file_id]), **self.auth(self.nurse)
+            )
+            self.assertEqual(own.status_code, 200)
+            url = reverse("staff-credential-file", args=[self.nurse.pk, file_id])
             self.assertEqual(self.client.get(url, **self.auth(self.desk)).status_code, 403)
             self.assertEqual(self.client.get(url, **self.auth(self.admin)).status_code, 200)
-        # Someone else's entry is not reachable through my own profile.
-        other = self.client.get(
-            reverse("me-professional-profile-item-document", args=[item_id]),
-            **self.auth(self.supervisor),
-        )
-        self.assertEqual(other.status_code, 404)
+            # Someone else's file is not reachable through my own profile.
+            other = self.client.get(
+                reverse("me-professional-profile-file", args=[file_id]),
+                **self.auth(self.supervisor),
+            )
+            self.assertEqual(other.status_code, 404)
         with platform_admin_context():
             views = AuditLogEntry.objects.filter(
                 action=AuditLogEntry.ACTION_VIEW,
@@ -252,6 +247,131 @@ class EditingTests(ProfileTestCase):
                 organization_id=self.org.id,
             )
             self.assertEqual(views.count(), 4)
+
+
+class ManyDocumentsTests(ProfileTestCase):
+    """Every slot takes many files (owner decision 2026-11-09)."""
+
+    def pdf(self, name):
+        return SimpleUploadedFile(name, PDF, content_type="application/pdf")
+
+    def test_a_slot_takes_several_files_at_once_and_more_later(self):
+        response = self.client.post(
+            reverse("me-professional-profile-document", args=["registration"]),
+            {"files": [self.pdf("page1.pdf"), self.pdf("page2.pdf")]},
+            format="multipart",
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.upload(self.nurse, "registration", name="renewal-letter.pdf")
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        names = [f["name"] for f in data["documents"]["registration"]["files"]]
+        self.assertEqual(names, ["page1.pdf", "page2.pdf", "renewal-letter.pdf"])
+        self.assertNotIn("registration_evidence", {m["key"] for m in data["missing_items"]})
+
+    def test_one_bad_file_adds_none_of_them(self):
+        response = self.client.post(
+            reverse("me-professional-profile-document", args=["nacada"]),
+            {"files": [self.pdf("ok.pdf"), SimpleUploadedFile("bad.pdf", PNG)]},
+            format="multipart",
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(response.status_code, 400)
+        with platform_admin_context():
+            self.assertFalse(PractitionerCredentialDocument.objects.exists())
+
+    def test_an_entry_takes_several_files_when_added_and_after(self):
+        response = self.add_item(
+            self.nurse, {"kind": "DEGREE", "title": "BSc Nursing", "issuer": "UoN"}, None
+        )
+        item_id = response.data["items"][0]["id"]
+        response = self.client.post(
+            reverse("me-professional-profile-item-document", args=[item_id]),
+            {"files": [self.pdf("degree.pdf"), self.pdf("transcript.pdf")]},
+            format="multipart",
+            **self.auth(self.nurse),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [f["name"] for f in response.data["items"][0]["files"]],
+            ["degree.pdf", "transcript.pdf"],
+        )
+
+    def test_removing_a_file_hides_it_keeps_it_and_needs_verifying_again(self):
+        self.complete_profile(self.nurse)
+        self.upload(self.nurse, "registration", name="second.pdf")
+        self.submit(self.nurse)
+        self.client.post(
+            reverse("staff-credential-verify", args=[self.nurse.pk]), **self.auth(self.admin)
+        )
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        first = data["documents"]["registration"]["files"][0]["id"]
+        response = self.client.delete(
+            reverse("me-professional-profile-file", args=[first]), **self.auth(self.nurse)
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["documents"]["registration"]["files"]), 1)
+        self.assertEqual(response.data["status"], "DRAFT")
+        with platform_admin_context():
+            removed = PractitionerCredentialDocument.objects.get(pk=first)
+            cred = PractitionerCredential.objects.get(user=self.nurse)
+        self.assertIsNotNone(removed.removed_at)
+        self.assertTrue(removed.file)
+        self.assertIsNone(cred.registration_verified_at)
+        # The last file gone: the slot asks for a document again.
+        last = response.data["documents"]["registration"]["files"][0]["id"]
+        response = self.client.delete(
+            reverse("me-professional-profile-file", args=[last]), **self.auth(self.nurse)
+        )
+        self.assertIn("registration_evidence", {m["key"] for m in response.data["missing_items"]})
+
+    def test_a_practitioner_records_registrations_with_more_regulators(self):
+        self.complete_profile(self.nurse)
+        response = self.add_item(
+            self.nurse, {"kind": "REGISTRATION", "regulator": "CPB", "number": "CPB-77"}
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        (reg,) = [i for i in response.data["items"] if i["kind"] == "REGISTRATION"]
+        # Named by the choice, never by what was typed.
+        self.assertEqual(reg["issuer"], "Counsellors and Psychologists Board")
+        self.assertEqual(reg["regulator"], "CPB")
+        self.assertEqual(response.data["missing_items"], [])
+        # A registration is not a qualification: the MHA qualifications line ignores it.
+        with platform_admin_context():
+            cred = PractitionerCredential.objects.get(user=self.nurse)
+        self.assertEqual(cred.qualifications, "BSc Nursing")
+        # "Other" needs the body's name; an unknown code is refused.
+        other = self.add_item(self.nurse, {"kind": "REGISTRATION", "regulator": "OTHER"})
+        self.assertEqual(other.status_code, 400)
+        bad = self.add_item(self.nurse, {"kind": "REGISTRATION", "regulator": "XYZ"})
+        self.assertEqual(bad.status_code, 400)
+        named = self.add_item(
+            self.nurse,
+            {"kind": "REGISTRATION", "regulator": "OTHER", "issuer": "A Board", "number": "1"},
+            None,
+        )
+        self.assertEqual(named.status_code, 201)
+        self.assertIn(
+            "Registration A Board 1 (upload)", [m["label"] for m in named.data["missing_items"]]
+        )
+
+    def test_the_org_admin_adds_several_nacada_certificates(self):
+        url = reverse("care-practitioner-nacada-evidence", args=[self.nurse.pk])
+        response = self.client.post(
+            url,
+            {"files": [self.pdf("nacada-1.pdf"), self.pdf("nacada-2.pdf")]},
+            format="multipart",
+            **self.auth(self.admin),
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        files = response.data["nacada"]["files"]
+        self.assertEqual([f["name"] for f in files], ["nacada-1.pdf", "nacada-2.pdf"])
+        one = self.client.get(f"{url}?file={files[0]['id']}", **self.auth(self.admin))
+        self.assertEqual(one.status_code, 200)
+        self.assertIn("nacada-1", one["Content-Disposition"])
+        # They are the practitioner's own NACADA slot.
+        data = self.client.get(reverse("me-professional-profile"), **self.auth(self.nurse)).data
+        self.assertEqual(len(data["documents"]["nacada"]["files"]), 2)
 
 
 class ManyCredentialsTests(ProfileTestCase):
@@ -313,8 +433,8 @@ class ManyCredentialsTests(ProfileTestCase):
         # Removed, not deleted: the row and its document are kept.
         with platform_admin_context():
             removed = PractitionerCredentialItem.objects.get(kind="DEGREE")
+            self.assertTrue(removed.documents.exists())
         self.assertIsNotNone(removed.removed_at)
-        self.assertTrue(removed.evidence)
 
     def test_a_renewal_supersedes_the_expired_licence_from_the_same_regulator(self):
         today = timezone.localdate()

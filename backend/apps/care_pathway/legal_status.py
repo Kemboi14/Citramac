@@ -160,8 +160,10 @@ def _nacada(cred):
             "verified_at": None,
             "verified_by": "",
             "has_evidence": False,
+            "files": [],
             "status": None,
         }
+    files = list(cred.active_documents().filter(slot="NACADA", item__isnull=True))
     return {
         "number": cred.nacada_number,
         "category": cred.nacada_category,
@@ -169,7 +171,16 @@ def _nacada(cred):
         "expires_on": cred.nacada_expires_on.isoformat() if cred.nacada_expires_on else None,
         "verified_at": _iso(cred.nacada_verified_at),
         "verified_by": _name(cred.nacada_verified_by) if cred.nacada_verified_by else "",
-        "has_evidence": bool(cred.nacada_evidence),
+        "has_evidence": bool(files),
+        # Every NACADA certificate file on the profile (many may be uploaded).
+        "files": [
+            {
+                "id": str(f.pk),
+                "name": f.original_name or f.file.name.rsplit("/", 1)[-1],
+                "uploaded_at": _iso(f.created_at),
+            }
+            for f in files
+        ],
         "status": cred.nacada_status,
     }
 

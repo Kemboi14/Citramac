@@ -6,14 +6,14 @@ import { SaveButton } from "../../components/SaveButton";
 import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { Callout, StatusPill } from "../care/shared/ui";
 import {
-  downloadStaffDocument,
-  downloadStaffItemDocument,
+  downloadStaffFile,
   getStaffCredential,
   openBlob,
   returnStaffCredential,
   STATUS_LABEL,
   STATUS_TONE,
   verifyStaffCredential,
+  type CredentialFile,
   type CredentialItem,
   type DocumentKind,
   type ProfessionalProfile,
@@ -73,19 +73,10 @@ export function ProfessionalProfileReviewDrawer({
     };
   }, [accessToken, userId]);
 
-  const view = async (kind: DocumentKind) => {
+  const view = async (fileId: string) => {
     if (!accessToken || !userId) return;
     try {
-      openBlob(await downloadStaffDocument(accessToken, userId, kind));
-    } catch (err) {
-      setError(message(err, "Couldn't open the document."));
-    }
-  };
-
-  const viewItem = async (itemId: string) => {
-    if (!accessToken || !userId) return;
-    try {
-      openBlob(await downloadStaffItemDocument(accessToken, userId, itemId));
+      openBlob(await downloadStaffFile(accessToken, userId, fileId));
     } catch (err) {
       setError(message(err, "Couldn't open the document."));
     }
@@ -117,15 +108,22 @@ export function ProfessionalProfileReviewDrawer({
     }
   };
 
-  const docLink = (uploaded: boolean, open: () => void) =>
-    uploaded ? (
-      <button
-        type="button"
-        className="font-semibold text-brand-green-dark hover:underline"
-        onClick={open}
-      >
-        View
-      </button>
+  // Every file in a slot (there may be many), each opened on its own.
+  const docLinks = (files: CredentialFile[]) =>
+    files.length ? (
+      <span className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+        {files.map((file) => (
+          <button
+            key={file.id}
+            type="button"
+            className="max-w-[16rem] truncate font-semibold text-brand-green-dark hover:underline"
+            title={file.name}
+            onClick={() => void view(file.id)}
+          >
+            {file.name}
+          </button>
+        ))}
+      </span>
     ) : (
       <span className="font-semibold text-status-red">Not uploaded</span>
     );
@@ -137,13 +135,13 @@ export function ProfessionalProfileReviewDrawer({
     return (
       <div className={ROW}>
         <span className={KEY}>{doc.label}</span>
-        {docLink(doc.uploaded, () => void view(kind))}
+        {docLinks(doc.files)}
       </div>
     );
   };
 
   const itemRow = (item: CredentialItem) => {
-    const licence = item.kind === "LICENCE";
+    const licence = item.kind === "LICENCE" || item.kind === "REGISTRATION";
     const kindName = profile?.item_kinds.find((k) => k.value === item.kind)?.label ?? item.kind;
     return (
       <div key={item.id} className="border-b border-surface-border py-2 text-[13px]">
@@ -151,7 +149,7 @@ export function ProfessionalProfileReviewDrawer({
           <span className="font-medium text-ink-900">
             {licence ? item.issuer || kindName : item.title || kindName}
           </span>
-          {docLink(item.document_uploaded, () => void viewItem(item.id))}
+          {docLinks(item.files)}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-500">
           <span>{kindName}</span>
@@ -166,8 +164,10 @@ export function ProfessionalProfileReviewDrawer({
               {item.number ? ` · No. ${item.number}` : ""}
             </span>
           )}
-          {licence && item.in_force === false && <StatusPill>Superseded</StatusPill>}
-          {licence && item.in_force && item.licence_status === "EXPIRED" && (
+          {item.kind === "LICENCE" && item.in_force === false && (
+            <StatusPill>Superseded</StatusPill>
+          )}
+          {item.kind === "LICENCE" && item.in_force && item.licence_status === "EXPIRED" && (
             <StatusPill tone="danger">Expired</StatusPill>
           )}
           {item.verified_at && (
@@ -178,8 +178,10 @@ export function ProfessionalProfileReviewDrawer({
     );
   };
 
+  const registrations = profile?.items.filter((i) => i.kind === "REGISTRATION") ?? [];
   const licences = profile?.items.filter((i) => i.kind === "LICENCE") ?? [];
-  const qualifications = profile?.items.filter((i) => i.kind !== "LICENCE") ?? [];
+  const qualifications =
+    profile?.items.filter((i) => i.kind !== "LICENCE" && i.kind !== "REGISTRATION") ?? [];
 
   const reviewable = Boolean(profile?.can_review && profile.status === "SUBMITTED");
   const f = profile?.fields;
@@ -315,6 +317,12 @@ export function ProfessionalProfileReviewDrawer({
                 <span className={VAL}>{f.registration_number || "—"}</span>
               </div>
               {docRow("registration")}
+              {registrations.length > 0 && (
+                <>
+                  <div className={SUBHEAD}>Registrations with other regulators</div>
+                  {registrations.map(itemRow)}
+                </>
+              )}
 
               <div className={SUBHEAD}>Practising licences</div>
               {licences.length === 0 && <p className="text-[13px] text-ink-400">None recorded.</p>}

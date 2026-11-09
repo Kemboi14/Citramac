@@ -4,27 +4,40 @@ import type { StatusTone } from "../modules/care/shared/ui";
 // Mirrors apps.accounts.practitioner_profile — a staff member's professional
 // profile (registration, practising licences, degrees / diplomas /
 // certificates, documents), the submit → verify / return workflow, and the
-// reviewer's side of it. A person may hold many licences and qualifications;
-// each is an entry with its own document.
+// reviewer's side of it. A person may hold registrations with several
+// regulators, many licences and qualifications — each an entry — and every
+// document slot takes as many files as they upload.
 
 export type ProfileStatus = "DRAFT" | "SUBMITTED" | "VERIFIED" | "RETURNED";
 export type CredentialState = "EXPIRED" | "UNVERIFIED" | "EXPIRING" | "VALID" | null;
-/** The profile's single documents. Licences and qualifications carry their own. */
+/** The profile's own document slots. Entries carry their own files. */
 export type DocumentKind = "registration" | "indemnity" | "nacada";
-export type ItemKind = "LICENCE" | "DEGREE" | "DIPLOMA" | "CERTIFICATE" | "OTHER";
+export type ItemKind = "REGISTRATION" | "LICENCE" | "DEGREE" | "DIPLOMA" | "CERTIFICATE" | "OTHER";
 
-/** A practising licence, degree, diploma or certificate (PractitionerCredentialItem). */
+/** One uploaded file (PractitionerCredentialDocument). */
+export interface CredentialFile {
+  id: string;
+  name: string;
+  size: number;
+  uploaded_at: string | null;
+  uploaded_by: string;
+}
+
+/** A further registration, practising licence, degree, diploma or certificate (PractitionerCredentialItem). */
 export interface CredentialItem {
   id: string;
   kind: ItemKind;
   label: string;
+  /** A registration or licence: the regulator picked from the list ("" if typed). */
+  regulator: string;
   title: string;
-  /** The regulator that issued a licence, or the awarding institution. */
+  /** The regulator that issued a registration or licence, or the awarding institution. */
   issuer: string;
   number: string;
   issued_on: string | null;
   expires_on: string | null;
   document_uploaded: boolean;
+  files: CredentialFile[];
   verified_at: string | null;
   verified_by: string;
   /** Licences only: whether it is the one in force from its regulator. */
@@ -33,6 +46,7 @@ export interface CredentialItem {
 }
 
 export interface CredentialItemFields {
+  regulator?: string;
   title?: string;
   issuer?: string;
   number?: string;
@@ -80,7 +94,7 @@ export interface ProfessionalProfile extends ProfessionalProfileSummary {
     nacada_at: string | null;
     nacada_by: string;
   };
-  documents: Record<DocumentKind, { label: string; uploaded: boolean }>;
+  documents: Record<DocumentKind, { label: string; uploaded: boolean; files: CredentialFile[] }>;
   item_kinds: { value: ItemKind; label: string }[];
   items: CredentialItem[];
   reviews: {
@@ -129,30 +143,46 @@ export function submitMyProfessionalProfile(accessToken: string) {
   });
 }
 
-export function uploadMyProfessionalDocument(accessToken: string, kind: DocumentKind, file: File) {
+function filesBody(files: File[]) {
   const body = new FormData();
-  body.set("file", file);
+  for (const file of files) body.append("files", file);
+  return body;
+}
+
+/** Add one or more files to one of the profile's own slots. */
+export function uploadMyProfessionalDocuments(
+  accessToken: string,
+  kind: DocumentKind,
+  files: File[],
+) {
   return apiRequest<ProfessionalProfile>(`/me/professional-profile/documents/${kind}/`, {
     method: "POST",
-    body,
+    body: filesBody(files),
     accessToken,
   });
 }
 
-export function downloadMyProfessionalDocument(accessToken: string, kind: DocumentKind) {
-  return apiDownload(`/me/professional-profile/documents/${kind}/`, accessToken);
+export function downloadMyProfessionalFile(accessToken: string, fileId: string) {
+  return apiDownload(`/me/professional-profile/files/${fileId}/`, accessToken);
+}
+
+/** Take one file off the profile (it is kept, hidden). */
+export function removeMyProfessionalFile(accessToken: string, fileId: string) {
+  return apiRequest<ProfessionalProfile>(`/me/professional-profile/files/${fileId}/`, {
+    method: "DELETE",
+    accessToken,
+  });
 }
 
 export function addMyCredentialItem(
   accessToken: string,
   kind: ItemKind,
   fields: CredentialItemFields,
-  file?: File | null,
+  files: File[] = [],
 ) {
-  const body = new FormData();
+  const body = filesBody(files);
   body.set("kind", kind);
   for (const [key, value] of Object.entries(fields)) body.set(key, value ?? "");
-  if (file) body.set("file", file);
   return apiRequest<ProfessionalProfile>("/me/professional-profile/items/", {
     method: "POST",
     body,
@@ -179,18 +209,17 @@ export function removeMyCredentialItem(accessToken: string, itemId: string) {
   });
 }
 
-export function uploadMyCredentialItemDocument(accessToken: string, itemId: string, file: File) {
-  const body = new FormData();
-  body.set("file", file);
-  return apiRequest<ProfessionalProfile>(`/me/professional-profile/items/${itemId}/document/`, {
+/** Add one or more files to an entry. */
+export function uploadMyCredentialItemDocuments(
+  accessToken: string,
+  itemId: string,
+  files: File[],
+) {
+  return apiRequest<ProfessionalProfile>(`/me/professional-profile/items/${itemId}/documents/`, {
     method: "POST",
-    body,
+    body: filesBody(files),
     accessToken,
   });
-}
-
-export function downloadMyCredentialItemDocument(accessToken: string, itemId: string) {
-  return apiDownload(`/me/professional-profile/items/${itemId}/document/`, accessToken);
 }
 
 // ── reviewers (Org Admin, staff.credentials.verify) ──
@@ -199,12 +228,8 @@ export function getStaffCredential(accessToken: string, userId: string) {
   return apiRequest<ProfessionalProfile>(`/staff-credentials/${userId}/`, { accessToken });
 }
 
-export function downloadStaffDocument(accessToken: string, userId: string, kind: DocumentKind) {
-  return apiDownload(`/staff-credentials/${userId}/documents/${kind}/`, accessToken);
-}
-
-export function downloadStaffItemDocument(accessToken: string, userId: string, itemId: string) {
-  return apiDownload(`/staff-credentials/${userId}/items/${itemId}/document/`, accessToken);
+export function downloadStaffFile(accessToken: string, userId: string, fileId: string) {
+  return apiDownload(`/staff-credentials/${userId}/files/${fileId}/`, accessToken);
 }
 
 export function verifyStaffCredential(accessToken: string, userId: string) {

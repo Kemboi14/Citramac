@@ -4,24 +4,25 @@ Professional profile API (apps.accounts.practitioner_profile).
 The staff member, under /me/professional-profile/:
     GET, PUT                 read / edit their own profile
     POST submit/             submit it for verification
-    GET, POST documents/<kind>/   download / upload a document
-    POST items/              add a licence, degree, diploma or certificate
-                             (multipart, its document as `file`, optional)
-    PATCH, DELETE items/<id>/          edit / remove an entry
-    GET, POST items/<id>/document/     download / upload an entry's document
+    POST documents/<kind>/   add files to registration / nacada / indemnity
+                             (multipart, one or more `files`)
+    POST items/              add a registration, licence, degree, diploma or
+                             certificate (multipart, its files as `files`, optional)
+    PATCH, DELETE items/<id>/           edit / remove an entry
+    POST items/<id>/documents/          add files to an entry
+    GET, DELETE files/<document_id>/    download / remove one file
 
 A reviewer (Org Admin or staff.credentials.verify), under
 /staff-credentials/<user_id>/:
     GET                      the staff member's profile
-    GET documents/<kind>/    a document (every download is audited)
-    GET items/<id>/document/ an entry's document (audited)
+    GET files/<document_id>/ one file (every download is audited)
     POST verify/             verify a submitted profile
     POST return/             return it with what needs changing ({"reason"})
 """
 
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
-from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -35,7 +36,7 @@ def _staff_only(user):
         raise PermissionDenied("Only an organisation's staff have a professional profile.")
 
 
-def _file_response(cred, target, field, document):
+def _file_response(cred, target, field, document, filename=None):
     from apps.sysadmin_audit.audit import write_event
     from apps.sysadmin_audit.models import AuditLogEntry
 
@@ -47,25 +48,27 @@ def _file_response(cred, target, field, document):
         {"document": document, "practitioner": str(target.pk)},
     )
     return FileResponse(
-        field.open("rb"), as_attachment=False, filename=field.name.rsplit("/", 1)[-1]
+        field.open("rb"),
+        as_attachment=False,
+        filename=filename or field.name.rsplit("/", 1)[-1],
     )
 
 
-def _document_response(request, target, kind):
-    if kind not in profile.DOCUMENT_KINDS:
-        raise NotFound("Unknown document.")
-    cred = profile.credential_for(target)
-    attr = profile.DOCUMENT_KINDS[kind][0]
-    if cred is None or not getattr(cred, attr):
-        raise NotFound("No document uploaded.")
-    return _file_response(cred, target, getattr(cred, attr), kind)
+def _uploads(request):
+    """Every file sent, whether as `files` (many) or `file` (one)."""
+    return request.FILES.getlist("files") + request.FILES.getlist("file")
 
 
-def _item_document_response(request, target, item_id):
-    entry = profile.item_for(target, item_id)
-    if not entry.evidence:
-        raise NotFound("No document uploaded.")
-    return _file_response(entry.credential, target, entry.evidence, f"item:{entry.pk}")
+def _document_file_response(target, document_id):
+    document = profile.document_for(target, document_id)
+    where = f"item:{document.item_id}" if document.item_id else document.slot.lower()
+    return _file_response(
+        document.credential,
+        target,
+        document.file,
+        f"{where}:file:{document.pk}",
+        document.original_name or None,
+    )
 
 
 class MyProfessionalProfileView(APIView):
@@ -94,16 +97,29 @@ class MyProfessionalProfileSubmitView(APIView):
 
 
 class MyProfessionalDocumentView(APIView):
+    """Add one or more files to one of the profile's own document slots."""
+
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
-    def get(self, request, kind):
-        _staff_only(request.user)
-        return _document_response(request, request.user, kind)
-
     def post(self, request, kind):
         _staff_only(request.user)
-        profile.store_document(request.user, kind, request.FILES.get("file"))
+        profile.store_document(request.user, kind, _uploads(request))
+        return Response(profile.detail(request.user))
+
+
+class MyProfessionalFileView(APIView):
+    """One uploaded file: download it, or take it off the profile."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, document_id):
+        _staff_only(request.user)
+        return _document_file_response(request.user, document_id)
+
+    def delete(self, request, document_id):
+        _staff_only(request.user)
+        profile.remove_document(request.user, document_id)
         return Response(profile.detail(request.user))
 
 
@@ -115,7 +131,7 @@ class MyCredentialItemsView(APIView):
 
     def post(self, request):
         _staff_only(request.user)
-        profile.add_item(request.user, request.data, request.FILES.get("file"))
+        profile.add_item(request.user, request.data, _uploads(request))
         return Response(profile.detail(request.user), status=201)
 
 
@@ -137,16 +153,14 @@ class MyCredentialItemView(APIView):
 
 
 class MyCredentialItemDocumentView(APIView):
+    """Add one or more files to an entry."""
+
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
-    def get(self, request, item_id):
-        _staff_only(request.user)
-        return _item_document_response(request, request.user, item_id)
-
     def post(self, request, item_id):
         _staff_only(request.user)
-        profile.store_item_document(request.user, item_id, request.FILES.get("file"))
+        profile.store_item_document(request.user, item_id, _uploads(request))
         return Response(profile.detail(request.user))
 
 
@@ -173,18 +187,11 @@ class StaffCredentialView(APIView):
         return Response(out)
 
 
-class StaffCredentialDocumentView(APIView):
+class StaffCredentialFileView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, user_id, kind):
-        return _document_response(request, _target(request, user_id), kind)
-
-
-class StaffCredentialItemDocumentView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, user_id, item_id):
-        return _item_document_response(request, _target(request, user_id), item_id)
+    def get(self, request, user_id, document_id):
+        return _document_file_response(_target(request, user_id), document_id)
 
 
 class StaffCredentialVerifyView(APIView):

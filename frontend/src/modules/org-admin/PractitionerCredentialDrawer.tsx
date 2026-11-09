@@ -259,20 +259,20 @@ export function PractitionerCredentialDrawer({
 
   const regulatorMissing = !form?.hwr_regulator || !form.registration_number.trim();
 
-  const uploadEvidence = async (file: File) => {
+  const uploadEvidence = async (files: File[]) => {
     if (!accessToken || !userId) return;
     setError(null);
     try {
-      setCredential(await uploadNacadaEvidence(accessToken, userId, file));
+      setCredential(await uploadNacadaEvidence(accessToken, userId, files));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't upload the certificate.");
     }
   };
 
-  const viewEvidence = async () => {
+  const viewEvidence = async (fileId: string) => {
     if (!accessToken || !userId) return;
     try {
-      const blob = await downloadNacadaEvidence(accessToken, userId);
+      const blob = await downloadNacadaEvidence(accessToken, userId, fileId);
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener");
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -525,28 +525,33 @@ export function PractitionerCredentialDrawer({
               </label>
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <label className="cursor-pointer rounded-md border border-surface-border px-3 py-1.5 font-semibold text-ink-700 hover:bg-surface-bg">
-                  {credential.nacada.has_evidence ? "Replace certificate" : "Upload certificate"}
+                  {credential.nacada.has_evidence ? "Add files" : "Upload certificate"}
                   <input
                     type="file"
+                    multiple
                     accept=".pdf,.png,.jpg,.jpeg"
                     className="sr-only"
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
+                      const files = Array.from(e.target.files ?? []);
                       e.target.value = "";
-                      if (file) void uploadEvidence(file);
+                      if (files.length) void uploadEvidence(files);
                     }}
                   />
                 </label>
-                {credential.nacada.has_evidence && (
+                {credential.nacada.files.map((file) => (
                   <button
+                    key={file.id}
                     type="button"
-                    className="font-semibold text-brand-green hover:underline"
-                    onClick={() => void viewEvidence()}
+                    className="max-w-[14rem] truncate font-semibold text-brand-green hover:underline"
+                    title={file.name}
+                    onClick={() => void viewEvidence(file.id)}
                   >
-                    View certificate
+                    {file.name}
                   </button>
-                )}
-                <span className={HELP_CLASS}>PDF, PNG or JPEG, up to 10 MB.</span>
+                ))}
+                <span className={HELP_CLASS}>
+                  PDF, PNG or JPEG, up to 10 MB each — add as many files as you need.
+                </span>
               </div>
             </div>
           </div>

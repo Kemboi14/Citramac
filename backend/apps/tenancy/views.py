@@ -2,12 +2,13 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.db.models.functions import TruncMonth
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,6 +29,8 @@ from config.errors import error_response
 from .models import (
     HEALTH_PROVIDER_ORG_TYPES,
     Branch,
+    BranchRegulatoryFile,
+    BranchRegulatoryRecord,
     Department,
     Organization,
     PlatformAiSettings,
@@ -40,6 +43,7 @@ from .models import (
     SubscriptionPolicy,
 )
 from .serializers import (
+    BranchRegulatoryRecordSerializer,
     BranchSerializer,
     CreateOrganizationSerializer,
     DepartmentSerializer,
@@ -905,6 +909,185 @@ class BranchFacilityRegistryView(APIView):
                 fields={exc.field: [exc.message]} if exc.field else None,
             )
         return Response(BranchSerializer(branch, context={"request": request}).data)
+
+
+# ── branch regulatory documents ─────────────────────────────────────────────
+
+# More than any one document plausibly needs, few enough that one request
+# can't be used to flood storage.
+REGULATORY_MAX_FILES_PER_REQUEST = 20
+
+
+def _check_regulatory_uploads(uploads):
+    """Every file a PDF, PNG or JPEG of at most 10 MB (the professional-profile
+    rule, reused); all are checked before any is stored."""
+    from apps.accounts.practitioner_profile import check_upload
+
+    if not uploads:
+        raise ValidationError({"files": ["Choose at least one file to upload."]})
+    if len(uploads) > REGULATORY_MAX_FILES_PER_REQUEST:
+        raise ValidationError(
+            {"files": [f"Upload at most {REGULATORY_MAX_FILES_PER_REQUEST} files at a time."]}
+        )
+    problems = []
+    for upload in uploads:
+        try:
+            check_upload(upload)
+        except ValidationError as exc:
+            detail = (
+                exc.detail.get("file", exc.detail) if isinstance(exc.detail, dict) else exc.detail
+            )
+            messages = detail if isinstance(detail, list) else [detail]
+            problems.append(f"{upload.name}: " + " ".join(str(m) for m in messages))
+    if problems:
+        raise ValidationError({"files": problems})
+
+
+def _store_regulatory_files(record, uploads, user):
+    for upload in uploads:
+        BranchRegulatoryFile.objects.create(
+            organization_id=record.organization_id,
+            record=record,
+            file=upload,
+            original_name=upload.name[:255],
+            size=upload.size,
+            uploaded_by=user,
+        )
+
+
+class _BranchRegulatoryBase(APIView):
+    """
+    A branch's regulatory documents (BranchRegulatoryRecord, each with many
+    BranchRegulatoryFile). Same audience as Branch Settings: Org Admin for
+    their own organisation's branches, Super Admin for any. Every write is
+    audited by the generic save signals (apps.sysadmin_audit.signals — file
+    names and ids, never contents); every download is a VIEW entry. Nothing is
+    deleted: removing a record or a file hides it.
+    """
+
+    permission_classes = [IsPlatformSuperAdminOrOrgAdmin]
+    # Uploads are POSTs; IsPlatformSuperAdminOrOrgAdmin refuses an Org Admin
+    # POST unless the view opts in.
+    org_admin_can_create = True
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_branch(self, request, pk):
+        branch = generics.get_object_or_404(Branch, pk=pk)
+        self.check_object_permissions(request, branch)
+        return branch
+
+    @staticmethod
+    def get_record(branch, record_id):
+        return generics.get_object_or_404(
+            BranchRegulatoryRecord, pk=record_id, branch=branch, removed_at__isnull=True
+        )
+
+    @staticmethod
+    def get_file(record, file_id):
+        return generics.get_object_or_404(
+            BranchRegulatoryFile, pk=file_id, record=record, removed_at__isnull=True
+        )
+
+    @staticmethod
+    def records_response(branch, status_code=status.HTTP_200_OK):
+        records = (
+            BranchRegulatoryRecord.objects.filter(branch=branch, removed_at__isnull=True)
+            .select_related("created_by")
+            .prefetch_related(
+                Prefetch(
+                    "files",
+                    queryset=BranchRegulatoryFile.objects.filter(
+                        removed_at__isnull=True
+                    ).select_related("uploaded_by"),
+                )
+            )
+        )
+        return Response(
+            BranchRegulatoryRecordSerializer(records, many=True).data, status=status_code
+        )
+
+
+class BranchRegulatoryRecordsView(_BranchRegulatoryBase):
+    """GET: the branch's regulatory documents. POST (multipart): add one — its
+    fields plus one or more files under `files`."""
+
+    def get(self, request, pk):
+        return self.records_response(self.get_branch(request, pk))
+
+    def post(self, request, pk):
+        branch = self.get_branch(request, pk)
+        serializer = BranchRegulatoryRecordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        uploads = request.FILES.getlist("files")
+        _check_regulatory_uploads(uploads)
+        with transaction.atomic():
+            record = serializer.save(
+                organization_id=branch.organization_id, branch=branch, created_by=request.user
+            )
+            _store_regulatory_files(record, uploads, request.user)
+        return self.records_response(branch, status.HTTP_201_CREATED)
+
+
+class BranchRegulatoryRecordView(_BranchRegulatoryBase):
+    """DELETE: remove a record — hidden with its files, the rows kept."""
+
+    def delete(self, request, pk, record_id):
+        branch = self.get_branch(request, pk)
+        record = self.get_record(branch, record_id)
+        record.removed_at = timezone.now()
+        record.removed_by = request.user
+        record.save(update_fields=["removed_at", "removed_by", "updated_at"])
+        return self.records_response(branch)
+
+
+class BranchRegulatoryFilesView(_BranchRegulatoryBase):
+    """POST (multipart): add one or more files (`files`) to a record."""
+
+    def post(self, request, pk, record_id):
+        branch = self.get_branch(request, pk)
+        record = self.get_record(branch, record_id)
+        uploads = request.FILES.getlist("files")
+        _check_regulatory_uploads(uploads)
+        with transaction.atomic():
+            _store_regulatory_files(record, uploads, request.user)
+        return self.records_response(branch, status.HTTP_201_CREATED)
+
+
+class BranchRegulatoryFileView(_BranchRegulatoryBase):
+    """GET: the file itself (authenticated, audited). DELETE: remove it — hidden,
+    the row and stored file kept."""
+
+    def get(self, request, pk, record_id, file_id):
+        from apps.sysadmin_audit.audit import write_entry
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        branch = self.get_branch(request, pk)
+        record = self.get_record(branch, record_id)
+        stored = self.get_file(record, file_id)
+        try:
+            handle = stored.file.open("rb")
+        except FileNotFoundError:
+            raise NotFound("The stored file could not be found.") from None
+        write_entry(
+            stored,
+            AuditLogEntry.ACTION_VIEW,
+            {
+                "document": "branch_regulatory_file",
+                "branch": str(branch.pk),
+                "record": str(record.pk),
+                "file": stored.original_name,
+            },
+        )
+        return FileResponse(handle, as_attachment=False, filename=stored.original_name)
+
+    def delete(self, request, pk, record_id, file_id):
+        branch = self.get_branch(request, pk)
+        record = self.get_record(branch, record_id)
+        stored = self.get_file(record, file_id)
+        stored.removed_at = timezone.now()
+        stored.removed_by = request.user
+        stored.save(update_fields=["removed_at", "removed_by", "updated_at"])
+        return self.records_response(branch)
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

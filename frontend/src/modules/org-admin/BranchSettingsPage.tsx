@@ -57,6 +57,7 @@ import {
   type OrganizationTheme,
 } from "../../lib/themeApi";
 import { NacadaReportingCard } from "./NacadaReportingCard";
+import { BranchRegulatoryDocumentsCard } from "./BranchRegulatoryDocumentsCard";
 
 const LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024;
 
@@ -1399,6 +1400,10 @@ export function BranchSettingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {!loading && !loadError && allBranches.length > 0 && (
+        <BranchRegulatoryDocumentsCard branches={allBranches} />
       )}
 
       {claims?.organization_id && (

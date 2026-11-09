@@ -3,6 +3,10 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     BranchFacilityRegistryView,
+    BranchRegulatoryFilesView,
+    BranchRegulatoryFileView,
+    BranchRegulatoryRecordsView,
+    BranchRegulatoryRecordView,
     BranchViewSet,
     DepartmentViewSet,
     MySubscriptionView,
@@ -100,6 +104,26 @@ urlpatterns = [
         "branches/<uuid:pk>/facility-registry/",
         BranchFacilityRegistryView.as_view(),
         name="branch-facility-registry",
+    ),
+    path(
+        "branches/<uuid:pk>/regulatory-records/",
+        BranchRegulatoryRecordsView.as_view(),
+        name="branch-regulatory-records",
+    ),
+    path(
+        "branches/<uuid:pk>/regulatory-records/<uuid:record_id>/",
+        BranchRegulatoryRecordView.as_view(),
+        name="branch-regulatory-record",
+    ),
+    path(
+        "branches/<uuid:pk>/regulatory-records/<uuid:record_id>/files/",
+        BranchRegulatoryFilesView.as_view(),
+        name="branch-regulatory-files",
+    ),
+    path(
+        "branches/<uuid:pk>/regulatory-records/<uuid:record_id>/files/<uuid:file_id>/",
+        BranchRegulatoryFileView.as_view(),
+        name="branch-regulatory-file",
     ),
     path("health/", PlatformHealthView.as_view(), name="platform-health"),
     path("subscription-policy/", SubscriptionPolicyView.as_view(), name="subscription-policy"),

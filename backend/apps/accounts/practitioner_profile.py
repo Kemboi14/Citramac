@@ -15,9 +15,11 @@ Owner decisions of 2026-11-05 (CLAUDE.md amendment of that date):
   blocked only when a practising licence with a recorded expiry date has
   expired (`signing_block_reason`).
 
-A practitioner may hold many practising licences, degrees, diplomas and
-certificates (2026-11-09): each is a PractitionerCredentialItem with its own
-document, and every document the profile asks for has its upload next to it.
+A practitioner may hold many registrations, practising licences, degrees,
+diplomas and certificates (2026-11-09): beyond the main registration each is a
+PractitionerCredentialItem. Every slot that asks for a document — the main
+registration, each entry, NACADA, indemnity — takes as many files as the
+person uploads (PractitionerCredentialDocument), right next to it.
 
 FHIR (not emitted in this pass): each licence and qualification is a
 `Practitioner.qualification` (identifier, period, issuer = the regulator or
@@ -56,13 +58,14 @@ ROLE_REGULATOR = {
 # A role the organisation made itself is a clinical one if it can record care.
 CLINICAL_PERMISSIONS = ("clinical.care.record", "clinical.medication.prescribe")
 
-# The profile's single documents. Licences and qualifications carry their own
-# (PractitionerCredentialItem.evidence).
+# The profile's own document slots (each takes many files). Entries carry
+# their own (PractitionerCredentialDocument.item).
 DOCUMENT_KINDS = {
-    "registration": ("registration_evidence", "Registration certificate"),
-    "indemnity": ("indemnity_evidence", "Professional indemnity cover"),
-    "nacada": ("nacada_evidence", "NACADA accreditation certificate"),
+    "registration": ("REGISTRATION", "Registration certificate"),
+    "indemnity": ("INDEMNITY", "Professional indemnity cover"),
+    "nacada": ("NACADA", "NACADA accreditation certificate"),
 }
+MAX_FILES_PER_UPLOAD = 20
 ITEM_TEXT_FIELDS = {"title": 150, "issuer": 150, "number": 64}
 ITEM_DATE_FIELDS = ("issued_on", "expires_on")
 DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -152,8 +155,16 @@ def missing_items(user, cred=None):
     def blank(attr):
         return cred is None or not str(getattr(cred, attr) or "").strip()
 
-    def no_file(attr):
-        return cred is None or not getattr(cred, attr)
+    slots_with_files = (
+        set(cred.active_documents().filter(item__isnull=True).values_list("slot", flat=True))
+        if cred is not None
+        else set()
+    )
+    items_with_files = (
+        set(cred.active_documents().filter(item__isnull=False).values_list("item_id", flat=True))
+        if cred is not None
+        else set()
+    )
 
     if blank("regulator"):
         items.append({"key": "regulator", "label": "Regulatory body"})
@@ -161,30 +172,31 @@ def missing_items(user, cred=None):
         items.append({"key": "registration_body", "label": "Name of the regulatory body"})
     if blank("registration_number"):
         items.append({"key": "registration_number", "label": "Registration number"})
-    if no_file("registration_evidence"):
+    if "REGISTRATION" not in slots_with_files:
         items.append({"key": "registration_evidence", "label": "Registration certificate (upload)"})
 
     entries = list(cred.active_items()) if cred is not None else []
     licences = [i for i in entries if i.is_licence]
     if not licences:
         items.append({"key": "licence", "label": "A practising licence"})
-    if not [i for i in entries if not i.is_licence]:
+    if not [i for i in entries if i.is_qualification]:
         items.append(
             {"key": "qualification", "label": "A qualification (degree, diploma or certificate)"}
         )
     for entry in entries:
         name = item_label(entry)
         key = f"item:{entry.pk}"
-        if entry.is_licence:
+        if entry.is_licence or entry.is_registration:
             if not entry.issuer.strip():
-                items.append({"key": f"{key}:issuer", "label": f"{name}: who issued it"})
+                items.append({"key": f"{key}:issuer", "label": f"{name}: the regulator"})
             if not entry.number.strip():
-                items.append({"key": f"{key}:number", "label": f"{name}: licence number"})
-            if entry.expires_on is None:
+                noun = "licence" if entry.is_licence else "registration"
+                items.append({"key": f"{key}:number", "label": f"{name}: {noun} number"})
+            if entry.is_licence and entry.expires_on is None:
                 items.append({"key": f"{key}:expires_on", "label": f"{name}: expiry date"})
         elif not entry.title.strip():
             items.append({"key": f"{key}:title", "label": f"{name}: its name"})
-        if not entry.evidence:
+        if entry.pk not in items_with_files:
             items.append({"key": f"{key}:evidence", "label": f"{name} (upload)"})
     today = timezone.localdate()
     for entry in cred.current_licences() if cred is not None else []:
@@ -202,6 +214,9 @@ def missing_items(user, cred=None):
 def item_label(entry):
     """How an entry is named to the person and their reviewers."""
     kind = dict(entry.KIND_CHOICES)[entry.kind]
+    if entry.is_registration:
+        detail = " ".join(p for p in (entry.issuer.strip(), entry.number.strip()) if p)
+        return f"Registration {detail}".strip() if detail else kind
     if entry.is_licence:
         detail = entry.number.strip() or entry.issuer.strip()
         return f"{kind} {detail}".strip()
@@ -305,16 +320,28 @@ def detail(user):
         "nacada_at": _iso(cred.nacada_verified_at) if cred else None,
         "nacada_by": _name(cred.nacada_verified_by) if cred else "",
     }
-    out["documents"] = {
-        kind: {"label": label, "uploaded": bool(cred and getattr(cred, attr))}
-        for kind, (attr, label) in DOCUMENT_KINDS.items()
-    }
+    files = (
+        list(cred.active_documents().select_related("uploaded_by").order_by("created_at"))
+        if cred
+        else []
+    )
+    out["documents"] = {}
+    for kind, (slot, label) in DOCUMENT_KINDS.items():
+        mine = [_file_out(f) for f in files if f.item_id is None and f.slot == slot]
+        out["documents"][kind] = {"label": label, "uploaded": bool(mine), "files": mine}
+    item_files = {}
+    for f in files:
+        if f.item_id is not None:
+            item_files.setdefault(f.item_id, []).append(_file_out(f))
     out["item_kinds"] = [
         {"value": v, "label": label} for v, label in PractitionerCredentialItem.KIND_CHOICES
     ]
     in_force = {i.pk for i in cred.current_licences()} if cred else set()
     out["items"] = (
-        [_item_out(i, i.pk in in_force) for i in cred.active_items().select_related("verified_by")]
+        [
+            _item_out(i, i.pk in in_force, item_files.get(i.pk, []))
+            for i in cred.active_items().select_related("verified_by")
+        ]
         if cred
         else []
     )
@@ -334,17 +361,29 @@ def detail(user):
     return out
 
 
-def _item_out(entry, in_force=False):
+def _file_out(document):
+    return {
+        "id": str(document.pk),
+        "name": document.original_name or document.file.name.rsplit("/", 1)[-1],
+        "size": document.size,
+        "uploaded_at": _iso(document.created_at),
+        "uploaded_by": _name(document.uploaded_by),
+    }
+
+
+def _item_out(entry, in_force=False, files=()):
     return {
         "id": str(entry.pk),
         "kind": entry.kind,
         "label": item_label(entry),
+        "regulator": entry.regulator,
         "title": entry.title,
         "issuer": entry.issuer,
         "number": entry.number,
         "issued_on": _iso(entry.issued_on),
         "expires_on": _iso(entry.expires_on),
-        "document_uploaded": bool(entry.evidence),
+        "document_uploaded": bool(files),
+        "files": list(files),
         "verified_at": _iso(entry.verified_at),
         "verified_by": _name(entry.verified_by),
         # A licence: whether it is the one in force from its regulator, and its state.
@@ -464,21 +503,94 @@ def check_upload(upload):
         )
 
 
+def check_uploads(uploads):
+    """One or more files, each checked by check_upload."""
+    uploads = [u for u in (uploads or []) if u is not None]
+    if not uploads:
+        raise ValidationError({"file": "Choose the document to upload."})
+    if len(uploads) > MAX_FILES_PER_UPLOAD:
+        raise ValidationError({"file": f"Upload at most {MAX_FILES_PER_UPLOAD} files at a time."})
+    for upload in uploads:
+        check_upload(upload)
+    return uploads
+
+
+def _save_files(cred, slot, uploads, actor, item=None):
+    from .models import PractitionerCredentialDocument
+
+    for upload in uploads:
+        PractitionerCredentialDocument.objects.create(
+            organization_id=cred.organization_id,
+            credential=cred,
+            slot=slot,
+            item=item,
+            file=upload,
+            original_name=upload.name.rsplit("/", 1)[-1][:255],
+            size=upload.size,
+            uploaded_by=actor,
+        )
+
+
+def _clear_slot_verification(cred, slot):
+    if slot == "REGISTRATION":
+        cred.registration_verified_at = cred.registration_verified_by = None
+    elif slot == "NACADA":
+        cred.nacada_verified_at = cred.nacada_verified_by = None
+
+
 @transaction.atomic
-def store_document(user, kind, upload):
+def store_document(user, kind, uploads):
+    """Add one or more files to one of the profile's own slots."""
     if kind not in DOCUMENT_KINDS:
         raise ValidationError({"kind": "Unknown document."})
-    check_upload(upload)
+    uploads = check_uploads(uploads)
     cred = credential_for(user, create=True)
-    attr = DOCUMENT_KINDS[kind][0]
-    setattr(cred, attr, upload)
-    if kind == "registration":
-        cred.registration_verified_at = cred.registration_verified_by = None
-    elif kind == "nacada":
-        cred.nacada_verified_at = cred.nacada_verified_by = None
+    slot = DOCUMENT_KINDS[kind][0]
+    _save_files(cred, slot, uploads, user)
+    _clear_slot_verification(cred, slot)
     _back_to_draft(cred)
     cred.save()
     return cred
+
+
+def store_nacada_by_admin(cred, uploads, actor):
+    """The Org Admin's credential drawer adds a NACADA certificate."""
+    uploads = check_uploads(uploads)
+    _save_files(cred, "NACADA", uploads, actor)
+
+
+def _own_document(user, document_id, cred=None):
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    cred = cred or credential_for(user)
+    if cred is None:
+        raise NotFound("No such document.")
+    try:
+        return cred.active_documents().select_related("item").get(pk=document_id)
+    except (cred.documents.model.DoesNotExist, DjangoValidationError, ValueError):
+        raise NotFound("No such document.") from None
+
+
+def document_for(target, document_id):
+    """A file on `target`'s profile, for download."""
+    return _own_document(target, document_id)
+
+
+@transaction.atomic
+def remove_document(user, document_id):
+    """Take a file off the profile. The row and the stored file are kept."""
+    cred = credential_for(user)
+    document = _own_document(user, document_id, cred)
+    document.removed_at, document.removed_by = timezone.now(), user
+    document.save(update_fields=["removed_at", "removed_by", "updated_at"])
+    if document.item_id is not None:
+        entry = document.item
+        entry.verified_at = entry.verified_by = None
+        entry.save(update_fields=["verified_at", "verified_by", "updated_at"])
+    else:
+        _clear_slot_verification(cred, document.slot)
+    _back_to_draft(cred)
+    cred.save()
 
 
 # ── licences and qualifications (many of each) ─────────────────────────────
@@ -498,7 +610,21 @@ def _own_item(user, item_id, cred=None):
 
 def _apply_item(entry, data):
     """Copy the editable fields from `data`; True when something changed."""
+    from .models import PractitionerCredential
+
     changed = False
+    if "regulator" in data and (entry.is_registration or entry.is_licence):
+        regulator = str(data.get("regulator") or "").strip()
+        choices = dict(PractitionerCredential.REGULATOR_CHOICES)
+        if regulator and regulator not in choices:
+            raise ValidationError({"regulator": "Choose a regulatory body from the list."})
+        if regulator != entry.regulator:
+            entry.regulator = regulator
+            changed = True
+        if regulator and regulator != "OTHER":
+            # Named by the choice; only "Other" takes a typed name.
+            # `data` may be a multipart QueryDict: read values with .get().
+            data = {**{key: data.get(key) for key in data.keys()}, "issuer": choices[regulator]}
     for key, size in ITEM_TEXT_FIELDS.items():
         if key in data:
             value = str(data.get(key) or "").strip()[:size]
@@ -515,6 +641,8 @@ def _apply_item(entry, data):
         raise ValidationError({"issued_on": "Can't be in the future."})
     if entry.issued_on and entry.expires_on and entry.expires_on <= entry.issued_on:
         raise ValidationError({"expires_on": "Must be after the issue date."})
+    if entry.is_registration and entry.regulator == "OTHER" and not entry.issuer.strip():
+        raise ValidationError({"issuer": "Name the regulatory body."})
     return changed
 
 
@@ -524,7 +652,7 @@ def _qualifications_line(cred):
     separately, so the two can't disagree."""
     titles = [
         e.title.strip()
-        for e in cred.active_items().exclude(kind=cred.items.model.KIND_LICENCE)
+        for e in cred.active_items().filter(kind__in=cred.items.model.QUALIFICATION_KINDS)
         if e.title.strip()
     ]
     line = ", ".join(dict.fromkeys(titles))[:255]
@@ -534,23 +662,27 @@ def _qualifications_line(cred):
 
 
 @transaction.atomic
-def add_item(user, data, upload=None):
-    """Add a licence, degree, diploma or certificate — optionally with its document."""
+def add_item(user, data, uploads=()):
+    """Add a registration, licence, degree, diploma or certificate — optionally
+    with its documents (as many files as were chosen)."""
     from .models import PractitionerCredentialItem
 
     kind = str(data.get("kind") or "").strip()
     if kind not in dict(PractitionerCredentialItem.KIND_CHOICES):
-        raise ValidationError({"kind": "Choose a licence, degree, diploma or certificate."})
-    if upload is not None:
-        check_upload(upload)
+        raise ValidationError(
+            {"kind": "Choose a registration, licence, degree, diploma or certificate."}
+        )
+    uploads = [u for u in (uploads or []) if u is not None]
+    if uploads:
+        check_uploads(uploads)
     cred = credential_for(user, create=True)
     entry = PractitionerCredentialItem(
         credential=cred, organization_id=cred.organization_id, kind=kind
     )
     _apply_item(entry, data)
-    if upload is not None:
-        entry.evidence = upload
     entry.save()
+    if uploads:
+        _save_files(cred, "ITEM", uploads, user, item=entry)
     _back_to_draft(cred)
     cred.save()
     _qualifications_line(cred)
@@ -573,11 +705,12 @@ def update_item(user, item_id, data):
 
 
 @transaction.atomic
-def store_item_document(user, item_id, upload):
-    check_upload(upload)
+def store_item_document(user, item_id, uploads):
+    """Add one or more files to an entry."""
+    uploads = check_uploads(uploads)
     cred = credential_for(user)
     entry = _own_item(user, item_id, cred)
-    entry.evidence = upload
+    _save_files(cred, "ITEM", uploads, user, item=entry)
     entry.verified_at = entry.verified_by = None
     entry.save()
     _back_to_draft(cred)
@@ -597,15 +730,11 @@ def remove_item(user, item_id):
     _qualifications_line(cred)
 
 
-def item_for(target, item_id):
-    """An entry on `target`'s profile, for download."""
-    return _own_item(target, item_id)
-
-
 # ── workflow ───────────────────────────────────────────────────────────────
 
 
 def _snapshot(cred):
+    files = list(cred.active_documents().values_list("slot", "item_id"))
     return {
         "regulator": cred.regulator,
         "registration_body": cred.registration_body,
@@ -620,7 +749,8 @@ def _snapshot(cred):
                 "number": e.number,
                 "issued_on": _iso(e.issued_on),
                 "expires_on": _iso(e.expires_on),
-                "document": bool(e.evidence),
+                "regulator": e.regulator,
+                "files": sum(1 for _, item_id in files if item_id == e.pk),
             }
             for e in cred.active_items()
         ],
@@ -628,7 +758,12 @@ def _snapshot(cred):
         "indemnity_expires_on": _iso(cred.indemnity_expires_on),
         "nacada_number": cred.nacada_number,
         "nacada_expires_on": _iso(cred.nacada_expires_on),
-        "documents": sorted(k for k, (a, _) in DOCUMENT_KINDS.items() if getattr(cred, a)),
+        # How many files each of the profile's own slots held.
+        "documents": {
+            kind: n
+            for kind, (slot, _) in DOCUMENT_KINDS.items()
+            if (n := sum(1 for s, item_id in files if s == slot and item_id is None))
+        },
     }
 
 

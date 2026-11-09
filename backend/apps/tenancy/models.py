@@ -727,6 +727,127 @@ class BranchIdentifierChange(TenantScopedModel):
         return f"{self.branch_id}: {self.field} {self.previous_value!r} -> {self.new_value!r}"
 
 
+class BranchRegulatoryRecord(TenantScopedModel):
+    """
+    One regulatory document a branch (a licensed facility) holds — a KMPDC
+    facility registration certificate, an annual operating licence, a NACADA
+    accreditation, a pharmacy premises licence — as many as the branch needs,
+    each with as many files as it takes (BranchRegulatoryFile): a renewal, a
+    multi-page scan, a receipt with its certificate.
+
+    Recorded alongside, never instead of, the branch's registration numbers
+    (Branch.kmpdc_registration_number, facility_license_*), whose history and
+    reminders are unchanged.
+
+    FHIR: none. This is organisation administration, not patient data, so it
+    has no resource and no `EpisodeOfCare` hook.
+
+    Removing a record hides it (`removed_at`); the row and its files are kept.
+    """
+
+    # VERIFY (CLAUDE.md §6): display labels only, for the person filling the
+    # form in. No code system, identifier `system` URI or regulator registry
+    # is derived from them; which regulators license which kind of facility
+    # is for the owner to confirm. Anything else is "Other", named as written
+    # on the document.
+    REGULATOR_KMPDC = "KMPDC"
+    REGULATOR_NACADA = "NACADA"
+    REGULATOR_PPB = "PPB"
+    REGULATOR_OTHER = "OTHER"
+    REGULATOR_CHOICES = [
+        (REGULATOR_KMPDC, "Kenya Medical Practitioners and Dentists Council (KMPDC)"),
+        (REGULATOR_NACADA, "NACADA"),
+        (REGULATOR_PPB, "Pharmacy and Poisons Board (PPB)"),
+        (REGULATOR_OTHER, "Other (name it)"),
+    ]
+
+    STATUS_NO_EXPIRY = "NO_EXPIRY"
+    STATUS_VALID = "VALID"
+    STATUS_EXPIRING = "EXPIRING"
+    STATUS_EXPIRED = "EXPIRED"
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="regulatory_records")
+    regulator = models.CharField(max_length=8, choices=REGULATOR_CHOICES)
+    # Only for OTHER: the regulator's name as written on the document.
+    regulator_name = models.CharField(max_length=150, blank=True)
+    # As written on the document (e.g. "Annual operating licence 2027").
+    document_type = models.CharField(max_length=150)
+    number = models.CharField(max_length=64, blank=True)
+    issued_on = models.DateField(null=True, blank=True)
+    valid_until = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-created_at"]
+
+    @property
+    def regulator_display(self):
+        if self.regulator == self.REGULATOR_OTHER:
+            return self.regulator_name
+        return self.get_regulator_display()
+
+    @property
+    def days_remaining(self):
+        from django.utils import timezone
+
+        if self.valid_until is None:
+            return None
+        return (self.valid_until - timezone.localdate()).days
+
+    @property
+    def status(self):
+        """NO_EXPIRY, VALID, EXPIRING (inside the facility-licence reminder window) or EXPIRED."""
+        from django.conf import settings
+
+        days = self.days_remaining
+        if days is None:
+            return self.STATUS_NO_EXPIRY
+        if days < 0:
+            return self.STATUS_EXPIRED
+        if days <= max(settings.FACILITY_LICENSE_REMINDER_DAYS, default=0):
+            return self.STATUS_EXPIRING
+        return self.STATUS_VALID
+
+    def __str__(self):
+        return f"{self.branch_id}: {self.regulator} {self.document_type}"
+
+
+class BranchRegulatoryFile(TenantScopedModel):
+    """
+    One file of a BranchRegulatoryRecord (PDF, PNG or JPEG, checked by
+    apps.accounts.practitioner_profile.check_upload). Served only through the
+    authenticated, audited download endpoint, never a public media URL.
+    Removing a file hides it (`removed_at`); the row and the stored file are
+    kept. `created_at` is when it was uploaded.
+    """
+
+    record = models.ForeignKey(
+        BranchRegulatoryRecord, on_delete=models.PROTECT, related_name="files"
+    )
+    file = models.FileField(upload_to="branches/regulatory/%Y/%m/", max_length=255)
+    original_name = models.CharField(max_length=255)
+    size = models.PositiveIntegerField()
+    uploaded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.record_id}: {self.original_name}"
+
+
 class Department(TenantScopedModel):
     """
     An organisational unit within a tenant — docs/04-MULTI-TENANCY.md §4.1's

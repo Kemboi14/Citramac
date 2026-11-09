@@ -1,6 +1,6 @@
 """Legal admission status endpoints (master prompt §7A). Logic is in legal_status.py."""
 
-from django.http import FileResponse
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -200,12 +200,15 @@ def _apply_nacada(cred, data, user, now):
 
 
 class NacadaEvidenceView(APIView):
-    """The NACADA certificate: Org Admin uploads (POST, `file`); Org Admin or its holder downloads (GET)."""
+    """NACADA certificates: Org Admin adds files (POST, one or more `files`);
+    Org Admin or the holder downloads one (GET `?file=<id>`, else the latest).
+    The files are the profile's own NACADA slot (PractitionerCredentialDocument)."""
 
     parser_classes = [MultiPartParser]
 
     def get(self, request, user_id):
         from apps.accounts.models import PractitionerCredential
+        from apps.accounts.practitioner_views import _file_response
 
         target = PractitionerCredentialView()._target(request, user_id)
         if target.pk != request.user.pk and not _is_org_admin(request.user):
@@ -213,34 +216,47 @@ class NacadaEvidenceView(APIView):
                 "Only an organisation administrator can view another practitioner's credential."
             )
         cred = PractitionerCredential.objects.filter(user=target).first()
-        if cred is None or not cred.nacada_evidence:
+        files = (
+            cred.active_documents().filter(slot="NACADA", item__isnull=True)
+            if cred is not None
+            else None
+        )
+        wanted = request.query_params.get("file")
+        document = None
+        if files is not None:
+            try:
+                document = (
+                    files.filter(pk=wanted).first()
+                    if wanted
+                    else files.order_by("-created_at").first()
+                )
+            except (DjangoValidationError, ValueError):
+                document = None
+        if document is None:
             raise NotFound("No NACADA certificate uploaded.")
-        return FileResponse(
-            cred.nacada_evidence.open("rb"),
-            as_attachment=False,
-            filename=cred.nacada_evidence.name.rsplit("/", 1)[-1],
+        return _file_response(
+            cred,
+            target,
+            document.file,
+            f"nacada:file:{document.pk}",
+            document.original_name or None,
         )
 
     def post(self, request, user_id):
         from apps.accounts.models import PractitionerCredential
+        from apps.accounts.practitioner_profile import store_nacada_by_admin
 
         if not _is_org_admin(request.user) or request.user.is_superuser:
             raise PermissionDenied(
                 "Only an organisation administrator can record practitioner credentials."
             )
         target = PractitionerCredentialView()._target(request, user_id)
-        upload = request.FILES.get("file")
-        if upload is None:
-            raise ValidationError({"file": "Choose the certificate to upload."})
-        if upload.size > 10 * 1024 * 1024:
-            raise ValidationError({"file": "The certificate must be 10 MB or smaller."})
-        if not upload.name.lower().endswith((".pdf", ".png", ".jpg", ".jpeg")):
-            raise ValidationError({"file": "Upload a PDF, PNG or JPEG."})
         cred, _ = PractitionerCredential.objects.get_or_create(
             user=target, defaults={"organization_id": target.organization_id}
         )
-        cred.nacada_evidence = upload
-        cred.save(update_fields=["nacada_evidence", "updated_at"])
+        store_nacada_by_admin(
+            cred, request.FILES.getlist("files") + request.FILES.getlist("file"), request.user
+        )
         return Response(legal_status.credential_status(target))
 
 

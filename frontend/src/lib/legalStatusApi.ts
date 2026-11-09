@@ -110,6 +110,8 @@ export interface NacadaCredential {
   verified_at: string | null;
   verified_by: string;
   has_evidence: boolean;
+  /** Every NACADA certificate file (many may be uploaded). */
+  files: { id: string; name: string; uploaded_at: string | null }[];
   status: "UNVERIFIED" | "EXPIRED" | "EXPIRING" | "VALID" | null;
 }
 
@@ -233,9 +235,9 @@ export function getPractitionerCredential(accessToken: string, userId: string) {
   return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/`, { accessToken });
 }
 
-export function uploadNacadaEvidence(accessToken: string, userId: string, file: File) {
+export function uploadNacadaEvidence(accessToken: string, userId: string, files: File[]) {
   const body = new FormData();
-  body.set("file", file);
+  for (const file of files) body.append("files", file);
   return apiRequest<Credential>(`/care/legal/practitioners/${userId}/credential/nacada-evidence/`, {
     method: "POST",
     body,
@@ -243,9 +245,9 @@ export function uploadNacadaEvidence(accessToken: string, userId: string, file: 
   });
 }
 
-export function downloadNacadaEvidence(accessToken: string, userId: string) {
+export function downloadNacadaEvidence(accessToken: string, userId: string, fileId: string) {
   return apiDownload(
-    `/care/legal/practitioners/${userId}/credential/nacada-evidence/`,
+    `/care/legal/practitioners/${userId}/credential/nacada-evidence/?file=${encodeURIComponent(fileId)}`,
     accessToken,
   );
 }

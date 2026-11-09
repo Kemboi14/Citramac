@@ -5,18 +5,19 @@ import { SaveButton } from "../../components/SaveButton";
 import { Callout, StatusPill } from "../care/shared/ui";
 import {
   addMyCredentialItem,
-  downloadMyCredentialItemDocument,
-  downloadMyProfessionalDocument,
+  downloadMyProfessionalFile,
   getMyProfessionalProfile,
   openBlob,
   removeMyCredentialItem,
+  removeMyProfessionalFile,
   STATUS_LABEL,
   STATUS_TONE,
   submitMyProfessionalProfile,
   updateMyCredentialItem,
   updateMyProfessionalProfile,
-  uploadMyCredentialItemDocument,
-  uploadMyProfessionalDocument,
+  uploadMyCredentialItemDocuments,
+  uploadMyProfessionalDocuments,
+  type CredentialFile,
   type CredentialItem,
   type CredentialItemFields,
   type DocumentKind,
@@ -59,68 +60,116 @@ function dateText(iso: string | null) {
 }
 
 /**
- * The upload placeholder that sits next to every document the profile asks
- * for: whether it is uploaded, View, and Upload / Replace. Before an entry is
- * saved, the chosen file is held here and sent with the entry.
+ * The upload place that sits next to every document the profile asks for. It
+ * takes as many files as the person needs (several pages, front and back, a
+ * renewal letter): each file is listed with View and Remove, and "Add files"
+ * picks one or more at a time. Before an entry is saved, the chosen files are
+ * held here and sent with the entry.
  */
 function DocumentSlot({
   label,
-  uploaded,
+  files,
   required,
   busy,
-  pendingName,
+  pending = [],
   onPick,
   onView,
+  onRemove,
+  onDropPending,
 }: {
   label: string;
-  uploaded: boolean;
+  files: CredentialFile[];
   required: boolean;
   busy: boolean;
-  pendingName?: string;
-  onPick: (file: File) => void;
-  onView?: () => void;
+  pending?: File[];
+  onPick: (files: File[]) => void;
+  onView?: (fileId: string) => void;
+  onRemove?: (file: CredentialFile) => void;
+  onDropPending?: (index: number) => void;
 }) {
+  const count = files.length;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-surface-border bg-surface-bg px-3 py-2.5">
-      <div className="min-w-0 flex-1 text-[12.5px] text-ink-900">
-        <span className="font-semibold">{label}</span>
-        <span className="ml-1.5 text-[11.5px] text-ink-500">PDF, PNG or JPEG, up to 10 MB</span>
-        {pendingName && (
-          <span className="block text-[11.5px] text-ink-500">
-            Selected: {pendingName} — uploaded when you save
+    <div className="mt-3 rounded-md border border-dashed border-surface-border bg-surface-bg px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1 text-[12.5px] text-ink-900">
+          <span className="font-semibold">{label}</span>
+          <span className="ml-1.5 text-[11.5px] text-ink-500">
+            PDF, PNG or JPEG, up to 10 MB each · add as many files as you need
           </span>
-        )}
+        </div>
+        <StatusPill
+          tone={count ? "success" : pending.length ? "info" : required ? "warning" : "neutral"}
+        >
+          {count
+            ? `${count} file${count === 1 ? "" : "s"} uploaded`
+            : pending.length
+              ? "Ready to upload"
+              : "Not uploaded"}
+        </StatusPill>
+        <label className={`${GHOST} cursor-pointer`}>
+          {busy ? "Uploading…" : count || pending.length ? "Add files" : "Upload files"}
+          <input
+            type="file"
+            multiple
+            accept={ACCEPT}
+            className="sr-only"
+            disabled={busy}
+            aria-label={`Upload ${label}`}
+            onChange={(e) => {
+              const picked = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (picked.length) onPick(picked);
+            }}
+          />
+        </label>
       </div>
-      <StatusPill
-        tone={uploaded ? "success" : pendingName ? "info" : required ? "warning" : "neutral"}
-      >
-        {uploaded ? "Uploaded" : pendingName ? "Ready to upload" : "Not uploaded"}
-      </StatusPill>
-      {uploaded && onView && (
-        <button type="button" className={GHOST} onClick={onView}>
-          View
-        </button>
+      {(count > 0 || pending.length > 0) && (
+        <ul className="mt-2 divide-y divide-surface-border rounded-md border border-surface-border bg-surface-card">
+          {files.map((file) => (
+            <li key={file.id} className="flex flex-wrap items-center gap-2 px-3 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-900">
+                {file.name}
+              </span>
+              {onView && (
+                <button type="button" className={GHOST} onClick={() => onView(file.id)}>
+                  View
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  type="button"
+                  className={GHOST}
+                  disabled={busy}
+                  onClick={() => onRemove(file)}
+                >
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+          {pending.map((file, index) => (
+            <li
+              key={`pending-${index}-${file.name}`}
+              className="flex flex-wrap items-center gap-2 px-3 py-1.5"
+            >
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-700">
+                {file.name} — uploaded when you save
+              </span>
+              {onDropPending && (
+                <button type="button" className={GHOST} onClick={() => onDropPending(index)}>
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
-      <label className={`${GHOST} cursor-pointer`}>
-        {busy ? "Uploading…" : uploaded || pendingName ? "Replace" : "Upload"}
-        <input
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          disabled={busy}
-          aria-label={`Upload ${label}`}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onPick(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
     </div>
   );
 }
 
 type ItemDraft = {
+  regulator: string;
   title: string;
   issuer: string;
   number: string;
@@ -130,6 +179,7 @@ type ItemDraft = {
 
 function draftFrom(item: CredentialItem | null, issuer = ""): ItemDraft {
   return {
+    regulator: item?.regulator ?? "",
     title: item?.title ?? "",
     issuer: item?.issuer ?? issuer,
     number: item?.number ?? "",
@@ -152,8 +202,9 @@ function itemPill(item: CredentialItem) {
 }
 
 /**
- * One licence, degree, diploma or certificate, with its own document slot.
- * `item` is null for a new entry that hasn't been saved yet.
+ * One further registration, licence, degree, diploma or certificate, with its
+ * own document slot (as many files as needed). `item` is null for a new entry
+ * that hasn't been saved yet.
  */
 function CredentialItemCard({
   kind,
@@ -161,11 +212,13 @@ function CredentialItemCard({
   item,
   defaultIssuer,
   issuerSuggestions,
+  regulatorChoices,
   onCreate,
   onUpdate,
   onRemove,
   onUpload,
   onView,
+  onRemoveFile,
   onCancel,
 }: {
   kind: ItemKind;
@@ -173,17 +226,20 @@ function CredentialItemCard({
   item: CredentialItem | null;
   defaultIssuer: string;
   issuerSuggestions: string[];
-  onCreate: (fields: CredentialItemFields, file: File | null) => Promise<void>;
+  regulatorChoices: { value: string; label: string }[];
+  onCreate: (fields: CredentialItemFields, files: File[]) => Promise<void>;
   onUpdate: (id: string, fields: CredentialItemFields) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
-  onUpload: (id: string, file: File) => Promise<void>;
-  onView: (id: string) => void;
+  onUpload: (id: string, files: File[]) => Promise<void>;
+  onView: (fileId: string) => void;
+  onRemoveFile: (file: CredentialFile) => Promise<void>;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<ItemDraft>(() => draftFrom(item, defaultIssuer));
-  const [pending, setPending] = useState<File | null>(null);
+  const [pending, setPending] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const licence = kind === "LICENCE";
+  const registration = kind === "REGISTRATION";
   const id = item?.id ?? `new-${kind}`;
   const saved = item ? draftFrom(item) : null;
   const dirty =
@@ -194,11 +250,12 @@ function CredentialItemCard({
     );
   const set = (patch: Partial<ItemDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
   const fields = (): CredentialItemFields => ({
+    ...(registration ? { regulator: draft.regulator } : {}),
     title: draft.title,
     issuer: draft.issuer,
     number: draft.number,
     issued_on: draft.issued_on || null,
-    expires_on: licence ? draft.expires_on || null : null,
+    expires_on: licence || registration ? draft.expires_on || null : null,
   });
 
   const save = async () => {
@@ -206,14 +263,24 @@ function CredentialItemCard({
     else await onCreate(fields(), pending);
   };
 
-  const pick = async (file: File) => {
+  const pick = async (files: File[]) => {
     if (!item) {
-      setPending(file);
+      setPending((prev) => [...prev, ...files]);
       return;
     }
     setBusy(true);
     try {
-      await onUpload(item.id, file);
+      await onUpload(item.id, files);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeFile = async (file: CredentialFile) => {
+    if (!window.confirm(`Remove ${file.name}?`)) return;
+    setBusy(true);
+    try {
+      await onRemoveFile(file);
     } finally {
       setBusy(false);
     }
@@ -234,7 +301,60 @@ function CredentialItemCard({
         {item && itemPill(item)}
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {licence ? (
+        {registration ? (
+          <>
+            <div className={draft.regulator === "OTHER" ? "" : "sm:col-span-2"}>
+              <label className={LABEL} htmlFor={`${id}-regulator`}>
+                Regulatory body
+              </label>
+              <select
+                id={`${id}-regulator`}
+                className={INPUT}
+                value={draft.regulator}
+                onChange={(e) =>
+                  set({
+                    regulator: e.target.value,
+                    issuer:
+                      e.target.value === "OTHER"
+                        ? ""
+                        : (regulatorChoices.find((c) => c.value === e.target.value)?.label ?? ""),
+                  })
+                }
+              >
+                <option value="">Choose…</option>
+                {regulatorChoices.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {draft.regulator === "OTHER" && (
+              <div>
+                <label className={LABEL} htmlFor={`${id}-issuer`}>
+                  Name of the regulatory body
+                </label>
+                <input
+                  id={`${id}-issuer`}
+                  className={INPUT}
+                  value={draft.issuer}
+                  onChange={(e) => set({ issuer: e.target.value })}
+                />
+              </div>
+            )}
+            <div>
+              <label className={LABEL} htmlFor={`${id}-number`}>
+                Registration number
+              </label>
+              <input
+                id={`${id}-number`}
+                className={INPUT}
+                value={draft.number}
+                onChange={(e) => set({ number: e.target.value })}
+              />
+            </div>
+          </>
+        ) : licence ? (
           <>
             <div>
               <label className={LABEL} htmlFor={`${id}-issuer`}>
@@ -295,7 +415,7 @@ function CredentialItemCard({
         )}
         <div>
           <label className={LABEL} htmlFor={`${id}-from`}>
-            {licence ? "Issued on" : "Awarded on"}
+            {licence || registration ? "Issued on" : "Awarded on"}
           </label>
           <input
             id={`${id}-from`}
@@ -305,10 +425,10 @@ function CredentialItemCard({
             onChange={(e) => set({ issued_on: e.target.value })}
           />
         </div>
-        {licence ? (
+        {licence || registration ? (
           <div>
             <label className={LABEL} htmlFor={`${id}-to`}>
-              Expires on
+              {registration ? "Expires on (if it does)" : "Expires on"}
             </label>
             <input
               id={`${id}-to`}
@@ -334,13 +454,21 @@ function CredentialItemCard({
       </div>
 
       <DocumentSlot
-        label={licence ? "Practising licence" : `${kindLabel} certificate`}
-        uploaded={Boolean(item?.document_uploaded)}
+        label={
+          licence
+            ? "Practising licence"
+            : registration
+              ? "Registration certificate"
+              : `${kindLabel} certificate`
+        }
+        files={item?.files ?? []}
         required
         busy={busy}
-        pendingName={pending?.name}
-        onPick={(file) => void pick(file)}
-        onView={item ? () => onView(item.id) : undefined}
+        pending={pending}
+        onPick={(files) => void pick(files)}
+        onView={onView}
+        onRemove={item ? (file) => void removeFile(file) : undefined}
+        onDropPending={(index) => setPending((prev) => prev.filter((_, i) => i !== index))}
       />
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
@@ -449,11 +577,11 @@ export function ProfessionalProfileSection() {
     }
   };
 
-  const upload = async (kind: DocumentKind, file: File) => {
+  const upload = async (kind: DocumentKind, files: File[]) => {
     setError(null);
     setUploading(kind);
     try {
-      await applied(await uploadMyProfessionalDocument(accessToken, kind, file), false);
+      await applied(await uploadMyProfessionalDocuments(accessToken, kind, files), false);
     } catch (err) {
       setError(message(err, "Couldn't upload the document."));
     } finally {
@@ -461,11 +589,25 @@ export function ProfessionalProfileSection() {
     }
   };
 
-  const view = async (kind: DocumentKind) => {
+  const view = async (fileId: string) => {
     try {
-      openBlob(await downloadMyProfessionalDocument(accessToken, kind));
+      openBlob(await downloadMyProfessionalFile(accessToken, fileId));
     } catch (err) {
       setError(message(err, "Couldn't open the document."));
+    }
+  };
+
+  const removeFile = async (file: CredentialFile, kind?: DocumentKind) => {
+    if (kind && !window.confirm(`Remove ${file.name}?`)) return;
+    setError(null);
+    if (kind) setUploading(kind);
+    try {
+      await applied(await removeMyProfessionalFile(accessToken, file.id), false);
+    } catch (err) {
+      setError(message(err, "Couldn't remove the file."));
+      throw err;
+    } finally {
+      if (kind) setUploading(null);
     }
   };
 
@@ -479,14 +621,6 @@ export function ProfessionalProfileSection() {
     } catch (err) {
       setError(message(err, fallback));
       throw err;
-    }
-  };
-
-  const viewItem = async (itemId: string) => {
-    try {
-      openBlob(await downloadMyCredentialItemDocument(accessToken, itemId));
-    } catch (err) {
-      setError(message(err, "Couldn't open the document."));
     }
   };
 
@@ -514,9 +648,10 @@ export function ProfessionalProfileSection() {
       item={item}
       defaultIssuer={kind === "LICENCE" ? registrationBody : ""}
       issuerSuggestions={regulatorNames}
-      onCreate={(fields, file) =>
+      regulatorChoices={profile.regulator_choices}
+      onCreate={(fields, files) =>
         itemAction(
-          () => addMyCredentialItem(accessToken, kind, fields, file),
+          () => addMyCredentialItem(accessToken, kind, fields, files),
           "Couldn't add the entry.",
         ).then(() => {
           if (draftKey !== undefined) dropDraft(draftKey);
@@ -534,19 +669,21 @@ export function ProfessionalProfileSection() {
           "Couldn't remove the entry.",
         ).catch(() => undefined)
       }
-      onUpload={(itemId, file) =>
+      onUpload={(itemId, files) =>
         itemAction(
-          () => uploadMyCredentialItemDocument(accessToken, itemId, file),
+          () => uploadMyCredentialItemDocuments(accessToken, itemId, files),
           "Couldn't upload the document.",
         ).catch(() => undefined)
       }
-      onView={(itemId) => void viewItem(itemId)}
+      onView={(fileId) => void view(fileId)}
+      onRemoveFile={(file) => removeFile(file).catch(() => undefined)}
       onCancel={() => draftKey !== undefined && dropDraft(draftKey)}
     />
   );
 
+  const registrations = profile.items.filter((i) => i.kind === "REGISTRATION");
   const licences = profile.items.filter((i) => i.kind === "LICENCE");
-  const qualifications = profile.items.filter((i) => i.kind !== "LICENCE");
+  const qualifications = profile.items.filter((i) => QUALIFICATION_KINDS.includes(i.kind));
 
   const status = profile.status;
   const canSubmit =
@@ -568,7 +705,7 @@ export function ProfessionalProfileSection() {
           </h2>
           <p className="mt-1 text-[13px] text-ink-500">
             {profile.credentials_required
-              ? "Your registration, practising licences and qualifications, each with its document beside it. Save as you go, then submit it to be verified."
+              ? "Your registrations, practising licences and qualifications, each with its documents beside it (add as many files as you need). Save as you go, then submit it to be verified."
               : "Your roles don't need a professional registration. Keep your mobile number up to date above."}
           </p>
         </div>
@@ -663,17 +800,31 @@ export function ProfessionalProfileSection() {
           </div>
           <DocumentSlot
             label={profile.documents.registration.label}
-            uploaded={profile.documents.registration.uploaded}
+            files={profile.documents.registration.files}
             required
             busy={uploading === "registration"}
-            onPick={(file) => void upload("registration", file)}
-            onView={() => void view("registration")}
+            onPick={(files) => void upload("registration", files)}
+            onView={(fileId) => void view(fileId)}
+            onRemove={(file) => void removeFile(file, "registration").catch(() => undefined)}
           />
           <div className="mt-3 flex justify-end">
             <SaveButton onSave={save} variant="ghost">
               Save registration
             </SaveButton>
           </div>
+
+          <div className={SUBHEAD}>Registrations with other regulators</div>
+          <p className={HELP}>
+            If you are also registered with another regulator, add each registration here with its
+            certificate. The registration above is the one printed on Mental Health Act forms.
+          </p>
+          {registrations.map((item) => card("REGISTRATION", item))}
+          {drafts
+            .filter((d) => d.kind === "REGISTRATION")
+            .map((d) => card("REGISTRATION", null, d.key))}
+          <button type="button" className={GHOST} onClick={() => addDraft("REGISTRATION")}>
+            + Add a registration with another regulator
+          </button>
 
           <div className={SUBHEAD}>Practising licences</div>
           <p className={HELP}>
@@ -691,7 +842,9 @@ export function ProfessionalProfileSection() {
             Add each qualification you hold. Each one asks for its certificate.
           </p>
           {qualifications.map((item) => card(item.kind, item))}
-          {drafts.filter((d) => d.kind !== "LICENCE").map((d) => card(d.kind, null, d.key))}
+          {drafts
+            .filter((d) => QUALIFICATION_KINDS.includes(d.kind))
+            .map((d) => card(d.kind, null, d.key))}
           <div className="flex flex-wrap gap-2">
             {QUALIFICATION_KINDS.map((kind) => (
               <button key={kind} type="button" className={GHOST} onClick={() => addDraft(kind)}>
@@ -754,11 +907,12 @@ export function ProfessionalProfileSection() {
             </div>
             <DocumentSlot
               label={profile.documents.nacada.label}
-              uploaded={profile.documents.nacada.uploaded}
+              files={profile.documents.nacada.files}
               required={Boolean(form.nacada_number.trim())}
               busy={uploading === "nacada"}
-              onPick={(file) => void upload("nacada", file)}
-              onView={() => void view("nacada")}
+              onPick={(files) => void upload("nacada", files)}
+              onView={(fileId) => void view(fileId)}
+              onRemove={(file) => void removeFile(file, "nacada").catch(() => undefined)}
             />
           </div>
           <div className={CARD}>
@@ -792,11 +946,12 @@ export function ProfessionalProfileSection() {
             </div>
             <DocumentSlot
               label={profile.documents.indemnity.label}
-              uploaded={profile.documents.indemnity.uploaded}
+              files={profile.documents.indemnity.files}
               required={Boolean(form.indemnity_number.trim())}
               busy={uploading === "indemnity"}
-              onPick={(file) => void upload("indemnity", file)}
-              onView={() => void view("indemnity")}
+              onPick={(files) => void upload("indemnity", files)}
+              onView={(fileId) => void view(fileId)}
+              onRemove={(file) => void removeFile(file, "indemnity").catch(() => undefined)}
             />
           </div>
           <div className="flex justify-end">

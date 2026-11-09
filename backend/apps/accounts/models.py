@@ -566,7 +566,6 @@ class PractitionerCredential(TenantScopedModel):
     nacada_category = models.CharField(max_length=150, blank=True)
     nacada_issued_on = models.DateField(null=True, blank=True)
     nacada_expires_on = models.DateField(null=True, blank=True)
-    nacada_evidence = models.FileField(upload_to="credentials/nacada/%Y/%m/", null=True, blank=True)
     nacada_verified_at = models.DateTimeField(null=True, blank=True)
     nacada_verified_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -599,24 +598,24 @@ class PractitionerCredential(TenantScopedModel):
         (STATUS_VERIFIED, "Verified"),
         (STATUS_RETURNED, "Returned for changes"),
     ]
+    # The main registration — the one the Mental Health Act forms print and
+    # the Health Worker Registry is searched with. Registrations with further
+    # regulators, practising licences, degrees, diplomas and certificates are
+    # PractitionerCredentialItem rows (`items`), as many as the person holds.
+    # Every document — as many files per slot as the person uploads — is a
+    # PractitionerCredentialDocument (2026-11-09).
     regulator = models.CharField(max_length=8, choices=REGULATOR_CHOICES, blank=True)
-    registration_evidence = models.FileField(
-        upload_to="credentials/registration/%Y/%m/", null=True, blank=True
-    )
-    # Practising licences, degrees, diplomas and certificates are
-    # PractitionerCredentialItem rows (`items`), as many as the person holds,
-    # each with its own document (2026-11-09).
     indemnity_number = models.CharField(max_length=64, blank=True)
     indemnity_expires_on = models.DateField(null=True, blank=True)
-    indemnity_evidence = models.FileField(
-        upload_to="credentials/indemnity/%Y/%m/", null=True, blank=True
-    )
     profile_status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     submitted_at = models.DateTimeField(null=True, blank=True)
     returned_reason = models.TextField(blank=True)
 
     def active_items(self):
         return self.items.filter(removed_at__isnull=True)
+
+    def active_documents(self):
+        return self.documents.filter(removed_at__isnull=True)
 
     def current_licences(self):
         """
@@ -669,10 +668,12 @@ class PractitionerCredential(TenantScopedModel):
 
 class PractitionerCredentialItem(TenantScopedModel):
     """
-    One practising licence, degree, diploma or certificate a practitioner
-    holds, with its own document. A person may hold many of each: licences
-    from more than one regulator, a renewal next to the licence it replaced,
-    and every qualification they want on record.
+    One registration with a further regulator, practising licence, degree,
+    diploma or certificate a practitioner holds, with its documents (as many
+    files as they upload). A person may hold many of each: registrations with
+    more than one regulator, licences from more than one regulator, a renewal
+    next to the licence it replaced, and every qualification they want on
+    record.
 
     FHIR (not emitted yet): one `Practitioner.qualification` each (identifier
     = number, period = issued/expires, issuer = the regulator or institution,
@@ -685,12 +686,14 @@ class PractitionerCredentialItem(TenantScopedModel):
     and the review snapshots record what was there when.
     """
 
+    KIND_REGISTRATION = "REGISTRATION"
     KIND_LICENCE = "LICENCE"
     KIND_DEGREE = "DEGREE"
     KIND_DIPLOMA = "DIPLOMA"
     KIND_CERTIFICATE = "CERTIFICATE"
     KIND_OTHER = "OTHER"
     KIND_CHOICES = [
+        (KIND_REGISTRATION, "Registration with another regulator"),
         (KIND_LICENCE, "Practising licence"),
         (KIND_DEGREE, "Degree"),
         (KIND_DIPLOMA, "Diploma"),
@@ -703,6 +706,12 @@ class PractitionerCredentialItem(TenantScopedModel):
         PractitionerCredential, on_delete=models.CASCADE, related_name="items"
     )
     kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    # A registration or licence: the regulator picked from the list (display
+    # labels only — VERIFY, see PractitionerCredential.REGULATOR_CHOICES).
+    # `issuer` then holds its name, or the name typed for "Other".
+    regulator = models.CharField(
+        max_length=8, choices=PractitionerCredential.REGULATOR_CHOICES, blank=True
+    )
     # A qualification's name as on the certificate (e.g. "MBChB"); for a
     # licence, optional (e.g. "Annual practising licence 2027").
     title = models.CharField(max_length=150, blank=True)
@@ -711,7 +720,6 @@ class PractitionerCredentialItem(TenantScopedModel):
     number = models.CharField(max_length=64, blank=True)
     issued_on = models.DateField(null=True, blank=True)
     expires_on = models.DateField(null=True, blank=True)
-    evidence = models.FileField(upload_to="credentials/items/%Y/%m/", null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     verified_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -729,6 +737,17 @@ class PractitionerCredentialItem(TenantScopedModel):
         return self.kind == self.KIND_LICENCE
 
     @property
+    def is_registration(self):
+        return self.kind == self.KIND_REGISTRATION
+
+    @property
+    def is_qualification(self):
+        return self.kind in self.QUALIFICATION_KINDS
+
+    def active_documents(self):
+        return self.documents.filter(removed_at__isnull=True)
+
+    @property
     def licence_status(self):
         """For a licence: EXPIRED, UNVERIFIED, EXPIRING (≤30 days) or VALID."""
         today = timezone.localdate()
@@ -742,6 +761,68 @@ class PractitionerCredentialItem(TenantScopedModel):
 
     def __str__(self):
         return f"{self.kind} for {self.credential_id}"
+
+
+class PractitionerCredentialDocument(TenantScopedModel):
+    """
+    One uploaded file on a practitioner's profile. Every slot takes as many
+    files as the person needs (a certificate in several pages, front and back,
+    a renewal letter): the main registration, NACADA accreditation, indemnity
+    cover, or an entry (`item`) — a further registration, licence or
+    qualification.
+
+    Removing a file hides it (`removed_at`); the row and the stored file are
+    kept, and every download is audited. Workforce data, not patient data —
+    no FHIR resource (the entries themselves are Practitioner.qualification).
+    """
+
+    SLOT_REGISTRATION = "REGISTRATION"
+    SLOT_NACADA = "NACADA"
+    SLOT_INDEMNITY = "INDEMNITY"
+    SLOT_ITEM = "ITEM"
+    SLOT_CHOICES = [
+        (SLOT_REGISTRATION, "Registration certificate"),
+        (SLOT_NACADA, "NACADA accreditation certificate"),
+        (SLOT_INDEMNITY, "Professional indemnity cover"),
+        (SLOT_ITEM, "Entry document"),
+    ]
+
+    credential = models.ForeignKey(
+        PractitionerCredential, on_delete=models.CASCADE, related_name="documents"
+    )
+    slot = models.CharField(max_length=12, choices=SLOT_CHOICES)
+    item = models.ForeignKey(
+        PractitionerCredentialItem,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    file = models.FileField(upload_to="credentials/documents/%Y/%m/")
+    original_name = models.CharField(max_length=255, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(slot="ITEM", item__isnull=False)
+                    | (~models.Q(slot="ITEM") & models.Q(item__isnull=True))
+                ),
+                name="practitioner_document_item_matches_slot",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.slot} document for {self.credential_id}"
 
 
 class PractitionerCredentialReview(TenantScopedModel):
