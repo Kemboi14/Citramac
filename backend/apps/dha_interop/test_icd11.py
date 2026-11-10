@@ -166,7 +166,10 @@ class DiagnosisCodingTests(APITestCase):
                 name="Org", slug="org", facility_type="MENTAL_HEALTH_MHP"
             )
             self.clinician = User.objects.create_user(
-                email="doc@org.test", password="Password123!", organization=self.org, is_active=True
+                email="doc@org.test",
+                password="Password123!",  # pragma: allowlist secret
+                organization=self.org,
+                is_active=True,
             )
             role, _ = Role.objects.get_or_create(
                 organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}

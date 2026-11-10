@@ -36,7 +36,7 @@ from django.utils import timezone
 RELEASE_DIR = Path(__file__).resolve().parent / "icd11_release"
 VENDORED_RELEASE = "2026-01"
 VENDORED_FILE = RELEASE_DIR / "SimpleTabulation-ICD-11-MMS-en-2026-01.zip"
-VENDORED_SHA256 = "f1356588f40953a83e3af2b662deab47c5e269f944d1ea4ed0cfeb2007c7cd39"
+VENDORED_SHA256 = "f1356588f40953a83e3af2b662deab47c5e269f944d1ea4ed0cfeb2007c7cd39"  # pragma: allowlist secret (WHO file hash)
 TABULATION_MEMBER = "SimpleTabulation-ICD-11-MMS-en.txt"
 
 # Chapters whose codes stand alone as a diagnosis. Not V (functioning
