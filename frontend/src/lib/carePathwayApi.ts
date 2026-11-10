@@ -331,6 +331,8 @@ export interface CareTask {
   action_code: string;
   action_label: string;
   owner: string;
+  /** The named person the task is assigned to (user id); older tasks may have none. */
+  assignee?: string | null;
   status: "INITIATED" | "PENDING" | "COMPLETED";
   created_at: string;
   created_by_name: string;
@@ -435,6 +437,8 @@ export function signTriage(
     decision: "CONFIRM" | "OVERRIDE";
     final_priority: PriorityOrBlank;
     override_reason?: string;
+    /** {task focus: user id} — a named person for each task the signature raises. */
+    task_assignees?: Record<string, string>;
   },
 ) {
   return apiRequest<TriageAssessmentRecord>(`/care/triage/${id}/sign/`, {
@@ -447,7 +451,7 @@ export function signTriage(
 export function registerTriageTasks(
   accessToken: string,
   id: string,
-  payload: { actions: string[]; owner: string; assignee?: string; status: CareTask["status"] },
+  payload: { tasks: { action: string; assignee: string }[]; status: CareTask["status"] },
 ) {
   return apiRequest<CareTask[]>(`/care/triage/${id}/tasks/`, {
     method: "POST",
@@ -456,13 +460,16 @@ export function registerTriageTasks(
   });
 }
 
-/** Section N "Responsible person / team": the organisation's clinical roles
- * (teams) and clinical staff (people). */
-export function getTaskOwners(accessToken: string) {
-  return apiRequest<{ teams: string[]; people: { id: string; name: string }[] }>(
-    "/care/task-owners/",
-    { accessToken },
-  );
+export interface TaskPerson {
+  id: string;
+  name: string;
+}
+
+/** Who a triage task can be assigned to: named clinical staff. With a triage
+ * id, only staff who can open that triage's branch. */
+export function getTaskOwners(accessToken: string, triageId?: string) {
+  const query = triageId ? `?triage=${encodeURIComponent(triageId)}` : "";
+  return apiRequest<{ people: TaskPerson[] }>(`/care/task-owners/${query}`, { accessToken });
 }
 
 /** Complete a psychiatric review with its coded outcome (and an optional note). */

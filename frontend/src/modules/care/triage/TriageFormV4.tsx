@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
-  registerTriageTasks,
   saveTriageDraft,
   signTriage,
   type CareTask,
@@ -20,6 +19,11 @@ import {
   type TriageV4Evaluation,
 } from "../../../lib/triageV4Api";
 import { Breadcrumbs } from "../shared/Breadcrumbs";
+import {
+  existingAssignees,
+  SectionNTaskRegister,
+  SigningTaskAssignees,
+} from "./TriageTaskAssignment";
 import { SafetyBanner } from "../shared/SafetyBanner";
 import { formatDateTime, formatTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, GROUP_LABEL, INPUT, TABLE, TD, TH } from "../shared/styles";
@@ -301,7 +305,9 @@ export function TriageFormV4({
   const [signError, setSignError] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [tasks, setTasks] = useState<CareTask[]>(detail.tasks);
-  const [taskError, setTaskError] = useState<string | null>(null);
+  const [signingAssignees, setSigningAssignees] = useState<Record<string, string>>(() =>
+    existingAssignees(detail.tasks),
+  );
   const [startedAt] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
   const timer = useRef<number | undefined>(undefined);
@@ -506,6 +512,7 @@ export function TriageFormV4({
         decision: override ? "OVERRIDE" : "CONFIRM",
         final_priority: chosen,
         override_reason: override ? a("m_override_reason").trim() : undefined,
+        task_assignees: signingAssignees,
       });
       pending.current = false;
       setSigned(record);
@@ -531,25 +538,6 @@ export function TriageFormV4({
       }
     } finally {
       setSigning(false);
-    }
-  }
-
-  async function onRegisterTasks() {
-    if (!accessToken || readOnly) return;
-    const actions = list(answers, "n_actions");
-    if (!actions.length) return;
-    setTaskError(null);
-    try {
-      setTasks(
-        await registerTriageTasks(accessToken, detail.id, {
-          actions,
-          owner: a("n_owner").trim(),
-          status: "INITIATED",
-        }),
-      );
-      set("n_actions", []);
-    } catch (err) {
-      setTaskError(errorText(err, "Tasks not registered — check your connection."));
     }
   }
 
@@ -1312,21 +1300,17 @@ export function TriageFormV4({
                     ))}
                   </div>
                 </fieldset>
-                <div className={`${FIELDGRID} mt-3 items-end`}>
-                  <Txt
-                    k="n_owner"
-                    label="Responsible person / team"
-                    placeholder="Psychiatry / Nursing"
-                  />
-                  <button
-                    type="button"
-                    className={`${BTN} justify-self-start`}
-                    onClick={onRegisterTasks}
-                  >
-                    Register as trackable tasks
-                  </button>
-                </div>
-                {taskError && <ErrorNote>{taskError}</ErrorNote>}
+                <SectionNTaskRegister
+                  triageId={detail.id}
+                  actions={list(answers, "n_actions")}
+                  actionLabel={(code) => vs.label("triage-action", code)}
+                  readOnly={readOnly}
+                  idPrefix={fid("n")}
+                  onRegistered={(next) => {
+                    setTasks(next);
+                    set("n_actions", []);
+                  }}
+                />
                 {tasks.length > 0 && (
                   <ul className="mt-3 space-y-1 text-[13px]">
                     {tasks.map((t) => (
@@ -1338,6 +1322,15 @@ export function TriageFormV4({
                     ))}
                   </ul>
                 )}
+                <SigningTaskAssignees
+                  triageId={detail.id}
+                  tasks={evaluation.signing_tasks ?? []}
+                  value={signingAssignees}
+                  onChange={setSigningAssignees}
+                  readOnly={readOnly}
+                  invalid={invalid}
+                  fieldId={fid}
+                />
               </Group>
             </fieldset>
           </form>

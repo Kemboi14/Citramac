@@ -7,6 +7,7 @@ import re
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import F, Func, Q, Value
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -455,12 +456,18 @@ def _worklist_row(item):
 def _evaluate(answers, labels):
     """Each answer set is evaluated by the rule set of its schema: v5, v4, or
     (anything else) the v3 rules (triage_rules.py)."""
+    from .triage_sign_v4 import signing_tasks
+
     if triage_v5.is_v5(answers):
         from . import approved_assessments
 
-        return triage_v5.evaluate(answers, labels, approved_assessments.names())
+        result = triage_v5.evaluate(answers, labels, approved_assessments.names())
+        result["signing_tasks"] = signing_tasks(triage_v5.clean_answers(answers), labels, triage_v5)
+        return result
     if triage_v4.is_v4(answers):
-        return triage_v4.evaluate(answers, labels)
+        result = triage_v4.evaluate(answers, labels)
+        result["signing_tasks"] = signing_tasks(triage_v4.clean_answers(answers), labels, triage_v4)
+        return result
     return triage_rules.evaluate(answers, labels)
 
 
@@ -634,46 +641,31 @@ class TriageSignView(APIView):
         return Response(_assessment_payload(assessment), status=status.HTTP_201_CREATED)
 
 
-def task_owner_choices(organization_id):
-    """Section N "Responsible person / team": the organisation's clinical staff
-    as people, and the clinical roles they hold as teams — both what Org Admin
-    already maintains (Staff, Roles & Permissions), never a list of our own."""
-    from apps.accounts.access import users_with_permission
-    from apps.accounts.models import Role
-
-    codename = "clinical.care.record"
-    staff = users_with_permission([codename], organization_id).order_by("first_name", "last_name")
-    held = Role.objects.filter(permissions__codename=codename, users__in=staff.values("pk"))
-    teams = sorted(set(held.values_list("name", flat=True)))
-    people = [{"id": str(u.pk), "name": user_display(u)} for u in staff]
-    return {"teams": teams, "people": people}
-
-
 class TaskOwnersView(APIView):
+    """The drop-down every triage task is assigned from: named clinical staff.
+    `?triage=<id>` narrows it to staff who can open that triage's branch."""
+
     def get(self, request):
-        return Response(task_owner_choices(request.user.organization_id))
+        from . import task_assignees
+
+        te = _triage(request.query_params["triage"]) if request.query_params.get("triage") else None
+        return Response({"people": task_assignees.people(request.user.organization_id, te)})
 
 
 class TriageTasksView(APIView):
-    """Section N "Register as trackable tasks" — one Task per ticked action,
-    owned by a team (a clinical role) or assigned to a person (clinical staff)."""
+    """Section N "Register as tasks" — one Task per ticked action, each assigned
+    to a named member of the clinical staff picked from the drop-down."""
 
     def post(self, request, pk):
+        from . import task_assignees, task_notify
+
         te = _triage(pk)
-        codes = request.data.get("actions") or []
-        owner = (request.data.get("owner") or "").strip() or "Psychiatry / Nursing"
-        assignee = None
-        if request.data.get("assignee"):
-            choices = task_owner_choices(te.organization_id)
-            person = next(
-                (p for p in choices["people"] if p["id"] == str(request.data["assignee"])), None
+        rows = request.data.get("tasks")
+        if not isinstance(rows, list) or not rows:
+            return Response(
+                {"tasks": "Tick at least one action and assign each one to a named person."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            if person is None:
-                return Response(
-                    {"assignee": "Choose a member of the clinical staff."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            assignee, owner = person["id"], person["name"]
         task_status = request.data.get("status") or "INITIATED"
         if task_status not in ("INITIATED", "PENDING"):
             # A registered task is work still to do; whoever does it marks it done.
@@ -682,30 +674,44 @@ class TriageTasksView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         labels = services.concept_labels()
-        created = []
-        for code in codes:
+        planned = []
+        for row in rows:
+            code = (row or {}).get("action") if isinstance(row, dict) else None
             label = labels.get(("triage-action", code))
             if not label:
-                continue
-            created.append(
-                CareTask.objects.create(
-                    organization_id=te.organization_id,
-                    patient=te.patient,
-                    triage_encounter=te,
-                    action_code=code,
-                    action_label=label,
-                    owner=owner[:150],
-                    assignee_id=assignee,
-                    status=task_status,
-                    created_by=request.user,
+                return Response(
+                    {"tasks": "One of the actions is not a triage action."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            )
-        from . import task_notify
+            person = task_assignees.resolve(te.organization_id, te, row.get("assignee"))
+            if person is None:
+                return Response(
+                    {"tasks": f"Assign “{label}” to a named person from the list."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            planned.append((code, label, person))
 
-        team = "" if assignee else owner
-        if team and team not in task_owner_choices(te.organization_id)["teams"]:
-            team = ""  # free text from an older draft names no one we can tell
-        task_notify.tasks_assigned(te, created, request.user, assignee_id=assignee, team=team)
+        created = []
+        with transaction.atomic():
+            for code, label, person in planned:
+                created.append(
+                    CareTask.objects.create(
+                        organization_id=te.organization_id,
+                        patient=te.patient,
+                        triage_encounter=te,
+                        action_code=code,
+                        action_label=label,
+                        owner=person["name"][:150],
+                        assignee_id=person["id"],
+                        status=task_status,
+                        created_by=request.user,
+                    )
+                )
+        by_person = {}
+        for task in created:
+            by_person.setdefault(str(task.assignee_id), []).append(task)
+        for assignee_id, tasks in by_person.items():
+            task_notify.tasks_assigned(te, tasks, request.user, assignee_id=assignee_id)
         return Response(
             CareTaskSerializer(te.tasks.all(), many=True).data, status=status.HTTP_201_CREATED
         )

@@ -698,3 +698,21 @@ this closes the open ICD-11 item from 2026-11-06.
    conformance step now includes `test_icd11.py::FhirR4ConformanceIcd11ExamplesTests`, which fails
    on any example ICD-11 coding that is not a WHO leaf code with WHO's display. HL7's validator still
    passes all 34 examples.
+
+### 2026-11-10 — every triage task has a named assignee
+
+On the owner's instruction ("on triage, every task must have an assignee from drop down"; chosen:
+a named person, per task, including the tasks a signature raises):
+
+1. **Section N.** Each ticked action has its own drop-down of the organisation's clinical staff
+   (`clinical.care.record` holders who can open the triage's branch, `task_assignees.py`). "Register
+   as tasks" needs a person for every ticked action. A team or free text is refused. Each person is
+   told in-app (`task_notify`).
+2. **Tasks raised by signing** (call-back, PEP / emergency-contraception decision, urgent medical or
+   psychiatric review, referral out, duty to protect, psychiatric review on withdrawal) are listed
+   before signing (`triage_sign_v4.signing_tasks`, in the evaluation as `signing_tasks`). Each needs
+   a named person, or the triage cannot be signed (`missing_keys` `task_assignee_<focus>`). A
+   psychiatric review raised by an intake (not a triage) still goes to Psychiatry with no assignee.
+3. FHIR: `Task.owner` is the person's name as display text, as before. Nothing else changes.
+
+Reversibility: cheap. Tasks already registered keep their owner text, and no signed triage changes.

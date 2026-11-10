@@ -90,6 +90,13 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
                 )
             ]
         )
+    # Every task the signature raises is assigned to a named person first.
+    plan = _plan(answers, labels, rules)
+    assignees, unassigned = _signing_assignees(
+        triage_encounter, plan, payload.get("task_assignees")
+    )
+    if unassigned:
+        raise _error(unassigned)
     downgrade = triage_rules.PRIORITY_RANK[final] < triage_rules.PRIORITY_RANK[recommended]
     senior = plan_extras.can_cosign(user)
 
@@ -172,12 +179,15 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
     if present:
         _record_vitals(encounter, user, answers, now)
         _record_observation(patient, user, answers, assessment.version, labels)
-    _create_tasks(triage_encounter, user, answers, assessment, labels)
-    if hasattr(rules, "withdrawal_reasons"):
-        from . import psychiatric_review
-
-        psychiatric_review.request(
-            triage_encounter, user, rules.withdrawal_reasons(answers), final, "triage"
+    _create_tasks(triage_encounter, user, plan, assignees, final)
+    if any(spec["focus"] == "DUTY_TO_PROTECT" for spec in plan):
+        plan_extras.request_cosign(
+            patient,
+            user,
+            "DUTY_TO_PROTECT",
+            "Duty to protect — decide on informing the named person / police",
+            "TriageAssessment",
+            assessment.id,
         )
     services.apply_triage_allergies(patient, answers, user)
 
@@ -272,55 +282,61 @@ def _record_observation(patient, user, answers, version, labels):
             )
 
 
-def _task(te, user, focus, label, owner, due, priority="urgent"):
-    exists = CareTask.objects.filter(
-        triage_encounter=te, focus_type=focus, status__in=("INITIATED", "PENDING")
-    ).first()
-    if exists:
-        changed = []
-        if exists.due_at != due:
-            exists.due_at = due
-            changed.append("due_at")
-        if exists.action_label != label:
-            exists.action_label = label
-            changed.append("action_label")
-        if changed:
-            exists.save(update_fields=changed + ["updated_at"])
-        return exists
-    return CareTask.objects.create(
-        organization_id=te.organization_id,
-        patient=te.patient,
-        triage_encounter=te,
-        action_code=focus.lower(),
-        action_label=label[:255],
-        owner=owner[:150],
-        status="INITIATED",
-        created_by=user,
-        priority=priority,
-        due_at=due,
-        focus_type=focus,
-    )
+ASSIGNEE_KEY = "task_assignee_{}"
 
 
-def _create_tasks(te, user, answers, assessment, labels):
+def signing_tasks(answers, labels, rules=v4):
+    """The tasks a signature of these (cleaned) answers will raise, in order:
+    [{"focus", "label", "role", "due_at", "priority"}]. Each one needs a named
+    assignee before the triage can be signed (task_assignees). `role` is who
+    usually does it — shown as guidance, never stored as the owner."""
+    return [
+        {
+            "focus": spec["focus"],
+            "label": spec["label"],
+            "role": spec["role"],
+            "due_at": spec["due"].isoformat() if spec["due"] else None,
+            "priority": spec["priority"],
+        }
+        for spec in _plan(answers, labels, rules)
+    ]
+
+
+def _plan(answers, labels, rules):
+    from . import psychiatric_review
+
     flags = answers.get("flags") or []
     # v4 flags, or the v5 answers that open the same detail blocks.
     gbv = "gbv_72h" in flags or answers.get("i_sv_recent") == "yes"
     duty = "homicidal_named" in flags or answers.get("e_named") == "yes"
+    plan = []
+
+    def add(focus, label, role, due=None, priority="urgent", reasons=None):
+        plan.append(
+            {
+                "focus": focus,
+                "label": label[:255],
+                "role": role,
+                "due": due,
+                "priority": priority,
+                "reasons": reasons or [],
+            }
+        )
+
     if v4.present_of(answers) == "no" and answers.get("r_disposition") == "callback":
         due = v4.parse_local_datetime(answers.get("r_callback_at"))
-        owner = CALLBACK_OWNER_LABELS.get(answers.get("r_callback_owner"), "Triage nurse")
         informant = labels.get(
             ("triage-informant", answers.get("b_informant") or "client"), "caller"
         )
-        _task(
-            te, user, "TRIAGE_CALLBACK", f"Call back ({informant}) — telephone triage", owner, due
+        add(
+            "TRIAGE_CALLBACK",
+            f"Call back ({informant}) — telephone triage",
+            CALLBACK_OWNER_LABELS.get(answers.get("r_callback_owner"), "Triage nurse"),
+            due,
         )
     if gbv:
         closes = v4.pep_deadline(answers)
-        _task(
-            te,
-            user,
+        add(
             "PEP_EC_DECISION",
             f"PEP & emergency-contraception decision — window closes "
             f"{timezone.localtime(closes).strftime('%Y-%m-%d %H:%M') if closes else '—'}",
@@ -331,50 +347,126 @@ def _create_tasks(te, user, answers, assessment, labels):
     # v5 H — the next step chosen for an acute medical concern.
     step = answers.get("h_next")
     if step == "urgent_medical_review":
-        _task(
-            te,
-            user,
+        add(
             "URGENT_MEDICAL_REVIEW",
             "Urgent medical review — acute medical concern",
             "Medical officer on duty",
-            None,
-            "asap",
+            priority="asap",
         )
     elif step == "psychiatric_review":
-        _task(
-            te,
-            user,
+        add(
             "URGENT_PSYCHIATRIC_REVIEW",
             "Psychiatric review — acute medical concern",
             "Psychiatry on duty",
-            None,
         )
     elif step == "refer_out":
-        _task(
-            te,
-            user,
+        add(
             "EXTERNAL_REFERRAL",
             f"Refer to {answers.get('h_refer_facility') or 'another facility'} — acute medical "
             "concern",
             "Triage clinician",
-            None,
-            "asap",
+            priority="asap",
         )
     if duty:
-        _task(
-            te,
-            user,
+        add(
             "DUTY_TO_PROTECT",
             "Duty to protect — senior decision on informing the named person / police",
             "Senior clinician",
-            None,
-            "asap",
+            priority="asap",
         )
-        plan_extras.request_cosign(
-            te.patient,
-            user,
-            "DUTY_TO_PROTECT",
-            "Duty to protect — decide on informing the named person / police",
-            "TriageAssessment",
-            assessment.id,
+    if hasattr(rules, "withdrawal_reasons"):
+        reasons = rules.withdrawal_reasons(answers)
+        if reasons:
+            add(
+                psychiatric_review.FOCUS,
+                psychiatric_review.label(reasons),
+                psychiatric_review.OWNER,
+                priority="",
+                reasons=reasons,
+            )
+    return plan
+
+
+def _existing(te, focus):
+    from . import psychiatric_review
+
+    if focus == psychiatric_review.FOCUS:
+        # One review per triage encounter, in any status (psychiatric_review.request).
+        return psychiatric_review.for_triage(te)
+    return CareTask.objects.filter(
+        triage_encounter=te, focus_type=focus, status__in=("INITIATED", "PENDING")
+    ).first()
+
+
+def _signing_assignees(te, plan, chosen):
+    """{focus: {"id", "name"}} for every planned task, or the problems to fix.
+    A task that already exists with an assignee keeps them unless another
+    person is picked; a psychiatric review already raised is not raised again."""
+    from . import psychiatric_review, task_assignees
+
+    chosen = chosen if isinstance(chosen, dict) else {}
+    out, problems = {}, []
+    for spec in plan:
+        focus = spec["focus"]
+        existing = _existing(te, focus)
+        if focus == psychiatric_review.FOCUS and existing is not None:
+            continue
+        picked = task_assignees.resolve(te.organization_id, te, chosen.get(focus))
+        if picked:
+            out[focus] = picked
+        elif not (existing and existing.assignee_id):
+            problems.append(
+                (f"Assign “{spec['label']}” to a named person", ASSIGNEE_KEY.format(focus))
+            )
+    return out, problems
+
+
+def _create_tasks(te, user, plan, assignees, final):
+    """Raise (or bring up to date) each planned task with its assignee, and tell
+    each newly assigned person."""
+    from . import psychiatric_review, task_notify
+
+    for spec in plan:
+        focus = spec["focus"]
+        person = assignees.get(focus)
+        if focus == psychiatric_review.FOCUS:
+            if person is None:
+                continue  # already raised for this triage encounter
+            task = psychiatric_review.request(te, user, spec["reasons"], final, "triage", person)
+            task_notify.tasks_assigned(te, [task], user, assignee_id=person["id"])
+            continue
+        due = spec["due"]
+        task = _existing(te, focus)
+        if task:
+            changed = []
+            if task.due_at != due:
+                task.due_at = due
+                changed.append("due_at")
+            if task.action_label != spec["label"]:
+                task.action_label = spec["label"]
+                changed.append("action_label")
+            newly = person is not None and str(task.assignee_id) != person["id"]
+            if newly:
+                task.assignee_id = person["id"]
+                task.owner = person["name"][:150]
+                changed += ["assignee", "owner"]
+            if changed:
+                task.save(update_fields=changed + ["updated_at"])
+            if newly:
+                task_notify.tasks_assigned(te, [task], user, assignee_id=person["id"])
+            continue
+        task = CareTask.objects.create(
+            organization_id=te.organization_id,
+            patient=te.patient,
+            triage_encounter=te,
+            action_code=focus.lower(),
+            action_label=spec["label"],
+            owner=person["name"][:150],
+            assignee_id=person["id"],
+            status="INITIATED",
+            created_by=user,
+            priority=spec["priority"] or "urgent",
+            due_at=due,
+            focus_type=focus,
         )
+        task_notify.tasks_assigned(te, [task], user, assignee_id=person["id"])

@@ -13,7 +13,6 @@ import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
   evaluateTriage,
-  registerTriageTasks,
   saveTriageDraft,
   signTriage,
   type CareTask,
@@ -44,6 +43,7 @@ import {
 import { useValueSets, type ValueSetsApi } from "../shared/useValueSets";
 import { EncounterContext } from "./EncounterContext";
 import { FIELDGRID, errorText } from "./helpers";
+import { SectionNTaskRegister } from "./TriageTaskAssignment";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.6 — mockup triage(), organizeTriageSections(),
 // initTriage() and recompute(). The recommendation itself is computed on the
@@ -339,7 +339,6 @@ export function TriageForm({
       base.m_override_reason = editable ? "" : (detail.signed?.override_reason ?? "");
     }
     if (!hasAnswer(base, "n_actions")) base.n_actions = [];
-    if (!hasAnswer(base, "n_owner")) base.n_owner = "Psychiatry / Nursing";
     if (!hasAnswer(base, "n_status")) base.n_status = "INITIATED";
     return base;
   });
@@ -367,10 +366,7 @@ export function TriageForm({
   const [open, setOpen] = useState<Set<string>>(() => new Set(["b", "c"]));
   const [tasks, setTasks] = useState<CareTask[]>(detail.tasks);
   const actions = answerList(answers, "n_actions");
-  const owner = answerText(answers, "n_owner");
   const taskStatus = toTaskStatus(answerText(answers, "n_status"));
-  const [taskError, setTaskError] = useState<string | null>(null);
-  const [registering, setRegistering] = useState(false);
 
   const [draftStatus, setDraftStatus] = useState(
     editable && detail.draft?.draft_saved_at
@@ -488,27 +484,6 @@ export function TriageForm({
     setAnswer("m_decision", next);
     if (toDecision(next) === "CONFIRM" && evaluation.ready) {
       setAnswer("m_final_priority", evaluation.priority);
-    }
-  }
-
-  async function onRegisterTasks() {
-    if (!accessToken || readOnly || actions.length === 0 || registering) return;
-    setRegistering(true);
-    setTaskError(null);
-    try {
-      const list = await registerTriageTasks(accessToken, detail.id, {
-        actions,
-        owner: owner.trim(),
-        status: taskStatus,
-      });
-      setTasks(list);
-      setAnswer("n_actions", []);
-    } catch (err) {
-      setTaskError(
-        errorText(err, "Tasks not registered — couldn't reach the server. Check your connection."),
-      );
-    } finally {
-      setRegistering(false);
     }
   }
 
@@ -1219,15 +1194,6 @@ export function TriageForm({
                 />
               </fieldset>
               <div className={`${FIELDGRID} mt-3 items-end`}>
-                <Field label="Responsible person/team" htmlFor="t-n-owner">
-                  <input
-                    id="t-n-owner"
-                    type="text"
-                    className={INPUT}
-                    value={owner}
-                    onChange={(e) => setAnswer("n_owner", e.target.value)}
-                  />
-                </Field>
                 <Field label="Status" htmlFor="t-n-status">
                   <SelectChoices
                     id="t-n-status"
@@ -1236,20 +1202,19 @@ export function TriageForm({
                     onChange={(value) => setAnswer("n_status", value)}
                   />
                 </Field>
-                <button
-                  type="button"
-                  className={`${BTN} justify-self-start`}
-                  disabled={registering}
-                  onClick={onRegisterTasks}
-                >
-                  Register as trackable tasks
-                </button>
               </div>
-              {taskError && (
-                <div className="mt-2">
-                  <ErrorNote>{taskError}</ErrorNote>
-                </div>
-              )}
+              <SectionNTaskRegister
+                triageId={detail.id}
+                actions={actions}
+                actionLabel={(code) => vs.label("triage-action", code)}
+                readOnly={readOnly}
+                status={taskStatus}
+                idPrefix="t-n"
+                onRegistered={(next) => {
+                  setTasks(next);
+                  setAnswer("n_actions", []);
+                }}
+              />
               <div className="mt-3 overflow-x-auto">
                 <table className={TABLE}>
                   <thead>

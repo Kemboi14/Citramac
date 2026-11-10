@@ -200,7 +200,7 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         self.psych_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.psych)[0]}"}
 
     def sign_v4(self, answers, priority=None, auth=None, te_id=None, **extra):
-        body = {"answers": answers, **extra}
+        body = {"answers": answers, "task_assignees": self.assign_all(), **extra}
         if priority:
             body["final_priority"] = priority
         return self.client.post(

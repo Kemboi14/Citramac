@@ -247,7 +247,7 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         self.te_id = registered.data["triage_encounter_id"]
 
     def sign_v5(self, answers, priority=None, **extra):
-        body = {"answers": answers, **extra}
+        body = {"answers": answers, "task_assignees": self.assign_all(), **extra}
         if priority:
             body["final_priority"] = priority
         return self.client.post(

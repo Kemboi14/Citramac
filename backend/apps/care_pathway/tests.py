@@ -40,6 +40,19 @@ CORE_NO = {
 }
 
 
+# Every task a triage signature can raise (triage_sign_v4.signing_tasks); each
+# needs a named assignee.
+SIGNING_TASK_FOCI = (
+    "TRIAGE_CALLBACK",
+    "PEP_EC_DECISION",
+    "URGENT_MEDICAL_REVIEW",
+    "URGENT_PSYCHIATRIC_REVIEW",
+    "EXTERNAL_REFERRAL",
+    "DUTY_TO_PROTECT",
+    "PSYCHIATRIC_REVIEW_WITHDRAWAL",
+)
+
+
 class TriageRulesTests(SimpleTestCase):
     def test_unanswered_core_screens_are_never_negative(self):
         result = triage_rules.evaluate({})
@@ -121,7 +134,12 @@ class CarePathwayApiTestCase(APITestCase):
         }
         return self.client.post(reverse("care-registrations"), payload, format="json", **self.auth)
 
+    def assign_all(self, user=None):
+        """`task_assignees` naming one person for every task a signature can raise."""
+        return {focus: str((user or self.nurse).pk) for focus in SIGNING_TASK_FOCI}
+
     def sign(self, te_id, answers, priority="GREEN", **extra):
+        extra.setdefault("task_assignees", self.assign_all())
         return self.client.post(
             reverse("care-triage-sign", args=[te_id]),
             {"answers": answers, "final_priority": priority, "decision": "CONFIRM", **extra},
@@ -224,38 +242,48 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertEqual(row["name"], "Amina Wanjiku Kamau")
         self.assertNotIn("diagnosis", row)
 
-    def test_triage_tasks_go_to_a_team_or_a_person_from_the_staff_list(self):
+    def test_every_triage_task_is_assigned_to_a_named_person_from_the_staff_list(self):
         with platform_admin_context():
             role, _ = Role.objects.get_or_create(
                 organization=None, name="Nurse", defaults={"scope": Role.SCOPE_ORG_TEMPLATE}
             )
             self.nurse.roles.add(role)
         te_id = self.register().data["triage_encounter_id"]
-        owners = self.client.get(reverse("care-task-owners"), **self.auth).data
-        self.assertIn("Nurse", owners["teams"])
+        owners = self.client.get(reverse("care-task-owners"), {"triage": te_id}, **self.auth).data
+        self.assertNotIn("teams", owners)
         me = next(p for p in owners["people"] if p["id"] == str(self.nurse.pk))
         url = reverse("care-triage-tasks", args=[te_id])
-        body = {"actions": ["comprehensive_intake"], "status": "PENDING"}
-        tasks = self.client.post(url, {**body, "owner": "Nurse"}, format="json", **self.auth)
-        self.assertEqual(tasks.status_code, 201)
-        self.assertEqual(tasks.data[0]["owner"], "Nurse")
-        tasks = self.client.post(
-            url, {**body, "assignee": str(self.nurse.pk)}, format="json", **self.auth
-        ).data
-        self.assertEqual(tasks[1]["owner"], me["name"])
+        # A team, free text, or no one is refused — every task has a named person.
+        for body in (
+            {"actions": ["comprehensive_intake"], "owner": "Nurse"},
+            {"tasks": [{"action": "comprehensive_intake"}]},
+            {"tasks": [{"action": "comprehensive_intake", "assignee": "Nurse"}]},
+            {"tasks": [{"action": "comprehensive_intake", "assignee": str(uuid.uuid4())}]},
+            {"tasks": []},
+        ):
+            refused = self.client.post(url, body, format="json", **self.auth)
+            self.assertEqual(refused.status_code, 400, body)
         with platform_admin_context():
-            self.assertEqual(CareTask.objects.get(pk=tasks[1]["id"]).assignee_id, self.nurse.pk)
+            self.assertFalse(CareTask.objects.filter(triage_encounter_id=te_id).exists())
+        tasks = self.client.post(
+            url,
+            {
+                "tasks": [{"action": "comprehensive_intake", "assignee": str(self.nurse.pk)}],
+                "status": "PENDING",
+            },
+            format="json",
+            **self.auth,
+        ).data
+        self.assertEqual(tasks[0]["owner"], me["name"])
+        self.assertEqual(tasks[0]["assignee"], str(self.nurse.pk))
+        with platform_admin_context():
+            self.assertEqual(CareTask.objects.get(pk=tasks[0]["id"]).assignee_id, self.nurse.pk)
         # The live queue shows who the open triage tasks went to (not "Unassigned").
         lanes = self.client.get(reverse("care-live-queue"), **self.auth).data["lanes"]
         row = next(r for lane in lanes.values() for r in lane if r["id"] == te_id)
         self.assertEqual(row["owner"]["name"], me["name"])
-        self.assertEqual(row["team"], "Nurse")
-        stranger = self.client.post(
-            url, {**body, "assignee": str(uuid.uuid4())}, format="json", **self.auth
-        )
-        self.assertEqual(stranger.status_code, 400)
 
-    def test_assigned_triage_tasks_notify_the_person_or_team_never_as_done(self):
+    def test_assigned_triage_tasks_notify_each_person_never_as_done(self):
         from apps.notifications.models import Notification
 
         with platform_admin_context():
@@ -264,7 +292,7 @@ class RegistrationTests(CarePathwayApiTestCase):
             )
             colleague = User.objects.create_user(
                 email=f"colleague-{uuid.uuid4().hex[:6]}@org.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 is_active=True,
                 first_name="Evan",
@@ -276,7 +304,10 @@ class RegistrationTests(CarePathwayApiTestCase):
         url = reverse("care-triage-tasks", args=[te_id])
         done = self.client.post(
             url,
-            {"actions": ["safety_plan"], "owner": "Nurse", "status": "COMPLETED"},
+            {
+                "tasks": [{"action": "safety_plan", "assignee": str(colleague.pk)}],
+                "status": "COMPLETED",
+            },
             format="json",
             **self.auth,
         )
@@ -292,20 +323,24 @@ class RegistrationTests(CarePathwayApiTestCase):
 
         self.client.post(
             url,
-            {"actions": ["safety_plan", "comprehensive_intake"], "owner": "Nurse"},
+            {
+                "tasks": [
+                    {"action": "safety_plan", "assignee": str(colleague.pk)},
+                    {"action": "comprehensive_intake", "assignee": str(colleague.pk)},
+                    {"action": "urgent_medical_review", "assignee": str(self.nurse.pk)},
+                ]
+            },
             format="json",
             **self.auth,
         )
         self.client.post(
             url,
-            {"actions": ["safety_plan"], "assignee": str(colleague.pk)},
+            {"tasks": [{"action": "safety_plan", "assignee": str(colleague.pk)}]},
             format="json",
             **self.auth,
         )
         titles = [t for t, _, _ in told(colleague)]
-        self.assertEqual(
-            titles, ["2 triage tasks assigned to the Nurse team", "Triage task assigned to you"]
-        )
+        self.assertEqual(titles, ["2 triage tasks assigned to you", "Triage task assigned to you"])
         self.assertIn("Safety Plan", told(colleague)[1][1])
         self.assertIn("Assigned by Jane Njoroge", told(colleague)[1][1])
         self.assertEqual(told(colleague)[1][2], f"/clinical/triage/{te_id}")
@@ -484,15 +519,23 @@ class TriageFlowTests(CarePathwayApiTestCase):
         self.assertEqual(self.sign(self.te_id, CORE_NO).status_code, 400)
 
     def test_tasks_register_from_served_action_codes(self):
+        url = reverse("care-triage-tasks", args=[self.te_id])
+        me = str(self.nurse.pk)
+        unknown = self.client.post(
+            url,
+            {"tasks": [{"action": "not_a_code", "assignee": me}], "status": "PENDING"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(unknown.status_code, 400)
         response = self.client.post(
-            reverse("care-triage-tasks", args=[self.te_id]),
-            {"actions": ["safety_plan", "not_a_code"], "status": "PENDING"},
+            url,
+            {"tasks": [{"action": "safety_plan", "assignee": me}], "status": "PENDING"},
             format="json",
             **self.auth,
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual([t["action_label"] for t in response.data], ["Safety Plan"])
-        self.assertEqual(response.data[0]["owner"], "Psychiatry / Nursing")
 
     def test_recheck_becomes_due_and_signs_measured_observations_only(self):
         self.sign(self.te_id, CORE_NO, priority="YELLOW")
@@ -564,7 +607,7 @@ class TriageFlowTests(CarePathwayApiTestCase):
         self.sign(self.te_id, {**CORE_NO, "d_suicidal": "yes"}, priority="ORANGE")
         self.client.post(
             reverse("care-triage-tasks", args=[self.te_id]),
-            {"actions": ["safety_plan"]},
+            {"tasks": [{"action": "safety_plan", "assignee": str(self.nurse.pk)}]},
             format="json",
             **self.auth,
         )

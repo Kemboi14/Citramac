@@ -6,8 +6,6 @@ import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
   lookupTriageFacility,
-  getTaskOwners,
-  registerTriageTasks,
   saveTriageDraft,
   signTriage,
   type CareTask,
@@ -25,6 +23,11 @@ import {
   type TriageV4Evaluation,
 } from "../../../lib/triageV4Api";
 import { Breadcrumbs } from "../shared/Breadcrumbs";
+import {
+  existingAssignees,
+  SectionNTaskRegister,
+  SigningTaskAssignees,
+} from "./TriageTaskAssignment";
 import { SafetyBanner } from "../shared/SafetyBanner";
 import { formatDateTime, formatTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, GROUP_LABEL, INPUT, TABLE, TD, TH } from "../shared/styles";
@@ -90,9 +93,6 @@ const SUBSTANCE_ROWS = [
   "other",
 ];
 const DRAFT_FAILED = "Draft not saved — check your connection";
-// Section N responsible person / team values.
-const TEAM = "team:";
-const PERSON = "person:";
 const VITAL_KEYS = ["v_sbp", "v_dbp", ...VITALS.map((v) => v.key)];
 /** What the early-warning score is computed from, to tell whether the shown score is current. */
 const ewsInput = (answers: TriageAnswers) =>
@@ -421,7 +421,6 @@ export function TriageFormV5({
   const stored = editable ? detail.draft : detail.signed;
 
   const [config, setConfig] = useState<TriageV4Config | null>(null);
-  const [owners, setOwners] = useState<Awaited<ReturnType<typeof getTaskOwners>> | null>(null);
   const [answers, setAnswers] = useState<TriageAnswers>(() => {
     const base: TriageAnswers = { ...detail.defaults, ...(stored?.answers ?? {}), schema: "v5" };
     if (!str(base, "c_concern")) base.c_concern = detail.presenting_concern;
@@ -453,7 +452,9 @@ export function TriageFormV5({
   const [signError, setSignError] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [tasks, setTasks] = useState<CareTask[]>(detail.tasks);
-  const [taskError, setTaskError] = useState<string | null>(null);
+  const [signingAssignees, setSigningAssignees] = useState<Record<string, string>>(() =>
+    existingAssignees(detail.tasks),
+  );
   const [known, setKnown] = useState<ClinicalFinding[]>([]);
   const [allergyEdit, setAllergyEdit] = useState(
     () => str(answers, "a_allergy_status") !== "" && str(answers, "a_allergy_confirmed") !== "yes",
@@ -470,9 +471,6 @@ export function TriageFormV5({
     let cancelled = false;
     getTriageV4Config(accessToken)
       .then((c) => !cancelled && setConfig(c))
-      .catch(() => undefined);
-    getTaskOwners(accessToken)
-      .then((o) => !cancelled && setOwners(o))
       .catch(() => undefined);
     // Section A: findings already on record (an earlier triage or intake).
     getClientFindings(accessToken, detail.patient_id)
@@ -656,6 +654,7 @@ export function TriageFormV5({
         decision: override ? "OVERRIDE" : "CONFIRM",
         final_priority: chosen,
         override_reason: override ? a("m_override_reason").trim() : undefined,
+        task_assignees: signingAssignees,
       });
       pending.current = false;
       setSigned(record);
@@ -681,29 +680,6 @@ export function TriageFormV5({
       }
     } finally {
       setSigning(false);
-    }
-  }
-
-  async function onRegisterTasks() {
-    if (!accessToken || readOnly) return;
-    const actions = list(answers, "n_actions");
-    if (!actions.length) return;
-    setTaskError(null);
-    // n_owner is "team:<role>" or "person:<user id>" (an older draft may hold free text).
-    const owner = a("n_owner");
-    const person = owner.startsWith(PERSON) ? owner.slice(PERSON.length) : undefined;
-    try {
-      setTasks(
-        await registerTriageTasks(accessToken, detail.id, {
-          actions,
-          owner: person ? "" : owner.replace(TEAM, "").trim(),
-          assignee: person,
-          status: "INITIATED",
-        }),
-      );
-      set("n_actions", []);
-    } catch (err) {
-      setTaskError(errorText(err, "Tasks not registered — check your connection."));
     }
   }
 
@@ -1538,54 +1514,21 @@ export function TriageFormV5({
                     ))}
                   </div>
                 </fieldset>
-                <div className={`${FIELDGRID} mt-3 items-end`}>
-                  <Field label="Responsible person / team" htmlFor={fid("n_owner")}>
-                    <select
-                      id={fid("n_owner")}
-                      className={INPUT}
-                      value={a("n_owner")}
-                      onChange={(e) => set("n_owner", e.target.value)}
-                    >
-                      <option value="">— select —</option>
-                      {a("n_owner") &&
-                        !a("n_owner").startsWith(TEAM) &&
-                        !a("n_owner").startsWith(PERSON) && (
-                          <option value={a("n_owner")}>{a("n_owner")}</option>
-                        )}
-                      {owners && owners.teams.length > 0 && (
-                        <optgroup label="Teams">
-                          {owners.teams.map((team) => (
-                            <option key={team} value={`${TEAM}${team}`}>
-                              {team}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {owners && owners.people.length > 0 && (
-                        <optgroup label="People">
-                          {owners.people.map((p) => (
-                            <option key={p.id} value={`${PERSON}${p.id}`}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </Field>
-                  <button
-                    type="button"
-                    className={`${BTN} justify-self-start`}
-                    disabled={!list(answers, "n_actions").length || !a("n_owner")}
-                    onClick={onRegisterTasks}
-                  >
-                    Register as tasks
-                  </button>
-                </div>
-                {taskError && <ErrorNote>{taskError}</ErrorNote>}
+                <SectionNTaskRegister
+                  triageId={detail.id}
+                  actions={list(answers, "n_actions")}
+                  actionLabel={(code) => vs.label("triage-action", code)}
+                  readOnly={readOnly}
+                  idPrefix={fid("n")}
+                  onRegistered={(next) => {
+                    setTasks(next);
+                    set("n_actions", []);
+                  }}
+                />
                 {tasks.length > 0 && (
                   <div className="mt-3">
                     <p className="text-[12px] text-ink-500">
-                      Tasks requested — each is done later by the person or team it was assigned to.
+                      Tasks requested — each is done later by the person it was assigned to.
                     </p>
                     <ul className="mt-1 space-y-1 text-[13px]">
                       {tasks.map((t) => (
@@ -1598,6 +1541,15 @@ export function TriageFormV5({
                     </ul>
                   </div>
                 )}
+                <SigningTaskAssignees
+                  triageId={detail.id}
+                  tasks={evaluation.signing_tasks ?? []}
+                  value={signingAssignees}
+                  onChange={setSigningAssignees}
+                  readOnly={readOnly}
+                  invalid={invalid}
+                  fieldId={fid}
+                />
               </Section>
             </fieldset>
           </form>

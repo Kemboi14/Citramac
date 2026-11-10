@@ -165,6 +165,31 @@ class PsychiatricReviewApiTests(FindingStoreApiTests):
             reverse("care-task", args=[self.review().id]), body, format="json", **self.auth
         )
 
+    def test_signing_needs_a_named_assignee_for_every_task_it_raises(self):
+        answers = {**BASE, **OPIOID_WD, **SAFETY}
+        evaluated = self.client.post(
+            reverse("care-triage-evaluate", args=[self.te_id]),
+            {"answers": answers},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(evaluated.status_code, 200, evaluated.data)
+        planned = [t["focus"] for t in evaluated.data["signing_tasks"]]
+        self.assertIn("PSYCHIATRIC_REVIEW_WITHDRAWAL", planned)
+
+        for assignees in ({}, {"PSYCHIATRIC_REVIEW_WITHDRAWAL": "Psychiatry"}):
+            refused = self.sign_v5(answers, task_assignees=assignees)
+            self.assertEqual(refused.status_code, 400, refused.data)
+            self.assertIn(
+                "task_assignee_PSYCHIATRIC_REVIEW_WITHDRAWAL", refused.data["missing_keys"]
+            )
+            self.assertIsNone(self.review())
+
+        signed = self.sign_v5(answers, task_assignees={p: str(self.nurse.pk) for p in planned})
+        self.assertEqual(signed.status_code, 201, signed.data)
+        self.assertEqual(self.review().assignee_id, self.nurse.pk)
+        self.assertEqual(self.review().owner, "Jane Njoroge")
+
     def test_withdrawal_raises_a_review_that_is_started_then_completed_with_an_outcome(self):
         response = self.sign_v5({**BASE, **OPIOID_WD, **SAFETY})
         self.assertEqual(response.status_code, 201, response.data)
@@ -178,7 +203,9 @@ class PsychiatricReviewApiTests(FindingStoreApiTests):
 
         row = self.queue_row()
         self.assertTrue(row["alerts"])  # the withdrawal alert, shown on the card
-        self.assertIsNone(row["owner"])
+        # Assigned at signing to the person picked from the drop-down.
+        self.assertEqual(task.assignee_id, self.nurse.pk)
+        self.assertEqual(row["owner"]["id"], str(self.nurse.pk))
         self.client.post(reverse("care-open-review", args=[self.te_id]), **self.auth)
         self.assertEqual(self.review().status, "PENDING")
         self.assertEqual(self.queue_row()["owner"]["id"], str(self.nurse.pk))  # the reviewer

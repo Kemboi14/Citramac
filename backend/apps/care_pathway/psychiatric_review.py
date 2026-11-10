@@ -60,10 +60,16 @@ def for_triage(triage_encounter):
     )
 
 
+def label(reasons):
+    return f"Psychiatric review — withdrawal ({'; '.join(reasons)})"[:255]
+
+
 @transaction.atomic
-def request(triage_encounter, user, reasons, priority, source):
+def request(triage_encounter, user, reasons, priority, source, assignee=None):
     """Raise the review for this triage encounter unless one already exists
-    (in any status). `source` is "triage" or "intake"."""
+    (in any status). `source` is "triage" or "intake". `assignee` is the
+    {"id", "name"} picked at triage signing (task_assignees); a review raised
+    by an intake has none and is owned by Psychiatry."""
     if triage_encounter is None or not reasons:
         return None
     existing = for_triage(triage_encounter)
@@ -74,8 +80,9 @@ def request(triage_encounter, user, reasons, priority, source):
         patient=triage_encounter.patient,
         triage_encounter=triage_encounter,
         action_code=FOCUS.lower(),
-        action_label=f"Psychiatric review — withdrawal ({'; '.join(reasons)})"[:255],
-        owner=OWNER,
+        action_label=label(reasons),
+        owner=(assignee["name"] if assignee else OWNER)[:150],
+        assignee_id=assignee["id"] if assignee else None,
         status="INITIATED",
         created_by=user,
         priority="urgent" if priority in URGENT_PRIORITIES else "routine",

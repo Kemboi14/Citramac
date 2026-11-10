@@ -33,8 +33,19 @@ export interface EwsResult {
 }
 
 /** The v4 evaluation is the v3 shape plus these fields. */
+/** A task the signature will raise; each needs a named assignee to sign. */
+export interface SigningTask {
+  focus: string;
+  label: string;
+  /** Who usually does it — guidance only. */
+  role: string;
+  due_at: string | null;
+  priority: string;
+}
+
 export interface TriageV4Evaluation extends TriageEvaluation {
   schema?: "v4" | "v5";
+  signing_tasks?: SigningTask[];
   ruleset_label?: string;
   reason_list?: V4Reason[];
   finding_items?: V4FindingItem[];
