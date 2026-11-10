@@ -168,6 +168,7 @@ def _primary_diagnosis(patient):
     return (
         DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")
         .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
+        .filter(code_review_reason="")  # flagged for re-coding: never billed
         .select_related("icd11_code")
         .order_by("-is_primary", "-noted_at")
         .first()
@@ -442,6 +443,7 @@ def _review(user, claim, lines_checked):
         {"system": "ICD-11", "code": d.icd11_code_id, "is_primary": d.is_primary}
         for d in DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE")
         .exclude(verification_status__in=DiagnosisCode.NOT_ASSERTED)
+        .filter(code_review_reason="")  # flagged for re-coding: never billed
         .order_by("-is_primary", "-noted_at")
     ]
     claim.checklist_snapshot = items

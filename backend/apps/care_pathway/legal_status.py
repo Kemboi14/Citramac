@@ -474,7 +474,7 @@ def evidence_context(patient):
     ).select_related("icd11_code")[:10]:
         groups["working_diagnosis"].append(
             {
-                "label": f"{dx.icd11_code.code} {dx.icd11_code.description}".strip(),
+                "label": dx.code_and_label,
                 "value": dx.get_verification_status_display() or "Certainty not stated",
                 "source": "CLINICIAN_OBSERVATION",
                 "record": "Diagnosis",

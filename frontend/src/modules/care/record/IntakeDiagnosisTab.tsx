@@ -179,9 +179,16 @@ export function IntakeDiagnosisTab({
                     </tr>
                   ) : (
                     <tr key={d.id}>
-                      <td className={`${TD} font-mono text-xs font-semibold`}>{d.icd11_code}</td>
+                      <td className={`${TD} font-mono text-xs font-semibold`}>
+                        {d.needs_recoding ? <Tag tone="warn">Code under review</Tag> : d.icd11_code}
+                      </td>
                       <td className={TD}>
                         {d.icd11_description} {d.is_primary && <Tag tone="brand">Primary</Tag>}
+                        {d.needs_recoding && (
+                          <span className="mt-1 block text-xs text-ink-700">
+                            {d.code_review_reason}
+                          </span>
+                        )}
                         <input
                           className={`${CELL} mt-1 block w-full`}
                           aria-label={`Specifier / note for ${d.icd11_code}`}
@@ -322,7 +329,14 @@ export function IntakeDiagnosisTab({
                       <span className="font-mono text-xs font-semibold text-brand-green">
                         {code.code}
                       </span>
-                      <span>{code.description}</span>
+                      <span>
+                        {code.description}
+                        {!code.is_leaf && (
+                          <span className="ml-1 text-xs text-ink-500">
+                            (more specific codes exist — search further)
+                          </span>
+                        )}
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -334,7 +348,8 @@ export function IntakeDiagnosisTab({
             {selected && (
               <p className="text-[13px] text-ink-900">
                 Selected: <span className="font-mono font-semibold">{selected.code}</span> —{" "}
-                {selected.description}
+                {selected.description}{" "}
+                <span className="text-xs text-ink-500">(WHO ICD-11 MMS {selected.release})</span>
               </p>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">

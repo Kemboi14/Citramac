@@ -12,8 +12,20 @@ from .models import (
 
 @admin.register(IcdCodeIndex)
 class IcdCodeIndexAdmin(admin.ModelAdmin):
-    list_display = ["code", "description"]
+    """Read-only: codes come from WHO's release file (manage.py import_icd11)."""
+
+    list_display = ["code", "description", "release", "retired_release", "chapter", "is_leaf"]
+    list_filter = ["release", "chapter"]
     search_fields = ["code", "description"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(LoincCodeIndex)

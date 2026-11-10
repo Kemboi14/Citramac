@@ -635,8 +635,12 @@ def visit_diagnosis_codes(claim, visit):
     every diagnosis the client has had: SHA is told what this claim is for."""
     from apps.clinical_encounter.models import DiagnosisCode
 
-    rows = DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE").exclude(
-        verification_status__in=DiagnosisCode.NOT_ASSERTED
+    rows = (
+        DiagnosisCode.objects.filter(encounter__patient=claim.patient, status="ACTIVE").exclude(
+            verification_status__in=DiagnosisCode.NOT_ASSERTED
+        )
+        # A code flagged for re-coding means something other than what was recorded.
+        .filter(code_review_reason="")
     )
     if visit.episode_id:
         rows = rows.filter(encounter__episode_id=visit.episode_id)

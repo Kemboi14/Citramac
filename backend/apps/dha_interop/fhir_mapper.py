@@ -74,14 +74,20 @@ def build_condition_resource(diagnosis, patient_ref):
             if verification
             else None
         ),
-        code=CodeableConcept(
-            coding=[
-                Coding(
-                    system="http://id.who.int/icd/release/11/mms",
-                    code=diagnosis.icd11_code_id,
-                    display=diagnosis.icd11_code.description,
-                )
-            ]
+        # A code flagged for re-coding means something other than what the
+        # clinician recorded, so only the recorded text is carried, uncoded.
+        code=(
+            CodeableConcept(text=diagnosis.icd11_display)
+            if diagnosis.needs_recoding
+            else CodeableConcept(
+                coding=[
+                    Coding(
+                        system="http://id.who.int/icd/release/11/mms",
+                        code=diagnosis.icd11_code_id,
+                        display=diagnosis.icd11_display,
+                    )
+                ]
+            )
         ),
     )
 

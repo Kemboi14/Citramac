@@ -26,13 +26,30 @@ class Icd11SearchView(ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
+        from .icd11_import import DIAGNOSIS_CHAPTERS
+
+        # Only codes that can be recorded: in the loaded WHO release, not retired,
+        # and from a chapter whose codes stand alone as a diagnosis.
+        queryset = IcdCodeIndex.objects.exclude(release="").filter(
+            retired_release="", chapter__in=DIAGNOSIS_CHAPTERS
+        )
         q = self.request.query_params.get("q", "").strip()
-        queryset = IcdCodeIndex.objects.all()
-        if q:
-            queryset = queryset.filter(description__icontains=q) | queryset.filter(
-                code__istartswith=q
-            )
-        return queryset[:25]
+        if not q:
+            return queryset.none()
+        by_code = queryset.filter(code__istartswith=q)
+        words = q.split()
+        by_title = queryset
+        for word in words[:6]:
+            by_title = by_title.filter(description__icontains=word)
+        matches = list(by_code.order_by("code")[:25])
+        seen = {row.code for row in matches}
+        for row in by_title.order_by("chapter", "code")[:50]:
+            if len(matches) >= 25:
+                break
+            if row.code not in seen:
+                matches.append(row)
+                seen.add(row.code)
+        return matches
 
 
 class LoincSearchView(ListAPIView):

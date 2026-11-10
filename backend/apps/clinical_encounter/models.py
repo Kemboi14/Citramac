@@ -116,6 +116,16 @@ class DiagnosisCode(TenantScopedModel):
 
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="diagnoses")
     icd11_code = models.ForeignKey(IcdCodeIndex, on_delete=models.PROTECT, related_name="+")
+    # Condition.code.coding.display as the clinician chose it, and the WHO
+    # release it was chosen from. Never rewritten, so a later release that
+    # retitles the code doesn't change what a signed diagnosis says.
+    icd11_display = models.CharField(max_length=500, blank=True, default="")
+    icd11_release = models.CharField(max_length=7, blank=True, default="")
+    # Set by the ICD-11 import when a diagnosis recorded from the old unverified
+    # list carries a code that doesn't mean what the clinician saw (or isn't a
+    # WHO code at all). It is then not shared, billed or emitted as coded until a
+    # clinician marks it entered in error and records the correct code.
+    code_review_reason = models.TextField(blank=True, default="")
     is_primary = models.BooleanField(default=False)
     noted_at = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="ACTIVE")
@@ -133,8 +143,34 @@ class DiagnosisCode(TenantScopedModel):
     class Meta(TenantScopedModel.Meta):
         ordering = ["-noted_at"]
 
+    def save(self, *args, **kwargs):
+        if not self.icd11_display and self.icd11_code_id:
+            self.icd11_display = self.icd11_code.description
+            self.icd11_release = self.icd11_code.release
+        super().save(*args, **kwargs)
+
+    @property
+    def needs_recoding(self):
+        return bool(self.code_review_reason) and self.verification_status != "ENTERED_IN_ERROR"
+
+    # For screens and documents: a code flagged for re-coding is not shown, since
+    # it means something other than what the clinician recorded.
+    @property
+    def shown_code(self):
+        return "" if self.needs_recoding else self.icd11_code_id
+
+    @property
+    def shown_label(self):
+        return self.icd11_display + (" (ICD-11 code under review)" if self.needs_recoding else "")
+
+    @property
+    def code_and_label(self):
+        if self.needs_recoding:
+            return self.shown_label
+        return f"{self.icd11_code_id} — {self.icd11_display}"
+
     def __str__(self):
-        return f"{self.icd11_code.code} ({'primary' if self.is_primary else 'secondary'})"
+        return f"{self.icd11_code_id} ({'primary' if self.is_primary else 'secondary'})"
 
 
 class ClinicalOrder(TenantScopedModel):

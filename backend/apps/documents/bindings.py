@@ -317,7 +317,7 @@ def _diagnoses(ctx):
         .order_by("-is_primary", "-noted_at")
     )
     items = [
-        f"{d.icd11_code.description} (ICD-11 {d.icd11_code_id})"
+        (d.shown_label if d.needs_recoding else f"{d.icd11_display} (ICD-11 {d.icd11_code_id})")
         + (" — primary" if d.is_primary else "")
         for d in rows
     ]

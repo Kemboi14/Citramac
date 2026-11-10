@@ -1017,8 +1017,8 @@ class ClientSnapshotView(APIView):
                 "diagnoses": [
                     {
                         "id": str(d.id),
-                        "code": d.icd11_code_id,
-                        "description": d.icd11_code.description,
+                        "code": d.shown_code,
+                        "description": d.shown_label,
                         "is_primary": d.is_primary,
                     }
                     for d in diagnoses
@@ -1823,11 +1823,7 @@ class OutpatientsView(APIView):
                     "patient_id": str(patient.id),
                     "name": patient.get_full_name(),
                     "citramac_number": patient.citramac_number,
-                    "diagnosis": (
-                        f"{diagnosis.icd11_code_id} — {diagnosis.icd11_code.description}"
-                        if diagnosis
-                        else ""
-                    ),
+                    "diagnosis": (diagnosis.code_and_label if diagnosis else ""),
                     "priority": signed.priority if signed else "",
                     "last_visit": _iso(last_visit.scheduled_for) if last_visit else None,
                     "next_appointment": _iso(next_visit.scheduled_for) if next_visit else None,

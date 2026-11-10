@@ -1871,7 +1871,7 @@ def client_timeline(patient):
                 "at": d.noted_at,
                 "kind": "diagnosis",
                 "title": "Diagnosis recorded",
-                "detail": f"{d.icd11_code_id} — {d.icd11_code.description}",
+                "detail": d.code_and_label,
             }
         )
     for appt in Appointment.objects.filter(patient=patient):
@@ -2211,8 +2211,8 @@ def discharge_context(admission):
         diagnoses = [
             {
                 "id": str(d.id),
-                "code": d.icd11_code_id,
-                "description": d.icd11_code.description,
+                "code": d.shown_code,
+                "description": d.shown_label,
                 "is_primary": d.is_primary,
             }
             for d in DiagnosisCode.objects.filter(encounter_id=admission.encounter_id)
@@ -2279,8 +2279,8 @@ def serialize_discharge(summary, full):
             "diagnoses": [
                 {
                     "id": str(d.id),
-                    "code": d.icd11_code_id,
-                    "description": d.icd11_code.description,
+                    "code": d.shown_code,
+                    "description": d.shown_label,
                     "is_primary": d.is_primary,
                 }
                 for d in summary.diagnoses.select_related("icd11_code")

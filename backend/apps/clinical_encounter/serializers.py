@@ -28,7 +28,9 @@ class EncounterSerializer(serializers.ModelSerializer):
 
 
 class DiagnosisCodeSerializer(serializers.ModelSerializer):
-    icd11_description = serializers.CharField(source="icd11_code.description", read_only=True)
+    # What the clinician chose the code by (Condition.code.coding.display).
+    icd11_description = serializers.CharField(source="icd11_display", read_only=True)
+    needs_recoding = serializers.BooleanField(read_only=True)
     patient = serializers.UUIDField(source="encounter.patient_id", read_only=True)
 
     class Meta:
@@ -39,6 +41,9 @@ class DiagnosisCodeSerializer(serializers.ModelSerializer):
             "patient",
             "icd11_code",
             "icd11_description",
+            "icd11_release",
+            "code_review_reason",
+            "needs_recoding",
             "is_primary",
             "noted_at",
             "status",
@@ -48,7 +53,21 @@ class DiagnosisCodeSerializer(serializers.ModelSerializer):
             "recorded_by",
             "error_reason",
         ]
-        read_only_fields = ["noted_at", "recorded_by", "error_reason"]
+        read_only_fields = [
+            "noted_at",
+            "recorded_by",
+            "error_reason",
+            "icd11_release",
+            "code_review_reason",
+        ]
+
+    def validate_icd11_code(self, value):
+        # Only a code from the WHO release loaded here can be recorded (CLAUDE.md §6).
+        if self.instance is None or value != self.instance.icd11_code:
+            problem = value.diagnosis_problem()
+            if problem:
+                raise serializers.ValidationError(problem)
+        return value
 
     def validate_verification_status(self, value):
         if value == "ENTERED_IN_ERROR":

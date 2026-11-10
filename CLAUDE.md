@@ -668,3 +668,33 @@ system invented). Migration `accounts 0025` copies each profile's single licence
 qualifications line + certificate into entries, keeping the files and verification. Reversible
 (checked forward and back). Reversibility: cheap. No signed record changes, and signed MHA forms
 keep the qualifications they were signed with.
+
+### 2026-11-10 — ICD-11 from WHO's release; the stub list retired
+
+On the owner's instruction ("pull the icd 11 and do everything"; "I need accurate repo FHIR, ICD-11"),
+this closes the open ICD-11 item from 2026-11-06.
+
+1. **Source.** WHO's ICD-11 MMS **2026-01** simple tabulation, vendored unchanged with its SHA-256
+   in `apps/dha_interop/icd11_release/` (provenance and the CC BY-ND 3.0 IGO licence are in
+   `SOURCE.md`). Migration `dha_interop 0009` loads it on deploy: 35,664 codes, each stamped with
+   its release, chapter and leaf flag. Later releases are loaded with `manage.py import_icd11
+   <zip> --release <id> --sha256 <hash>`. A code missing from a later release is retired, never
+   deleted. Every import is a `TerminologySyncRun`. The admin view of the index is read-only.
+2. **Only WHO codes can be recorded.** A new diagnosis needs a code from the loaded release that is
+   not retired and is in chapters 01–25. Chapters V, 26 and X are supplementary or extension codes
+   and are never recorded on their own. Search offers only those codes, matches on every word typed,
+   and marks codes that have more specific codes below them.
+3. **The stub list was wrong.** Five of its 16 codes (6C4B, 6C45, 6A25, 6D10, QA02) meant something
+   other than their shown title (table in `SOURCE.md`). Each diagnosis now keeps the display text it
+   was recorded with (`DiagnosisCode.icd11_display`, backfilled by `clinical_encounter 0011` before
+   the titles changed) and the release it came from. A stub-era diagnosis whose code means something
+   else in WHO is flagged (`code_review_reason`), not rewritten. It shows the recorded text marked
+   "ICD-11 code under review", without the code. It is not sent to the SHR (listed as omitted),
+   billed to SHA, or emitted as a FHIR coding (only `Condition.code.text`). A clinician corrects it
+   with entered in error plus a new diagnosis. Reversibility: cheap. No signed text changes. **Not
+   reversible:** any wrong code already sent to SHA or the SHR before today. The owner should check
+   the SHA and HIE disclosure audit for the five codes.
+4. **Examples.** Published examples use WHO leaf codes (6A70.1, 6C40.20) with WHO's titles. CI's
+   conformance step now includes `test_icd11.py::FhirR4ConformanceIcd11ExamplesTests`, which fails
+   on any example ICD-11 coding that is not a WHO leaf code with WHO's display. HL7's validator still
+   passes all 34 examples.

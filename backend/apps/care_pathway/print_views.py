@@ -95,8 +95,8 @@ class DischargePrintView(APIView):
             "destination": summary.destination,
             "diagnoses": [
                 {
-                    "code": d.icd11_code.code if d.icd11_code_id else "",
-                    "label": d.icd11_code.description if d.icd11_code_id else str(d),
+                    "code": d.shown_code if d.icd11_code_id else "",
+                    "label": d.shown_label if d.icd11_code_id else str(d),
                     "kind": "Primary" if d.is_primary else "Secondary",
                 }
                 for d in summary.diagnoses.select_related("icd11_code")

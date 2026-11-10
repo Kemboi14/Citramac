@@ -858,8 +858,8 @@ class CaseloadView(APIView):
                     "priority": priorities.get(patient.id, ""),
                     "diagnosis": (
                         {
-                            "code": diagnosis.icd11_code_id,
-                            "description": diagnosis.icd11_code.description,
+                            "code": diagnosis.shown_code,
+                            "description": diagnosis.shown_label,
                         }
                         if diagnosis
                         else None

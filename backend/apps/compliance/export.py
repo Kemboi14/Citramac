@@ -215,7 +215,8 @@ def _record(patient):
         "diagnoses": [
             {
                 "code": d.icd11_code_id,
-                "description": d.icd11_code.description,
+                "description": d.icd11_display,
+                "code_review": d.code_review_reason if d.needs_recoding else "",
                 "status": d.get_status_display(),
                 "primary": d.is_primary,
                 "noted_at": _iso(d.noted_at),

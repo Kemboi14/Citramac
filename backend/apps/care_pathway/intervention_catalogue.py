@@ -485,7 +485,7 @@ def workspace(patient):
     )
     register = attention.active_alerts(patient)
     diagnoses = [
-        {"code": d.icd11_code.code, "description": d.icd11_code.description}
+        {"code": d.shown_code, "description": d.icd11_display}
         for d in DiagnosisCode.objects.filter(
             encounter__patient=patient, status="ACTIVE"
         ).select_related("icd11_code")

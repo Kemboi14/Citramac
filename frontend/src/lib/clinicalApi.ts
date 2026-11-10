@@ -276,9 +276,15 @@ export function listEncountersForPatient(accessToken: string, patientId: string)
   return apiRequest<Paginated<EncounterRow>>(`/encounters/?patient=${patientId}`, { accessToken });
 }
 
+/** A code from the WHO ICD-11 MMS release loaded on the server. */
 export interface Icd11Code {
   code: string;
   description: string;
+  release: string;
+  chapter: string;
+  /** False when WHO has more specific codes below this one. */
+  is_leaf: boolean;
+  is_residual: boolean;
 }
 
 export function searchIcd11(accessToken: string, query: string) {

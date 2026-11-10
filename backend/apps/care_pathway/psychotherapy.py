@@ -1120,7 +1120,7 @@ def _diagnoses(patient):
         .select_related("icd11_code")
         .order_by("-is_primary", "-noted_at")
     )
-    return [f"{d.icd11_code_id} — {d.icd11_code.description}" for d in rows]
+    return [d.code_and_label for d in rows]
 
 
 def effective_sections(note):

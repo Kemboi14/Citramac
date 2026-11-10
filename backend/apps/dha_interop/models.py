@@ -1,22 +1,33 @@
 import uuid
 
 from django.db import models
+from django.utils import timezone
 
 from apps.tenancy.models import TenantScopedModel
 
 # docs/06-DATA-MODEL.md §6.6 — global terminology catalogs, not tenant-scoped
-# (every org searches the same ICD-11/LOINC/drug index). Phase 3-5 seed a
-# small illustrative set via data migration; docs/11-ROADMAP-AND-PHASES.md
-# Phase 6 replaces that with a real nightly sync job against the WHO/LOINC/
-# national drug registry APIs (docs/08-DHA-SHA-INTEGRATION.md §8.2) — do not
-# treat the seeded codes here as a certified, complete mirror.
+# (every org searches the same ICD-11/LOINC/drug index).
 
 
 class IcdCodeIndex(models.Model):
+    """
+    ICD-11 MMS, loaded from WHO's release file (`icd11_import.py`). A row with
+    no `release` came from the old illustrative stub list and was never in a
+    WHO release; it can't be chosen for a new diagnosis. A row with
+    `retired_release` was in an earlier release but not in that one.
+    """
+
     # code IS the primary key — the natural, human-meaningful lookup key
     # (diagnoses reference "6A70", not an opaque internal id).
     code = models.CharField(max_length=16, primary_key=True)
+    # WHO's title for the code in `release`.
     description = models.CharField(max_length=500)
+    release = models.CharField(max_length=7, blank=True, default="")
+    retired_release = models.CharField(max_length=7, blank=True, default="")
+    linearization_uri = models.CharField(max_length=200, blank=True, default="")
+    chapter = models.CharField(max_length=2, blank=True, default="")
+    is_leaf = models.BooleanField(default=False)
+    is_residual = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["code"]
@@ -25,6 +36,23 @@ class IcdCodeIndex(models.Model):
 
     def __str__(self):
         return f"{self.code} — {self.description}"
+
+    def diagnosis_problem(self):
+        """Why this code can't be chosen for a new diagnosis, or "" if it can."""
+        from .icd11_import import DIAGNOSIS_CHAPTERS
+
+        if not self.release:
+            return f"{self.code} is not in the WHO ICD-11 release loaded here."
+        if self.retired_release:
+            return (
+                f"{self.code} is no longer in WHO ICD-11 (not in release {self.retired_release})."
+            )
+        if self.chapter not in DIAGNOSIS_CHAPTERS:
+            return (
+                f"{self.code} is in ICD-11 chapter {self.chapter}, whose codes are not used "
+                "on their own as a diagnosis."
+            )
+        return ""
 
 
 class LoincCodeIndex(models.Model):
@@ -242,11 +270,10 @@ class FhirResourceCache(models.Model):
 
 class TerminologySyncRun(models.Model):
     """
-    Audit trail of terminology mirror sync attempts — docs/08-DHA-SHA-INTEGRATION.md
-    §8.2's "generic TerminologySyncJob Celery task pattern reused for all
-    three mirrors." No live WHO/LOINC/national-drug-registry source is
-    configured in this environment, so runs honestly record a SKIPPED status
-    with the reason rather than fabricating a successful sync.
+    Record of each terminology load. ICD-11 is loaded from WHO's release file
+    (`icd11_import.py`, `manage.py import_icd11`); each import is one row with
+    the release and the file's SHA-256. LOINC and the drug index have no
+    verified source yet.
     """
 
     SOURCE_CHOICES = [
@@ -264,8 +291,11 @@ class TerminologySyncRun(models.Model):
     source = models.CharField(max_length=32, choices=SOURCE_CHOICES)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES)
     records_synced = models.PositiveIntegerField(default=0)
+    # WHO's release id (ICD-11, e.g. "2026-01") and the source file's hash.
+    release = models.CharField(max_length=16, blank=True, default="")
+    source_sha256 = models.CharField(max_length=64, blank=True, default="")
     detail = models.TextField(blank=True)
-    started_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(default=timezone.now)
     finished_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

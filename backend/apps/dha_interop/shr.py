@@ -551,7 +551,7 @@ def _condition_resource(consent, diagnosis, security):
                 {
                     "system": ICD11_SYSTEM,
                     "code": diagnosis.icd11_code_id,
-                    "display": diagnosis.icd11_code.description,
+                    "display": diagnosis.icd11_display,
                 }
             ]
         },
@@ -592,9 +592,17 @@ def build_bundle(consent, labels):
     # Kenya Core requires a verification status, and blank means the certainty
     # was never stated — sending it as provisional would assert what nobody did.
     unstated = [d for d in diagnoses if not d.verification_status]
+    recoding = [d for d in diagnoses if d.needs_recoding]
     diagnoses = [
-        d for d in diagnoses if d.verification_status not in DiagnosisCode.NOT_ASSERTED + ("",)
+        d
+        for d in diagnoses
+        if d.verification_status not in DiagnosisCode.NOT_ASSERTED + ("",) and not d.needs_recoding
     ]
+    if recoding:
+        omissions.append(
+            f"{len(recoding)} diagnosis(es) recorded from the old code list under a code that "
+            "means something else in WHO ICD-11 not shared — correct the code to share them."
+        )
     if refuted:
         omissions.append(f"{len(refuted)} ruled-out diagnosis(es) not shared.")
     if in_error:

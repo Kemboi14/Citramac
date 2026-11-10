@@ -186,8 +186,8 @@
           "coding": [
             {
               "system": "http://id.who.int/icd/release/11/mms",
-              "code": "6C40.2",
-              "display": "Alcohol dependence"
+              "code": "6C40.20",
+              "display": "Alcohol dependence, current use, continuous"
             }
           ]
         },

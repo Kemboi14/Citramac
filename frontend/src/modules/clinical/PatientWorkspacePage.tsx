@@ -19,6 +19,7 @@ import {
 } from "../../lib/clinicalApi";
 import {
   createDiagnosis,
+  diagnosisLabel,
   listDiagnosesForPatient,
   updateDiagnosis,
   type Diagnosis,
@@ -438,6 +439,9 @@ export function PatientWorkspacePage() {
                         className="block w-full px-3 py-2 text-left text-xs hover:bg-brand-green-tint-2"
                       >
                         {r.code} — {r.description}
+                        {!r.is_leaf && (
+                          <span className="ml-1 text-ink-500">(more specific codes exist)</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -474,9 +478,7 @@ export function PatientWorkspacePage() {
                 }`}
               >
                 <div>
-                  <strong className="text-sm text-ink-900">
-                    {d.icd11_code} — {d.icd11_description}
-                  </strong>
+                  <strong className="text-sm text-ink-900">{diagnosisLabel(d)}</strong>
                   <p className="mt-0.5 text-xs text-ink-500">
                     {new Date(d.noted_at).toLocaleDateString()}
                     {d.is_primary && " · Primary"}
@@ -499,8 +501,11 @@ export function PatientWorkspacePage() {
             {selectedDiagnosis && (
               <div className="flex flex-col gap-3">
                 <strong className="text-sm text-ink-900">
-                  {selectedDiagnosis.icd11_code} — {selectedDiagnosis.icd11_description}
+                  {diagnosisLabel(selectedDiagnosis)}
                 </strong>
+                {selectedDiagnosis.needs_recoding && (
+                  <p className="text-xs text-ink-700">{selectedDiagnosis.code_review_reason}</p>
+                )}
                 <label className={LABEL_CLASS}>
                   Status
                   <select

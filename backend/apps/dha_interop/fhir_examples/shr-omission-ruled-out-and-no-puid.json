@@ -144,8 +144,8 @@
           "coding": [
             {
               "system": "http://id.who.int/icd/release/11/mms",
-              "code": "6A70",
-              "display": "Single episode depressive disorder"
+              "code": "6A70.1",
+              "display": "Single episode depressive disorder, moderate, without psychotic symptoms"
             }
           ]
         },
