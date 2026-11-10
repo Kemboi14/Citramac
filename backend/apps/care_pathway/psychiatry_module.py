@@ -47,6 +47,9 @@ STRUCTURED_SECTIONS = (
     ("formulation", "Formulation"),
     ("plan", "Plan"),
 )
+# A structured assessment cannot be signed without these: a psychiatric
+# assessment with no risk statement or no plan is not a complete record.
+REQUIRED_TO_SIGN = (("risk", "Risk"), ("plan", "Plan"))
 REVIEW_FOCUS_TYPES = ("PSYCHIATRIC_REVIEW_WITHDRAWAL", "URGENT_PSYCHIATRIC_REVIEW")
 OPEN_TASK_STATUSES = ("INITIATED", "PENDING")
 
@@ -254,12 +257,12 @@ def _render_note(fmt, free_text, structured, mse):
     return "\n".join(parts).strip()
 
 
-def _has_content(fmt, free_text, structured, mse):
-    if fmt == FREE_TEXT and free_text.strip():
-        return True
-    if fmt == STRUCTURED and any(value.strip() for value in structured.values()):
-        return True
-    return any(value.strip() for value in mental_state.exam_text(mse).values())
+def _missing_to_sign(fmt, free_text, structured):
+    """What the assessment still needs before it can be signed. The MSE has its
+    own store and does not stand in for the assessment itself."""
+    if fmt == FREE_TEXT:
+        return [] if free_text.strip() else ["the assessment narrative"]
+    return [label for key, label in REQUIRED_TO_SIGN if not (structured.get(key) or "").strip()]
 
 
 def _save_mse(patient, encounter, user, mse, note=None):
@@ -317,6 +320,13 @@ def _save(patient, user, data):
         raise ValidationError({"format": "Choose free text or structured format."})
     free_text = str(data.get("free_text") or "")
     structured = _clean_structured(data.get("structured"))
+    # Only the chosen format's content is kept. Text from the other format
+    # would sit in `data` without appearing in the rendered note, so a signed
+    # record would carry content its text does not show.
+    if fmt == FREE_TEXT:
+        structured = {}
+    else:
+        free_text = ""
     mse = data.get("mse") or {}
     if not isinstance(mse, dict):
         raise ValidationError({"mse": "MSE must be an object."})
@@ -354,13 +364,15 @@ def save_workspace(patient, user, data):
 def sign_workspace(patient, user, data):
     note = _save(patient, user, data)
     payload = note.data or {}
-    if not _has_content(
+    missing = _missing_to_sign(
         payload.get("format") or STRUCTURED,
         str(payload.get("free_text") or ""),
         payload.get("structured") or {},
-        payload.get("mse") or {},
-    ):
-        raise ValidationError({"detail": "Record the assessment or mental state before signing."})
+    )
+    if missing:
+        raise ValidationError(
+            {"detail": f"Record {' and '.join(missing)} before signing the assessment."}
+        )
     note = records.sign_note(note, user)
     return _workspace_state(patient, note.encounter, note, user)
 

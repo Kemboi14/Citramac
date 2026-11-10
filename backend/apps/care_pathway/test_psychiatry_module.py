@@ -150,3 +150,47 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             first_exam = MentalStatusExam.objects.get(pk=first_exam_id)
             self.assertEqual(first_exam.mood, "Low")
             self.assertEqual(exams.last().mood, "Euthymic")
+
+    def test_only_the_chosen_formats_content_is_kept(self):
+        body = dict(self.body, free_text="Narrative typed before switching to structured.")
+        saved = self.client.put(self.open_url, body, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["assessment"]["free_text"], "")
+        self.assertNotIn("Narrative typed", saved.data["assessment"]["text"])
+
+        free = {
+            "format": "FREE_TEXT",
+            "structured": self.body["structured"],
+            "free_text": "Seen today. Low mood. No suicidal ideation. Plan: CBT.",
+            "mse": {},
+        }
+        saved = self.client.put(self.open_url, free, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["assessment"]["structured"], {})
+        with platform_admin_context():
+            note = ProgressNote.objects.get(patient_id=self.pid, note_type="PSYCHIATRY")
+            self.assertEqual(note.data["structured"], {})
+            self.assertNotIn("Presenting concern", note.text)
+
+    def test_structured_assessment_needs_risk_and_plan_to_sign(self):
+        body = dict(self.body)
+        body["structured"] = dict(self.body["structured"], risk="", plan="  ")
+        signed = self.client.post(
+            reverse("care-psych-sign", args=[self.pid]), body, format="json", **self.auth
+        )
+        self.assertEqual(signed.status_code, 400, signed.data)
+        self.assertIn("Risk and Plan", str(signed.data))
+        with platform_admin_context():
+            self.assertFalse(
+                ProgressNote.objects.filter(
+                    patient_id=self.pid, note_type="PSYCHIATRY", status="SIGNED"
+                ).exists()
+            )
+
+    def test_an_mse_alone_is_not_a_signable_assessment(self):
+        body = {"format": "FREE_TEXT", "structured": {}, "free_text": " ", "mse": {"mood": "Low"}}
+        signed = self.client.post(
+            reverse("care-psych-sign", args=[self.pid]), body, format="json", **self.auth
+        )
+        self.assertEqual(signed.status_code, 400, signed.data)
+        self.assertIn("assessment narrative", str(signed.data))

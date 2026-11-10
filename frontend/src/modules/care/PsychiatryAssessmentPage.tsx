@@ -20,7 +20,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
-import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
 import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
@@ -28,7 +28,7 @@ import { MseSection } from "./record/intake/MseSection";
 import { IntakeDiagnosisTab } from "./record/IntakeDiagnosisTab";
 import { PrescribingModule } from "./record/modules/PrescribingModule";
 
-const STRUCTURED_FIELDS: { key: string; label: string; hint: string }[] = [
+const STRUCTURED_FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
   {
     key: "presenting_concern",
     label: "Presenting concern",
@@ -43,6 +43,7 @@ const STRUCTURED_FIELDS: { key: string; label: string; hint: string }[] = [
     key: "risk",
     label: "Risk",
     hint: "Suicide / self-harm, harm to others, vulnerability and protective factors.",
+    required: true,
   },
   {
     key: "formulation",
@@ -53,17 +54,26 @@ const STRUCTURED_FIELDS: { key: string; label: string; hint: string }[] = [
     key: "plan",
     label: "Plan",
     hint: "Investigations, psychological treatment, medication, follow-up and safety plan.",
+    required: true,
   },
 ];
 
 const SECTIONS = [
-  { id: "psych-format", label: "Format" },
   { id: "psych-assessment", label: "Assessment" },
   { id: "psych-mse", label: "MSE" },
   { id: "psych-diagnosis", label: "Diagnosis" },
   { id: "psych-medication", label: "Medication" },
   { id: "psych-previous", label: "Previous" },
 ];
+
+/** The structured sections as one narrative, under their headings, so switching
+ * to free text keeps what was written. */
+function sectionsAsNarrative(structured: Record<string, string>) {
+  return STRUCTURED_FIELDS.map((field) => [field.label, (structured[field.key] ?? "").trim()])
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}\n${value}`)
+    .join("\n\n");
+}
 
 function errorText(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
@@ -78,7 +88,9 @@ function signedLocked(workspace: PsychiatryWorkspace | null) {
  * note store (ProgressNote type PSYCHIATRY), the MSE uses the one MSE store,
  * diagnosis uses ICD-11 DiagnosisCode and medication uses the structured
  * prescribing module. The format switch only changes how the assessment note is
- * captured; the clinical stores are the same either way.
+ * captured; the clinical stores are the same either way. Only the chosen
+ * format's text is saved, so switching carries the text across (structured →
+ * free text) or asks before discarding it (free text → structured).
  */
 export function PsychiatryAssessmentPage() {
   const { patientId = "" } = useParams<{ patientId: string }>();
@@ -99,7 +111,7 @@ export function PsychiatryAssessmentPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState(SECTIONS[1].id);
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
 
   useEffect(() => {
     if (!accessToken || !patientId) return;
@@ -155,6 +167,26 @@ export function PsychiatryAssessmentPage() {
     () => ({ format, free_text: freeText, structured, mse }),
     [format, freeText, structured, mse],
   );
+
+  const switchFormat = (next: PsychiatryFormat) => {
+    if (next === format) return;
+    if (next === "FREE_TEXT") {
+      const carried = sectionsAsNarrative(structured);
+      if (carried) setFreeText((current) => [current.trim(), carried].filter(Boolean).join("\n\n"));
+      setStructured({});
+    } else {
+      if (
+        freeText.trim() &&
+        !window.confirm(
+          "Switching to structured discards the free-text narrative, because it can't be split into sections. Copy it first if you need it. Switch to structured?",
+        )
+      ) {
+        return;
+      }
+      setFreeText("");
+    }
+    setFormat(next);
+  };
 
   const run = async (action: "save" | "sign") => {
     if (!accessToken || !patientId) return;
@@ -289,27 +321,18 @@ export function PsychiatryAssessmentPage() {
       </nav>
 
       <div
-        id="psych-format"
+        id="psych-assessment"
         role="tabpanel"
-        aria-labelledby="psych-format-tab"
-        className={`min-w-0 ${activeSection === "psych-format" ? "" : "hidden"}`}
+        aria-labelledby="psych-assessment-tab"
+        className={`min-w-0 ${activeSection === "psych-assessment" ? "" : "hidden"}`}
       >
         <Card
-          title="Assessment format"
+          title="Assessment"
           aside={
-            <span className="text-[12px] text-ink-500">
-              {assessment
-                ? `Last saved ${formatDateTime(assessment.updated_at)}`
-                : "New assessment"}
-            </span>
-          }
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={FIELD_LABEL}>Choose how to record this assessment</span>
             <div
               role="group"
               aria-label="Assessment format"
-              className="ml-auto flex rounded-xl border border-surface-border bg-surface-bg p-1"
+              className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
             >
               {(
                 [
@@ -322,8 +345,8 @@ export function PsychiatryAssessmentPage() {
                   type="button"
                   aria-pressed={format === value}
                   disabled={readOnly}
-                  onClick={() => setFormat(value)}
-                  className={`rounded-[9px] px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+                  onClick={() => switchFormat(value)}
+                  className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
                     format === value
                       ? "bg-brand-green text-on-primary"
                       : "text-ink-900 hover:bg-surface-card"
@@ -333,33 +356,33 @@ export function PsychiatryAssessmentPage() {
                 </button>
               ))}
             </div>
-          </div>
-          <p className="mt-2 text-[12.5px] leading-5 text-ink-700">
-            Structured mode separates presenting concern, history, risk, formulation and plan. Free
-            text mode records the same assessment as one narrative. The mental state examination,
-            diagnosis and orders stay structured either way.
-          </p>
-        </Card>
-      </div>
-
-      <div
-        id="psych-assessment"
-        role="tabpanel"
-        aria-labelledby="psych-assessment-tab"
-        className={`min-w-0 ${activeSection === "psych-assessment" ? "" : "hidden"}`}
-      >
-        <Card
-          title="Assessment"
-          aside={
-            <Tag tone={format === "STRUCTURED" ? "brand" : "neutral"}>
-              {format === "STRUCTURED" ? "Structured" : "Free text"}
-            </Tag>
           }
         >
+          <p className="mb-3 text-[12.5px] leading-5 text-ink-700">
+            {format === "STRUCTURED"
+              ? "Record the assessment under headings. Risk and Plan are needed to sign."
+              : "Record the assessment as one narrative, including risk and plan."}{" "}
+            The mental state examination, diagnosis and medication have their own tabs and are
+            recorded the same way in either format.
+            {assessment && ` Last saved ${formatDateTime(assessment.updated_at)}.`}
+          </p>
           {format === "STRUCTURED" ? (
             <div className="grid gap-3 lg:grid-cols-2">
               {STRUCTURED_FIELDS.map((field) => (
-                <Field key={field.key} label={field.label} hint={field.hint}>
+                <Field
+                  key={field.key}
+                  label={
+                    field.required ? (
+                      <>
+                        {field.label}{" "}
+                        <span className="font-normal text-ink-500">(needed to sign)</span>
+                      </>
+                    ) : (
+                      field.label
+                    )
+                  }
+                  hint={field.hint}
+                >
                   <AutoResizeTextarea
                     className={`${INPUT} min-h-[112px]`}
                     rows={4}
@@ -375,7 +398,7 @@ export function PsychiatryAssessmentPage() {
           ) : (
             <Field
               label="Psychiatric assessment — free text"
-              hint="History, mental state, risk, formulation and plan in your own structure."
+              hint="Presenting concern, history, risk, formulation and plan in your own structure. Record the mental state on the MSE tab."
             >
               <AutoResizeTextarea
                 className={`${INPUT} min-h-[280px]`}

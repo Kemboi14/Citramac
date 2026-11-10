@@ -17,7 +17,7 @@ import { useRecordData } from "./record/useRecordData";
 type View = "needs" | "intake" | "reviewed" | "all";
 
 const VIEWS: { key: View; label: string }[] = [
-  { key: "needs", label: "Needs assessment" },
+  { key: "needs", label: "Need assessment" },
   { key: "intake", label: "Intake complete" },
   { key: "reviewed", label: "Assessed" },
   { key: "all", label: "All clients" },
