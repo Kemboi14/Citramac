@@ -17,6 +17,7 @@ Stores (CLAUDE.md §4 — one store per clinical concept):
 """
 
 from django.db import transaction
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -32,6 +33,7 @@ from .models import (
     ClinicalAlert,
     EpisodeOfCare,
     IntakeAssessment,
+    LocalConcept,
     ProgressNote,
     TriageEncounter,
 )
@@ -43,13 +45,12 @@ FORMATS = (FREE_TEXT, STRUCTURED)
 STRUCTURED_SECTIONS = (
     ("presenting_concern", "Presenting concern"),
     ("history", "History"),
-    ("risk", "Risk"),
+    ("risk", "Clinical Risk Assessment"),
     ("formulation", "Formulation"),
     ("plan", "Plan"),
 )
-# A structured assessment cannot be signed without these: a psychiatric
-# assessment with no risk statement or no plan is not a complete record.
-REQUIRED_TO_SIGN = (("risk", "Risk"), ("plan", "Plan"))
+# The structured assessment requires a clinical risk statement before signing.
+REQUIRED_TO_SIGN = (("risk", "Risk"),)
 REVIEW_FOCUS_TYPES = ("PSYCHIATRIC_REVIEW_WITHDRAWAL", "URGENT_PSYCHIATRIC_REVIEW")
 OPEN_TASK_STATUSES = ("INITIATED", "PENDING")
 
@@ -213,16 +214,218 @@ def open_workspace(patient, user):
     return _workspace_state(patient, encounter, note, user)
 
 
+def _risk_has_content(value):
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        rows = value.get("rows") or {}
+        if isinstance(rows, dict) and any(
+            isinstance(row_values, list) and any(str(item).strip() for item in row_values)
+            for row_values in rows.values()
+        ):
+            return True
+        for key in (
+            "other",
+            "details",
+            "static",
+            "dynamic",
+            "protective",
+            "change_72h",
+            "summary",
+            "plan",
+        ):
+            entry = value.get(key)
+            if isinstance(entry, str) and entry.strip():
+                return True
+        if value.get("actions"):
+            return True
+        return False
+    return bool(str(value).strip())
+
+
 def _clean_structured(value):
     if value is None:
         return {}
     if not isinstance(value, dict):
         raise ValidationError({"structured": "Structured assessment must be an object."})
-    return {
-        key: str(value.get(key) or "").strip()
-        for key, _label in STRUCTURED_SECTIONS
-        if key in value
-    }
+    cleaned = {}
+    for key, _label in STRUCTURED_SECTIONS:
+        if key not in value:
+            continue
+        entry = value.get(key)
+        if key == "risk":
+            if entry is None:
+                continue
+            if isinstance(entry, str):
+                cleaned[key] = entry.strip()
+            elif isinstance(entry, dict):
+                rows = entry.get("rows") or {}
+                clean_rows = {}
+                if isinstance(rows, dict):
+                    for row_key, row_values in rows.items():
+                        if isinstance(row_values, list):
+                            clean_rows[row_key] = [str(v).strip() for v in row_values if str(v).strip()]
+                clean = {"rows": clean_rows}
+                for field in ("static", "dynamic", "protective", "change_72h", "summary"):
+                    if field in entry and isinstance(entry.get(field), str):
+                        clean[field] = entry[field].strip()
+                has_risk_content = bool(
+                    any(row_values for row_values in clean.get("rows", {}).values())
+                    or any(
+                        clean.get(field)
+                        for field in ("static", "dynamic", "protective", "change_72h", "summary")
+                    )
+                )
+                if has_risk_content:
+                    cleaned[key] = clean
+                elif isinstance(entry.get("text"), str) and entry.get("text").strip():
+                    cleaned[key] = entry["text"].strip()
+            else:
+                cleaned[key] = str(entry).strip()
+        else:
+            cleaned[key] = str(entry or "").strip()
+    if "risk" in value:
+        cleaned["risk"] = _clean_risk(value["risk"])
+    return cleaned
+
+
+def _clean_risk(value):
+    if value is None:
+        return {"rows": {}}
+    if isinstance(value, str):
+        return {"summary": value.strip(), "rows": {}}
+    if not isinstance(value, dict):
+        raise ValidationError(
+            {"structured": {"risk": "Clinical risk assessment must be an object."}}
+        )
+
+    raw_rows = value.get("rows") or {}
+    if not isinstance(raw_rows, dict):
+        raise ValidationError(
+            {"structured": {"risk": {"rows": "Risk rows must be an object."}}}
+        )
+    rows = {}
+    row_specs = {row["key"]: row for row in intake_schema.RISK_ROWS}
+    for row_key, selections in raw_rows.items():
+        spec = row_specs.get(row_key)
+        if spec is None:
+            raise ValidationError(
+                {"structured": {"risk": {"rows": f"Unknown risk row: {row_key}."}}}
+            )
+        if not isinstance(selections, list):
+            raise ValidationError(
+                {
+                    "structured": {
+                        "risk": {"rows": f"Selections for {row_key} must be a list."}
+                    }
+                }
+            )
+        selected = [str(item).strip() for item in selections if str(item).strip()]
+        invalid = set(selected) - set(spec["options"])
+        if invalid:
+            raise ValidationError(
+                {
+                    "structured": {
+                        "risk": {
+                            "rows": (
+                                f"Unknown selection(s) for {row_key}: "
+                                f"{', '.join(sorted(invalid))}."
+                            )
+                        }
+                    }
+                }
+            )
+        if spec.get("single") and len(set(selected)) > 1:
+            raise ValidationError(
+                {"structured": {"risk": {"rows": f"Choose only one option for {row_key}."}}}
+            )
+        if set(selected) & set(spec["none"]) and set(selected) & set(spec["active"]):
+            raise ValidationError(
+                {
+                    "structured": {
+                        "risk": {
+                            "rows": (
+                                f"A 'none' option cannot be combined with active "
+                                f"{row_key} risks."
+                            )
+                        }
+                    }
+                }
+            )
+        rows[row_key] = list(dict.fromkeys(selected))
+
+    clean = {"rows": rows}
+    for field in (
+        "other",
+        "details",
+        "static",
+        "dynamic",
+        "protective",
+        "change_72h",
+        "summary",
+        "plan",
+        "review_by",
+    ):
+        item = value.get(field, "")
+        if item is not None and not isinstance(item, str):
+            raise ValidationError(
+                {"structured": {"risk": {field: "Enter text for this field."}}}
+            )
+        clean[field] = item.strip() if isinstance(item, str) else ""
+    if clean["review_by"] and parse_date(clean["review_by"]) is None:
+        raise ValidationError(
+            {"structured": {"risk": {"review_by": "Enter a valid review date."}}}
+        )
+
+    actions = value.get("actions") or []
+    if not isinstance(actions, list) or not all(isinstance(item, str) for item in actions):
+        raise ValidationError(
+            {"structured": {"risk": {"actions": "Actions must be a list of codes."}}}
+        )
+    valid_actions = set(
+        LocalConcept.objects.filter(
+            valueset_id="intake-risk-actions", active=True
+        ).values_list("code", flat=True)
+    )
+    if set(actions) - valid_actions:
+        raise ValidationError(
+            {"structured": {"risk": {"actions": "Choose actions from the served list."}}}
+        )
+    clean["actions"] = list(dict.fromkeys(actions))
+
+    concern_level = value.get("concern_level") or ""
+    if not isinstance(concern_level, str):
+        raise ValidationError(
+            {
+                "structured": {
+                    "risk": {"concern_level": "Choose a level from the served list."}
+                }
+            }
+        )
+    if concern_level and not LocalConcept.objects.filter(
+        valueset_id="intake-concern-level", code=concern_level, active=True
+    ).exists():
+        raise ValidationError(
+            {
+                "structured": {
+                    "risk": {"concern_level": "Choose a level from the served list."}
+                }
+            }
+        )
+    clean["concern_level"] = concern_level
+    signature = value.get("formulation_signed_at")
+    if signature is not None and not isinstance(signature, str):
+        raise ValidationError(
+            {
+                "structured": {
+                    "risk": {"formulation_signed_at": "Invalid formulation signature."}
+                }
+            }
+        )
+    clean["formulation_signed_at"] = signature or ""
+    return clean
 
 
 def _mse_text(mse):
@@ -241,6 +444,69 @@ def _mse_text(mse):
     )
 
 
+def _risk_to_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, dict):
+        return str(value).strip()
+    rows = value.get("rows") or {}
+    if isinstance(rows, dict):
+        parts = []
+        for row in intake_schema.RISK_ROWS:
+            row_key = row["key"]
+            selected = rows.get(row_key) or []
+            if selected:
+                parts.append(f"{row['label']}: {', '.join(str(item) for item in selected)}")
+        for field in (
+            "other",
+            "details",
+            "static",
+            "dynamic",
+            "protective",
+            "change_72h",
+            "summary",
+            "plan",
+            "review_by",
+        ):
+            item = value.get(field)
+            if isinstance(item, str) and item.strip():
+                label = {
+                    "other": "Other acute risk",
+                    "details": "Immediate actions already taken",
+                    "static": "Static factors",
+                    "dynamic": "Dynamic factors",
+                    "protective": "Protective factors",
+                    "change_72h": "What could change in the next 24-72 hours?",
+                    "summary": "Structured risk formulation",
+                    "plan": "Risk management plan",
+                    "review_by": "Review by",
+                }.get(field, field)
+                parts.append(f"{label}: {item.strip()}")
+        actions = value.get("actions") or []
+        if actions:
+            labels = {
+                concept.code: concept.display
+                for concept in LocalConcept.objects.filter(
+                    valueset_id="intake-risk-actions", code__in=actions
+                )
+            }
+            parts.append("Actions: " + ", ".join(labels.get(code, code) for code in actions))
+        concern_level = value.get("concern_level")
+        if concern_level:
+            display = (
+                LocalConcept.objects.filter(
+                    valueset_id="intake-concern-level", code=concern_level
+                )
+                .values_list("display", flat=True)
+                .first()
+            )
+            parts.append(f"Level of concern: {display or concern_level}")
+        return "\n".join(parts)
+    return str(value).strip()
+
+
 def _render_note(fmt, free_text, structured, mse):
     parts = ["Psychiatric assessment"]
     if fmt == FREE_TEXT:
@@ -248,9 +514,13 @@ def _render_note(fmt, free_text, structured, mse):
             parts += ["", free_text.strip()]
     else:
         for key, label in STRUCTURED_SECTIONS:
-            value = (structured.get(key) or "").strip()
-            if value:
-                parts += ["", label, value]
+            value = structured.get(key)
+            if key == "risk":
+                rendered = _risk_to_text(value)
+            else:
+                rendered = (value or "").strip() if isinstance(value, str) else ""
+            if rendered:
+                parts += ["", label, rendered]
     mse_text = _mse_text(mse)
     if mse_text:
         parts += ["", "Mental state examination", mse_text]
@@ -262,7 +532,14 @@ def _missing_to_sign(fmt, free_text, structured):
     own store and does not stand in for the assessment itself."""
     if fmt == FREE_TEXT:
         return [] if free_text.strip() else ["the assessment narrative"]
-    return [label for key, label in REQUIRED_TO_SIGN if not (structured.get(key) or "").strip()]
+    missing = []
+    for key, label in REQUIRED_TO_SIGN:
+        if key == "risk":
+            if not _risk_has_content(structured.get(key)):
+                missing.append(label)
+        elif not (structured.get(key) or "").strip():
+            missing.append(label)
+    return missing
 
 
 def _save_mse(patient, encounter, user, mse, note=None):
@@ -319,7 +596,28 @@ def _save(patient, user, data):
     if fmt not in FORMATS:
         raise ValidationError({"format": "Choose free text or structured format."})
     free_text = str(data.get("free_text") or "")
-    structured = _clean_structured(data.get("structured"))
+    raw_structured = data.get("structured")
+    previous_risk = (
+        ((note.data or {}).get("structured") or {}).get("risk")
+        if isinstance((note.data or {}).get("structured"), dict)
+        else {}
+    )
+    formulation_sign = None
+    if isinstance(raw_structured, dict) and isinstance(raw_structured.get("risk"), dict):
+        raw_structured = dict(raw_structured)
+        risk_payload = dict(raw_structured["risk"])
+        formulation_sign = intake_service._pop_formulation_signature(
+            risk_payload, previous_risk if isinstance(previous_risk, dict) else {}
+        )
+        raw_structured["risk"] = risk_payload
+    structured = _clean_structured(raw_structured)
+    if fmt == STRUCTURED and "risk" in structured:
+        risk = structured["risk"]
+        if formulation_sign is None and isinstance(previous_risk, dict):
+            risk["formulation_signed_at"] = previous_risk.get("formulation_signed_at", "")
+            risk["formulation_signed_by"] = previous_risk.get("formulation_signed_by", "")
+        elif formulation_sign is not None:
+            intake_service._apply_formulation_signature(risk, user, formulation_sign)
     # Only the chosen format's content is kept. Text from the other format
     # would sit in `data` without appearing in the rendered note, so a signed
     # record would carry content its text does not show.
