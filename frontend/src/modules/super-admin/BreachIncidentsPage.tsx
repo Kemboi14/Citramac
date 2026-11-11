@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -455,8 +456,8 @@ function ReportBreachForm({
         </label>
         <label className={`${LABEL_CLASS} md:col-span-2`}>
           Description
-          <textarea
-            className={`${FIELD_CLASS} min-h-[90px]`}
+          <AutoResizeTextarea
+            className="min-h-[90px]"
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
             required
@@ -532,8 +533,8 @@ function ReportBreachForm({
         </label>
         <label className={`${LABEL_CLASS} md:col-span-2`}>
           Containment actions taken
-          <textarea
-            className={`${FIELD_CLASS} min-h-[70px]`}
+          <AutoResizeTextarea
+            className="min-h-[70px]"
             value={form.containment_actions}
             onChange={(e) => set("containment_actions", e.target.value)}
           />
@@ -906,8 +907,8 @@ function RecordNotificationForm({
         </label>
         <label className={`${LABEL_CLASS} md:col-span-3`}>
           Notes
-          <textarea
-            className={`${FIELD_CLASS} min-h-[60px]`}
+          <AutoResizeTextarea
+            className="min-h-[60px]"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
@@ -915,8 +916,8 @@ function RecordNotificationForm({
         {late && (
           <label className={`${LABEL_CLASS} md:col-span-3`}>
             Reasons for the delay (DPA s.43(2))
-            <textarea
-              className={`${FIELD_CLASS} min-h-[60px]`}
+            <AutoResizeTextarea
+              className="min-h-[60px]"
               value={lateReason}
               onChange={(e) => setLateReason(e.target.value)}
               required

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useRef, useState } from "react";
 import {
   Building2,
@@ -736,8 +737,7 @@ export function BranchSettingsPage() {
                 <div className="flex flex-col gap-4">
                   <label className={LABEL_CLASS}>
                     Address
-                    <textarea
-                      className={FIELD_CLASS}
+                    <AutoResizeTextarea
                       rows={2}
                       value={form.address}
                       onChange={(e) => updateForm({ address: e.target.value })}

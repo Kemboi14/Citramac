@@ -93,7 +93,6 @@ export function ProgressNotes({ patientId }: { patientId: string }) {
         </select>
         {amends && <p className="text-xs text-ink-500">Addendum to a signed note.</p>}
         <AutoResizeTextarea
-          className={INPUT}
           rows={4}
           aria-label="Note"
           value={text}

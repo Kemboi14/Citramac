@@ -189,7 +189,6 @@ export function ClientTab({
             </span>
             <AutoResizeTextarea
               rows={2}
-              className={`${INPUT} resize-y`}
               defaultValue={details.rationale}
               onBlur={(e) => void saveDetails({ rationale: e.target.value })}
             />
@@ -239,7 +238,6 @@ export function ClientTab({
             <span className={FIELD_LABEL}>Crisis &amp; relapse plan</span>
             <AutoResizeTextarea
               rows={3}
-              className={`${INPUT} resize-y`}
               defaultValue={details.crisis_plan}
               onBlur={(e) =>
                 e.target.value !== details.crisis_plan &&
@@ -253,7 +251,6 @@ export function ClientTab({
             </span>
             <AutoResizeTextarea
               rows={3}
-              className={`${INPUT} resize-y`}
               defaultValue={details.family_involvement}
               onBlur={(e) =>
                 e.target.value !== details.family_involvement &&
@@ -271,7 +268,6 @@ export function ClientTab({
             <span className={FIELD_LABEL}>Advance statement &amp; treatment preferences</span>
             <AutoResizeTextarea
               rows={2}
-              className={`${INPUT} resize-y`}
               defaultValue={details.advance_statement}
               onBlur={(e) =>
                 e.target.value !== details.advance_statement &&
@@ -350,7 +346,6 @@ export function ClientTab({
                   <AutoResizeTextarea
                     rows={2}
                     disabled={locked}
-                    className={`${INPUT} resize-y`}
                     defaultValue={plan[k]}
                     key={`${plan.id}-${k}`}
                     onBlur={(e) =>

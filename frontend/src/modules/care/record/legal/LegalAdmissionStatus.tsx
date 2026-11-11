@@ -675,7 +675,6 @@ function InvoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocu
       ))}
       {assertions.includes("OTHER") && (
         <AutoResizeTextarea
-          className={INPUT}
           disabled={!draft}
           placeholder={labels.otherDescribe}
           value={other}
@@ -881,7 +880,6 @@ function RecommendationForm({ doc, data, busy, run }: PanelProps & { doc: LegalD
                         ({g.code}) {fill(g.text, values)}
                       </label>
                       <AutoResizeTextarea
-                        className={INPUT}
                         disabled={!draft}
                         placeholder={form.labels.groundNarrative}
                         value={grounds[g.code]?.narrative ?? ""}
@@ -957,7 +955,6 @@ function OfficialUse({ data, busy, run }: PanelProps) {
       {data.me.is_admitting_officer ? (
         <>
           <AutoResizeTextarea
-            className={INPUT}
             placeholder="Reason (required to reject)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1008,7 +1005,6 @@ function EndStatus({ data, busy, run }: PanelProps) {
   return (
     <Section title="Review outcome">
       <AutoResizeTextarea
-        className={INPUT}
         placeholder="Reason for ending the involuntary status"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -1038,7 +1034,6 @@ function GiveNotice({ data, busy, run }: PanelProps) {
   return (
     <Section title="Written notice of intention to leave">
       <AutoResizeTextarea
-        className={INPUT}
         placeholder="The client's written notice, in their words"
         value={statement}
         onChange={(e) => setStatement(e.target.value)}

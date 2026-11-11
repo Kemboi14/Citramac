@@ -469,7 +469,6 @@ function AdmissionLegal({
         <AutoResizeTextarea
           id={`${id}-${key}`}
           rows={2}
-          className={INPUT}
           // eslint-disable-next-line security/detect-object-injection -- typed key of LegalForm.
           value={form[key]}
           onChange={(e) => set({ [key]: e.target.value })}
@@ -896,7 +895,6 @@ function LogRequestForm({
           <AutoResizeTextarea
             id={`${id}-details`}
             rows={2}
-            className={INPUT}
             value={details}
             onChange={(e) => setDetails(e.target.value)}
           />
@@ -1067,7 +1065,6 @@ function SubjectRequestItem({
                 <AutoResizeTextarea
                   id={`${id}-${mode}`}
                   rows={2}
-                  className={INPUT}
                   required
                   value={text}
                   onChange={(e) => setText(e.target.value)}

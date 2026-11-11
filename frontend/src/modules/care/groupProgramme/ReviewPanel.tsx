@@ -1,6 +1,6 @@
 import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import type { GroupClient, RiskFlag } from "../../../lib/groupProgrammeApi";
-import { BTN, BTN_GHOST, INPUT, TABLE, TD, TH } from "../shared/styles";
+import { BTN, BTN_GHOST, TABLE, TD, TH } from "../shared/styles";
 import { clientLabel, type DraftAttendance } from "./model";
 
 export interface ReviewSummary {
@@ -129,7 +129,6 @@ export function ReviewPanel({
                           <AutoResizeTextarea
                             rows={2}
                             maxLength={500}
-                            className={INPUT}
                             value={entry.riskOverrideReason ?? ""}
                             onChange={(e) =>
                               onEntryChange(client.id, { riskOverrideReason: e.target.value })

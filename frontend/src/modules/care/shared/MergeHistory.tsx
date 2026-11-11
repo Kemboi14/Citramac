@@ -4,7 +4,7 @@ import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import { getPatientMerges, reverseMerge, type PatientMerge } from "../../../lib/carePathwayApi";
 import { formatDateTime } from "./format";
-import { BTN_DANGER, BTN_GHOST, BTN_SM, INPUT } from "./styles";
+import { BTN_DANGER, BTN_GHOST, BTN_SM } from "./styles";
 import { Callout, Card, StatusPill } from "./ui";
 
 /** Temporary records merged into this client (or this record merged away), with
@@ -134,7 +134,6 @@ export function MergeHistory({
                   <AutoResizeTextarea
                     id={`reverse-${merge.id}`}
                     rows={2}
-                    className={`${INPUT} resize-y`}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                   />

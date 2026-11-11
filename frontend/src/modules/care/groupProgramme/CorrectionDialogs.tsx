@@ -107,7 +107,6 @@ function ReasonField({
         id={id}
         rows={2}
         maxLength={500}
-        className={INPUT}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -357,7 +356,6 @@ export function EntryCorrectionDialog({
                 id="group-amend-observation"
                 rows={4}
                 maxLength={1000}
-                className={INPUT}
                 value={form.observation}
                 onChange={(e) => update({ observation: e.target.value })}
               />

@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
@@ -157,10 +158,10 @@ function NewVersionForm({
           <label htmlFor="consent-text" className={LABEL}>
             Consent wording
           </label>
-          <textarea
+          <AutoResizeTextarea
             id="consent-text"
             rows={10}
-            className={`${INPUT} leading-relaxed`}
+            className="leading-relaxed"
             value={text}
             disabled={confirming || saving}
             aria-invalid={!!fieldErrors.text}

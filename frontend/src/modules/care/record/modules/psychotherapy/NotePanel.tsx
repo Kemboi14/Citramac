@@ -601,7 +601,7 @@ function Section({
       {editing ? (
         <div className="mt-1.5 flex flex-col gap-1.5">
           <AutoResizeTextarea
-            className={`${INPUT} min-h-[130px] font-doc text-[15px] leading-normal`}
+            className="min-h-[130px] font-doc text-[15px] leading-normal"
             aria-label={`Edit ${title}`}
             rows={Math.min(14, Math.max(4, draft.split("\n").length + 1))}
             value={draft}
@@ -848,7 +848,6 @@ function SignedFooter({
             ))}
           </select>
           <AutoResizeTextarea
-            className={INPUT}
             rows={4}
             aria-label="Amended text"
             value={text}

@@ -269,7 +269,6 @@ function RequestConsentForm({
         <Field label="Why the client cannot consent" htmlFor={`${ids}-reason`}>
           <AutoResizeTextarea
             id={`${ids}-reason`}
-            className={INPUT}
             rows={2}
             maxLength={255}
             value={incapacityReason}
@@ -542,7 +541,6 @@ function ConsentPanel({ consent, onChanged }: { consent: ShrConsent; onChanged: 
           <Field label="Why the client refused" htmlFor={`${ids}-refuse`}>
             <AutoResizeTextarea
               id={`${ids}-refuse`}
-              className={INPUT}
               rows={2}
               value={refusalReason}
               disabled={busy}
@@ -712,7 +710,6 @@ function ConsentPanel({ consent, onChanged }: { consent: ShrConsent; onChanged: 
             <Field label="Why the client cannot consent" htmlFor={`${ids}-close`}>
               <AutoResizeTextarea
                 id={`${ids}-close`}
-                className={INPUT}
                 rows={2}
                 value={closeReason}
                 disabled={busy}

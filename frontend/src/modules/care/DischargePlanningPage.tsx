@@ -843,7 +843,6 @@ function DischargeForm({
             <AutoResizeTextarea
               id="dc-status"
               rows={3}
-              className={INPUT}
               value={form.clinicalStatus}
               onChange={(e) => set("clinicalStatus", e.target.value)}
             />
@@ -856,7 +855,6 @@ function DischargeForm({
             <AutoResizeTextarea
               id="dc-treatment"
               rows={4}
-              className={INPUT}
               value={form.treatmentSummary}
               onChange={(e) => set("treatmentSummary", e.target.value)}
             />
@@ -874,7 +872,6 @@ function DischargeForm({
               <AutoResizeTextarea
                 id="dc-legal"
                 rows={2}
-                className={INPUT}
                 value={form.legalStatus}
                 placeholder={
                   context?.legal_order_reference

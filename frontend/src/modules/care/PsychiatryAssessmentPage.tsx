@@ -20,7 +20,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
-import { BTN, BTN_GHOST, BTN_SM, INPUT } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
@@ -384,7 +384,7 @@ export function PsychiatryAssessmentPage() {
                   hint={field.hint}
                 >
                   <AutoResizeTextarea
-                    className={`${INPUT} min-h-[112px]`}
+                    className="min-h-[112px]"
                     rows={4}
                     value={structured[field.key] ?? ""}
                     disabled={readOnly}
@@ -401,7 +401,7 @@ export function PsychiatryAssessmentPage() {
               hint="Presenting concern, history, risk, formulation and plan in your own structure. Record the mental state on the MSE tab."
             >
               <AutoResizeTextarea
-                className={`${INPUT} min-h-[280px]`}
+                className="min-h-[280px]"
                 rows={12}
                 value={freeText}
                 disabled={readOnly}

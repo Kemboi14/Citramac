@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
@@ -234,8 +235,8 @@ export function PlatformCompliancePage() {
               </label>
               <label className={LABEL_CLASS}>
                 Wording
-                <textarea
-                  className={`${FIELD_CLASS} min-h-[220px] font-normal`}
+                <AutoResizeTextarea
+                  className="min-h-[220px]"
                   value={wording}
                   onChange={(e) => setWording(e.target.value)}
                 />

@@ -42,4 +42,46 @@ describe("AutoResizeTextarea", () => {
     fireEvent.input(textarea);
     expect(Number.parseFloat(textarea.style.height)).toBeGreaterThan(firstHeight);
   });
+
+  function NoteField({ plain = false }: { plain?: boolean }) {
+    const [value, setValue] = useState("Poor sleep");
+    return (
+      <AutoResizeTextarea
+        aria-label="Note"
+        plain={plain}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+    );
+  }
+
+  it("has the intake's square look and a list toolbar once focused", () => {
+    render(<NoteField />);
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Note" });
+    expect(textarea).toHaveClass("!rounded-none");
+    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
+
+    fireEvent.focus(textarea);
+    textarea.setSelectionRange(0, 0);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle bulleted list" }));
+    // The caller's own onChange receives the formatted text.
+    expect(textarea).toHaveValue("• Poor sleep");
+  });
+
+  it("continues a list on Enter", () => {
+    render(<NoteField />);
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Note" });
+    fireEvent.change(textarea, { target: { value: "1. Poor sleep" } });
+    textarea.setSelectionRange(13, 13);
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(textarea).toHaveValue("1. Poor sleep\n2. ");
+  });
+
+  it("plain fields keep the caller's styling and have no toolbar", () => {
+    render(<NoteField plain />);
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Note" });
+    fireEvent.focus(textarea);
+    expect(textarea).not.toHaveClass("!rounded-none");
+    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
+  });
 });

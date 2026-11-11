@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../auth/useAuth";
 import {
@@ -206,10 +207,9 @@ function FactsFields({
         />
       </Field>
       <Field label="What happened" htmlFor={`${id}-description`} className="sm:col-span-2">
-        <textarea
+        <AutoResizeTextarea
           id={`${id}-description`}
           rows={3}
-          className={INPUT}
           required
           value={form.description}
           onChange={(e) => set({ description: e.target.value })}
@@ -288,10 +288,9 @@ function FactsFields({
         htmlFor={`${id}-containment`}
         className="sm:col-span-2"
       >
-        <textarea
+        <AutoResizeTextarea
           id={`${id}-containment`}
           rows={2}
-          className={INPUT}
           value={form.containment_actions}
           onChange={(e) => set({ containment_actions: e.target.value })}
         />
@@ -511,10 +510,9 @@ function RecordNotificationForm({
             htmlFor={`${id}-late`}
             className="sm:col-span-2"
           >
-            <textarea
+            <AutoResizeTextarea
               id={`${id}-late`}
               rows={2}
-              className={INPUT}
               required
               value={lateReason}
               onChange={(e) => setLateReason(e.target.value)}

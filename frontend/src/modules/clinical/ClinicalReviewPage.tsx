@@ -98,7 +98,6 @@ export function ClinicalReviewPage() {
         <label className={LABEL_CLASS}>
           Case summary
           <AutoResizeTextarea
-            className={FIELD_CLASS}
             rows={3}
             value={caseSummary}
             onChange={(e) => setCaseSummary(e.target.value)}

@@ -1213,7 +1213,6 @@ export function RegistrationPage() {
                   rows={2}
                   maxLength={255}
                   placeholder="Approximate build, hair, distinguishing marks, clothing"
-                  className={`${REG_INPUT} resize-y`}
                   value={form.description}
                   onChange={(e) => set("description")(e.target.value)}
                 />
@@ -1260,7 +1259,6 @@ export function RegistrationPage() {
                   id="reg-arrival-referral"
                   rows={2}
                   placeholder="e.g. OB number, ambulance crew, referring facility"
-                  className={`${REG_INPUT} resize-y`}
                   value={form.arrivalReferralInfo}
                   onChange={(e) => set("arrivalReferralInfo")(e.target.value)}
                 />
@@ -1274,7 +1272,6 @@ export function RegistrationPage() {
                   id="reg-identification-notes"
                   rows={2}
                   placeholder="Names they respond to, belongings, documents found, who might know them"
-                  className={`${REG_INPUT} resize-y`}
                   value={form.identificationNotes}
                   onChange={(e) => set("identificationNotes")(e.target.value)}
                 />
@@ -1767,7 +1764,6 @@ export function RegistrationPage() {
                 rows={2}
                 required
                 placeholder="e.g. National ID card seen, matches the existing record; recognised by their sister"
-                className={`${REG_INPUT} !h-auto resize-y !py-2`}
                 value={mergeReason}
                 onChange={(e) => {
                   setMergeReason(e.target.value);

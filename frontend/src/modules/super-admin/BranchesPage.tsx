@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -961,8 +962,7 @@ export function BranchesPage() {
           </label>
           <label className={LABEL_CLASS}>
             Description
-            <textarea
-              className={FIELD_CLASS}
+            <AutoResizeTextarea
               rows={2}
               value={newDept.description}
               onChange={(e) => setNewDept({ ...newDept, description: e.target.value })}

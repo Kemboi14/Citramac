@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Archive, BellRing, CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -622,9 +623,8 @@ function RetentionFloorCard() {
           {!settings.floor_verified && (
             <label className={LABEL_CLASS}>
               Verification source
-              <textarea
+              <AutoResizeTextarea
                 rows={3}
-                className={FIELD_CLASS}
                 value={form.floor_source}
                 placeholder="The legal instrument or DHA guidance these figures were confirmed against"
                 onChange={(e) => {

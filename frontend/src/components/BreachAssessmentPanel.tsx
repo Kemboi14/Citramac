@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../modules/care/shared/AutoResizeTextarea";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { FileText } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
@@ -70,10 +71,9 @@ function TextArea({
   return (
     <label htmlFor={id} className={LABEL}>
       {label}
-      <textarea
+      <AutoResizeTextarea
         id={id}
         rows={2}
-        className={INPUT}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

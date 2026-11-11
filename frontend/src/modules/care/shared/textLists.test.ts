@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { continueListOnEnter, formatSelectedLines } from "./ListTextarea";
+import { continueListOnEnter, formatSelectedLines } from "./textLists";
 
 describe("formatSelectedLines", () => {
   it("numbers selected lines", () => {

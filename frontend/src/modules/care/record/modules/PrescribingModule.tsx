@@ -360,7 +360,7 @@ export function PrescribingModule({
                     {state.is_senior ? "." : " and a senior clinician is asked to co-sign it."}
                   </p>
                   <AutoResizeTextarea
-                    className={`${INPUT} mt-2`}
+                    className="mt-2"
                     rows={2}
                     aria-label="Reason for overriding the allergy hard stop"
                     placeholder="Clinical reason for overriding"

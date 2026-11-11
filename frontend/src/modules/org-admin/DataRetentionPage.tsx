@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, Archive, History, PlayCircle, Scale, Search } from "lucide-react";
@@ -948,12 +949,7 @@ function BatchModal({
       )}
       <label className={LABEL_CLASS}>
         {decision === "approve" ? "Note (optional)" : "Reason for rejecting (required)"}
-        <textarea
-          className={FIELD_CLASS}
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
+        <AutoResizeTextarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       {decisionError && <p className={ERROR_CLASS}>{decisionError}</p>}
       <div className="flex flex-wrap justify-end gap-2.5">
@@ -1607,8 +1603,7 @@ function PatientActionDrawer({
           </Notice>
           <label className={LABEL_CLASS}>
             Reason for restoring (required)
-            <textarea
-              className={FIELD_CLASS}
+            <AutoResizeTextarea
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -1632,8 +1627,7 @@ function PatientActionDrawer({
           </Notice>
           <label className={LABEL_CLASS}>
             {placingHold ? "Reason for the hold (required)" : "Reason (optional)"}
-            <textarea
-              className={FIELD_CLASS}
+            <AutoResizeTextarea
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}

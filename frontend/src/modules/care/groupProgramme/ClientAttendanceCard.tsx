@@ -137,7 +137,7 @@ export function EditableClientCard({
       {observationOpen && (
         <div className="grid gap-[7px]" id={noteId}>
           <AutoResizeTextarea
-            className="min-h-[78px] w-full resize-y rounded-[10px] border border-surface-border bg-surface-bg px-3 py-2.5 text-xs text-ink-900 outline-none focus:border-brand-green"
+            className="min-h-[78px]"
             maxLength={1000}
             rows={3}
             autoFocus

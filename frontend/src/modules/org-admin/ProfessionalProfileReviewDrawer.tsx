@@ -293,7 +293,6 @@ export function ProfessionalProfileReviewDrawer({
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none focus:border-brand-green"
               />
               <button
                 type="button"

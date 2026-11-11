@@ -147,7 +147,6 @@ export function SafetyModal({
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL}>Describe the concern (required)</span>
               <AutoResizeTextarea
-                className={INPUT}
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

@@ -386,7 +386,6 @@ function SessionExtras({
             Process notes — restricted (never shared with billing or payers)
           </span>
           <AutoResizeTextarea
-            className={INPUT}
             rows={2}
             value={process}
             onChange={(e) => setProcess(e.target.value)}

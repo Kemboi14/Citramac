@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import { Building2, LayoutGrid, Plus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -615,8 +616,7 @@ export function BranchesAndDepartmentsPage() {
           </label>
           <label className={LABEL_CLASS}>
             Description
-            <textarea
-              className={FIELD_CLASS}
+            <AutoResizeTextarea
               rows={3}
               value={deptForm.description}
               onChange={(e) => setDeptForm({ ...deptForm, description: e.target.value })}

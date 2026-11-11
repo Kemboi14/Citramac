@@ -134,7 +134,6 @@ export function DocumentInputsForm({
                 <AutoResizeTextarea
                   id={id}
                   rows={3}
-                  className={INPUT}
                   disabled={disabled}
                   value={text(field.key)}
                   onChange={(e) => set(field.key, e.target.value)}

@@ -262,7 +262,6 @@ export function ClientHistoryPage() {
               <label className={LABEL_CLASS}>
                 Narrative
                 <AutoResizeTextarea
-                  className={FIELD_CLASS}
                   rows={3}
                   value={form.presenting_problem}
                   onChange={(e) => set("presenting_problem", e.target.value)}
@@ -342,7 +341,6 @@ export function ClientHistoryPage() {
               <label className={`${LABEL_CLASS} col-span-2`}>
                 Details
                 <AutoResizeTextarea
-                  className={FIELD_CLASS}
                   rows={2}
                   value={form.substance_use_details}
                   onChange={(e) => set("substance_use_details", e.target.value)}
@@ -507,7 +505,6 @@ export function ClientHistoryPage() {
                 <label key={key} className={LABEL_CLASS}>
                   {label}
                   <AutoResizeTextarea
-                    className={FIELD_CLASS}
                     rows={2}
                     // eslint-disable-next-line security/detect-object-injection -- `key` is iterated from the fixed `CLINICAL_HISTORY_FIELDS` const array, not user input.
                     value={form[key] as string}
@@ -524,7 +521,6 @@ export function ClientHistoryPage() {
               <label className={`${LABEL_CLASS} col-span-3`}>
                 Risk for withdrawal
                 <AutoResizeTextarea
-                  className={FIELD_CLASS}
                   rows={2}
                   value={form.withdrawal_risk}
                   onChange={(e) => set("withdrawal_risk", e.target.value)}
@@ -562,7 +558,6 @@ export function ClientHistoryPage() {
               <label className={LABEL_CLASS}>
                 Plan
                 <AutoResizeTextarea
-                  className={FIELD_CLASS}
                   rows={3}
                   value={form.plan_details}
                   onChange={(e) => set("plan_details", e.target.value)}

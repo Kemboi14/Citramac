@@ -248,7 +248,6 @@ export function NursingCarePage() {
           <label className={`${LABEL_CLASS} w-full sm:w-auto sm:flex-1`}>
             Note
             <AutoResizeTextarea
-              className={FIELD_CLASS}
               rows={2}
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}

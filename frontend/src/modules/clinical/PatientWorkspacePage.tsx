@@ -523,7 +523,6 @@ export function PatientWorkspacePage() {
                 <label className={LABEL_CLASS}>
                   Clinical description
                   <AutoResizeTextarea
-                    className={FIELD_CLASS}
                     rows={3}
                     defaultValue={selectedDiagnosis.clinical_notes}
                     onBlur={(e) => saveDiagnosisDetail({ clinical_notes: e.target.value })}
@@ -532,7 +531,6 @@ export function PatientWorkspacePage() {
                 <label className={LABEL_CLASS}>
                   Diagnostic criteria met
                   <AutoResizeTextarea
-                    className={FIELD_CLASS}
                     rows={3}
                     defaultValue={selectedDiagnosis.diagnostic_criteria_met}
                     onBlur={(e) => saveDiagnosisDetail({ diagnostic_criteria_met: e.target.value })}

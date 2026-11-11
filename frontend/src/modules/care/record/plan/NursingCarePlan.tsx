@@ -110,7 +110,6 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
                         <AutoResizeTextarea
                           rows={2}
                           aria-label="Evaluation"
-                          className={`${INPUT} resize-y`}
                           value={evaluating.text}
                           onChange={(e) => setEvaluating({ id: n.id, text: e.target.value })}
                         />
@@ -177,7 +176,6 @@ export function NursingCarePlan({ patientId, ws }: { patientId: string; ws: Plan
             <span className={FIELD_LABEL}>Interventions</span>
             <AutoResizeTextarea
               rows={2}
-              className={`${INPUT} resize-y`}
               value={draft.interventions}
               onChange={(e) => setDraft((d) => ({ ...d, interventions: e.target.value }))}
             />

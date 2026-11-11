@@ -520,7 +520,6 @@ export function InpatientAdmissionsPage() {
                       <AutoResizeTextarea
                         id="adm-consent-notes"
                         rows={2}
-                        className={INPUT}
                         value={form.consentNotes}
                         {...invalid("consent_notes", "adm-consent-notes")}
                         onChange={(e) => update({ consentNotes: e.target.value })}
@@ -549,7 +548,6 @@ export function InpatientAdmissionsPage() {
                       <AutoResizeTextarea
                         id="adm-nok-notes"
                         rows={2}
-                        className={INPUT}
                         value={form.nokNotes}
                         {...invalid("next_of_kin_notes", "adm-nok-notes")}
                         onChange={(e) => update({ nokNotes: e.target.value })}
@@ -588,7 +586,6 @@ export function InpatientAdmissionsPage() {
                 <AutoResizeTextarea
                   id="adm-reason"
                   rows={2}
-                  className={INPUT}
                   value={form.reason}
                   {...invalid("reason_for_admission", "adm-reason")}
                   onChange={(e) => update({ reason: e.target.value })}

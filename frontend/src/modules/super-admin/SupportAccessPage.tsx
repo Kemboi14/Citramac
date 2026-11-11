@@ -1,3 +1,4 @@
+import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -230,8 +231,8 @@ export function PlatformSupportAccessPage() {
           </label>
           <label className={`${LABEL_CLASS} md:col-span-2`}>
             Reason
-            <textarea
-              className={`${FIELD_CLASS} min-h-[80px]`}
+            <AutoResizeTextarea
+              className="min-h-[80px]"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               required

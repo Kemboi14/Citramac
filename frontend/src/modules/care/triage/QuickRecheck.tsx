@@ -416,7 +416,6 @@ export function QuickRecheck({
               id="recheck-note"
               rows={2}
               placeholder="Record a brief change or observation"
-              className={RC_INPUT}
               value={note}
               onChange={(e) => {
                 setNote(e.target.value);

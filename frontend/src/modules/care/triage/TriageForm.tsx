@@ -231,7 +231,6 @@ function Txt({
           id={id}
           rows={rows}
           placeholder={placeholder}
-          className={`${INPUT} resize-y`}
           value={value}
           onChange={(e) => setAnswer(k, e.target.value)}
         />

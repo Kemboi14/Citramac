@@ -349,7 +349,6 @@ function TreatmentPlanCard({
           <AutoResizeTextarea
             id="plan-goals"
             rows={3}
-            className={INPUT}
             value={draft.goals}
             onChange={(e) => edit({ goals: e.target.value })}
           />

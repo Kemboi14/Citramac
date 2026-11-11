@@ -10,7 +10,7 @@ import {
 } from "../../../lib/findingsApi";
 import { errorText } from "../triage/helpers";
 import { formatDateTime } from "./format";
-import { BTN, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "./styles";
+import { BTN, BTN_GHOST, BTN_SM, TABLE, TD, TH } from "./styles";
 import { Card, ErrorNote, SelectChoices, Tag } from "./ui";
 import { useValueSets } from "./useValueSets";
 
@@ -218,7 +218,6 @@ export function FindingsPanel({
                           What changed / new information
                           <AutoResizeTextarea
                             rows={2}
-                            className={`${INPUT} resize-y`}
                             value={draft.note}
                             onChange={(e) => {
                               const note = e.target.value;

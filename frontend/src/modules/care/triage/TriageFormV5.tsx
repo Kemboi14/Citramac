@@ -220,7 +220,7 @@ function Txt({
         <AutoResizeTextarea
           {...common}
           rows={rows}
-          className={`${INPUT} resize-y ${grow ? "[field-sizing:content] min-h-[4.5rem]" : ""}`}
+          className={grow ? "min-h-[4.5rem]" : undefined}
           onChange={(e) => setAnswer(k, e.target.value)}
         />
       ) : (
@@ -1635,7 +1635,6 @@ export function TriageFormV5({
                           <AutoResizeTextarea
                             id={fid("m_override_reason")}
                             rows={2}
-                            className={`${INPUT} resize-y`}
                             value={a("m_override_reason")}
                             onChange={(e) => set("m_override_reason", e.target.value)}
                           />

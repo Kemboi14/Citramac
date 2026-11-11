@@ -198,7 +198,6 @@ export function SessionDetailsFields({
           id={id("description")}
           rows={3}
           maxLength={2000}
-          className={INPUT}
           value={form.description}
           onChange={(e) => onChange({ description: e.target.value })}
         />
@@ -420,7 +419,7 @@ export function SessionEditor({
                           </td>
                           <td className={TD}>
                             <AutoResizeTextarea
-                              className={`${INPUT} min-h-14 min-w-[190px]`}
+                              className="min-h-14 min-w-[190px]"
                               rows={2}
                               maxLength={1000}
                               disabled={locked}
