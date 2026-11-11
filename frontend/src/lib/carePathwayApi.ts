@@ -599,9 +599,13 @@ export function getPsychiatryCandidates(accessToken: string) {
   });
 }
 
-/** Structured MSE shape shared with the intake (INT-16): domain codes plus notes. */
+/** Structured MSE shape shared with the intake (INT-16): domain codes plus notes.
+ * Free-text MSE is stored as a single `free_text` narrative for the psychiatry module.
+ */
 export interface PsychiatryMse {
   findings?: Record<string, string[]>;
+  free_text?: string;
+  summary?: string;
   [key: string]: unknown;
 }
 

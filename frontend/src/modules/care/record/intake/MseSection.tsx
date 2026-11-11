@@ -94,8 +94,7 @@ export function MseSection({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-[12.5px] text-ink-500">
-          Structured options drive alerts and triggers; notes add context. Records the mental state{" "}
-          <strong>now</strong>.
+          Record the current mental state.
         </p>
         <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={fillNormal}>
           Insert normal MSE (smart phrase)

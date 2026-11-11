@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, FileText, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -18,10 +18,9 @@ import { EmptyState } from "../../components/EmptyState";
 import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
-import { clientRecordPath } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN, BTN_GHOST, BTN_SM } from "./shared/styles";
-import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "./shared/ui";
+import { Callout, Card, ErrorNote, Field, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
 import { MseSection } from "./record/intake/MseSection";
@@ -83,14 +82,41 @@ function signedLocked(workspace: PsychiatryWorkspace | null) {
   return workspace?.assessment?.status === "SIGNED" || workspace?.assessment?.can_edit === false;
 }
 
+function inferMseFormat(mse: PsychiatryMse): "STRUCTURED" | "FREE_TEXT" {
+  const text = typeof mse?.free_text === "string" ? mse.free_text : "";
+  if (text.trim()) return "FREE_TEXT";
+  const summary = typeof mse?.summary === "string" ? mse.summary : "";
+  const structuredKeys = Object.keys(mse ?? {}).filter(
+    (key) => !["findings", "free_text", "summary"].includes(key),
+  );
+  if (summary.trim() && structuredKeys.length === 0) return "FREE_TEXT";
+  return "STRUCTURED";
+}
+
+function mseNarrative(mse: PsychiatryMse): string {
+  if (typeof mse?.free_text === "string" && mse.free_text.trim()) {
+    return mse.free_text.trim();
+  }
+  if (typeof mse?.summary === "string" && mse.summary.trim()) {
+    return mse.summary.trim();
+  }
+  const parts = Object.entries(mse ?? {})
+    .filter(
+      ([key, value]) =>
+        !["findings", "free_text", "summary"].includes(key) &&
+        typeof value === "string" &&
+        value.trim(),
+    )
+    .map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value).trim()}`);
+  return parts.join("\n");
+}
+
 /**
  * Psychiatry — one client's assessment workspace. Assessment notes use the one
  * note store (ProgressNote type PSYCHIATRY), the MSE uses the one MSE store,
  * diagnosis uses ICD-11 DiagnosisCode and medication uses the structured
- * prescribing module. The format switch only changes how the assessment note is
- * captured; the clinical stores are the same either way. Only the chosen
- * format's text is saved, so switching carries the text across (structured →
- * free text) or asks before discarding it (free text → structured).
+ * prescribing module. The format switch changes how each note is captured, and
+ * the free-text mode is a single narrative field with no structured questions.
  */
 export function PsychiatryAssessmentPage() {
   const { patientId = "" } = useParams<{ patientId: string }>();
@@ -108,6 +134,7 @@ export function PsychiatryAssessmentPage() {
   const [freeText, setFreeText] = useState("");
   const [structured, setStructured] = useState<Record<string, string>>({});
   const [mse, setMse] = useState<PsychiatryMse>({});
+  const [mseFormat, setMseFormat] = useState<"STRUCTURED" | "FREE_TEXT">("STRUCTURED");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,6 +152,7 @@ export function PsychiatryAssessmentPage() {
         setFreeText(assessment?.free_text ?? "");
         setStructured(assessment?.structured ?? {});
         setMse(state.mse ?? {});
+        setMseFormat(inferMseFormat(state.mse ?? {}));
         setLoadError(null);
       })
       .catch((error) => {
@@ -188,6 +216,25 @@ export function PsychiatryAssessmentPage() {
     setFormat(next);
   };
 
+  const switchMseFormat = (next: "STRUCTURED" | "FREE_TEXT") => {
+    if (next === mseFormat) return;
+    if (next === "FREE_TEXT") {
+      const narrative = mseNarrative(mse);
+      setMse({ free_text: narrative });
+    } else {
+      if (
+        mseNarrative(mse).trim() &&
+        !window.confirm(
+          "Switching to structured MSE discards the free-text narrative. Copy it first if you need it. Switch to structured?",
+        )
+      ) {
+        return;
+      }
+      setMse({});
+    }
+    setMseFormat(next);
+  };
+
   const run = async (action: "save" | "sign") => {
     if (!accessToken || !patientId) return;
     setSaving(true);
@@ -248,30 +295,6 @@ export function PsychiatryAssessmentPage() {
   return (
     <div className="clinical-readable flex flex-col gap-4">
       <SafetyBanner banner={banner} error={bannerError} />
-      <Breadcrumbs
-        items={[
-          { label: "Psychiatry", to: "/clinical/psychiatry" },
-          { label: banner?.name.trim() || "Client" },
-          { label: "Assessment" },
-        ]}
-      />
-      <PageHeader
-        eyebrow="Psychiatry module"
-        title={signed ? "Psychiatric assessment — signed" : "Psychiatric assessment"}
-        subtitle="Assessment, mental state examination, diagnosis and medication in one clinical encounter. The MSE and diagnosis are shared with the client record — they are not a second copy."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM}`}>
-              <ArrowLeft aria-hidden className="h-4 w-4" />
-              Psychiatry list
-            </Link>
-            <Link to={clientRecordPath(patientId, "intake")} className={`${BTN_GHOST} ${BTN_SM}`}>
-              <FileText aria-hidden className="h-4 w-4" />
-              Full client record
-            </Link>
-          </div>
-        }
-      />
       <ErrorNote>{actionError ?? schemaError}</ErrorNote>
       {notice && <Callout tone="success">{notice}</Callout>}
 
@@ -360,11 +383,9 @@ export function PsychiatryAssessmentPage() {
         >
           <p className="mb-3 text-[12.5px] leading-5 text-ink-700">
             {format === "STRUCTURED"
-              ? "Record the assessment under headings. Risk and Plan are needed to sign."
-              : "Record the assessment as one narrative, including risk and plan."}{" "}
-            The mental state examination, diagnosis and medication have their own tabs and are
-            recorded the same way in either format.
-            {assessment && ` Last saved ${formatDateTime(assessment.updated_at)}.`}
+              ? "Risk and plan are required to sign."
+              : "Record the assessment as a narrative."}{" "}
+            {assessment && `Last saved ${formatDateTime(assessment.updated_at)}.`}
           </p>
           {format === "STRUCTURED" ? (
             <div className="grid gap-3 lg:grid-cols-2">
@@ -396,10 +417,7 @@ export function PsychiatryAssessmentPage() {
               ))}
             </div>
           ) : (
-            <Field
-              label="Psychiatric assessment — free text"
-              hint="Presenting concern, history, risk, formulation and plan in your own structure. Record the mental state on the MSE tab."
-            >
+            <Field label="Free text" hint="Record the assessment in narrative form.">
               <AutoResizeTextarea
                 className="min-h-[280px]"
                 rows={12}
@@ -418,13 +436,54 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-mse-tab"
         className={`min-w-0 ${activeSection === "psych-mse" ? "" : "hidden"}`}
       >
-        <Card title="Mental state examination (MSE)" aside={<Tag tone="brand">One MSE store</Tag>}>
+        <Card
+          title="MSE"
+          aside={
+            <div
+              role="group"
+              aria-label="MSE format"
+              className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
+            >
+              {([
+                ["STRUCTURED", "Structured"],
+                ["FREE_TEXT", "Free text"],
+              ] as ["STRUCTURED" | "FREE_TEXT", string][]).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={mseFormat === value}
+                  disabled={readOnly}
+                  onClick={() => switchMseFormat(value)}
+                  className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                    mseFormat === value
+                      ? "bg-brand-green text-on-primary"
+                      : "text-ink-900 hover:bg-surface-card"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        >
           {!schema ? (
             schemaError ? (
               <ErrorNote>{schemaError}</ErrorNote>
             ) : (
               <p className="text-[13px] text-ink-500">Loading MSE options…</p>
             )
+          ) : mseFormat === "FREE_TEXT" ? (
+            <Field label="Free text" hint="Enter the MSE in narrative form.">
+              <AutoResizeTextarea
+                className="min-h-[180px]"
+                rows={8}
+                value={typeof mse.free_text === "string" ? mse.free_text : ""}
+                disabled={readOnly}
+                onChange={(event) =>
+                  setMse((current) => ({ ...current, free_text: event.target.value }))
+                }
+              />
+            </Field>
           ) : (
             <MseSection
               schema={schema}
@@ -461,6 +520,28 @@ export function PsychiatryAssessmentPage() {
             <PrescribingModule patientId={patientId} />
           </div>
         </Card>
+        {!readOnly && (
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-surface-border bg-surface-card/95 p-3 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              disabled={saving}
+              onClick={() => void run("save")}
+            >
+              <Save aria-hidden className="h-4 w-4" />
+              {saving ? "Saving…" : "Save draft"}
+            </button>
+            <button
+              type="button"
+              className={`${BTN} ${BTN_SM}`}
+              disabled={saving}
+              onClick={() => void run("sign")}
+            >
+              <CheckCircle2 aria-hidden className="h-4 w-4" />
+              {saving ? "Signing…" : "Sign assessment"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div
@@ -497,33 +578,6 @@ export function PsychiatryAssessmentPage() {
         </Card>
       </div>
 
-      {!readOnly && (
-        <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-surface-border bg-surface-card/95 p-3 shadow-sm backdrop-blur">
-          <span className="mr-auto text-[12.5px] text-ink-500">
-            {signed
-              ? "Signed assessments are read-only."
-              : "Save a draft at any time. Signing locks the assessment note."}
-          </span>
-          <button
-            type="button"
-            className={`${BTN_GHOST} ${BTN_SM}`}
-            disabled={saving}
-            onClick={() => void run("save")}
-          >
-            <Save aria-hidden className="h-4 w-4" />
-            {saving ? "Saving…" : "Save draft"}
-          </button>
-          <button
-            type="button"
-            className={`${BTN} ${BTN_SM}`}
-            disabled={saving}
-            onClick={() => void run("sign")}
-          >
-            <CheckCircle2 aria-hidden className="h-4 w-4" />
-            {saving ? "Signing…" : "Sign assessment"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

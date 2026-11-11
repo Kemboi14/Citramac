@@ -172,6 +172,18 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             self.assertEqual(note.data["structured"], {})
             self.assertNotIn("Presenting concern", note.text)
 
+    def test_free_text_mse_is_saved_as_a_single_narrative(self):
+        body = dict(self.body)
+        body["mse"] = {"free_text": "Low mood, guarded, no psychosis; no SI or HI."}
+        saved = self.client.put(self.open_url, body, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["mse"]["free_text"], body["mse"]["free_text"])
+        self.assertIn("Low mood", saved.data["assessment"]["text"])
+        with platform_admin_context():
+            note = ProgressNote.objects.get(patient_id=self.pid, note_type="PSYCHIATRY")
+            exam = MentalStatusExam.objects.get(pk=note.data["mse_exam_id"])
+            self.assertEqual(exam.summary, body["mse"]["free_text"])
+
     def test_structured_assessment_needs_risk_and_plan_to_sign(self):
         body = dict(self.body)
         body["structured"] = dict(self.body["structured"], risk="", plan="  ")

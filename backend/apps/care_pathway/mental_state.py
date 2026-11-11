@@ -47,7 +47,16 @@ def has(mse, domain, display):
     return schema._code(display) in codes(mse, domain)
 
 
+def _free_text(mse):
+    value = (mse or {}).get("free_text")
+    if not isinstance(value, str):
+        value = (mse or {}).get("summary")
+    return value.strip() if isinstance(value, str) else ""
+
+
 def notes(mse, domain):
+    if not is_structured(mse) and domain == "summary":
+        return _free_text(mse)
     value = (mse or {}).get(domain)
     return value if isinstance(value, str) else ""
 
@@ -86,9 +95,12 @@ def exam_text(mse):
     """{MentalStatusExam field: text} — the readable form kept in the one MSE
     store (triage.MentalStatusExam) and used in handovers. Structured findings
     are written as their displays followed by the notes; legacy text passes
-    through unchanged."""
+    through unchanged. Free-text MSE is stored as a single summary string."""
     mse = mse or {}
     if not is_structured(mse):
+        free_text = _free_text(mse)
+        if free_text:
+            return {"summary": free_text}
         return {key: notes(mse, key) for key in _exam_fields()}
     label = _display_lookup()
     out = {}
