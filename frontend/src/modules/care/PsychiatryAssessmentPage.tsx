@@ -582,7 +582,7 @@ export function PsychiatryAssessmentPage() {
                     <AutoResizeTextarea
                       className="min-h-[112px]"
                       rows={4}
-                      value={structured[field.key] ?? ""}
+                      value={String(structured[field.key] ?? "")}
                       disabled={readOnly}
                       onChange={(event) =>
                         setStructured((current) => ({

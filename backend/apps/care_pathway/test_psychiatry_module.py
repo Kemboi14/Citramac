@@ -114,13 +114,9 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         with platform_admin_context():
             note = ProgressNote.objects.get(patient_id=self.pid, note_type="PSYCHIATRY")
             self.assertEqual(note.data["structured"]["risk"]["rows"]["suicide"][0], "Thoughts")
-            self.assertEqual(
-                note.data["structured"]["risk"]["actions"], ["SAFETY_PLAN_TRIGGERED"]
-            )
+            self.assertEqual(note.data["structured"]["risk"]["actions"], ["SAFETY_PLAN_TRIGGERED"])
             self.assertEqual(note.data["structured"]["risk"]["review_by"], "2026-11-12")
-            self.assertNotEqual(
-                note.data["structured"]["risk"]["formulation_signed_at"], "sign"
-            )
+            self.assertNotEqual(note.data["structured"]["risk"]["formulation_signed_at"], "sign")
             self.assertEqual(
                 note.data["structured"]["risk"]["formulation_signed_by"],
                 self.nurse.get_full_name() or self.nurse.username,

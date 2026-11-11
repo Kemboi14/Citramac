@@ -17,8 +17,8 @@ Stores (CLAUDE.md §4 — one store per clinical concept):
 """
 
 from django.db import transaction
-from django.utils.dateparse import parse_date
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.clinical_encounter.models import Encounter
@@ -266,7 +266,9 @@ def _clean_structured(value):
                 if isinstance(rows, dict):
                     for row_key, row_values in rows.items():
                         if isinstance(row_values, list):
-                            clean_rows[row_key] = [str(v).strip() for v in row_values if str(v).strip()]
+                            clean_rows[row_key] = [
+                                str(v).strip() for v in row_values if str(v).strip()
+                            ]
                 clean = {"rows": clean_rows}
                 for field in ("static", "dynamic", "protective", "change_72h", "summary"):
                     if field in entry and isinstance(entry.get(field), str):
@@ -303,9 +305,7 @@ def _clean_risk(value):
 
     raw_rows = value.get("rows") or {}
     if not isinstance(raw_rows, dict):
-        raise ValidationError(
-            {"structured": {"risk": {"rows": "Risk rows must be an object."}}}
-        )
+        raise ValidationError({"structured": {"risk": {"rows": "Risk rows must be an object."}}})
     rows = {}
     row_specs = {row["key"]: row for row in intake_schema.RISK_ROWS}
     for row_key, selections in raw_rows.items():
@@ -316,11 +316,7 @@ def _clean_risk(value):
             )
         if not isinstance(selections, list):
             raise ValidationError(
-                {
-                    "structured": {
-                        "risk": {"rows": f"Selections for {row_key} must be a list."}
-                    }
-                }
+                {"structured": {"risk": {"rows": f"Selections for {row_key} must be a list."}}}
             )
         selected = [str(item).strip() for item in selections if str(item).strip()]
         invalid = set(selected) - set(spec["options"])
@@ -370,14 +366,10 @@ def _clean_risk(value):
     ):
         item = value.get(field, "")
         if item is not None and not isinstance(item, str):
-            raise ValidationError(
-                {"structured": {"risk": {field: "Enter text for this field."}}}
-            )
+            raise ValidationError({"structured": {"risk": {field: "Enter text for this field."}}})
         clean[field] = item.strip() if isinstance(item, str) else ""
     if clean["review_by"] and parse_date(clean["review_by"]) is None:
-        raise ValidationError(
-            {"structured": {"risk": {"review_by": "Enter a valid review date."}}}
-        )
+        raise ValidationError({"structured": {"risk": {"review_by": "Enter a valid review date."}}})
 
     actions = value.get("actions") or []
     if not isinstance(actions, list) or not all(isinstance(item, str) for item in actions):
@@ -385,9 +377,9 @@ def _clean_risk(value):
             {"structured": {"risk": {"actions": "Actions must be a list of codes."}}}
         )
     valid_actions = set(
-        LocalConcept.objects.filter(
-            valueset_id="intake-risk-actions", active=True
-        ).values_list("code", flat=True)
+        LocalConcept.objects.filter(valueset_id="intake-risk-actions", active=True).values_list(
+            "code", flat=True
+        )
     )
     if set(actions) - valid_actions:
         raise ValidationError(
@@ -398,31 +390,22 @@ def _clean_risk(value):
     concern_level = value.get("concern_level") or ""
     if not isinstance(concern_level, str):
         raise ValidationError(
-            {
-                "structured": {
-                    "risk": {"concern_level": "Choose a level from the served list."}
-                }
-            }
+            {"structured": {"risk": {"concern_level": "Choose a level from the served list."}}}
         )
-    if concern_level and not LocalConcept.objects.filter(
-        valueset_id="intake-concern-level", code=concern_level, active=True
-    ).exists():
+    if (
+        concern_level
+        and not LocalConcept.objects.filter(
+            valueset_id="intake-concern-level", code=concern_level, active=True
+        ).exists()
+    ):
         raise ValidationError(
-            {
-                "structured": {
-                    "risk": {"concern_level": "Choose a level from the served list."}
-                }
-            }
+            {"structured": {"risk": {"concern_level": "Choose a level from the served list."}}}
         )
     clean["concern_level"] = concern_level
     signature = value.get("formulation_signed_at")
     if signature is not None and not isinstance(signature, str):
         raise ValidationError(
-            {
-                "structured": {
-                    "risk": {"formulation_signed_at": "Invalid formulation signature."}
-                }
-            }
+            {"structured": {"risk": {"formulation_signed_at": "Invalid formulation signature."}}}
         )
     clean["formulation_signed_at"] = signature or ""
     return clean
@@ -496,9 +479,7 @@ def _risk_to_text(value):
         concern_level = value.get("concern_level")
         if concern_level:
             display = (
-                LocalConcept.objects.filter(
-                    valueset_id="intake-concern-level", code=concern_level
-                )
+                LocalConcept.objects.filter(valueset_id="intake-concern-level", code=concern_level)
                 .values_list("display", flat=True)
                 .first()
             )
