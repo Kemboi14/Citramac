@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -24,8 +24,11 @@ import { Callout, Card, ErrorNote, Field, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
 import { MseSection } from "./record/intake/MseSection";
+import { RiskSection } from "./record/intake/RiskSection";
+import type { SectionValues } from "./record/intake/fields";
 import { IntakeDiagnosisTab } from "./record/IntakeDiagnosisTab";
 import { PrescribingModule } from "./record/modules/PrescribingModule";
+import { clientRecordPath } from "./shared/recordRoutes";
 
 const STRUCTURED_FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
   {
@@ -40,22 +43,115 @@ const STRUCTURED_FIELDS: { key: string; label: string; hint: string; required?: 
   },
   {
     key: "risk",
-    label: "Risk",
+    label: "Clinical Risk Assessment",
     hint: "Suicide / self-harm, harm to others, vulnerability and protective factors.",
     required: true,
   },
-  {
-    key: "formulation",
-    label: "Formulation",
-    hint: "Predisposing, precipitating, perpetuating and protective factors; working explanation.",
-  },
-  {
-    key: "plan",
-    label: "Plan",
-    hint: "Investigations, psychological treatment, medication, follow-up and safety plan.",
-    required: true,
-  },
 ];
+
+const LEGACY_STRUCTURED_FIELDS = [
+  { key: "formulation", label: "Formulation" },
+  { key: "plan", label: "Plan" },
+];
+
+const EMPTY_RISK = {
+  rows: {} as Record<string, string[]>,
+  other: "",
+  details: "",
+  actions: [] as string[],
+  static: "",
+  dynamic: "",
+  protective: "",
+  change_72h: "",
+  summary: "",
+  plan: "",
+  review_by: "",
+  concern_level: "",
+  formulation_signed_at: "",
+  formulation_signed_by: "",
+};
+
+function normalizeRiskValue(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    return { ...EMPTY_RISK, summary: value.trim() };
+  }
+  if (value && typeof value === "object") {
+    const next = value as Record<string, unknown>;
+    return {
+      ...EMPTY_RISK,
+      rows:
+        typeof next.rows === "object" && next.rows && !Array.isArray(next.rows)
+          ? next.rows
+          : EMPTY_RISK.rows,
+      other: typeof next.other === "string" ? next.other : "",
+      details: typeof next.details === "string" ? next.details : "",
+      actions: Array.isArray(next.actions) ? next.actions : [],
+      static: typeof next.static === "string" ? next.static : "",
+      dynamic: typeof next.dynamic === "string" ? next.dynamic : "",
+      protective: typeof next.protective === "string" ? next.protective : "",
+      change_72h: typeof next.change_72h === "string" ? next.change_72h : "",
+      summary: typeof next.summary === "string" ? next.summary : "",
+      plan: typeof next.plan === "string" ? next.plan : "",
+      review_by: typeof next.review_by === "string" ? next.review_by : "",
+      concern_level: typeof next.concern_level === "string" ? next.concern_level : "",
+      formulation_signed_at:
+        typeof next.formulation_signed_at === "string" ? next.formulation_signed_at : "",
+      formulation_signed_by:
+        typeof next.formulation_signed_by === "string" ? next.formulation_signed_by : "",
+    };
+  }
+  return { ...EMPTY_RISK };
+}
+
+function riskValueText(
+  value: unknown,
+  riskRows: IntakeSchema["riskRows"],
+  vs: ReturnType<typeof useValueSets>,
+): string {
+  const risk = normalizeRiskValue(value);
+  const rows = risk.rows as Record<string, string[]> | undefined;
+  const lines: string[] = [];
+  for (const row of riskRows) {
+    const picked = rows?.[row.key] ?? [];
+    if (picked.length) {
+      lines.push(`${row.label}: ${picked.join(", ")}`);
+    }
+  }
+  for (const field of ["static", "dynamic", "protective", "change_72h", "summary"] as const) {
+    // Field keys are a fixed local allow-list.
+    // eslint-disable-next-line security/detect-object-injection
+    const text = String(risk[field] ?? "").trim();
+    if (text) {
+      lines.push(
+        field === "summary"
+          ? `Risk formulation: ${text}`
+          : `${field === "static" ? "Static factors" : field === "dynamic" ? "Dynamic factors" : field === "protective" ? "Protective factors" : "What could change in the next 24-72 hours?"}: ${text}`,
+      );
+    }
+  }
+  for (const [field, label] of [
+    ["other", "Other acute risk"],
+    ["details", "Immediate actions already taken"],
+    ["plan", "Risk management plan"],
+    ["review_by", "Review by"],
+  ] as const) {
+    // Field keys are a fixed local allow-list.
+    // eslint-disable-next-line security/detect-object-injection
+    const text = String(risk[field] ?? "").trim();
+    if (text) lines.push(`${label}: ${text}`);
+  }
+  const actions = risk.actions as string[];
+  if (actions.length) {
+    lines.push(
+      `Actions: ${actions.map((code) => vs.label("intake-risk-actions", code)).join(", ")}`,
+    );
+  }
+  const concernLevel = String(risk.concern_level ?? "");
+  if (concernLevel) {
+    lines.push(`Level of concern: ${vs.label("intake-concern-level", concernLevel)}`);
+  }
+  return lines.join("\n");
+}
 
 const SECTIONS = [
   { id: "psych-assessment", label: "Assessment" },
@@ -67,8 +163,19 @@ const SECTIONS = [
 
 /** The structured sections as one narrative, under their headings, so switching
  * to free text keeps what was written. */
-function sectionsAsNarrative(structured: Record<string, string>) {
-  return STRUCTURED_FIELDS.map((field) => [field.label, (structured[field.key] ?? "").trim()])
+function sectionsAsNarrative(
+  structured: Record<string, unknown>,
+  riskRows: IntakeSchema["riskRows"],
+  vs: ReturnType<typeof useValueSets>,
+) {
+  return [...STRUCTURED_FIELDS, ...LEGACY_STRUCTURED_FIELDS]
+    .map((field) => {
+      const raw =
+        field.key === "risk"
+          ? riskValueText(structured[field.key], riskRows, vs)
+          : String(structured[field.key] ?? "").trim();
+      return [field.label, raw] as const;
+    })
     .filter(([, value]) => value)
     .map(([label, value]) => `${label}\n${value}`)
     .join("\n\n");
@@ -132,7 +239,7 @@ export function PsychiatryAssessmentPage() {
 
   const [format, setFormat] = useState<PsychiatryFormat>("STRUCTURED");
   const [freeText, setFreeText] = useState("");
-  const [structured, setStructured] = useState<Record<string, string>>({});
+  const [structured, setStructured] = useState<Record<string, unknown>>({});
   const [mse, setMse] = useState<PsychiatryMse>({});
   const [mseFormat, setMseFormat] = useState<"STRUCTURED" | "FREE_TEXT">("STRUCTURED");
   const [saving, setSaving] = useState(false);
@@ -195,11 +302,33 @@ export function PsychiatryAssessmentPage() {
     () => ({ format, free_text: freeText, structured, mse }),
     [format, freeText, structured, mse],
   );
+  const riskValue = useMemo(() => normalizeRiskValue(structured.risk), [structured.risk]);
+
+  const withRiskPatch = (current: Record<string, unknown>, patch: Record<string, unknown>) => {
+    const nextRisk = normalizeRiskValue(current.risk);
+    const rows = {
+      ...((nextRisk.rows as Record<string, string[]>) ?? {}),
+      ...((patch.rows as Record<string, string[]>) ?? {}),
+    };
+    return { ...current, risk: { ...nextRisk, ...patch, rows } };
+  };
+
+  const setRiskField = (patch: Record<string, unknown>) => {
+    setStructured((current) => withRiskPatch(current, patch));
+  };
+
+  const updateRisk = (patch: Record<string, unknown>) => {
+    const nextStructured = withRiskPatch(structured, patch);
+    setStructured(nextStructured);
+    if (patch.formulation_signed_at === "sign") {
+      void run("save", { ...body, structured: nextStructured });
+    }
+  };
 
   const switchFormat = (next: PsychiatryFormat) => {
     if (next === format) return;
     if (next === "FREE_TEXT") {
-      const carried = sectionsAsNarrative(structured);
+      const carried = sectionsAsNarrative(structured, schema?.riskRows ?? [], vs);
       if (carried) setFreeText((current) => [current.trim(), carried].filter(Boolean).join("\n\n"));
       setStructured({});
     } else {
@@ -235,7 +364,7 @@ export function PsychiatryAssessmentPage() {
     setMseFormat(next);
   };
 
-  const run = async (action: "save" | "sign") => {
+  const run = async (action: "save" | "sign", payload = body) => {
     if (!accessToken || !patientId) return;
     setSaving(true);
     setActionError(null);
@@ -243,9 +372,16 @@ export function PsychiatryAssessmentPage() {
     try {
       const state =
         action === "save"
-          ? await savePsychiatryAssessment(accessToken, patientId, body)
-          : await signPsychiatryAssessment(accessToken, patientId, body);
+          ? await savePsychiatryAssessment(accessToken, patientId, payload)
+          : await signPsychiatryAssessment(accessToken, patientId, payload);
       setWorkspace(state);
+      if (state.assessment) {
+        setFormat(state.assessment.format);
+        setFreeText(state.assessment.free_text);
+        setStructured(state.assessment.structured);
+      }
+      setMse(state.mse);
+      setMseFormat(inferMseFormat(state.mse));
       setNotice(
         action === "save"
           ? "Draft saved. You can return to it from the Psychiatry list."
@@ -291,10 +427,21 @@ export function PsychiatryAssessmentPage() {
 
   const assessment = workspace.assessment;
   const signed = assessment?.status === "SIGNED";
+  const riskSpec = schema?.sections.find((section) => section.key === "risk");
 
   return (
     <div className="clinical-readable flex flex-col gap-4">
       <SafetyBanner banner={banner} error={bannerError} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM}`}>
+          <ArrowLeft aria-hidden className="h-4 w-4" />
+          Psychiatry list
+        </Link>
+        <Link to={clientRecordPath(patientId, "snapshot")} className={`${BTN_GHOST} ${BTN_SM}`}>
+          <FileText aria-hidden className="h-4 w-4" />
+          Full client record
+        </Link>
+      </div>
       <ErrorNote>{actionError ?? schemaError}</ErrorNote>
       {notice && <Callout tone="success">{notice}</Callout>}
 
@@ -383,38 +530,70 @@ export function PsychiatryAssessmentPage() {
         >
           <p className="mb-3 text-[12.5px] leading-5 text-ink-700">
             {format === "STRUCTURED"
-              ? "Risk and plan are required to sign."
+              ? "Clinical risk assessment is required to sign."
               : "Record the assessment as a narrative."}{" "}
             {assessment && `Last saved ${formatDateTime(assessment.updated_at)}.`}
           </p>
           {format === "STRUCTURED" ? (
             <div className="grid gap-3 lg:grid-cols-2">
-              {STRUCTURED_FIELDS.map((field) => (
-                <Field
-                  key={field.key}
-                  label={
-                    field.required ? (
-                      <>
-                        {field.label}{" "}
-                        <span className="font-normal text-ink-500">(needed to sign)</span>
-                      </>
-                    ) : (
-                      field.label
-                    )
-                  }
-                  hint={field.hint}
-                >
-                  <AutoResizeTextarea
-                    className="min-h-[112px]"
-                    rows={4}
-                    value={structured[field.key] ?? ""}
-                    disabled={readOnly}
-                    onChange={(event) =>
-                      setStructured((current) => ({ ...current, [field.key]: event.target.value }))
+              {STRUCTURED_FIELDS.map((field) => {
+                if (field.key === "risk") {
+                  return (
+                    <div key={field.key} className="lg:col-span-2" id="psych-risk-assessment">
+                      {!schema || !riskSpec ? (
+                        <ErrorNote>
+                          {schemaError ?? "Loading clinical risk assessment options…"}
+                        </ErrorNote>
+                      ) : (
+                        <>
+                          <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-ink-700">
+                            {field.label}
+                          </h3>
+                          <RiskSection
+                            spec={riskSpec}
+                            riskRows={schema.riskRows}
+                            values={riskValue as SectionValues}
+                            vs={vs}
+                            onChange={(key, value) => setRiskField({ [key]: value })}
+                            onPatch={updateRisk}
+                            showFormulation={false}
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Field
+                    key={field.key}
+                    label={
+                      field.required ? (
+                        <>
+                          {field.label}{" "}
+                          <span className="font-normal text-ink-500">(needed to sign)</span>
+                        </>
+                      ) : (
+                        field.label
+                      )
                     }
-                  />
-                </Field>
-              ))}
+                    hint={field.hint}
+                  >
+                    <AutoResizeTextarea
+                      className="min-h-[112px]"
+                      rows={4}
+                      value={structured[field.key] ?? ""}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        setStructured((current) => ({
+                          ...current,
+                          [field.key]: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                );
+              })}
             </div>
           ) : (
             <Field label="Free text" hint="Record the assessment in narrative form.">
