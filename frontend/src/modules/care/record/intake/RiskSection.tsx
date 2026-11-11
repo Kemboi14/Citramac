@@ -33,6 +33,7 @@ export function RiskSection({
   onChange,
   onPatch,
   triggers,
+  showFormulation = true,
 }: {
   spec: IntakeSectionSpec;
   riskRows: IntakeRiskRow[];
@@ -42,6 +43,7 @@ export function RiskSection({
   onPatch: (patch: Record<string, unknown>) => void;
   /** "Triggered:" tool chips (mockup `triggerHint`), shown after the actions. */
   triggers?: ReactNode;
+  showFormulation?: boolean;
 }) {
   const rows = asRows(values.rows);
   const carried = asCarried(values.carried);
@@ -219,60 +221,62 @@ export function RiskSection({
       />
       {triggers}
 
-      <div id="intake-required-risk-formulation" tabIndex={-1}>
-        <div className={GROUP_LABEL}>
-          Structured risk formulation{" "}
-          <span className="font-normal normal-case text-ink-500">
-            — replaces a Low / Moderate / High rating
-          </span>
+      {showFormulation && (
+        <div id="intake-required-risk-formulation" tabIndex={-1}>
+          <div className={GROUP_LABEL}>
+            Structured risk formulation{" "}
+            <span className="font-normal normal-case text-ink-500">
+              — replaces a Low / Moderate / High rating
+            </span>
+          </div>
+          <div className="mb-2">
+            {signedAt ? (
+              <Tag tone="brand">
+                Signed {new Date(signedAt).toLocaleString()}
+                {signedBy ? ` · ${signedBy}` : ""}
+              </Tag>
+            ) : (
+              <Tag tone="warn">
+                Draft — unsigned{anyActive ? " · required: an active risk is recorded" : ""}
+              </Tag>
+            )}
+          </div>
+          <SchemaSection
+            spec={{
+              ...spec,
+              fields: spec.fields.filter((f) =>
+                [
+                  "static",
+                  "dynamic",
+                  "protective",
+                  "change_72h",
+                  "summary",
+                  "plan",
+                  "review_by",
+                  "concern_level",
+                ].includes(f.key),
+              ),
+            }}
+            values={values}
+            vs={vs}
+            onChange={(k, v) => onPatch({ [k]: v, formulation_signed_at: "" })}
+          />
+          <button
+            type="button"
+            className={`${BTN} ${BTN_SM} mt-3`}
+            disabled={!formulationReady}
+            title={
+              formulationReady
+                ? ""
+                : "Complete static, dynamic, protective, next 24–72 h and the summary first"
+            }
+            // A truthy value asks the server to sign; it records the signer and time itself.
+            onClick={() => onPatch({ formulation_signed_at: "sign" })}
+          >
+            {signedAt ? "Re-sign formulation" : "Sign risk formulation"}
+          </button>
         </div>
-        <div className="mb-2">
-          {signedAt ? (
-            <Tag tone="brand">
-              Signed {new Date(signedAt).toLocaleString()}
-              {signedBy ? ` · ${signedBy}` : ""}
-            </Tag>
-          ) : (
-            <Tag tone="warn">
-              Draft — unsigned{anyActive ? " · required: an active risk is recorded" : ""}
-            </Tag>
-          )}
-        </div>
-        <SchemaSection
-          spec={{
-            ...spec,
-            fields: spec.fields.filter((f) =>
-              [
-                "static",
-                "dynamic",
-                "protective",
-                "change_72h",
-                "summary",
-                "plan",
-                "review_by",
-                "concern_level",
-              ].includes(f.key),
-            ),
-          }}
-          values={values}
-          vs={vs}
-          onChange={(k, v) => onPatch({ [k]: v, formulation_signed_at: "" })}
-        />
-        <button
-          type="button"
-          className={`${BTN} ${BTN_SM} mt-3`}
-          disabled={!formulationReady}
-          title={
-            formulationReady
-              ? ""
-              : "Complete static, dynamic, protective, next 24–72 h and the summary first"
-          }
-          // A truthy value asks the server to sign; it records the signer and time itself.
-          onClick={() => onPatch({ formulation_signed_at: "sign" })}
-        >
-          {signedAt ? "Re-sign formulation" : "Sign risk formulation"}
-        </button>
-      </div>
+      )}
     </div>
   );
 }
