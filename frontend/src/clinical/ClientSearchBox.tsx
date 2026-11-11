@@ -20,8 +20,8 @@ export function ClientSearchBox({
   placeholder?: string;
   label?: string;
   inputRef?: Ref<HTMLInputElement>;
-  /** "brand" is the dark topbar field; "page" sits on a card. */
-  tone?: "page" | "brand";
+  /** "topbar" is the shell's topbar field (fixed 36px height); "page" sits on a card. */
+  tone?: "page" | "topbar";
   autoFocus?: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -60,10 +60,10 @@ export function ClientSearchBox({
     }
   };
 
-  const brand = tone === "brand";
-  const inputClass = brand
-    ? "h-9 w-full rounded-lg border border-sidebar-divider bg-sidebar-hover pl-8 pr-3 text-[12.5px] text-sidebar-text-strong outline-none placeholder:text-sidebar-muted focus:border-sidebar-muted"
-    : "w-full min-w-0 rounded-lg border border-surface-border bg-surface-bg py-2 pl-8 pr-2.5 text-[13px] text-ink-900 outline-none focus:border-brand-green focus:bg-surface-card";
+  const inputClass =
+    tone === "topbar"
+      ? "h-9 w-full rounded-[10px] border border-surface-border bg-surface-bg pl-8 pr-3 text-[13px] text-ink-900 outline-none focus:border-brand-green focus:bg-surface-card"
+      : "w-full min-w-0 rounded-lg border border-surface-border bg-surface-bg py-2 pl-8 pr-2.5 text-[13px] text-ink-900 outline-none focus:border-brand-green focus:bg-surface-card";
 
   return (
     <div
@@ -75,7 +75,7 @@ export function ClientSearchBox({
     >
       <Search
         aria-hidden="true"
-        className={`pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${brand ? "text-sidebar-muted" : "text-ink-400"}`}
+        className={`pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-400`}
       />
       <input
         ref={inputRef}

@@ -27,7 +27,7 @@ export function GlobalClientSearch() {
 
   return (
     <ClientSearchBox
-      tone="brand"
+      tone="topbar"
       inputRef={inputRef}
       label="Search clients"
       placeholder="Search clients…  Ctrl+K"

@@ -73,11 +73,7 @@ export function ClinicalWorkspaceShell() {
       pageTitles={PAGE_TITLES}
       focusRoutes={FOCUS_ROUTES}
       topbarRight={
-        <TopbarActions
-          pill={<OrgBranchPill />}
-          notificationsPath="/clinical/notifications"
-          tone="brand"
-        />
+        <TopbarActions pill={<OrgBranchPill />} notificationsPath="/clinical/notifications" />
       }
     />
   );

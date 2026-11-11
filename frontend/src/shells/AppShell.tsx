@@ -6,7 +6,7 @@ import { useDialogA11y } from "../components/useDialogA11y";
 import { usePatientContext } from "../clinical/usePatientContext";
 import type { NavGroup, NavItem } from "./navConfig";
 import { groupContainsActive, itemMatches } from "./navMatch";
-import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
+import { TOPBAR_ICON_BUTTON } from "./brandTopbar";
 import { ProfileCompletionBanner } from "./ProfileCompletionBanner";
 import { SubscriptionBanner } from "./SubscriptionBanner";
 import { getPlatformBranding } from "../lib/brandingApi";
@@ -82,8 +82,8 @@ export function AppShell({
   /** Portal-relative route to this shell's "My Profile" page — every
    * portal gets one so every user, any role, can set their own avatar. */
   profilePath: string;
-  /** "brand" — the clinical workspace's dark-green topbar carrying the current
-   * page title and a light/dark toggle (docs/15-CLINICAL-WORKSPACE-V3.md §1.1). */
+  /** "brand" — the clinical workspace's topbar: light like the other shells, but
+   * carrying the current page title, a working search slot and a light/dark toggle. */
   variant?: "default" | "brand";
   /** Topbar titles for routes whose title differs from their nav label, or
    * that have no nav entry. Falls back to the nav label of the current route. */
@@ -470,15 +470,12 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {isBrand ? (
-          <header
-            className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-sidebar-divider px-4 text-sidebar-text-strong"
-            style={{ backgroundColor: "var(--sidebar-top)" }}
-          >
+          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 text-ink-900 backdrop-blur">
             <button
               type="button"
               onClick={toggleSidebar}
               aria-label="Toggle sidebar"
-              className={BRAND_TOPBAR_BUTTON}
+              className={TOPBAR_ICON_BUTTON}
             >
               <Menu className="h-[17px] w-[17px]" />
             </button>
@@ -492,7 +489,7 @@ export function AppShell({
                   type="text"
                   aria-label={searchPlaceholder}
                   placeholder={searchPlaceholder}
-                  className="h-9 w-full rounded-lg border border-sidebar-divider bg-sidebar-hover px-3 text-[12.5px] text-sidebar-text-strong outline-none placeholder:text-sidebar-muted focus:border-sidebar-muted"
+                  className="h-9 w-full rounded-[10px] border border-surface-border bg-surface-bg px-3 text-[13px] text-ink-900 outline-none focus:border-brand-green focus:bg-surface-card"
                 />
               )}
             </div>
@@ -609,7 +606,7 @@ function ThemeToggleButton() {
       aria-label="Toggle light/dark theme"
       aria-pressed={isDark}
       title="Toggle light/dark theme"
-      className={BRAND_TOPBAR_BUTTON}
+      className={TOPBAR_ICON_BUTTON}
     >
       {isDark ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
     </button>

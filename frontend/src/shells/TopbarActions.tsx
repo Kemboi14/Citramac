@@ -4,7 +4,7 @@ import { Bell } from "lucide-react";
 import { NotificationIcon } from "../components/NotificationIcon";
 import { timeAgo } from "../lib/notificationFormat";
 import { useAuth } from "../auth/useAuth";
-import { BRAND_TOPBAR_BUTTON } from "./brandTopbar";
+import { TOPBAR_ICON_BUTTON } from "./brandTopbar";
 import {
   getUnreadNotificationCount,
   listNotifications,
@@ -24,12 +24,9 @@ const POLL_INTERVAL_MS = 60_000;
 export function TopbarActions({
   pill,
   notificationsPath,
-  tone = "default",
 }: {
   pill: React.ReactNode;
   notificationsPath: string;
-  /** "brand" matches AppShell's dark-green clinical topbar. */
-  tone?: "default" | "brand";
 }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -105,11 +102,7 @@ export function TopbarActions({
           aria-label="Notifications"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className={
-            tone === "brand"
-              ? `relative ${BRAND_TOPBAR_BUTTON}`
-              : "relative flex h-9 w-9 items-center justify-center rounded-[10px] border border-surface-border bg-surface-card text-ink-700 transition-colors duration-150 hover:bg-surface-bg"
-          }
+          className={`relative ${TOPBAR_ICON_BUTTON}`}
         >
           <Bell className="h-[17px] w-[17px]" />
           {unreadCount > 0 && (

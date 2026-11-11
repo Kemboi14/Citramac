@@ -1,3 +1,3 @@
-/** Square icon button on the clinical workspace's dark-green topbar (AppShell `variant="brand"`). */
-export const BRAND_TOPBAR_BUTTON =
-  "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-sidebar-divider bg-sidebar-hover text-sidebar-text-strong transition-colors duration-150 hover:bg-sidebar-divider";
+/** Square icon button on every shell's light topbar (menu, theme toggle, notifications). */
+export const TOPBAR_ICON_BUTTON =
+  "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] border border-surface-border bg-surface-card text-ink-700 transition-colors duration-150 hover:bg-surface-bg";
