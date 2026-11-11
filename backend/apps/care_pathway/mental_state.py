@@ -49,14 +49,14 @@ def has(mse, domain, display):
 
 def _free_text(mse):
     value = (mse or {}).get("free_text")
-    if not isinstance(value, str):
-        value = (mse or {}).get("summary")
     return value.strip() if isinstance(value, str) else ""
 
 
 def notes(mse, domain):
     if not is_structured(mse) and domain == "summary":
-        return _free_text(mse)
+        free_text = _free_text(mse)
+        if free_text:
+            return free_text
     value = (mse or {}).get(domain)
     return value if isinstance(value, str) else ""
 
