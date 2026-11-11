@@ -717,8 +717,12 @@ export function PsychiatryAssessmentPage() {
       >
         <Card title="Formulation & diagnosis">
           <div className="grid gap-3">
-            <Field label="Integrated clinical summary / formulation">
+            <Field
+              label="Integrated clinical summary / formulation"
+              htmlFor="psychiatry-formulation-summary"
+            >
               <AutoResizeTextarea
+                id="psychiatry-formulation-summary"
                 className="min-h-[112px]"
                 rows={5}
                 value={String(
@@ -736,8 +740,12 @@ export function PsychiatryAssessmentPage() {
                 }
               />
             </Field>
-            <Field label="Differential diagnoses / conditions to rule out">
+            <Field
+              label="Differential diagnoses / conditions to rule out"
+              htmlFor="psychiatry-formulation-differential"
+            >
               <AutoResizeTextarea
+                id="psychiatry-formulation-differential"
                 className="min-h-[72px]"
                 rows={3}
                 value={String(
