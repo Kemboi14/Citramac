@@ -121,9 +121,9 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
                 note.data["structured"]["risk"]["formulation_signed_by"],
                 self.nurse.get_full_name() or self.nurse.username,
             )
-            self.assertEqual(note.patient_id, self.pid)
-            self.assertEqual(note.encounter_id, saved.data["encounter_id"])
-            self.assertEqual(note.episode_id, saved.data["episode_id"])
+            self.assertEqual(str(note.patient_id), self.pid)
+            self.assertEqual(str(note.encounter_id), saved.data["encounter_id"])
+            self.assertEqual(str(note.episode_id), saved.data["episode_id"])
             exam = MentalStatusExam.objects.get(pk=note.data["mse_exam_id"])
             self.assertEqual(exam.encounter_id, note.encounter_id)
             self.assertEqual(exam.encounter.patient_id, note.patient_id)
@@ -238,14 +238,14 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             exam = MentalStatusExam.objects.get(pk=note.data["mse_exam_id"])
             self.assertEqual(exam.summary, body["mse"]["free_text"])
 
-    def test_structured_assessment_needs_risk_and_plan_to_sign(self):
+    def test_structured_assessment_needs_risk_to_sign(self):
         body = dict(self.body)
-        body["structured"] = dict(self.body["structured"], risk="", plan="  ")
+        body["structured"] = dict(self.body["structured"], risk="")
         signed = self.client.post(
             reverse("care-psych-sign", args=[self.pid]), body, format="json", **self.auth
         )
         self.assertEqual(signed.status_code, 400, signed.data)
-        self.assertIn("Risk and Plan", str(signed.data))
+        self.assertIn("Record Risk", str(signed.data))
         with platform_admin_context():
             self.assertFalse(
                 ProgressNote.objects.filter(
