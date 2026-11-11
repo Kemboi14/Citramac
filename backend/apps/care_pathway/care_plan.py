@@ -356,7 +356,7 @@ def recommend(patient):
         add(
             "social",
             "YELLOW",
-            "Difficulty with self-care / vulnerability — " + risk_text("neglect"),
+            "Self-neglect/vulnerability — " + risk_text("neglect"),
         )
 
     current = suggested_priority(patient, sections) or "GREEN"
