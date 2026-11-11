@@ -85,6 +85,64 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(row["assessment_status"], "SIGNED")
         self.assertFalse(row["suggested"])
 
+    def test_structured_risk_rows_are_saved_and_signable(self):
+        body = dict(self.body)
+        body["structured"] = {
+            "presenting_concern": "Low mood and poor sleep.",
+            "history": "No previous psychiatric admission.",
+            "risk": {
+                "rows": {"suicide": ["Thoughts", "Access to means"]},
+                "other": "Escalating distress at night.",
+                "details": "Family contacted; urgent review arranged.",
+                "actions": ["SAFETY_PLAN_TRIGGERED"],
+                "static": "Historical self-harm attempt.",
+                "dynamic": "Current hopelessness and poor concentration.",
+                "protective": "Family support and engagement.",
+                "change_72h": "Could worsen if support fades.",
+                "summary": "Moderate risk with protective supports.",
+                "plan": "Daily review and safety plan.",
+                "review_by": "2026-11-12",
+                "formulation_signed_at": "sign",
+            },
+            "formulation": "Likely depressive episode.",
+        }
+        saved = self.client.put(self.open_url, body, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertIn("Suicide / self-harm", saved.data["assessment"]["text"])
+        self.assertIn("Immediate actions already taken", saved.data["assessment"]["text"])
+        self.assertIn("Safety plan triggered", saved.data["assessment"]["text"])
+        with platform_admin_context():
+            note = ProgressNote.objects.get(patient_id=self.pid, note_type="PSYCHIATRY")
+            self.assertEqual(note.data["structured"]["risk"]["rows"]["suicide"][0], "Thoughts")
+            self.assertEqual(
+                note.data["structured"]["risk"]["actions"], ["SAFETY_PLAN_TRIGGERED"]
+            )
+            self.assertEqual(note.data["structured"]["risk"]["review_by"], "2026-11-12")
+            self.assertNotEqual(
+                note.data["structured"]["risk"]["formulation_signed_at"], "sign"
+            )
+            self.assertEqual(
+                note.data["structured"]["risk"]["formulation_signed_by"],
+                self.nurse.get_full_name() or self.nurse.username,
+            )
+            self.assertEqual(note.patient_id, self.pid)
+            self.assertEqual(note.encounter_id, saved.data["encounter_id"])
+            self.assertEqual(note.episode_id, saved.data["episode_id"])
+            exam = MentalStatusExam.objects.get(pk=note.data["mse_exam_id"])
+            self.assertEqual(exam.encounter_id, note.encounter_id)
+            self.assertEqual(exam.encounter.patient_id, note.patient_id)
+
+        tools = self.client.get(reverse("care-client-tools", args=[self.pid]), **self.auth)
+        self.assertEqual(tools.status_code, 200, tools.data)
+        sra = next(row for row in tools.data["results"] if row["key"] == "SRA")
+        self.assertTrue(any("Suicide / self-harm finding" in why for why in sra["why"]))
+
+        signed = self.client.post(
+            reverse("care-psych-sign", args=[self.pid]), body, format="json", **self.auth
+        )
+        self.assertEqual(signed.status_code, 200, signed.data)
+        self.assertEqual(signed.data["assessment"]["status"], "SIGNED")
+
     def test_free_text_assessment_is_rendered_and_can_be_signed(self):
         body = {
             "format": "FREE_TEXT",
