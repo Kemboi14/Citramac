@@ -716,3 +716,33 @@ a named person, per task, including the tasks a signature raises):
 3. FHIR: `Task.owner` is the person's name as display text, as before. Nothing else changes.
 
 Reversibility: cheap. Tasks already registered keep their owner text, and no signed triage changes.
+
+### 2026-11-10 — Clinical Report; Operational overview corrected
+
+On the owner's decisions of 2026-11-10 (design and mapping confirmed before building, §7):
+
+1. **Clinical Report** (`apps/care_pathway/clinical_report.py`, Reports & analytics → Clinical Report).
+   It covers one branch and a period, opening on last month at the working branch. Sections: new
+   episodes (by sex and age), clients triaged (by their latest final priority in the period), the
+   top 10 ICD-11 codes by client (WHO titles; ruled-out and entered-in-error not counted; a code
+   under review is counted but not named), admissions, discharges, risk alerts (an alert counts for a
+   branch when the client had an episode open there when it was raised), psychiatric reviews for
+   withdrawal (raised, current status, outcome), waiting time, and episodes closed. It reuses the
+   NACADA report's counting and its small-number rule (1–4 → "<5", plus the secondary withholding).
+2. **Computed when opened, never stored.** Counts only, with no names, identifiers or free text. It
+   is open to clinical staff (`clinical.care.record`) and Org Admin, for their own branches. Every
+   screen view, preview, PDF and FHIR read is a VIEW audit entry (`care_pathway.clinicalreport`, with
+   the period and output). Preview and Download PDF use the shared document layout.
+3. **FHIR.** A summary `MeasureReport`, read-time, on the NACADA mapping (`nacada_fhir`, now taking
+   its measure and code systems as parameters): reporter = the branch, one group per section,
+   withheld counts carry `data-absent-reason` `masked`, plus a `Provenance`. Local
+   `urn:citramac:…clinical-report…` codes. VERIFY with DHA whether a published Measure is expected
+   for facility clinical reporting. Examples in `care_pathway/fhir_examples/clinical-report-*.json`
+   (routine month, small-numbers edge case, no-activity omission). CI's conformance step runs
+   `test_clinical_report.py`, and HL7's validator passes all 37 examples.
+4. **Operational overview** (`care/reports/`) shows how things stand now. "Registered clients"
+   (everyone ever registered) is now **Clients in care** (an open episode). "Signed triage
+   assessments" (all time) is now **Triages signed today**. The priority table counts each client in
+   care once, by their latest triage, instead of every triage ever signed.
+
+Reversibility: cheap. Both reports are read-only, nothing is stored, and no signed record changes.

@@ -1,5 +1,6 @@
 import { apiRequest } from "./apiClient";
 import type { LegalBanner } from "./legalStatusApi";
+import type { NacadaSummary } from "./mhpExtrasApi";
 
 // Mirrors backend/apps/care_pathway (views.py) — docs/15-CLINICAL-WORKSPACE-V3.md.
 // Every clinical screen of the approved 2026-10-07 mockup reads/writes here.
@@ -1554,10 +1555,11 @@ export function getOutpatients(accessToken: string) {
 }
 
 export interface CareReports {
-  registered_clients: number;
+  /** Clients with an open episode of care. */
+  clients_in_care: number;
   awaiting_triage: number;
   rechecks_due: number;
-  signed_triage_assessments: number;
+  triages_signed_today: number;
   inpatients: number;
   occupied_beds: number;
   total_beds: number;
@@ -1567,6 +1569,38 @@ export interface CareReports {
 
 export function getCareReports(accessToken: string) {
   return apiRequest<CareReports>("/care/reports/", { accessToken });
+}
+
+/** Clinical Report (counts only, one branch and period; nothing stored). */
+export interface ClinicalReport extends NacadaSummary {
+  branch_id: string;
+  reference: string;
+  generated_at: string;
+  branches: { id: string; name: string }[];
+}
+
+export interface ClinicalReportQuery {
+  branch?: string;
+  period_start?: string;
+  period_end?: string;
+}
+
+export function clinicalReportQuery(query: ClinicalReportQuery) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
+export function getClinicalReport(accessToken: string, query: ClinicalReportQuery = {}) {
+  return apiRequest<ClinicalReport>(`/care/clinical-report/${clinicalReportQuery(query)}`, {
+    accessToken,
+  });
+}
+
+/** The print endpoint (Preview, or `&output=pdf`) for DocumentActions. */
+export function clinicalReportPrintPath(query: ClinicalReportQuery) {
+  return `/care/clinical-report/print/${clinicalReportQuery(query)}`;
 }
 
 // ── Sectioned intake (served schema → draft → sign) ──

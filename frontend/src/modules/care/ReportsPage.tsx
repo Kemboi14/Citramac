@@ -5,7 +5,8 @@ import { getCareReports, type CareReports, type Priority } from "../../lib/careP
 import { TABLE, TD, TH } from "./shared/styles";
 import { Card, ErrorNote, PageHeader, PriorityPill } from "./shared/ui";
 
-// docs/15-CLINICAL-WORKSPACE-V3.md §1.16 — mockup reports().
+// Operational overview: figures as they stand now. Period counts are the
+// Clinical report (ClinicalReportPage).
 
 const PRIORITIES: Priority[] = ["RED", "ORANGE", "YELLOW", "GREEN"];
 
@@ -31,10 +32,10 @@ export function ReportsPage() {
 
   const v = (value: number | string | undefined) => (data ? String(value ?? 0) : "—");
   const metrics: [string, string][] = [
-    ["Registered clients", v(data?.registered_clients)],
+    ["Clients in care (open episode)", v(data?.clients_in_care)],
     ["Awaiting triage", v(data?.awaiting_triage)],
     ["Triage re-checks due", v(data?.rechecks_due)],
-    ["Signed triage assessments", v(data?.signed_triage_assessments)],
+    ["Triages signed today", v(data?.triages_signed_today)],
     ["Inpatients", v(data?.inpatients)],
     ["Occupied beds", data ? `${data.occupied_beds} / ${data.total_beds}` : "—"],
     ["Appointments today", v(data?.appointments_today)],
@@ -50,8 +51,8 @@ export function ReportsPage() {
     <div className="animate-fade-in">
       <PageHeader
         eyebrow={`Service overview · ${new Date().toLocaleDateString()}`}
-        title="Reports"
-        subtitle="Live operational summaries from the current client, triage, bed, and appointment records"
+        title="Operational overview"
+        subtitle="How the service stands right now. For counts over a period, open the Clinical report."
       />
 
       {error && (
@@ -81,8 +82,8 @@ export function ReportsPage() {
             </tbody>
           </table>
         </Card>
-        <Card title="Signed triage priority distribution" bodyClassName="p-0">
-          <table className={TABLE} aria-label="Signed triage priority distribution">
+        <Card title="Clients in care by latest triage priority" bodyClassName="p-0">
+          <table className={TABLE} aria-label="Clients in care by latest triage priority">
             <thead>
               <tr>
                 <th className={TH}>Priority</th>

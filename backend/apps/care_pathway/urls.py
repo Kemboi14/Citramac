@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import clinical_report_views as crview
 from . import group_views as gview
 from . import intervention_views as iview
 from . import legal_views as lview
@@ -669,6 +670,17 @@ urlpatterns = [
     path("care/dashboard/", views.DashboardView.as_view(), name="care-dashboard"),
     path("care/outpatients/", views.OutpatientsView.as_view(), name="care-outpatients"),
     path("care/reports/", views.ReportsView.as_view(), name="care-reports"),
+    path("care/clinical-report/", crview.ClinicalReportView.as_view(), name="care-clinical-report"),
+    path(
+        "care/clinical-report/print/",
+        crview.ClinicalReportPrintView.as_view(),
+        name="care-clinical-report-print",
+    ),
+    path(
+        "care/clinical-report/fhir/",
+        crview.ClinicalReportFhirView.as_view(),
+        name="care-clinical-report-fhir",
+    ),
     path(
         "care/consent-templates/",
         views.ConsentTemplatesView.as_view(),

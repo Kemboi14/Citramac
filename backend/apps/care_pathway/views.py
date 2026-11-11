@@ -1840,20 +1840,35 @@ class OutpatientsView(APIView):
 
 
 class ReportsView(APIView):
+    """Operational overview: figures as they stand now (or today). The
+    period-based clinical counts are the Clinical Report (clinical_report.py)."""
+
     def get(self, request):
         today_bounds = facility_time.day_bounds(facility_time.local_date())
         worklist = services.triage_worklist()
-        signed = list(
-            TriageEncounter.objects.filter(triage_version__gt=0).values_list("priority", flat=True)
+        in_care = set(
+            EpisodeOfCare.objects.filter(
+                status__in=EpisodeOfCare.OPEN_STATUSES, patient__archived_at__isnull=True
+            ).values_list("patient_id", flat=True)
         )
+        latest_priority = {}
+        for patient_id, priority in (
+            TriageEncounter.objects.filter(triage_version__gt=0, patient_id__in=in_care)
+            .order_by("last_triaged_at")
+            .values_list("patient_id", "priority")
+        ):
+            latest_priority[patient_id] = priority  # ascending: the last one wins
+        priorities = list(latest_priority.values())
         beds = Bed.objects.all()
         return Response(
             {
-                "registered_clients": Patient.objects.filter(archived_at__isnull=True).count(),
+                "clients_in_care": len(in_care),
                 "awaiting_triage": sum(1 for i in worklist if i["status"] != "RECHECK_DUE"),
                 "rechecks_due": sum(1 for i in worklist if i["status"] == "RECHECK_DUE"),
-                "signed_triage_assessments": TriageAssessment.objects.filter(
-                    status="COMPLETED"
+                "triages_signed_today": TriageAssessment.objects.filter(
+                    status="COMPLETED",
+                    signed_at__gte=today_bounds[0],
+                    signed_at__lt=today_bounds[1],
                 ).count(),
                 "inpatients": Admission.objects.filter(
                     status__in=services.CURRENT_ADMISSION_STATUSES
@@ -1866,7 +1881,7 @@ class ReportsView(APIView):
                 .exclude(status="CANCELLED")
                 .count(),
                 "priority_distribution": [
-                    {"priority": p, "count": signed.count(p)}
+                    {"priority": p, "count": priorities.count(p)}
                     for p in sorted(PRIORITY_ORDER, key=PRIORITY_ORDER.get)
                 ],
             }

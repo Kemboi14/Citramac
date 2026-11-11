@@ -95,6 +95,10 @@ const SignedTriageDocumentPage = lazyNamed(
 );
 const BillingPage = lazyNamed(() => import("./modules/care/BillingPage"), "BillingPage");
 const ReportsPage = lazyNamed(() => import("./modules/care/ReportsPage"), "ReportsPage");
+const ClinicalReportPage = lazyNamed(
+  () => import("./modules/care/ClinicalReportPage"),
+  "ClinicalReportPage",
+);
 // docs/16-DATA-PROTECTION-COMPLIANCE.md — legal opinion of 2 October 2026.
 const BreachIncidentsPage = lazyNamed(
   () => import("./modules/org-admin/BreachIncidentsPage"),
@@ -392,7 +396,7 @@ function App() {
             <Route path="documents/:assessmentId" element={<SignedTriageDocumentPage />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="reports" element={<ReportsPage />} />
-            <Route path="reports/clinical" element={<ReportsPage />} />
+            <Route path="reports/clinical" element={<ClinicalReportPage />} />
             <Route path="registry" element={<ClientRegistryPage />} />
             <Route path="patient" element={<PatientWorkspacePage />} />
             <Route path="attachments" element={<AttachmentsPage />} />

@@ -444,10 +444,12 @@ export function PsychiatryAssessmentPage() {
               aria-label="MSE format"
               className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
             >
-              {([
-                ["STRUCTURED", "Structured"],
-                ["FREE_TEXT", "Free text"],
-              ] as ["STRUCTURED" | "FREE_TEXT", string][]).map(([value, label]) => (
+              {(
+                [
+                  ["STRUCTURED", "Structured"],
+                  ["FREE_TEXT", "Free text"],
+                ] as ["STRUCTURED" | "FREE_TEXT", string][]
+              ).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
@@ -577,7 +579,6 @@ export function PsychiatryAssessmentPage() {
           )}
         </Card>
       </div>
-
     </div>
   );
 }

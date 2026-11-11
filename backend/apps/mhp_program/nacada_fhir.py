@@ -34,6 +34,8 @@ STRATIFIER_SYSTEM = "urn:citramac:codesystem:nacada-ndo-stratifier"
 STRATUM_SYSTEM = "urn:citramac:codesystem:nacada-ndo-stratum"
 MEASURE_POPULATION_SYSTEM = "http://terminology.hl7.org/CodeSystem/measure-population"
 DATA_ABSENT_REASON_URL = "http://hl7.org/fhir/StructureDefinition/data-absent-reason"
+# (indicator, stratifier, stratum) code systems; another report passes its own.
+NACADA_SYSTEMS = (INDICATOR_SYSTEM, STRATIFIER_SYSTEM, STRATUM_SYSTEM)
 
 INITIAL_POPULATION = {
     "coding": [
@@ -57,11 +59,12 @@ def _population(stored):
     return population
 
 
-def _group(section):
+def _group(section, systems=NACADA_SYSTEMS):
+    indicator_system, stratifier_system, stratum_system = systems
     group = {
         "code": {
             "coding": [
-                {"system": INDICATOR_SYSTEM, "code": section["code"], "display": section["title"]}
+                {"system": indicator_system, "code": section["code"], "display": section["title"]}
             ],
             "text": section["total_label"],
         },
@@ -78,7 +81,7 @@ def _group(section):
                     {
                         "coding": [
                             {
-                                "system": STRATIFIER_SYSTEM,
+                                "system": stratifier_system,
                                 "code": f"{section['code']}.{breakdown['code']}",
                                 "display": breakdown["title"],
                             }
@@ -91,7 +94,7 @@ def _group(section):
                         "value": {
                             "coding": [
                                 {
-                                    "system": STRATUM_SYSTEM,
+                                    "system": stratum_system,
                                     "code": row["code"],
                                     "display": row["label"],
                                 }
@@ -109,20 +112,22 @@ def _group(section):
     return group
 
 
-def build_measure_report(report_id, summary, generated_at, branch_id):
+def build_measure_report(
+    report_id, summary, generated_at, branch_id, measure=MEASURE_CANONICAL, systems=NACADA_SYSTEMS
+):
     return {
         "resourceType": "MeasureReport",
         "id": str(report_id),
         "status": "complete",
         "type": "summary",
-        "measure": f"{MEASURE_CANONICAL}:{summary['definition']}",
+        "measure": f"{measure}:{summary['definition']}",
         "date": generated_at,
         "reporter": {
             "reference": f"Organization/{branch_id}",
             "display": f"{summary['organization_name']} — {summary['branch_name']}",
         },
         "period": {"start": summary["period_start"], "end": summary["period_end"]},
-        "group": [_group(section) for section in summary["sections"]],
+        "group": [_group(section, systems) for section in summary["sections"]],
     }
 
 
@@ -130,10 +135,20 @@ def build_measure_report(report_id, summary, generated_at, branch_id):
 PROVENANCE_NAMESPACE = uuid.UUID("9c4e2a7b-3f1d-4b8e-a6c2-7d5e9f1b3a4c")
 
 
-def build_bundle(report_id, summary, generated_at, branch_id, compiled_by):
+def build_bundle(
+    report_id,
+    summary,
+    generated_at,
+    branch_id,
+    compiled_by,
+    measure=MEASURE_CANONICAL,
+    systems=NACADA_SYSTEMS,
+):
     """Collection Bundle: the MeasureReport and the Provenance saying who
     compiled it and when (CLAUDE.md §3 item 4)."""
-    measure_report = build_measure_report(report_id, summary, generated_at, branch_id)
+    measure_report = build_measure_report(
+        report_id, summary, generated_at, branch_id, measure, systems
+    )
     provenance_id = str(uuid.uuid5(PROVENANCE_NAMESPACE, f"compiled:{report_id}"))
     provenance = {
         "resourceType": "Provenance",

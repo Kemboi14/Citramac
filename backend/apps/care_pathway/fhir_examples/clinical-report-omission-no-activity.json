@@ -1,0 +1,1335 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "timestamp": "2026-11-01T08:30:00+03:00",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:0d2ad437-c488-5b9d-8e9c-8130446a9014",
+      "resource": {
+        "resourceType": "MeasureReport",
+        "id": "0d2ad437-c488-5b9d-8e9c-8130446a9014",
+        "status": "complete",
+        "type": "summary",
+        "measure": "urn:citramac:measure:clinical-report:clinical-report-2026-11-10",
+        "date": "2026-11-01T08:30:00+03:00",
+        "reporter": {
+          "reference": "Organization/4a1a3149-6cb1-5c72-8860-318e430d52b1",
+          "display": "Example Recovery Centre — Main branch"
+        },
+        "period": {
+          "start": "2026-10-01",
+          "end": "2026-10-31"
+        },
+        "group": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "new-episodes",
+                  "display": "New treatment episodes"
+                }
+              ],
+              "text": "Episodes started in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "new-episodes.sex",
+                        "display": "By sex"
+                      }
+                    ],
+                    "text": "By sex"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "MALE",
+                          "display": "Male"
+                        }
+                      ],
+                      "text": "Male"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "FEMALE",
+                          "display": "Female"
+                        }
+                      ],
+                      "text": "Female"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "OTHER",
+                          "display": "Intersex / other"
+                        }
+                      ],
+                      "text": "Intersex / other"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "NOT_STATED",
+                          "display": "Not stated"
+                        }
+                      ],
+                      "text": "Not stated"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "NOT_SAID",
+                          "display": "Prefer not to say"
+                        }
+                      ],
+                      "text": "Prefer not to say"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "unknown",
+                          "display": "Not recorded"
+                        }
+                      ],
+                      "text": "Not recorded"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "new-episodes.age",
+                        "display": "By age when the episode started"
+                      }
+                    ],
+                    "text": "By age when the episode started"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "lt15",
+                          "display": "Under 15"
+                        }
+                      ],
+                      "text": "Under 15"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "15-19",
+                          "display": "15–19"
+                        }
+                      ],
+                      "text": "15–19"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "20-24",
+                          "display": "20–24"
+                        }
+                      ],
+                      "text": "20–24"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "25-34",
+                          "display": "25–34"
+                        }
+                      ],
+                      "text": "25–34"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "35-44",
+                          "display": "35–44"
+                        }
+                      ],
+                      "text": "35–44"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "45-54",
+                          "display": "45–54"
+                        }
+                      ],
+                      "text": "45–54"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "55plus",
+                          "display": "55 and over"
+                        }
+                      ],
+                      "text": "55 and over"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "unknown",
+                          "display": "Not recorded"
+                        }
+                      ],
+                      "text": "Not recorded"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "clients-triaged",
+                  "display": "Clients triaged"
+                }
+              ],
+              "text": "Clients with a signed triage in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "clients-triaged.priority",
+                        "display": "By final priority (their latest triage in the period)"
+                      }
+                    ],
+                    "text": "By final priority (their latest triage in the period)"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "RED",
+                          "display": "RED — immediate"
+                        }
+                      ],
+                      "text": "RED — immediate"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "ORANGE",
+                          "display": "ORANGE — very urgent"
+                        }
+                      ],
+                      "text": "ORANGE — very urgent"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "YELLOW",
+                          "display": "YELLOW — urgent"
+                        }
+                      ],
+                      "text": "YELLOW — urgent"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "GREEN",
+                          "display": "GREEN — standard"
+                        }
+                      ],
+                      "text": "GREEN — standard"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "diagnoses",
+                  "display": "Diagnoses recorded"
+                }
+              ],
+              "text": "Clients with a diagnosis recorded in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "diagnoses.icd11",
+                        "display": "Most frequent ICD-11 codes (top 10), clients"
+                      }
+                    ],
+                    "text": "Most frequent ICD-11 codes (top 10), clients"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "other",
+                          "display": "All other ICD-11 codes"
+                        }
+                      ],
+                      "text": "All other ICD-11 codes"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "under-review",
+                          "display": "Code under review (not shown)"
+                        }
+                      ],
+                      "text": "Code under review (not shown)"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "admissions",
+                  "display": "Inpatient admissions"
+                }
+              ],
+              "text": "Admissions in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "admissions.type",
+                        "display": "By type"
+                      }
+                    ],
+                    "text": "By type"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "VOLUNTARY",
+                          "display": "Voluntary Admission"
+                        }
+                      ],
+                      "text": "Voluntary Admission"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "INVOLUNTARY",
+                          "display": "Involuntary Admission"
+                        }
+                      ],
+                      "text": "Involuntary Admission"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "discharges",
+                  "display": "Inpatient discharges"
+                }
+              ],
+              "text": "Discharges in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "risk-alerts",
+                  "display": "Risk alerts raised"
+                }
+              ],
+              "text": "Clients with an alert raised in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "psychiatric-reviews",
+                  "display": "Psychiatric reviews for withdrawal"
+                }
+              ],
+              "text": "Reviews raised in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "psychiatric-reviews.status",
+                        "display": "Raised in the period, by current status"
+                      }
+                    ],
+                    "text": "Raised in the period, by current status"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "INITIATED",
+                          "display": "Not started"
+                        }
+                      ],
+                      "text": "Not started"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "PENDING",
+                          "display": "In progress"
+                        }
+                      ],
+                      "text": "In progress"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "COMPLETED",
+                          "display": "Completed"
+                        }
+                      ],
+                      "text": "Completed"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "psychiatric-reviews.outcome",
+                        "display": "Completed in the period, by outcome"
+                      }
+                    ],
+                    "text": "Completed in the period, by outcome"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "managed_here",
+                          "display": "Reviewed — managed here"
+                        }
+                      ],
+                      "text": "Reviewed — managed here"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "admitted_withdrawal",
+                          "display": "Reviewed — admitted for withdrawal management"
+                        }
+                      ],
+                      "text": "Reviewed — admitted for withdrawal management"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "referred_out",
+                          "display": "Reviewed — referred out"
+                        }
+                      ],
+                      "text": "Reviewed — referred out"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "withdrawal_not_confirmed",
+                          "display": "Reviewed — withdrawal not confirmed"
+                        }
+                      ],
+                      "text": "Reviewed — withdrawal not confirmed"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "not_reviewed",
+                          "display": "Not reviewed — client left / declined"
+                        }
+                      ],
+                      "text": "Not reviewed — client left / declined"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "waiting-time",
+                  "display": "Waiting time"
+                }
+              ],
+              "text": "Clients who started treatment from the waitlist in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ]
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:clinical-report-indicator",
+                  "code": "episodes-closed",
+                  "display": "Treatment episodes closed"
+                }
+              ],
+              "text": "Episodes closed in the period"
+            },
+            "population": [
+              {
+                "code": {
+                  "coding": [
+                    {
+                      "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                      "code": "initial-population",
+                      "display": "Initial Population"
+                    }
+                  ]
+                },
+                "count": 0
+              }
+            ],
+            "stratifier": [
+              {
+                "code": [
+                  {
+                    "coding": [
+                      {
+                        "system": "urn:citramac:codesystem:clinical-report-stratifier",
+                        "code": "episodes-closed.outcome",
+                        "display": "By outcome"
+                      }
+                    ],
+                    "text": "By outcome"
+                  }
+                ],
+                "stratum": [
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "PLANNED",
+                          "display": "Discharged — planned"
+                        }
+                      ],
+                      "text": "Discharged — planned"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "LEFT_EARLY",
+                          "display": "Left before planned discharge"
+                        }
+                      ],
+                      "text": "Left before planned discharge"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "TRANSFERRED",
+                          "display": "Transferred"
+                        }
+                      ],
+                      "text": "Transferred"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "LOST",
+                          "display": "Lost to follow-up"
+                        }
+                      ],
+                      "text": "Lost to follow-up"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  },
+                  {
+                    "value": {
+                      "coding": [
+                        {
+                          "system": "urn:citramac:codesystem:clinical-report-stratum",
+                          "code": "DECEASED",
+                          "display": "Deceased"
+                        }
+                      ],
+                      "text": "Deceased"
+                    },
+                    "population": [
+                      {
+                        "code": {
+                          "coding": [
+                            {
+                              "system": "http://terminology.hl7.org/CodeSystem/measure-population",
+                              "code": "initial-population",
+                              "display": "Initial Population"
+                            }
+                          ]
+                        },
+                        "count": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:91a7a82b-ff5d-5179-a0f3-a1fafdc8a5d8",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "91a7a82b-ff5d-5179-a0f3-a1fafdc8a5d8",
+        "target": [
+          {
+            "reference": "urn:uuid:0d2ad437-c488-5b9d-8e9c-8130446a9014"
+          }
+        ],
+        "recorded": "2026-11-01T08:30:00+03:00",
+        "activity": {
+          "text": "Compiled from the facility's records"
+        },
+        "agent": [
+          {
+            "who": {
+              "display": "Example clinician"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
