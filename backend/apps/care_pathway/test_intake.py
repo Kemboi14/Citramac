@@ -120,6 +120,9 @@ class IntakeSchemaTests(IntakeTestCase):
             set(response.data["required"]), {"pres", "risk", "meds", "allergy", "mse", "form"}
         )
         self.assertEqual(len(response.data["riskRows"]), 6)
+        labels = {row["key"]: row["label"] for row in response.data["riskRows"]}
+        self.assertEqual(labels["absconding"], "Absconding/Leave care risk")
+        self.assertEqual(labels["neglect"], "Self-neglect/vulnerability")
 
     def test_every_referenced_valueset_is_seeded_and_served(self):
         ids = {
