@@ -629,6 +629,7 @@ export interface PsychiatryWorkspace {
   encounter_id: string;
   episode_id: string | null;
   assessment: PsychiatryAssessment | null;
+  carried_forward_presenting_concern: { text: string; source: "triage" | "intake" } | null;
   mse: PsychiatryMse;
   history: {
     id: string;

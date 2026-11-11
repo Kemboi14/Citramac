@@ -49,10 +49,7 @@ const STRUCTURED_FIELDS: { key: string; label: string; hint: string; required?: 
   },
 ];
 
-const LEGACY_STRUCTURED_FIELDS = [
-  { key: "formulation", label: "Formulation" },
-  { key: "plan", label: "Plan" },
-];
+const LEGACY_STRUCTURED_FIELDS = [{ key: "plan", label: "Plan" }];
 
 const EMPTY_RISK = {
   rows: {} as Record<string, string[]>,
@@ -156,7 +153,7 @@ function riskValueText(
 const SECTIONS = [
   { id: "psych-assessment", label: "Assessment" },
   { id: "psych-mse", label: "MSE" },
-  { id: "psych-diagnosis", label: "Diagnosis" },
+  { id: "psych-formulation-diagnosis", label: "Formulation & diagnosis" },
   { id: "psych-medication", label: "Medication" },
   { id: "psych-previous", label: "Previous" },
 ];
@@ -173,12 +170,35 @@ function sectionsAsNarrative(
       const raw =
         field.key === "risk"
           ? riskValueText(structured[field.key], riskRows, vs)
-          : String(structured[field.key] ?? "").trim();
+          : field.key === "form"
+            ? formulationDiagnosisText(structured[field.key])
+            : String(structured[field.key] ?? "").trim();
       return [field.label, raw] as const;
     })
     .filter(([, value]) => value)
     .map(([label, value]) => `${label}\n${value}`)
     .join("\n\n");
+}
+
+function formulationDiagnosisText(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const section = value as Record<string, unknown>;
+  return [
+    ["Integrated clinical summary / formulation", section.summary],
+    ["Differential diagnoses / conditions to rule out", section.differential],
+  ]
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string" && !!entry[1].trim())
+    .map(([label, text]) => `${label}\n${text.trim()}`)
+    .join("\n\n");
+}
+
+function normalizedStructuredAssessment(value: Record<string, unknown>) {
+  const structured = { ...value };
+  if (!structured.form && typeof structured.formulation === "string") {
+    structured.form = { summary: structured.formulation, differential: "" };
+    delete structured.formulation;
+  }
+  return structured;
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -257,7 +277,11 @@ export function PsychiatryAssessmentPage() {
         const assessment = state.assessment;
         setFormat(assessment?.format ?? "STRUCTURED");
         setFreeText(assessment?.free_text ?? "");
-        setStructured(assessment?.structured ?? {});
+        const structuredAssessment = normalizedStructuredAssessment(assessment?.structured ?? {});
+        if (!assessment && state.carried_forward_presenting_concern) {
+          structuredAssessment.presenting_concern = state.carried_forward_presenting_concern.text;
+        }
+        setStructured(structuredAssessment);
         setMse(state.mse ?? {});
         setMseFormat(inferMseFormat(state.mse ?? {}));
         setLoadError(null);
@@ -378,7 +402,7 @@ export function PsychiatryAssessmentPage() {
       if (state.assessment) {
         setFormat(state.assessment.format);
         setFreeText(state.assessment.free_text);
-        setStructured(state.assessment.structured);
+        setStructured(normalizedStructuredAssessment(state.assessment.structured));
       }
       setMse(state.mse);
       setMseFormat(inferMseFormat(state.mse));
@@ -537,6 +561,10 @@ export function PsychiatryAssessmentPage() {
           {format === "STRUCTURED" ? (
             <div className="grid gap-3 lg:grid-cols-2">
               {STRUCTURED_FIELDS.map((field) => {
+                const carriedConcern =
+                  field.key === "presenting_concern" && !assessment
+                    ? workspace?.carried_forward_presenting_concern
+                    : null;
                 if (field.key === "risk") {
                   return (
                     <div key={field.key} className="lg:col-span-2" id="psych-risk-assessment">
@@ -577,7 +605,11 @@ export function PsychiatryAssessmentPage() {
                         field.label
                       )
                     }
-                    hint={field.hint}
+                    hint={
+                      carriedConcern
+                        ? `Carried forward from signed ${carriedConcern.source}. Review or update as needed.`
+                        : field.hint
+                    }
                   >
                     <AutoResizeTextarea
                       className="min-h-[112px]"
@@ -678,11 +710,53 @@ export function PsychiatryAssessmentPage() {
       </div>
 
       <div
-        id="psych-diagnosis"
+        id="psych-formulation-diagnosis"
         role="tabpanel"
-        aria-labelledby="psych-diagnosis-tab"
-        className={`min-w-0 ${activeSection === "psych-diagnosis" ? "" : "hidden"}`}
+        aria-labelledby="psych-formulation-diagnosis-tab"
+        className={`min-w-0 ${activeSection === "psych-formulation-diagnosis" ? "" : "hidden"}`}
       >
+        <Card title="Formulation & diagnosis">
+          <div className="grid gap-3">
+            <Field label="Integrated clinical summary / formulation">
+              <AutoResizeTextarea
+                className="min-h-[112px]"
+                rows={5}
+                value={String(
+                  (structured.form as Record<string, unknown> | undefined)?.summary ?? "",
+                )}
+                disabled={readOnly}
+                onChange={(event) =>
+                  setStructured((current) => ({
+                    ...current,
+                    form: {
+                      ...((current.form as Record<string, unknown> | undefined) ?? {}),
+                      summary: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Differential diagnoses / conditions to rule out">
+              <AutoResizeTextarea
+                className="min-h-[72px]"
+                rows={3}
+                value={String(
+                  (structured.form as Record<string, unknown> | undefined)?.differential ?? "",
+                )}
+                disabled={readOnly}
+                onChange={(event) =>
+                  setStructured((current) => ({
+                    ...current,
+                    form: {
+                      ...((current.form as Record<string, unknown> | undefined) ?? {}),
+                      differential: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </Field>
+          </div>
+        </Card>
         <IntakeDiagnosisTab
           patientId={patientId}
           encounterId={workspace.encounter_id}

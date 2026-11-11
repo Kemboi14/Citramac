@@ -7,7 +7,7 @@ from apps.client_registry.models import Patient
 from apps.tenancy.context import platform_admin_context
 from apps.triage.models import MentalStatusExam
 
-from .models import ProgressNote
+from .models import IntakeAssessment, ProgressNote, TriageEncounter
 from .tests import CORE_NO, CarePathwayApiTestCase
 
 
@@ -51,6 +51,54 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(row["assessment_status"], "")
         self.assertIn("psychiatric review", row["suggested_reason"].lower())
 
+    def test_new_assessment_carries_forward_triage_presenting_concern(self):
+        concern = "Low mood and poor sleep, reported at triage."
+        with platform_admin_context():
+            TriageEncounter.objects.filter(pk=self.te_id).update(presenting_concern=concern)
+
+        opened = self.client.post(self.open_url, format="json", **self.auth)
+
+        self.assertEqual(opened.status_code, 200, opened.data)
+        self.assertIsNone(opened.data["assessment"])
+        self.assertEqual(
+            opened.data["carried_forward_presenting_concern"],
+            {"text": concern, "source": "triage"},
+        )
+
+    def test_new_assessment_falls_back_to_intake_presenting_concern(self):
+        concern = "Poor sleep and low mood, reported at intake."
+        with platform_admin_context():
+            TriageEncounter.objects.filter(pk=self.te_id).update(presenting_concern="")
+            IntakeAssessment.objects.create(
+                organization=self.org,
+                patient=Patient.objects.get(pk=self.pid),
+                presenting_concern=concern,
+                status=IntakeAssessment.STATUS_SIGNED,
+            )
+
+        opened = self.client.post(self.open_url, format="json", **self.auth)
+
+        self.assertEqual(opened.status_code, 200, opened.data)
+        self.assertEqual(
+            opened.data["carried_forward_presenting_concern"],
+            {"text": concern, "source": "intake"},
+        )
+
+    def test_existing_draft_is_not_replaced_by_carried_forward_concern(self):
+        saved = self.client.put(self.open_url, self.body, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        source_concern = "Updated concern from triage."
+        with platform_admin_context():
+            TriageEncounter.objects.filter(pk=self.te_id).update(presenting_concern=source_concern)
+
+        opened = self.client.post(self.open_url, format="json", **self.auth)
+
+        self.assertEqual(opened.status_code, 200, opened.data)
+        self.assertEqual(
+            opened.data["assessment"]["structured"]["presenting_concern"],
+            self.body["structured"]["presenting_concern"],
+        )
+
     def test_structured_assessment_is_saved_to_progress_note_and_mse_store(self):
         opened = self.client.post(self.open_url, format="json", **self.auth)
         self.assertEqual(opened.status_code, 200, opened.data)
@@ -84,6 +132,36 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         row = next(r for r in listed.data["results"] if r["patient_id"] == self.pid)
         self.assertEqual(row["assessment_status"], "SIGNED")
         self.assertFalse(row["suggested"])
+
+    def test_formulation_and_differential_are_saved_in_psychiatry_note(self):
+        body = dict(self.body)
+        body["structured"] = {
+            **self.body["structured"],
+            "form": {
+                "summary": "Integrated presentation with depressive symptoms.",
+                "differential": "Consider a substance-induced mood disorder.",
+            },
+        }
+
+        saved = self.client.put(self.open_url, body, format="json", **self.auth)
+
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(
+            saved.data["assessment"]["structured"]["form"],
+            {
+                "summary": "Integrated presentation with depressive symptoms.",
+                "differential": "Consider a substance-induced mood disorder.",
+            },
+        )
+        self.assertIn("Formulation & diagnosis", saved.data["assessment"]["text"])
+        self.assertIn(
+            "Integrated clinical summary / formulation: Integrated presentation with depressive symptoms.",
+            saved.data["assessment"]["text"],
+        )
+        self.assertIn(
+            "Differential diagnoses / conditions to rule out: Consider a substance-induced mood disorder.",
+            saved.data["assessment"]["text"],
+        )
 
     def test_structured_risk_rows_are_saved_and_signable(self):
         body = dict(self.body)

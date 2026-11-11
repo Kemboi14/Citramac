@@ -14,6 +14,9 @@ Stores (CLAUDE.md §4 — one store per clinical concept):
   retained in the note exactly as the intake retains them in its section;
 - diagnosis → `clinical_encounter.DiagnosisCode`;
 - medication → the existing prescribing module / PrescriptionItem store.
+
+VERIFY: identify the published DocumentReference profile and mappings for
+ProgressNote before emitting psychiatry assessments as FHIR.
 """
 
 from django.db import transaction
@@ -46,6 +49,7 @@ STRUCTURED_SECTIONS = (
     ("presenting_concern", "Presenting concern"),
     ("history", "History"),
     ("risk", "Clinical Risk Assessment"),
+    ("form", "Formulation & diagnosis"),
     ("formulation", "Formulation"),
     ("plan", "Plan"),
 )
@@ -176,6 +180,18 @@ def _mse_from_exam(exam):
     return {key: getattr(exam, key, "") for key in keys if getattr(exam, key, "")}
 
 
+def _carried_forward_presenting_concern(patient):
+    triage = services.latest_signed_triage(patient)
+    if triage and triage.presenting_concern.strip():
+        return {"text": triage.presenting_concern.strip(), "source": "triage"}
+
+    intake = intake_service.latest_signed(patient)
+    if intake and intake.presenting_concern.strip():
+        return {"text": intake.presenting_concern.strip(), "source": "intake"}
+
+    return None
+
+
 def _workspace_state(patient, encounter, note, user):
     data = (note.data or {}) if note else {}
     exam = None
@@ -193,6 +209,7 @@ def _workspace_state(patient, encounter, note, user):
         "encounter_id": str(encounter.pk),
         "episode_id": str(encounter.episode_id) if encounter.episode_id else None,
         "assessment": _assessment_state(note, user),
+        "carried_forward_presenting_concern": _carried_forward_presenting_concern(patient),
         "mse": mse,
         "history": [
             _history_row(n)
@@ -255,7 +272,20 @@ def _clean_structured(value):
         if key not in value:
             continue
         entry = value.get(key)
-        if key == "risk":
+        if key == "form":
+            if entry is None:
+                continue
+            if not isinstance(entry, dict):
+                raise ValidationError({"structured": {"form": "Formulation must be an object."}})
+            cleaned[key] = {}
+            for field in ("summary", "differential"):
+                item = entry.get(field, "")
+                if item is not None and not isinstance(item, str):
+                    raise ValidationError(
+                        {"structured": {"form": {field: "Enter text for this field."}}}
+                    )
+                cleaned[key][field] = item.strip() if isinstance(item, str) else ""
+        elif key == "risk":
             if entry is None:
                 continue
             if isinstance(entry, str):
@@ -488,6 +518,20 @@ def _risk_to_text(value):
     return str(value).strip()
 
 
+def _formulation_diagnosis_to_text(value):
+    if not isinstance(value, dict):
+        return ""
+    parts = []
+    for key, label in (
+        ("summary", "Integrated clinical summary / formulation"),
+        ("differential", "Differential diagnoses / conditions to rule out"),
+    ):
+        item = value.get(key)
+        if isinstance(item, str) and item.strip():
+            parts.append(f"{label}: {item.strip()}")
+    return "\n".join(parts)
+
+
 def _render_note(fmt, free_text, structured, mse):
     parts = ["Psychiatric assessment"]
     if fmt == FREE_TEXT:
@@ -498,6 +542,8 @@ def _render_note(fmt, free_text, structured, mse):
             value = structured.get(key)
             if key == "risk":
                 rendered = _risk_to_text(value)
+            elif key == "form":
+                rendered = _formulation_diagnosis_to_text(value)
             else:
                 rendered = (value or "").strip() if isinstance(value, str) else ""
             if rendered:

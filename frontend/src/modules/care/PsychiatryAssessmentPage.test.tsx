@@ -56,6 +56,7 @@ const workspace: PsychiatryWorkspace = {
   encounter_id: "encounter-77",
   episode_id: "episode-77",
   assessment: null,
+  carried_forward_presenting_concern: null,
   mse: {},
   history: [],
   review: null,
@@ -223,4 +224,108 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
       }),
     );
   }, 10_000);
+
+  it("prefills a new assessment with the signed triage presenting concern", async () => {
+    apiMocks.open.mockResolvedValue({
+      ...workspace,
+      carried_forward_presenting_concern: {
+        text: "Low mood and poor sleep reported at triage.",
+        source: "triage",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByDisplayValue("Low mood and poor sleep reported at triage."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Carried forward from signed triage. Review or update as needed."),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves an existing draft presenting concern instead of replacing it", async () => {
+    apiMocks.open.mockResolvedValue({
+      ...workspace,
+      assessment: {
+        id: "assessment-1",
+        status: "DRAFT",
+        format: "STRUCTURED",
+        free_text: "",
+        structured: { presenting_concern: "Existing psychiatry draft concern." },
+        text: "Existing psychiatry draft concern.",
+        author: "Clinician",
+        created_at: "2026-11-12T00:00:00Z",
+        updated_at: "2026-11-12T00:00:00Z",
+        signed_at: null,
+        can_edit: true,
+      },
+      carried_forward_presenting_concern: {
+        text: "Newer concern from triage.",
+        source: "triage",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByDisplayValue("Existing psychiatry draft concern."),
+    ).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Newer concern from triage.")).not.toBeInTheDocument();
+  });
+
+  it("saves formulation and differential alongside coded diagnoses", async () => {
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Formulation & diagnosis" }));
+    fireEvent.change(screen.getByLabelText("Integrated clinical summary / formulation"), {
+      target: { value: "Integrated clinical summary." },
+    });
+    fireEvent.change(screen.getByLabelText("Differential diagnoses / conditions to rule out"), {
+      target: { value: "Consider a substance-related condition." },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Medication" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() => expect(apiMocks.save).toHaveBeenCalledOnce());
+    expect(apiMocks.save).toHaveBeenCalledWith(
+      "test-token",
+      "patient-77",
+      expect.objectContaining({
+        structured: expect.objectContaining({
+          form: {
+            summary: "Integrated clinical summary.",
+            differential: "Consider a substance-related condition.",
+          },
+        }),
+      }),
+    );
+  });
 });
