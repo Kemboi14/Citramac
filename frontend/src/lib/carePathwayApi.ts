@@ -615,7 +615,7 @@ export interface PsychiatryAssessment {
   status: "DRAFT" | "SIGNED";
   format: PsychiatryFormat;
   free_text: string;
-  structured: Record<string, string>;
+  structured: Record<string, unknown>;
   text: string;
   author: string;
   created_at: string;
@@ -643,7 +643,7 @@ export interface PsychiatryWorkspace {
 export interface PsychiatrySaveBody {
   format: PsychiatryFormat;
   free_text: string;
-  structured: Record<string, string>;
+  structured: Record<string, unknown>;
   mse: PsychiatryMse;
 }
 
