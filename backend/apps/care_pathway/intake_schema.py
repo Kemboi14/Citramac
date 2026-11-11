@@ -522,7 +522,7 @@ RISK_ROWS = [
     },
     {
         "key": "neglect",
-        "label": "Difficulty with self-care / vulnerability",
+        "label": "Self-neglect/vulnerability",
         "options": [
             "None",
             "Difficulty with self-care",
@@ -558,7 +558,7 @@ RISK_ROWS = [
     },
     {
         "key": "absconding",
-        "label": "Leaving care without agreement",
+        "label": "Absconding/Leave care risk",
         "options": ["None", "Possible", "Significant"],
         "none": ["None"],
         "single": True,
