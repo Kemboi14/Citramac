@@ -97,9 +97,6 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
             "arrival_at"
         ):
             latest_triage[triage.patient_id] = triage
-        from apps.care_pathway.services import queued_triage_encounter_ids
-
-        queued_triage = queued_triage_encounter_ids()
 
         priorities = {}
         for triage in (
@@ -184,12 +181,6 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
                     "allergy_status": patient.allergy_status,
                     "allergies": allergies.get(patient.id, []),
                     "responsible_team": " · ".join(team_parts),
-                    # The triage visit the dashboard opens for this client (the
-                    # one in the triage queue, else the latest), so the registry
-                    # opens the same triage screen.
-                    "triage_encounter_id": (
-                        str(queued_triage.get(patient.id) or triage.id) if triage else None
-                    ),
                 }
             )
 

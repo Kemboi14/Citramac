@@ -102,12 +102,7 @@ export function ClientRegistryPage() {
 
   const openPatient = (patient: ClientRegistryRow) => {
     selectPatient(patient.id, patient.name);
-    // The same triage screen the dashboard opens for this client.
-    navigate(
-      patient.triage_encounter_id
-        ? `/clinical/triage/${patient.triage_encounter_id}`
-        : clientRecordPath(patient.id, "triage"),
-    );
+    navigate(clientRecordPath(patient.id, "triage"));
   };
 
   const activeTab = category ?? "";
