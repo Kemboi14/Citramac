@@ -142,6 +142,10 @@ class PsychotherapyNote(TenantScopedModel):
     # [{"goal_index", "goal", "evidence", "statement",
     #   "status": PROGRESS|NO_CHANGE|BARRIER|NOT_RELEVANT (earlier: CONFIRMED|DISMISSED), "by", "at"}]
     goal_links = models.JSONField(default=list, blank=True)
+    # PSY-CHANGE: [{"key": "score:<previous id>:<current id>", "summary",
+    #   "status": IMPROVEMENT|NO_CHANGE|DETERIORATION|NOT_RELEVANT, "by", "at"}] —
+    # the clinician's reading of the change between two recorded outcome scores.
+    change_links = models.JSONField(default=list, blank=True)
     # PSY-OUT sections ({key: text}) as they stand: the generated text, with the
     # clinician's own edit in place of it for an edited section.
     sections = models.JSONField(default=dict, blank=True)

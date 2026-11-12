@@ -436,6 +436,11 @@ urlpatterns = [
         name="care-psy-note-amend",
     ),
     path(
+        "care/psychotherapy-notes/<uuid:pk>/fhir/",
+        psyview.PsyNoteFhirView.as_view(),
+        name="care-psy-note-fhir",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/oat/", views.ClientOatView.as_view(), name="care-client-oat"
     ),
     path("care/oat/<uuid:pk>/status/", views.OatStatusView.as_view(), name="care-oat-status"),

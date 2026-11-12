@@ -39,6 +39,7 @@ import {
   savePsyNote,
   signPsyNote,
   startPsyNote,
+  type ChangeDecision,
   type GoalDecision,
   type PsyConfig,
   type PsyNote,
@@ -1346,6 +1347,8 @@ function WorkspaceBody({
           void save({ model_decision: { code, decision: include ? "INCLUDE" : "EXCLUDE" } }),
         onGoal: (index: number, decision: GoalDecision) =>
           void save({ goal_link: { goal_index: index, decision } }),
+        onChange: (key: string, decision: ChangeDecision) =>
+          void save({ change_link: { key, decision } }),
         onSafety: (answer) => void chooseSafety(answer),
         onOpenRisk: () => setSafetyOpen(true),
         onOpenNotes: openNotes,

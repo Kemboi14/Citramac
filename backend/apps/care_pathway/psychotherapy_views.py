@@ -101,3 +101,29 @@ class PsyNoteAmendView(APIView):
         note = _note(pk)
         psy.amend(note, request.user, request.data)
         return Response(psy.detail(note, request.user), status=status.HTTP_201_CREATED)
+
+
+class PsyNoteFhirView(APIView):
+    """GET care/psychotherapy-notes/<id>/fhir/ — the signed note as a FHIR R4
+    document Bundle (psychotherapy_fhir.py). Same access as reading the note;
+    every export is a VIEW audit entry marked as the FHIR output."""
+
+    def get(self, request, pk):
+        from rest_framework.exceptions import PermissionDenied
+
+        from apps.sysadmin_audit.audit import write_entry
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        from .psychotherapy_fhir import build_psychotherapy_bundle
+        from .services import StateConflict
+
+        note = _note(pk)
+        if not psy.can_read(request.user, note):
+            raise PermissionDenied(
+                "Psychotherapy notes are visible to the treating clinician and the care team only."
+            )
+        if note.status != "SIGNED":
+            raise StateConflict("Only a signed psychotherapy note can be exported.")
+        bundle = build_psychotherapy_bundle(note)
+        write_entry(note, AuditLogEntry.ACTION_VIEW, {"output": "fhir"})
+        return Response(bundle)

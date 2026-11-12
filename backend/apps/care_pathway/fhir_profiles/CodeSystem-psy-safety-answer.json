@@ -1,0 +1,29 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "psy-safety-answer",
+  "url": "urn:citramac:codesystem:psy-safety-answer",
+  "version": "1",
+  "name": "Psychotherapysafetyanswer",
+  "title": "Psychotherapy safety answer",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "The answer to the mandatory session safety question. NOT_ASSESSED records that safety was not assessed; it is never a denial.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 3,
+  "concept": [
+    {
+      "code": "YES",
+      "display": "Yes"
+    },
+    {
+      "code": "NO",
+      "display": "No"
+    },
+    {
+      "code": "NOT_ASSESSED",
+      "display": "Not assessed"
+    }
+  ]
+}

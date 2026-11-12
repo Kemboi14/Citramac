@@ -1,0 +1,19 @@
+{
+  "resourceType": "ValueSet",
+  "id": "psy-note-section",
+  "url": "urn:citramac:valueset:psy-note-section",
+  "version": "1",
+  "name": "Psychotherapynotesection",
+  "title": "Psychotherapy note section",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Every psychotherapy note section.",
+  "compose": {
+    "include": [
+      {
+        "system": "urn:citramac:codesystem:psy-note-section"
+      }
+    ]
+  }
+}

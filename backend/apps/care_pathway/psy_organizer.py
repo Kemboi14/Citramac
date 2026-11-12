@@ -96,6 +96,21 @@ GOAL_DECISIONS = {
 }
 LEGACY_GOAL_DECISIONS = ("CONFIRMED", "DISMISSED")
 
+# PSY-CHANGE: the clinician's reading of a change between two recorded outcome
+# scores. The system states the scores and the instrument's own change rule;
+# only the clinician says whether it is improvement or deterioration.
+CHANGE_DECISIONS = {
+    "IMPROVEMENT": "improvement noted",
+    "NO_CHANGE": "no clear change noted",
+    "DETERIORATION": "deterioration noted",
+    "NOT_RELEVANT": "",
+}
+SAFETY_HISTORY_WORDS = {
+    SAFETY_YES: "a new or changed safety concern was recorded",
+    SAFETY_NO: "no new or changed safety concern was identified at that session",
+    SAFETY_NOT_ASSESSED: "safety was not assessed",
+}
+
 # PSY-OUT — required sections, in order.
 SECTIONS = [
     ("session_information", "Session Information"),
@@ -427,6 +442,7 @@ def _session_information(info):
 def _risk_safety(safety, detections, resolutions, context):
     answer = safety.get("answer")
     lines = []
+    history = safety_history(answer, context.get("previous_safety"))
     if answer == SAFETY_YES:
         concerns = "; ".join(safety.get("concern_labels") or [])
         lines.append(f"New or changed safety concern identified in today's session: {concerns}.")
@@ -460,6 +476,8 @@ def _risk_safety(safety, detections, resolutions, context):
             lines.append(f"Reason recorded by the clinician: {safety['ack_reason']}")
     else:
         lines.append("Safety question not yet answered.")
+    if history:
+        lines.append(history)
     reviewed = [d for d in detections if d["key"] in resolutions]
     if reviewed:
         lines.append("Language prompting a safety review was reviewed by the clinician:")
@@ -471,20 +489,61 @@ def _risk_safety(safety, detections, resolutions, context):
     return "\n".join(lines)
 
 
-def goal_lines(links):
+def goal_lines(links, previous=None):
     """Treatment-plan goal lines for the decided links (PSY-LINK). Nothing is
     added for a goal until the clinician decides; "not relevant" adds nothing.
-    Legacy CONFIRMED links keep their clinician-written statement."""
+    Legacy CONFIRMED links keep their clinician-written statement.
+
+    `previous` ({"date", "links"}) is the last signed note's decided links: a
+    goal decided there too gets that earlier decision beside today's, in the
+    clinician's own words of the time (PSY-CHANGE) — never a new reading."""
+    earlier = {}
+    for link in (previous or {}).get("links") or []:
+        label = GOAL_DECISIONS.get(link.get("status"))
+        if label:
+            earlier[(link.get("goal_index"), link.get("goal"))] = label
     lines = []
     for link in links:
         status = link.get("status")
         label = GOAL_DECISIONS.get(status)
         if label:
             line = f"G{link['goal_index'] + 1} {link['goal']}: {label}."
+            before = earlier.get((link["goal_index"], link["goal"]))
+            if before:
+                line += f" Previous session ({previous['date']}): {before}."
             if link.get("evidence"):
                 line += f" Session detail: {link['evidence']}"
             lines.append(line)
     return lines
+
+
+def change_lines(changes, links):
+    """PSY-CHANGE: the decided score changes. A suggestion adds nothing until the
+    clinician decides it, a decision on a suggestion that no longer stands (the
+    linked score changed) is ignored, and "not relevant" adds nothing."""
+    decided = {link["key"]: link["status"] for link in links or []}
+    lines = []
+    for change in changes or []:
+        label = CHANGE_DECISIONS.get(decided.get(change["key"]))
+        if label:
+            lines.append(f"{change['summary']} Clinician: {label}.")
+    return lines
+
+
+def safety_history(today, previous):
+    """PSY-CHANGE: a line naming the previous session's safety answer, only when
+    today's answer differs from it. Today "not assessed" after a previous "no"
+    adds nothing, so an earlier no-concern statement is never read as today's
+    (PSY-GEN-7)."""
+    if not previous or not today or previous.get("answer") == today:
+        return ""
+    before = previous.get("answer")
+    if today == SAFETY_NOT_ASSESSED and before != SAFETY_YES:
+        return ""
+    words = SAFETY_HISTORY_WORDS.get(before)
+    if not words:
+        return ""
+    return f"Change from the previous psychotherapy session ({previous['date']}), when {words}."
 
 
 def model_block(models):
@@ -521,6 +580,8 @@ def organize(
     selected_models=(),
     applied_models=None,
     goal_links=(),
+    changes=(),
+    change_links=(),
 ):
     """Build the seven PSY-OUT sections from the clinician's answers (the
     English translation where one is done). Returns {"sections": {key: text},
@@ -557,7 +618,14 @@ def organize(
     response_extra = "\n\n".join(
         b
         for b in (
-            _block("Treatment-plan goals (clinician confirmed)", goal_lines(goal_links)),
+            _block(
+                "Treatment-plan goals (clinician confirmed)",
+                goal_lines(goal_links, context.get("previous_goals")),
+            ),
+            _block(
+                "Change since the previous score (clinician decided)",
+                change_lines(changes, change_links),
+            ),
             _block("Progress toward care-plan goals (confirmed by the clinician)", legacy),
             _block("Measurement", measured),
         )

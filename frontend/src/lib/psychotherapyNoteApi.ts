@@ -13,6 +13,25 @@ export type TranslationStatus = "pending" | "done" | "error" | "unavailable";
 export type GoalDecision =
   "PROGRESS" | "NO_CHANGE" | "BARRIER" | "NOT_RELEVANT" | "CONFIRMED" | "DISMISSED";
 
+/** PSY-CHANGE: the clinician's reading of a change between two recorded scores. */
+export type ChangeDecision = "IMPROVEMENT" | "NO_CHANGE" | "DETERIORATION" | "NOT_RELEVANT";
+export interface ScoreChange {
+  key: string;
+  instrument: string;
+  name: string;
+  previous: { score_id: string; total: number; band: string; at: string };
+  current: { score_id: string; total: number; band: string; at: string };
+  change: string;
+  summary: string;
+}
+export interface ChangeLink {
+  key: string;
+  summary: string;
+  status: ChangeDecision;
+  by: string;
+  at: string;
+}
+
 export interface PsyQuestion {
   key: string;
   title: string;
@@ -214,6 +233,8 @@ export interface PsyNote extends Omit<PsyNoteSummary, "amendments"> {
   detections: Detection[];
   goal_suggestions: { goal_index: number; goal: string; evidence: string }[];
   goal_links: GoalLink[];
+  score_changes: ScoreChange[];
+  change_links: ChangeLink[];
   sections: Record<string, string>;
   sections_edited: boolean;
   edited_sections: string[];

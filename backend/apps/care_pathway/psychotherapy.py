@@ -34,7 +34,7 @@ from apps.mhp_program.permissions import has_full_mhp_access
 from apps.sysadmin_audit.audit import log_view, write_event
 from apps.tenancy.context import platform_admin_context
 
-from . import facility_time, intake_schema, psy_ai
+from . import facility_time, instruments, intake_schema, psy_ai
 from . import psy_organizer as org
 from . import psy_seed, records, services, therapy
 from .models import (
@@ -732,6 +732,32 @@ def _goal_link(note, user, data):
     _audit(note, user, f"GOAL_LINK_{decision}", goal=goals[index]["goal"], statement=statement)
 
 
+def _change_link(note, user, data):
+    """PSY-CHANGE: the clinician's reading of a score change. Only the change
+    that stands now can be decided."""
+    key = str((data or {}).get("key") or "")
+    decision = (data or {}).get("decision")
+    change = next((c for c in score_changes(note) if c["key"] == key), None)
+    if change is None:
+        raise ValidationError({"change_link": "That change is no longer shown for this session."})
+    if decision not in org.CHANGE_DECISIONS:
+        raise ValidationError(
+            {"change_link": "Choose improvement, no clear change, deterioration or not relevant."}
+        )
+    links = [link for link in (note.change_links or []) if link["key"] != key]
+    links.append(
+        {
+            "key": key,
+            "summary": change["summary"],
+            "status": decision,
+            "by": _by(user),
+            "at": _now_iso(),
+        }
+    )
+    note.change_links = links
+    _audit(note, user, f"CHANGE_{decision}", change=change["summary"])
+
+
 def _model_decision(note, user, data):
     code, decision = str((data or {}).get("code") or ""), (data or {}).get("decision")
     if decision not in ("INCLUDE", "EXCLUDE"):
@@ -841,6 +867,9 @@ def save_draft(note, user, data):
         inputs_changed = True
     if data.get("goal_link"):
         _goal_link(note, user, data["goal_link"])
+        inputs_changed = True
+    if data.get("change_link"):
+        _change_link(note, user, data["change_link"])
         inputs_changed = True
     inputs_changed |= _set_session_info(note, user, data)
     if "sections" in data:
@@ -1130,14 +1159,92 @@ def effective_sections(note):
     return sections
 
 
-def _previous(note, user):
-    prev = (
-        PsychotherapyNote.objects.filter(patient=note.patient, status="SIGNED")
-        .exclude(pk=note.pk)
-        .select_related("signed_by")
-        .order_by("-signed_at")
+def _previous_signed(note):
+    """The client's psychotherapy note signed before this one (any therapist)."""
+    rows = PsychotherapyNote.objects.filter(patient=note.patient, status="SIGNED").exclude(
+        pk=note.pk
+    )
+    if note.signed_at:
+        rows = rows.filter(signed_at__lt=note.signed_at)
+    return rows.select_related("signed_by", "session").order_by("-signed_at").first()
+
+
+def _score_row(score):
+    return {
+        "score_id": str(score.pk),
+        "total": score.score,
+        "band": instruments.band_for(score.instrument, score.score),
+        "at": facility_time.local_format(score.recorded_at, "%Y-%m-%d"),
+    }
+
+
+def score_changes(note):
+    """PSY-CHANGE: the outcome score linked to this session against the client's
+    previous score on the same instrument, both from the shared outcome store.
+    The change wording is the instrument's own rule (instruments.change_text,
+    the same one the outcome-measures view uses); it states the scores, never
+    what they mean for this client — the clinician decides that."""
+    measure = (note.session.extra or {}).get("measure")
+    if not measure:
+        return []
+    current = OutcomeScore.objects.filter(pk=measure.get("score_id"), patient=note.patient).first()
+    if current is None or current.instrument not in instruments.INSTRUMENTS:
+        return []
+    previous = (
+        OutcomeScore.objects.filter(
+            patient=note.patient,
+            instrument=current.instrument,
+            recorded_at__lt=current.recorded_at,
+        )
+        .order_by("-recorded_at")
         .first()
     )
+    if previous is None:
+        return []
+    name = instruments.INSTRUMENTS[current.instrument]["name"]
+    before, now = _score_row(previous), _score_row(current)
+    change = instruments.change_text(current.instrument, [previous.score, current.score])
+
+    def shown(row):
+        return f"{row['total']}" + (f" ({row['band']})" if row["band"] else "") + f" on {row['at']}"
+
+    return [
+        {
+            "key": f"score:{previous.pk}:{current.pk}",
+            "instrument": current.instrument,
+            "name": name,
+            "previous": before,
+            "current": now,
+            "change": change["text"],
+            "summary": f"{name} {shown(before)}, then {shown(now)}: {change['text']}.",
+        }
+    ]
+
+
+def _changes_progress(note):
+    """(all score-change suggestions, the undecided ones)."""
+    if note.status != "DRAFT":
+        return [], []
+    changes = score_changes(note)
+    decided = {link["key"] for link in note.change_links or []}
+    return changes, [c for c in changes if c["key"] not in decided]
+
+
+def _history_context(note, user):
+    """The previous signed note's safety answer and goal decisions, for the
+    PSY-CHANGE lines — only when this user may read that note."""
+    prev = _previous_signed(note)
+    if prev is None or not can_read(user, prev):
+        return {}
+    when = facility_time.local_format(prev.session.session_date, "%Y-%m-%d")
+    return {
+        "previous_safety": {"answer": prev.safety_answer, "date": when},
+        "previous_goals": {"links": prev.goal_links or [], "date": when},
+    }
+
+
+def _previous(note, user):
+    prev = _previous_signed(note)
     if prev:
         if not can_read(user, prev):
             return {"restricted": True, "at": prev.signed_at.isoformat()}
@@ -1313,8 +1420,10 @@ def generate(note, user):
         confirmed_links=[link for link in note.goal_links or [] if link["status"] == "CONFIRMED"],
         goal_links=note.goal_links or [],
         measure=(note.session.extra or {}).get("measure"),
-        context={"safety_plan": _safety_plan(note.patient)},
+        context={"safety_plan": _safety_plan(note.patient), **_history_context(note, user)},
         applied_models=applied_models(note),
+        changes=score_changes(note),
+        change_links=note.change_links or [],
     )
     if (
         not note.generated_sections
@@ -1413,6 +1522,13 @@ def blockers(note, found=None):
             "Decide each treatment-plan goal suggestion (progress, no clear change, "
             "barrier or not relevant).",
         )
+    _, undecided_changes = _changes_progress(note)
+    if undecided_changes:
+        add(
+            "CHANGES_UNRESOLVED",
+            "Decide what the change since the previous score means (improvement, no clear "
+            "change, deterioration or not relevant).",
+        )
     if _translation_pending(note):
         add("TRANSLATION_PENDING", "A translation is still in progress.")
     if processing_state(note)["status"] == "pending":
@@ -1434,6 +1550,7 @@ def checklist(note, found, pending):
     )
     reviewed = sum(1 for d in found if d["key"] in (note.detection_resolutions or {}))
     suggestions, undecided = _goal_progress(note)
+    changes, undecided_changes = _changes_progress(note)
     labels = dict(org.SAFETY_OPTIONS)
     items = [
         {
@@ -1482,6 +1599,18 @@ def checklist(note, found, pending):
             "done": not undecided,
             "detail": f"{len(suggestions) - len(undecided)}/{len(suggestions)}",
         },
+        *(
+            [
+                {
+                    "key": "changes",
+                    "label": "Change since the previous score decided",
+                    "done": not undecided_changes,
+                    "detail": f"{len(changes) - len(undecided_changes)}/{len(changes)}",
+                }
+            ]
+            if changes
+            else []
+        ),
         {
             "key": "attestation",
             "label": "Clinician attestation",
@@ -1698,6 +1827,8 @@ def detail(note, user):
         ],
         "goal_suggestions": undecided,
         "goal_links": note.goal_links,
+        "score_changes": _changes_progress(note)[0],
+        "change_links": note.change_links,
         "sections": sections,
         "sections_edited": note.sections_edited,
         "edited_sections": sorted(note.section_edits or {}) if note.status == "DRAFT" else [],

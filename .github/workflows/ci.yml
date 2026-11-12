@@ -95,7 +95,7 @@ jobs:
         run: pytest --ds=config.settings.test apps/tenancy/tests.py -v
 
       - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
-        run: pytest --ds=config.settings.test apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py apps/dha_interop/test_icd11.py apps/care_pathway/test_clinical_report.py -k FhirR4Conformance -v
+        run: pytest --ds=config.settings.test apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py apps/dha_interop/test_icd11.py apps/care_pathway/test_clinical_report.py apps/care_pathway/test_psychotherapy_fhir.py -k FhirR4Conformance -v
 
       - uses: actions/setup-java@v4
         with:
@@ -105,7 +105,8 @@ jobs:
       # Rung 4 (CLAUDE.md §2): HL7's own validator checks every published
       # example (SHR ones against the vendored Kenya Core IG,
       # apps/dha_interop/fhir_validation/kenya_core/; the rest against base R4,
-      # bundle invariants and reference resolution included). The jar is pinned
+      # bundle invariants and reference resolution included; the psychotherapy
+      # note against our own profiles in apps/care_pathway/fhir_profiles/). The jar is pinned
       # by version and checksum; scripts/hl7_validator_gate.py fails on any error.
       - name: Kenya Core IG validation — HL7 FHIR validator (cannot be skipped)
         run: |
@@ -113,6 +114,7 @@ jobs:
           echo "1106b9d58f9e363e47bea7c4fc065841e5fc91fe9d062775c3bfdd212bd653cc  /tmp/validator_cli.jar" | sha256sum -c -
           java -jar /tmp/validator_cli.jar -version 4.0.1 \
             -ig apps/dha_interop/fhir_validation/kenya_core/ke.fhir.core-1.0.0.tgz \
+            -ig apps/care_pathway/fhir_profiles \
             apps/*/fhir_examples/*.json -output /tmp/shr-outcome.json
           python scripts/hl7_validator_gate.py /tmp/shr-outcome.json
 

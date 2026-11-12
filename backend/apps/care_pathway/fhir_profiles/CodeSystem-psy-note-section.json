@@ -1,0 +1,45 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "psy-note-section",
+  "url": "urn:citramac:codesystem:psy-note-section",
+  "version": "1",
+  "name": "Psychotherapynotesection",
+  "title": "Psychotherapy note section",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "The seven sections of a CITRAMAC psychotherapy progress note, in order.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 7,
+  "concept": [
+    {
+      "code": "session_information",
+      "display": "Session Information"
+    },
+    {
+      "code": "presenting_focus",
+      "display": "Presenting Focus / Client Report"
+    },
+    {
+      "code": "assessment",
+      "display": "Clinical Assessment / Observations"
+    },
+    {
+      "code": "interventions",
+      "display": "Therapeutic Focus & Interventions"
+    },
+    {
+      "code": "response",
+      "display": "Client Response & Progress"
+    },
+    {
+      "code": "risk_safety",
+      "display": "Risk & Safety"
+    },
+    {
+      "code": "plan",
+      "display": "Plan"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "psy-session-safety",
+  "url": "urn:citramac:codesystem:psy-session-safety",
+  "version": "1",
+  "name": "Psychotherapysessionsafety",
+  "title": "Psychotherapy session safety",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Local code for the mandatory psychotherapy session safety question. VERIFY: a LOINC or SNOMED CT code before this is replaced.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 1,
+  "concept": [
+    {
+      "code": "session-safety-question",
+      "display": "Psychotherapy session safety question"
+    }
+  ]
+}

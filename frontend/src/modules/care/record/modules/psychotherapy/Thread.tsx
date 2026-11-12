@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type {
+  ChangeDecision,
   Detection,
   GoalDecision,
   PsyConfig,
@@ -24,6 +25,13 @@ const DECISIONS: { code: Exclude<GoalDecision, "CONFIRMED" | "DISMISSED">; label
   { code: "PROGRESS", label: "Progress" },
   { code: "NO_CHANGE", label: "No clear change" },
   { code: "BARRIER", label: "Barrier" },
+  { code: "NOT_RELEVANT", label: "Not relevant" },
+];
+
+const CHANGE_DECISIONS: { code: ChangeDecision; label: string }[] = [
+  { code: "IMPROVEMENT", label: "Improvement" },
+  { code: "NO_CHANGE", label: "No clear change" },
+  { code: "DETERIORATION", label: "Deterioration" },
   { code: "NOT_RELEVANT", label: "Not relevant" },
 ];
 
@@ -108,6 +116,7 @@ export interface ThreadHandlers {
   onReview: (key: string) => void;
   onModel: (code: string, include: boolean) => void;
   onGoal: (index: number, decision: GoalDecision) => void;
+  onChange: (key: string, decision: ChangeDecision) => void;
   onSafety: (answer: Exclude<SafetyAnswer, "">) => void;
   onOpenRisk: () => void;
   onOpenNotes: () => void;
@@ -399,6 +408,42 @@ export function Thread({
                 </div>
               </div>
             ))}
+          </div>
+        </Sys>
+      )}
+      {(note.score_changes ?? []).length > 0 && note.status === "DRAFT" && (
+        <Sys>
+          <div className="flex flex-col gap-2 rounded-lg border border-surface-border p-3">
+            <strong className="text-[13px]">Change since the previous score</strong>
+            <span className="text-[12px] text-ink-500">
+              Both scores are from the outcome record. Say what the change means for this client;
+              nothing is added to the note until you decide.
+            </span>
+            {note.score_changes.map((c) => {
+              const decided = (note.change_links ?? []).find((l) => l.key === c.key)?.status;
+              return (
+                <div
+                  key={c.key}
+                  className="flex flex-col gap-1.5 border-t border-surface-border pt-2"
+                >
+                  <div className="text-[13.5px]">{c.summary}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CHANGE_DECISIONS.map((d) => (
+                      <button
+                        key={d.code}
+                        type="button"
+                        aria-pressed={decided === d.code}
+                        disabled={locked || busy}
+                        className={pill(decided === d.code)}
+                        onClick={() => h.onChange(c.key, d.code)}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Sys>
       )}

@@ -1,0 +1,19 @@
+{
+  "resourceType": "ValueSet",
+  "id": "psy-safety-answer",
+  "url": "urn:citramac:valueset:psy-safety-answer",
+  "version": "1",
+  "name": "Psychotherapysafetyanswer",
+  "title": "Psychotherapy safety answer",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Yes, No or Not assessed.",
+  "compose": {
+    "include": [
+      {
+        "system": "urn:citramac:codesystem:psy-safety-answer"
+      }
+    ]
+  }
+}

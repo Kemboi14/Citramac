@@ -746,3 +746,43 @@ On the owner's decisions of 2026-11-10 (design and mapping confirmed before buil
    care once, by their latest triage, instead of every triage ever signed.
 
 Reversibility: cheap. Both reports are read-only, nothing is stored, and no signed record changes.
+
+### 2026-11-12 — psychotherapy note: changes across sessions; FHIR document with our own profiles
+
+On the owner's instruction ("do all") after a gap review of the psychotherapy module guidance against
+what was built (mapping confirmed before building, §7). The five questions, safety question, risk-language
+prompt, therapy-model registry, output sections, goal links and sign-off were already in place.
+
+1. **Changes across sessions (PSY-CHANGE), from recorded data only.**
+   - When the session is linked to an outcome score, it is compared with the client's previous score on the
+     same instrument, worded by that instrument's own change rule (`instruments.change_text`). The clinician
+     decides: improvement, no clear change, deterioration or not relevant (`PsychotherapyNote.change_links`,
+     migration `care_pathway 0056`). Until they decide, nothing is added to the note, and the note cannot be
+     signed (`CHANGES_UNRESOLVED`).
+   - A goal decided in the previous signed note shows that earlier decision beside today's.
+   - The previous session's safety answer is named only when today's answer differs. "Not assessed" today
+     after a previous "no" adds nothing, so an earlier no-concern statement is never read as today's.
+   - Nothing is inferred from the narrative. History lines appear only when the author may read the previous
+     note.
+2. **FHIR R4 document** (`psychotherapy_fhir.py`, GET `care/psychotherapy-notes/<id>/fhir/`, signed notes
+   only, same access as reading the note, a VIEW audit entry marked `output: fhir`).
+   - The Bundle holds a Composition (7 coded sections, legal attester, `confidentiality` R), the
+     Patient, EpisodeOfCare and Encounter, the safety-screen Observation (Risk & Safety section entry), and a
+     Provenance for the signature plus one per amendment (an amended note is `status=amended`).
+   - Every resource except Patient carries R + PSY, the codes DHA's SHR label catalogue offers.
+   - Correction to the mapping first proposed: R4 `Observation.derivedFrom` cannot point at a Composition, so
+     the Composition references the Observation instead.
+   - The Composition is never sent to the SHR (2026-10-23).
+3. **Profiles.** Kenya Core has no Composition profile, so ours are in `care_pathway/fhir_profiles/`:
+   `psychotherapy-note` and `psychotherapy-safety-screen`, plus the CodeSystems / ValueSets they bind
+   (`urn:citramac:`).
+   - HL7's validator loads them in CI (`-ig apps/care_pathway/fhir_profiles`) and enforces cardinality,
+     bindings and invariants (labels, the seven sections once each, the risk entry). It was checked to fail
+     a copy with a label or section removed.
+   - Three examples (`psychotherapy-note-*.json`: routine, edge with an amendment, safety not assessed) and
+     `test_psychotherapy_fhir.py` run in the conformance step. HL7's validator passes all 40 examples.
+4. **VERIFY:** the LOINC document type for a psychotherapy note; a LOINC / SNOMED CT code for the session
+   safety screen; the DS4P psychotherapy-note sensitivity code; the Encounter.class code for an outpatient
+   or virtual session; our canonical base for local profiles.
+
+Reversibility: cheap. Additive. No signed note changes; the export is read-time.
