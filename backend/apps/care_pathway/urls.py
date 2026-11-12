@@ -109,6 +109,11 @@ urlpatterns = [
         name="care-psych-workspace",
     ),
     path(
+        "care/clients/<uuid:patient_id>/psychiatry/schedule/",
+        views.PsychiatryPlanScheduleView.as_view(),
+        name="care-psych-schedule",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/psychiatry/sign/",
         views.PsychiatrySignView.as_view(),
         name="care-psych-sign",

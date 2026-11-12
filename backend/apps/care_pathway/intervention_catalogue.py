@@ -470,6 +470,7 @@ def _payer_terms(services):
 def workspace(patient):
     """Everything the Interventions screen shows: the plan's actions, the
     modules (recommended or not), and the clinical context carried forward."""
+    from apps.client_registry.models import Appointment
     from apps.clinical_encounter.models import DiagnosisCode
 
     from . import attention, care_plan, services
@@ -497,6 +498,24 @@ def workspace(patient):
     )
     facts = _facts(patient, actions, register, diagnoses, medicines)
     from_plan = care_plan.recommended_modules(patient)
+    scheduled_sessions = [
+        {
+            "id": str(appointment.pk),
+            "activity_id": str(appointment.care_plan_activity_id),
+            "activity_title": appointment.care_plan_activity.title,
+            "scheduled_for": appointment.scheduled_for.isoformat(),
+            "notes": appointment.notes,
+            "provider_name": services.user_display(appointment.provider),
+        }
+        for appointment in Appointment.objects.filter(
+            patient=patient,
+            care_plan_activity__in=actions,
+            status="SCHEDULED",
+            scheduled_for__gte=timezone.now(),
+        )
+        .select_related("care_plan_activity", "provider")
+        .order_by("scheduled_for")
+    ]
 
     action_rows = []
     linked = {}
@@ -583,6 +602,7 @@ def workspace(patient):
         "has_plan": bool(actions),
         "plan_signed": bool(plan and plan.versions.exists()),
         "actions": action_rows,
+        "scheduled_sessions": scheduled_sessions,
         "modules": module_rows,
         "context": _context(patient, actions, register, diagnoses, medicines),
     }

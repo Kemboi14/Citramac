@@ -329,9 +329,7 @@ class MedicationHistoryTests(IntakeTestCase):
         with platform_admin_context():
             original = MedicationHistoryEntry.objects.get(pk=original_id)
             self.assertIsNotNone(original.superseded_at)
-            self.assertTrue(
-                MedicationHistoryEntry.objects.filter(pk=revised.data["id"]).exists()
-            )
+            self.assertTrue(MedicationHistoryEntry.objects.filter(pk=revised.data["id"]).exists())
 
     def test_superseded_entry_cannot_be_revised_again(self):
         url = reverse("care-client-medication-history", args=[self.pid])

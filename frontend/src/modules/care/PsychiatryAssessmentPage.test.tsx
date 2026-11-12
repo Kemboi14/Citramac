@@ -10,6 +10,8 @@ const apiMocks = vi.hoisted(() => ({
   sign: vi.fn(),
   getSchema: vi.fn(),
   listIntakes: vi.fn(),
+  getSchedule: vi.fn(),
+  schedule: vi.fn(),
 }));
 
 vi.mock("../../auth/useAuth", () => ({
@@ -23,6 +25,8 @@ vi.mock("../../lib/carePathwayApi", () => ({
   signPsychiatryAssessment: apiMocks.sign,
   getIntakeSchema: apiMocks.getSchema,
   listIntakeAssessments: apiMocks.listIntakes,
+  getPsychiatryPlanSchedule: apiMocks.getSchedule,
+  schedulePsychiatrySession: apiMocks.schedule,
 }));
 
 vi.mock("./shared/useClientBanner", () => ({
@@ -91,6 +95,43 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
           },
         },
       ],
+    });
+    apiMocks.getSchedule.mockResolvedValue({
+      plan: {
+        id: "plan-1",
+        goals: "Continue psychiatric review.",
+        confirmed: false,
+        activities: [
+          {
+            id: "activity-1",
+            title: "Psychiatric review",
+            goal: "Review progress",
+            module: "PSYCHIATRY",
+            status: "PLANNED",
+            status_display: "Planned",
+            available_to_psychiatry: true,
+          },
+          {
+            id: "activity-2",
+            title: "Therapy",
+            goal: "",
+            module: "THERAPY",
+            status: "PLANNED",
+            status_display: "Planned",
+            available_to_psychiatry: false,
+          },
+          {
+            id: "activity-3",
+            title: "Existing review",
+            goal: "",
+            module: "PSYCHIATRY",
+            status: "ACTIVE",
+            status_display: "Active",
+            available_to_psychiatry: true,
+          },
+        ],
+      },
+      scheduled_sessions: [],
     });
     apiMocks.getSchema.mockResolvedValue({
       sections: [
@@ -381,5 +422,80 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
       "href",
       "/clinical/clients/patient-77/intake",
     );
+  });
+
+  it("schedules only a planned psychiatry action from the current care plan", async () => {
+    apiMocks.schedule.mockResolvedValue({
+      plan: {
+        id: "plan-1",
+        goals: "Continue psychiatric review.",
+        confirmed: true,
+        activities: [
+          {
+            id: "activity-1",
+            title: "Psychiatric review",
+            goal: "Review progress",
+            module: "PSYCHIATRY",
+            status: "PLANNED",
+            status_display: "Planned",
+            available_to_psychiatry: true,
+          },
+        ],
+      },
+      scheduled_sessions: [
+        {
+          id: "appointment-1",
+          care_plan_activity_id: "activity-1",
+          activity_title: "Psychiatric review",
+          scheduled_for: "2030-02-03T10:00:00Z",
+          duration_minutes: 45,
+          mode: "VIDEO",
+          status: "SCHEDULED",
+          notes: "Call first",
+          provider_name: "Clinician",
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Plan & Schedule" }));
+    const activitySelect = await screen.findByLabelText("Care-plan action");
+    expect(activitySelect.querySelectorAll("option")).toHaveLength(2);
+    expect(activitySelect).toHaveTextContent("Psychiatric review");
+    expect(activitySelect).not.toHaveTextContent("Therapy");
+    expect(activitySelect).not.toHaveTextContent("Existing review");
+    fireEvent.change(activitySelect, { target: { value: "activity-1" } });
+    fireEvent.change(screen.getByLabelText("Date and time"), {
+      target: { value: "2030-02-03T13:00" },
+    });
+    fireEvent.change(screen.getByLabelText("Brief scheduling note (optional)"), {
+      target: { value: "Call first" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Schedule next session" }));
+
+    await waitFor(() => expect(apiMocks.schedule).toHaveBeenCalledOnce());
+    expect(apiMocks.schedule).toHaveBeenCalledWith(
+      "test-token",
+      "patient-77",
+      expect.objectContaining({
+        care_plan_activity: "activity-1",
+        duration_minutes: 30,
+        mode: "IN_PERSON",
+        notes: "Call first",
+      }),
+    );
+    expect(await screen.findByText("Next psychiatry session scheduled.")).toBeInTheDocument();
+    expect(screen.getByText("Call first", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Schedule next session" })).not.toBeInTheDocument();
   });
 });

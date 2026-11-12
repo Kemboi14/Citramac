@@ -1,13 +1,24 @@
 """Psychiatry module: caseload, assessment draft/sign, MSE mirror."""
 
+import uuid
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.client_registry.models import Patient
+from apps.client_registry.models import Appointment, Patient
 from apps.tenancy.context import platform_admin_context
 from apps.triage.models import MentalStatusExam
 
-from .models import IntakeAssessment, ProgressNote, TriageEncounter
+from .models import (
+    CarePlan,
+    CarePlanActivity,
+    CarePlanVersion,
+    IntakeAssessment,
+    ProgressNote,
+    TriageEncounter,
+)
 from .tests import CORE_NO, CarePathwayApiTestCase
 
 
@@ -26,6 +37,7 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(signed.status_code, 201, signed.data)
 
         self.open_url = reverse("care-psych-workspace", args=[self.pid])
+        self.schedule_url = reverse("care-psych-schedule", args=[self.pid])
         self.body = {
             "format": "STRUCTURED",
             "structured": {
@@ -43,6 +55,46 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             },
         }
 
+    def create_schedule_plan(self, activity_status="PLANNED", confirmed=True):
+        with platform_admin_context():
+            triage = TriageEncounter.objects.get(pk=self.te_id)
+            plan = CarePlan.objects.create(
+                organization=self.org,
+                patient=triage.patient,
+                episode=triage.episode,
+                goals="Continue psychiatric review.",
+            )
+            activity = CarePlanActivity.objects.create(
+                organization=self.org,
+                care_plan=plan,
+                title="Psychiatric review",
+                goal="Review progress",
+                module="PSYCHIATRY",
+                action_key="psych_review",
+                decision="ACCEPTED",
+                status=activity_status,
+            )
+            if confirmed:
+                CarePlanVersion.objects.create(
+                    organization=self.org,
+                    care_plan=plan,
+                    patient=triage.patient,
+                    version=1,
+                    snapshot={"goals": plan.goals},
+                    signed_by=self.nurse,
+                )
+        return str(plan.pk), str(activity.pk)
+
+    def schedule_body(self, activity_id, request_id=None):
+        return {
+            "care_plan_activity": activity_id,
+            "scheduled_for": (timezone.now() + timedelta(days=1)).isoformat(),
+            "duration_minutes": 45,
+            "mode": "VIDEO",
+            "notes": "Call first",
+            "client_request_id": request_id or str(uuid.uuid4()),
+        }
+
     def test_client_list_includes_signed_triage_and_marks_review_needed(self):
         response = self.client.get(reverse("care-psych-module-clients"), **self.auth)
         self.assertEqual(response.status_code, 200, response.data)
@@ -50,6 +102,73 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertTrue(row["suggested"])
         self.assertEqual(row["assessment_status"], "")
         self.assertIn("psychiatric review", row["suggested_reason"].lower())
+
+    def test_schedule_read_does_not_create_a_care_plan(self):
+        response = self.client.get(self.schedule_url, **self.auth)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["plan"])
+
+    def test_planned_psychiatry_action_can_be_scheduled_once_and_appears_in_lists(self):
+        _, activity_id = self.create_schedule_plan(confirmed=False)
+        request_id = str(uuid.uuid4())
+        payload = self.schedule_body(activity_id, request_id)
+
+        scheduled = self.client.post(self.schedule_url, payload, format="json", **self.auth)
+
+        self.assertEqual(scheduled.status_code, 201, scheduled.data)
+        self.assertEqual(len(scheduled.data["scheduled_sessions"]), 1)
+        self.assertFalse(scheduled.data["plan"]["confirmed"])
+        self.assertEqual(
+            scheduled.data["scheduled_sessions"][0]["care_plan_activity_id"], activity_id
+        )
+        self.assertEqual(scheduled.data["scheduled_sessions"][0]["notes"], "Call first")
+        repeated = self.client.post(self.schedule_url, payload, format="json", **self.auth)
+        self.assertEqual(repeated.status_code, 200, repeated.data)
+        self.assertEqual(len(repeated.data["scheduled_sessions"]), 1)
+        duplicate = self.client.post(
+            self.schedule_url,
+            self.schedule_body(activity_id),
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(duplicate.status_code, 400, duplicate.data)
+
+        with platform_admin_context():
+            appointment = Appointment.objects.get(client_request_id=request_id)
+            activity = CarePlanActivity.objects.get(pk=activity_id)
+            self.assertEqual(appointment.care_plan_activity_id, activity.pk)
+            self.assertEqual(appointment.origin, "CARE_PLAN")
+            self.assertEqual(appointment.appointment_type, "Psychiatry review")
+            self.assertEqual(appointment.provider_id, self.nurse.pk)
+            self.assertEqual(activity.status, "PLANNED")
+
+        clients = self.client.get(reverse("care-psych-module-clients"), **self.auth)
+        row = next(item for item in clients.data["results"] if item["patient_id"] == self.pid)
+        self.assertEqual(
+            row["next_scheduled_session"]["scheduled_for"],
+            scheduled.data["scheduled_sessions"][0]["scheduled_for"],
+        )
+        interventions = self.client.get(
+            reverse("care-client-interventions-workspace", args=[self.pid]), **self.auth
+        )
+        self.assertEqual(interventions.status_code, 200, interventions.data)
+        self.assertEqual(len(interventions.data["scheduled_sessions"]), 1)
+        self.assertEqual(interventions.data["scheduled_sessions"][0]["activity_id"], activity_id)
+
+    def test_in_progress_action_cannot_be_scheduled(self):
+        _, activity_id = self.create_schedule_plan(activity_status="ACTIVE")
+
+        response = self.client.post(
+            self.schedule_url,
+            self.schedule_body(activity_id),
+            format="json",
+            **self.auth,
+        )
+
+        self.assertEqual(response.status_code, 404, response.data)
+        with platform_admin_context():
+            self.assertFalse(Appointment.objects.filter(patient_id=self.pid).exists())
 
     def test_new_assessment_carries_forward_triage_presenting_concern(self):
         concern = "Low mood and poor sleep, reported at triage."

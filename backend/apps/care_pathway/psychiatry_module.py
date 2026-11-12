@@ -20,10 +20,12 @@ ProgressNote before emitting psychiatry assessments as FHIR.
 """
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.client_registry.models import Appointment
 from apps.clinical_encounter.models import Encounter
 from apps.sysadmin_audit.audit import log_view
 from apps.triage.models import MentalStatusExam
@@ -771,6 +773,22 @@ def candidates():
     ):
         alerts.setdefault(alert.patient_id, []).append(alert.label)
 
+    sessions = {}
+    for appointment in (
+        Appointment.objects.filter(
+            patient_id__in=patient_ids,
+            status="SCHEDULED",
+            scheduled_for__gte=timezone.now(),
+        )
+        .filter(
+            Q(care_plan_activity__module="PSYCHIATRY")
+            | Q(care_plan_activity__action_key="psych_review")
+        )
+        .select_related("care_plan_activity", "provider")
+        .order_by("scheduled_for")
+    ):
+        sessions.setdefault(appointment.patient_id, appointment)
+
     rows = []
     for patient_id in patient_ids:
         triage = latest_triage.get(patient_id)
@@ -817,6 +835,14 @@ def candidates():
                 "assessment_format": data.get("format") or "",
                 "assessment_updated_at": _iso(note.updated_at) if note else None,
                 "assessment_signed_at": _iso(signed.signed_at) if signed else None,
+                "next_scheduled_session": (
+                    {
+                        "scheduled_for": _iso(sessions[patient_id].scheduled_for),
+                        "appointment_type": sessions[patient_id].appointment_type,
+                    }
+                    if patient_id in sessions
+                    else None
+                ),
                 "alerts": alerts.get(patient_id, []),
             }
         )

@@ -591,11 +591,72 @@ export interface PsychiatryCandidate {
   assessment_format: PsychiatryFormat | "";
   assessment_updated_at: string | null;
   assessment_signed_at: string | null;
+  next_scheduled_session: {
+    scheduled_for: string;
+    appointment_type: string;
+  } | null;
   alerts: string[];
 }
 
 export function getPsychiatryCandidates(accessToken: string) {
   return apiRequest<{ results: PsychiatryCandidate[] }>("/care/psychiatry/clients/", {
+    accessToken,
+  });
+}
+
+export interface PsychiatryScheduleActivity {
+  id: string;
+  title: string;
+  goal: string;
+  module: string;
+  status: CarePlanActivity["status"];
+  status_display: string;
+  available_to_psychiatry: boolean;
+}
+
+export interface PsychiatryScheduledSession {
+  id: string;
+  care_plan_activity_id: string;
+  activity_title: string;
+  scheduled_for: string;
+  duration_minutes: number;
+  mode: "IN_PERSON" | "PHONE" | "VIDEO";
+  status: string;
+  notes: string;
+  provider_name: string;
+}
+
+export interface PsychiatryPlanSchedule {
+  plan: {
+    id: string;
+    goals: string;
+    confirmed: boolean;
+    activities: PsychiatryScheduleActivity[];
+  } | null;
+  scheduled_sessions: PsychiatryScheduledSession[];
+}
+
+export function getPsychiatryPlanSchedule(accessToken: string, patientId: string) {
+  return apiRequest<PsychiatryPlanSchedule>(`/care/clients/${patientId}/psychiatry/schedule/`, {
+    accessToken,
+  });
+}
+
+export function schedulePsychiatrySession(
+  accessToken: string,
+  patientId: string,
+  payload: {
+    care_plan_activity: string;
+    scheduled_for: string;
+    duration_minutes: number;
+    mode: "IN_PERSON" | "PHONE" | "VIDEO";
+    notes: string;
+    client_request_id: string;
+  },
+) {
+  return apiRequest<PsychiatryPlanSchedule>(`/care/clients/${patientId}/psychiatry/schedule/`, {
+    method: "POST",
+    body: payload,
     accessToken,
   });
 }
@@ -1427,6 +1488,7 @@ export interface InterventionWorkspace {
   /** The care plan has a signed version (v4 "confirmed"). */
   plan_signed: boolean;
   actions: InterventionAction[];
+  scheduled_sessions: PsychiatryScheduledSession[];
   modules: InterventionModule[];
   context: InterventionContext;
 }

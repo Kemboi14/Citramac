@@ -5,7 +5,9 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
   getIntakeSchema,
+  getPsychiatryPlanSchedule,
   openPsychiatryAssessment,
+  schedulePsychiatrySession,
   savePsychiatryAssessment,
   signPsychiatryAssessment,
   listIntakeAssessments,
@@ -13,6 +15,7 @@ import {
   type IntakeSchema,
   type PsychiatryFormat,
   type PsychiatryMse,
+  type PsychiatryPlanSchedule,
   type PsychiatrySaveBody,
   type PsychiatryWorkspace,
 } from "../../lib/carePathwayApi";
@@ -21,7 +24,7 @@ import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
 import { SafetyBanner } from "./shared/SafetyBanner";
-import { BTN, BTN_GHOST, BTN_SM } from "./shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "./shared/styles";
 import { Callout, Card, ErrorNote, Field, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
@@ -158,6 +161,7 @@ const SECTIONS = [
   { id: "psych-mse", label: "MSE" },
   { id: "psych-formulation-diagnosis", label: "Formulation & diagnosis" },
   { id: "psych-medication", label: "Medication" },
+  { id: "psych-plan-schedule", label: "Plan & Schedule" },
   { id: "psych-previous", label: "Previous" },
 ];
 
@@ -260,6 +264,16 @@ export function PsychiatryAssessmentPage() {
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
   const [latestIntake, setLatestIntake] = useState<IntakeAssessment | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
+  const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
+  const [selectedPlanActivity, setSelectedPlanActivity] = useState("");
+  const [scheduledFor, setScheduledFor] = useState("");
+  const [sessionMode, setSessionMode] = useState<"IN_PERSON" | "PHONE" | "VIDEO">("IN_PERSON");
+  const [sessionDuration, setSessionDuration] = useState(30);
+  const [sessionNote, setSessionNote] = useState("");
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
+  const [scheduleRequestId, setScheduleRequestId] = useState(() => crypto.randomUUID());
+  const [scheduling, setScheduling] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const [format, setFormat] = useState<PsychiatryFormat>("STRUCTURED");
@@ -297,6 +311,26 @@ export function PsychiatryAssessmentPage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, patientId]);
+
+  useEffect(() => {
+    if (!accessToken || !patientId) return;
+    let cancelled = false;
+    getPsychiatryPlanSchedule(accessToken, patientId)
+      .then((data) => {
+        if (!cancelled) {
+          setPlanSchedule(data);
+          setPlanScheduleError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPlanScheduleError(errorText(error, "Couldn't load the current care plan."));
+        }
       });
     return () => {
       cancelled = true;
@@ -478,6 +512,43 @@ export function PsychiatryAssessmentPage() {
   const signed = assessment?.status === "SIGNED";
   const riskSpec = schema?.sections.find((section) => section.key === "risk");
   const intakeMeds = latestIntake?.sections?.meds;
+  const scheduledActivityIds = new Set(
+    (planSchedule?.scheduled_sessions ?? []).map((session) => session.care_plan_activity_id),
+  );
+  const psychiatryPlanActivities =
+    planSchedule?.plan?.activities.filter(
+      (activity) =>
+        activity.available_to_psychiatry &&
+        activity.status === "PLANNED" &&
+        !scheduledActivityIds.has(activity.id),
+    ) ?? [];
+
+  const scheduleNextSession = async () => {
+    if (!accessToken || !selectedPlanActivity || !scheduledFor) return;
+    setScheduling(true);
+    setPlanScheduleError(null);
+    setScheduleMessage(null);
+    try {
+      const updated = await schedulePsychiatrySession(accessToken, patientId, {
+        care_plan_activity: selectedPlanActivity,
+        scheduled_for: new Date(scheduledFor).toISOString(),
+        duration_minutes: sessionDuration,
+        mode: sessionMode,
+        notes: sessionNote.trim(),
+        client_request_id: scheduleRequestId,
+      });
+      setPlanSchedule(updated);
+      setSelectedPlanActivity("");
+      setScheduledFor("");
+      setSessionNote("");
+      setScheduleRequestId(crypto.randomUUID());
+      setScheduleMessage("Next psychiatry session scheduled.");
+    } catch (error) {
+      setPlanScheduleError(errorText(error, "Couldn't schedule the next session."));
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   return (
     <div className="clinical-readable flex flex-col gap-4">
@@ -926,6 +997,192 @@ export function PsychiatryAssessmentPage() {
               {saving ? "Signing…" : "Sign assessment"}
             </button>
           </div>
+        )}
+      </div>
+
+      <div
+        id="psych-plan-schedule"
+        role="tabpanel"
+        aria-labelledby="psych-plan-schedule-tab"
+        className={`min-w-0 ${activeSection === "psych-plan-schedule" ? "" : "hidden"}`}
+      >
+        <ErrorNote>{planScheduleError}</ErrorNote>
+        {scheduleMessage && <Callout tone="success">{scheduleMessage}</Callout>}
+        <Card title="Plan & Schedule">
+          {!planSchedule && !planScheduleError ? (
+            <p className="text-[13px] text-ink-500">Loading the current care plan…</p>
+          ) : !planSchedule?.plan ? (
+            <EmptyState title="No current care plan">
+              A plan must exist for this client&apos;s open episode before a psychiatry session can
+              be scheduled.
+            </EmptyState>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <section aria-labelledby="psychiatry-current-plan-title">
+                <h3 id="psychiatry-current-plan-title" className="text-sm font-bold text-ink-900">
+                  Current episode care plan
+                </h3>
+                <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-700">
+                  {planSchedule.plan.goals || "No plan goals recorded."}
+                </p>
+                <p className="mt-1 text-xs text-ink-500">
+                  {planSchedule.plan.confirmed ? "Confirmed care plan" : "Not yet confirmed"}
+                </p>
+                <ul className="mt-3 divide-y divide-surface-border rounded-md border border-surface-border">
+                  {planSchedule.plan.activities.map((activity) => (
+                    <li
+                      key={activity.id}
+                      className="flex flex-wrap items-start justify-between gap-2 px-3 py-2"
+                    >
+                      <div>
+                        <span className="text-[13px] font-medium text-ink-900">
+                          {activity.title}
+                        </span>
+                        {activity.goal && (
+                          <span className="mt-0.5 block text-xs text-ink-700">{activity.goal}</span>
+                        )}
+                      </div>
+                      <Tag>{activity.status_display}</Tag>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {psychiatryPlanActivities.length > 0 ? (
+                <section
+                  aria-labelledby="psychiatry-schedule-session-title"
+                  className="border-t border-surface-border pt-4"
+                >
+                  <h3
+                    id="psychiatry-schedule-session-title"
+                    className="text-sm font-bold text-ink-900"
+                  >
+                    Schedule next psychiatry session
+                  </h3>
+                  <p className="mt-1 text-xs text-ink-700">
+                    Choose a planned Psychiatry action. Actions already in progress or already
+                    scheduled cannot be selected again.
+                  </p>
+                  {!planSchedule.plan.confirmed && (
+                    <Callout tone="warning">
+                      This care plan is not confirmed yet. A session can be scheduled only against
+                      an action that is still planned.
+                    </Callout>
+                  )}
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className={FIELD_LABEL}>
+                      Care-plan action
+                      <select
+                        className={INPUT}
+                        value={selectedPlanActivity}
+                        onChange={(event) => setSelectedPlanActivity(event.target.value)}
+                      >
+                        <option value="">Select a planned action…</option>
+                        {psychiatryPlanActivities.map((activity) => (
+                          <option key={activity.id} value={activity.id}>
+                            {activity.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={FIELD_LABEL}>
+                      Date and time
+                      <input
+                        className={INPUT}
+                        type="datetime-local"
+                        step={900}
+                        value={scheduledFor}
+                        onChange={(event) => setScheduledFor(event.target.value)}
+                      />
+                    </label>
+                    <label className={FIELD_LABEL}>
+                      Session mode
+                      <select
+                        className={INPUT}
+                        value={sessionMode}
+                        onChange={(event) =>
+                          setSessionMode(event.target.value as "IN_PERSON" | "PHONE" | "VIDEO")
+                        }
+                      >
+                        <option value="IN_PERSON">In person</option>
+                        <option value="PHONE">Phone</option>
+                        <option value="VIDEO">Video</option>
+                      </select>
+                    </label>
+                    <label className={FIELD_LABEL}>
+                      Duration (minutes)
+                      <input
+                        className={INPUT}
+                        type="number"
+                        min={5}
+                        max={240}
+                        step={5}
+                        value={sessionDuration}
+                        onChange={(event) => setSessionDuration(Number(event.target.value) || 30)}
+                      />
+                    </label>
+                    <label className={`${FIELD_LABEL} md:col-span-2`}>
+                      Brief scheduling note (optional)
+                      <textarea
+                        className={`${INPUT} min-h-20`}
+                        maxLength={500}
+                        value={sessionNote}
+                        onChange={(event) => setSessionNote(event.target.value)}
+                        placeholder="Logistics only"
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs text-ink-500">
+                    This note appears in the shared appointment and Interventions views. Do not
+                    include psychiatric details; record clinical content in the appropriate signed
+                    note.
+                  </p>
+                  <button
+                    type="button"
+                    className={`${BTN} ${BTN_SM} mt-3`}
+                    disabled={
+                      scheduling ||
+                      !selectedPlanActivity ||
+                      !scheduledFor ||
+                      sessionDuration < 5 ||
+                      sessionDuration > 240
+                    }
+                    onClick={() => void scheduleNextSession()}
+                  >
+                    {scheduling ? "Scheduling…" : "Schedule next session"}
+                  </button>
+                </section>
+              ) : (
+                <Callout tone="info">
+                  There are no planned Psychiatry actions to schedule. An action already in progress
+                  cannot be scheduled again.
+                </Callout>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {planSchedule && planSchedule.scheduled_sessions.length > 0 && (
+          <Card title="Upcoming psychiatry sessions" className="mt-3">
+            <ul className="divide-y divide-surface-border">
+              {planSchedule.scheduled_sessions.map((session) => (
+                <li key={session.id} className="py-2 first:pt-0 last:pb-0">
+                  <strong className="block text-[13px] text-ink-900">
+                    {session.activity_title}
+                  </strong>
+                  <span className="text-xs text-ink-700">
+                    {formatDateTime(session.scheduled_for)}
+                    {session.provider_name ? ` · ${session.provider_name}` : ""}
+                  </span>
+                  {session.notes && (
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+                      Scheduling note: {session.notes}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
       </div>
 

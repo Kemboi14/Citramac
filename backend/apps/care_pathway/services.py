@@ -2062,7 +2062,14 @@ def book_follow_up(user, patient, data, *, episode=None, admission=None, origin=
         raise ValidationError({"mode": "Choose in person, phone or video."})
     if episode is None:
         episode = open_episode_for(patient)
-    label = concept_labels().get(("follow-up-reason", reason), reason)
+    labels = concept_labels()
+    appointment_type_code = data.get("appointment_type") or ""
+    if appointment_type_code and appointment_type_code not in _valid_codes("appointment-type"):
+        raise ValidationError({"appointment_type": "Choose an appointment type from the list."})
+    label = labels.get(
+        ("appointment-type", appointment_type_code),
+        labels.get(("follow-up-reason", reason), reason),
+    )
     appointment = Appointment.objects.create(
         organization_id=user.organization_id,
         patient=patient,

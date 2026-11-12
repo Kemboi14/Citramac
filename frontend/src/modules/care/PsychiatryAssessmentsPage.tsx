@@ -158,6 +158,7 @@ export function PsychiatryAssessmentsPage() {
                   <th className={TH}>Why here</th>
                   <th className={TH}>Intake</th>
                   <th className={TH}>Assessment</th>
+                  <th className={TH}>Next session</th>
                   <th className={TH}>
                     <span className="sr-only">Action</span>
                   </th>
@@ -246,6 +247,18 @@ export function PsychiatryAssessmentsPage() {
                           <span className="mt-0.5 block text-[12px] text-ink-500">
                             Intake {formatDate(row.intake_signed_at)}
                           </span>
+                        )}
+                      </td>
+                      <td className={TD}>
+                        {row.next_scheduled_session ? (
+                          <>
+                            <Tag tone="brand">Session scheduled</Tag>
+                            <span className="mt-1 block text-[12px] text-ink-500">
+                              {formatDateTime(row.next_scheduled_session.scheduled_for)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[12px] text-ink-500">Not scheduled</span>
                         )}
                       </td>
                       <td className={`${TD} text-right`}>

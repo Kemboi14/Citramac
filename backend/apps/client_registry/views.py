@@ -449,7 +449,7 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
         return Response(ConsentRecordSerializer(patient.consent_records.all(), many=True).data)
 
 
-class AppointmentViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class AppointmentViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """Appointments Calendar — filterable by `from`/`to` (ISO dates) and `status`."""
 
     serializer_class = AppointmentSerializer

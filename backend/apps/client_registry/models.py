@@ -596,6 +596,15 @@ class Appointment(TenantScopedModel):
         blank=True,
         related_name="appointments",
     )
+    # Local link for a scheduled psychiatry follow-up. FHIR Appointment profile
+    # linkage is VERIFY; this association is not emitted until one is approved.
+    care_plan_activity = models.ForeignKey(
+        "care_pathway.CarePlanActivity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="appointments",
+    )
     admission = models.ForeignKey(
         "ipd_ward.Admission",
         on_delete=models.PROTECT,

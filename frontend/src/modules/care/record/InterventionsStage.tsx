@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
-import { Callout, ErrorNote } from "../shared/ui";
+import { Callout, Card, ErrorNote } from "../shared/ui";
+import { formatDateTime } from "../shared/format";
 import { CarePlanActionsTable } from "./interventions/CarePlanActionsTable";
 import { InterventionDrawer } from "./interventions/InterventionDrawer";
 import { ModuleList, ScopeToggle } from "./interventions/ModuleList";
@@ -86,6 +87,27 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
           </div>
           <CarePlanActionsTable actions={actions} loading={workspace.loading && !data} />
         </>
+      )}
+
+      {(data?.scheduled_sessions ?? []).length > 0 && (
+        <Card title="Upcoming psychiatry sessions" className="mt-3">
+          <ul className="divide-y divide-surface-border">
+            {(data?.scheduled_sessions ?? []).map((session) => (
+              <li key={session.id} className="py-2 first:pt-0 last:pb-0">
+                <strong className="block text-[13px] text-ink-900">{session.activity_title}</strong>
+                <span className="text-xs text-ink-700">
+                  {formatDateTime(session.scheduled_for)}
+                  {session.provider_name ? ` · ${session.provider_name}` : ""}
+                </span>
+                {session.notes && (
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+                    Scheduling note: {session.notes}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {openModule && data ? (
