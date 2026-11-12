@@ -178,6 +178,7 @@ export function PsychotherapyWorkspace({
           patientId={patientId}
           onClose={onClose}
           onReplace={setNote}
+          inline={inline}
         />
       ) : (
         <div className="m-auto flex max-w-md flex-col items-center gap-3 p-6 text-center">
@@ -215,6 +216,77 @@ function RailButton({
     >
       {children}
     </button>
+  );
+}
+
+const TAB_VIEWS: { label: string; views: View[]; to: View }[] = [
+  { label: "Session", views: ["chat"], to: "chat" },
+  { label: "History", views: ["history", "past"], to: "history" },
+  { label: "Client file", views: ["client"], to: "client" },
+  { label: "Audit trail", views: ["audit"], to: "audit" },
+];
+
+/** The inline workspace's views, as the underline tabs every clinical module
+ * uses (Record / History / Info), with its two actions on the right. */
+function WorkspaceTabs({
+  view,
+  setView,
+  onNew,
+  onApproaches,
+}: {
+  view: View;
+  setView: (v: View) => void;
+  onNew: () => void;
+  onApproaches: () => void;
+}) {
+  const action =
+    "inline-flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg hover:text-ink-900";
+  return (
+    <div className="flex items-center gap-2 border-b border-surface-border px-4 sm:px-5">
+      <nav aria-label="Psychotherapy views" className="min-w-0 flex-1 overflow-x-auto">
+        <ul className="flex gap-0.5">
+          {TAB_VIEWS.map((t) => {
+            const current = t.views.includes(view);
+            return (
+              <li key={t.label}>
+                <button
+                  type="button"
+                  aria-current={current ? "page" : undefined}
+                  onClick={() => setView(t.to)}
+                  className={`min-h-[40px] whitespace-nowrap border-b-2 px-3 py-[9px] text-[13px] font-semibold transition-colors ${
+                    current
+                      ? "border-brand-green text-brand-green"
+                      : "border-transparent text-ink-500 hover:text-ink-900"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      <button
+        type="button"
+        className={action}
+        onClick={onNew}
+        aria-label="New session"
+        title="New session"
+      >
+        <Plus className="h-4 w-4" />
+        <span className="hidden md:inline">New session</span>
+      </button>
+      <button
+        type="button"
+        className={action}
+        onClick={onApproaches}
+        aria-label="Therapy approaches"
+        title="Therapy approaches"
+      >
+        <Layers className="h-4 w-4" />
+        <span className="hidden md:inline">Therapy approaches</span>
+      </button>
+    </div>
   );
 }
 
@@ -406,12 +478,17 @@ function WorkspaceBody({
   patientId,
   onClose,
   onReplace,
+  inline,
 }: {
   config: PsyConfig;
   initial: PsyNote;
   patientId: string;
   onClose: () => void;
   onReplace: (n: PsyNote) => void;
+  /** In the client record's Interventions card: the record already supplies
+   * the app frame, so the workspace drops its own icon rail and shows its
+   * views as tabs under one header, like the other clinical modules. */
+  inline: boolean;
 }) {
   const { accessToken } = useAuth();
   const wide = useMedia(WIDE);
@@ -1354,49 +1431,65 @@ function WorkspaceBody({
     />
   );
 
+  const tabs = inline && (
+    <WorkspaceTabs
+      view={view}
+      setView={setView}
+      onNew={() => void newSession()}
+      onApproaches={() => setLibraryOpen(true)}
+    />
+  );
+
   return (
     <>
-      <nav
-        aria-label="Workspace"
-        className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16"
-      >
-        <RailButton label="Back to Interventions" onClick={onClose}>
-          <ArrowLeft className="h-5 w-5" />
-        </RailButton>
-        <div
-          aria-hidden
-          className="mb-3 grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-brand-green font-display text-[19px] font-semibold text-on-primary"
+      {!inline && (
+        <nav
+          aria-label="Workspace"
+          className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16"
         >
-          C
-        </div>
-        <RailButton label="New session" onClick={() => void newSession()}>
-          <Plus className="h-5 w-5" />
-        </RailButton>
-        <RailButton
-          label="Chat · session history"
-          current={view === "history" || view === "past"}
-          onClick={() => setView("history")}
-        >
-          <MessageSquare className="h-5 w-5" />
-        </RailButton>
-        <RailButton
-          label="Client file"
-          current={view === "client"}
-          onClick={() => setView("client")}
-        >
-          <User className="h-5 w-5" />
-        </RailButton>
-        <RailButton label="Therapy approaches" onClick={() => setLibraryOpen(true)}>
-          <Layers className="h-5 w-5" />
-        </RailButton>
-        <RailButton label="Audit trail" current={view === "audit"} onClick={() => setView("audit")}>
-          <Clock className="h-5 w-5" />
-        </RailButton>
-      </nav>
+          <RailButton label="Back to Interventions" onClick={onClose}>
+            <ArrowLeft className="h-5 w-5" />
+          </RailButton>
+          <div
+            aria-hidden
+            className="mb-3 grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-brand-green font-display text-[19px] font-semibold text-on-primary"
+          >
+            C
+          </div>
+          <RailButton label="New session" onClick={() => void newSession()}>
+            <Plus className="h-5 w-5" />
+          </RailButton>
+          <RailButton
+            label="Chat · session history"
+            current={view === "history" || view === "past"}
+            onClick={() => setView("history")}
+          >
+            <MessageSquare className="h-5 w-5" />
+          </RailButton>
+          <RailButton
+            label="Client file"
+            current={view === "client"}
+            onClick={() => setView("client")}
+          >
+            <User className="h-5 w-5" />
+          </RailButton>
+          <RailButton label="Therapy approaches" onClick={() => setLibraryOpen(true)}>
+            <Layers className="h-5 w-5" />
+          </RailButton>
+          <RailButton
+            label="Audit trail"
+            current={view === "audit"}
+            onClick={() => setView("audit")}
+          >
+            <Clock className="h-5 w-5" />
+          </RailButton>
+        </nav>
+      )}
 
       {!(wide && panel === "expanded") && (
         <section className="flex min-w-0 flex-1 flex-col" aria-label="Session">
           {header}
+          {tabs}
           {error && (
             <div className="px-4 pt-2">
               <ErrorNote>{error}</ErrorNote>

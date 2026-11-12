@@ -77,19 +77,10 @@ export function InterventionDrawer({
     tabRefs.current.at(next)?.focus();
   };
 
-  return (
-    <section
-      ref={panelRef}
-      tabIndex={-1}
-      aria-labelledby={`${id}-title`}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && event.target === event.currentTarget) onClose();
-      }}
-      style={
-        guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 56 + 28}px))` } : undefined
-      }
-      className="flex flex-col overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm outline-none"
-    >
+  // Back link + module header. The guided session draws its own single
+  // header (breadcrumb back to Interventions), so it isn't framed twice.
+  const moduleHeader = (
+    <>
       <button
         type="button"
         onClick={onClose}
@@ -116,13 +107,29 @@ export function InterventionDrawer({
           <X className="h-5 w-5" />
         </button>
       </div>
+    </>
+  );
 
+  return (
+    <section
+      ref={panelRef}
+      tabIndex={-1}
+      aria-label={module.name}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && event.target === event.currentTarget) onClose();
+      }}
+      style={
+        guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 56 + 28}px))` } : undefined
+      }
+      className="flex flex-col overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm outline-none"
+    >
       {guided ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <PsychotherapyRecord patientId={patientId} onClose={onClose} />
+          <PsychotherapyRecord patientId={patientId} onClose={onClose} header={moduleHeader} />
         </div>
       ) : (
         <>
+          {moduleHeader}
           <div
             role="tablist"
             aria-label="Intervention details"
