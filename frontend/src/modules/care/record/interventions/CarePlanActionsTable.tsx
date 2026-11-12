@@ -46,6 +46,17 @@ export function CarePlanActionsTable({
                       {[action.decision_display, action.why].filter(Boolean).join(" · ")}
                     </div>
                   )}
+                  {action.note && (
+                    <div className="mt-1.5 border-l-2 border-brand-green pl-2">
+                      <p className="whitespace-pre-wrap text-[12.5px] leading-5 text-ink-700">
+                        {action.note.text}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-ink-500">
+                        Care-plan note · {action.note.author || "Clinician"} ·{" "}
+                        {formatDateTime(action.note.at)}
+                      </p>
+                    </div>
+                  )}
                 </td>
                 <td className={TD}>
                   <PriorityPill priority={action.priority} pendingLabel="Not set" />

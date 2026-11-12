@@ -4,7 +4,10 @@ import { ArrowLeft, CheckCircle2, FileText, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
+  decidePlanAction,
+  getCarePlanCatalogue,
   getIntakeSchema,
+  getPlanWorkspace,
   getPsychiatryPlanSchedule,
   openPsychiatryAssessment,
   schedulePsychiatrySession,
@@ -13,6 +16,8 @@ import {
   listIntakeAssessments,
   type IntakeAssessment,
   type IntakeSchema,
+  type PlanCatalogueItem,
+  type PlanWorkspace,
   type PsychiatryFormat,
   type PsychiatryMse,
   type PsychiatryPlanSchedule,
@@ -266,7 +271,14 @@ export function PsychiatryAssessmentPage() {
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
   const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
-  const [selectedPlanActivity, setSelectedPlanActivity] = useState("");
+  const [catalogue, setCatalogue] = useState<PlanCatalogueItem[]>([]);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const [planWorkspace, setPlanWorkspace] = useState<PlanWorkspace | null>(null);
+  const [selectedCarePlan, setSelectedCarePlan] = useState("");
+  const [confirmingPlan, setConfirmingPlan] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+  const [confirmNote, setConfirmNote] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
   const [sessionMode, setSessionMode] = useState<"IN_PERSON" | "PHONE" | "VIDEO">("IN_PERSON");
   const [sessionDuration, setSessionDuration] = useState(30);
@@ -331,6 +343,41 @@ export function PsychiatryAssessmentPage() {
         if (!cancelled) {
           setPlanScheduleError(errorText(error, "Couldn't load the current care plan."));
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, patientId]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    getCarePlanCatalogue(accessToken)
+      .then(({ results }) => {
+        if (!cancelled) {
+          setCatalogue(results);
+          setCatalogueError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCatalogueError(errorText(error, "Couldn't load the care plan catalogue."));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken || !patientId) return;
+    let cancelled = false;
+    getPlanWorkspace(accessToken, patientId)
+      .then((data) => {
+        if (!cancelled) setPlanWorkspace(data);
+      })
+      .catch(() => {
+        // The catalogue and schedule remain usable; confirmation reloads this.
       });
     return () => {
       cancelled = true;
@@ -515,22 +562,69 @@ export function PsychiatryAssessmentPage() {
   const scheduledActivityIds = new Set(
     (planSchedule?.scheduled_sessions ?? []).map((session) => session.care_plan_activity_id),
   );
-  const psychiatryPlanActivities =
-    planSchedule?.plan?.activities.filter(
+  const acceptedCarePlans = new Set(
+    (planWorkspace?.actions ?? [])
+      .filter((action) => ["ACCEPTED", "MODIFIED", "ADDED"].includes(action.decision))
+      .map((action) => action.key),
+  );
+  const recommendedCarePlans = new Set(
+    (planWorkspace?.recommendations ?? []).map((recommendation) => recommendation.key),
+  );
+  const selectedCatalogueItem = catalogue.find((item) => item.key === selectedCarePlan) ?? null;
+  const selectedCarePlanAccepted = acceptedCarePlans.has(selectedCarePlan);
+  const selectedCarePlanNote =
+    planWorkspace?.actions.find((action) => action.key === selectedCarePlan)?.note ?? null;
+  const canScheduleCarePlan = selectedCarePlan === "psych_review" && selectedCarePlanAccepted;
+  const psychReviewActivity =
+    planSchedule?.plan?.activities.find(
       (activity) =>
+        activity.action_key === "psych_review" &&
         activity.available_to_psychiatry &&
         activity.status === "PLANNED" &&
         !scheduledActivityIds.has(activity.id),
-    ) ?? [];
+    ) ?? null;
+
+  const carePlanState = (key: string) =>
+    acceptedCarePlans.has(key)
+      ? "Confirmed"
+      : recommendedCarePlans.has(key)
+        ? "Recommended"
+        : "Not selected";
+
+  const confirmCarePlan = async () => {
+    if (!accessToken || !selectedCarePlan || selectedCarePlanAccepted) return;
+    setConfirmingPlan(true);
+    setConfirmError(null);
+    setConfirmMessage(null);
+    try {
+      const updatedWorkspace = await decidePlanAction(accessToken, patientId, selectedCarePlan, {
+        decision: "ACCEPTED",
+        ...(confirmNote.trim() ? { note: confirmNote.trim() } : {}),
+      });
+      setPlanWorkspace(updatedWorkspace);
+      setPlanSchedule(await getPsychiatryPlanSchedule(accessToken, patientId));
+      setConfirmMessage(
+        `“${selectedCatalogueItem?.name ?? "Care plan"}” confirmed for this client — it now appears in Interventions.`,
+      );
+      setConfirmNote("");
+      // Keep Psychiatric review selected so its scheduling panel opens; other
+      // plans are done once confirmed.
+      if (selectedCarePlan !== "psych_review") setSelectedCarePlan("");
+    } catch (error) {
+      setConfirmError(errorText(error, "Couldn't confirm the care plan."));
+    } finally {
+      setConfirmingPlan(false);
+    }
+  };
 
   const scheduleNextSession = async () => {
-    if (!accessToken || !selectedPlanActivity || !scheduledFor) return;
+    if (!accessToken || !psychReviewActivity || !scheduledFor) return;
     setScheduling(true);
     setPlanScheduleError(null);
     setScheduleMessage(null);
     try {
       const updated = await schedulePsychiatrySession(accessToken, patientId, {
-        care_plan_activity: selectedPlanActivity,
+        care_plan_activity: psychReviewActivity.id,
         scheduled_for: new Date(scheduledFor).toISOString(),
         duration_minutes: sessionDuration,
         mode: sessionMode,
@@ -538,7 +632,6 @@ export function PsychiatryAssessmentPage() {
         client_request_id: scheduleRequestId,
       });
       setPlanSchedule(updated);
-      setSelectedPlanActivity("");
       setScheduledFor("");
       setSessionNote("");
       setScheduleRequestId(crypto.randomUUID());
@@ -1006,19 +1099,106 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-plan-schedule-tab"
         className={`min-w-0 ${activeSection === "psych-plan-schedule" ? "" : "hidden"}`}
       >
-        <ErrorNote>{planScheduleError}</ErrorNote>
-        {scheduleMessage && <Callout tone="success">{scheduleMessage}</Callout>}
+        <ErrorNote>{planScheduleError ?? catalogueError ?? confirmError}</ErrorNote>
+        {(scheduleMessage ?? confirmMessage) && (
+          <Callout tone="success">{scheduleMessage ?? confirmMessage}</Callout>
+        )}
         <Card title="Plan & Schedule">
-          {!planSchedule && !planScheduleError ? (
-            <p className="text-[13px] text-ink-500">Loading the current care plan…</p>
-          ) : !planSchedule?.plan ? (
-            <EmptyState title="No current care plan">
-              A plan must exist for this client&apos;s open episode before a psychiatry session can
-              be scheduled.
-            </EmptyState>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <section aria-labelledby="psychiatry-current-plan-title">
+          <div className="flex flex-col gap-4">
+            <section aria-labelledby="psychiatry-select-plan-title">
+              <h3 id="psychiatry-select-plan-title" className="text-sm font-bold text-ink-900">
+                Care plans
+              </h3>
+              <p className="mt-1 text-xs text-ink-700">
+                Select a care plan and confirm it for this client. A confirmed plan appears in
+                Interventions. Confirm Psychiatric review to schedule the next session.
+              </p>
+              <label className={`${FIELD_LABEL} mt-3`}>
+                Care plan
+                <select
+                  className={INPUT}
+                  value={selectedCarePlan}
+                  onChange={(event) => {
+                    setSelectedCarePlan(event.target.value);
+                    setConfirmMessage(null);
+                    setConfirmError(null);
+                    setConfirmNote("");
+                  }}
+                >
+                  <option value="">Select a care plan…</option>
+                  {catalogue.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.name} — {carePlanState(item.key)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {catalogueError && catalogue.length === 0 && (
+                <p className="mt-2 text-xs text-ink-500">Care plans are unavailable.</p>
+              )}
+              {selectedCatalogueItem && (
+                <div className="mt-3 rounded-md border border-surface-border bg-surface-bg px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong className="text-[13px] text-ink-900">
+                      {selectedCatalogueItem.name}
+                    </strong>
+                    <Tag tone={selectedCarePlanAccepted ? "brand" : "neutral"}>
+                      {selectedCarePlanAccepted ? "Confirmed for this client" : "Not yet confirmed"}
+                    </Tag>
+                  </div>
+                  {selectedCatalogueItem.tasks.length > 0 && (
+                    <ul className="mt-1.5 list-disc pl-5 text-xs text-ink-700">
+                      {selectedCatalogueItem.tasks.map((task) => (
+                        <li key={task}>{task}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {selectedCarePlanAccepted && selectedCarePlanNote && (
+                    <div className="mt-2 rounded border-l-2 border-brand-green bg-surface-card px-3 py-2">
+                      <p className="whitespace-pre-wrap text-xs text-ink-900">
+                        {selectedCarePlanNote.text}
+                      </p>
+                      <p className="mt-1 text-[11px] text-ink-500">
+                        {selectedCarePlanNote.author || "Clinician"} ·{" "}
+                        {formatDateTime(selectedCarePlanNote.at)}
+                      </p>
+                    </div>
+                  )}
+                  {!selectedCarePlanAccepted && (
+                    <>
+                      <label className={`${FIELD_LABEL} mt-3`}>
+                        Note for the record (optional)
+                        <AutoResizeTextarea
+                          rows={3}
+                          aria-label="Note for the record"
+                          placeholder="Why this plan, what was agreed, the client's preference…"
+                          maxLength={4000}
+                          value={confirmNote}
+                          onChange={(event) => setConfirmNote(event.target.value)}
+                        />
+                      </label>
+                      <p className="mt-1 text-[11px] text-ink-500">
+                        Saved to the client&apos;s record and shown in Interventions.
+                      </p>
+                      <button
+                        type="button"
+                        className={`${BTN} ${BTN_SM} mt-2`}
+                        disabled={confirmingPlan}
+                        onClick={() => void confirmCarePlan()}
+                      >
+                        {confirmingPlan ? "Confirming…" : "Confirm for this client"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {planSchedule?.plan ? (
+              <section
+                aria-labelledby="psychiatry-current-plan-title"
+                className="border-t border-surface-border pt-4"
+              >
                 <h3 id="psychiatry-current-plan-title" className="text-sm font-bold text-ink-900">
                   Current episode care plan
                 </h3>
@@ -1047,8 +1227,15 @@ export function PsychiatryAssessmentPage() {
                   ))}
                 </ul>
               </section>
+            ) : (
+              <p className="border-t border-surface-border pt-4 text-xs text-ink-500">
+                No care plan exists for this client&apos;s open episode yet. Confirming a plan above
+                creates one.
+              </p>
+            )}
 
-              {psychiatryPlanActivities.length > 0 ? (
+            {canScheduleCarePlan &&
+              (psychReviewActivity ? (
                 <section
                   aria-labelledby="psychiatry-schedule-session-title"
                   className="border-t border-surface-border pt-4"
@@ -1060,31 +1247,10 @@ export function PsychiatryAssessmentPage() {
                     Schedule next psychiatry session
                   </h3>
                   <p className="mt-1 text-xs text-ink-700">
-                    Choose a planned Psychiatry action. Actions already in progress or already
-                    scheduled cannot be selected again.
+                    Psychiatric review is confirmed for this client. Book the next session now; it
+                    will appear in the appointment and Interventions views.
                   </p>
-                  {!planSchedule.plan.confirmed && (
-                    <Callout tone="warning">
-                      This care plan is not confirmed yet. A session can be scheduled only against
-                      an action that is still planned.
-                    </Callout>
-                  )}
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className={FIELD_LABEL}>
-                      Care-plan action
-                      <select
-                        className={INPUT}
-                        value={selectedPlanActivity}
-                        onChange={(event) => setSelectedPlanActivity(event.target.value)}
-                      >
-                        <option value="">Select a planned action…</option>
-                        {psychiatryPlanActivities.map((activity) => (
-                          <option key={activity.id} value={activity.id}>
-                            {activity.title}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                     <label className={FIELD_LABEL}>
                       Date and time
                       <input
@@ -1141,11 +1307,7 @@ export function PsychiatryAssessmentPage() {
                     type="button"
                     className={`${BTN} ${BTN_SM} mt-3`}
                     disabled={
-                      scheduling ||
-                      !selectedPlanActivity ||
-                      !scheduledFor ||
-                      sessionDuration < 5 ||
-                      sessionDuration > 240
+                      scheduling || !scheduledFor || sessionDuration < 5 || sessionDuration > 240
                     }
                     onClick={() => void scheduleNextSession()}
                   >
@@ -1154,12 +1316,12 @@ export function PsychiatryAssessmentPage() {
                 </section>
               ) : (
                 <Callout tone="info">
-                  There are no planned Psychiatry actions to schedule. An action already in progress
-                  cannot be scheduled again.
+                  Psychiatric review is confirmed, but there is no planned, unscheduled psychiatry
+                  action to book. An action already in progress or already scheduled cannot be
+                  scheduled again.
                 </Callout>
-              )}
-            </div>
-          )}
+              ))}
+          </div>
         </Card>
 
         {planSchedule && planSchedule.scheduled_sessions.length > 0 && (

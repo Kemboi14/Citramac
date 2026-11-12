@@ -474,7 +474,12 @@ def workspace(patient):
     from apps.clinical_encounter.models import DiagnosisCode
 
     from . import attention, care_plan, services
-    from .models import CarePlan, InterventionRecord, MedicationHistoryEntry
+    from .models import (
+        CarePlan,
+        InterventionRecord,
+        MedicationHistoryEntry,
+        ProgressNote,
+    )
 
     episode = services.current_or_latest_episode(patient)
     plan = CarePlan.objects.filter(episode=episode).first() if episode else None
@@ -517,6 +522,16 @@ def workspace(patient):
         .order_by("scheduled_for")
     ]
 
+    notes = {}
+    for note in (
+        ProgressNote.objects.filter(
+            care_plan_activity_id__in=[a.pk for a in actions], note_type="CARE_PLAN"
+        )
+        .select_related("author")
+        .order_by("created_at")
+    ):
+        notes[note.care_plan_activity_id] = note
+
     action_rows = []
     linked = {}
     now = timezone.now()
@@ -550,6 +565,18 @@ def workspace(patient):
                 "records": len(own),
                 "latest_by": services.user_display(latest.provider) if latest else "",
                 "latest_at": latest.performed_at.isoformat() if latest else None,
+                "note": (
+                    {
+                        "id": str(notes[activity.id].pk),
+                        "text": notes[activity.id].text,
+                        "author": services.user_display(notes[activity.id].author),
+                        "at": (
+                            notes[activity.id].signed_at or notes[activity.id].created_at
+                        ).isoformat(),
+                    }
+                    if activity.id in notes
+                    else None
+                ),
             }
         )
 

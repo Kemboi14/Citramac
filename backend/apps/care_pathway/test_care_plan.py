@@ -11,7 +11,7 @@ from apps.accounts.tokens import issue_tokens
 from apps.tenancy.context import platform_admin_context
 
 from . import care_plan
-from .models import CarePlanTask, CarePlanVersion
+from .models import CarePlanTask, CarePlanVersion, ProgressNote
 from .test_intake import IntakeTestCase
 
 
@@ -150,6 +150,27 @@ class DecisionTests(CarePlanTestCase):
     def test_unknown_action_and_decision_are_refused(self):
         self.assertEqual(self.decide("nope", "ACCEPTED").status_code, 400)
         self.assertEqual(self.decide("therapy", "MAYBE").status_code, 400)
+
+    def test_a_confirmation_note_is_saved_as_a_signed_care_plan_note(self):
+        response = self.decide(
+            "outpatient", "ACCEPTED", note="Client agrees to weekly review; prefers mornings."
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        action = next(a for a in response.data["actions"] if a["key"] == "outpatient")
+        self.assertEqual(
+            action["note"]["text"], "Client agrees to weekly review; prefers mornings."
+        )
+        with platform_admin_context():
+            note = ProgressNote.objects.get(patient_id=self.pid, note_type="CARE_PLAN")
+            self.assertEqual(note.status, "SIGNED")
+            self.assertEqual(note.care_plan_activity.action_key, "outpatient")
+            self.assertEqual(note.text, "Client agrees to weekly review; prefers mornings.")
+        # A later read of the workspace keeps the note beside its action.
+        again = self.ws()
+        action = next(a for a in again.data["actions"] if a["key"] == "outpatient")
+        self.assertEqual(
+            action["note"]["text"], "Client agrees to weekly review; prefers mornings."
+        )
 
 
 class SignPlanTests(CarePlanTestCase):

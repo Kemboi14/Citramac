@@ -1450,6 +1450,15 @@ class ProgressNote(TenantScopedModel):
         blank=True,
         related_name="progress_note_copy",
     )
+    # Set on a care-plan note: the confirmed action the note was written against,
+    # so Interventions can show it beside that action.
+    care_plan_activity = models.ForeignKey(
+        "CarePlanActivity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="notes",
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-created_at"]

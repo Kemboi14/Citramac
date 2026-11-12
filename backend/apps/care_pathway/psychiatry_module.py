@@ -19,6 +19,8 @@ VERIFY: identify the published DocumentReference profile and mappings for
 ProgressNote before emitting psychiatry assessments as FHIR.
 """
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -704,6 +706,24 @@ def sign_workspace(patient, user, data):
     return _workspace_state(patient, note.encounter, note, user)
 
 
+DUE_ORDER = {"OVERDUE": 0, "TODAY": 1, "TOMORROW": 2, "UPCOMING": 3}
+
+
+def _session_due(appointment):
+    """How soon the booked session is due: overdue, today, tomorrow or later."""
+    now = timezone.now()
+    if appointment.scheduled_for < now:
+        days = (timezone.localdate() - timezone.localtime(appointment.scheduled_for).date()).days
+        return "OVERDUE", days
+    today = timezone.localdate()
+    day = timezone.localtime(appointment.scheduled_for).date()
+    if day == today:
+        return "TODAY", 0
+    if day == today + timedelta(days=1):
+        return "TOMORROW", 1
+    return "UPCOMING", (day - today).days
+
+
 def _candidate_reason(triage, intake, review, signed_note, source_at):
     if review is not None:
         return review.action_label
@@ -745,7 +765,26 @@ def candidates():
     ):
         latest_intake[intake.patient_id] = intake
 
-    patient_ids = set(latest_triage) | set(latest_intake)
+    # A booked psychiatry session keeps the client on the list even when the
+    # triage/intake that first brought them in has already been reviewed.
+    sessions = {}
+    session_patients = {}
+    for appointment in (
+        Appointment.objects.filter(
+            status__in=("SCHEDULED", "CHECKED_IN"),
+            patient__archived_at__isnull=True,
+        )
+        .filter(
+            Q(care_plan_activity__module="PSYCHIATRY")
+            | Q(care_plan_activity__action_key="psych_review")
+        )
+        .select_related("patient", "care_plan_activity", "provider")
+        .order_by("scheduled_for")
+    ):
+        sessions.setdefault(appointment.patient_id, appointment)
+        session_patients.setdefault(appointment.patient_id, appointment.patient)
+
+    patient_ids = set(latest_triage) | set(latest_intake) | set(sessions)
     if not patient_ids:
         return []
 
@@ -773,27 +812,14 @@ def candidates():
     ):
         alerts.setdefault(alert.patient_id, []).append(alert.label)
 
-    sessions = {}
-    for appointment in (
-        Appointment.objects.filter(
-            patient_id__in=patient_ids,
-            status="SCHEDULED",
-            scheduled_for__gte=timezone.now(),
-        )
-        .filter(
-            Q(care_plan_activity__module="PSYCHIATRY")
-            | Q(care_plan_activity__action_key="psych_review")
-        )
-        .select_related("care_plan_activity", "provider")
-        .order_by("scheduled_for")
-    ):
-        sessions.setdefault(appointment.patient_id, appointment)
-
     rows = []
     for patient_id in patient_ids:
         triage = latest_triage.get(patient_id)
         intake = latest_intake.get(patient_id)
-        patient = triage.patient if triage else intake.patient
+        session = sessions.get(patient_id)
+        patient = (
+            triage.patient if triage else intake.patient if intake else session_patients[patient_id]
+        )
         note = latest_note.get(patient_id)
         signed = signed_note.get(patient_id)
         review = reviews.get(patient_id)
@@ -810,6 +836,7 @@ def candidates():
         )
         suggested = bool(review or (source_at and not reviewed_after_source))
         data = (note.data or {}) if note else {}
+        due_state, days_until = _session_due(session) if session else ("", None)
         rows.append(
             {
                 "patient_id": str(patient.pk),
@@ -819,7 +846,14 @@ def candidates():
                 "age": patient.age_years,
                 "sex": patient.gender,
                 "priority": triage.priority if triage else "",
-                "episode_id": str((triage.episode_id if triage else intake.episode_id) or ""),
+                "episode_id": str(
+                    (
+                        triage.episode_id
+                        if triage
+                        else intake.episode_id if intake else session.episode_id
+                    )
+                    or ""
+                ),
                 "presenting_concern": (
                     (triage.presenting_concern if triage else "")
                     or (intake.presenting_concern if intake else "")
@@ -828,7 +862,11 @@ def candidates():
                 "intake_complete": intake is not None,
                 "intake_signed_at": _iso(intake.signed_at) if intake else None,
                 "suggested": suggested,
-                "suggested_reason": _candidate_reason(triage, intake, review, signed, source_at),
+                "suggested_reason": (
+                    "Psychiatry session booked"
+                    if not triage and not intake and session
+                    else _candidate_reason(triage, intake, review, signed, source_at)
+                ),
                 "review": psychiatric_review.row(review),
                 "assessment_id": str(note.pk) if note else None,
                 "assessment_status": note.status if note else "",
@@ -837,10 +875,17 @@ def candidates():
                 "assessment_signed_at": _iso(signed.signed_at) if signed else None,
                 "next_scheduled_session": (
                     {
-                        "scheduled_for": _iso(sessions[patient_id].scheduled_for),
-                        "appointment_type": sessions[patient_id].appointment_type,
+                        "id": str(session.pk),
+                        "scheduled_for": _iso(session.scheduled_for),
+                        "appointment_type": session.appointment_type,
+                        "status": session.status,
+                        "mode": session.mode,
+                        "duration_minutes": session.duration_minutes,
+                        "provider_name": services.user_display(session.provider),
+                        "due_state": due_state,
+                        "days_until": days_until,
                     }
-                    if patient_id in sessions
+                    if session
                     else None
                 ),
                 "alerts": alerts.get(patient_id, []),
@@ -850,6 +895,7 @@ def candidates():
         rows,
         key=lambda row: (
             not row["suggested"],
+            DUE_ORDER.get((row["next_scheduled_session"] or {}).get("due_state"), 4),
             PRIORITY_ORDER.get(row["priority"], 9),
             (row["name"] or "").lower(),
         ),

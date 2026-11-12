@@ -8,18 +8,19 @@ import {
   type PsychiatryCandidate,
 } from "../../lib/carePathwayApi";
 import { EmptyState } from "../../components/EmptyState";
-import { formatDate, formatDateTime } from "./shared/format";
+import { formatDate, formatDateTime, formatTime } from "./shared/format";
 import { psychiatryAssessmentPath } from "./shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "./shared/styles";
-import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
+import { Callout, Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
 import { useRecordData } from "./record/useRecordData";
 
-type View = "needs" | "intake" | "reviewed" | "all";
+type View = "needs" | "intake" | "reviewed" | "sessions" | "all";
 
 const VIEWS: { key: View; label: string }[] = [
   { key: "needs", label: "Need assessment" },
   { key: "intake", label: "Intake complete" },
   { key: "reviewed", label: "Assessed" },
+  { key: "sessions", label: "Sessions" },
   { key: "all", label: "All clients" },
 ];
 
@@ -30,6 +31,8 @@ const searchText = (row: PsychiatryCandidate) =>
     row.citramac_number,
     row.presenting_concern,
     row.suggested_reason,
+    row.next_scheduled_session?.appointment_type,
+    row.next_scheduled_session?.provider_name,
     ...row.alerts,
   ]
     .join(" ")
@@ -50,6 +53,22 @@ function actionLabel(row: PsychiatryCandidate) {
   if (row.assessment_status === "DRAFT") return "Continue draft";
   if (row.assessment_status === "SIGNED") return "Start follow-up";
   return "Start assessment";
+}
+
+function sessionTag(session: NonNullable<PsychiatryCandidate["next_scheduled_session"]>) {
+  if (session.due_state === "OVERDUE") {
+    const days = session.days_until ?? 0;
+    return `Overdue${days ? ` · ${days} ${days === 1 ? "day" : "days"}` : ""}`;
+  }
+  if (session.due_state === "TODAY") return `Today · ${formatTime(session.scheduled_for)}`;
+  if (session.due_state === "TOMORROW") return `Tomorrow · ${formatTime(session.scheduled_for)}`;
+  return formatDateTime(session.scheduled_for);
+}
+
+function sessionTone(session: NonNullable<PsychiatryCandidate["next_scheduled_session"]>) {
+  if (session.due_state === "OVERDUE") return "risk" as const;
+  if (session.due_state === "TODAY" || session.due_state === "TOMORROW") return "warn" as const;
+  return "brand" as const;
 }
 
 /**
@@ -76,6 +95,7 @@ export function PsychiatryAssessmentsPage() {
     if (key === "needs") return needsAssessment(row);
     if (key === "intake") return row.intake_complete;
     if (key === "reviewed") return row.assessment_status === "SIGNED";
+    if (key === "sessions") return Boolean(row.next_scheduled_session);
     return true;
   };
   const counts = Object.fromEntries(
@@ -84,15 +104,29 @@ export function PsychiatryAssessmentsPage() {
   const shown = rows.filter(
     (row) => inView(row, view) && (!needle || searchText(row).includes(needle)),
   );
+  const dueToday = rows.filter((row) => row.next_scheduled_session?.due_state === "TODAY").length;
+  const overdue = rows.filter((row) => row.next_scheduled_session?.due_state === "OVERDUE").length;
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         eyebrow="Clinical workflow"
         title="Psychiatry"
-        subtitle="Assess, examine mental state, diagnose and prescribe in one place. Clients appear here when triage or withdrawal review suggests a psychiatric review, or when their intake is signed."
+        subtitle="Assess, examine mental state, diagnose and prescribe in one place. Clients appear here when triage or withdrawal review suggests a psychiatric review, when their intake is signed, or when a session is booked."
       />
       <ErrorNote>{error}</ErrorNote>
+
+      {(dueToday > 0 || overdue > 0) && (
+        <Callout tone="warning" label="Sessions due">
+          {[
+            overdue > 0 ? `${overdue} ${overdue === 1 ? "session" : "sessions"} overdue` : "",
+            dueToday > 0 ? `${dueToday} due today` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          . Open the client to continue the review or record what happened.
+        </Callout>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative min-w-[240px] flex-1">
@@ -137,7 +171,7 @@ export function PsychiatryAssessmentsPage() {
       {data && shown.length === 0 && (
         <EmptyState title={rows.length === 0 ? "No clients to assess yet" : "No one here"}>
           {rows.length === 0
-            ? "Clients appear here after their triage recommends psychiatric review, or once their intake is signed."
+            ? "Clients appear here after their triage recommends psychiatric review, once their intake is signed, or when a session is booked."
             : needle
               ? "No client matches that search."
               : "No client in this view — try “All clients”."}
@@ -252,9 +286,14 @@ export function PsychiatryAssessmentsPage() {
                       <td className={TD}>
                         {row.next_scheduled_session ? (
                           <>
-                            <Tag tone="brand">Session scheduled</Tag>
+                            <Tag tone={sessionTone(row.next_scheduled_session)}>
+                              {sessionTag(row.next_scheduled_session)}
+                            </Tag>
                             <span className="mt-1 block text-[12px] text-ink-500">
                               {formatDateTime(row.next_scheduled_session.scheduled_for)}
+                              {row.next_scheduled_session.provider_name
+                                ? ` · ${row.next_scheduled_session.provider_name}`
+                                : ""}
                             </span>
                           </>
                         ) : (

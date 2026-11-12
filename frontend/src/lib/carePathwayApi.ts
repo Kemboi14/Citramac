@@ -592,8 +592,16 @@ export interface PsychiatryCandidate {
   assessment_updated_at: string | null;
   assessment_signed_at: string | null;
   next_scheduled_session: {
+    id: string;
     scheduled_for: string;
     appointment_type: string;
+    status: string;
+    mode: string;
+    duration_minutes: number;
+    provider_name: string;
+    /** "" when no session is booked. */
+    due_state: "OVERDUE" | "TODAY" | "TOMORROW" | "UPCOMING" | "";
+    days_until: number | null;
   } | null;
   alerts: string[];
 }
@@ -606,6 +614,8 @@ export function getPsychiatryCandidates(accessToken: string) {
 
 export interface PsychiatryScheduleActivity {
   id: string;
+  /** The catalogue key this activity was created from (e.g. `psych_review`). */
+  action_key: string;
   title: string;
   goal: string;
   module: string;
@@ -1422,6 +1432,14 @@ export function voidIntervention(accessToken: string, id: string, reason: string
 
 export type InterventionGroup = "Assess" | "Treat" | "Support" | "Close-out";
 
+/** A note a clinician logged while confirming a care-plan action. */
+export interface CarePlanNote {
+  id: string;
+  text: string;
+  author: string;
+  at: string;
+}
+
 export interface InterventionAction {
   id: string;
   title: string;
@@ -1440,6 +1458,8 @@ export interface InterventionAction {
   records: number;
   latest_by: string;
   latest_at: string | null;
+  /** Latest note logged when this action was confirmed, if one was written. */
+  note: CarePlanNote | null;
 }
 
 export interface InterventionModule {
@@ -1935,6 +1955,7 @@ export interface PlanAction {
   status: string;
   due_at: string | null;
   bulk_accepted: boolean;
+  note: CarePlanNote | null;
   tasks: PlanTask[];
 }
 
@@ -2019,11 +2040,33 @@ export function decidePlanAction(
   accessToken: string,
   patientId: string,
   key: string,
-  body: { decision: PlanDecision; priority?: PlanPriority; instructions?: string; reason?: string },
+  body: {
+    decision: PlanDecision;
+    priority?: PlanPriority;
+    instructions?: string;
+    reason?: string;
+    /** Optional note saved to the record and shown beside the action in Interventions. */
+    note?: string;
+  },
 ) {
   return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/actions/${key}/decide/`, {
     method: "POST",
     body,
+    accessToken,
+  });
+}
+
+export interface PlanCatalogueItem {
+  key: string;
+  name: string;
+  low: boolean;
+  roles: string[];
+  tasks: string[];
+}
+
+/** Every care plan the facility can offer, whether or not it is on this client's plan. */
+export function getCarePlanCatalogue(accessToken: string) {
+  return apiRequest<{ results: PlanCatalogueItem[] }>("/care/care-plan/catalogue/", {
     accessToken,
   });
 }

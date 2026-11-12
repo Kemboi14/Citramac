@@ -907,6 +907,7 @@ def _psychiatry_plan_schedule(patient, plan):
                 "activities": [
                     {
                         "id": str(activity.pk),
+                        "action_key": activity.action_key,
                         "title": activity.title,
                         "goal": activity.goal,
                         "module": activity.module,

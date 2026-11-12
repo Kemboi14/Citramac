@@ -522,7 +522,7 @@ def remove_added(plan, key):
     activity = plan.activities.filter(action_key=key).first()
     if activity is None or activity.decision != "ADDED":
         raise ValidationError({"action_key": "Only an action you added can be removed."})
-    if activity.tasks.exists() or activity.due_at:
+    if activity.tasks.exists() or activity.due_at or activity.notes.exists():
         raise ValidationError(
             {"action_key": "This action is part of a signed plan — mark it completed instead."}
         )

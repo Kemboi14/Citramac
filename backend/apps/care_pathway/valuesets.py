@@ -78,6 +78,7 @@ VALUESETS = {
             ("NURSING_SHIFT", "Nursing shift note"),
             ("FOLLOW_UP", "Follow-up contact"),
             ("PSYCHIATRY", "Psychiatric assessment"),
+            ("CARE_PLAN", "Care-plan note"),
         ],
     ),
     "episode-outcome": (

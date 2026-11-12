@@ -156,6 +156,37 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(len(interventions.data["scheduled_sessions"]), 1)
         self.assertEqual(interventions.data["scheduled_sessions"][0]["activity_id"], activity_id)
 
+    def test_a_booked_session_keeps_the_client_on_the_caseload(self):
+        _, activity_id = self.create_schedule_plan(confirmed=False)
+        self.client.post(
+            self.schedule_url, self.schedule_body(activity_id), format="json", **self.auth
+        )
+        # The triage that first brought them in has been reviewed; the booked
+        # session alone must keep the client on the psychiatry list.
+        with platform_admin_context():
+            TriageEncounter.objects.filter(pk=self.te_id).update(triage_version=0)
+
+        clients = self.client.get(reverse("care-psych-module-clients"), **self.auth)
+        row = next(item for item in clients.data["results"] if item["patient_id"] == self.pid)
+        self.assertIsNotNone(row["next_scheduled_session"])
+        self.assertEqual(row["suggested_reason"], "Psychiatry session booked")
+        self.assertEqual(row["next_scheduled_session"]["status"], "SCHEDULED")
+
+    def test_an_unactioned_session_shows_as_overdue(self):
+        _, activity_id = self.create_schedule_plan(confirmed=False)
+        self.client.post(
+            self.schedule_url, self.schedule_body(activity_id), format="json", **self.auth
+        )
+        with platform_admin_context():
+            Appointment.objects.filter(patient_id=self.pid).update(
+                scheduled_for=timezone.now() - timedelta(days=2)
+            )
+
+        clients = self.client.get(reverse("care-psych-module-clients"), **self.auth)
+        row = next(item for item in clients.data["results"] if item["patient_id"] == self.pid)
+        self.assertEqual(row["next_scheduled_session"]["due_state"], "OVERDUE")
+        self.assertGreaterEqual(row["next_scheduled_session"]["days_until"], 2)
+
     def test_in_progress_action_cannot_be_scheduled(self):
         _, activity_id = self.create_schedule_plan(activity_status="ACTIVE")
 

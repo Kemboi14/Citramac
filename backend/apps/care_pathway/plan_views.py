@@ -1,5 +1,6 @@
 """Care plan, safety plan, MDT and co-signature endpoints (mockup v4 stage 4)."""
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -9,6 +10,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.access import users_with_permission
 from apps.accounts.models import User
+from apps.accounts.practitioner_profile import require_current_licence
 
 from . import care_plan, plan_extras, services
 from .access import clinical_only
@@ -17,6 +19,7 @@ from .models import (
     CosignRequest,
     MdtReview,
     NursingCarePlanEntry,
+    ProgressNote,
     SafetyPlan,
 )
 from .views import _patient
@@ -26,7 +29,35 @@ def _user_name(user):
     return (user.get_full_name() or str(user)) if user else ""
 
 
-def _activity_row(a):
+def _note_row(note):
+    if note is None:
+        return None
+    return {
+        "id": str(note.pk),
+        "text": note.text,
+        "author": _user_name(note.author),
+        "at": note.signed_at or note.created_at,
+    }
+
+
+def _record_care_plan_note(patient, plan, activity, user, note):
+    """A confirmation note is part of the record: signed, authored, timestamped."""
+    require_current_licence(user)
+    return ProgressNote.objects.create(
+        organization_id=patient.organization_id,
+        patient=patient,
+        episode=plan.episode,
+        encounter=services.clinical_encounter_for(patient, plan.episode, user),
+        note_type="CARE_PLAN",
+        text=note,
+        status="SIGNED",
+        author=user,
+        signed_at=timezone.now(),
+        care_plan_activity=activity,
+    )
+
+
+def _activity_row(a, note=None):
     return {
         "id": str(a.id),
         "key": a.action_key,
@@ -40,6 +71,7 @@ def _activity_row(a):
         "status": a.status,
         "due_at": a.due_at,
         "bulk_accepted": a.bulk_accepted,
+        "note": _note_row(note),
         "tasks": [
             {
                 "id": str(t.id),
@@ -57,6 +89,16 @@ def _activity_row(a):
 def _workspace(patient, plan):
     recs = care_plan.recommend(patient)
     by_key = {a.action_key: a for a in plan.activities.all() if a.action_key}
+    activities = list(plan.activities.all())
+    notes = {}
+    for note in (
+        ProgressNote.objects.filter(
+            care_plan_activity_id__in=[a.pk for a in activities], note_type="CARE_PLAN"
+        )
+        .select_related("author")
+        .order_by("created_at")
+    ):
+        notes[note.care_plan_activity_id] = note
     items, found = care_plan.outstanding(plan)
     return {
         "version": plan.version,
@@ -75,7 +117,9 @@ def _workspace(patient, plan):
             }
             for key, rec in sorted(recs.items(), key=lambda kv: care_plan.RANK[kv[1]["priority"]])
         ],
-        "actions": [_activity_row(a) for a in plan.activities.exclude(action_key="")],
+        "actions": [
+            _activity_row(a, notes.get(a.pk)) for a in plan.activities.exclude(action_key="")
+        ],
         "details": {
             "client_agreement": plan.client_agreement,
             "disagreements": plan.disagreements,
@@ -130,11 +174,15 @@ class CarePlanWorkspaceView(APIView):
 
 
 class CarePlanActionDecisionView(APIView):
+    @transaction.atomic
     def post(self, request, patient_id, key):
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
         d = request.data
-        care_plan.decide_action(
+        note = str(d.get("note") or "").strip()
+        if len(note) > 4000:
+            raise ValidationError({"note": "Keep the note under 4,000 characters."})
+        activity = care_plan.decide_action(
             plan,
             request.user,
             key,
@@ -143,6 +191,8 @@ class CarePlanActionDecisionView(APIView):
             instructions=d.get("instructions", ""),
             reason=d.get("reason", ""),
         )
+        if note:
+            _record_care_plan_note(patient, plan, activity, request.user, note)
         return Response(_workspace(patient, plan))
 
     def delete(self, request, patient_id, key):

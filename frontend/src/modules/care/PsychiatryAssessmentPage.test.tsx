@@ -12,6 +12,9 @@ const apiMocks = vi.hoisted(() => ({
   listIntakes: vi.fn(),
   getSchedule: vi.fn(),
   schedule: vi.fn(),
+  getCatalogue: vi.fn(),
+  getPlanWorkspace: vi.fn(),
+  decidePlan: vi.fn(),
 }));
 
 vi.mock("../../auth/useAuth", () => ({
@@ -27,6 +30,9 @@ vi.mock("../../lib/carePathwayApi", () => ({
   listIntakeAssessments: apiMocks.listIntakes,
   getPsychiatryPlanSchedule: apiMocks.getSchedule,
   schedulePsychiatrySession: apiMocks.schedule,
+  getCarePlanCatalogue: apiMocks.getCatalogue,
+  getPlanWorkspace: apiMocks.getPlanWorkspace,
+  decidePlanAction: apiMocks.decidePlan,
 }));
 
 vi.mock("./shared/useClientBanner", () => ({
@@ -104,6 +110,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
         activities: [
           {
             id: "activity-1",
+            action_key: "psych_review",
             title: "Psychiatric review",
             goal: "Review progress",
             module: "PSYCHIATRY",
@@ -113,6 +120,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
           },
           {
             id: "activity-2",
+            action_key: "therapy",
             title: "Therapy",
             goal: "",
             module: "THERAPY",
@@ -122,6 +130,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
           },
           {
             id: "activity-3",
+            action_key: "outpatient",
             title: "Existing review",
             goal: "",
             module: "PSYCHIATRY",
@@ -133,6 +142,25 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
       },
       scheduled_sessions: [],
     });
+    apiMocks.getCatalogue.mockResolvedValue({
+      results: [
+        {
+          key: "psych_review",
+          name: "Psychiatric review",
+          low: false,
+          roles: ["psychiatrist"],
+          tasks: ["Refer to on-call psychiatry or book a slot"],
+        },
+        {
+          key: "therapy",
+          name: "Psychological therapy",
+          low: true,
+          roles: ["therapist"],
+          tasks: ["Refer to therapy service"],
+        },
+      ],
+    });
+    apiMocks.getPlanWorkspace.mockResolvedValue({ actions: [], recommendations: [] });
     apiMocks.getSchema.mockResolvedValue({
       sections: [
         {
@@ -424,7 +452,22 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     );
   });
 
-  it("schedules only a planned psychiatry action from the current care plan", async () => {
+  it("confirms a care plan with a note and schedules the next psychiatric review session", async () => {
+    apiMocks.decidePlan.mockResolvedValue({
+      actions: [
+        {
+          key: "psych_review",
+          decision: "ACCEPTED",
+          note: {
+            id: "note-1",
+            text: "Client agrees to weekly review; prefers mornings.",
+            author: "Dr A. Banda",
+            at: "2026-11-12T08:04:00Z",
+          },
+        },
+      ],
+      recommendations: [],
+    });
     apiMocks.schedule.mockResolvedValue({
       plan: {
         id: "plan-1",
@@ -433,6 +476,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
         activities: [
           {
             id: "activity-1",
+            action_key: "psych_review",
             title: "Psychiatric review",
             goal: "Review progress",
             module: "PSYCHIATRY",
@@ -469,12 +513,28 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     );
 
     fireEvent.click(await screen.findByRole("tab", { name: "Plan & Schedule" }));
-    const activitySelect = await screen.findByLabelText("Care-plan action");
-    expect(activitySelect.querySelectorAll("option")).toHaveLength(2);
-    expect(activitySelect).toHaveTextContent("Psychiatric review");
-    expect(activitySelect).not.toHaveTextContent("Therapy");
-    expect(activitySelect).not.toHaveTextContent("Existing review");
-    fireEvent.change(activitySelect, { target: { value: "activity-1" } });
+    const planSelect = await screen.findByLabelText("Care plan");
+    expect(planSelect).toHaveTextContent("Psychiatric review — Not selected");
+    expect(planSelect).toHaveTextContent("Psychological therapy — Not selected");
+    fireEvent.change(planSelect, { target: { value: "psych_review" } });
+    fireEvent.change(await screen.findByLabelText(/Note for the record/), {
+      target: { value: "Client agrees to weekly review; prefers mornings." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm for this client" }));
+
+    await waitFor(() =>
+      expect(apiMocks.decidePlan).toHaveBeenCalledWith("test-token", "patient-77", "psych_review", {
+        decision: "ACCEPTED",
+        note: "Client agrees to weekly review; prefers mornings.",
+      }),
+    );
+    expect(
+      await screen.findByText("Client agrees to weekly review; prefers mornings."),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Schedule next session" }),
+    ).toBeInTheDocument();
+
     fireEvent.change(screen.getByLabelText("Date and time"), {
       target: { value: "2030-02-03T13:00" },
     });
@@ -496,6 +556,39 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     );
     expect(await screen.findByText("Next psychiatry session scheduled.")).toBeInTheDocument();
     expect(screen.getByText("Call first", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Schedule next session" })).not.toBeInTheDocument();
+  });
+
+  it("confirms a non-psychiatric care plan without offering scheduling", async () => {
+    apiMocks.decidePlan.mockResolvedValue({
+      actions: [{ key: "therapy", decision: "ACCEPTED" }],
+      recommendations: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Plan & Schedule" }));
+    const planSelect = await screen.findByLabelText("Care plan");
+    fireEvent.change(planSelect, { target: { value: "therapy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm for this client" }));
+
+    await waitFor(() =>
+      expect(apiMocks.decidePlan).toHaveBeenCalledWith("test-token", "patient-77", "therapy", {
+        decision: "ACCEPTED",
+      }),
+    );
+    expect(
+      await screen.findByText(/Psychological therapy.*now appears in Interventions/),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Schedule next session" })).not.toBeInTheDocument();
   });
 });

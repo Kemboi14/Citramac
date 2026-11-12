@@ -70,12 +70,14 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
       </p>
       <ErrorNote>{workspace.error ?? records.error}</ErrorNote>
 
-      {data && !data.plan_signed ? (
+      {data && !data.plan_signed && (
         <Callout tone="warning">
-          No confirmed care plan yet. Modules are available (e.g. for emergency care), but action
-          tracking and recommendations from the plan appear once the plan is signed.
+          The care plan is not signed yet. Actions confirmed for this client are shown below and
+          appear here as they are accepted; sign the plan to complete the confirmed care plan.
         </Callout>
-      ) : (
+      )}
+
+      {data && (
         <>
           <div className={SECTION_HEAD}>
             <div>
