@@ -1300,13 +1300,15 @@ function WorkspaceBody({
     </div>
   );
 
+  // Inline, the Session tab leads back; full-screen, each view has its own link.
+  const backToSession = inline ? undefined : () => setView("chat");
   let centre: ReactNode;
   if (view === "history") {
     centre = (
       <SessionHistory
         note={note}
         notes={notes}
-        onBack={() => setView("chat")}
+        onBack={backToSession}
         onOpenCurrent={() => setView("chat")}
         onOpenPast={(id) => {
           setPastId(id);
@@ -1318,9 +1320,9 @@ function WorkspaceBody({
   } else if (view === "past" && pastId) {
     centre = <PastNote config={config} id={pastId} onBack={() => setView("history")} />;
   } else if (view === "client") {
-    centre = <ClientFile note={note} notes={notes} onBack={() => setView("chat")} />;
+    centre = <ClientFile note={note} notes={notes} onBack={backToSession} />;
   } else if (view === "audit") {
-    centre = <AuditTrail note={note} onBack={() => setView("chat")} />;
+    centre = <AuditTrail note={note} onBack={backToSession} />;
   }
 
   const thread = example ? (

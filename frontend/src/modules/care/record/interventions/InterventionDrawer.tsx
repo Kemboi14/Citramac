@@ -51,9 +51,14 @@ export function InterventionDrawer({
   const panelRef = useRef<HTMLElement>(null);
   // The client banner is sticky: open the module just below it, and size the
   // guided session to the space left under it.
-  const [bannerHeight] = useState(() =>
-    Math.round(document.querySelector("[data-safety-banner]")?.getBoundingClientRect().height ?? 0),
-  );
+  // `bannerHeight` is where the stuck banner ends: its sticky offset (the app
+  // top bar) plus its own height.
+  const [bannerHeight] = useState(() => {
+    const banner = document.querySelector<HTMLElement>("[data-safety-banner]");
+    if (!banner) return 0;
+    const top = parseFloat(getComputedStyle(banner).top) || 0;
+    return Math.round(top + banner.getBoundingClientRect().height);
+  });
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -118,9 +123,7 @@ export function InterventionDrawer({
       onKeyDown={(event) => {
         if (event.key === "Escape" && event.target === event.currentTarget) onClose();
       }}
-      style={
-        guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 56 + 28}px))` } : undefined
-      }
+      style={guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 28}px))` } : undefined}
       className="flex flex-col overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm outline-none"
     >
       {guided ? (

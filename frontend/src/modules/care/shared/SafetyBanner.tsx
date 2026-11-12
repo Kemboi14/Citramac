@@ -103,7 +103,7 @@ export function SafetyBanner({
     <section
       aria-label="Patient safety banner"
       data-safety-banner
-      className="sticky top-0 z-[15] -mx-4 mb-4 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
+      className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-4 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
       <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(250px,1.1fr)_minmax(300px,1.8fr)_minmax(200px,.9fr)_minmax(210px,1fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
         <div className={`${cell} flex items-center gap-3.5`} aria-label="Patient identity">

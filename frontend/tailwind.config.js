@@ -78,7 +78,10 @@ export default {
         },
         surface: {
           bg: "var(--bg)",
-          card: "var(--card)",
+          // `<alpha-value>` lets `bg-surface-card/95` work: Tailwind drops the
+          // opacity modifier on a bare `var()` colour, which left the sticky
+          // top bar and footers fully transparent.
+          card: "color-mix(in srgb, var(--card) calc(<alpha-value> * 100%), transparent)",
           border: "var(--border)",
           scrim: "var(--scrim-overlay)",
         },

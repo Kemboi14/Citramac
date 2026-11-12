@@ -32,7 +32,11 @@ function Page({ children }: { children: ReactNode }) {
   );
 }
 
-function Back({ label, onClick }: { label: string; onClick: () => void }) {
+// `onBack` is left out when the workspace sits in the client record: its tabs
+// already name the view and lead back, so neither the back link nor the
+// eyebrow label above the heading is drawn there.
+function Back({ label, onClick }: { label: string; onClick?: () => void }) {
+  if (!onClick) return null;
   return (
     <button
       type="button"
@@ -44,10 +48,10 @@ function Back({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-function Heading({ label, title, sub }: { label: string; title: string; sub?: string }) {
+function Heading({ label, title, sub }: { label?: string; title: string; sub?: string }) {
   return (
     <div>
-      <div className={FIELD_LABEL}>{label}</div>
+      {label && <div className={FIELD_LABEL}>{label}</div>}
       <h1 className="font-display text-xl font-semibold text-ink-900">{title}</h1>
       {sub && <div className="text-[12.5px] text-ink-500">{sub}</div>}
     </div>
@@ -74,7 +78,7 @@ export function SessionHistory({
 }: {
   note: PsyNote;
   notes: PsyNoteSummary[] | null;
-  onBack: () => void;
+  onBack?: () => void;
   onOpenCurrent: () => void;
   onOpenPast: (id: string) => void;
   onNew: () => void;
@@ -85,7 +89,7 @@ export function SessionHistory({
     <Page>
       <Back label="Back to session" onClick={onBack} />
       <Heading
-        label="Chat"
+        label={onBack && "Chat"}
         title="Session history"
         sub={`${note.patient.name} · ${note.patient.number || "—"} · ${(notes ?? []).length || 1} sessions`}
       />
@@ -155,7 +159,7 @@ export function PastNote({
 }: {
   config: PsyConfig;
   id: string;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const { accessToken } = useAuth();
   const [past, setPast] = useState<PsyNote | null>(null);
@@ -215,7 +219,7 @@ export function ClientFile({
 }: {
   note: PsyNote;
   notes: PsyNoteSummary[] | null;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const c = note.context;
   const signed = (notes ?? []).filter((n) => n.status === "SIGNED");
@@ -223,7 +227,7 @@ export function ClientFile({
     <Page>
       <Back label="Back to session" onClick={onBack} />
       <Heading
-        label="Client record"
+        label={onBack && "Client record"}
         title={note.patient.name}
         sub={`Record ${note.patient.number || "—"}`}
       />
@@ -385,13 +389,13 @@ function describe(e: HistoryEntry) {
 }
 
 /** Audit trail: note.history, newest first, with typed dots. */
-export function AuditTrail({ note, onBack }: { note: PsyNote; onBack: () => void }) {
+export function AuditTrail({ note, onBack }: { note: PsyNote; onBack?: () => void }) {
   const list = [...note.history].reverse();
   return (
     <Page>
       <Back label="Back to session" onClick={onBack} />
       <Heading
-        label="Audit trail"
+        label={onBack && "Audit trail"}
         title={`Session ${note.session_number ?? ""} timeline`}
         sub={`${list.length} events · ${ddmmyyyy(note.session.session_date)} · newest first`}
       />

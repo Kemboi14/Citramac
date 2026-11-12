@@ -105,6 +105,23 @@ export function AppShell({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  // The top bar is sticky; anything else that sticks to the top of the page
+  // (the client safety banner) sits below it, at `--app-header-h`.
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty("--app-header-h", `${header.getBoundingClientRect().height}px`);
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(header);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty("--app-header-h");
+    };
+  }, []);
   const { accessToken, claims, avatarUrl, logout } = useAuth();
   const { clear: forgetSelectedClient } = usePatientContext();
   const navigate = useNavigate();
@@ -470,7 +487,10 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {isBrand ? (
-          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 text-ink-900 backdrop-blur">
+          <header
+            ref={headerRef}
+            className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 text-ink-900 backdrop-blur"
+          >
             <button
               type="button"
               onClick={toggleSidebar}
@@ -499,7 +519,10 @@ export function AppShell({
             </div>
           </header>
         ) : (
-          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 py-3 backdrop-blur sm:px-5 lg:px-7 lg:py-3.5">
+          <header
+            ref={headerRef}
+            className="sticky top-0 z-20 flex items-center gap-3 border-b border-surface-border bg-surface-card/95 px-4 py-3 backdrop-blur sm:px-5 lg:px-7 lg:py-3.5"
+          >
             <button
               type="button"
               onClick={toggleSidebar}
