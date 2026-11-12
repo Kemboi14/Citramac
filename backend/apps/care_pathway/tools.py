@@ -56,6 +56,16 @@ def _record_view(patient):
     return source.sections if source else {}
 
 
+def _psychiatry_risk(patient):
+    """The latest psychiatry assessment (draft or signed) as `{"risk": …}`, in
+    the intake's shape, so `_active_risk` reads both alike."""
+    from .psychiatry_module import _latest_note
+
+    note = _latest_note(patient)
+    risk = ((note.data or {}).get("structured") or {}).get("risk") if note else None
+    return {"risk": risk} if isinstance(risk, dict) else {}
+
+
 def _active_risk(sections, row):
     chosen = (sections.get("risk", {}).get("rows", {}) or {}).get(row, []) or []
     return [o for o in chosen if o in _ACTIVE[row]]
@@ -109,18 +119,24 @@ def triggers(patient):
                 f"Alcohol use recorded at {finding.stage.lower()} — predict withdrawal risk",
             )
 
-    suicide = _active_risk(s, "suicide")
-    if suicide:
-        reason = "Suicide / self-harm finding: " + ", ".join(o.lower() for o in suicide)
-        add("SRA", reason)
-        add("SAFETY", reason)
-    if suicidal_content:
-        add("SRA", "MSE thought content: suicidal")
-    violence = _active_risk(s, "violence")
-    if violence:
-        reason = "Violence risk: " + ", ".join(o.lower() for o in violence)
-        add("SRA", reason)
-        add("SAFETY", reason)
+    # The psychiatry assessment records the same risk register rows (its
+    # structured risk), so a live risk found there recommends the same tools.
+    psy = _psychiatry_risk(patient)
+    for source, sections in (("", s), (" (psychiatry assessment)", psy)):
+        suicide = _active_risk(sections, "suicide")
+        if suicide:
+            reason = f"Suicide / self-harm finding{source}: " + ", ".join(
+                o.lower() for o in suicide
+            )
+            add("SRA", reason)
+            add("SAFETY", reason)
+        if suicidal_content and not source:
+            add("SRA", "MSE thought content: suicidal")
+        violence = _active_risk(sections, "violence")
+        if violence:
+            reason = f"Violence risk{source}: " + ", ".join(o.lower() for o in violence)
+            add("SRA", reason)
+            add("SAFETY", reason)
 
     # CIWA-Ar / COWS (withdrawal severity) belong to the withdrawal module, which
     # needs a clinical protocol source — they are not recommended here.

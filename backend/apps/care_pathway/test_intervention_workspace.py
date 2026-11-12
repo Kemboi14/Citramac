@@ -149,7 +149,17 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.set_rate("Psychotherapy", Decimal("3000"))
 
         data = self.workspace()
-        self.assertEqual(set(data), {"has_plan", "plan_signed", "actions", "modules", "context"})
+        self.assertEqual(
+            set(data),
+            {
+                "has_plan",
+                "plan_signed",
+                "actions",
+                "modules",
+                "context",
+                "scheduled_sessions",
+            },
+        )
         self.assertFalse(data["plan_signed"])
         action = data["actions"][0]
         self.assertEqual(
