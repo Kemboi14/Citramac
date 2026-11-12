@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("care_pathway", "0057_care_programme"),
+        ("care_pathway", "0055_progress_note_care_plan_activity"),
         ("clinical_encounter", "0011_backfill_icd11_display"),
     ]
 
