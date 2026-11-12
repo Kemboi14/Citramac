@@ -1406,6 +1406,28 @@ class AllergyVerifyView(APIView):
 
 
 class MedicationHistoryEntryView(APIView):
+    @transaction.atomic
+    def put(self, request, pk):
+        """Revise an entry without overwriting its prior clinical assertion."""
+        entry = get_object_or_404(MedicationHistoryEntry, pk=pk)
+        if entry.superseded_at is not None:
+            raise ValidationError({"detail": "This medication entry has already been superseded."})
+
+        serializer = MedicationHistorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        revised = serializer.save(
+            organization=entry.organization,
+            patient=entry.patient,
+            episode=entry.episode,
+            recorded_by=request.user,
+        )
+        entry.superseded_at = timezone.now()
+        entry.save(update_fields=["superseded_at", "updated_at"])
+        return Response(
+            MedicationHistorySerializer(revised).data,
+            status=status.HTTP_201_CREATED,
+        )
+
     def delete(self, request, pk):
         """Retire — never delete — an entry (kept for the record)."""
         entry = get_object_or_404(MedicationHistoryEntry, pk=pk)

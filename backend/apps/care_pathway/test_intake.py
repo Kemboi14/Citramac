@@ -297,6 +297,59 @@ class MedicationHistoryTests(IntakeTestCase):
         with platform_admin_context():
             self.assertTrue(MedicationHistoryEntry.objects.filter(pk=entry_id).exists())
 
+    def test_updating_entry_appends_a_revision_and_keeps_the_prior_entry(self):
+        url = reverse("care-client-medication-history", args=[self.pid])
+        created = self.client.post(
+            url,
+            {"name": "Sertraline", "dose": "50 mg", "frequency": "Daily"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(created.status_code, 201)
+        original_id = created.data["id"]
+
+        revised = self.client.put(
+            reverse("care-medication-history-entry", args=[original_id]),
+            {
+                "name": "Sertraline",
+                "dose": "100 mg",
+                "frequency": "Daily",
+                "route": "oral",
+                "reason": "Indication documented",
+                "status": "TAKING",
+                "source": "Psychiatry",
+            },
+            format="json",
+            **self.auth,
+        )
+
+        self.assertEqual(revised.status_code, 201, revised.data)
+        self.assertEqual(revised.data["dose"], "100 mg")
+        self.assertEqual(len(self.client.get(url, **self.auth).data["results"]), 1)
+        with platform_admin_context():
+            original = MedicationHistoryEntry.objects.get(pk=original_id)
+            self.assertIsNotNone(original.superseded_at)
+            self.assertTrue(
+                MedicationHistoryEntry.objects.filter(pk=revised.data["id"]).exists()
+            )
+
+    def test_superseded_entry_cannot_be_revised_again(self):
+        url = reverse("care-client-medication-history", args=[self.pid])
+        created = self.client.post(url, {"name": "Sertraline"}, format="json", **self.auth)
+        self.assertEqual(created.status_code, 201)
+        self.client.delete(
+            reverse("care-medication-history-entry", args=[created.data["id"]]), **self.auth
+        )
+
+        revised = self.client.put(
+            reverse("care-medication-history-entry", args=[created.data["id"]]),
+            {"name": "Sertraline", "dose": "100 mg"},
+            format="json",
+            **self.auth,
+        )
+
+        self.assertEqual(revised.status_code, 400)
+
 
 class AllergySectionTests(IntakeTestCase):
     def test_client_reported_allergy_is_confirmed_by_a_clinician(self):

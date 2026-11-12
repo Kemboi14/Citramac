@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   save: vi.fn(),
   sign: vi.fn(),
   getSchema: vi.fn(),
+  listIntakes: vi.fn(),
 }));
 
 vi.mock("../../auth/useAuth", () => ({
@@ -21,6 +22,7 @@ vi.mock("../../lib/carePathwayApi", () => ({
   savePsychiatryAssessment: apiMocks.save,
   signPsychiatryAssessment: apiMocks.sign,
   getIntakeSchema: apiMocks.getSchema,
+  listIntakeAssessments: apiMocks.listIntakes,
 }));
 
 vi.mock("./shared/useClientBanner", () => ({
@@ -47,8 +49,14 @@ vi.mock("./record/intake/MseSection", () => ({
   MseSection: () => null,
 }));
 
+vi.mock("./record/intake/MedsSection", () => ({
+  MedsSection: ({ source }: { source: string }) => (
+    <div data-testid="psychiatry-medication-history">{source} medication history</div>
+  ),
+}));
+
 vi.mock("./record/modules/PrescribingModule", () => ({
-  PrescribingModule: () => null,
+  PrescribingModule: () => <div data-testid="psychiatry-medication-orders">Medication orders</div>,
 }));
 
 const workspace: PsychiatryWorkspace = {
@@ -67,6 +75,23 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     vi.clearAllMocks();
     apiMocks.open.mockResolvedValue(workspace);
     apiMocks.save.mockResolvedValue(workspace);
+    apiMocks.listIntakes.mockResolvedValue({
+      results: [
+        {
+          id: "intake-1",
+          status: "SIGNED",
+          version: 3,
+          sections: {
+            meds: {
+              none: false,
+              reconciled: true,
+              unavailable: false,
+              non_adherence: "Stopped due to nausea",
+            },
+          },
+        },
+      ],
+    });
     apiMocks.getSchema.mockResolvedValue({
       sections: [
         {
@@ -326,6 +351,35 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
           },
         }),
       }),
+    );
+  });
+
+  it("uses the shared intake medication history in psychiatry", async () => {
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Medication" }));
+
+    expect(await screen.findByText("Medication orders & History")).toBeInTheDocument();
+    expect(await screen.findByTestId("psychiatry-medication-orders")).toBeInTheDocument();
+    expect(await screen.findByTestId("psychiatry-medication-history")).toHaveTextContent(
+      "Psychiatry medication history",
+    );
+    expect(await screen.findByTestId("psychiatry-intake-medication-summary")).toHaveTextContent(
+      "Medication reconciliation completed",
+    );
+    expect(screen.getByText("Stopped due to nausea")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open / update in Intake" })).toHaveAttribute(
+      "href",
+      "/clinical/clients/patient-77/intake",
     );
   });
 });

@@ -1052,6 +1052,7 @@ export interface IntakeAssessment {
   status: "DRAFT" | "SIGNED";
   completeness: "" | "COMPLETE" | "PARTIAL" | "UNABLE";
   signed_at: string | null;
+  sections?: IntakeSections;
 }
 
 export type IntakePayload = Omit<
@@ -1737,6 +1738,18 @@ export function addMedicationHistory(
 ) {
   return apiRequest<MedicationHistoryRow>(`/care/clients/${patientId}/medication-history/`, {
     method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
+export function updateMedicationHistory(
+  accessToken: string,
+  entryId: string,
+  payload: Partial<Omit<MedicationHistoryRow, "id" | "recorded_at">> & { name: string },
+) {
+  return apiRequest<MedicationHistoryRow>(`/care/medication-history/${entryId}/`, {
+    method: "PUT",
     body: payload,
     accessToken,
   });

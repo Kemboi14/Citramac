@@ -881,10 +881,7 @@ function SectionBody({
       return (
         <MedsSection
           patientId={patientId}
-          spec={spec}
-          values={values}
-          vs={vs}
-          onChange={onChange}
+          reconciliation={{ spec, values, vs, onChange }}
           onListChanged={onRecordChanged}
         />
       );
