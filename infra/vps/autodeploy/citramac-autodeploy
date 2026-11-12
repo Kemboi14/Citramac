@@ -109,6 +109,11 @@ if ! git_app merge-base --is-ancestor "$target" origin/master; then
   log "green commit $target is not on master; skipping"
   exit 0
 fi
+# A green commit older than the deployed one (CI still running on newer
+# commits after a manual deploy) is not a failure: wait for a newer green one.
+if git_app merge-base --is-ancestor "$target" "$deployed"; then
+  exit 0
+fi
 if ! git_app merge-base --is-ancestor "$deployed" "$target"; then
   log "REFUSED: $target does not descend from the deployed $deployed (history rewritten?). Deploy by hand."
   echo "$target" >"$STATE_DIR/failed"
