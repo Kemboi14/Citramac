@@ -222,7 +222,12 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
                 log_view(task)
         return Response(bundle)
 
-    @action(detail=True, methods=["get", "post"], url_path="psychiatric-review")
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="psychiatric-review",
+        url_name="psychiatric-review",
+    )
     def psychiatric_review_request(self, request, pk=None):
         from apps.care_pathway import psychiatric_review_request
         from apps.care_pathway.access import require

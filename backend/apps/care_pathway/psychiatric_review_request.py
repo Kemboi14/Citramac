@@ -39,7 +39,7 @@ def request(admission, user):
     from apps.ipd_ward.models import Admission
 
     admission = (
-        Admission.objects.select_for_update()
+        Admission.objects.select_for_update(of=("self",))
         .select_related("patient", "episode", "encounter")
         .get(pk=admission.pk)
     )

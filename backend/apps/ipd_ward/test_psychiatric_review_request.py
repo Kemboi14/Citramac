@@ -103,11 +103,16 @@ class PsychiatricReviewRequestTests(APITestCase):
                 ),
             )
             self.assertTrue(task.sbar.startswith("SITUATION"))
-            audit = AuditLogEntry.objects.filter(
-                model="care_pathway.caretask", object_id=str(task.id)
-            ).first()
-        self.assertNotIn("SITUATION", str(audit.field_diff))
-        self.assertIn("[clinical content ", str(audit.field_diff))
+            diffs = str(
+                [
+                    row.field_diff
+                    for row in AuditLogEntry.objects.filter(
+                        model="care_pathway.caretask", object_id=str(task.id)
+                    )
+                ]
+            )
+        self.assertNotIn("SITUATION", diffs)
+        self.assertIn("[clinical content ", diffs)
 
     def test_only_senior_clinicians_see_and_complete_the_request(self):
         admission = self.admit()
@@ -161,7 +166,7 @@ class PsychiatricReviewRequestTests(APITestCase):
                 row.field_diff.get("event")
                 for row in AuditLogEntry.objects.filter(
                     model="care_pathway.caretask", object_id=str(task.id)
-                )
+                ).order_by("timestamp")
                 if row.field_diff.get("event")
             ]
         self.assertEqual(events, ["RAISED", "STARTED", "COMPLETED"])
