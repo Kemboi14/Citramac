@@ -47,7 +47,11 @@ journalctl -u citramac-autodeploy -n 100     # full log of recent runs
 cat /var/lib/citramac-autodeploy/history     # one line per deploy attempt
 ```
 
-Pause it before deploying by hand, so the two cannot interleave. To retry a
+Pause it before deploying by hand, so the two cannot interleave. `resume`
+records the checkout as deployed when a manual deploy moved it ahead, and a
+run never deploys a green commit older than the checkout (the images are built
+from the checkout). `:previous` is replaced only when an image actually
+changes, so it stays a real rollback target. To retry a
 failed commit after fixing the cause on the server, remove
 `/var/lib/citramac-autodeploy/failed`.
 

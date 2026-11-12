@@ -64,6 +64,16 @@ case ${1:-run} in
     exit 0
     ;;
   resume)
+    # A manual deploy while paused moves the checkout ahead of what this
+    # script last recorded. Record it, so the next run neither rebuilds the
+    # same code under an older commit's name nor treats it as undeployed.
+    head=$(git_app rev-parse HEAD)
+    recorded=$(deployed_sha)
+    if [[ $head != "$recorded" ]] && git_app merge-base --is-ancestor "$recorded" "$head"; then
+      echo "$head" >"$STATE_DIR/deployed"
+      record_result "$head" ok "recorded a manual deploy (checkout was ahead of $recorded)"
+      log "recorded the checkout ($head) as deployed"
+    fi
     rm -f "$STATE_DIR/paused"
     log "resumed"
     exit 0
@@ -104,6 +114,13 @@ if ! git_app merge-base --is-ancestor "$deployed" "$target"; then
   echo "$target" >"$STATE_DIR/failed"
   record_result "$target" failed "not a fast-forward from $deployed"
   exit 1
+fi
+# The images are built from the checkout, so a green commit older than the
+# checkout (it was moved ahead by hand) must not be deployed: that would build
+# the newer code and record it as the older commit. Wait for a newer green one.
+head=$(git_app rev-parse HEAD)
+if [[ $head != "$target" ]] && git_app merge-base --is-ancestor "$target" "$head"; then
+  exit 0
 fi
 if [[ -n $(git_app status --porcelain --untracked-files=no) ]]; then
   log "REFUSED: $APP_DIR has local changes; not touching it"
@@ -190,7 +207,11 @@ fi
 
 # 4. Promote and roll out.
 for c in "${components[@]}"; do
-  docker image inspect "citramac-$c:latest" >/dev/null 2>&1 && docker tag "citramac-$c:latest" "citramac-$c:previous"
+  # Keep :previous a real rollback target: only replace it when the image changes.
+  latest_id=$(docker image inspect -f '{{.Id}}' "citramac-$c:latest" 2>/dev/null || true)
+  if [[ -n $latest_id && $latest_id != "$(docker image inspect -f '{{.Id}}' "citramac-$c:candidate")" ]]; then
+    docker tag "citramac-$c:latest" "citramac-$c:previous"
+  fi
   docker tag "citramac-$c:candidate" "citramac-$c:latest"
   import_image "citramac-$c:latest"
 done
