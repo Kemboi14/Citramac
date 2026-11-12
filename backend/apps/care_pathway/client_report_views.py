@@ -66,9 +66,7 @@ class ClientReportPrintView(APIView):
             ],
             "report": report,
             "printed_by": services.user_display(request.user),
-            "printed_at": facility_time.local_format(
-                facility_time.local_now(), "%d %b %Y %H:%M"
-            ),
+            "printed_at": facility_time.local_format(facility_time.local_now(), "%d %b %Y %H:%M"),
         }
         html = printing.render("documents/print/client_report.html", context)
         return printing.respond(

@@ -98,8 +98,10 @@ def _display_value(value, valueset, labels):
         return ""
     if isinstance(value, list):
         parts = [
-            _concept(labels, valueset, item) if isinstance(item, str) else _display_value(
-                item, valueset, labels
+            (
+                _concept(labels, valueset, item)
+                if isinstance(item, str)
+                else _display_value(item, valueset, labels)
             )
             for item in value
         ]
@@ -193,9 +195,7 @@ def _registration(patient, banner, episode):
         "address": _address(patient),
         "national_id": patient.national_id,
         "preferred_language": patient.preferred_language,
-        "marital_status": (
-            patient.get_marital_status_display() if patient.marital_status else ""
-        ),
+        "marital_status": (patient.get_marital_status_display() if patient.marital_status else ""),
         "occupation": patient.occupation,
         "next_of_kin": kin.name if kin else "",
         "next_of_kin_relationship": kin.relationship if kin else "",
@@ -305,18 +305,14 @@ def _triage(patient, labels):
     )
     if encounter is None:
         return None
-    assessment = (
-        encounter.assessments.filter(status="COMPLETED").order_by("-version").first()
-    )
+    assessment = encounter.assessments.filter(status="COMPLETED").order_by("-version").first()
     return {
         "arrival_at": _iso(encounter.arrival_at),
         "arrival_on": _when(encounter.arrival_at),
         "status": encounter.get_status_display(),
         "presenting_concern": _text(encounter.presenting_concern),
         "priority": encounter.priority,
-        "priority_label": (
-            encounter.get_priority_display() if encounter.priority else "Not set"
-        ),
+        "priority_label": (encounter.get_priority_display() if encounter.priority else "Not set"),
         "signed_on": _when(assessment.signed_at) if assessment else "",
         "signed_by": _name(assessment.signed_by) if assessment else "",
         "recommendation": (
@@ -324,9 +320,7 @@ def _triage(patient, labels):
             if assessment
             else ""
         ),
-        "recommendation_reasons": _text(assessment.recommendation_reasons)
-        if assessment
-        else "",
+        "recommendation_reasons": _text(assessment.recommendation_reasons) if assessment else "",
         "final_priority": (
             assessment.get_final_priority_display()
             if assessment and assessment.final_priority
@@ -349,9 +343,7 @@ def _intake(patient, labels):
     return {
         "version": intake.version,
         "status": intake.get_status_display(),
-        "completeness": (
-            intake.get_completeness_display() if intake.completeness else ""
-        ),
+        "completeness": (intake.get_completeness_display() if intake.completeness else ""),
         "saved_on": _when(intake.created_at),
         "signed_on": _when(intake.signed_at),
         "signed_by": _name(intake.signed_by),
@@ -360,9 +352,7 @@ def _intake(patient, labels):
         "risk_level": intake.get_risk_level_display() if intake.risk_level else "",
         "risk_notes": _text(intake.risk_notes),
         "formulation": _text(intake.formulation),
-        "clinical_decision": _concept(
-            labels, "intake-clinical-decision", intake.clinical_decision
-        ),
+        "clinical_decision": _concept(labels, "intake-clinical-decision", intake.clinical_decision),
         "gad7_score": intake.gad7_score,
         "phq9_score": intake.phq9_score,
         "outstanding": intake.outstanding or [],
@@ -465,14 +455,10 @@ def _interventions(patient, labels):
                 "title": activity.title,
                 "module": _concept(labels, "care-module", activity.module),
                 "priority": activity.priority,
-                "priority_label": (
-                    activity.get_priority_display() if activity.priority else ""
-                ),
+                "priority_label": (activity.get_priority_display() if activity.priority else ""),
                 "status": activity.status,
                 "status_label": activity.get_status_display(),
-                "decision": (
-                    activity.get_decision_display() if activity.decision else ""
-                ),
+                "decision": (activity.get_decision_display() if activity.decision else ""),
                 "goal": _text(activity.goal),
                 "instructions": _text(activity.instructions),
                 "note": note,
@@ -537,9 +523,7 @@ def _psychotherapy(patient):
         if session.modality:
             details.append({"label": "Modality", "value": session.modality})
         if session.trauma_processing_stage:
-            details.append(
-                {"label": "Trauma phase", "value": session.trauma_processing_stage}
-            )
+            details.append({"label": "Trauma phase", "value": session.trauma_processing_stage})
         if session.progress_rating:
             details.append({"label": "Progress", "value": f"{session.progress_rating}/10"})
         if _text(session.goals):
@@ -548,9 +532,7 @@ def _psychotherapy(patient):
         if _text(extra.get("homework")):
             details.append({"label": "Homework", "value": _text(extra.get("homework"))})
         if _text(extra.get("process_notes")):
-            details.append(
-                {"label": "Process notes", "value": _text(extra.get("process_notes"))}
-            )
+            details.append({"label": "Process notes", "value": _text(extra.get("process_notes"))})
         if note is not None:
             for key, title in _psy_sections():
                 shown = _text((note.sections or {}).get(key))
@@ -657,9 +639,7 @@ def _discharges(patient):
                 "signed_by": _name(row.signed_by),
                 "discharged_on": _when(row.discharged_at),
                 "destination": row.destination,
-                "disposition": _concept(
-                    labels, "discharge-disposition", row.disposition
-                ),
+                "disposition": _concept(labels, "discharge-disposition", row.disposition),
                 "clinical_status": _text(row.clinical_status),
                 "treatment_summary": _text(row.treatment_summary),
                 "legal_status": _text(row.legal_status_at_discharge),
@@ -667,9 +647,7 @@ def _discharges(patient):
                     {
                         "code": diagnosis.shown_code if diagnosis.icd11_code_id else "",
                         "label": (
-                            diagnosis.shown_label
-                            if diagnosis.icd11_code_id
-                            else str(diagnosis)
+                            diagnosis.shown_label if diagnosis.icd11_code_id else str(diagnosis)
                         ),
                     }
                     for diagnosis in row.diagnoses.all()
@@ -680,9 +658,7 @@ def _discharges(patient):
                         "dose": line.dose,
                         "route": line.route,
                         "frequency": line.frequency,
-                        "action": _concept(
-                            labels, "discharge-medication-action", line.action
-                        ),
+                        "action": _concept(labels, "discharge-medication-action", line.action),
                         "note": line.note,
                     }
                     for line in row.medications.all()
@@ -704,9 +680,7 @@ def _follow_ups(patient):
             "overdue": row["overdue"],
             "contact_note": row["contact_note"]["text"] if row["contact_note"] else "",
             "contact_by": row["contact_note"]["by"] if row["contact_note"] else "",
-            "contact_on": _when(row["contact_note"]["at"])
-            if row["contact_note"]
-            else "",
+            "contact_on": _when(row["contact_note"]["at"]) if row["contact_note"] else "",
         }
         for row in rows
     ]
@@ -775,9 +749,7 @@ def compile_report(patient, user=None):
             "goals": _text(plan.goals),
             "review_date": _day(plan.review_date),
             "care_coordinator": _name(plan.care_coordinator),
-            "client_agreement": _concept(
-                labels, "care-plan-agreement", plan.client_agreement
-            ),
+            "client_agreement": _concept(labels, "care-plan-agreement", plan.client_agreement),
             "what_matters": _text(plan.what_matters),
             "rationale": _text(plan.rationale),
         }
