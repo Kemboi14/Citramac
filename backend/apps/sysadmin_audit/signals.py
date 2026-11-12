@@ -30,6 +30,7 @@ FINGERPRINTED_FIELDS = {
     "body_text",
     "html_context",
 }
+CLINICAL_CONTENT_FIELDS = {"sbar"}
 
 
 def _is_fingerprinted(name):
@@ -70,7 +71,13 @@ def _serialize(instance, field_names=None):
             continue
         value = getattr(instance, name, None)
         value = str(value) if value is not None else None
-        if _is_fingerprinted(name):
+        if name in CLINICAL_CONTENT_FIELDS:
+            value = (
+                "[clinical content " + hashlib.sha256(value.encode()).hexdigest()[:8] + "]"
+                if value
+                else value
+            )
+        elif _is_fingerprinted(name):
             value = _fingerprint(value)
         data[name] = value
     return data
@@ -120,7 +127,13 @@ def _log_delete(sender, instance, **kwargs):
             continue
         value = getattr(instance, field.attname, None)
         value = str(value) if value is not None else None
-        if _is_fingerprinted(field.name):
+        if field.name in CLINICAL_CONTENT_FIELDS:
+            value = (
+                "[clinical content " + hashlib.sha256(value.encode()).hexdigest()[:8] + "]"
+                if value
+                else value
+            )
+        elif _is_fingerprinted(field.name):
             value = _fingerprint(value)
         diff[field.name] = {"old": value, "new": None}
     write_entry(instance, AuditLogEntry.ACTION_DELETE, diff)

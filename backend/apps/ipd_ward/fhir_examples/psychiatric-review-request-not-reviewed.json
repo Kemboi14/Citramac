@@ -1,0 +1,64 @@
+{
+  "resourceType": "Task",
+  "id": "d702c75e-17e7-4a2d-aabb-6c2bf8be233e",
+  "meta": {
+    "profile": ["https://fhir.dha.go.ke/core/StructureDefinition/kenya-core-task"],
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      }
+    ]
+  },
+  "status": "completed",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/CodeSystem/task-code",
+        "code": "fulfill",
+        "display": "Fulfill the focal request"
+      }
+    ],
+    "text": "Psychiatric review requested"
+  },
+  "description": "SITUATION\nClient Z was admitted for psychiatric review.\n\nBACKGROUND\nRecord summary prepared from the client's chart.\n\nASSESSMENT\nThe client left the ward before assessment.\n\nRECOMMENDATION\nArrange follow-up when the client returns.",
+  "for": {
+    "reference": "Patient/09fa51f0-8563-431d-94db-1d3bcd50177d"
+  },
+  "encounter": {
+    "reference": "Encounter/2060aaea-51e8-47d7-afab-fc7dc7637b72"
+  },
+  "requester": {
+    "reference": "Practitioner/27cfcc19-a409-4fd8-815a-f2848460dc8b",
+    "display": "Jane Njoroge"
+  },
+  "owner": {
+    "reference": "Practitioner/96b78c38-eec0-4b79-82e8-d0620f2c07eb",
+    "display": "Wanjiru Otieno"
+  },
+  "authoredOn": "2026-11-17T14:00:00+03:00",
+  "priority": "routine",
+  "lastModified": "2026-11-17T14:35:00+03:00",
+  "output": [
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "urn:citramac:codesystem:task-output",
+            "code": "psychiatric-review-outcome"
+          }
+        ]
+      },
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "urn:citramac:codesystem:psychiatric-review-outcome",
+            "code": "not_reviewed",
+            "display": "Not reviewed — client left / declined"
+          }
+        ]
+      }
+    }
+  ]
+}

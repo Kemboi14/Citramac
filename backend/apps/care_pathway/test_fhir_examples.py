@@ -10,9 +10,10 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from apps.dha_interop.fhir_validation.validator import validate_bundle
+from apps.dha_interop.fhir_validation.validator import validate_bundle, validate_resource
 
 EXAMPLES = Path(__file__).parent / "fhir_examples"
+IPD_EXAMPLES = Path(__file__).parent.parent / "ipd_ward" / "fhir_examples"
 
 
 def _load(name):
@@ -208,3 +209,34 @@ class FhirR4ConformancePsychiatricReviewExamplesTests(SimpleTestCase):
         )
         self.assertEqual(task["status"], "requested")
         self.assertNotIn("output", task)
+
+
+class FhirR4ConformanceNursingPsychiatricReviewTaskExamplesTests(SimpleTestCase):
+    """Nurse-requested review Tasks use Kenya Core, carry their SBAR only within
+    the facility, and show request, in-progress, and client-left outcomes."""
+
+    def test_examples_are_r4_tasks_conformant_to_the_kenya_core_profile(self):
+        paths = sorted(IPD_EXAMPLES.glob("psychiatric-review-request-*.json"))
+        self.assertGreaterEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(example=path.name):
+                task = json.loads(path.read_text())
+                self.assertEqual(validate_resource(task), [])
+                self.assertEqual(task["resourceType"], "Task")
+                self.assertEqual(
+                    task["meta"]["profile"],
+                    ["https://fhir.dha.go.ke/core/StructureDefinition/kenya-core-task"],
+                )
+                self.assertTrue(task["for"] and task["encounter"] and task["requester"])
+                self.assertTrue(task["authoredOn"] and task["description"])
+                self.assertEqual(task["code"]["coding"][0]["code"], "fulfill")
+        statuses = {json.loads(path.read_text())["status"] for path in paths}
+        self.assertEqual(statuses, {"requested", "in-progress", "completed"})
+
+    def test_client_left_example_carries_the_served_not_reviewed_outcome(self):
+        task = json.loads(
+            (IPD_EXAMPLES / "psychiatric-review-request-not-reviewed.json").read_text()
+        )
+        self.assertEqual(
+            task["output"][0]["valueCodeableConcept"]["coding"][0]["code"], "not_reviewed"
+        )

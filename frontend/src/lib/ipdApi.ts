@@ -157,6 +157,25 @@ export interface Admission {
   patient_citramac_number: string;
 }
 
+export interface PsychiatricReviewRequest {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  kind: "PSYCHIATRIC_REVIEW";
+  what: string;
+  status: "INITIATED" | "PENDING" | "COMPLETED";
+  requested_by: string;
+  requested_at: string;
+  decided_by: string;
+  decided_at: string | null;
+  priority: string;
+  assignee: string | null;
+  assignee_name: string;
+  outcome: string;
+  outcome_label: string;
+  outcome_note: string;
+}
+
 export function listAdmissions(
   accessToken: string,
   params?: { admissionType?: AdmissionType; patient?: string; status?: string },
@@ -167,6 +186,20 @@ export function listAdmissions(
   if (params?.status) query.set("status", params.status);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiRequest<Paginated<Admission>>(`/ipd/admissions/${suffix}`, { accessToken });
+}
+
+export function getPsychiatricReviewRequest(accessToken: string, admissionId: string) {
+  return apiRequest<PsychiatricReviewRequest | null>(
+    `/ipd/admissions/${admissionId}/psychiatric-review/`,
+    { accessToken },
+  );
+}
+
+export function requestPsychiatricReview(accessToken: string, admissionId: string) {
+  return apiRequest<PsychiatricReviewRequest>(
+    `/ipd/admissions/${admissionId}/psychiatric-review/`,
+    { method: "POST", accessToken },
+  );
 }
 
 /** Every admission currently holding a bed (status ADMITTED or TRANSFERRED). */

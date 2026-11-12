@@ -6,14 +6,17 @@ import { usePatientContext } from "../../clinical/usePatientContext";
 import {
   addNursingNote,
   administerMarEntry,
+  getPsychiatricReviewRequest,
   listAdmissions,
   listMarEntries,
   listNursingNotes,
+  requestPsychiatricReview,
   scheduleMarEntry,
   type Admission,
   type MarStatus,
   type MedicationAdministration,
   type NursingNote,
+  type PsychiatricReviewRequest,
 } from "../../lib/ipdApi";
 import { PageHeader } from "../care/shared/ui";
 import { formErrorSummary } from "../../lib/formErrors";
@@ -46,6 +49,7 @@ export function NursingCarePage() {
   const [admission, setAdmission] = useState<Admission | null>(null);
   const [marEntries, setMarEntries] = useState<MedicationAdministration[]>([]);
   const [notes, setNotes] = useState<NursingNote[]>([]);
+  const [reviewRequest, setReviewRequest] = useState<PsychiatricReviewRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -55,43 +59,49 @@ export function NursingCarePage() {
 
   const refresh = async () => {
     if (!accessToken || !selected) return;
-    const admissions = await listAdmissions(accessToken);
+    const admissions = await listAdmissions(accessToken, { patient: selected.patientId });
     const active = admissions.results.find(
-      (a) => a.patient === selected.patientId && a.status === "ADMITTED",
+      (a) => a.patient === selected.patientId && ["ADMITTED", "TRANSFERRED"].includes(a.status),
     );
     setAdmission(active ?? null);
     if (active) {
-      const [mar, noteRes] = await Promise.all([
+      const [mar, noteRes, review] = await Promise.all([
         listMarEntries(accessToken, active.id),
         listNursingNotes(accessToken, active.id),
+        getPsychiatricReviewRequest(accessToken, active.id),
       ]);
       setMarEntries(mar.results);
       setNotes(noteRes.results);
+      setReviewRequest(review);
     } else {
       setMarEntries([]);
       setNotes([]);
+      setReviewRequest(null);
     }
   };
 
   useEffect(() => {
     if (!accessToken || !selected) return;
-    listAdmissions(accessToken)
+    listAdmissions(accessToken, { patient: selected.patientId })
       .then(async (admissions) => {
         const active = admissions.results.find(
-          (a) => a.patient === selected.patientId && a.status === "ADMITTED",
+          (a) => a.patient === selected.patientId && ["ADMITTED", "TRANSFERRED"].includes(a.status),
         );
         setAdmission(active ?? null);
         if (!active) {
           setMarEntries([]);
           setNotes([]);
+          setReviewRequest(null);
           return;
         }
-        const [mar, noteRes] = await Promise.all([
+        const [mar, noteRes, review] = await Promise.all([
           listMarEntries(accessToken, active.id),
           listNursingNotes(accessToken, active.id),
+          getPsychiatricReviewRequest(accessToken, active.id),
         ]);
         setMarEntries(mar.results);
         setNotes(noteRes.results);
+        setReviewRequest(review);
       })
       .catch(() => setError("Couldn't load nursing records."));
   }, [accessToken, selected]);
@@ -160,14 +170,63 @@ export function NursingCarePage() {
     }
   };
 
+  const requestReview = async () => {
+    if (!accessToken || !admission) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setReviewRequest(await requestPsychiatricReview(accessToken, admission.id));
+    } catch (err) {
+      setError(formErrorSummary(err, "Couldn't request the psychiatrist review."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reviewInProgress =
+    reviewRequest?.status === "INITIATED" || reviewRequest?.status === "PENDING";
+
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <ClientContext />
       <PageHeader
-        eyebrow="Pharmacy & medication"
-        title={"Medication administration"}
+        eyebrow="Psychiatric Nursing"
+        title="Nursing care"
         subtitle={selected.patientName}
       />
+
+      <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
+        <h2 className="mb-2 font-display text-base font-semibold text-ink-900">
+          Psychiatrist review
+        </h2>
+        <p className="mb-4 text-sm text-ink-500">
+          Request a review from Psychiatry. The SBAR handover is generated from the client record
+          and sent to the psychiatrist’s “Needs my decision” inbox.
+        </p>
+        {reviewRequest && (
+          <p className="mb-3 text-sm text-ink-700">
+            {reviewRequest.status === "INITIATED"
+              ? "Review requested"
+              : reviewRequest.status === "PENDING"
+                ? `Review in progress${reviewRequest.assignee_name ? ` with ${reviewRequest.assignee_name}` : ""}`
+                : `Review completed${reviewRequest.outcome_label ? ` — ${reviewRequest.outcome_label}` : ""}`}
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={busy || Boolean(reviewInProgress)}
+          className={BUTTON_CLASS}
+          onClick={() => void requestReview()}
+        >
+          {reviewRequest?.status === "INITIATED"
+            ? "Review requested"
+            : reviewRequest?.status === "PENDING"
+              ? "Review in progress"
+              : reviewRequest?.status === "COMPLETED"
+                ? "Request another review (SBAR)"
+                : "Request psychiatrist review (SBAR)"}
+        </button>
+      </div>
 
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="mb-4 font-display text-base font-semibold text-ink-900">

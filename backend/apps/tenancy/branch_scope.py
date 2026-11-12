@@ -27,7 +27,11 @@ BRANCH_SCOPED = {
     "care_pathway.TriageEncounter": ("episode__branch",),
     "care_pathway.TriageAssessment": ("triage_encounter__episode__branch",),
     "care_pathway.TriageRecheck": ("triage_encounter__episode__branch",),
-    "care_pathway.CareTask": ("triage_encounter__episode__branch",),
+    "care_pathway.CareTask": (
+        "triage_encounter__episode__branch",
+        "episode__branch",
+        "encounter__branch",
+    ),
     "care_pathway.IntakeAssessment": ("episode__branch",),
     "care_pathway.MedicationHistoryEntry": ("episode__branch",),
     "care_pathway.CarePlan": ("episode__branch",),

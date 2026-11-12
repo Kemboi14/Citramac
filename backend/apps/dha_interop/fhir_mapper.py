@@ -9,6 +9,7 @@ HL7's R4 4.0.1 schema (fhir_validation), never against the library.
 import json
 import logging
 
+from django.conf import settings
 from fhir.resources.R4B.annotation import Annotation
 from fhir.resources.R4B.bundle import Bundle, BundleEntry
 from fhir.resources.R4B.codeableconcept import CodeableConcept
@@ -19,15 +20,19 @@ from fhir.resources.R4B.dosage import Dosage
 from fhir.resources.R4B.encounter import Encounter
 from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.medicationrequest import MedicationRequest
+from fhir.resources.R4B.meta import Meta
 from fhir.resources.R4B.observation import Observation
+from fhir.resources.R4B.provenance import Provenance, ProvenanceAgent
 from fhir.resources.R4B.reference import Reference
 from fhir.resources.R4B.riskassessment import RiskAssessment
+from fhir.resources.R4B.task import Task, TaskOutput
 
 from .fhir_patient import build_patient_resource as _build_patient
 
 logger = logging.getLogger(__name__)
 
 _GENDER_MAP = {"MALE": "male", "FEMALE": "female", "OTHER": "other"}
+KENYA_CORE_TASK_PROFILE = "https://fhir.dha.go.ke/core/StructureDefinition/kenya-core-task"
 
 
 def _urn(resource_type, internal_id):
@@ -223,7 +228,131 @@ def build_risk_assessment_resource(admission, patient_ref, encounter_ref=None):
     )
 
 
-def build_admission_bundle(admission):
+def _build_psychiatric_review_task(task, patient_ref, encounter_ref):
+    from apps.care_pathway.psychiatric_review import OUTCOMES
+
+    task_ref = _urn("Task", task.id)
+    requester = task.created_by
+    reviewer = task.completed_by
+    assignee = task.assignee
+    status = {"INITIATED": "requested", "PENDING": "in-progress", "COMPLETED": "completed"}[
+        task.status
+    ]
+    fhir_task = Task(
+        id=str(task.id),
+        meta=Meta(
+            profile=[KENYA_CORE_TASK_PROFILE],
+            security=[
+                Coding(
+                    system="http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+                    code=settings.FHIR_PSYCH_CONFIDENTIALITY_CODE,
+                )
+            ],
+        ),
+        status=status,
+        intent="order",
+        code=CodeableConcept(
+            coding=[
+                Coding(
+                    system="http://hl7.org/fhir/CodeSystem/task-code",
+                    code="fulfill",
+                    display="Fulfill the focal request",
+                )
+            ],
+            text=task.action_label,
+        ),
+        description=task.sbar,
+        for_fhir=Reference(reference=patient_ref),
+        encounter=Reference(reference=encounter_ref),
+        requester=(
+            Reference(
+                reference=f"Practitioner/{requester.id}",
+                display=requester.get_full_name() or str(requester),
+            )
+            if requester
+            else None
+        ),
+        owner=(
+            Reference(
+                reference=f"Practitioner/{assignee.id}",
+                display=assignee.get_full_name() or str(assignee),
+            )
+            if assignee
+            else None
+        ),
+        authoredOn=task.created_at.isoformat(),
+        priority=task.priority or None,
+        lastModified=(task.completed_at or task.updated_at).isoformat(),
+        output=(
+            [
+                TaskOutput(
+                    type=CodeableConcept(
+                        coding=[
+                            Coding(
+                                system="urn:citramac:codesystem:task-output",
+                                code="psychiatric-review-outcome",
+                            )
+                        ]
+                    ),
+                    valueCodeableConcept=CodeableConcept(
+                        coding=[
+                            Coding(
+                                system="urn:citramac:codesystem:psychiatric-review-outcome",
+                                code=task.outcome,
+                                display=OUTCOMES.get(task.outcome),
+                            )
+                        ]
+                    ),
+                )
+            ]
+            if task.outcome
+            else None
+        ),
+        note=[Annotation(text=task.outcome_note)] if task.outcome_note else None,
+    )
+    entries = [BundleEntry(fullUrl=task_ref, resource=fhir_task)]
+    if requester:
+        entries.append(
+            BundleEntry(
+                fullUrl=_urn("Provenance", f"request-{task.id}"),
+                resource=Provenance(
+                    id=f"request-{task.id}",
+                    target=[Reference(reference=task_ref)],
+                    recorded=task.created_at.isoformat(),
+                    agent=[
+                        ProvenanceAgent(
+                            who=Reference(
+                                reference=f"Practitioner/{requester.id}",
+                                display=requester.get_full_name() or str(requester),
+                            )
+                        )
+                    ],
+                ),
+            )
+        )
+    if task.outcome and task.completed_at and reviewer:
+        entries.append(
+            BundleEntry(
+                fullUrl=_urn("Provenance", f"outcome-{task.id}"),
+                resource=Provenance(
+                    id=f"outcome-{task.id}",
+                    target=[Reference(reference=task_ref)],
+                    recorded=task.completed_at.isoformat(),
+                    agent=[
+                        ProvenanceAgent(
+                            who=Reference(
+                                reference=f"Practitioner/{reviewer.id}",
+                                display=reviewer.get_full_name() or str(reviewer),
+                            )
+                        )
+                    ],
+                ),
+            )
+        )
+    return entries
+
+
+def build_admission_bundle(admission, include_psychiatric_review=False):
     """Encounter (class IMP, in its episode) + the admission RiskAssessment when
     any risk was recorded. Served by AdmissionViewSet.fhir for review; never
     transmitted. Legal status has no R4 home and is not in it (legal_models.py);
@@ -247,6 +376,14 @@ def build_admission_bundle(admission):
                 resource=build_risk_assessment_resource(admission, patient_ref, encounter_ref),
             )
         )
+    if include_psychiatric_review and admission.encounter_id:
+        from apps.care_pathway.models import CareTask
+        from apps.care_pathway.psychiatric_review_request import FOCUS
+
+        for task in CareTask.objects.filter(
+            focus_type=FOCUS, encounter_id=admission.encounter_id
+        ).select_related("created_by", "completed_by"):
+            entries.extend(_build_psychiatric_review_task(task, patient_ref, encounter_ref))
 
     bundle = Bundle(type="collection", entry=entries)
     return json.loads(bundle.model_dump_json(exclude_none=True))

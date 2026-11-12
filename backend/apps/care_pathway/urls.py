@@ -97,6 +97,16 @@ urlpatterns = [
         name="care-open-review",
     ),
     path("care/tasks/<uuid:pk>/", views.CareTaskView.as_view(), name="care-task"),
+    path(
+        "care/psychiatric-review-requests/<uuid:pk>/start/",
+        views.PsychiatricReviewRequestStartView.as_view(),
+        name="care-psychiatric-review-request-start",
+    ),
+    path(
+        "care/psychiatric-review-requests/<uuid:pk>/complete/",
+        views.PsychiatricReviewRequestCompleteView.as_view(),
+        name="care-psychiatric-review-request-complete",
+    ),
     path("care/psychiatry/queue/", views.PsychiatryQueueView.as_view(), name="care-psych-queue"),
     path(
         "care/psychiatry/clients/",

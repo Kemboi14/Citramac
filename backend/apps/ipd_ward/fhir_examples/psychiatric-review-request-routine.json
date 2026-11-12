@@ -1,0 +1,39 @@
+{
+  "resourceType": "Task",
+  "id": "2f9af403-3541-4f11-9d62-2cbbaac4a1f4",
+  "meta": {
+    "profile": ["https://fhir.dha.go.ke/core/StructureDefinition/kenya-core-task"],
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      }
+    ]
+  },
+  "status": "requested",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/CodeSystem/task-code",
+        "code": "fulfill",
+        "display": "Fulfill the focal request"
+      }
+    ],
+    "text": "Psychiatric review requested"
+  },
+  "description": "SITUATION\nClient X is admitted for assessment.\n\nBACKGROUND\nCurrent medicines and relevant history reviewed.\n\nASSESSMENT\nVitals and current risk reviewed.\n\nRECOMMENDATION\nPlease assess and advise.",
+  "for": {
+    "reference": "Patient/44ac78d3-884b-4dd1-b029-8e17a33a4b83"
+  },
+  "encounter": {
+    "reference": "Encounter/4c472bc1-24c8-4437-90e7-b9c49a0e8683"
+  },
+  "requester": {
+    "reference": "Practitioner/27cfcc19-a409-4fd8-815a-f2848460dc8b",
+    "display": "Jane Njoroge"
+  },
+  "authoredOn": "2026-11-18T09:30:00+03:00",
+  "priority": "routine",
+  "lastModified": "2026-11-18T09:30:00+03:00"
+}

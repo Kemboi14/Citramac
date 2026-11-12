@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import _has_org_admin_role
 from apps.retention.mixins import NoHardDeleteMixin
+from apps.sysadmin_audit.audit import log_view
 from apps.sysadmin_audit.mixins import AuditedReadMixin
 
 from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
@@ -202,10 +203,45 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
     @action(detail=True, methods=["get"])
     def fhir(self, request, pk=None):
         """FHIR Bundle (Encounter + Consent/RiskAssessment) for this admission."""
+        from apps.accounts.access import has_permission
         from apps.dha_interop.fhir_mapper import build_admission_bundle
 
         admission = self.get_object()
-        return Response(build_admission_bundle(admission))
+        log_view(admission)
+        include_review = has_permission(request.user, "clinical.care.record") and has_permission(
+            request.user, "clinical.cosign"
+        )
+        bundle = build_admission_bundle(admission, include_psychiatric_review=include_review)
+        if include_review:
+            from apps.care_pathway.models import CareTask
+            from apps.care_pathway.psychiatric_review_request import FOCUS
+
+            for task in CareTask.objects.filter(
+                focus_type=FOCUS, encounter_id=admission.encounter_id
+            ):
+                log_view(task)
+        return Response(bundle)
+
+    @action(detail=True, methods=["get", "post"], url_path="psychiatric-review")
+    def psychiatric_review_request(self, request, pk=None):
+        from apps.care_pathway import psychiatric_review_request
+        from apps.care_pathway.access import require
+
+        require(request.user)
+        admission = self.get_object()
+        log_view(admission)
+        if request.method == "GET":
+            task = psychiatric_review_request.latest_for_admission(admission)
+            if task:
+                log_view(task)
+                return Response(psychiatric_review_request.row(task))
+            return Response(None)
+
+        task, created = psychiatric_review_request.request(admission, request.user)
+        return Response(
+            psychiatric_review_request.row(task),
+            status=201 if created else 200,
+        )
 
     @action(detail=True, methods=["post"])
     def discharge(self, request, pk=None):

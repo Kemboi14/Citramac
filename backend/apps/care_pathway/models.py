@@ -419,7 +419,7 @@ class ClinicalFinding(TenantScopedModel):
 
 
 class CareTask(TenantScopedModel):
-    """Trackable immediate action from triage section N. FHIR Task."""
+    """Shared FHIR Task store for triage actions and other clinical workflows."""
 
     STATUS_CHOICES = [
         ("INITIATED", "Initiated"),
@@ -431,7 +431,17 @@ class CareTask(TenantScopedModel):
     triage_encounter = models.ForeignKey(
         TriageEncounter, on_delete=models.PROTECT, null=True, blank=True, related_name="tasks"
     )
-    # Code from the `triage-action` LocalValueSet; label kept as shown at the time.
+    episode = models.ForeignKey(
+        EpisodeOfCare, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    encounter = models.ForeignKey(
+        "clinical_encounter.Encounter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Workflow code; triage actions use the `triage-action` LocalValueSet.
     action_code = models.CharField(max_length=40)
     action_label = models.CharField(max_length=255)
     owner = models.CharField(max_length=150)
@@ -460,6 +470,8 @@ class CareTask(TenantScopedModel):
     # psychiatric_review.py). FHIR Task.output.
     outcome = models.CharField(max_length=40, blank=True)
     outcome_note = models.CharField(max_length=500, blank=True)
+    # Frozen record-derived handover for a nurse-requested psychiatric review.
+    sbar = models.TextField(blank=True)
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]

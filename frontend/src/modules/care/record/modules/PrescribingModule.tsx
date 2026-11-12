@@ -5,7 +5,6 @@ import {
   checkPrescribing,
   getPrescribing,
   placeOrder,
-  requestCosign,
   type PrescribingCheck,
   type PrescribingState,
 } from "../../../../lib/carePathwayApi";
@@ -76,7 +75,6 @@ export function PrescribingModule({
   const [checks, setChecks] = useState<PrescribingCheck | null>(null);
   const [ack, setAck] = useState(false);
   const [override, setOverride] = useState<string | null>(null);
-  const [reviewRequested, setReviewRequested] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -160,20 +158,6 @@ export function PrescribingModule({
     }
   }
 
-  async function requestReview() {
-    if (!accessToken) return;
-    try {
-      await requestCosign(
-        accessToken,
-        patientId,
-        "Psychiatrist review requested — SBAR handover on the record",
-      );
-      setReviewRequested(true);
-    } catch (e) {
-      setError(errorText(e, "Couldn't request the review."));
-    }
-  }
-
   if (!state)
     return error ? (
       <ErrorNote>{error}</ErrorNote>
@@ -199,7 +183,8 @@ export function PrescribingModule({
       )}
       {!state.locked && !state.can_prescribe && (
         <Callout>
-          Only a prescriber can place medication orders. Request a psychiatrist review below.
+          Only a prescriber can place medication orders. Request a psychiatric review from
+          Psychiatric Nursing.
         </Callout>
       )}
       {!state.locked && state.can_prescribe && (
@@ -460,23 +445,6 @@ export function PrescribingModule({
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-      {!state.is_senior && (
-        <div className="border-t border-surface-border pt-3">
-          <div className={FIELD_LABEL}>Escalate to psychiatrist</div>
-          <p className="mt-1 text-[12px] text-ink-500">
-            Raises a review request with the SBAR built from the record; it appears in the
-            psychiatrist’s “Needs my decision” inbox.
-          </p>
-          <button
-            type="button"
-            className={`${BTN_GHOST} ${BTN_SM} mt-2`}
-            disabled={reviewRequested}
-            onClick={() => void requestReview()}
-          >
-            {reviewRequested ? "Review requested" : "Request psychiatrist review (SBAR)"}
-          </button>
         </div>
       )}
     </div>

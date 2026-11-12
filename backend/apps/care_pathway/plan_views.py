@@ -559,4 +559,12 @@ class CosignAcknowledgeView(APIView):
 class DecisionInboxView(APIView):
     def get(self, request):
         items = plan_extras.inbox(request.user)
-        return Response({"results": [_cosign_row(r, kind) for r, kind in items]})
+        results = [_cosign_row(r, kind) for r, kind in items]
+        from apps.sysadmin_audit.audit import log_view
+
+        from . import psychiatric_review_request
+
+        for task in psychiatric_review_request.inbox(request.user):
+            log_view(task)
+            results.append(psychiatric_review_request.row(task, include_sbar=True))
+        return Response({"results": results})

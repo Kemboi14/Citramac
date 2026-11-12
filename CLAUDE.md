@@ -824,3 +824,24 @@ configurable categories and utilisation were already in place.
 
 Reversibility: cheap. Additive (migration `care_pathway 0057`); no signed or confirmed record changes.
 An eligibility limit affects only sessions confirmed afterwards.
+
+### 2026-11-12 — psychiatric review requests originate in Psychiatric Nursing
+
+On the owner's instruction, a nurse requests psychiatrist review from the
+Psychiatric Nursing module, never from the shared Psychiatry/Pharmacy/Interventions prescribing
+panel. The request creates one shared `CareTask` (FHIR R4 `Task`) for an active admission.
+The Task hangs off the admission's R4 `Encounter` and `EpisodeOfCare`; its server-generated SBAR
+is frozen on the request. The Kenya Core 1.0.0 `kenya-core-task` profile applies. Task.code uses
+HL7 R4's `task-code` `fulfill`; the review result comes from the already-served local
+`psychiatric-review-outcome` ValueSet and is recorded in `Task.output`.
+
+Only staff with clinical-record and senior-review permissions see requests in “Needs my decision”.
+The reviewing psychiatrist starts the Task and completes it with an active served outcome; a bare
+status update is refused. The request and its SBAR are facility-internal and are not added to SHR
+or SHA payloads. SBAR reads and Task transitions are audited; the audit trail fingerprints, but
+does not copy, the SBAR text. The Task carries the configured restricted confidentiality label.
+Published examples cover routine request, urgent/in-progress review, and a client-left outcome.
+
+Reversibility: cheap — requests are additive and can be superseded with another request; no signed
+clinical record is changed. The SBAR is a point-in-time snapshot and is never regenerated after
+the request, so the psychiatrist sees the same handover that was raised.

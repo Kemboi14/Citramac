@@ -2196,14 +2196,21 @@ export interface CosignRow {
   patient_name: string;
   kind: string;
   what: string;
-  status: "REQUESTED" | "SIGNED" | "DECLINED" | "ACKNOWLEDGED";
+  status:
+    "REQUESTED" | "SIGNED" | "DECLINED" | "ACKNOWLEDGED" | "INITIATED" | "PENDING" | "COMPLETED";
   requested_by: string;
   requested_at: string;
   decided_by: string;
   decided_at: string | null;
   decline_reason: string;
   thread: { by: string; at: string; note: string }[];
-  inbox_kind: "" | "cosign" | "returned" | "discuss";
+  inbox_kind: "" | "cosign" | "returned" | "discuss" | "psychiatric_review";
+  sbar?: string;
+  priority?: string;
+  assignee?: string | null;
+  outcome?: string;
+  outcome_label?: string;
+  outcome_note?: string;
 }
 
 export function listCosign(accessToken: string, patientId: string) {
@@ -2239,6 +2246,26 @@ export function acknowledgeCosign(accessToken: string, id: string) {
 
 export function getDecisionInbox(accessToken: string) {
   return apiRequest<{ results: CosignRow[] }>("/care/decisions/", { accessToken });
+}
+
+export function startPsychiatricReviewRequest(accessToken: string, id: string) {
+  return apiRequest<CosignRow>(`/care/psychiatric-review-requests/${id}/start/`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+export function completePsychiatricReviewRequest(
+  accessToken: string,
+  id: string,
+  outcome: string,
+  outcomeNote = "",
+) {
+  return apiRequest<CosignRow>(`/care/psychiatric-review-requests/${id}/complete/`, {
+    method: "POST",
+    body: { outcome, outcome_note: outcomeNote },
+    accessToken,
+  });
 }
 
 // ── Intervention modules ──

@@ -735,6 +735,12 @@ class CareTaskView(APIView):
                 task, request.user, request.data.get("outcome"), request.data.get("outcome_note")
             )
             return Response(CareTaskSerializer(task).data)
+        from . import psychiatric_review_request
+
+        if task.focus_type == psychiatric_review_request.FOCUS:
+            raise ValidationError(
+                {"status": "Use the psychiatric review inbox to start or complete this task."}
+            )
         from . import legal_status
 
         if task.focus_type == legal_status.TASK_FOCUS:
@@ -753,6 +759,38 @@ class CareTaskView(APIView):
         else:
             serializer.save()
         return Response(serializer.data)
+
+
+class PsychiatricReviewRequestStartView(APIView):
+    def post(self, request, pk):
+        from . import psychiatric_review_request
+
+        task = get_object_or_404(
+            CareTask.objects.select_related("patient", "created_by", "assignee"),
+            pk=pk,
+            focus_type=psychiatric_review_request.FOCUS,
+        )
+        return Response(
+            psychiatric_review_request.row(psychiatric_review_request.start(task, request.user))
+        )
+
+
+class PsychiatricReviewRequestCompleteView(APIView):
+    def post(self, request, pk):
+        from . import psychiatric_review_request
+
+        task = get_object_or_404(
+            CareTask.objects.select_related("patient", "created_by", "assignee"),
+            pk=pk,
+            focus_type=psychiatric_review_request.FOCUS,
+        )
+        updated = psychiatric_review_request.complete(
+            task,
+            request.user,
+            request.data.get("outcome"),
+            request.data.get("outcome_note", ""),
+        )
+        return Response(psychiatric_review_request.row(updated))
 
 
 class TriageRecheckDraftView(APIView):
