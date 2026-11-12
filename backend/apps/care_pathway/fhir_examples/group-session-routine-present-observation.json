@@ -1,0 +1,359 @@
+{
+  "resourceType": "Bundle",
+  "id": "080f90ee-83bd-5ad9-a72f-a922ebcf99ad",
+  "meta": {
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      },
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+        "code": "PSY"
+      }
+    ]
+  },
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:27452b93-d915-4ef7-bf76-3f1fd0565385",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "27452b93-d915-4ef7-bf76-3f1fd0565385",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202611ORG--001"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Kamau",
+            "given": [
+              "Amina",
+              "Wanjiku"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1992-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:bec9717d-fc6d-4cba-850b-338777eb18f8",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "bec9717d-fc6d-4cba-850b-338777eb18f8",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-11-12T09:28:55.409525Z"
+            }
+          }
+        ],
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:care-programme",
+                "code": "residential_rehabilitation",
+                "display": "Residential rehabilitation"
+              }
+            ]
+          }
+        ],
+        "patient": {
+          "reference": "urn:uuid:27452b93-d915-4ef7-bf76-3f1fd0565385"
+        },
+        "period": {
+          "start": "2026-11-12T09:28:55.409525Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e8cbb559-7d72-5dc9-92d4-c8756e0b053b",
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "e8cbb559-7d72-5dc9-92d4-c8756e0b053b",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "fulfilled",
+        "serviceType": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:group-programme-category",
+                "code": "group_psychotherapy",
+                "display": "Group psychotherapy"
+              }
+            ]
+          }
+        ],
+        "description": "Coping with cravings",
+        "start": "2026-11-12T10:00:00+03:00",
+        "end": "2026-11-12T11:00:00+03:00",
+        "comment": "Psychoeducation on the craving cycle, followed by urge-surfing practice in pairs.",
+        "participant": [
+          {
+            "type": [
+              {
+                "text": "Facilitator"
+              }
+            ],
+            "actor": {
+              "display": "Jane Njoroge"
+            },
+            "required": "required",
+            "status": "accepted"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:deb94738-3021-4211-a4a9-d058f8928b6a",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "deb94738-3021-4211-a4a9-d058f8928b6a",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:group-session-entry"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "finished",
+        "class": {
+          "display": "group session"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:group-programme-category",
+                "code": "group_psychotherapy",
+                "display": "Group psychotherapy"
+              }
+            ]
+          }
+        ],
+        "subject": {
+          "reference": "urn:uuid:27452b93-d915-4ef7-bf76-3f1fd0565385"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:uuid:bec9717d-fc6d-4cba-850b-338777eb18f8"
+          }
+        ],
+        "participant": [
+          {
+            "type": [
+              {
+                "text": "Facilitator"
+              }
+            ],
+            "individual": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ],
+        "appointment": [
+          {
+            "reference": "urn:uuid:e8cbb559-7d72-5dc9-92d4-c8756e0b053b"
+          }
+        ],
+        "period": {
+          "start": "2026-11-12T10:00:00+03:00",
+          "end": "2026-11-12T11:00:00+03:00"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:a4d2e1de-65fb-59a4-8105-02264d6eff2d",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "a4d2e1de-65fb-59a4-8105-02264d6eff2d",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:group-session-attendance"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:group-session-observation",
+              "code": "group-session-attendance",
+              "display": "Group session attendance"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:27452b93-d915-4ef7-bf76-3f1fd0565385"
+        },
+        "encounter": {
+          "reference": "urn:uuid:deb94738-3021-4211-a4a9-d058f8928b6a"
+        },
+        "effectiveDateTime": "2026-11-12T10:00:00+03:00",
+        "performer": [
+          {
+            "display": "Jane Njoroge"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:group-attendance",
+              "code": "PRESENT",
+              "display": "Present"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Described using the urge-surfing exercise twice this week and shared it with the group."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:1c814522-7b79-5816-b25d-5f7025068afd",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "1c814522-7b79-5816-b25d-5f7025068afd",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:intervention-module",
+              "code": "group_psychotherapy",
+              "display": "Group therapy"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:27452b93-d915-4ef7-bf76-3f1fd0565385"
+        },
+        "encounter": {
+          "reference": "urn:uuid:deb94738-3021-4211-a4a9-d058f8928b6a"
+        },
+        "performedDateTime": "2026-11-12T10:00:00+03:00",
+        "performer": [
+          {
+            "actor": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:07685c00-2a46-53a5-a71f-ae1e91e05de6",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "07685c00-2a46-53a5-a71f-ae1e91e05de6",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "target": [
+          {
+            "reference": "urn:uuid:deb94738-3021-4211-a4a9-d058f8928b6a"
+          },
+          {
+            "reference": "urn:uuid:a4d2e1de-65fb-59a4-8105-02264d6eff2d"
+          },
+          {
+            "reference": "urn:uuid:1c814522-7b79-5816-b25d-5f7025068afd"
+          }
+        ],
+        "recorded": "2026-11-12T09:28:56.013564Z",
+        "activity": {
+          "text": "Group session confirmed"
+        },
+        "agent": [
+          {
+            "who": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

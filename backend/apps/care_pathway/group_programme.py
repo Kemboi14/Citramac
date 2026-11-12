@@ -17,12 +17,16 @@ shared session list, the session history and utilisation never carry an
 observation or a risk detail; a client's record carries only that client's own
 entries plus the shared session facts.
 
-Open questions, recorded rather than guessed:
-- No programme-enrolment model exists, so every client's programme is
-  "Not assigned" (the mockup's own fallback).
-- No session-eligibility model exists, so every listed client is eligible. The
-  "Eligible clients only / All active clients" filter is kept working against
-  the `eligible` flag so a real rule can be added without a UI change.
+Programme and eligibility (owner, 2026-11-12):
+- A client's programme is `EpisodeOfCare.programme` (FHIR EpisodeOfCare.type),
+  one of the organisation's own `CareProgramme`s, which Org Admin maintains.
+  None is seeded; a client without one is "Not assigned".
+- A category limited to programmes lists only their clients as eligible; a
+  category with none is open to every client in care. Confirming a session
+  refuses a client the category is not open to.
+- The list is every client with an open episode, each marked admitted or not;
+  the workspace shows admitted clients unless "Include outpatients in care" is
+  ticked. A discharged client with no open episode never appears.
 """
 
 from datetime import timedelta
@@ -40,6 +44,7 @@ from apps.ipd_ward.models import Admission
 
 from . import facility_time, services
 from .models import (
+    CareProgramme,
     CareTask,
     ClinicalAlert,
     EpisodeOfCare,
@@ -116,7 +121,113 @@ def category_row(category):
         "display": category.display,
         "active": category.active,
         "is_other": category.code.startswith("other"),
+        # Session eligibility: empty = open to every client in care.
+        "programmes": sorted(p.code for p in category.programmes.all()),
     }
+
+
+def set_category_programmes(user, category, codes):
+    """Limit a category to programmes (empty list = open to every client)."""
+    if not can_configure_categories(user):
+        raise PermissionDenied("Only an administrator can change session eligibility.")
+    if not isinstance(codes, list):
+        raise ValidationError({"programmes": "Choose programmes from the list."})
+    chosen = list(CareProgramme.objects.filter(code__in=codes))
+    if len(chosen) != len(set(codes)):
+        raise ValidationError({"programmes": "Choose programmes from the list."})
+    category.programmes.set(chosen)
+    return category
+
+
+# ── Programmes (EpisodeOfCare.type) ──
+
+
+def programmes():
+    return CareProgramme.objects.all()
+
+
+def programme_row(programme):
+    return {"code": programme.code, "display": programme.display, "active": programme.active}
+
+
+def _clean_programme_display(display, exclude=None):
+    display = str(display or "").strip()
+    if not display:
+        raise ValidationError({"display": "Enter a programme name."})
+    if len(display) > 100:
+        raise ValidationError({"display": "Keep the programme name to 100 characters."})
+    clash = CareProgramme.objects.filter(display__iexact=display)
+    if exclude:
+        clash = clash.exclude(pk=exclude.pk)
+    if clash.exists():
+        raise ValidationError({"display": "This programme already exists."})
+    return display
+
+
+def add_programme(user, display):
+    if not can_configure_categories(user):
+        raise PermissionDenied("Only an administrator can add a programme.")
+    display = _clean_programme_display(display)
+    base = slugify(display).replace("-", "_")[:56] or "programme"
+    code, suffix = base, 2
+    while CareProgramme.objects.filter(code=code).exists():
+        code, suffix = f"{base}_{suffix}", suffix + 1
+    last = CareProgramme.objects.order_by("-order").first()
+    return CareProgramme.objects.create(
+        organization_id=user.organization_id,
+        code=code,
+        display=display,
+        order=(last.order + 1) if last else 0,
+    )
+
+
+def modify_programme(user, programme, data):
+    """Rename or retire a programme. The code never changes, so every episode
+    on it keeps pointing at the same programme; a retired one is not offered
+    for new assignments."""
+    if not can_configure_categories(user):
+        raise PermissionDenied("Only an administrator can change a programme.")
+    fields = []
+    if "display" in data:
+        programme.display = _clean_programme_display(data["display"], exclude=programme)
+        fields.append("display")
+    if "active" in data:
+        programme.active = bool(data["active"])
+        fields.append("active")
+    if fields:
+        programme.save(update_fields=[*fields, "updated_at"])
+    return programme
+
+
+def set_episode_programme(user, patient, code):
+    """Put the client's open episode on a programme (or none). Organisational
+    data on the episode, audited like every episode change."""
+    from apps.accounts.access import has_permission
+
+    if not (has_permission(user, "clinical.care.record") or can_configure_categories(user)):
+        raise PermissionDenied("Only clinical staff can change a client's programme.")
+    episode = services.open_episode_for(patient)
+    if episode is None:
+        raise StateConflict("This client has no open episode of care.")
+    programme = None
+    if code:
+        programme = CareProgramme.objects.filter(code=code, active=True).first()
+        if programme is None:
+            raise ValidationError({"programme": "Choose a programme from the list."})
+    if episode.programme_id != (programme.pk if programme else None):
+        episode.programme = programme
+        episode.save(update_fields=["programme", "updated_at"])
+    return episode
+
+
+def programme_label(episode):
+    return episode.programme.display if episode and episode.programme_id else "Not assigned"
+
+
+def eligible_for(category, programme_id):
+    """Is a client on `programme_id` (or none) eligible for `category`'s sessions?"""
+    allowed = {p.pk for p in category.programmes.all()}
+    return not allowed or programme_id in allowed
 
 
 def _clean_category_display(display, exclude=None):
@@ -193,22 +304,47 @@ def _eligible_patients():
     )
 
 
+def _open_episodes(patient_ids):
+    """{patient id: open episode (with its programme)}."""
+    out = {}
+    episodes = (
+        EpisodeOfCare.objects.filter(
+            patient_id__in=patient_ids, status__in=EpisodeOfCare.OPEN_STATUSES
+        )
+        .select_related("programme")
+        .order_by("period_start")
+    )
+    for episode in episodes:
+        out[episode.patient_id] = episode
+    return out
+
+
 def eligible_clients():
+    """Every client in care, marked admitted or not, with their programme.
+    `eligible` is per category, so the workspace decides it from the chosen
+    category's `programmes`; it is True here only for a client whose programme
+    every category is open to (kept for older screens)."""
     patients = list(_eligible_patients())
-    units = _units_for([p.pk for p in patients])
-    rows = [
-        {
-            "id": str(patient.pk),
-            "display_id": patient.citramac_number,
-            "name": _client_name(patient),
-            "programme": "Not assigned",
-            "unit": units.get(patient.pk, "Outpatient"),
-            "admitted": patient.pk in units,
-            # ASSUMPTION: no eligibility model exists — see the module docstring.
-            "eligible": True,
-        }
-        for patient in patients
-    ]
+    ids = [p.pk for p in patients]
+    units = _units_for(ids)
+    episodes = _open_episodes(ids)
+    rows = []
+    for patient in patients:
+        episode = episodes.get(patient.pk)
+        rows.append(
+            {
+                "id": str(patient.pk),
+                "display_id": patient.citramac_number,
+                "name": _client_name(patient),
+                "programme": programme_label(episode),
+                "programme_code": (
+                    episode.programme.code if episode and episode.programme_id else None
+                ),
+                "unit": units.get(patient.pk, "Outpatient"),
+                "admitted": patient.pk in units,
+                "eligible": True,
+            }
+        )
     return sorted(rows, key=lambda row: row["name"].lower())
 
 
@@ -405,7 +541,9 @@ def session_detail(session):
     """The facilitator's saved-session view: each attendee's entry, as the mockup shows."""
     labels = services.concept_labels()
     entries = list(
-        session.entries.select_related("patient", "follow_up_task", "intervention_record")
+        session.entries.select_related(
+            "patient", "episode__programme", "follow_up_task", "intervention_record"
+        )
     )
     return {
         **session_row(session),
@@ -415,7 +553,7 @@ def session_detail(session):
                 "patient_id": str(entry.patient_id),
                 "display_id": entry.patient.citramac_number,
                 "name": _client_name(entry.patient),
-                "programme": "Not assigned",
+                "programme": programme_label(entry.episode),
             }
             for entry in entries
         ],
@@ -693,6 +831,21 @@ def confirm_session(user, data):
             {
                 "entries": "A listed client no longer has an open episode of care. "
                 "Reload the session."
+            }
+        )
+
+    category = details.validated_data["category"]
+    episodes = _open_episodes(patient_ids)
+    refused = [
+        _client_name(patients[pid])
+        for pid in patient_ids
+        if not eligible_for(category, getattr(episodes.get(pid), "programme_id", None))
+    ]
+    if refused:
+        raise ValidationError(
+            {
+                "entries": f"{category.display} sessions are not open to {', '.join(refused)} "
+                "(programme). Reload the session."
             }
         )
 

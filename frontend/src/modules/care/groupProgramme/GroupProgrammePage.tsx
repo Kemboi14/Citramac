@@ -20,7 +20,7 @@ import { newRequestId } from "../shared/format";
 import { clientRecordPath } from "../shared/recordRoutes";
 import { Callout } from "../shared/ui";
 import { useValueSets } from "../shared/useValueSets";
-import { CategoryConfig } from "./CategoryConfig";
+import { CategoryConfig, ProgrammeConfig } from "./CategoryConfig";
 import { EntryCorrectionDialog, SessionCorrectionDialog } from "./CorrectionDialogs";
 import {
   detailsErrors,
@@ -29,6 +29,7 @@ import {
   initialDetails,
   itemTab,
   localDateIso,
+  eligibleFor,
   matchesFilters,
   scheduledLocal,
   workspaceItems,
@@ -82,6 +83,7 @@ export function GroupProgrammePage() {
     programme: "",
     unit: "",
     eligibility: "eligible",
+    outpatients: false,
   });
   const [search, setSearch] = useState("");
   const [observationOpen, setObservationOpen] = useState<Record<string, boolean>>({});
@@ -200,9 +202,9 @@ export function GroupProgrammePage() {
     );
   }
 
-  const { categories, clients, staff, current_user: currentUser } = workspace;
-  const programmes = uniqueSorted(clients.map((c) => c.programme));
-  const units = uniqueSorted(clients.map((c) => c.unit));
+  const { categories, staff, current_user: currentUser } = workspace;
+  const programmes = uniqueSorted(workspace.clients.map((c) => c.programme));
+  const units = uniqueSorted(workspace.clients.map((c) => c.unit));
   const editable = selected && selected.kind !== "saved" ? selected : undefined;
   const draftFor = (item: WorkspaceItem): SessionDraft =>
     drafts[item.key] ?? {
@@ -210,6 +212,12 @@ export function GroupProgrammePage() {
       attendance: {},
     };
   const currentDraft = editable ? draftFor(editable) : undefined;
+  // Eligibility depends on the session's category (its programmes).
+  const sessionCategory = categories.find((c) => c.code === currentDraft?.details.category);
+  const clients = workspace.clients.map((client) => ({
+    ...client,
+    eligible: eligibleFor(client, sessionCategory),
+  }));
 
   const updateDraft = (item: WorkspaceItem, change: (draft: SessionDraft) => SessionDraft) =>
     setDrafts((prev) => ({
@@ -610,6 +618,17 @@ export function GroupProgrammePage() {
                 ? { ...prev, categories: payload.results, can_configure: payload.can_configure }
                 : prev,
             )
+          }
+        />
+        <ProgrammeConfig
+          categories={categories}
+          programmes={workspace.programmes ?? []}
+          canConfigure={workspace.can_configure}
+          onCategories={(payload) =>
+            setWorkspace((prev) => (prev ? { ...prev, categories: payload.results } : prev))
+          }
+          onProgrammes={(payload) =>
+            setWorkspace((prev) => (prev ? { ...prev, programmes: payload.results } : prev))
           }
         />
         <SessionHistory

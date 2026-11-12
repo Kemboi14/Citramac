@@ -12,6 +12,20 @@ export interface GroupCategory {
   display: string;
   active: boolean;
   is_other: boolean;
+  /** Session eligibility: programme codes; empty = open to every client in care. */
+  programmes: string[];
+}
+
+/** A treatment programme the organisation runs (EpisodeOfCare.type). */
+export interface CareProgramme {
+  code: string;
+  display: string;
+  active: boolean;
+}
+
+export interface CareProgrammesPayload {
+  results: CareProgramme[];
+  can_configure: boolean;
 }
 
 export interface GroupCategoriesPayload {
@@ -71,6 +85,8 @@ export interface GroupClient {
   display_id: string;
   name: string;
   programme: string;
+  /** The open episode's programme code, or null when none is assigned. */
+  programme_code: string | null;
   unit: string;
   /** True when the client has a current inpatient admission. */
   admitted: boolean;
@@ -85,6 +101,7 @@ export interface StaffMember {
 export interface GroupWorkspace {
   categories: GroupCategory[];
   can_configure: boolean;
+  programmes: CareProgramme[];
   sessions: GroupSessionRow[];
   scheduled: ScheduledGroupSession[];
   clients: GroupClient[];
@@ -219,6 +236,54 @@ export function modifyGroupCategory(accessToken: string, code: string, display: 
   return apiRequest<GroupCategoriesPayload>(`${BASE}/categories/${encodeURIComponent(code)}/`, {
     method: "PATCH",
     body: { display },
+    accessToken,
+  });
+}
+
+export function setGroupCategoryProgrammes(
+  accessToken: string,
+  code: string,
+  programmes: string[],
+) {
+  return apiRequest<GroupCategoriesPayload>(
+    `${BASE}/categories/${encodeURIComponent(code)}/programmes/`,
+    { method: "PUT", body: { programmes }, accessToken },
+  );
+}
+
+export function addCareProgramme(accessToken: string, display: string) {
+  return apiRequest<CareProgrammesPayload>("/care/programmes/", {
+    method: "POST",
+    body: { display },
+    accessToken,
+  });
+}
+
+export function modifyCareProgramme(
+  accessToken: string,
+  code: string,
+  body: { display?: string; active?: boolean },
+) {
+  return apiRequest<CareProgrammesPayload>(`/care/programmes/${encodeURIComponent(code)}/`, {
+    method: "PATCH",
+    body,
+    accessToken,
+  });
+}
+
+export function listCareProgrammes(accessToken: string) {
+  return apiRequest<CareProgrammesPayload>("/care/programmes/", { accessToken });
+}
+
+/** Put the client's open episode on a programme (null = none). */
+export function setClientProgramme(
+  accessToken: string,
+  patientId: string,
+  programme: string | null,
+) {
+  return apiRequest<unknown>(`/care/clients/${patientId}/programme/`, {
+    method: "PUT",
+    body: { programme },
     accessToken,
   });
 }

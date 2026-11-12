@@ -1617,6 +1617,12 @@ def episode_summary(patient):
         "period_start": episode.period_start.isoformat(),
         "period_end": episode.period_end.isoformat() if episode.period_end else None,
         "care_manager": user_display(episode.care_manager),
+        # EpisodeOfCare.type — the organisation's own programme (group eligibility).
+        "programme": (
+            {"code": episode.programme.code, "display": episode.programme.display}
+            if episode.programme_id
+            else None
+        ),
         "waiting_minutes": waited,
         "still_waiting": waitlist is not None and active is None and episode.status == "waitlist",
         "history": [

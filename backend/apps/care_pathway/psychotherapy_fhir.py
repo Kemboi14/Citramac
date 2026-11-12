@@ -124,12 +124,13 @@ def _signer(note):
     return Reference(display=user_display(note.signed_by))
 
 
-def _episode(note, patient_ref):
+def episode_resource(episode, patient_ref):
+    """The EpisodeOfCare a clinical record hangs off: status, statusHistory, period,
+    and its programme as `type` (local `care-programme` codes)."""
     from fhir.resources.R4B.episodeofcare import EpisodeOfCare, EpisodeOfCareStatusHistory
 
     from .fhir import _episode_period
 
-    episode = note.episode
     return EpisodeOfCare(
         id=str(episode.id),
         meta=_meta(),
@@ -145,6 +146,11 @@ def _episode(note, patient_ref):
             for h in episode.status_history.all()
         ]
         or None,
+        type=(
+            [_local("care-programme", episode.programme.code, episode.programme.display)]
+            if episode.programme_id
+            else None
+        ),
         patient=Reference(reference=patient_ref),
         period=_episode_period(episode),
     )
@@ -315,7 +321,7 @@ def build_psychotherapy_bundle(note):
     entries = [
         BundleEntry(fullUrl=composition_ref, resource=composition),
         BundleEntry(fullUrl=patient_ref, resource=patient),
-        BundleEntry(fullUrl=episode_ref, resource=_episode(note, patient_ref)),
+        BundleEntry(fullUrl=episode_ref, resource=episode_resource(note.episode, patient_ref)),
         BundleEntry(fullUrl=encounter_ref, resource=_encounter(note, patient_ref, episode_ref)),
         BundleEntry(fullUrl=observation_ref, resource=observation),
     ]

@@ -1,0 +1,33 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "group-attendance",
+  "url": "urn:citramac:codesystem:group-attendance",
+  "version": "1",
+  "name": "Groupsessionattendance",
+  "title": "Group session attendance",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Attendance at a group programme session (the served group-attendance value set).",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 4,
+  "concept": [
+    {
+      "code": "PRESENT",
+      "display": "Present"
+    },
+    {
+      "code": "ABSENT",
+      "display": "Absent"
+    },
+    {
+      "code": "EXCUSED",
+      "display": "Excused"
+    },
+    {
+      "code": "DECLINED",
+      "display": "Declined"
+    }
+  ]
+}

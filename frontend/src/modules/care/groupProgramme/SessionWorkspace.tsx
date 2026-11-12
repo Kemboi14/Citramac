@@ -261,6 +261,14 @@ export function SessionWorkspace({
                 <option value="eligible">Eligible clients only</option>
                 <option value="all">All active clients</option>
               </select>
+              <label className="flex items-center gap-1.5 text-xs text-ink-700">
+                <input
+                  type="checkbox"
+                  checked={filters.outpatients}
+                  onChange={(e) => onFilters({ ...filters, outpatients: e.target.checked })}
+                />
+                Include outpatients in care
+              </label>
             </>
           ) : (
             <span className="text-xs text-ink-500">

@@ -1,8 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
+  addCareProgramme,
   addGroupCategory,
+  modifyCareProgramme,
   modifyGroupCategory,
+  setGroupCategoryProgrammes,
+  type CareProgramme,
+  type CareProgrammesPayload,
   type GroupCategoriesPayload,
   type GroupCategory,
 } from "../../../lib/groupProgrammeApi";
@@ -146,6 +151,190 @@ export function CategoryConfig({
           </>
         )}
         <div className={NOTE}>Configured: {categories.map((c) => c.display).join(" · ")}</div>
+        <div role="status" aria-live="polite" className={NOTE}>
+          {status}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+/** Programmes (EpisodeOfCare.type) and session eligibility: which programmes a
+ * category is open to. Org Admin only, enforced server-side; a category with
+ * no programmes ticked is open to every client in care. */
+export function ProgrammeConfig({
+  categories,
+  programmes,
+  canConfigure,
+  onCategories,
+  onProgrammes,
+}: {
+  categories: GroupCategory[];
+  programmes: CareProgramme[];
+  canConfigure: boolean;
+  onCategories: (payload: GroupCategoriesPayload) => void;
+  onProgrammes: (payload: CareProgrammesPayload) => void;
+}) {
+  const { accessToken } = useAuth();
+  const [newName, setNewName] = useState("");
+  const [categoryCode, setCategoryCode] = useState("");
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const selectedCode = categoryCode || categories[0]?.code || "";
+  const selected = categories.find((c) => c.code === selectedCode);
+  const chosen = picked ?? selected?.programmes ?? [];
+
+  function run<T>(request: Promise<T>, apply: (payload: T) => void, message: string) {
+    setSaving(true);
+    setStatus("");
+    request
+      .then((payload) => {
+        apply(payload);
+        setStatus(message);
+      })
+      .catch((err) =>
+        setStatus(err instanceof ApiError ? err.message : "The change could not be saved."),
+      )
+      .finally(() => setSaving(false));
+  }
+
+  const add = (event: FormEvent) => {
+    event.preventDefault();
+    const name = newName.trim();
+    if (!accessToken) return;
+    if (!name) return setStatus("Enter a programme name.");
+    run(
+      addCareProgramme(accessToken, name),
+      (payload) => {
+        onProgrammes(payload);
+        setNewName("");
+      },
+      "Programme added.",
+    );
+  };
+
+  const toggleActive = (programme: CareProgramme) => {
+    if (!accessToken) return;
+    run(
+      modifyCareProgramme(accessToken, programme.code, { active: !programme.active }),
+      onProgrammes,
+      programme.active ? "Programme retired." : "Programme restored.",
+    );
+  };
+
+  const saveEligibility = (event: FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || !selectedCode) return;
+    run(
+      setGroupCategoryProgrammes(accessToken, selectedCode, chosen),
+      (payload) => {
+        onCategories(payload);
+        setPicked(null);
+      },
+      "Session eligibility saved.",
+    );
+  };
+
+  return (
+    <details className={DETAILS}>
+      <summary className={DETAILS_SUMMARY}>Programmes and session eligibility</summary>
+      <div className="grid gap-2.5 p-4">
+        <p className={NOTE}>
+          {canConfigure
+            ? "A client’s programme is set on their episode of care. Limit a category to programmes to list only their clients as eligible; with none ticked, every client in care is eligible."
+            : "Only an administrator can change programmes or session eligibility."}
+        </p>
+        <div className={NOTE}>
+          Programmes:{" "}
+          {programmes.length
+            ? programmes.map((p) => (p.active ? p.display : `${p.display} (retired)`)).join(" · ")
+            : "none yet"}
+        </div>
+        {canConfigure && (
+          <>
+            <form className="flex flex-wrap items-end gap-2" onSubmit={add} noValidate>
+              <PlainField label="New programme" htmlFor="group-new-programme">
+                <input
+                  id="group-new-programme"
+                  type="text"
+                  maxLength={100}
+                  className={INPUT}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              </PlainField>
+              <button type="submit" className={`${BTN} ${BTN_SM}`} disabled={saving}>
+                Add programme
+              </button>
+            </form>
+            {programmes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {programmes.map((p) => (
+                  <button
+                    key={p.code}
+                    type="button"
+                    className={`${BTN_GHOST} ${BTN_SM}`}
+                    disabled={saving}
+                    onClick={() => toggleActive(p)}
+                  >
+                    {p.active ? `Retire ${p.display}` : `Restore ${p.display}`}
+                  </button>
+                ))}
+              </div>
+            )}
+            {programmes.length > 0 && (
+              <form className="grid gap-2" onSubmit={saveEligibility} noValidate>
+                <PlainField label="Category" htmlFor="group-eligibility-category">
+                  <select
+                    id="group-eligibility-category"
+                    className={INPUT}
+                    value={selectedCode}
+                    onChange={(e) => {
+                      setCategoryCode(e.target.value);
+                      setPicked(null);
+                    }}
+                  >
+                    {categories.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.display}
+                      </option>
+                    ))}
+                  </select>
+                </PlainField>
+                <fieldset className="flex flex-wrap gap-3 text-[13px]">
+                  <legend className="mb-1 text-[13px] text-ink-900">Open to</legend>
+                  {programmes
+                    .filter((p) => p.active || chosen.includes(p.code))
+                    .map((p) => (
+                      <label key={p.code} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={chosen.includes(p.code)}
+                          onChange={(e) =>
+                            setPicked(
+                              e.target.checked
+                                ? [...chosen, p.code]
+                                : chosen.filter((c) => c !== p.code),
+                            )
+                          }
+                        />
+                        {p.display}
+                      </label>
+                    ))}
+                </fieldset>
+                <span className={NOTE}>
+                  {chosen.length ? "" : "No programme ticked: open to every client in care."}
+                </span>
+                <div>
+                  <button type="submit" className={`${BTN_GHOST} ${BTN_SM}`} disabled={saving}>
+                    Save eligibility
+                  </button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
         <div role="status" aria-live="polite" className={NOTE}>
           {status}
         </div>

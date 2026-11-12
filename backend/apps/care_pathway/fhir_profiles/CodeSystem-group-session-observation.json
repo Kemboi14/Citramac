@@ -1,0 +1,21 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "group-session-observation",
+  "url": "urn:citramac:codesystem:group-session-observation",
+  "version": "1",
+  "name": "Groupsessionobservation",
+  "title": "Group session observation",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Local code for one client's attendance and observation at a group session. VERIFY: a LOINC or SNOMED CT code before this is replaced.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 1,
+  "concept": [
+    {
+      "code": "group-session-attendance",
+      "display": "Group session attendance"
+    }
+  ]
+}

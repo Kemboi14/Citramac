@@ -786,3 +786,41 @@ prompt, therapy-model registry, output sections, goal links and sign-off were al
    or virtual session; our canonical base for local profiles.
 
 Reversibility: cheap. Additive. No signed note changes; the export is read-time.
+
+### 2026-11-12 — group programme: programmes, session eligibility, admitted-first list; per-client FHIR
+
+On the owner's decisions of 2026-11-12, after a gap review of the Group Programme Documentation
+requirement against `group_programme.py`. One session, a separate entry per client, attendance,
+optional observations, risk screening with follow-up tasks, corrections with an audit trail,
+configurable categories and utilisation were already in place.
+
+1. **Programme on the episode.**
+   - `EpisodeOfCare.programme` → R4 `EpisodeOfCare.type`, one of the organisation's own
+     `CareProgramme`s (local `care-programme` codes).
+   - Org Admin adds, renames or retires programmes (Group programme → Programmes and session
+     eligibility). None is seeded; a client without one is "Not assigned".
+   - Clinical staff set it on the client's episode card (PUT `care/clients/<id>/programme/`). It is
+     organisational data, not clinical content, and audited like every episode change.
+2. **Session eligibility.** A category can be limited to programmes
+   (`GroupProgrammeCategory.programmes`). A category with none is open to every client in care.
+   Confirming a session refuses a client the category is not open to, and names them.
+3. **Client list.** Admitted clients are shown by default; "Include outpatients in care" adds the
+   rest of the open episodes. A client with no open episode never appears.
+4. **FHIR, per client** (`group_fhir.py`, GET `care/group-programme/entries/<id>/fhir/`, audited
+   VIEW with `output: fhir`).
+   - The collection Bundle holds the Encounter (profile `group-session-entry`: this client only,
+     `appointment` → the session, `episodeOfCare`; finished if present, cancelled otherwise) and the
+     attendance Observation (profile `group-session-attendance`: coded attendance, the client's own
+     observation as a note).
+   - It also holds an Appointment that lists the facilitator only, a Procedure when present, the
+     follow-up Task, the risk Flag, and a Provenance for the confirmation plus one per correction.
+   - **No Group and no other attendee.** The cohort is never exported in a client's record (§4).
+   - Attendance is not mapped to `Appointment.participant.status` (that binding has no verified
+     mapping for absent or excused).
+   - Three examples (`group-session-*.json`) and `test_group_fhir.py` are in CI's conformance step.
+     HL7's validator passes all 43 examples.
+   - VERIFY: an Encounter.class code for a group session; LOINC / SNOMED CT codes for the attendance
+     observation and the follow-up task.
+
+Reversibility: cheap. Additive (migration `care_pathway 0057`); no signed or confirmed record changes.
+An eligibility limit affects only sessions confirmed afterwards.

@@ -1,0 +1,95 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "group-session-entry",
+  "url": "urn:citramac:StructureDefinition:group-session-entry",
+  "version": "1",
+  "name": "CitramacGroupSessionEntry",
+  "title": "CITRAMAC group session entry",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "One client's own record of a group programme session: subject is that client only, linked to the shared session (Appointment) and the client's EpisodeOfCare.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Encounter",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Encounter",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Encounter",
+        "path": "Encounter",
+        "constraint": [
+          {
+            "key": "grp-entry-1",
+            "severity": "error",
+            "human": "Carries the R (restricted) and PSY (psychiatry) security labels",
+            "expression": "meta.security.where(system = 'http://terminology.hl7.org/CodeSystem/v3-Confidentiality' and code = 'R').exists() and meta.security.where(system = 'http://terminology.hl7.org/CodeSystem/v3-ActCode' and code = 'PSY').exists()"
+          },
+          {
+            "key": "grp-entry-2",
+            "severity": "error",
+            "human": "Finished when the client attended, cancelled otherwise",
+            "expression": "status = 'finished' or status = 'cancelled'"
+          }
+        ]
+      },
+      {
+        "id": "Encounter.meta",
+        "path": "Encounter.meta",
+        "min": 1
+      },
+      {
+        "id": "Encounter.meta.security",
+        "path": "Encounter.meta.security",
+        "min": 2
+      },
+      {
+        "id": "Encounter.type",
+        "path": "Encounter.type",
+        "min": 1
+      },
+      {
+        "id": "Encounter.subject",
+        "path": "Encounter.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Encounter.episodeOfCare",
+        "path": "Encounter.episodeOfCare",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Encounter.appointment",
+        "path": "Encounter.appointment",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Encounter.participant",
+        "path": "Encounter.participant",
+        "min": 1
+      },
+      {
+        "id": "Encounter.period",
+        "path": "Encounter.period",
+        "min": 1
+      },
+      {
+        "id": "Encounter.period.start",
+        "path": "Encounter.period.start",
+        "min": 1
+      }
+    ]
+  }
+}

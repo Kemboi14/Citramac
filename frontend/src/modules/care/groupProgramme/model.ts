@@ -55,6 +55,8 @@ export interface Filters {
   programme: string;
   unit: string;
   eligibility: "eligible" | "all";
+  /** Admitted clients are listed by default; outpatients in care only when ticked. */
+  outpatients: boolean;
 }
 
 export interface WorkspaceItem {
@@ -279,8 +281,17 @@ export function detailsErrors(form: SessionForm, categories: GroupCategory[]) {
   return errors;
 }
 
+/** Session eligibility for a category: open categories take every client in
+ *  care; a limited one only clients on one of its programmes. The server
+ *  refuses the rest on confirm. */
+export function eligibleFor(client: GroupClient, category: GroupCategory | undefined) {
+  if (!category || category.programmes.length === 0) return true;
+  return client.programme_code !== null && category.programmes.includes(client.programme_code);
+}
+
 export function matchesFilters(client: GroupClient, filters: Filters) {
   return (
+    (filters.outpatients || client.admitted) &&
     (!filters.programme || client.programme === filters.programme) &&
     (!filters.unit || client.unit === filters.unit) &&
     (filters.eligibility === "all" || client.eligible)

@@ -750,6 +750,18 @@ urlpatterns = [
         name="care-group-category",
     ),
     path(
+        "care/group-programme/categories/<slug:code>/programmes/",
+        gview.GroupCategoryProgrammesView.as_view(),
+        name="care-group-category-programmes",
+    ),
+    path("care/programmes/", gview.CareProgrammesView.as_view(), name="care-programmes"),
+    path("care/programmes/<slug:code>/", gview.CareProgrammeView.as_view(), name="care-programme"),
+    path(
+        "care/clients/<uuid:patient_id>/programme/",
+        gview.ClientProgrammeView.as_view(),
+        name="care-client-programme",
+    ),
+    path(
         "care/group-programme/workspace/",
         gview.GroupWorkspaceView.as_view(),
         name="care-group-workspace",
@@ -773,6 +785,11 @@ urlpatterns = [
         "care/group-programme/entries/<uuid:pk>/",
         gview.GroupEntryView.as_view(),
         name="care-group-entry",
+    ),
+    path(
+        "care/group-programme/entries/<uuid:pk>/fhir/",
+        gview.GroupEntryFhirView.as_view(),
+        name="care-group-entry-fhir",
     ),
     path(
         "care/group-programme/entries/<uuid:pk>/follow-up/complete/",

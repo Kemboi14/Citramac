@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
+import {
+  listCareProgrammes,
+  setClientProgramme,
+  type CareProgramme,
+} from "../../../lib/groupProgrammeApi";
 import {
   getClientSnapshot,
   resolveAlert,
@@ -53,7 +58,11 @@ export function SnapshotView({ patientId, onRecordChanged }: RecordViewProps) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <AttentionCard patientId={patientId} onChanged={onRecordChanged} />
-      <EpisodeCard episode={data.episode} />
+      <EpisodeCard
+        episode={data.episode}
+        patientId={patientId}
+        onChanged={() => setVersion((v) => v + 1)}
+      />
       <EpisodeOutcomeCard patientId={patientId} onChanged={onRecordChanged} />
       <AlertsCard
         alerts={data.alerts}
@@ -244,7 +253,79 @@ function waitText(minutes: number) {
 }
 
 /** EpisodeOfCare — the organisational container; statusHistory holds the wait. */
-function EpisodeCard({ episode }: { episode: EpisodeSummary | null }) {
+/** The open episode's programme (EpisodeOfCare.type): which group sessions the
+ * client is eligible for. Choices are the organisation's own programmes. */
+function ProgrammeField({
+  episode,
+  patientId,
+  onChanged,
+}: {
+  episode: EpisodeSummary;
+  patientId: string;
+  onChanged: () => void;
+}) {
+  const { accessToken } = useAuth();
+  const [options, setOptions] = useState<CareProgramme[] | null>(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const open = !episode.period_end;
+  useEffect(() => {
+    if (!accessToken || !open) return;
+    let live = true;
+    listCareProgrammes(accessToken)
+      .then((payload) => live && setOptions(payload.results))
+      .catch(() => live && setOptions([]));
+    return () => {
+      live = false;
+    };
+  }, [accessToken, open]);
+  const current = episode.programme ?? null;
+  if (!open || !options || options.length === 0) {
+    return current ? <>{current.display}</> : <span className="text-ink-400">Not assigned</span>;
+  }
+  const choose = (code: string) => {
+    if (!accessToken) return;
+    setSaving(true);
+    setError("");
+    setClientProgramme(accessToken, patientId, code || null)
+      .then(onChanged)
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "The programme could not be saved."),
+      )
+      .finally(() => setSaving(false));
+  };
+  return (
+    <span className="flex flex-col gap-1">
+      <select
+        aria-label="Programme"
+        className="rounded-[8px] border border-surface-border bg-surface-card px-2 py-1 text-[13px]"
+        value={current?.code ?? ""}
+        disabled={saving}
+        onChange={(e) => choose(e.target.value)}
+      >
+        <option value="">Not assigned</option>
+        {options
+          .filter((p) => p.active || p.code === current?.code)
+          .map((p) => (
+            <option key={p.code} value={p.code}>
+              {p.display}
+            </option>
+          ))}
+      </select>
+      {error && <span className="text-[12px] text-priority-red">{error}</span>}
+    </span>
+  );
+}
+
+function EpisodeCard({
+  episode,
+  patientId,
+  onChanged,
+}: {
+  episode: EpisodeSummary | null;
+  patientId: string;
+  onChanged: () => void;
+}) {
   return (
     <Card
       title="Episode of care"
@@ -273,6 +354,14 @@ function EpisodeCard({ episode }: { episode: EpisodeSummary | null }) {
               </dt>
               <dd className="text-[13px] text-ink-900">
                 {episode.care_manager || <span className="text-ink-400">Not assigned</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                Programme
+              </dt>
+              <dd className="text-[13px] text-ink-900">
+                <ProgrammeField episode={episode} patientId={patientId} onChanged={onChanged} />
               </dd>
             </div>
             <div>

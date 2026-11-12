@@ -67,7 +67,8 @@ export function EditableClientCard({
       </div>
       {!canAttend && (
         <div className="text-[11px] text-ink-500">
-          Session eligibility review required; attendance cannot be recorded until cleared.
+          Not eligible: this session category is limited to other programmes. Set the client’s
+          programme on their record if it is wrong.
         </div>
       )}
       <div

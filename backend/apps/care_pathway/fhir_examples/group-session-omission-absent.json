@@ -1,0 +1,297 @@
+{
+  "resourceType": "Bundle",
+  "id": "13ed8e27-e8c6-562a-93a6-4d2484543a34",
+  "meta": {
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      },
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+        "code": "PSY"
+      }
+    ]
+  },
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:361ff48f-a887-411a-b00e-b877d2368557",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "361ff48f-a887-411a-b00e-b877d2368557",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202611ORG--002"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Ouma",
+            "given": [
+              "Brian",
+              "Otieno"
+            ]
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1992-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ff00e686-1365-4aef-9d47-0d47ff80a5e9",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "ff00e686-1365-4aef-9d47-0d47ff80a5e9",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-11-12T09:28:55.538387Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:uuid:361ff48f-a887-411a-b00e-b877d2368557"
+        },
+        "period": {
+          "start": "2026-11-12T09:28:55.538387Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e8cbb559-7d72-5dc9-92d4-c8756e0b053b",
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "e8cbb559-7d72-5dc9-92d4-c8756e0b053b",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "fulfilled",
+        "serviceType": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:group-programme-category",
+                "code": "group_psychotherapy",
+                "display": "Group psychotherapy"
+              }
+            ]
+          }
+        ],
+        "description": "Coping with cravings",
+        "start": "2026-11-12T10:00:00+03:00",
+        "end": "2026-11-12T11:00:00+03:00",
+        "comment": "Psychoeducation on the craving cycle, followed by urge-surfing practice in pairs.",
+        "participant": [
+          {
+            "type": [
+              {
+                "text": "Facilitator"
+              }
+            ],
+            "actor": {
+              "display": "Jane Njoroge"
+            },
+            "required": "required",
+            "status": "accepted"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:1bbf7587-8abb-40e8-8239-f64a224fc0c0",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "1bbf7587-8abb-40e8-8239-f64a224fc0c0",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:group-session-entry"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "cancelled",
+        "class": {
+          "display": "group session"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:group-programme-category",
+                "code": "group_psychotherapy",
+                "display": "Group psychotherapy"
+              }
+            ]
+          }
+        ],
+        "subject": {
+          "reference": "urn:uuid:361ff48f-a887-411a-b00e-b877d2368557"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:uuid:ff00e686-1365-4aef-9d47-0d47ff80a5e9"
+          }
+        ],
+        "participant": [
+          {
+            "type": [
+              {
+                "text": "Facilitator"
+              }
+            ],
+            "individual": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ],
+        "appointment": [
+          {
+            "reference": "urn:uuid:e8cbb559-7d72-5dc9-92d4-c8756e0b053b"
+          }
+        ],
+        "period": {
+          "start": "2026-11-12T10:00:00+03:00",
+          "end": "2026-11-12T11:00:00+03:00"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:b149fd42-8d9a-52c5-96f9-e86ce6c65ba6",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "b149fd42-8d9a-52c5-96f9-e86ce6c65ba6",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:group-session-attendance"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:group-session-observation",
+              "code": "group-session-attendance",
+              "display": "Group session attendance"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:361ff48f-a887-411a-b00e-b877d2368557"
+        },
+        "encounter": {
+          "reference": "urn:uuid:1bbf7587-8abb-40e8-8239-f64a224fc0c0"
+        },
+        "effectiveDateTime": "2026-11-12T10:00:00+03:00",
+        "performer": [
+          {
+            "display": "Jane Njoroge"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:group-attendance",
+              "code": "ABSENT",
+              "display": "Absent"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:dd92690f-9eb8-52b7-825a-ee4199d42930",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "dd92690f-9eb8-52b7-825a-ee4199d42930",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "target": [
+          {
+            "reference": "urn:uuid:1bbf7587-8abb-40e8-8239-f64a224fc0c0"
+          },
+          {
+            "reference": "urn:uuid:b149fd42-8d9a-52c5-96f9-e86ce6c65ba6"
+          }
+        ],
+        "recorded": "2026-11-12T09:28:56.013564Z",
+        "activity": {
+          "text": "Group session confirmed"
+        },
+        "agent": [
+          {
+            "who": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

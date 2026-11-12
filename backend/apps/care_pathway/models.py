@@ -101,6 +101,12 @@ class EpisodeOfCare(TenantScopedModel):
     care_manager = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # The treatment programme the client is on (FHIR EpisodeOfCare.type): one of
+    # the organisation's own programmes, which Org Admin maintains. Organisational,
+    # not clinical content — it decides which group sessions a client is eligible for.
+    programme = models.ForeignKey(
+        "CareProgramme", on_delete=models.PROTECT, null=True, blank=True, related_name="episodes"
+    )
     presenting_problems = models.TextField(blank=True)
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -1599,6 +1605,29 @@ class LegalForm(TenantScopedModel):
 # ── Group programme (v4 mockup "Group Psychotherapy" workspace) ──
 
 
+class CareProgramme(TenantScopedModel):
+    """A treatment programme the organisation runs (residential rehabilitation, a
+    day programme, …) — its own list, maintained by Org Admin; none is seeded.
+    `code` is stable once created (EpisodeOfCare.type coding, local code system
+    `care-programme`); renaming changes the display only. Retired, never deleted."""
+
+    code = models.SlugField(max_length=64)
+    display = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["order", "display"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "code"], name="unique_care_programme_code_per_org"
+            )
+        ]
+
+    def __str__(self):
+        return self.display
+
+
 class GroupProgrammeCategory(TenantScopedModel):
     """A session category the organisation runs (mockup "Category configuration").
     `code` is stable once created: modifying a category changes its display only,
@@ -1608,6 +1637,9 @@ class GroupProgrammeCategory(TenantScopedModel):
     display = models.CharField(max_length=100)
     active = models.BooleanField(default=True)
     order = models.PositiveSmallIntegerField(default=0)
+    # Session eligibility: a category limited to these programmes lists only their
+    # clients as eligible; with none, every client in care is eligible.
+    programmes = models.ManyToManyField(CareProgramme, blank=True, related_name="categories")
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["order", "display"]

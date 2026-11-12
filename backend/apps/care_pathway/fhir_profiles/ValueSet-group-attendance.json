@@ -1,0 +1,19 @@
+{
+  "resourceType": "ValueSet",
+  "id": "group-attendance",
+  "url": "urn:citramac:valueset:group-attendance",
+  "version": "1",
+  "name": "Groupsessionattendance",
+  "title": "Group session attendance",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "description": "Present, absent, excused or declined.",
+  "compose": {
+    "include": [
+      {
+        "system": "urn:citramac:codesystem:group-attendance"
+      }
+    ]
+  }
+}

@@ -908,6 +908,8 @@ export interface EpisodeSummary {
   period_start: string;
   period_end: string | null;
   care_manager: string;
+  /** EpisodeOfCare.type — the organisation's programme (group session eligibility). */
+  programme?: { code: string; display: string } | null;
   /** Minutes from waitlist to first active; null if not yet active. */
   waiting_minutes: number | null;
   still_waiting: boolean;
