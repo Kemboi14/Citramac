@@ -220,6 +220,17 @@ PERMISSIONS = [
         ["Supervisor", "Clinical Supervisor"],
     ),
     (
+        "clinical.care_team.assign",
+        "clinical",
+        "Assign a client's care team",
+        "Add staff to a client's care team, with their role, or end their place on it. "
+        "A care-team member sees the client's full mental-health content and has the "
+        "client on their caseload, so nobody can add themselves. Org Admin can always "
+        "assign. The care coordinator is set by clinical staff and opens nothing extra.",
+        SCOPE_ORG,
+        ["Clinical Supervisor"],
+    ),
+    (
         "staff.credentials.verify",
         "staff",
         "Verify staff professional profiles",

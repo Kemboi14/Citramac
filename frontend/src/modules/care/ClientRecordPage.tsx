@@ -8,7 +8,7 @@ import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/record
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout } from "./shared/ui";
-import { useClientBanner } from "./shared/useClientBanner";
+import { notifyClientChanged, useClientBanner } from "./shared/useClientBanner";
 import { BillingStage } from "./record/BillingStage";
 import { CarePlanStage } from "./record/plan/CarePlanWorkspace";
 import { ChartsView } from "./record/ChartsView";
@@ -76,14 +76,11 @@ function renderView(view: RecordView, props: RecordViewProps) {
  */
 export function ClientRecordPage() {
   const { patientId = "", view = "" } = useParams<{ patientId: string; view: string }>();
-  const [reloadKey, setReloadKey] = useState(0);
-  const { banner, error } = useClientBanner(
-    patientId || undefined,
-    reloadKey,
-    JOURNEY_KEYS.has(view),
-  );
+  const { banner, error } = useClientBanner(patientId || undefined, 0, JOURNEY_KEYS.has(view));
   const { selected, selectPatient } = usePatientContext();
-  const onRecordChanged = useCallback(() => setReloadKey((k) => k + 1), []);
+  // A save in any tab of the record reloads this banner, every other banner open
+  // for the client on this page, and the user's other tabs (useClientBanner).
+  const onRecordChanged = useCallback(() => notifyClientChanged(patientId), [patientId]);
   const [registryOpen, setRegistryOpen] = useState(false);
 
   // Keep the older clinical screens pointed at this client.

@@ -1197,10 +1197,8 @@ def banner_for(patient, include_journey=False):
     latest_te = TriageEncounter.objects.filter(patient=patient).order_by("-arrival_at").first()
     signed = latest_signed_triage(patient)
     episode = current_or_latest_episode(patient)
-    clinician = patient.doctor or (admission.consultant if admission else None)
-    team = (admission.primary_care_team if admission else "") or (
-        user_display(episode.care_manager) if episode and episode.care_manager else ""
-    )
+    from .care_team import banner_summary
+
     banner = {
         "patient_id": str(patient.id),
         "name": patient.get_full_name(),
@@ -1228,8 +1226,8 @@ def banner_for(patient, include_journey=False):
             {"id": str(a.id), "code": a.alert_code, "label": a.label}
             for a in ClinicalAlert.objects.filter(patient=patient, status="ACTIVE")
         ],
-        "clinician": user_display(clinician) or "Unassigned",
-        "team": team,
+        # Responsible clinician, care team and open tasks (care_team.py).
+        **banner_summary(patient, episode, admission),
         # BAN-10 / LGL-DATA-01 — legal admission status + notice countdown.
         "legal_status": _legal_banner(patient),
         "episode_id": str(episode.id) if episode else None,

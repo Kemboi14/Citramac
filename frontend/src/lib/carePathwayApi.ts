@@ -808,8 +808,15 @@ export interface ClientBanner {
   };
   priority: PriorityOrBlank;
   alerts: { id: string; code: string; label: string }[];
+  /** Responsible clinician: the admitting consultant, else the care coordinator,
+   * else the registered doctor ("Unassigned" when none). */
   clinician: string;
+  clinician_role: "Consultant" | "Care coordinator" | "Registered doctor" | "";
+  /** The active care team as one line, else an admission's team name. */
   team: string;
+  care_team: { name: string; role_label: string }[];
+  /** Open (initiated / in-progress) tasks for this client. */
+  open_tasks: number;
   /** BAN-10 / LGL-DATA-01 — legal admission status + notice countdown (master prompt §7A). */
   legal_status?: LegalBanner | null;
   episode_id: string | null;
@@ -817,6 +824,70 @@ export interface ClientBanner {
   latest_signed_triage_encounter_id: string | null;
   journey_status?: Partial<Record<JourneyStageKey, JourneyStageStatus>>;
   psychiatry_encounter_id: string | null;
+}
+
+/** An opaque fingerprint of the banner; polled to notice changes (not audited). */
+export function getClientBannerVersion(accessToken: string, patientId: string) {
+  return apiRequest<{ version: string }>(`/care/clients/${patientId}/banner/version/`, {
+    accessToken,
+  });
+}
+
+/** Care coordinator (EpisodeOfCare.careManager) and care team (CareTeam.participant). */
+export interface CareTeamMember {
+  id: string;
+  user_id: string;
+  name: string;
+  role: string;
+  role_label: string;
+  assigned_at: string;
+  assigned_by: string;
+}
+
+export interface ClientCareTeam {
+  episode_id: string | null;
+  coordinator: { id: string; name: string } | null;
+  members: CareTeamMember[];
+  roles: { code: string; display: string }[];
+  can_set_coordinator: boolean;
+  can_assign_team: boolean;
+  current_user_id: string;
+  staff: { id: string; name: string }[];
+}
+
+const careTeamPath = (patientId: string) => `/care/clients/${patientId}/care-team/`;
+
+export function getClientCareTeam(accessToken: string, patientId: string) {
+  return apiRequest<ClientCareTeam>(careTeamPath(patientId), { accessToken });
+}
+
+export function setCareCoordinator(accessToken: string, patientId: string, userId: string | null) {
+  return apiRequest<ClientCareTeam>(careTeamPath(patientId), {
+    method: "PUT",
+    body: { coordinator: userId },
+    accessToken,
+  });
+}
+
+export function addCareTeamMember(
+  accessToken: string,
+  patientId: string,
+  userId: string,
+  role: string,
+) {
+  return apiRequest<ClientCareTeam>(careTeamPath(patientId), {
+    method: "POST",
+    body: { user: userId, role },
+    accessToken,
+  });
+}
+
+export function endCareTeamMember(accessToken: string, patientId: string, membershipId: string) {
+  return apiRequest<ClientCareTeam>(careTeamPath(patientId), {
+    method: "DELETE",
+    body: { membership: membershipId },
+    accessToken,
+  });
 }
 
 export type JourneyStageKey =

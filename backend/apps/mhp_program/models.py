@@ -7,15 +7,29 @@ from apps.tenancy.models import TenantScopedModel
 
 class CareTeamMembership(TenantScopedModel):
     """
+    The client's care team (FHIR R4 CareTeam.participant: member + role +
+    period; the open EpisodeOfCare.team points at it). Not clinical content.
+
     Elevated privacy tier for psychiatric/SUD records — docs/07-CLINICAL-MODULES-SPEC.md
     §7.14.7: only the assigned care team, their supervisor chain, and the
     patient's Org Admin can see full session content; everyone else in the
     org sees only that an active care episode exists. Enforced in
     PsychotherapySessionViewSet/BiopsychosocialAssessmentViewSet via
     apps.mhp_program.permissions.has_full_mhp_access(), not just here.
+
+    A membership is ended (``ended_at``), never deleted, so who was on the team
+    and when stays answerable (CareTeam.participant.period). Only an active one
+    (``ended_at`` empty) opens content or puts the client on a caseload.
     """
 
-    ROLE_CHOICES = [("THERAPIST", "Therapist"), ("SUPERVISOR", "Supervisor")]
+    ROLE_CHOICES = [
+        ("PSYCHIATRIST", "Psychiatrist"),
+        ("CLINICIAN", "Doctor / clinical officer"),
+        ("NURSE", "Nurse"),
+        ("THERAPIST", "Therapist / counsellor"),
+        ("SOCIAL_WORKER", "Social worker"),
+        ("SUPERVISOR", "Supervisor"),
+    ]
 
     patient = models.ForeignKey(
         Patient, on_delete=models.PROTECT, related_name="care_team_memberships"
@@ -25,11 +39,20 @@ class CareTeamMembership(TenantScopedModel):
     )
     role = models.CharField(max_length=16, choices=ROLE_CHOICES)
     assigned_at = models.DateTimeField(default=timezone.now)
+    assigned_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     class Meta(TenantScopedModel.Meta):
         constraints = [
             models.UniqueConstraint(
-                fields=["patient", "user", "role"], name="unique_care_team_membership"
+                fields=["patient", "user", "role"],
+                condition=models.Q(ended_at__isnull=True),
+                name="unique_active_care_team_membership",
             )
         ]
 

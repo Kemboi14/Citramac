@@ -845,3 +845,36 @@ Published examples cover routine request, urgent/in-progress review, and a clien
 Reversibility: cheap — requests are additive and can be superseded with another request; no signed
 clinical record is changed. The SBAR is a point-in-time snapshot and is never regenerated after
 the request, so the psychiatrist sees the same handover that was raised.
+
+### 2026-11-12 — client banner: care coordinator, care team, open tasks; banner kept in sync
+
+On the owner's instruction ("do all", after a read of why the banner showed "Unassigned" and went
+stale): the banner read only `Patient.doctor` (never set by any screen), the admission consultant and
+`EpisodeOfCare.care_manager` (never set), so nearly every client showed "Unassigned"; and it loaded
+once, refreshing only after some saves on the same page.
+
+1. **Care coordinator** — R4 `EpisodeOfCare.careManager` on the open episode
+   (`EpisodeOfCare.care_manager`), set on the client's episode card by clinical staff
+   (`clinical.care.record`) from the organisation's clinical staff for the episode's branch. It opens
+   no extra access; it puts the client on the coordinator's caseload ("My clients").
+2. **Care team** — R4 `CareTeam.participant` (member, role, period), the episode's
+   `EpisodeOfCare.team`, stored as `mhp_program.CareTeamMembership`. A member sees the client's full
+   MHP content, so only the Org Admin or a holder of the new `clinical.care_team.assign` (default:
+   Clinical Supervisor, `accounts 0027`) adds or ends one, never for themselves. A member is ended
+   (`ended_at`, `ended_by`), never deleted (`mhp_program 0010`); only active members open content or
+   count for a caseload. Roles are local codes (psychiatrist, doctor / clinical officer, nurse,
+   therapist / counsellor, social worker, supervisor). VERIFY: SNOMED CT codes for
+   `CareTeam.participant.role`. Not emitted to FHIR yet. Every change is a `CARE_COORDINATOR_SET` /
+   `CARE_TEAM_MEMBER_ADDED` / `CARE_TEAM_MEMBER_ENDED` audit event (`care_pathway/care_team.py`).
+3. **Banner.** Responsible clinician = the admitting consultant, else the care coordinator, else the
+   registered doctor, with which one it is. The team line lists the active care team (else an
+   admission's team name). An open-task count (initiated / in progress) is shown. Triage task
+   assignees own tasks, not the client, so they are not named as responsible.
+4. **Sync.** The banner reloads after any save in the client record, in every banner open for the
+   client on the page and in the user's other tabs (`notifyClientChanged`, BroadcastChannel with the
+   client id only — nothing stored, §5). Every 30 s while visible, and on focus, the page asks
+   `care/clients/<id>/banner/version/` for an opaque fingerprint and reloads when it changes. The
+   version route returns no record content and is the one `care/clients/<id>/…` route not written as
+   a VIEW (`sysadmin_audit.middleware.NOT_RECORD_READS`); the reload it triggers is audited as usual.
+
+Reversibility: cheap. Additive; no signed record changes. Ending a membership keeps its row.

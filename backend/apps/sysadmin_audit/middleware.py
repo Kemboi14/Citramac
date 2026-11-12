@@ -36,6 +36,13 @@ class AuditMiddleware:
         return response
 
 
+# Routes that name a client but return none of their record. The banner version
+# is an opaque fingerprint an open page polls to learn that the banner changed;
+# reading the banner itself (care-client-banner) is audited as usual. Logging
+# each poll would add one entry a minute per open page and bury real reads.
+NOT_RECORD_READS = frozenset({"care-client-banner-version"})
+
+
 def log_client_record_read(request, response):
     """CLAUDE.md §4: an AuditEvent on every access to a psychiatric record. Every
     successful read of a URL that names a client (`<patient_id>` — the whole
@@ -49,6 +56,8 @@ def log_client_record_read(request, response):
     patient_id = (match.kwargs or {}).get("patient_id") if match else None
     user = getattr(request, "user", None)
     if not patient_id or user is None or not user.is_authenticated:
+        return
+    if match.view_name in NOT_RECORD_READS:
         return
     from apps.tenancy.context import get_current_organization_id
 

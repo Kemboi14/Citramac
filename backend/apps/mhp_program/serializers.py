@@ -17,7 +17,8 @@ from .models import (
 class CareTeamMembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = CareTeamMembership
-        fields = ["id", "patient", "user", "role", "assigned_at"]
+        fields = ["id", "patient", "user", "role", "assigned_at", "ended_at"]
+        read_only_fields = ["assigned_at", "ended_at"]
 
 
 class SubstanceUseEntrySerializer(serializers.ModelSerializer):

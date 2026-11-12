@@ -26,9 +26,15 @@ def _branch_id(triage_encounter):
 
 def people(organization_id, triage_encounter=None):
     """[{"id", "name"}] — the clinical staff a task can be assigned to."""
+    return people_at_branch(organization_id, _branch_id(triage_encounter))
+
+
+def people_at_branch(organization_id, branch_id=None):
+    """[{"id", "name"}] — clinical staff who can open `branch_id` (any branch when
+    None). Also the care coordinator and care-team pickers (care_team.py)."""
     from .services import user_display
 
-    branch_id = _branch_id(triage_encounter)
+    branch_id = str(branch_id) if branch_id else None
     staff = users_with_permission([CODENAME], organization_id).order_by("first_name", "last_name")
     out = []
     for user in staff:

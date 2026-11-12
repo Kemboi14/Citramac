@@ -207,9 +207,11 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
     """The client's care team (docs/07 §7.14.7, at git f80b45b).
 
     Membership opens the client's full MHP content (``has_full_mhp_access``)
-    and puts them on the member's caseload, so only the Org Admin assigns or
-    removes it. Anyone else sees only their own memberships: who is on which
-    client's team is itself sensitive.
+    and puts them on the member's caseload, so only the Org Admin or a holder of
+    ``clinical.care_team.assign`` assigns or ends it, never for themselves
+    (apps.care_pathway.care_team). Anyone else sees only their own memberships:
+    who is on which client's team is itself sensitive. Ending a membership keeps
+    the row (CareTeam.participant.period); nothing is deleted.
     """
 
     serializer_class = CareTeamMembershipSerializer
@@ -223,10 +225,16 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
         return qs.filter(user=self.request.user)
 
     def _require_org_admin(self):
+        from apps.care_pathway.care_team import require_team_assigner
+
+        require_team_assigner(self.request.user)
+
+    def _check_not_self(self, serializer):
         from apps.accounts.access import is_org_admin
 
-        if not is_org_admin(self.request.user):
-            raise PermissionDenied("Only the Org Admin assigns a client's care team.")
+        member = serializer.validated_data.get("user")
+        if member == self.request.user and not is_org_admin(self.request.user):
+            raise PermissionDenied("You can't add yourself to a client's care team.")
 
     def _check_member(self, serializer):
         member = serializer.validated_data.get("user")
@@ -236,16 +244,22 @@ class CareTeamMembershipViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         self._require_org_admin()
         self._check_member(serializer)
-        serializer.save(organization=self.request.user.organization)
+        self._check_not_self(serializer)
+        serializer.save(organization=self.request.user.organization, assigned_by=self.request.user)
 
     def perform_update(self, serializer):
         self._require_org_admin()
         self._check_member(serializer)
+        self._check_not_self(serializer)
         serializer.save()
 
     def perform_destroy(self, instance):
+        # Ended, never deleted: who was on the team, and when, stays answerable.
         self._require_org_admin()
-        instance.delete()
+        if instance.ended_at is None:
+            instance.ended_at = timezone.now()
+            instance.ended_by = self.request.user
+            instance.save(update_fields=["ended_at", "ended_by"])
 
 
 class SudRehabPlanViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
@@ -378,7 +392,9 @@ class MhpTeamRosterView(APIView):
     def get(self, request):
         from apps.accounts.models import User
 
-        therapists = User.objects.filter(care_team_memberships__isnull=False).distinct()
+        therapists = User.objects.filter(
+            care_team_memberships__isnull=False, care_team_memberships__ended_at__isnull=True
+        ).distinct()
         roster = []
         for user in therapists:
             roster.append(
@@ -387,7 +403,8 @@ class MhpTeamRosterView(APIView):
                     "email": user.email,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
-                    "caseload_count": user.care_team_memberships.values("patient")
+                    "caseload_count": user.care_team_memberships.filter(ended_at__isnull=True)
+                    .values("patient")
                     .distinct()
                     .count(),
                     "specialties": list(user.roles.values_list("name", flat=True)),

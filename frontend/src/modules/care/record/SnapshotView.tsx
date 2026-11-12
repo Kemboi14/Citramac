@@ -22,6 +22,7 @@ import { scoreSeverity, severityTone, SCORE_SEVERITY_BANDS, type Instrument } fr
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { AttentionCard, EpisodeOutcomeCard } from "./AttentionCards";
+import { CareTeamField } from "./CareTeamField";
 
 const EMPTY = "text-[13px] text-ink-500";
 
@@ -61,7 +62,10 @@ export function SnapshotView({ patientId, onRecordChanged }: RecordViewProps) {
       <EpisodeCard
         episode={data.episode}
         patientId={patientId}
-        onChanged={() => setVersion((v) => v + 1)}
+        onChanged={() => {
+          setVersion((v) => v + 1);
+          onRecordChanged();
+        }}
       />
       <EpisodeOutcomeCard patientId={patientId} onChanged={onRecordChanged} />
       <AlertsCard
@@ -350,14 +354,6 @@ function EpisodeCard({
             )}
             <div>
               <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-                Care manager
-              </dt>
-              <dd className="text-[13px] text-ink-900">
-                {episode.care_manager || <span className="text-ink-400">Not assigned</span>}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
                 Programme
               </dt>
               <dd className="text-[13px] text-ink-900">
@@ -381,6 +377,7 @@ function EpisodeCard({
               </dd>
             </div>
           </dl>
+          <CareTeamField patientId={patientId} onChanged={onChanged} />
           {episode.history.length > 0 && (
             <div>
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-500">

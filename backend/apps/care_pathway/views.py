@@ -1178,6 +1178,61 @@ class ClientBannerView(APIView):
         return Response(banner)
 
 
+def banner_version(patient):
+    """An opaque fingerprint of the banner, so an open page can tell that
+    something changed without reading the record again."""
+    import hashlib
+    import json
+
+    payload = json.dumps(services.banner_for(patient), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+class ClientBannerVersionView(APIView):
+    """GET care/clients/<id>/banner/version/ — {"version"} only, no record content.
+    The page polls it and reloads the banner (an audited read) when it changes.
+    Listed in sysadmin_audit.middleware.NOT_RECORD_READS for that reason."""
+
+    def get(self, request, patient_id):
+        return Response({"version": banner_version(_patient(patient_id))})
+
+
+class ClientCareTeamView(APIView):
+    """GET care/clients/<id>/care-team/ — the care coordinator and care team.
+    PUT {coordinator: user id | null} sets the coordinator; POST {user, role}
+    adds a team member; DELETE {membership} ends one (care_team.py)."""
+
+    def get(self, request, patient_id):
+        from . import care_team
+
+        return Response(care_team.care_team_for(request.user, _patient(patient_id)))
+
+    def put(self, request, patient_id):
+        from . import care_team
+
+        patient = _patient(patient_id)
+        care_team.set_coordinator(request.user, patient, request.data.get("coordinator"))
+        return Response(care_team.care_team_for(request.user, patient))
+
+    def post(self, request, patient_id):
+        from . import care_team
+
+        patient = _patient(patient_id)
+        care_team.add_member(
+            request.user, patient, request.data.get("user"), request.data.get("role")
+        )
+        return Response(
+            care_team.care_team_for(request.user, patient), status=status.HTTP_201_CREATED
+        )
+
+    def delete(self, request, patient_id):
+        from . import care_team
+
+        patient = _patient(patient_id)
+        care_team.end_member(request.user, patient, request.data.get("membership"))
+        return Response(care_team.care_team_for(request.user, patient))
+
+
 class ClientTimelineView(APIView):
     def get(self, request, patient_id):
         return Response({"results": services.client_timeline(_patient(patient_id))})

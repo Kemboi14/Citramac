@@ -268,14 +268,43 @@ export function SafetyBanner({
             )}
           </div>
           <div>
-            <div className={label}>Responsible clinician / team</div>
-            <div className="line-clamp-2 break-words text-sm font-bold leading-snug text-ink-900">
-              {banner.clinician}
-              {banner.team && (
-                <>
-                  <br />
-                  <span className="text-xs font-semibold text-ink-400">{banner.team}</span>
-                </>
+            <div className={`${label} flex items-center gap-2`}>
+              Responsible clinician / team
+              {banner.open_tasks > 0 && (
+                <span className="rounded-full bg-surface-bg px-2 py-px text-[11px] font-bold text-ink-700 ring-1 ring-surface-border">
+                  {banner.open_tasks} open {banner.open_tasks === 1 ? "task" : "tasks"}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 text-sm leading-snug">
+              <div
+                className={`truncate font-bold ${banner.clinician === "Unassigned" ? "text-ink-400" : "text-ink-900"}`}
+                title={
+                  banner.clinician_role
+                    ? `${banner.clinician} — ${banner.clinician_role}`
+                    : banner.clinician
+                }
+              >
+                {banner.clinician}
+                {banner.clinician_role && (
+                  <span className="ml-1.5 text-xs font-semibold text-ink-400">
+                    {banner.clinician_role}
+                  </span>
+                )}
+              </div>
+              {banner.team ? (
+                <div
+                  className="truncate text-xs font-semibold text-ink-500"
+                  title={
+                    banner.care_team.length > 0
+                      ? banner.care_team.map((m) => `${m.name} (${m.role_label})`).join("\n")
+                      : banner.team
+                  }
+                >
+                  {banner.team}
+                </div>
+              ) : (
+                <div className="text-xs font-semibold text-ink-400">No care team assigned</div>
               )}
             </div>
           </div>

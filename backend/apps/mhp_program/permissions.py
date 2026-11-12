@@ -19,4 +19,6 @@ def has_full_mhp_access(user, patient):
 
     if is_org_admin(user):
         return True
-    return CareTeamMembership.objects.filter(patient=patient, user=user).exists()
+    return CareTeamMembership.objects.filter(
+        patient=patient, user=user, ended_at__isnull=True
+    ).exists()

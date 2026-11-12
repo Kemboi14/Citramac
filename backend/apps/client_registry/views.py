@@ -764,20 +764,32 @@ class ErasureRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
 
 def caseload_patients(user):
-    """The clients on this user's caseload: they are the registered doctor, hold a
-    care-team membership, or are the consultant on the current admission.
+    """The clients on this user's caseload: they are the registered doctor, the
+    care coordinator on the open episode, hold an active care-team membership, or
+    are the consultant on the current admission.
     Archived clients are left out. The one definition of "my clients" — the
     caseload page and the dashboard's "My work" both use it."""
+    from apps.care_pathway.models import EpisodeOfCare
     from apps.ipd_ward.models import Admission
     from apps.mhp_program.models import CareTeamMembership
 
-    care_team = CareTeamMembership.objects.filter(user=user).values("patient_id")
+    care_team = CareTeamMembership.objects.filter(user=user, ended_at__isnull=True).values(
+        "patient_id"
+    )
+    coordinator = EpisodeOfCare.objects.filter(
+        care_manager=user, status__in=EpisodeOfCare.OPEN_STATUSES
+    ).values("patient_id")
     consultant = Admission.objects.filter(
         consultant=user, status__in=("ADMITTED", "TRANSFERRED")
     ).values("patient_id")
     return (
         Patient.objects.filter(archived_at__isnull=True)
-        .filter(models.Q(doctor=user) | models.Q(id__in=care_team) | models.Q(id__in=consultant))
+        .filter(
+            models.Q(doctor=user)
+            | models.Q(id__in=care_team)
+            | models.Q(id__in=coordinator)
+            | models.Q(id__in=consultant)
+        )
         .distinct()
     )
 

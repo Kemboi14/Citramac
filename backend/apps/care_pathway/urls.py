@@ -143,6 +143,16 @@ urlpatterns = [
         name="care-client-banner",
     ),
     path(
+        "care/clients/<uuid:patient_id>/banner/version/",
+        views.ClientBannerVersionView.as_view(),
+        name="care-client-banner-version",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/care-team/",
+        views.ClientCareTeamView.as_view(),
+        name="care-client-care-team",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/snapshot/",
         views.ClientSnapshotView.as_view(),
         name="care-client-snapshot",

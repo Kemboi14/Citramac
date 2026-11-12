@@ -144,6 +144,7 @@ export function TriageEncounterScreen({
           onFullRetriage={() => {
             setFormKey((k) => k + 1);
             setReloadKey((k) => k + 1);
+            onChanged?.();
           }}
         />
       </div>
