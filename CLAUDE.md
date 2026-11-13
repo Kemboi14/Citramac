@@ -878,3 +878,49 @@ once, refreshing only after some saves on the same page.
    a VIEW (`sysadmin_audit.middleware.NOT_RECORD_READS`); the reload it triggers is audited as usual.
 
 Reversibility: cheap. Additive; no signed record changes. Ending a membership keeps its row.
+
+### 2026-11-13 — e-signatures on consents; prescription confirmation fixed
+
+On the owner's decisions of 2026-11-13 (method, signers and scope chosen; mapping stated before building, §7):
+
+1. **Who signs, how.** Drawn on screen (finger, stylus or mouse) and witnessed by the staff member present,
+   who signs as themselves every time. The client signs their own consent; a parent / guardian signs for a
+   minor and a substitute decision-maker when they decide; on a family-involvement consent document (CON-04)
+   the named family member / caregiver signs too, chosen from the client's contacts. A party who cannot sign
+   has the reason recorded instead (still witnessed); the witness can never be "unable".
+2. **Where.** Decision consents (`VisitConsent`): signed when recorded; a deferred (emergency) consent is
+   signed when it is completed. Their scope is now a `capacity-decision` code (+ detail for Other), not free
+   text; rows recorded earlier keep their text. Recording or completing one needs `clinical.care.record`
+   (there was no check). Consent documents (catalogue CON-01..11): the parties sign the draft, and the
+   clinician's "Authorize & sign" is refused until every required signature is on the current content.
+   Mental Health Act forms are unchanged (not chosen).
+3. **Facility wording for consent documents.** CON-01..11 were permanently blocked (VERIFY: no approved
+   wording). Org Admin → Consent wording now sets each one's wording (`ConsentTemplate` types `DOC-CON-nn`);
+   it is frozen into the document's content, printed above the signatures, and a document without it stays a
+   structured draft. The system writes no consent text (§6).
+4. **Store.** `documents.PartySignature`, append-only, RLS: role, name, relationship / contact, method, the
+   PNG (in the database, never browser storage), its SHA-256, and the SHA-256 of the content signed. A
+   document edited after signing no longer matches, and its signatures stop counting. The audit trail keeps
+   the image only as a fingerprint (`image_png` joins `CLINICAL_CONTENT_FIELDS`). Every signature prints on
+   the document's Preview / PDF.
+5. **FHIR.** `Consent` (profile `signed-consent`: R + PSY, performer when active, policyRule) + `Provenance`
+   (profile `consent-signature-provenance`: one `signature` per drawn signature, sigFormat image/png, the
+   witness always present, signer-role codes from local `signature-role`) + Patient. Read-time:
+   GET `care/visit-consents/<id>/fhir/`, GET `documents/generated/<id>/fhir/` (signed consent documents),
+   each a VIEW audit entry. Three examples in `documents/fhir_examples/consent-*.json` (routine client, minor
+   with guardian + family member, unable to sign); `test_consent_signatures.py` is in CI's conformance step,
+   and HL7's validator passes all 49 examples (checked to fail with the witness or a label removed).
+   Never sent to the SHR.
+6. **VERIFY:** ISO-ASTM E1762 signature-type codes (Signature.type is local until then); with legal counsel,
+   that a drawn, witnessed signature meets Kenyan e-signature and data-protection consent requirements for
+   each consent — no statute is cited.
+7. **Prescription confirmation (fixes 4fd930c).** A telephone / PRN order is confirmed only through its
+   co-sign request: `clinical.cosign`, never the person who placed it, current licence, audited. Signing the
+   request in "Needs my decision" confirms the order; declining leaves it permanently not administerable with
+   the reason shown. One request per order. A PRN order always gets the PRN checks. Order type is the served
+   `medication-order-type` value set.
+8. **Registry.** The Clients page has search and opens newest-registered first (by surname on request).
+
+Reversibility: cheap. Everything is additive; no signed record changes. Consents and documents recorded
+before today show no signatures. Open for the owner: a telephone order does not yet name the prescriber who
+gave it (the confirming senior is the authority of record).

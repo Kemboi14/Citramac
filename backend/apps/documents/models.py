@@ -253,3 +253,103 @@ class DisclosureRecord(_AppendOnly):
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["-released_at"]
+
+
+class PartySignature(_AppendOnly):
+    """One person's electronic signature on a consent: a decision consent
+    (care_pathway.VisitConsent) or a consent document (GeneratedDocument).
+
+    Owner decisions 2026-11-13: drawn on screen and witnessed by the staff member
+    present; the client signs their own consent, a parent / guardian or substitute
+    decision-maker signs when they decide, a named family member / caregiver signs
+    a family-involvement document, and the staff witness countersigns every time.
+
+    Each row binds to the exact content signed (`content_sha256`): a document
+    edited after signing no longer matches, and its signatures stop counting.
+    Append-only; nothing is ever re-signed in place.
+
+    FHIR R4: a `Provenance.signature` (type, when, who, onBehalfOf, sigFormat
+    image/png, data) targeting the `Consent` (documents/consent_fhir.py). A
+    person unable to sign is a Provenance agent with the stated reason, never a
+    signature.
+    """
+
+    ROLE_CLIENT = "CLIENT"
+    ROLE_GUARDIAN = "GUARDIAN"
+    ROLE_SUBSTITUTE = "SUBSTITUTE"
+    ROLE_RELATED_PERSON = "RELATED_PERSON"
+    ROLE_WITNESS = "WITNESS"
+    ROLE_CHOICES = [
+        (ROLE_CLIENT, "Client"),
+        (ROLE_GUARDIAN, "Parent / guardian"),
+        (ROLE_SUBSTITUTE, "Substitute decision-maker"),
+        (ROLE_RELATED_PERSON, "Family member / caregiver"),
+        (ROLE_WITNESS, "Staff witness"),
+    ]
+    METHOD_DRAWN = "DRAWN"
+    METHOD_UNABLE = "UNABLE"
+    METHOD_CHOICES = [
+        (METHOD_DRAWN, "Drawn on screen, witnessed"),
+        (METHOD_UNABLE, "Unable to sign — reason recorded, witnessed"),
+    ]
+
+    patient = models.ForeignKey(
+        "client_registry.Patient", on_delete=models.PROTECT, related_name="party_signatures"
+    )
+    visit_consent = models.ForeignKey(
+        "care_pathway.VisitConsent",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="signatures",
+    )
+    document = models.ForeignKey(
+        GeneratedDocument,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="party_signatures",
+    )
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    signer_name = models.CharField(max_length=150)
+    relationship = models.CharField(max_length=100, blank=True)
+    related_person = models.ForeignKey(
+        "client_registry.EmergencyContact",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # The staff witness signing as themselves.
+    signer_user = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    method = models.CharField(max_length=8, choices=METHOD_CHOICES)
+    unable_reason = models.TextField(blank=True)
+    image_png = models.BinaryField(null=True, blank=True)
+    image_sha256 = models.CharField(max_length=64, blank=True)
+    content_sha256 = models.CharField(max_length=64)
+    captured_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    captured_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["captured_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(visit_consent__isnull=False, document__isnull=True)
+                    | models.Q(visit_consent__isnull=True, document__isnull=False)
+                ),
+                name="party_signature_one_target",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(method="DRAWN", image_png__isnull=False)
+                    | models.Q(method="UNABLE", image_png__isnull=True)
+                    & ~models.Q(unable_reason="")
+                ),
+                name="party_signature_image_or_reason",
+            ),
+        ]

@@ -1,0 +1,92 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "consent-signature-provenance",
+  "url": "urn:citramac:StructureDefinition:consent-signature-provenance",
+  "version": "1",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "name": "CitramacConsentSignatureProvenance",
+  "title": "CITRAMAC consent signatures",
+  "description": "The on-screen signatures on one consent: the deciding party (or the reason they could not sign), any family member / caregiver, and the staff witness who always signs. Each drawn signature is a PNG.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Provenance",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Provenance",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Provenance",
+        "path": "Provenance",
+        "constraint": [
+          {
+            "key": "sig-prov-1",
+            "severity": "error",
+            "human": "Carries the R (restricted) and PSY (psychiatry) security labels",
+            "expression": "meta.security.where(system = 'http://terminology.hl7.org/CodeSystem/v3-Confidentiality' and code = 'R').exists() and meta.security.where(system = 'http://terminology.hl7.org/CodeSystem/v3-ActCode' and code = 'PSY').exists()"
+          },
+          {
+            "key": "sig-prov-2",
+            "severity": "error",
+            "human": "The staff witness signs",
+            "expression": "signature.where(type.where(system = 'urn:citramac:codesystem:signature-role' and code = 'witness').exists()).exists()"
+          },
+          {
+            "key": "sig-prov-3",
+            "severity": "error",
+            "human": "Every signature is a drawn PNG",
+            "expression": "signature.all(sigFormat = 'image/png' and data.exists())"
+          }
+        ]
+      },
+      {
+        "id": "Provenance.meta",
+        "path": "Provenance.meta",
+        "min": 1
+      },
+      {
+        "id": "Provenance.meta.security",
+        "path": "Provenance.meta.security",
+        "min": 2
+      },
+      {
+        "id": "Provenance.target",
+        "path": "Provenance.target",
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Consent"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.signature",
+        "path": "Provenance.signature",
+        "min": 1
+      },
+      {
+        "id": "Provenance.signature.type",
+        "path": "Provenance.signature.type",
+        "binding": {
+          "strength": "required",
+          "valueSet": "urn:citramac:valueset:signature-role"
+        }
+      },
+      {
+        "id": "Provenance.signature.sigFormat",
+        "path": "Provenance.signature.sigFormat",
+        "min": 1
+      },
+      {
+        "id": "Provenance.signature.data",
+        "path": "Provenance.signature.data",
+        "min": 1
+      }
+    ]
+  }
+}

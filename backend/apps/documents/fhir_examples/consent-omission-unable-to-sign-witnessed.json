@@ -1,0 +1,209 @@
+{
+  "resourceType": "Bundle",
+  "id": "00000001-0000-4000-8000-000000000001",
+  "meta": {
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      },
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+        "code": "PSY"
+      }
+    ]
+  },
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:00000002-0000-4000-8000-000000000002",
+      "resource": {
+        "resourceType": "Consent",
+        "id": "00000002-0000-4000-8000-000000000002",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:signed-consent"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "active",
+        "scope": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/consentscope",
+              "code": "treatment"
+            }
+          ]
+        },
+        "category": [
+          {
+            "text": "Consent for: Withdrawal management"
+          }
+        ],
+        "patient": {
+          "reference": "urn:uuid:00000003-0000-4000-8000-000000000003"
+        },
+        "dateTime": "2026-11-13T11:40:00+03:00",
+        "performer": [
+          {
+            "reference": "urn:uuid:00000003-0000-4000-8000-000000000003"
+          }
+        ],
+        "policyRule": {
+          "text": "Decision consent recorded by the treating team (no separate facility wording)"
+        },
+        "provision": {
+          "type": "permit"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:00000003-0000-4000-8000-000000000003",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "00000003-0000-4000-8000-000000000003",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Client-Synthetic",
+            "given": [
+              "Test"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1990-06-01",
+        "contact": [
+          {
+            "relationship": [
+              {
+                "text": "Guardian"
+              }
+            ],
+            "name": {
+              "text": "Mary Wanjiku"
+            }
+          },
+          {
+            "relationship": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                    "code": "N",
+                    "display": "Next-of-Kin"
+                  }
+                ],
+                "text": "Aunt (caregiver)"
+              }
+            ],
+            "name": {
+              "text": "Grace Achieng"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:00000004-0000-4000-8000-000000000004",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "00000004-0000-4000-8000-000000000004",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:consent-signature-provenance"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "target": [
+          {
+            "reference": "urn:uuid:00000002-0000-4000-8000-000000000002"
+          }
+        ],
+        "recorded": "2026-11-13T11:40:00+03:00",
+        "activity": {
+          "text": "Consent signed on screen, witnessed"
+        },
+        "agent": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:signature-role",
+                  "code": "client",
+                  "display": "Client"
+                }
+              ]
+            },
+            "role": [
+              {
+                "text": "Unable to sign: Tremor too severe to hold the stylus; consent given verbally"
+              }
+            ],
+            "who": {
+              "reference": "urn:uuid:00000003-0000-4000-8000-000000000003"
+            }
+          },
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:signature-role",
+                  "code": "witness",
+                  "display": "Staff witness"
+                }
+              ]
+            },
+            "who": {
+              "display": "Psych Synthetic (Staff witness)"
+            }
+          }
+        ],
+        "signature": [
+          {
+            "type": [
+              {
+                "system": "urn:citramac:codesystem:signature-role",
+                "code": "witness",
+                "display": "Staff witness"
+              }
+            ],
+            "when": "2026-11-13T11:40:00+03:00",
+            "who": {
+              "display": "Psych Synthetic (Staff witness)"
+            },
+            "sigFormat": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAASwAAABkCAYAAAA8AQ3AAAADM0lEQVR4nO3by1LcQAwFUIf//+dhQRbGBcZj90NSn7NhFeiWbt8Mqcq2AQAAAAAAAAAAAAAAAAAAAAAAAAAAAEBTr8NXSO3f7APQxW8FZd+kJsC1XP0kZe+kJLg13PmVz+5J52P2AXjktZ2X1Vkp+Xct0vG3bE5/lc1Pe71bbBCGoOZyp6iu/nlZIDwhzeFpUV39XvJAaAIaW8uieud7ywUhCWZMPYvq6s+RDcIRylhGFdXVnykfPPHaGmdIIGOYUVTvnEFOeMcxS83yI4hzRSiqPaXFUz9lSGElF62o9pQWdwzJtACOFbmojhQXVw3LiuCNkamo9pQWZ4bnWuj6ylpUe0qLo2m5Frg+KhTVkeJi2yZnW9DaqlhUe0prXSGyLWRthFjmIEprPWF2LmDPrFRUR2FCTDfh8i1Y94Rb5CRKq6aw+Raq94Rd5ERKq5bQGReoa0IvMQjFlVuKjIc4RGAplhiI0sopzd5CHSYQRXVfmvCTL+fhDjRZugUGprjiSpvzsAcbLO0Cg1Na8aTOeujDDZB6eUkorRhKZD3FITsosbxkFNc8ZWaf6rANKKq5yjycJMrlPd2Bbyq3uMSUVn9l85724BeVXVwBiquP0plPffgTpZdWiNJqZ4nMl7jEzhJLK0ZpPbfMDKtcRlHlt8yja2i53Ge/0HILK05pXbNs7rNebNmFLUBpnVs6+9kut/SyFqO4vpP9Lc8lLWtNSuuLOfwX/bKKipUfq/wfRL2wRXG0UnHJ/y+iXdyiOLNCaXkDJ6Jc3pK4qmppeQMXzB6CJXFXpeKqdJeuZg1DUdFC9ofuHbxp9EAsiNYylpZ3cNOowVgQvWUpLm/hgd7DsRxGilxa3kIDvYZkOcwSsbQiniml1sNSVEQRoSS8h8ZGFZbFMMOs0lJUnfQY3H5ZFsNso0tLWXXUa2GWQjS9i0tRDWCIrKRXaUX497IlGCaraVkuPlUNZqCs6klxKapJPmYfACY5K5WzQlJWExkuq7v6SUtRBWDI8OWvQvqNNzSQXwnhy53iUVaDGTh8d+WTlnczicHDz/w3MyCV1+ErAAAAAAAAAAAAAAAAAAAAAAAAAEB8n92+pT5TUTCdAAAAAElFTkSuQmCC"
+          }
+        ]
+      }
+    }
+  ]
+}

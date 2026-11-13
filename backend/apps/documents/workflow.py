@@ -358,8 +358,25 @@ def _guard(doc, action):
         )
 
 
-def _not_verify(spec):
-    if spec["contentStatus"] == "VERIFY":
+def content_ready(spec, doc=None, organization=None):
+    """Whether the document has approved wording: the catalogue's own, or — for a
+    consent document — the facility's wording (in the document's content, or for
+    the organisation when there is no document yet)."""
+    if spec["contentStatus"] != "VERIFY":
+        return True
+    if spec["category"] != "CON":
+        return False
+    if doc is not None:
+        return bool((doc.content or {}).get("wording"))
+    return organizer.consent_wording(spec, organization) is not None
+
+
+def record_party_signature(doc, user, role):
+    _event(doc, user, "party_sign", doc.status, doc.status, role=role)
+
+
+def _not_verify(spec, doc=None):
+    if not content_ready(spec, doc):
         raise ValidationError(
             {
                 "detail": "This template needs facility-approved wording before it "
@@ -381,7 +398,7 @@ def transition(doc, spec, user, action, data):
     now = timezone.now()
 
     if action == "submit":
-        _not_verify(spec)
+        _not_verify(spec, doc)
         missing = doc.block_detail.get("missing") or []
         if missing:
             labels = {f["key"]: f["label"] for f in spec["userEntered"]}
@@ -404,7 +421,17 @@ def transition(doc, spec, user, action, data):
             )
         doc.reviewed_by, doc.reviewed_at = user, now
     elif action == "sign":
-        _not_verify(spec)
+        _not_verify(spec, doc)
+        from . import signatures
+
+        missing = signatures.missing_signatures(doc, spec)
+        if missing:
+            raise ValidationError(
+                {
+                    "detail": "This consent needs these signatures on the current version "
+                    "first: " + ", ".join(missing) + "."
+                }
+            )
         from apps.accounts.practitioner_profile import require_current_licence
 
         require_current_licence(user)
@@ -623,7 +650,7 @@ def allowed_actions(doc, spec, user):
     for action, (sources, _) in TRANSITIONS.items():
         if doc.status not in sources or not can(user, spec, action):
             continue
-        if action in ("submit", "sign") and spec["contentStatus"] == "VERIFY":
+        if action in ("submit", "sign") and not content_ready(spec, doc):
             continue
         if action == "approve" and (
             doc.reviewed_by_id or (spec["highRisk"] and doc.author_id == user.id)

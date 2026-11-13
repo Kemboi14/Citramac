@@ -42,7 +42,11 @@ def _summary(spec, user):
         "tags": spec["tags"],
         "trigger": spec["trigger"],
         "highRisk": spec["highRisk"],
-        "contentStatus": spec["contentStatus"],
+        "contentStatus": (
+            "READY"
+            if workflow.content_ready(spec, organization=getattr(user, "organization", None))
+            else "VERIFY"
+        ),
         "recipientTypes": spec["disclosureRules"]["recipientTypes"],
         "can_generate": workflow.can(user, spec, "generate"),
     }
@@ -123,7 +127,7 @@ def _doc_payload(doc, spec, user, full=True):
         "signed_by": _user(doc.signed_by),
         "signed_at": _iso(doc.signed_at),
         "high_risk": spec["highRisk"],
-        "content_status": spec["contentStatus"],
+        "content_status": "READY" if workflow.content_ready(spec, doc) else "VERIFY",
         "source": spec.get("source", ""),
         # LGL-DOC-05: the signed statutory form this release record points at;
         # its content and print come from the legal module.
@@ -186,9 +190,43 @@ def _doc_payload(doc, spec, user, full=True):
                 for e in events
             ],
             "disclosures": [_disclosure_payload(d) for d in disclosures],
+            **_signature_payload(doc, spec),
         }
     )
     return base
+
+
+def _signature_payload(doc, spec):
+    """A consent document's party signatures (images only on the print view)."""
+    from apps.client_registry.models import EmergencyContact
+
+    from . import signatures
+
+    if not signatures.is_consent_document(spec):
+        return {"signature_requirements": [], "party_signatures": [], "signature_roles": []}
+    current = signatures.content_sha256(doc.content)
+    return {
+        "signature_requirements": signatures.document_requirements(doc, spec),
+        "party_signatures": [
+            signatures.signature_row(row, current) for row in doc.party_signatures.all()
+        ],
+        "signature_roles": [
+            {"code": r, "label": signatures.ROLE_LABELS[r]}
+            for r in signatures.allowed_roles(doc, spec)
+            if r != "WITNESS"
+        ],
+        "client_is_minor": signatures._is_minor(doc.patient),
+        "contacts": [
+            {
+                "id": str(c.pk),
+                "name": c.name,
+                "relationship": c.relationship,
+                "is_guardian": c.is_guardian,
+            }
+            for c in EmergencyContact.objects.filter(patient=doc.patient)
+        ],
+        "wording": (doc.content or {}).get("wording"),
+    }
 
 
 def _disclosure_payload(d):
@@ -268,6 +306,41 @@ class GeneratedTransitionView(APIView):
         if doc.status == "BLOCKED_CONSENT" and action == "release":
             code = status.HTTP_409_CONFLICT
         return Response(_doc_payload(doc, spec, request.user), status=code)
+
+
+class GeneratedSignatureView(APIView):
+    """POST one party's signature, with the staff witness's, on a consent document."""
+
+    def post(self, request, pk):
+        from . import signatures
+
+        doc, spec = _doc(pk, request.user)
+        signatures.sign_document(doc, spec, request.user, request.data)
+        doc.refresh_from_db()
+        return Response(_doc_payload(doc, spec, request.user), status=status.HTTP_201_CREATED)
+
+
+class GeneratedConsentFhirView(APIView):
+    """GET a signed consent document as FHIR R4 (Consent + signature Provenance)."""
+
+    def get(self, request, pk):
+        from . import consent_fhir, signatures
+
+        doc, spec = _doc(pk, request.user)
+        if not signatures.is_consent_document(spec):
+            raise ValidationError({"detail": "Only consent documents are exported as a Consent."})
+        try:
+            bundle = consent_fhir.build_document_consent_bundle(doc)
+        except ValueError as exc:
+            raise ValidationError({"detail": str(exc)}) from None
+        write_event(
+            doc.organization_id,
+            "VIEW",
+            "documents.generateddocument",
+            doc.pk,
+            {"output": "fhir"},
+        )
+        return Response(bundle)
 
 
 class DisclosureListView(APIView):

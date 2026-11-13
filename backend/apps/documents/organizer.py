@@ -124,6 +124,10 @@ def organize(
         for cls in catalogue.CLASS_ORDER
         if cls in sections
     ]
+    # A consent document carries the facility's own wording (Org Admin → Consent
+    # wording), frozen into the content its signatures attest to. Without it the
+    # document stays a structured draft (CLAUDE.md §6: the system writes no legal text).
+    wording = consent_wording(spec, organization)
     sensitivity = ["MH"]
     if "SUBSTANCE_USE" in draft.include:
         sensitivity.append("SUD")
@@ -149,7 +153,8 @@ def organize(
         "clinician_comment": inputs.get("clinician_comment") or "",
         "legal_basis": draft.basis,
         "legal_basis_reference": inputs.get("legal_basis_reference") or "",
-        "verify_notice": spec["verifyNote"],
+        "verify_notice": "" if wording else spec["verifyNote"],
+        "wording": wording,
     }
     meta = {
         "missing": missing,
@@ -169,6 +174,18 @@ def organize(
         "required_fields": sorted(required),
     }
     return meta, content
+
+
+def consent_wording(spec, organization):
+    """The facility's active wording for a consent document, or None."""
+    if spec["category"] != "CON" or organization is None:
+        return None
+    from apps.care_pathway.models import ConsentTemplate
+
+    template = ConsentTemplate.objects.filter(
+        organization=organization, consent_type=spec["documentId"], active=True
+    ).first()
+    return {"version": template.version, "text": template.text} if template else None
 
 
 def content_hash(content):

@@ -30,7 +30,9 @@ FINGERPRINTED_FIELDS = {
     "body_text",
     "html_context",
 }
-CLINICAL_CONTENT_FIELDS = {"sbar"}
+# Kept only as a short hash: the SBAR handover text, and a drawn consent
+# signature (documents.PartySignature.image_png), which is the signature itself.
+CLINICAL_CONTENT_FIELDS = {"sbar", "image_png"}
 
 
 def _is_fingerprinted(name):

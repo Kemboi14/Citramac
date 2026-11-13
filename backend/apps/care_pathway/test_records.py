@@ -77,23 +77,35 @@ class CapacityConsentTests(RecordsTestCase):
     def test_consent_warns_when_patient_lacks_capacity_and_deferred_stays_open_until_completed(
         self,
     ):
+        from apps.documents.test_consent_signatures import drawn, signed
+
+        sigs = {"party": {"image": drawn()}, "witness": signed()}
         self.capacity(weigh="No")
-        c = self.post("care-client-visit-consents", {"scope": "MEDICATION", "party": "PATIENT"})
+        c = self.post(
+            "care-client-visit-consents",
+            {"scope": "MEDICATION", "party": "PATIENT", "signatures": sigs},
+        )
         self.assertTrue(any("lacking" in w for w in c.data["warnings"]))
         self.assertEqual(
             self.post(
-                "care-client-visit-consents", {"scope": "x", "party": "GUARDIAN"}
+                "care-client-visit-consents",
+                {"scope": "MEDICATION", "party": "GUARDIAN", "signatures": sigs},
             ).status_code,
             400,
         )
-        d = self.post(
-            "care-client-visit-consents", {"scope": "Emergency sedation", "party": "DEFERRED"}
-        )
+        d = self.post("care-client-visit-consents", {"scope": "ADMISSION", "party": "DEFERRED"})
         self.assertTrue(d.data["open_deferred"])
-        done = self.post("care-visit-consent-complete", {}, d.data["id"])
+        done = self.post(
+            "care-visit-consent-complete", {"party": "PATIENT", "signatures": sigs}, d.data["id"]
+        )
         self.assertFalse(done.data["open_deferred"])
         self.assertEqual(
-            self.post("care-visit-consent-complete", {}, d.data["id"]).status_code, 400
+            self.post(
+                "care-visit-consent-complete",
+                {"party": "PATIENT", "signatures": sigs},
+                d.data["id"],
+            ).status_code,
+            400,
         )
 
 

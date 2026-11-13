@@ -7,8 +7,11 @@ import {
   recordCapacity,
   recordVisitConsent,
   type CapacityRow,
+  type PartySignatureRow,
+  type SignatureInput,
   type VisitConsentRow,
 } from "../../../lib/carePathwayApi";
+import { SignaturePad } from "../shared/SignaturePad";
 import { formatDateTime } from "../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../shared/styles";
 import { Callout, Card, ErrorNote, Tag } from "../shared/ui";
@@ -36,7 +39,7 @@ export function CapacityConsentCard({ patientId }: { patientId: string }) {
   const [current, setCurrent] = useState<CapacityRow[]>([]);
   const [consents, setConsents] = useState<VisitConsentRow[]>([]);
   const [cap, setCap] = useState<Record<string, string>>({});
-  const [con, setCon] = useState<Record<string, string>>({ party: "PATIENT" });
+  const [completing, setCompleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -50,14 +53,16 @@ export function CapacityConsentCard({ patientId }: { patientId: string }) {
   }, [accessToken, patientId]);
   useEffect(load, [load]);
 
-  async function run(work: () => Promise<unknown>, after: () => void) {
+  async function run(work: () => Promise<unknown>, after: () => void): Promise<boolean> {
     setError(null);
     try {
       await work();
       after();
       load();
+      return true;
     } catch (e) {
       setError(errorText(e, "Couldn't save."));
+      return false;
     }
   }
 
@@ -153,75 +158,234 @@ export function CapacityConsentCard({ patientId }: { patientId: string }) {
 
       <h3 className="mb-1 text-sm font-semibold">Consent for this visit</h3>
       {consents.map((c) => (
-        <div key={c.id} className="mb-1 text-[13px]">
+        <div key={c.id} className="mb-2 text-[13px]">
           <Tag tone={c.open_deferred ? "risk" : "neutral"}>
             {c.open_deferred ? "Deferred — open" : PARTIES.find(([v]) => v === c.party)?.[1]}
           </Tag>{" "}
-          {c.scope}
+          {c.scope_label}
           {c.given_by_name && ` — ${c.given_by_name}`}{" "}
           <span className="text-ink-500">{formatDateTime(c.recorded_at)}</span>
+          <SignatureSummary signatures={c.signatures} />
           {c.warnings.map((w) => (
             <Callout key={w} tone="warning" className="mt-1">
               {w}
             </Callout>
           ))}
-          {c.open_deferred && (
-            <button
-              type="button"
-              className={`${BTN_GHOST} ${BTN_SM} ml-2`}
-              onClick={() =>
-                void run(
-                  () => completeDeferredConsent(accessToken!, c.id),
-                  () => undefined,
-                )
-              }
-            >
-              Mark completed
-            </button>
-          )}
+          {c.open_deferred &&
+            (completing === c.id ? (
+              <ConsentForm
+                mode="complete"
+                onCancel={() => setCompleting(null)}
+                onSubmit={(body) =>
+                  run(
+                    () =>
+                      completeDeferredConsent(accessToken!, c.id, {
+                        party: body.party as "PATIENT" | "GUARDIAN" | "SUBSTITUTE",
+                        given_by_name: body.given_by_name,
+                        signatures: body.signatures,
+                      }),
+                    () => setCompleting(null),
+                  )
+                }
+              />
+            ) : (
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM} ml-2`}
+                onClick={() => setCompleting(c.id)}
+              >
+                Consent obtained — sign now
+              </button>
+            ))}
         </div>
       ))}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
-          className={INPUT}
-          placeholder="What is the consent for?"
-          value={con.scope ?? ""}
-          onChange={(e) => setCon({ ...con, scope: e.target.value })}
-        />
+      <ConsentForm
+        mode="new"
+        onSubmit={(body) =>
+          run(
+            () => recordVisitConsent(accessToken!, patientId, body),
+            () => undefined,
+          )
+        }
+      />
+    </Card>
+  );
+}
+
+function SignatureSummary({ signatures }: { signatures: PartySignatureRow[] }) {
+  if (!signatures.length) return null;
+  return (
+    <span className="block text-[12px] text-ink-500">
+      {signatures
+        .map((s) =>
+          s.method === "UNABLE"
+            ? `${s.signer_name} (${s.role_label.toLowerCase()}) unable to sign — ${s.unable_reason}`
+            : `Signed by ${s.signer_name} (${s.role_label.toLowerCase()})`,
+        )
+        .join(" · ")}
+    </span>
+  );
+}
+
+type ConsentBody = {
+  scope?: string;
+  scope_detail?: string;
+  party: string;
+  given_by_name?: string;
+  signatures: { party: SignatureInput; witness: SignatureInput };
+};
+
+/** A decision consent, signed on screen by whoever decides and by you as the
+ * witness (2026-11-13). `complete` signs a deferred consent once obtained. */
+function ConsentForm({
+  mode,
+  onSubmit,
+  onCancel,
+}: {
+  mode: "new" | "complete";
+  onSubmit: (body: ConsentBody) => Promise<boolean>;
+  onCancel?: () => void;
+}) {
+  const vs = useValueSets();
+  const [scope, setScope] = useState("");
+  const [detail, setDetail] = useState("");
+  const [party, setParty] = useState("PATIENT");
+  const [name, setName] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [partySig, setPartySig] = useState<SignatureInput | null>(null);
+  const [witness, setWitness] = useState<SignatureInput | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [reset, setReset] = useState(0);
+
+  const parties = mode === "new" ? PARTIES : PARTIES.filter(([v]) => v !== "DEFERRED");
+  const deferred = party === "DEFERRED";
+  const named = party === "GUARDIAN" || party === "SUBSTITUTE";
+  const ready =
+    (mode === "complete" || (scope && (scope !== "OTHER" || detail.trim()))) &&
+    (!named || name.trim()) &&
+    (deferred || (partySig && witness));
+
+  async function submit() {
+    setSaving(true);
+    const ok = await onSubmit({
+      ...(mode === "new" ? { scope, scope_detail: detail.trim() } : {}),
+      party,
+      given_by_name: named ? name.trim() : "",
+      signatures: {
+        party: { ...(partySig ?? {}), ...(named ? { relationship: relationship.trim() } : {}) },
+        witness: witness ?? {},
+      },
+    });
+    setSaving(false);
+    if (ok) {
+      setScope("");
+      setDetail("");
+      setParty("PATIENT");
+      setName("");
+      setRelationship("");
+      setPartySig(null);
+      setWitness(null);
+      setReset((n) => n + 1);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-lg border border-surface-border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {mode === "new" && (
+          <select
+            className={INPUT}
+            aria-label="What is the consent for?"
+            value={scope}
+            onChange={(e) => setScope(e.target.value)}
+          >
+            <option value="">What is the consent for?…</option>
+            {vs.options("capacity-decision").map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.display}
+              </option>
+            ))}
+          </select>
+        )}
+        {mode === "new" && scope === "OTHER" && (
+          <input
+            className={INPUT}
+            placeholder="Which decision?"
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+          />
+        )}
         <select
           className={INPUT}
           aria-label="Who is consenting"
-          value={con.party}
-          onChange={(e) => setCon({ ...con, party: e.target.value })}
+          value={party}
+          onChange={(e) => {
+            setParty(e.target.value);
+            // The party's pad starts blank for the new signer.
+            setPartySig(null);
+          }}
         >
-          {PARTIES.map(([v, l]) => (
+          {parties.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </select>
-        {(con.party === "GUARDIAN" || con.party === "SUBSTITUTE") && (
-          <input
-            className={INPUT}
-            placeholder="Name of person consenting"
-            value={con.given_by_name ?? ""}
-            onChange={(e) => setCon({ ...con, given_by_name: e.target.value })}
-          />
+        {named && (
+          <>
+            <input
+              className={INPUT}
+              placeholder="Name of person consenting"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              className={INPUT}
+              placeholder="Relationship to the client"
+              value={relationship}
+              onChange={(e) => setRelationship(e.target.value)}
+            />
+          </>
         )}
+      </div>
+      {deferred ? (
+        <p className="text-[12px] text-ink-500">
+          Nobody can consent yet. The consent is signed when it is obtained.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <SignaturePad
+            key={`party-${reset}-${party}`}
+            label={
+              party === "PATIENT"
+                ? "Client's signature"
+                : `${parties.find(([v]) => v === party)?.[1]}'s signature`
+            }
+            allowUnable
+            onChange={setPartySig}
+          />
+          <SignaturePad
+            key={`witness-${reset}`}
+            label="Your signature as witness"
+            onChange={setWitness}
+          />
+        </div>
+      )}
+      <div className="flex gap-2">
         <button
           type="button"
           className={`${BTN} ${BTN_SM}`}
-          disabled={!con.scope?.trim()}
-          onClick={() =>
-            void run(
-              () => recordVisitConsent(accessToken!, patientId, con),
-              () => setCon({ party: "PATIENT" }),
-            )
-          }
+          disabled={!ready || saving}
+          onClick={() => void submit()}
         >
-          Record consent
+          {saving ? "Saving…" : "Record signed consent"}
         </button>
+        {onCancel && (
+          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
-    </Card>
+    </div>
   );
 }

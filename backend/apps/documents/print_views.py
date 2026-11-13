@@ -108,7 +108,31 @@ def document_context(doc, user):
         ),
         "organizer": c.get("organizer") or "",
         "printed_by": _user(user),
+        "wording": c.get("wording") or None,
+        "party_signatures": _party_signatures(doc),
     }
+
+
+def _party_signatures(doc):
+    """The signatures on this version's content, images embedded (data: URLs only;
+    the PDF engine fetches nothing). Earlier signatures on changed content are
+    not shown — they no longer attest to this text."""
+    from . import signatures
+
+    current = signatures.content_sha256(doc.content)
+    out = []
+    for row in doc.party_signatures.filter(content_sha256=current).order_by("captured_at"):
+        out.append(
+            {
+                "role": signatures.ROLE_LABELS[row.role],
+                "name": row.signer_name,
+                "relationship": row.relationship,
+                "image": signatures.image_data_url(row),
+                "unable_reason": row.unable_reason,
+                "when": _when(row.captured_at),
+            }
+        )
+    return out
 
 
 class GeneratedPrintView(APIView):

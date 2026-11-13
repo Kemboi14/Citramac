@@ -1092,7 +1092,9 @@ export type ConsentType =
   | "APPOINTMENT_MESSAGES"
   /** The client's decision per channel, recorded against APPOINTMENT_MESSAGES wording. */
   | "APPOINTMENT_SMS"
-  | "APPOINTMENT_EMAIL";
+  | "APPOINTMENT_EMAIL"
+  /** Facility wording for a consent document (documents catalogue CON-01..11). */
+  | `DOC-CON-${string}`;
 
 /** One message sent to a client about an appointment (appointment_messages.status). */
 export interface AppointmentMessage {
@@ -1194,7 +1196,11 @@ export function recordDataSharingConsent(
 }
 
 export function listConsentTemplates(accessToken: string) {
-  return apiRequest<{ results: ConsentTemplate[] }>("/care/consent-templates/", { accessToken });
+  return apiRequest<{
+    results: ConsentTemplate[];
+    /** Every wording a facility can set, consent documents included. */
+    types: { type: ConsentType; label: string }[];
+  }>("/care/consent-templates/", { accessToken });
 }
 
 export function createConsentTemplate(
@@ -2718,9 +2724,33 @@ export interface CapacityRow {
   assessed_by: string;
   assessed_at: string;
 }
+/** One on-screen signature on a consent (documents.PartySignature). */
+export interface PartySignatureRow {
+  id: string;
+  role: "CLIENT" | "GUARDIAN" | "SUBSTITUTE" | "RELATED_PERSON" | "WITNESS";
+  role_label: string;
+  signer_name: string;
+  relationship: string;
+  method: "DRAWN" | "UNABLE";
+  unable_reason: string;
+  captured_at: string;
+  captured_by: string;
+  /** False once the content it was signed on has changed. */
+  current: boolean;
+}
+/** A party's signature as sent: the drawn PNG, or why they could not sign. */
+export interface SignatureInput {
+  image?: string;
+  unable_reason?: string;
+  name?: string;
+  relationship?: string;
+  related_person_id?: string;
+}
 export interface VisitConsentRow {
   id: string;
   scope: string;
+  scope_label: string;
+  scope_detail: string;
   party: string;
   method: string;
   given_by_name: string;
@@ -2729,6 +2759,7 @@ export interface VisitConsentRow {
   recorded_by: string;
   completed_at: string | null;
   open_deferred: boolean;
+  signatures: PartySignatureRow[];
 }
 export interface ProgressNoteRow {
   id: string;
@@ -2785,10 +2816,18 @@ export const recordVisitConsent = (t: string, id: string, body: Record<string, u
     body,
     accessToken: t,
   });
-export const completeDeferredConsent = (t: string, consentId: string) =>
+export const completeDeferredConsent = (
+  t: string,
+  consentId: string,
+  body: {
+    party: "PATIENT" | "GUARDIAN" | "SUBSTITUTE";
+    given_by_name?: string;
+    signatures: { party: SignatureInput; witness: SignatureInput };
+  },
+) =>
   apiRequest<VisitConsentRow>(`/care/visit-consents/${consentId}/complete/`, {
     method: "POST",
-    body: {},
+    body,
     accessToken: t,
   });
 export const getNotes = (t: string, id: string) =>

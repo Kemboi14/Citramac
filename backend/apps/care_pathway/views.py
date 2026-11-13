@@ -19,7 +19,8 @@ from rest_framework.views import APIView
 from apps.client_registry.models import AllergyRecord, Appointment, ConsentRecord, Patient
 from apps.clinical_encounter.models import DiagnosisCode
 from apps.ipd_ward.models import Admission, Bed
-from apps.sysadmin_audit.audit import log_view
+from apps.sysadmin_audit.audit import log_view, write_event
+from apps.sysadmin_audit.models import AuditLogEntry
 from apps.triage.models import VitalSigns
 from config.errors import error_response
 
@@ -2432,7 +2433,16 @@ class ConsentTemplatesView(APIView):
     active wording and retires the previous one."""
 
     def get(self, request):
-        return Response({"results": [_template_payload(t) for t in ConsentTemplate.objects.all()]})
+        return Response(
+            {
+                "results": [_template_payload(t) for t in ConsentTemplate.objects.all()],
+                # Every wording a facility can set, including each consent document's.
+                "types": [
+                    {"type": code, "label": label}
+                    for code, label in ConsentTemplate.CONSENT_TYPE_CHOICES
+                ],
+            }
+        )
 
     def post(self, request):
         if not _is_org_admin(request.user):
@@ -2791,9 +2801,18 @@ class ClientCapacityView(APIView):
 
 
 def _consent_row(c):
+    from apps.documents import signatures
+
+    from .services import concept_labels
+
+    scope_label = concept_labels().get(("capacity-decision", c.scope), c.scope)
+    if c.scope == "OTHER" and c.scope_detail:
+        scope_label = f"{scope_label}: {c.scope_detail}"
     return {
         "id": str(c.pk),
         "scope": c.scope,
+        "scope_label": scope_label,
+        "scope_detail": c.scope_detail,
         "party": c.party,
         "method": c.method,
         "given_by_name": c.given_by_name,
@@ -2802,7 +2821,13 @@ def _consent_row(c):
         "recorded_by": user_display(c.recorded_by),
         "completed_at": _iso(c.completed_at),
         "open_deferred": c.party == "DEFERRED" and not c.completed_at,
+        "signatures": [signatures.signature_row(r) for r in c.signatures.all()],
     }
+
+
+def _require_clinical(request, what):
+    if not is_clinical_staff(request.user):
+        raise PermissionDenied(f"Only clinical staff can {what}.")
 
 
 class ClientVisitConsentView(APIView):
@@ -2813,7 +2838,9 @@ class ClientVisitConsentView(APIView):
             {
                 "results": [
                     _consent_row(c)
-                    for c in VisitConsent.objects.filter(patient=_patient(patient_id))
+                    for c in VisitConsent.objects.filter(
+                        patient=_patient(patient_id)
+                    ).prefetch_related("signatures")
                 ]
             }
         )
@@ -2821,6 +2848,7 @@ class ClientVisitConsentView(APIView):
     def post(self, request, patient_id):
         from . import records
 
+        _require_clinical(request, "record a consent")
         c = records.record_visit_consent(_patient(patient_id), request.user, request.data)
         return Response(_consent_row(c), status=status.HTTP_201_CREATED)
 
@@ -2830,11 +2858,35 @@ class VisitConsentCompleteView(APIView):
         from . import records
         from .models import VisitConsent
 
+        _require_clinical(request, "complete a consent")
         return Response(
             _consent_row(
-                records.complete_deferred(get_object_or_404(VisitConsent, pk=pk), request.user)
+                records.complete_deferred(
+                    get_object_or_404(VisitConsent, pk=pk), request.user, request.data
+                )
             )
         )
+
+
+class VisitConsentFhirView(APIView):
+    """GET one decision consent as FHIR R4 (Consent + signature Provenance)."""
+
+    def get(self, request, pk):
+        from apps.documents import consent_fhir
+
+        from .models import VisitConsent
+
+        _require_clinical(request, "export a consent")
+        consent = get_object_or_404(VisitConsent, pk=pk)
+        bundle = consent_fhir.build_visit_consent_bundle(consent)
+        write_event(
+            consent.organization_id,
+            AuditLogEntry.ACTION_VIEW,
+            "care_pathway.visitconsent",
+            consent.pk,
+            {"output": "fhir"},
+        )
+        return Response(bundle)
 
 
 def _note_type_display(code):

@@ -25,6 +25,16 @@ urlpatterns = [
         views.GeneratedTransitionView.as_view(),
         name="documents-transition",
     ),
+    path(
+        "generated/<uuid:pk>/signatures/",
+        views.GeneratedSignatureView.as_view(),
+        name="documents-signatures",
+    ),
+    path(
+        "generated/<uuid:pk>/fhir/",
+        views.GeneratedConsentFhirView.as_view(),
+        name="documents-consent-fhir",
+    ),
     path("disclosures/", views.DisclosureListView.as_view(), name="documents-disclosures"),
     path(
         "authorizations/", views.ReleaseAuthorizationView.as_view(), name="documents-authorizations"

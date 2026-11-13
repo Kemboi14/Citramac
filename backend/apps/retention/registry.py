@@ -117,6 +117,7 @@ PATIENT_PATHS = {
     "documents.GeneratedDocument": "patient",
     "documents.DocumentEvent": "patient",
     "documents.DisclosureRecord": "patient",
+    "documents.PartySignature": "patient",
 }
 
 # A client with any row in one of these is held to the mental health /
@@ -186,6 +187,7 @@ MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mh
     "documents.GeneratedDocument",
     "documents.DocumentEvent",
     "documents.DisclosureRecord",
+    "documents.PartySignature",
     "dha_interop.ShrConsent",
 }
 

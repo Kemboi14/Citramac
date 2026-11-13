@@ -6,6 +6,7 @@ import { ApiError } from "../../../lib/apiClient";
 import {
   editGeneratedDocument,
   getGeneratedDocument,
+  signConsentDocument,
   transitionDocument,
   type DocAction,
   type DocInputs,
@@ -15,6 +16,7 @@ import { formatDateTime } from "../shared/format";
 import { BTN, BTN_DANGER, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "../shared/styles";
 import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "../shared/ui";
 import { AuthorizationForm } from "./AuthorizationForm";
+import { ConsentSignatures } from "./ConsentSignatures";
 import { DocumentInputsForm, type RecipientValues } from "./DocumentInputsForm";
 import { DocumentPreview } from "./DocumentPreview";
 import { useDocCatalogue } from "./useDocCatalogue";
@@ -187,7 +189,9 @@ export function GeneratedDocumentPage() {
           )}
           {doc.content_status === "VERIFY" && (
             <Callout tone="warning">
-              {doc.verify_note}. Structured draft only — cannot be signed or released.
+              {doc.category === "CON"
+                ? "The facility has not set its wording for this consent (Org Admin → Consent wording). Structured draft only — cannot be signed or released."
+                : `${doc.verify_note}. Structured draft only — cannot be signed or released.`}
             </Callout>
           )}
           {(doc.block.warnings ?? []).map((w) => (
@@ -199,6 +203,16 @@ export function GeneratedDocumentPage() {
             <Callout>
               Correction of v{doc.version - 1}: {doc.correction_reason}
             </Callout>
+          )}
+
+          {doc.category === "CON" && (
+            <ConsentSignatures
+              doc={doc}
+              busy={busy}
+              onSign={(body, done) => {
+                if (accessToken) run(signConsentDocument(accessToken, doc.id, body), done);
+              }}
+            />
           )}
 
           <Card title="Actions">

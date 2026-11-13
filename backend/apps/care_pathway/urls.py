@@ -401,6 +401,11 @@ urlpatterns = [
         name="care-visit-consent-complete",
     ),
     path(
+        "care/visit-consents/<uuid:pk>/fhir/",
+        views.VisitConsentFhirView.as_view(),
+        name="care-visit-consent-fhir",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/notes/",
         views.ClientNotesView.as_view(),
         name="care-client-notes",

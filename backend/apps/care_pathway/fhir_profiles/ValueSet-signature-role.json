@@ -1,0 +1,19 @@
+{
+  "resourceType": "ValueSet",
+  "id": "signature-role",
+  "url": "urn:citramac:valueset:signature-role",
+  "version": "1",
+  "status": "draft",
+  "experimental": false,
+  "publisher": "CITRAMAC",
+  "name": "Signaturerole",
+  "title": "Consent signer role",
+  "description": "Client, parent / guardian, substitute decision-maker, family member / caregiver or staff witness.",
+  "compose": {
+    "include": [
+      {
+        "system": "urn:citramac:codesystem:signature-role"
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { PartySignatureRow, SignatureInput } from "./carePathwayApi";
 
 // Mirrors backend/apps/documents (master prompt §6 Document Generation).
 // Nothing here touches browser storage (CLAUDE.md §5).
@@ -242,6 +243,26 @@ export interface GeneratedDocument extends GeneratedDocumentRow {
     reason: string;
   }[];
   disclosures: DisclosureRow[];
+  /** Consent documents (CON-01..11) only: who must sign, who has, and the wording. */
+  signature_requirements: { key: string; label: string; roles: string[]; satisfied: boolean }[];
+  party_signatures: PartySignatureRow[];
+  signature_roles?: { code: PartySignatureRow["role"]; label: string }[];
+  client_is_minor?: boolean;
+  contacts?: { id: string; name: string; relationship: string; is_guardian: boolean }[];
+  wording?: { version: string; text: string } | null;
+}
+
+/** One party's on-screen signature, with the staff witness's (2026-11-13). */
+export function signConsentDocument(
+  accessToken: string,
+  id: string,
+  body: { role: string; party: SignatureInput; witness: SignatureInput },
+) {
+  return apiRequest<GeneratedDocument>(`/documents/generated/${id}/signatures/`, {
+    method: "POST",
+    accessToken,
+    body,
+  });
 }
 
 export interface ReleaseAuthorization {

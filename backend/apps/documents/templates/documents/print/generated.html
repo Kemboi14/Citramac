@@ -39,6 +39,31 @@
   <p class="pre">{{ clinician_comment }}</p>
   {% endif %}
 
+  {% if wording %}
+  <h2>Consent</h2>
+  <p class="pre">{{ wording.text }}</p>
+  <p class="source">Facility wording, version {{ wording.version }}</p>
+  {% endif %}
+
+  {% if party_signatures %}
+  <h2>Signed by</h2>
+  <table class="signature">
+    {% for s in party_signatures %}
+    <tr>
+      <td>
+        {% if s.image %}<img class="drawn-signature" src="{{ s.image }}" alt="Signature of {{ s.name }}">
+        {% else %}<div class="not-recorded">Unable to sign: {{ s.unable_reason }}</div>{% endif %}
+        <div class="line">{{ s.name }} — {{ s.role }}{% if s.relationship %} ({{ s.relationship }}){% endif %}</div>
+      </td>
+      <td>
+        <div>{{ s.when }}</div>
+        <div class="line">Date and time</div>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
   {% if verify_notice %}
   <div class="boxed"><strong>Structured draft of record data only.</strong> {{ verify_notice }}.</div>
   {% endif %}

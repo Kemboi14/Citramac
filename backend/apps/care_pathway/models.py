@@ -1075,6 +1075,20 @@ class ConsentTemplate(TenantScopedModel):
         # What the client is told before agreeing to SMS / email about their
         # appointments (ConsentRecord APPOINTMENT_SMS / APPOINTMENT_EMAIL).
         ("APPOINTMENT_MESSAGES", "Appointment messages by SMS / email"),
+        # The facility's wording for each consent document (documents catalogue
+        # CON-01..11). Without it the document stays a structured draft that
+        # cannot be signed (2026-11-13).
+        ("DOC-CON-01", "Document: General consent for treatment"),
+        ("DOC-CON-02", "Document: Telemedicine consent"),
+        ("DOC-CON-03", "Document: Specific procedure / testing consent"),
+        ("DOC-CON-04", "Document: Consent to involve family / caregiver"),
+        ("DOC-CON-05", "Document: Authorization to release medical information"),
+        ("DOC-CON-06", "Document: Request / authorization to obtain medical information"),
+        ("DOC-CON-07", "Document: Reciprocal exchange-of-information authorization"),
+        ("DOC-CON-08", "Document: Consent to communicate with employer"),
+        ("DOC-CON-09", "Document: Consent to communicate with school / university"),
+        ("DOC-CON-10", "Document: Electronic communication consent"),
+        ("DOC-CON-11", "Document: Withdrawal / revocation of consent"),
     ]
 
     consent_type = models.CharField(max_length=32, choices=CONSENT_TYPE_CHOICES)
@@ -1403,7 +1417,11 @@ class VisitConsent(TenantScopedModel):
         ("DEFERRED", "Deferred — emergency"),
     ]
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="visit_consents")
+    # A `capacity-decision` code (the same decisions capacity is assessed for).
+    # Rows recorded before 2026-11-13 hold free text here and are shown as is.
     scope = models.CharField(max_length=120)
+    # What "Other" means, when scope is OTHER.
+    scope_detail = models.CharField(max_length=200, blank=True)
     party = models.CharField(max_length=12, choices=PARTY_CHOICES)
     method = models.CharField(max_length=20, blank=True)
     given_by_name = models.CharField(max_length=150, blank=True)

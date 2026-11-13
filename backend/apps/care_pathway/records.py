@@ -140,30 +140,67 @@ def consent_warnings(patient, scope, party):
     return warnings
 
 
-def record_visit_consent(patient, user, data):
+CONSENT_SCOPE_VALUESET = "capacity-decision"
+
+
+def _deciding_party(data, allowed):
     party = data.get("party")
-    if party not in dict(VisitConsent.PARTY_CHOICES):
+    if party not in allowed:
         raise ValidationError({"party": "Say who is giving consent."})
-    scope = str(data.get("scope", "")).strip()
-    if not scope:
-        raise ValidationError({"scope": "Say what the consent is for."})
-    if party in ("GUARDIAN", "SUBSTITUTE") and not str(data.get("given_by_name", "")).strip():
+    name = str(data.get("given_by_name", "")).strip()[:150]
+    if party in ("GUARDIAN", "SUBSTITUTE") and not name:
         raise ValidationError({"given_by_name": "Record the name of the person consenting."})
-    return VisitConsent.objects.create(
+    return party, name
+
+
+@transaction.atomic
+def record_visit_consent(patient, user, data):
+    """A decision consent, signed (2026-11-13): the party giving it and the staff
+    witness sign on screen when it is recorded. A deferred (emergency) consent
+    has nobody to sign yet; it is signed when it is completed."""
+    from apps.documents import signatures
+
+    from .models import LocalConcept
+
+    party, name = _deciding_party(data, dict(VisitConsent.PARTY_CHOICES))
+    scope = str(data.get("scope", "")).strip()
+    if not LocalConcept.objects.filter(
+        valueset_id=CONSENT_SCOPE_VALUESET, code=scope, active=True
+    ).exists():
+        raise ValidationError({"scope": "Choose the decision the consent is for."})
+    detail = str(data.get("scope_detail", "")).strip()[:200]
+    if scope == "OTHER" and not detail:
+        raise ValidationError({"scope_detail": "Say which decision this is for."})
+    consent = VisitConsent.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
         scope=scope,
+        scope_detail=detail if scope == "OTHER" else "",
         party=party,
         method=str(data.get("method", ""))[:20],
-        given_by_name=str(data.get("given_by_name", ""))[:150],
+        given_by_name=name,
         warnings=consent_warnings(patient, scope, party),
         recorded_by=user,
     )
+    if party != "DEFERRED":
+        signatures.sign_visit_consent(consent, user, data.get("signatures"), party)
+    return consent
 
 
-def complete_deferred(consent, user):
+@transaction.atomic
+def complete_deferred(consent, user, data=None):
+    """The deferred consent obtained: the deciding party and the witness sign."""
+    from apps.documents import signatures
+
+    data = data or {}
+    consent = VisitConsent.objects.select_for_update().get(pk=consent.pk)
     if consent.party != "DEFERRED" or consent.completed_at:
         raise ValidationError({"detail": "This is not an open deferred consent."})
+    party, name = _deciding_party(data, ("PATIENT", "GUARDIAN", "SUBSTITUTE"))
+    if party != "PATIENT":
+        data = {**data, "signatures": {**(data.get("signatures") or {})}}
+        data["signatures"]["party"] = {**(data["signatures"].get("party") or {}), "name": name}
+    signatures.sign_visit_consent(consent, user, data.get("signatures"), party)
     consent.completed_at, consent.completed_by = timezone.now(), user
     consent.save(update_fields=["completed_at", "completed_by", "updated_at"])
     return consent

@@ -233,6 +233,8 @@ function NewVersionForm({
 export function ConsentWordingPage() {
   const { accessToken } = useAuth();
   const [templates, setTemplates] = useState<ConsentTemplate[] | null>(null);
+  // Each consent document's wording (CON-01..11), named by the server.
+  const [documentKinds, setDocumentKinds] = useState<typeof KINDS>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -240,7 +242,19 @@ export function ConsentWordingPage() {
     if (!accessToken) return;
     let cancelled = false;
     listConsentTemplates(accessToken)
-      .then((data) => !cancelled && setTemplates(data.results))
+      .then((data) => {
+        if (cancelled) return;
+        setTemplates(data.results);
+        setDocumentKinds(
+          (data.types ?? [])
+            .filter((t) => t.type.startsWith("DOC-CON-"))
+            .map((t) => ({
+              type: t.type,
+              label: t.label.replace(/^Document: /, ""),
+              subject: `wording of the consent document “${t.label.replace(/^Document: /, "")}”`,
+            })),
+        );
+      })
       .catch(
         (err) =>
           !cancelled &&
@@ -252,7 +266,7 @@ export function ConsentWordingPage() {
   }, [accessToken]);
 
   const [kindType, setKindType] = useState<ConsentType>("DATA_SHARING_HIE");
-  const kind = KINDS.find((k) => k.type === kindType) ?? KINDS[0];
+  const kind = [...KINDS, ...documentKinds].find((k) => k.type === kindType) ?? KINDS[0];
   const ofKind = templates?.filter((t) => (t.consent_type || "DATA_SHARING_HIE") === kind.type);
   const active = ofKind?.find((t) => t.active) ?? null;
   const history = ofKind?.filter((t) => !t.active) ?? [];
@@ -303,27 +317,40 @@ export function ConsentWordingPage() {
 
       {templates && (
         <>
-          <div role="tablist" aria-label="Consent type" className="flex flex-wrap gap-1.5">
-            {KINDS.map((k) => (
-              <button
-                key={k.type}
-                type="button"
-                role="tab"
-                aria-selected={k.type === kind.type}
-                onClick={() => {
-                  setKindType(k.type);
-                  setNotice(null);
-                }}
-                className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                  k.type === kind.type
-                    ? "border-brand-green bg-brand-green text-on-primary"
-                    : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
-                }`}
-              >
-                {k.label}
-              </button>
+          {[
+            { title: "Consent decisions", kinds: KINDS },
+            {
+              title: "Consent documents — signed by the client and a staff witness",
+              kinds: documentKinds,
+            },
+          ]
+            .filter((group) => group.kinds.length)
+            .map((group) => (
+              <div key={group.title} className="flex flex-col gap-1.5">
+                <div className={LABEL}>{group.title}</div>
+                <div role="tablist" aria-label={group.title} className="flex flex-wrap gap-1.5">
+                  {group.kinds.map((k) => (
+                    <button
+                      key={k.type}
+                      type="button"
+                      role="tab"
+                      aria-selected={k.type === kind.type}
+                      onClick={() => {
+                        setKindType(k.type);
+                        setNotice(null);
+                      }}
+                      className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                        k.type === kind.type
+                          ? "border-brand-green bg-brand-green text-on-primary"
+                          : "border-surface-border bg-surface-card text-ink-700 hover:bg-surface-bg"
+                      }`}
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
-          </div>
           <section className={CARD_CLASS} aria-labelledby="consent-active-title">
             <div className={CARD_HEADER}>
               <h2 id="consent-active-title" className={CARD_TITLE}>
