@@ -1002,8 +1002,6 @@ class PsychiatryPlanScheduleView(APIView):
         if episode is None:
             raise ValidationError({"care_plan_activity": "The client has no open episode of care."})
         plan = CarePlan.objects.select_for_update().filter(patient=patient, episode=episode).first()
-        if plan is None:
-            raise ValidationError({"care_plan_activity": "The client has no current care plan."})
 
         request_id = str(request.data.get("client_request_id") or "").strip()
         if not request_id or len(request_id) > 64:
@@ -1099,6 +1097,190 @@ class PsychiatryPlanScheduleView(APIView):
             {"care_plan_activity": str(activity.pk), "reason": appointment.reason},
         )
         return Response(_psychiatry_plan_schedule(patient, plan), status=status.HTTP_201_CREATED)
+
+
+def _psychotherapy_plan_schedule(patient, plan):
+    from . import intervention_catalogue
+
+    activities = (
+        list(plan.activities.exclude(decision="DECLINED").order_by("created_at")) if plan else []
+    )
+    activity_ids = [activity.pk for activity in activities]
+    sessions = (
+        Appointment.objects.filter(
+            patient=patient,
+            care_plan_activity_id__in=activity_ids,
+            status="SCHEDULED",
+            scheduled_for__gte=timezone.now(),
+        )
+        .select_related("care_plan_activity", "provider")
+        .order_by("scheduled_for")
+    )
+    return {
+        "plan": (
+            {
+                "id": str(plan.pk),
+                "goals": plan.goals,
+                "confirmed": plan.versions.exists(),
+                "activities": [
+                    {
+                        "id": str(activity.pk),
+                        "action_key": activity.action_key,
+                        "title": activity.title,
+                        "goal": activity.goal,
+                        "module": activity.module,
+                        "status": activity.status,
+                        "status_display": activity.get_status_display(),
+                        "available_to_psychotherapy": (
+                            "psychotherapy" in intervention_catalogue.modules_for_activity(activity)
+                        ),
+                    }
+                    for activity in activities
+                ],
+            }
+            if plan
+            else None
+        ),
+        "scheduled_sessions": [
+            {
+                "id": str(appointment.pk),
+                "care_plan_activity_id": str(appointment.care_plan_activity_id),
+                "activity_title": appointment.care_plan_activity.title,
+                "scheduled_for": _iso(appointment.scheduled_for),
+                "duration_minutes": appointment.duration_minutes,
+                "mode": appointment.mode,
+                "status": appointment.status,
+                "notes": appointment.notes,
+                "provider_name": user_display(appointment.provider),
+            }
+            for appointment in sessions
+        ],
+    }
+
+
+class PsychotherapyPlanScheduleView(APIView):
+    def _check(self, request):
+        if not is_clinical_staff(request.user):
+            raise PermissionDenied("Only clinical staff can schedule a psychotherapy session.")
+
+    def get(self, request, patient_id):
+        self._check(request)
+        patient = _patient(patient_id)
+        episode = services.open_episode_for(patient)
+        plan = (
+            CarePlan.objects.filter(patient=patient, episode=episode).first() if episode else None
+        )
+        return Response(_psychotherapy_plan_schedule(patient, plan))
+
+    @transaction.atomic
+    def post(self, request, patient_id):
+        self._check(request)
+        patient = _patient(patient_id)
+        episode = services.open_episode_for(patient)
+        if episode is None:
+            raise ValidationError({"care_plan_activity": "The client has no open episode of care."})
+        plan = CarePlan.objects.select_for_update().filter(patient=patient, episode=episode).first()
+        if plan is None:
+            raise ValidationError({"care_plan_activity": "The client has no current care plan."})
+
+        request_id = str(request.data.get("client_request_id") or "").strip()
+        if not request_id or len(request_id) > 64:
+            raise ValidationError({"client_request_id": "A stable request id is required."})
+        existing = Appointment.objects.filter(
+            organization=request.user.organization, client_request_id=request_id
+        ).first()
+        if existing:
+            if existing.patient_id != patient.pk or str(existing.care_plan_activity_id) != str(
+                request.data.get("care_plan_activity") or ""
+            ):
+                raise ValidationError({"client_request_id": "That request id is already in use."})
+            if existing.status != "SCHEDULED" or existing.scheduled_for <= timezone.now():
+                raise ValidationError(
+                    {
+                        "client_request_id": (
+                            "That request already belongs to a session that is no longer upcoming. "
+                            "Refresh before scheduling again."
+                        )
+                    }
+                )
+            return Response(_psychotherapy_plan_schedule(patient, plan))
+
+        activity = None
+        requested_activity = request.data.get("care_plan_activity")
+        if requested_activity:
+            if plan is None:
+                raise ValidationError({"care_plan_activity": "The client has no current care plan."})
+            activity = get_object_or_404(
+                CarePlanActivity.objects.select_for_update(),
+                pk=requested_activity,
+                care_plan=plan,
+                status="PLANNED",
+            )
+            from . import intervention_catalogue
+
+            if "psychotherapy" not in intervention_catalogue.modules_for_activity(activity):
+                raise ValidationError(
+                    {"care_plan_activity": "Choose a planned action assigned to Psychotherapy."}
+                )
+            if Appointment.objects.filter(
+                care_plan_activity=activity,
+                status="SCHEDULED",
+                scheduled_for__gte=timezone.now(),
+            ).exists():
+                raise ValidationError(
+                    {"care_plan_activity": "A future session is already scheduled for this action."}
+                )
+
+        notes = request.data.get("notes") or ""
+        if not isinstance(notes, str) or len(notes) > 500:
+            raise ValidationError({"notes": "Use a brief scheduling note of at most 500 characters."})
+        duration = request.data.get("duration_minutes") or 30
+        try:
+            duration = int(duration)
+        except (TypeError, ValueError):
+            raise ValidationError({"duration_minutes": "Enter a valid session length."}) from None
+        if duration < 5 or duration > 240:
+            raise ValidationError({"duration_minutes": "Session length must be 5 to 240 minutes."})
+        from django.utils.dateparse import parse_datetime
+
+        from . import facility_time
+
+        scheduled_for = request.data.get("scheduled_for")
+        parsed_at = parse_datetime(scheduled_for) if isinstance(scheduled_for, str) else None
+        if parsed_at is None:
+            raise ValidationError({"scheduled_for": "Enter a valid session date and time."})
+        scheduled_at = facility_time.make_local_aware(parsed_at)
+        if scheduled_at <= timezone.now():
+            raise ValidationError({"scheduled_for": "Choose a future date and time."})
+
+        appointment = services.book_follow_up(
+            request.user,
+            patient,
+            {
+                "reason": "CARE_PLAN_REVIEW",
+                "appointment_type": request.data.get("appointment_type") or "Individual psychotherapy",
+                "scheduled_for": scheduled_at.isoformat(),
+                "provider": str(request.user.pk),
+                "mode": request.data.get("mode") or "IN_PERSON",
+                "duration_minutes": duration,
+                "notes": notes.strip(),
+                "client_request_id": request_id,
+            },
+            episode=episode,
+            origin="CARE_PLAN",
+        )
+        if activity is not None:
+            appointment.care_plan_activity = activity
+            appointment.save(update_fields=["care_plan_activity", "updated_at"])
+        from apps.sysadmin_audit.audit import write_entry
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        write_entry(
+            appointment,
+            AuditLogEntry.ACTION_CREATE,
+            {"care_plan_activity": str(activity.pk), "reason": appointment.reason},
+        )
+        return Response(_psychotherapy_plan_schedule(patient, plan), status=status.HTTP_201_CREATED)
 
 
 class PsychiatrySignView(APIView):

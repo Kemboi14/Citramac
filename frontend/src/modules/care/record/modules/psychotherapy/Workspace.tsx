@@ -123,6 +123,10 @@ export function PsychotherapyWorkspace({
   patientId,
   episodeId,
   noteId,
+  sessionType,
+  sessionObjective,
+  primaryGoal,
+  secondaryGoals,
   onClose,
   inline = false,
   backLabel = "Interventions",
@@ -130,6 +134,10 @@ export function PsychotherapyWorkspace({
   patientId: string;
   episodeId?: string;
   noteId?: string;
+  sessionType?: "INDIVIDUAL" | "FAMILY";
+  sessionObjective?: string;
+  primaryGoal?: string;
+  secondaryGoals?: string;
   onClose: () => void;
   inline?: boolean;
   /** Where the back crumb returns to. Defaults to the client record's
@@ -148,7 +156,7 @@ export function PsychotherapyWorkspace({
       .catch((e) => setError(errorText(e, "Couldn't load the session note settings.")));
     const load = noteId
       ? getPsyNote(accessToken, noteId)
-      : startPsyNote(accessToken, patientId, { episode: episodeId });
+      : startPsyNote(accessToken, patientId, { episode: episodeId, session_type: sessionType, session_objective: sessionObjective, primary_goal: primaryGoal, secondary_goals: secondaryGoals });
     load.then(setNote).catch((e) => setError(errorText(e, "Couldn't open the session note.")));
   }, [accessToken, patientId, episodeId, noteId]);
   useEffect(() => {
@@ -1506,6 +1514,7 @@ function WorkspaceBody({
       example={example}
       busy={busy}
       onEditAnswer={editAnswer}
+      patientId={patientId}
     />
   );
 

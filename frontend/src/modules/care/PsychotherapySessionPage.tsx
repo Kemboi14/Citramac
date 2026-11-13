@@ -40,12 +40,18 @@ export function PsychotherapySessionPage() {
         </Link>
       </div>
       <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card shadow-sm">
-        {episodeId || noteId ? (
+        {noteId ? (
           <PsychotherapyWorkspace
             inline
             patientId={patientId}
-            episodeId={episodeId || undefined}
             noteId={noteId}
+            backLabel="Individual Psychotherapy"
+            onClose={() => navigate(backTo)}
+          />
+        ) : episodeId ? (
+          <PsychotherapyRecord
+            patientId={patientId}
+            initialEpisodeId={episodeId}
             backLabel="Individual Psychotherapy"
             onClose={() => navigate(backTo)}
           />

@@ -671,6 +671,64 @@ export function schedulePsychiatrySession(
   });
 }
 
+export interface PsychotherapyScheduleActivity {
+  id: string;
+  action_key: string;
+  title: string;
+  goal: string;
+  module: string;
+  status: CarePlanActivity["status"];
+  status_display: string;
+  available_to_psychotherapy: boolean;
+}
+
+export interface PsychotherapyScheduledSession {
+  id: string;
+  care_plan_activity_id: string;
+  activity_title: string;
+  scheduled_for: string;
+  duration_minutes: number;
+  mode: "IN_PERSON" | "PHONE" | "VIDEO";
+  status: string;
+  notes: string;
+  provider_name: string;
+}
+
+export interface PsychotherapyPlanSchedule {
+  plan: {
+    id: string;
+    goals: string;
+    confirmed: boolean;
+    activities: PsychotherapyScheduleActivity[];
+  } | null;
+  scheduled_sessions: PsychotherapyScheduledSession[];
+}
+
+export function getPsychotherapyPlanSchedule(accessToken: string, patientId: string) {
+  return apiRequest<PsychotherapyPlanSchedule>(`/care/clients/${patientId}/psychotherapy/schedule/`, {
+    accessToken,
+  });
+}
+
+export function schedulePsychotherapySession(
+  accessToken: string,
+  patientId: string,
+  payload: {
+    care_plan_activity: string;
+    scheduled_for: string;
+    duration_minutes: number;
+    mode: "IN_PERSON" | "PHONE" | "VIDEO";
+    notes: string;
+    client_request_id: string;
+    appointment_type?: string;
+  },
+) {
+  return apiRequest<PsychotherapyPlanSchedule>(`/care/clients/${patientId}/psychotherapy/schedule/`, {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
 /** Structured MSE shape shared with the intake (INT-16): domain codes plus notes.
  * Free-text MSE is stored as a single `free_text` narrative for the psychiatry module.
  */

@@ -124,6 +124,11 @@ urlpatterns = [
         name="care-psych-schedule",
     ),
     path(
+        "care/clients/<uuid:patient_id>/psychotherapy/schedule/",
+        views.PsychotherapyPlanScheduleView.as_view(),
+        name="care-psychotherapy-schedule",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/psychiatry/sign/",
         views.PsychiatrySignView.as_view(),
         name="care-psych-sign",

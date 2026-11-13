@@ -218,6 +218,9 @@ export interface PsyNote extends Omit<PsyNoteSummary, "amendments"> {
     location: string;
     encounter: string;
     activity: string;
+    session_objective: string;
+    primary_goal: string;
+    secondary_goals: string;
     measure: { name: string; total: number } | null;
     process_notes: string | null;
   };
@@ -256,6 +259,7 @@ export interface PsyNote extends Omit<PsyNoteSummary, "amendments"> {
     at: string;
   }[];
   history: HistoryEntry[];
+  inpatient?: boolean;
   context: {
     goals: { index: number; goal: string; owner: string; review_date: string }[];
     previous_note: {

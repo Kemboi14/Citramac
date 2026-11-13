@@ -61,7 +61,7 @@ ATTENDANCE_VALUESET = "psy-attendance-mode"
 ALERT_LABELS = dict(psy_seed.ALERTS)
 # Group attendance: group_programme.py only. Couple and family sessions are one
 # note per client — each person's record stands alone (CLAUDE.md §4).
-SESSION_TYPES = ("INDIVIDUAL", "COUPLE", "FAMILY")
+SESSION_TYPES = ("INDIVIDUAL", "FAMILY")
 PROPOSAL_SOURCE = "Psychotherapy session safety question"
 DEFAULT_LANGUAGE = "en-GB"
 SEED_MODEL_CODES = frozenset(code for code, *_ in psy_seed.THERAPY_MODELS)
@@ -326,7 +326,7 @@ def start_or_resume(patient, user, data):
     if session_type not in SESSION_TYPES:
         raise ValidationError(
             {
-                "session_type": "Individual, couple or family — group sessions are recorded in the group programme."
+                "session_type": "Individual or family — group sessions are recorded in the group programme."
             }
         )
     activity = (
@@ -341,6 +341,10 @@ def start_or_resume(patient, user, data):
         encounter_type="PSYCHOTHERAPY",
         status="IN_PROGRESS",
     )
+    extra = {"therapy_episode": str(ep.pk), "activity": str(activity.pk if activity else "")}
+    for field in ("session_objective", "primary_goal", "secondary_goals"):
+        if data.get(field):
+            extra[field] = str(data.get(field) or "").strip()[:4000]
     session = PsychotherapySession.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -348,7 +352,7 @@ def start_or_resume(patient, user, data):
         therapist=user,
         modality=ep.modality,
         trauma_processing_stage=str(ep.trauma_phase or ""),
-        extra={"therapy_episode": str(ep.pk), "activity": str(activity.pk if activity else "")},
+        extra=extra,
     )
     note = PsychotherapyNote(
         organization_id=patient.organization_id,
@@ -506,7 +510,7 @@ def _set_session_info(note, user, data):
         if data["session_type"] not in SESSION_TYPES:
             raise ValidationError(
                 {
-                    "session_type": "Individual, couple or family — group sessions are recorded in the group programme."
+                    "session_type": "Individual or family — group sessions are recorded in the group programme."
                 }
             )
         session.session_type = data["session_type"]
@@ -532,6 +536,9 @@ def _set_session_info(note, user, data):
         if text and not intake.can_view_restricted(user):
             raise PermissionDenied("Process notes are restricted to treating clinicians.")
         extra["process_notes"] = text  # restricted: therapy.visible_extra
+    for field in ("session_objective", "primary_goal", "secondary_goals"):
+        if field in data:
+            extra[field] = str(data.get(field) or "").strip()[:4000]
     if "score_id" in data:
         if data["score_id"]:
             score = OutcomeScore.objects.filter(pk=data["score_id"], patient=note.patient).first()
@@ -1796,6 +1803,9 @@ def detail(note, user):
             "location": extra.get("location", ""),
             "encounter": str(note.encounter_id),
             "activity": extra.get("activity", ""),
+            "session_objective": extra.get("session_objective", ""),
+            "primary_goal": extra.get("primary_goal", ""),
+            "secondary_goals": extra.get("secondary_goals", ""),
             "measure": extra.get("measure"),
             "process_notes": extra.get("process_notes", "") if "process_notes" in extra else None,
         },
@@ -1854,6 +1864,7 @@ def detail(note, user):
         ],
         "history": note.history,
         "context": context(note, user),
+        "inpatient": services.current_admission(patient) is not None,
     }
 
 

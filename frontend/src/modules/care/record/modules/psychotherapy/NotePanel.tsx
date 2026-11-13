@@ -1,7 +1,13 @@
 import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
 import { ChevronDown, Copy, Download, Pencil, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useAuth } from "../../../../../auth/useAuth";
 import type { PsyConfig, PsyNote } from "../../../../../lib/psychotherapyNoteApi";
+import {
+  getPsychotherapyPlanSchedule,
+  schedulePsychotherapySession,
+  type PsychotherapyPlanSchedule,
+} from "../../../../../lib/carePathwayApi";
 import { formatDateTime } from "../../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { Callout, Tag } from "../../../shared/ui";
@@ -56,6 +62,7 @@ export function NotePanel({
   example,
   busy,
   onEditAnswer,
+  patientId,
 }: {
   config: PsyConfig;
   note: PsyNote;
@@ -67,6 +74,7 @@ export function NotePanel({
   example: boolean;
   busy: boolean;
   onEditAnswer?: (key: string) => void;
+  patientId?: string;
 }) {
   // Until the clinician picks a view, a draft shows what has been captured in
   // the transcript; once the note is organised the note itself leads.
@@ -131,7 +139,14 @@ export function NotePanel({
             <ExampleTranscript config={config} />
           )
         ) : tab === "note" ? (
-          <NoteBody config={config} note={note} save={save} organise={organise} busy={busy} />
+          <NoteBody
+            config={config}
+            note={note}
+            save={save}
+            organise={organise}
+            busy={busy}
+            patientId={patientId}
+          />
         ) : (
           <Transcript config={config} note={note} onEditAnswer={onEditAnswer} />
         )}
@@ -325,6 +340,9 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
     mode: s.attendance_mode,
     type: s.session_type,
     location: s.location,
+    session_objective: s.session_objective ?? "",
+    primary_goal: s.primary_goal ?? "",
+    secondary_goals: s.secondary_goals ?? "",
   });
   const mode = config.attendance_modes.find((m) => m.code === s.attendance_mode)?.label;
   const type = config.session_types.find((t) => t.code === s.session_type)?.label ?? s.session_type;
@@ -336,6 +354,9 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
       attendance_mode: form.mode,
       session_type: form.type,
       location: form.location,
+      session_objective: form.session_objective,
+      primary_goal: form.primary_goal,
+      secondary_goals: form.secondary_goals,
     });
     if (ok) setEditing(false);
   }
@@ -353,6 +374,11 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           <span>· {type}</span>
           <span>· {note.author}</span>
           {s.location && <span>· {s.location}</span>}
+          {s.session_objective && (
+            <span className="block">Objective: {s.session_objective}</span>
+          )}
+          {s.primary_goal && <span className="block">Primary goal: {s.primary_goal}</span>}
+          {s.secondary_goals && <span className="block">Secondary goals: {s.secondary_goals}</span>}
         </div>
         {!locked && note.is_author && (
           <button
@@ -399,7 +425,9 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           onChange={(e) => setForm({ ...form, mode: e.target.value })}
         >
           <option value="">— not recorded —</option>
-          {config.attendance_modes.map((m) => (
+          {config.attendance_modes
+            .filter((m) => !note.inpatient || m.code === "IN_PERSON")
+            .map((m) => (
             <option key={m.code} value={m.code}>
               {m.label}
             </option>
@@ -435,6 +463,33 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           onChange={(e) => setForm({ ...form, location: e.target.value })}
         />
       </label>
+      <label className="text-[12px] sm:col-span-2">
+        <span className={FIELD_LABEL}>Session objective</span>
+        <AutoResizeTextarea
+          className={INPUT}
+          rows={2}
+          value={form.session_objective}
+          onChange={(e) => setForm({ ...form, session_objective: e.target.value })}
+        />
+      </label>
+      <label className="text-[12px] sm:col-span-2">
+        <span className={FIELD_LABEL}>Primary goal</span>
+        <AutoResizeTextarea
+          className={INPUT}
+          rows={2}
+          value={form.primary_goal}
+          onChange={(e) => setForm({ ...form, primary_goal: e.target.value })}
+        />
+      </label>
+      <label className="text-[12px] sm:col-span-2">
+        <span className={FIELD_LABEL}>Secondary goals</span>
+        <AutoResizeTextarea
+          className={INPUT}
+          rows={2}
+          value={form.secondary_goals}
+          onChange={(e) => setForm({ ...form, secondary_goals: e.target.value })}
+        />
+      </label>
       <p className="text-[11px] text-ink-500 sm:col-span-2">
         Encounter {s.encounter.slice(0, 8).toUpperCase()} · one note per client — couple and family
         sessions are recorded for each person separately.
@@ -461,12 +516,14 @@ function NoteBody({
   save,
   organise,
   busy,
+  patientId,
 }: {
   config: PsyConfig;
   note: PsyNote;
   save: Save;
   organise: () => Promise<boolean>;
   busy: boolean;
+  patientId?: string;
 }) {
   const signed = note.status === "SIGNED";
   const hasSections = Object.values(note.sections).some((v) => v);
@@ -504,6 +561,7 @@ function NoteBody({
           {note.watermark}
         </p>
       )}
+      {patientId && <PsychotherapyPlanCard patientId={patientId} />}
     </div>
   );
 }
@@ -934,5 +992,157 @@ function SignedFooter({
         </button>
       </div>
     </div>
+  );
+}
+
+
+
+export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
+  const { accessToken } = useAuth();
+  const [schedule, setSchedule] = useState<PsychotherapyPlanSchedule | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [scheduledFor, setScheduledFor] = useState("");
+  const [mode, setMode] = useState<"IN_PERSON" | "PHONE" | "VIDEO">("IN_PERSON");
+  const [sessionType, setSessionType] = useState<"INDIVIDUAL" | "FAMILY">("INDIVIDUAL");
+  const [duration, setDuration] = useState(30);
+  const [sessionNote, setSessionNote] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
+  const [requestId] = useState(() => crypto.randomUUID());
+
+  const load = () => {
+    if (!accessToken || !patientId) return;
+    getPsychotherapyPlanSchedule(accessToken, patientId)
+      .then(setSchedule)
+      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load sessions."));
+  };
+
+  useEffect(() => { load(); }, [accessToken, patientId]);
+
+  const psychActivity =
+    schedule?.plan?.activities.find(
+      (a) =>
+        a.available_to_psychotherapy &&
+        a.status === "PLANNED" &&
+        !(schedule?.scheduled_sessions ?? []).some((s) => s.care_plan_activity_id === a.id),
+    ) ?? null;
+
+  const scheduleSession = async () => {
+    if (!accessToken || !scheduledFor) return;
+    setScheduling(true);
+    setError(null);
+    setScheduleMessage(null);
+    try {
+      const updated = await schedulePsychotherapySession(accessToken, patientId, {
+        care_plan_activity: psychActivity?.id ?? "",
+        scheduled_for: new Date(scheduledFor).toISOString(),
+        duration_minutes: duration,
+        mode,
+        notes: sessionNote.trim(),
+        client_request_id: requestId,
+        appointment_type: appointmentTypeCode,
+      });
+      // Override appointment_type is set server-side; we pass session type via notes? 
+      setSchedule(updated);
+      setScheduledFor("");
+      setSessionNote("");
+      setScheduleMessage("Next psychotherapy session scheduled.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't schedule session.");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // map session type to appointment_type code
+  const appointmentTypeCode = sessionType === "FAMILY" ? "Family psychotherapy" : "Individual psychotherapy";
+
+  return (
+    <section className="mt-4 border-t border-surface-border pt-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green">
+          Next sessions (Question 5)
+        </h3>
+        <button
+          type="button"
+          className="text-[11px] font-semibold text-brand-green hover:underline"
+          onClick={load}
+        >
+          Refresh
+        </button>
+      </div>
+      {schedule?.plan && (
+        <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+          {schedule.plan.goals || "No plan goals recorded."}
+        </p>
+      )}
+      {schedule && schedule.scheduled_sessions.length > 0 ? (
+        <div className="mt-2">
+          <p className="text-xs font-semibold text-ink-700">Booked sessions</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {schedule.scheduled_sessions.map((s) => (
+              <li key={s.id} className="rounded border border-surface-border px-2 py-1 text-xs text-ink-700">
+                {s.activity_title} · {s.scheduled_for} · {s.duration_minutes} min · {s.mode}
+                {s.notes ? ` — ${s.notes}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-ink-500">No sessions booked yet.</p>
+      )}
+      <div className="mt-3 grid gap-2">
+          <p className="text-xs font-semibold text-ink-700">Add another session</p>
+          <select
+            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+            value={sessionType}
+            onChange={(e) => setSessionType(e.target.value as "INDIVIDUAL" | "FAMILY")}
+          >
+            <option value="INDIVIDUAL">Individual psychotherapy</option>
+            <option value="FAMILY">Family psychotherapy</option>
+          </select>
+          <input
+            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+            type="datetime-local"
+            value={scheduledFor}
+            onChange={(e) => setScheduledFor(e.target.value)}
+          />
+          <select
+            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
+          >
+            <option value="IN_PERSON">In person</option>
+            <option value="PHONE">Phone</option>
+            <option value="VIDEO">Video</option>
+          </select>
+          <input
+            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+            type="number"
+            min={5}
+            max={240}
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value) || 30)}
+          />
+          <AutoResizeTextarea
+            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+            placeholder="Brief note (optional)"
+            value={sessionNote}
+            onChange={(e) => setSessionNote(e.target.value)}
+          />
+          <p className="text-[10px] text-ink-500">Appointment type: {appointmentTypeCode}</p>
+          <button
+            type="button"
+            disabled={scheduling || !scheduledFor}
+            onClick={() => void scheduleSession()}
+            className="rounded bg-brand-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {scheduling ? "Scheduling…" : "Schedule next psychotherapy session"}
+          </button>
+        </div>
+      
+      {scheduleMessage && <p className="mt-2 text-xs text-brand-green">{scheduleMessage}</p>}
+      {error && <p className="mt-2 text-xs text-priority-red">{error}</p>}
+    </section>
   );
 }
