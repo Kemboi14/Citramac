@@ -211,13 +211,6 @@ export function Thread({
 
   return (
     <div className="flex flex-col gap-4">
-      <Sys>
-        <p>
-          Session started. I’ll ask five questions, one at a time, then the safety question. Answer
-          naturally; there’s no need for headings or formal language. Your note builds on the right
-          as you go.
-        </p>
-      </Sys>
       {q && (
         <div key={q.key} className="flex flex-col gap-3">
           <Sys id={`psy-m-q${current}`}>

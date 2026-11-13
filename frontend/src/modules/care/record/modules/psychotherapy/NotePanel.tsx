@@ -74,6 +74,14 @@ export function NotePanel({
   const tab = chosen ?? (example || note.generated_at ? "note" : "transcript");
   const signed = note.status === "SIGNED";
   const noteText = example ? exampleText(config) : note.rendered;
+  // Keep the newest captured answer in view as the session moves on.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const answered = note.transcript.filter((t) => t.text.trim() !== "").length;
+  useEffect(() => {
+    if (example || tab !== "transcript") return;
+    const el = bodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [answered, example, tab]);
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-card">
       <div className="flex flex-col gap-2.5 border-b border-surface-border px-[18px] pb-2.5 pt-3.5">
@@ -110,6 +118,7 @@ export function NotePanel({
         </div>
       </div>
       <div
+        ref={bodyRef}
         className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4"
         role="tabpanel"
         id={`psy-panel-${tab}`}
@@ -657,7 +666,11 @@ function Transcript({
 }) {
   const languages = new Map(config.languages.map((l) => [l.code, l.label]));
   const editable = note.status !== "SIGNED" && note.is_author && !!onEditAnswer;
-  if (note.transcript.length === 0) {
+  // Only what has been answered: the panel fills in as the session progresses.
+  const answered = note.transcript
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.text.trim() !== "");
+  if (answered.length === 0) {
     return (
       <p className="text-[13.5px] text-ink-500">
         Each answer appears here as you give it. Nothing has been captured yet.
@@ -666,7 +679,7 @@ function Transcript({
   }
   return (
     <ol className="flex flex-col gap-4">
-      {note.transcript.map((t, i) => (
+      {answered.map(({ row: t, index: i }) => (
         <li key={t.question}>
           <div className="text-[12.5px] font-semibold text-ink-900">
             Q{i + 1}. {t.title}
@@ -687,9 +700,7 @@ function Transcript({
               </button>
             )}
           </div>
-          <p className="mt-1 whitespace-pre-wrap text-[13px]">
-            {t.text || <span className="text-ink-500">Not answered.</span>}
-          </p>
+          <p className="mt-1 whitespace-pre-wrap text-[13px]">{t.text}</p>
           {t.translation && (
             <div className="mt-1.5 rounded-md border border-surface-border bg-surface-bg px-2.5 py-1.5">
               <div className={FIELD_LABEL}>English translation</div>

@@ -1569,12 +1569,14 @@ function WorkspaceBody({
             welcome
           ) : (
             <>
-              <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-                <div className="mx-auto my-auto w-full max-w-[760px] px-4 py-5 sm:px-6">
-                  {thread}
+              <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto flex w-full max-w-[760px] flex-col pt-4 sm:pt-5">
+                  <div className="px-4 pb-4 sm:px-6">{thread}</div>
+                  {!example && !signed && note.is_author && (
+                    <div className="sticky bottom-0 bg-surface-bg">{composer}</div>
+                  )}
                 </div>
               </div>
-              {!example && !signed && note.is_author && composer}
             </>
           )}
         </section>
