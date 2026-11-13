@@ -187,6 +187,67 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(row["next_scheduled_session"]["due_state"], "OVERDUE")
         self.assertGreaterEqual(row["next_scheduled_session"]["days_until"], 2)
 
+    def test_scheduling_without_a_care_plan_is_refused_by_name(self):
+        response = self.client.post(
+            self.schedule_url,
+            self.schedule_body(str(uuid.uuid4())),
+            format="json",
+            **self.auth,
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("no current care plan", str(response.data["care_plan_activity"]))
+
+    def test_psychotherapy_session_can_be_scheduled_without_a_planned_action(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        self.create_schedule_plan()
+        url = reverse("care-psychotherapy-schedule", args=[self.pid])
+        body = self.schedule_body("")
+        del body["care_plan_activity"]
+        body["appointment_type"] = "Family psychotherapy"
+
+        response = self.client.post(url, body, format="json", **self.auth)
+
+        self.assertEqual(response.status_code, 201, response.data)
+        [session] = response.data["scheduled_sessions"]
+        self.assertIsNone(session["care_plan_activity_id"])
+        self.assertEqual(session["activity_title"], "Family psychotherapy")
+        with platform_admin_context():
+            appointment = Appointment.objects.get(patient_id=self.pid)
+            self.assertIsNone(appointment.care_plan_activity_id)
+            self.assertEqual(appointment.appointment_type, "Family psychotherapy")
+            entry = AuditLogEntry.objects.filter(
+                object_id=str(appointment.pk), action=AuditLogEntry.ACTION_CREATE
+            ).last()
+            self.assertIsNotNone(entry)
+
+        # The same request retried is the same session, not a refusal or a second booking.
+        retried = self.client.post(url, body, format="json", **self.auth)
+        self.assertEqual(retried.status_code, 200, retried.data)
+        self.assertEqual(len(retried.data["scheduled_sessions"]), 1)
+        listed = self.client.get(url, **self.auth)
+        self.assertEqual(len(listed.data["scheduled_sessions"]), 1)
+        with platform_admin_context():
+            self.assertEqual(Appointment.objects.filter(patient_id=self.pid).count(), 1)
+
+    def test_psychotherapy_schedule_refuses_a_non_psychotherapy_type(self):
+        self.create_schedule_plan()
+        body = self.schedule_body("")
+        body["appointment_type"] = "Psychiatry review"
+
+        response = self.client.post(
+            reverse("care-psychotherapy-schedule", args=[self.pid]),
+            body,
+            format="json",
+            **self.auth,
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("appointment_type", response.data)
+        with platform_admin_context():
+            self.assertFalse(Appointment.objects.filter(patient_id=self.pid).exists())
+
     def test_in_progress_action_cannot_be_scheduled(self):
         _, activity_id = self.create_schedule_plan(activity_status="ACTIVE")
 

@@ -684,7 +684,8 @@ export interface PsychotherapyScheduleActivity {
 
 export interface PsychotherapyScheduledSession {
   id: string;
-  care_plan_activity_id: string;
+  /** Null when the session was booked without a planned action. */
+  care_plan_activity_id: string | null;
   activity_title: string;
   scheduled_for: string;
   duration_minutes: number;

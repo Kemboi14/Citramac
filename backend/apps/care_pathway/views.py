@@ -1002,6 +1002,8 @@ class PsychiatryPlanScheduleView(APIView):
         if episode is None:
             raise ValidationError({"care_plan_activity": "The client has no open episode of care."})
         plan = CarePlan.objects.select_for_update().filter(patient=patient, episode=episode).first()
+        if plan is None:
+            raise ValidationError({"care_plan_activity": "The client has no current care plan."})
 
         request_id = str(request.data.get("client_request_id") or "").strip()
         if not request_id or len(request_id) > 64:
@@ -1099,17 +1101,37 @@ class PsychiatryPlanScheduleView(APIView):
         return Response(_psychiatry_plan_schedule(patient, plan), status=status.HTTP_201_CREATED)
 
 
-def _psychotherapy_plan_schedule(patient, plan):
+# Psychotherapy sessions this endpoint books: served `appointment-type` codes. Group
+# psychotherapy is booked through the group programme, never here.
+PSYCHOTHERAPY_APPOINTMENT_TYPES = ("Individual psychotherapy", "Family psychotherapy")
+
+
+def _psychotherapy_plan_schedule(patient, plan, episode=None):
+    from django.db.models import Q
+
     from . import intervention_catalogue
 
     activities = (
         list(plan.activities.exclude(decision="DECLINED").order_by("created_at")) if plan else []
     )
     activity_ids = [activity.pk for activity in activities]
+    # A session booked without a planned action is still a booked session: list it by
+    # its episode and psychotherapy appointment type.
+    labels = services.concept_labels()
+    type_labels = [
+        labels.get(("appointment-type", code), code) for code in PSYCHOTHERAPY_APPOINTMENT_TYPES
+    ]
+    linked = Q(care_plan_activity_id__in=activity_ids)
+    if episode is not None:
+        linked |= Q(
+            care_plan_activity__isnull=True,
+            episode=episode,
+            appointment_type__in=type_labels,
+        )
     sessions = (
         Appointment.objects.filter(
+            linked,
             patient=patient,
-            care_plan_activity_id__in=activity_ids,
             status="SCHEDULED",
             scheduled_for__gte=timezone.now(),
         )
@@ -1144,8 +1166,16 @@ def _psychotherapy_plan_schedule(patient, plan):
         "scheduled_sessions": [
             {
                 "id": str(appointment.pk),
-                "care_plan_activity_id": str(appointment.care_plan_activity_id),
-                "activity_title": appointment.care_plan_activity.title,
+                "care_plan_activity_id": (
+                    str(appointment.care_plan_activity_id)
+                    if appointment.care_plan_activity_id
+                    else None
+                ),
+                "activity_title": (
+                    appointment.care_plan_activity.title
+                    if appointment.care_plan_activity_id
+                    else appointment.appointment_type
+                ),
                 "scheduled_for": _iso(appointment.scheduled_for),
                 "duration_minutes": appointment.duration_minutes,
                 "mode": appointment.mode,
@@ -1170,7 +1200,7 @@ class PsychotherapyPlanScheduleView(APIView):
         plan = (
             CarePlan.objects.filter(patient=patient, episode=episode).first() if episode else None
         )
-        return Response(_psychotherapy_plan_schedule(patient, plan))
+        return Response(_psychotherapy_plan_schedule(patient, plan, episode))
 
     @transaction.atomic
     def post(self, request, patient_id):
@@ -1190,9 +1220,9 @@ class PsychotherapyPlanScheduleView(APIView):
             organization=request.user.organization, client_request_id=request_id
         ).first()
         if existing:
-            if existing.patient_id != patient.pk or str(existing.care_plan_activity_id) != str(
-                request.data.get("care_plan_activity") or ""
-            ):
+            if existing.patient_id != patient.pk or str(
+                existing.care_plan_activity_id or ""
+            ) != str(request.data.get("care_plan_activity") or ""):
                 raise ValidationError({"client_request_id": "That request id is already in use."})
             if existing.status != "SCHEDULED" or existing.scheduled_for <= timezone.now():
                 raise ValidationError(
@@ -1203,15 +1233,17 @@ class PsychotherapyPlanScheduleView(APIView):
                         )
                     }
                 )
-            return Response(_psychotherapy_plan_schedule(patient, plan))
+            return Response(_psychotherapy_plan_schedule(patient, plan, episode))
+
+        appointment_type = request.data.get("appointment_type") or "Individual psychotherapy"
+        if appointment_type not in PSYCHOTHERAPY_APPOINTMENT_TYPES:
+            raise ValidationError(
+                {"appointment_type": "Choose individual or family psychotherapy."}
+            )
 
         activity = None
         requested_activity = request.data.get("care_plan_activity")
         if requested_activity:
-            if plan is None:
-                raise ValidationError(
-                    {"care_plan_activity": "The client has no current care plan."}
-                )
             activity = get_object_or_404(
                 CarePlanActivity.objects.select_for_update(),
                 pk=requested_activity,
@@ -1262,8 +1294,7 @@ class PsychotherapyPlanScheduleView(APIView):
             patient,
             {
                 "reason": "CARE_PLAN_REVIEW",
-                "appointment_type": request.data.get("appointment_type")
-                or "Individual psychotherapy",
+                "appointment_type": appointment_type,
                 "scheduled_for": scheduled_at.isoformat(),
                 "provider": str(request.user.pk),
                 "mode": request.data.get("mode") or "IN_PERSON",
@@ -1283,9 +1314,15 @@ class PsychotherapyPlanScheduleView(APIView):
         write_entry(
             appointment,
             AuditLogEntry.ACTION_CREATE,
-            {"care_plan_activity": str(activity.pk), "reason": appointment.reason},
+            {
+                "care_plan_activity": str(activity.pk) if activity is not None else "",
+                "appointment_type": appointment.appointment_type,
+                "reason": appointment.reason,
+            },
         )
-        return Response(_psychotherapy_plan_schedule(patient, plan), status=status.HTTP_201_CREATED)
+        return Response(
+            _psychotherapy_plan_schedule(patient, plan, episode), status=status.HTTP_201_CREATED
+        )
 
 
 class PsychiatrySignView(APIView):

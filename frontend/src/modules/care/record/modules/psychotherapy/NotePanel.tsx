@@ -11,6 +11,7 @@ import {
 import { formatDateTime } from "../../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { Callout, Tag } from "../../../shared/ui";
+import { useValueSets } from "../../../shared/useValueSets";
 import { EXAMPLE_ANSWERS, EXAMPLE_SECTION } from "./exampleSession";
 import {
   copyText,
@@ -993,18 +994,28 @@ function SignedFooter({
   );
 }
 
+// `appointment-type` codes this card books; group psychotherapy is booked through the
+// group programme. The server enforces the same list.
+const PSYCHOTHERAPY_APPOINTMENT_TYPES = ["Individual psychotherapy", "Family psychotherapy"];
+
 export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
   const { accessToken } = useAuth();
+  const vs = useValueSets();
   const [schedule, setSchedule] = useState<PsychotherapyPlanSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scheduledFor, setScheduledFor] = useState("");
   const [mode, setMode] = useState<"IN_PERSON" | "PHONE" | "VIDEO">("IN_PERSON");
-  const [sessionType, setSessionType] = useState<"INDIVIDUAL" | "FAMILY">("INDIVIDUAL");
+  const [appointmentType, setAppointmentType] = useState(PSYCHOTHERAPY_APPOINTMENT_TYPES[0]);
   const [duration, setDuration] = useState(30);
   const [sessionNote, setSessionNote] = useState("");
   const [scheduling, setScheduling] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
-  const [requestId] = useState(() => crypto.randomUUID());
+  // One stable id per booking: a retry of the same booking reuses it, and a new one is
+  // issued once a booking succeeds so the next session is not taken for a retry.
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const typeOptions = vs
+    .options("appointment-type")
+    .filter((o) => PSYCHOTHERAPY_APPOINTMENT_TYPES.includes(o.code));
 
   const load = () => {
     if (!accessToken || !patientId) return;
@@ -1038,10 +1049,10 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
         mode,
         notes: sessionNote.trim(),
         client_request_id: requestId,
-        appointment_type: appointmentTypeCode,
+        appointment_type: appointmentType,
       });
-      // Override appointment_type is set server-side; we pass session type via notes?
       setSchedule(updated);
+      setRequestId(crypto.randomUUID());
       setScheduledFor("");
       setSessionNote("");
       setScheduleMessage("Next psychotherapy session scheduled.");
@@ -1051,10 +1062,6 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
       setScheduling(false);
     }
   };
-
-  // map session type to appointment_type code
-  const appointmentTypeCode =
-    sessionType === "FAMILY" ? "Family psychotherapy" : "Individual psychotherapy";
 
   return (
     <section className="mt-4 border-t border-surface-border pt-3">
@@ -1097,11 +1104,15 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
         <p className="text-xs font-semibold text-ink-700">Add another session</p>
         <select
           className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          value={sessionType}
-          onChange={(e) => setSessionType(e.target.value as "INDIVIDUAL" | "FAMILY")}
+          value={appointmentType}
+          onChange={(e) => setAppointmentType(e.target.value)}
+          disabled={!typeOptions.length}
         >
-          <option value="INDIVIDUAL">Individual psychotherapy</option>
-          <option value="FAMILY">Family psychotherapy</option>
+          {typeOptions.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.display}
+            </option>
+          ))}
         </select>
         <input
           className="w-full rounded border border-surface-border px-2 py-1 text-xs"
@@ -1132,10 +1143,9 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
           value={sessionNote}
           onChange={(e) => setSessionNote(e.target.value)}
         />
-        <p className="text-[10px] text-ink-500">Appointment type: {appointmentTypeCode}</p>
         <button
           type="button"
-          disabled={scheduling || !scheduledFor}
+          disabled={scheduling || !scheduledFor || !typeOptions.length}
           onClick={() => void scheduleSession()}
           className="rounded bg-brand-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
         >
@@ -1144,7 +1154,7 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
       </div>
 
       {scheduleMessage && <p className="mt-2 text-xs text-brand-green">{scheduleMessage}</p>}
-      {error && <p className="mt-2 text-xs text-priority-red">{error}</p>}
+      {(error || vs.error) && <p className="mt-2 text-xs text-priority-red">{error || vs.error}</p>}
     </section>
   );
 }
