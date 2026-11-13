@@ -2535,6 +2535,8 @@ export interface MedicationOrder {
   order_type: "PRESCRIPTION" | "PRN" | "TELEPHONE";
   cosigned_by: string;
   cosigned_at: string | null;
+  /** Telephone / PRN orders: awaiting a senior clinician, confirmed, or declined. */
+  confirmation: { state: "" | "AWAITING" | "CONFIRMED" | "DECLINED"; reason?: string };
 }
 export interface MarOrder extends MedicationOrder {
   /** Today's dose times; `entry` is null until the dose is charted. */
@@ -2586,7 +2588,8 @@ export interface PrescribingState {
   can_prescribe: boolean;
   is_senior: boolean;
   frequencies: string[];
-  orders: MedicationOrder[];
+  /** `can_confirm`: a senior clinician who did not place the order. */
+  orders: (MedicationOrder & { can_confirm: boolean })[];
 }
 export interface OrderPayload {
   drug: string;

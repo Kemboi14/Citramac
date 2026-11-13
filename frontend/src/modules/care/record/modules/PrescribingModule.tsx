@@ -111,13 +111,15 @@ export function PrescribingModule({
     }
   }
 
+  // A PRN order is always as-needed (the server applies the same rule).
+  const isPrn = form.is_prn || form.order_type === "PRN";
   const missing = [
     !drug && "medicine",
     !form.dose.trim() && "dose",
     !form.route && "route",
-    form.order_type !== "TELEPHONE" && !form.is_prn && !form.frequency && "frequency (or mark PRN)",
-    form.is_prn && !(Number(form.max) > 0) && "maximum PRN doses in 24 h",
-    form.is_prn && !form.indication.trim() && "PRN indication",
+    !isPrn && !form.frequency && "frequency (or mark PRN)",
+    isPrn && !(Number(form.max) > 0) && "maximum PRN doses in 24 h",
+    isPrn && !form.indication.trim() && "PRN indication",
   ].filter(Boolean);
 
   async function runChecks() {
@@ -142,9 +144,9 @@ export function PrescribingModule({
           drug: drug.code,
           dose: form.dose.trim(),
           route: form.route,
-          frequency: form.is_prn ? "" : form.frequency,
-          is_prn: form.is_prn,
-          prn_max_per_24h: form.is_prn ? Number(form.max) : undefined,
+          frequency: isPrn ? "" : form.frequency,
+          is_prn: isPrn,
+          prn_max_per_24h: isPrn ? Number(form.max) : undefined,
           indication: form.indication.trim(),
           controlled_drug: form.controlled,
           acknowledged_warnings: ack,
@@ -273,7 +275,7 @@ export function PrescribingModule({
                 </option>
               ))}
             </select>
-            {!form.is_prn && (
+            {!isPrn && (
               <select
                 className={INPUT}
                 aria-label="Frequency"
@@ -296,20 +298,23 @@ export function PrescribingModule({
                   edit({ order_type: e.target.value as "PRESCRIPTION" | "PRN" | "TELEPHONE" })
                 }
               >
-                <option value="PRESCRIPTION">Prescription (psychiatrist)</option>
-                <option value="PRN">PRN (nurse, under protocol)</option>
-                <option value="TELEPHONE">Telephone order (nurse, pending co-sign)</option>
+                {vs.options("medication-order-type").map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.display}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
-                checked={form.is_prn}
+                checked={isPrn}
+                disabled={form.order_type === "PRN"}
                 onChange={(e) => edit({ is_prn: e.target.checked })}
               />{" "}
               PRN (as needed)
             </label>
-            {form.is_prn && (
+            {isPrn && (
               <input
                 className={INPUT}
                 type="number"
@@ -323,7 +328,7 @@ export function PrescribingModule({
             <input
               className={INPUT}
               aria-label="Indication"
-              placeholder={form.is_prn ? "PRN indication (required)" : "Indication"}
+              placeholder={isPrn ? "PRN indication (required)" : "Indication"}
               value={form.indication}
               onChange={(e) => edit({ indication: e.target.value })}
             />
@@ -458,17 +463,35 @@ export function PrescribingModule({
                     )}
                   </td>
                   <td className={TD}>
-                    {o.order_type}
-                    {!o.cosigned_at && o.order_type !== "PRESCRIPTION" && (
+                    {vs.label("medication-order-type", o.order_type)}
+                    {o.confirmation.state === "AWAITING" && (
                       <>
-                        <Tag tone="risk">pending confirmation</Tag>
-                        <button
-                          type="button"
-                          className={`${BTN_GHOST} ${BTN_SM} ml-2`}
-                          onClick={() => void cosign(o.id)}
-                        >
-                          Confirm
-                        </button>
+                        {" "}
+                        <Tag tone="risk">awaiting confirmation — not to be given</Tag>
+                        {o.can_confirm && (
+                          <button
+                            type="button"
+                            className={`${BTN_GHOST} ${BTN_SM} ml-2`}
+                            onClick={() => void cosign(o.id)}
+                          >
+                            Confirm
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {o.confirmation.state === "CONFIRMED" && (
+                      <span className="block text-[12px] text-ink-500">
+                        Confirmed by {o.cosigned_by}
+                        {o.cosigned_at ? ` · ${formatDateTime(o.cosigned_at)}` : ""}
+                      </span>
+                    )}
+                    {o.confirmation.state === "DECLINED" && (
+                      <>
+                        {" "}
+                        <Tag tone="risk">declined — not to be given</Tag>
+                        <span className="block text-[12px] text-ink-500">
+                          {o.confirmation.reason}
+                        </span>
                       </>
                     )}
                   </td>

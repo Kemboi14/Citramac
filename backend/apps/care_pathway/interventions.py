@@ -16,7 +16,7 @@ from datetime import time, timedelta
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.accounts.access import has_permission, users_with_permission
 
@@ -304,6 +304,16 @@ def prescribing_checks(patient, drug_name):
 
 # ── structured medication orders (R4 MedicationRequest) ──
 ROUTE_VALUESET_ID = "medication-route"
+ORDER_TYPE_VALUESET_ID = "medication-order-type"
+ORDER_TYPE_VALUESET_TITLE = "Medication order type"
+# A prescription is placed and signed by a prescriber; a PRN order (nurse, under
+# protocol) and a telephone order must be confirmed by a senior clinician before
+# a dose can be given.
+ORDER_TYPES = [
+    ("PRESCRIPTION", "Prescription (psychiatrist)"),
+    ("PRN", "PRN (nurse, under protocol)"),
+    ("TELEPHONE", "Telephone order (nurse, pending confirmation)"),
+]
 ROUTE_VALUESET_TITLE = "Medication route"
 # Local codes, seeded by migration 0037 and served from then on. VERIFY: mapping
 # to the SNOMED CT route codes the R4 Dosage.route binding expects.
@@ -341,6 +351,19 @@ def _order_text(item):
     return f"{item.dose} {item.route} {item.frequency}".strip()
 
 
+def _confirmation_state(item):
+    """Where a telephone / PRN order stands: "" (a prescription), confirmed,
+    declined (with the reason) or awaiting a senior clinician."""
+    if item.order_type == "PRESCRIPTION":
+        return {"state": ""}
+    if item.cosigned_at:
+        return {"state": "CONFIRMED"}
+    declined = confirmation_request(item, status="DECLINED")
+    if declined is not None and confirmation_request(item) is None:
+        return {"state": "DECLINED", "reason": declined.decline_reason}
+    return {"state": "AWAITING"}
+
+
 def _order_row(item):
     rx = item.prescription
     return {
@@ -357,6 +380,7 @@ def _order_row(item):
         "order_type": item.order_type,
         "cosigned_by": _name(item.cosigned_by) if item.cosigned_by_id else "",
         "cosigned_at": item.cosigned_at,
+        "confirmation": _confirmation_state(item),
         "findings": item.check_findings,
         "allergy_override_reason": item.allergy_override_reason,
         "prescribed_by": _name(rx.prescribed_by),
@@ -381,7 +405,15 @@ def prescribing_state(patient, user):
         "can_prescribe": can_prescribe(user),
         "is_senior": plan_extras.can_cosign(user),
         "frequencies": FREQUENCIES,
-        "orders": [_order_row(i) for i in orders],
+        "orders": [
+            {
+                **_order_row(i),
+                # A senior clinician may confirm an order someone else placed.
+                "can_confirm": plan_extras.can_cosign(user)
+                and i.prescription.prescribed_by_id != user.pk,
+            }
+            for i in orders
+        ],
     }
 
 
@@ -391,8 +423,6 @@ def place_order(patient, user, data):
     that needs a written override reason (and a senior co-signature when the
     prescriber is not one); warnings must be acknowledged. Raises
     apps.billing.gate.BillingNotCleared when the encounter has no cleared payment."""
-    from rest_framework.exceptions import PermissionDenied
-
     from apps.billing.gate import check_billing_clearance
     from apps.clinical_encounter.models import Prescription, PrescriptionItem
     from apps.dha_interop.models import NationalDrugIndex
@@ -401,7 +431,9 @@ def place_order(patient, user, data):
     from .models import LocalConcept
 
     order_type = str(data.get("order_type") or "PRESCRIPTION").upper()
-    if order_type not in ("PRESCRIPTION", "PRN", "TELEPHONE"):
+    if not LocalConcept.objects.filter(
+        valueset_id=ORDER_TYPE_VALUESET_ID, code=order_type, active=True
+    ).exists():
         raise ValidationError({"order_type": "Choose prescription, PRN or telephone order."})
     if order_type == "PRESCRIPTION" and not can_prescribe(user):
         raise PermissionDenied(
@@ -427,7 +459,8 @@ def place_order(patient, user, data):
     ).first()
     if route is None:
         raise ValidationError({"route": "Choose the route."})
-    is_prn = bool(data.get("is_prn"))
+    # A PRN order is always as-needed, so it always gets the PRN checks.
+    is_prn = bool(data.get("is_prn")) or order_type == "PRN"
     indication = str(data.get("indication") or "").strip()
     frequency, maximum = "", None
     if is_prn:
@@ -477,7 +510,7 @@ def place_order(patient, user, data):
         dose=dose,
         route=route.display,
         frequency=frequency,
-        is_prn=is_prn or order_type == "PRN",
+        is_prn=is_prn,
         prn_max_per_24h=maximum,
         indication=indication,
         controlled_drug=bool(data.get("controlled_drug")),
@@ -516,16 +549,68 @@ def place_order(patient, user, data):
     return item
 
 
-def cosign_order(item, user):
-    """Countersign a telephone order (or any order) so it becomes administerable."""
-    from apps.accounts.practitioner_profile import require_current_licence
+CONFIRMATION_KINDS = ("TELEPHONE_ORDER", "PRN_ORDER")
 
-    require_current_licence(user)
-    if item.cosigned_at is None:
-        item.cosigned_by = user
-        item.cosigned_at = timezone.now()
-        item.save(update_fields=["cosigned_by", "cosigned_at", "updated_at"])
+
+def confirmation_request(item, status="REQUESTED"):
+    """The co-sign request a telephone / PRN order was raised with."""
+    from .models import CosignRequest
+
+    return (
+        CosignRequest.objects.filter(
+            subject_type="PrescriptionItem",
+            subject_id=str(item.pk),
+            kind__in=CONFIRMATION_KINDS,
+            **({"status": status} if status else {}),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def cosign_order(item, user):
+    """Confirm a telephone / PRN order so it becomes administerable. It is the
+    same decision as signing its request in "Needs my decision": a senior
+    clinician (`clinical.cosign`), never the person who placed the order, with a
+    current licence; audited. A declined order is never confirmed."""
+    from . import plan_extras
+
+    if item.order_type == "PRESCRIPTION" or item.cosigned_at:
+        return item
+    req = confirmation_request(item)
+    if req is None:
+        declined = confirmation_request(item, status="DECLINED")
+        if declined is not None:
+            raise ValidationError({"detail": f"This order was declined: {declined.decline_reason}"})
+        raise ValidationError({"detail": "This order has no confirmation request."})
+    plan_extras.decide_cosign(req, user, "SIGN")
+    item.refresh_from_db()
     return item
+
+
+def apply_confirmation(req, user, action):
+    """Called by plan_extras.decide_cosign for a telephone / PRN order's request."""
+    from apps.clinical_encounter.models import PrescriptionItem
+    from apps.sysadmin_audit.audit import write_entry
+    from apps.sysadmin_audit.models import AuditLogEntry
+
+    item = PrescriptionItem.objects.select_for_update().filter(pk=req.subject_id).first()
+    if item is None:
+        raise ValidationError({"detail": "The order this request is for no longer exists."})
+    if item.prescription.prescribed_by_id == user.pk:
+        raise PermissionDenied("You cannot confirm an order you placed.")
+    if action == "SIGN" and item.cosigned_at is None:
+        item.cosigned_by, item.cosigned_at = user, timezone.now()
+        item.save(update_fields=["cosigned_by", "cosigned_at", "updated_at"])
+    write_entry(
+        item,
+        AuditLogEntry.ACTION_UPDATE,
+        {
+            "order_confirmation": "confirmed" if action == "SIGN" else "declined",
+            "order_type": item.order_type,
+            "cosign_request": str(req.pk),
+        },
+    )
 
 
 # ── MAR ──

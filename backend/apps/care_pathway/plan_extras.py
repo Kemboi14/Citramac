@@ -172,8 +172,14 @@ def can_cosign(user):
 
 
 def request_cosign(patient, user, kind, what, subject_type="", subject_id=""):
+    # One open request per subject: two identical orders are two requests.
+    match = (
+        {"subject_type": subject_type, "subject_id": str(subject_id)}
+        if subject_id
+        else {"what": what}
+    )
     existing = CosignRequest.objects.filter(
-        patient=patient, kind=kind, what=what, status="REQUESTED"
+        patient=patient, kind=kind, status="REQUESTED", **match
     ).first()
     if existing:
         return existing
@@ -206,6 +212,13 @@ def decide_cosign(req, user, action, note=""):
             from . import legal_forms
 
             legal_forms.complete_cosigned(req, user)
+        if req.subject_type == "PrescriptionItem" and req.kind in (
+            "TELEPHONE_ORDER",
+            "PRN_ORDER",
+        ):
+            from . import interventions
+
+            interventions.apply_confirmation(req, user, "SIGN")
         req.status = "SIGNED"
         req.decided_by, req.decided_at = user, now
     elif action == "DECLINE":
@@ -213,6 +226,14 @@ def decide_cosign(req, user, action, note=""):
             raise ValidationError(
                 {"note": "Give a reason for declining (returned to the requester)."}
             )
+        if req.subject_type == "PrescriptionItem" and req.kind in (
+            "TELEPHONE_ORDER",
+            "PRN_ORDER",
+        ):
+            from . import interventions
+
+            # A declined order is never confirmed, so it is never administered.
+            interventions.apply_confirmation(req, user, "DECLINE")
         req.status = "DECLINED"
         req.decline_reason = note
         req.decided_by, req.decided_at = user, now

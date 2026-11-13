@@ -204,6 +204,100 @@ class PrescribingOrderTests(ModulesTestCase):
         with platform_admin_context():
             self.assertEqual(CosignRequest.objects.filter(kind="PRESCRIBING_OVERRIDE").count(), 1)
 
+    def phone_order(self, auth, **over):
+        return self.order(auth, order_type="TELEPHONE", **over)
+
+    def confirm(self, auth, item_id):
+        return self.client.post(
+            reverse("care-prescription-cosign", args=[item_id]), format="json", **auth
+        )
+
+    def test_order_types_are_a_served_value_set(self):
+        served = self.client.get(
+            reverse("care-valuesets") + "?ids=medication-order-type", **self.auth
+        ).data
+        codes = [c["code"] for c in served["medication-order-type"]["concepts"]]
+        self.assertEqual(codes, ["PRESCRIPTION", "PRN", "TELEPHONE"])
+        self.assertEqual(self.order(order_type="VERBAL").status_code, 400)
+
+    def test_a_telephone_order_is_confirmed_only_by_a_senior_who_did_not_place_it(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        placed = self.phone_order(self.auth)
+        self.assertEqual(placed.status_code, 201, placed.data)
+        row = placed.data["orders"][0]
+        self.assertEqual(row["confirmation"]["state"], "AWAITING")
+        self.assertFalse(row["can_confirm"])
+        # Not the nurse who placed it, and not a clinician without co-sign rights.
+        self.assertEqual(self.confirm(self.auth, row["id"]).status_code, 403)
+        self.assertEqual(self.confirm(self.doctor_auth, row["id"]).status_code, 403)
+        with platform_admin_context():
+            self.assertIsNone(PrescriptionItem.objects.get(pk=row["id"]).cosigned_at)
+
+        self.assertTrue(
+            self.as_(self.psych_auth, "care-prescribing").data["orders"][0]["can_confirm"]
+        )
+        confirmed = self.confirm(self.psych_auth, row["id"])
+        self.assertEqual(confirmed.status_code, 200, confirmed.data)
+        self.assertEqual(confirmed.data["orders"][0]["confirmation"]["state"], "CONFIRMED")
+        with platform_admin_context():
+            request = CosignRequest.objects.get(subject_id=row["id"])
+            self.assertEqual(request.status, "SIGNED")
+            self.assertTrue(
+                AuditLogEntry.objects.filter(
+                    object_id=row["id"], field_diff__order_confirmation="confirmed"
+                ).exists()
+            )
+
+    def test_signing_the_request_in_the_inbox_confirms_and_declining_stops_the_order(self):
+        first = self.phone_order(self.auth).data["orders"][0]["id"]
+        second = self.phone_order(self.auth).data["orders"][0]["id"]
+        with platform_admin_context():
+            # Two identical orders are two requests, one per order.
+            requests = {
+                r.subject_id: r for r in CosignRequest.objects.filter(kind="TELEPHONE_ORDER")
+            }
+        self.assertEqual(set(requests), {first, second})
+
+        signed = self.client.post(
+            reverse("care-cosign-decide", args=[requests[first].pk]),
+            {"action": "SIGN"},
+            format="json",
+            **self.psych_auth,
+        )
+        self.assertEqual(signed.status_code, 200, signed.data)
+        declined = self.client.post(
+            reverse("care-cosign-decide", args=[requests[second].pk]),
+            {"action": "DECLINE", "note": "Dose too high for this client"},
+            format="json",
+            **self.psych_auth,
+        )
+        self.assertEqual(declined.status_code, 200, declined.data)
+
+        orders = {o["id"]: o for o in self.as_(self.auth, "care-prescribing").data["orders"]}
+        self.assertEqual(orders[first]["confirmation"]["state"], "CONFIRMED")
+        self.assertEqual(
+            orders[second]["confirmation"],
+            {"state": "DECLINED", "reason": "Dose too high for this client"},
+        )
+        refused = self.confirm(self.psych_auth, second)
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("declined", str(refused.data))
+
+    def test_a_prn_order_always_gets_the_prn_checks(self):
+        response = self.order(self.auth, order_type="PRN", frequency="BD")
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("prn_max_per_24h", response.data)
+        placed = self.order(
+            self.auth,
+            order_type="PRN",
+            frequency="",
+            prn_max_per_24h=2,
+            indication="Acute agitation",
+        )
+        self.assertEqual(placed.status_code, 201, placed.data)
+        self.assertTrue(placed.data["orders"][0]["is_prn"])
+
     def test_no_cleared_payment_blocks_the_order(self):
         with platform_admin_context():
             InsuranceCoverage.objects.filter(patient_id=self.pid).delete()
