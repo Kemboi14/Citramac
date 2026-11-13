@@ -50,10 +50,17 @@ export type ClientRegistryCategory =
 
 export function listClientRegistry(
   accessToken: string,
-  options?: { category?: ClientRegistryCategory; q?: string; page?: number },
+  options?: {
+    category?: ClientRegistryCategory;
+    q?: string;
+    page?: number;
+    /** "recent": newest registrations first; default by surname. */
+    sort?: "recent" | "name";
+  },
 ) {
   const params = new URLSearchParams();
   if (options?.category) params.set("category", options.category);
+  if (options?.sort === "recent") params.set("sort", "recent");
   if (options?.q) params.set("q", options.q);
   if (options?.page && options.page > 1) params.set("page", String(options.page));
   const query = params.toString() ? `?${params.toString()}` : "";

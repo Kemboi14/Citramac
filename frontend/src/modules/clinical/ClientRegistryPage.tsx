@@ -59,6 +59,9 @@ export function ClientRegistryPage() {
   const [patients, setPatients] = useState<ClientRegistryRow[]>([]);
   const [count, setCount] = useState(0);
   const [category, setCategory] = useState<ClientRegistryCategory | undefined>();
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"recent" | "name">("recent");
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
@@ -71,7 +74,7 @@ export function ClientRegistryPage() {
     const requestId = ++requestSequence.current;
     setIsLoading(true);
     setError(null);
-    listClientRegistry(accessToken, { category, page })
+    listClientRegistry(accessToken, { category, page, q: query || undefined, sort })
       .then((data) => {
         if (requestId !== requestSequence.current) return;
         setPatients(data.results);
@@ -87,7 +90,16 @@ export function ClientRegistryPage() {
       .finally(() => {
         if (requestId === requestSequence.current) setIsLoading(false);
       });
-  }, [accessToken, category, page]);
+  }, [accessToken, category, page, query, sort]);
+
+  // Search as the user types, without a request per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +168,29 @@ export function ClientRegistryPage() {
             </button>
           );
         })}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          aria-label="Search clients by name or number"
+          placeholder="Search by name or client number"
+          className="min-w-[240px] flex-1 rounded-md border border-surface-border bg-surface-card px-3 py-2 text-[13px] text-ink-900"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          aria-label="Order"
+          className="rounded-md border border-surface-border bg-surface-card px-3 py-2 text-[13px] text-ink-900"
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value as "recent" | "name");
+            setPage(1);
+          }}
+        >
+          <option value="recent">Newest registered first</option>
+          <option value="name">By surname</option>
+        </select>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">

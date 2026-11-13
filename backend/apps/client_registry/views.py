@@ -64,11 +64,18 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
 
         TRIAGE_QUEUE_STATES = ("AWAITING", "IN_TRIAGE", "RECHECK_DUE")
 
+        # `?sort=recent` lists the newest registrations first, so a client just
+        # registered is at the top; the default is by surname.
+        ordering = (
+            ("-registered_at",)
+            if request.query_params.get("sort") == "recent"
+            else ("last_name", "first_name")
+        )
         patients = list(
             self.get_queryset()
             .filter(archived_at__isnull=True, merged_into__isnull=True)
             .select_related("doctor")
-            .order_by("last_name", "first_name")
+            .order_by(*ordering)
         )
         patient_ids = [patient.id for patient in patients]
 

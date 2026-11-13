@@ -1110,6 +1110,30 @@ class CaseloadTests(APITestCase):
         self.assertEqual(row["allergies"], ["Penicillin"])
         self.assertEqual(row["responsible_team"], "clinician@org-caseload.test · Ward A team")
 
+    def test_client_registry_lists_newest_first_on_request_and_searches(self):
+        with platform_admin_context():
+            older = Patient.objects.create(
+                organization=self.org,
+                first_name="Baraka",
+                last_name="Achieng",
+                gender="MALE",
+                date_of_birth="1990-01-01",
+                registered_at=timezone.now() - timedelta(days=3),
+            )
+            newest = Patient.objects.create(
+                organization=self.org,
+                first_name="Wanjiru",
+                last_name="Zuma",
+                gender="FEMALE",
+                date_of_birth="1990-01-01",
+            )
+        by_name = self.client.get(reverse("patient-registry"), **self.auth).data["results"]
+        self.assertEqual([r["id"] for r in by_name], [str(older.pk), str(newest.pk)])
+        recent = self.client.get(reverse("patient-registry") + "?sort=recent", **self.auth)
+        self.assertEqual([r["id"] for r in recent.data["results"]], [str(newest.pk), str(older.pk)])
+        found = self.client.get(reverse("patient-registry") + "?q=wanj", **self.auth).data
+        self.assertEqual([r["id"] for r in found["results"]], [str(newest.pk)])
+
     def test_client_registry_shows_a_due_recheck_as_the_triage_queue_does(self):
         from apps.care_pathway.models import EpisodeOfCare, TriageEncounter
         from apps.clinical_encounter.models import Encounter
