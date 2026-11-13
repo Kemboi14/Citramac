@@ -194,6 +194,34 @@ class AdmissionSerializer(serializers.ModelSerializer):
         "legal_rationale",
     )
 
+    # Owner decision 2026-11-13: an admission made before the legal-status module
+    # (no legal_status_record) keeps its free-text legal basis as recorded — read
+    # only, still printed. The one exception is the review due date of a current
+    # involuntary inpatient, which still has to be renewed: it can be changed (never
+    # blanked), and the write-audit keeps every before/after.
+    LEGACY_FROZEN = (*LEGAL_STATUS_OWNED, "oversight_notes")
+
+    def _check_legacy_legal(self, attrs):
+        admission = self.instance
+        frozen = {}
+        for field in self.LEGACY_FROZEN:
+            if field not in attrs or attrs[field] == getattr(admission, field):
+                continue
+            if field == "legal_review_due_date" and (
+                admission.admission_type == "INVOLUNTARY" and admission.status == "ADMITTED"
+            ):
+                if not attrs[field]:
+                    frozen[field] = (
+                        "The review due date of an involuntary admission can't be removed."
+                    )
+                continue
+            frozen[field] = (
+                "Recorded before the legal-status module and kept as recorded; "
+                "it can't be changed."
+            )
+        if frozen:
+            raise serializers.ValidationError(frozen)
+
     def validate(self, attrs):
         # Who the admission is about, and the encounter it is, never change:
         # moving it would carry its legal status and record to another client.
@@ -217,6 +245,8 @@ class AdmissionSerializer(serializers.ModelSerializer):
             }
             if owned:
                 raise serializers.ValidationError(owned)
+        elif self.instance is not None:
+            self._check_legacy_legal(attrs)
         if self.instance is not None:
             merged = {
                 field: attrs.get(field, getattr(self.instance, field))

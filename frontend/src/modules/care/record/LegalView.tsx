@@ -406,6 +406,7 @@ function AdmissionLegal({
   // Legal status first: a linked admission's basis is the legal status above;
   // only what the admission itself holds (capacity, notes, next of kin) is edited here.
   const linked = a.legal_status_linked;
+  const reviewRenewable = !linked && involuntary && a.status === "Admitted";
   const today = formatDate(new Date().toISOString());
   const due = dateOnly(a.legal_review_due_date);
   const overdue = Boolean(due) && due < today && a.status !== "Discharged";
@@ -427,14 +428,10 @@ function AdmissionLegal({
         }
       : involuntary
         ? {
+            // Recorded before the legal-status module: kept as recorded. Only a
+            // current inpatient's review date is renewed (owner, 2026-11-13).
             ...shared,
-            legal_status: form.legal_status,
-            legal_order_reference: form.legal_order_reference,
-            legal_order_date: form.legal_order_date || null,
-            legal_review_due_date: form.legal_review_due_date || null,
-            authorizing_professional: form.authorizing_professional,
-            legal_rationale: form.legal_rationale,
-            oversight_notes: form.oversight_notes,
+            ...(reviewRenewable ? { legal_review_due_date: form.legal_review_due_date } : {}),
           }
         : {
             ...shared,
@@ -583,13 +580,14 @@ function AdmissionLegal({
               </>
             ) : involuntary ? (
               <>
-                {text("legal_status", "Legal status")}
-                {text("legal_order_reference", "Legal order reference")}
-                {text("legal_order_date", "Legal order date", false, "date")}
-                {text("legal_review_due_date", "Review due date", false, "date")}
-                {text("authorizing_professional", "Authorising professional")}
-                {text("legal_rationale", "Legal rationale", true)}
-                {text("oversight_notes", "Oversight notes", true)}
+                <p className="text-[12.5px] text-ink-500 sm:col-span-2">
+                  This admission&apos;s legal basis was recorded before the legal-status module and
+                  is kept as recorded.{" "}
+                  {reviewRenewable
+                    ? "Only the review due date can be renewed."
+                    : "It can no longer be changed."}
+                </p>
+                {reviewRenewable && text("legal_review_due_date", "Review due date", false, "date")}
               </>
             ) : (
               <>

@@ -224,7 +224,7 @@ class IpdWardTests(APITestCase):
             self.admit(admission_type="VOLUNTARY", bed=str(self.bed_b.id)).status_code, 400
         )
 
-    def test_legacy_legal_basis_can_be_updated_but_not_blanked(self):
+    def test_legacy_legal_basis_is_frozen_except_a_current_inpatients_review_date(self):
         with platform_admin_context():
             admission = Admission.objects.create(
                 organization=self.org,
@@ -243,6 +243,31 @@ class IpdWardTests(APITestCase):
         self.assertEqual(renewed.status_code, 200, renewed.data)
         blanked = self.client.patch(url, {"legal_order_reference": ""}, format="json", **self.auth)
         self.assertEqual(blanked.status_code, 400)
+        # Frozen as recorded (2026-11-13): not even a non-blank change.
+        for field, value in (
+            ("legal_order_reference", "MHA-2"),
+            ("legal_rationale", "rewritten"),
+            ("oversight_notes", "added later"),
+            ("admission_type", "VOLUNTARY"),
+        ):
+            refused = self.client.patch(url, {field: value}, format="json", **self.auth)
+            self.assertEqual(refused.status_code, 400, field)
+            self.assertIn(field, refused.data)
+        self.assertEqual(
+            self.client.patch(
+                url, {"legal_review_due_date": None}, format="json", **self.auth
+            ).status_code,
+            400,
+        )
+        # Once the client is discharged, the review date is frozen too.
+        with platform_admin_context():
+            Admission.objects.filter(pk=admission.pk).update(status="DISCHARGED")
+        self.assertEqual(
+            self.client.patch(
+                url, {"legal_review_due_date": "2026-12-01"}, format="json", **self.auth
+            ).status_code,
+            400,
+        )
 
     def test_admission_list_filters_by_admission_type(self):
         with platform_admin_context():
