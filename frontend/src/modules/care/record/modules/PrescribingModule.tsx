@@ -35,6 +35,8 @@ interface OrderForm {
   indication: string;
   controlled: boolean;
   order_type: "PRESCRIPTION" | "PRN" | "TELEPHONE";
+  /** Telephone order: the prescriber who gave it. */
+  authorised_by: string;
 }
 const EMPTY: OrderForm = {
   dose: "",
@@ -45,6 +47,7 @@ const EMPTY: OrderForm = {
   indication: "",
   controlled: false,
   order_type: "PRESCRIPTION",
+  authorised_by: "",
 };
 
 /** Structured medication orders. Checks run before the order exists: a recorded
@@ -114,6 +117,9 @@ export function PrescribingModule({
   // A PRN order is always as-needed (the server applies the same rule).
   const isPrn = form.is_prn || form.order_type === "PRN";
   const missing = [
+    form.order_type === "TELEPHONE" &&
+      !form.authorised_by &&
+      "the prescriber who gave the telephone order",
     !drug && "medicine",
     !form.dose.trim() && "dose",
     !form.route && "route",
@@ -152,6 +158,7 @@ export function PrescribingModule({
           acknowledged_warnings: ack,
           override_reason: override ?? undefined,
           order_type: form.order_type,
+          ...(form.order_type === "TELEPHONE" ? { authorised_by: form.authorised_by } : {}),
         }),
       );
       setDrug(null);
@@ -305,6 +312,24 @@ export function PrescribingModule({
                 ))}
               </select>
             </label>
+            {form.order_type === "TELEPHONE" && (
+              <label className="flex flex-col gap-1 text-[13px]">
+                <span>Prescriber who gave the order</span>
+                <select
+                  className={INPUT}
+                  aria-label="Prescriber who gave the order"
+                  value={form.authorised_by}
+                  onChange={(e) => edit({ authorised_by: e.target.value })}
+                >
+                  <option value="">— choose —</option>
+                  {state.prescribers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
@@ -464,6 +489,11 @@ export function PrescribingModule({
                   </td>
                   <td className={TD}>
                     {vs.label("medication-order-type", o.order_type)}
+                    {o.authorised_by && (
+                      <span className="block text-[12px] text-ink-500">
+                        Given by {o.authorised_by}
+                      </span>
+                    )}
                     {o.confirmation.state === "AWAITING" && (
                       <>
                         {" "}

@@ -921,6 +921,11 @@ On the owner's decisions of 2026-11-13 (method, signers and scope chosen; mappin
    `medication-order-type` value set.
 8. **Registry.** The Clients page has search and opens newest-registered first (by surname on request).
 
+   A telephone order names the prescriber who gave it (`PrescriptionItem.authorised_by`, any holder of
+   `clinical.medication.prescribe` other than the person placing it), and only that prescriber can confirm or
+   decline it; it waits in their "Needs my decision", not every senior's. A PRN order is confirmed by a
+   senior clinician as above.
+
 Reversibility: cheap. Everything is additive; no signed record changes. Consents and documents recorded
-before today show no signatures. Open for the owner: a telephone order does not yet name the prescriber who
-gave it (the confirming senior is the authority of record).
+before today show no signatures; a telephone order placed before today names no prescriber,
+so a senior clinician confirms it as before.

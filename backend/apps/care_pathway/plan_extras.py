@@ -198,7 +198,25 @@ def request_cosign(patient, user, kind, what, subject_type="", subject_id=""):
 def decide_cosign(req, user, action, note=""):
     if req.status != "REQUESTED":
         raise ValidationError({"detail": "This request has already been decided."})
-    if not can_cosign(user):
+    order_confirmation = req.subject_type == "PrescriptionItem" and req.kind in (
+        "TELEPHONE_ORDER",
+        "PRN_ORDER",
+    )
+    if order_confirmation:
+        # Who may decide is the order's own rule (interventions.may_confirm): a
+        # telephone order only by the prescriber who gave it.
+        from apps.clinical_encounter.models import PrescriptionItem
+
+        from . import interventions
+
+        item = PrescriptionItem.objects.filter(pk=req.subject_id).first()
+        if item is None or not interventions.may_confirm(item, user):
+            raise PermissionDenied(
+                "Only the prescriber who gave this telephone order can decide it."
+                if req.kind == "TELEPHONE_ORDER"
+                else "Only a senior clinician can co-sign."
+            )
+    elif not can_cosign(user):
         raise PermissionDenied("Only a senior clinician can co-sign.")
     if req.requested_by_id == user.pk:
         raise PermissionDenied("You cannot co-sign your own request.")
@@ -263,10 +281,31 @@ def acknowledge_declined(req, user):
 def inbox(user):
     """Needs-my-decision: requests waiting for a senior (not mine), and my own
     declined requests that came back, and discussions awaiting my reply."""
+    from apps.clinical_encounter.models import PrescriptionItem
+
     items = []
+    open_requests = CosignRequest.objects.filter(status="REQUESTED").exclude(requested_by=user)
+    named = {
+        str(pk)
+        for pk in PrescriptionItem.objects.filter(authorised_by__isnull=False).values_list(
+            "pk", flat=True
+        )
+    }
     if can_cosign(user):
-        for r in CosignRequest.objects.filter(status="REQUESTED").exclude(requested_by=user):
+        # A telephone order goes to the prescriber who gave it, not every senior
+        # (one placed before prescribers were named still goes to the seniors).
+        for r in open_requests:
+            if r.kind == "TELEPHONE_ORDER" and r.subject_id in named:
+                continue
             items.append((r, "cosign"))
+    mine_to_confirm = [
+        str(pk)
+        for pk in PrescriptionItem.objects.filter(
+            authorised_by=user, cosigned_at__isnull=True
+        ).values_list("pk", flat=True)
+    ]
+    for r in open_requests.filter(kind="TELEPHONE_ORDER", subject_id__in=mine_to_confirm):
+        items.append((r, "cosign"))
     mine = CosignRequest.objects.filter(requested_by=user)
     for r in mine.filter(status="DECLINED"):
         items.append((r, "returned"))

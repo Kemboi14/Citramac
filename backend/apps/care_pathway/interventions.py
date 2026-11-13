@@ -380,6 +380,7 @@ def _order_row(item):
         "order_type": item.order_type,
         "cosigned_by": _name(item.cosigned_by) if item.cosigned_by_id else "",
         "cosigned_at": item.cosigned_at,
+        "authorised_by": _name(item.authorised_by) if item.authorised_by_id else "",
         "confirmation": _confirmation_state(item),
         "findings": item.check_findings,
         "allergy_override_reason": item.allergy_override_reason,
@@ -405,12 +406,16 @@ def prescribing_state(patient, user):
         "can_prescribe": can_prescribe(user),
         "is_senior": plan_extras.can_cosign(user),
         "frequencies": FREQUENCIES,
+        # Who can be named as giving a telephone order (not yourself).
+        "prescribers": [
+            {"id": str(u.pk), "name": u.get_full_name() or u.email}
+            for u in prescribers(patient.organization_id).exclude(pk=user.pk)
+        ],
         "orders": [
             {
                 **_order_row(i),
                 # A senior clinician may confirm an order someone else placed.
-                "can_confirm": plan_extras.can_cosign(user)
-                and i.prescription.prescribed_by_id != user.pk,
+                "can_confirm": may_confirm(i, user),
             }
             for i in orders
         ],
@@ -441,6 +446,18 @@ def place_order(patient, user, data):
         )
     if order_type in ("PRN", "TELEPHONE") and not is_clinical_staff(user):
         raise PermissionDenied("Only clinical staff can place a PRN or telephone order.")
+    authorised_by = None
+    if order_type == "TELEPHONE":
+        authorised_by = (
+            prescribers(patient.organization_id)
+            .exclude(pk=user.pk)
+            .filter(pk=data.get("authorised_by") or None)
+            .first()
+        )
+        if authorised_by is None:
+            raise ValidationError(
+                {"authorised_by": "Name the prescriber who gave this order by telephone."}
+            )
     from apps.accounts.practitioner_profile import require_current_licence
 
     require_current_licence(user)
@@ -515,6 +532,7 @@ def place_order(patient, user, data):
         indication=indication,
         controlled_drug=bool(data.get("controlled_drug")),
         order_type=order_type,
+        authorised_by=authorised_by,
         cosigned_by=user if order_type == "PRESCRIPTION" else None,
         cosigned_at=timezone.now() if order_type == "PRESCRIPTION" else None,
         allergy_check_passed=not checks["blocking"],
@@ -550,6 +568,28 @@ def place_order(patient, user, data):
 
 
 CONFIRMATION_KINDS = ("TELEPHONE_ORDER", "PRN_ORDER")
+
+
+def prescribers(organization_id):
+    from apps.accounts.access import users_with_permission
+
+    return users_with_permission(["clinical.medication.prescribe"], organization_id).order_by(
+        "first_name", "last_name"
+    )
+
+
+def may_confirm(item, user):
+    """Who may confirm (or decline) a telephone / PRN order: never the person who
+    placed it; a telephone order only the prescriber who gave it; a PRN order a
+    senior clinician (`clinical.cosign`)."""
+    from . import plan_extras
+
+    if item.prescription.prescribed_by_id == user.pk:
+        return False
+    if item.order_type == "TELEPHONE" and item.authorised_by_id:
+        return item.authorised_by_id == user.pk and can_prescribe(user)
+    # A PRN order, or a telephone order placed before prescribers were named.
+    return plan_extras.can_cosign(user)
 
 
 def confirmation_request(item, status="REQUESTED"):
@@ -599,6 +639,12 @@ def apply_confirmation(req, user, action):
         raise ValidationError({"detail": "The order this request is for no longer exists."})
     if item.prescription.prescribed_by_id == user.pk:
         raise PermissionDenied("You cannot confirm an order you placed.")
+    if not may_confirm(item, user):
+        raise PermissionDenied(
+            "Only the prescriber who gave this telephone order can confirm it."
+            if item.order_type == "TELEPHONE"
+            else "Only a senior clinician can confirm this order."
+        )
     if action == "SIGN" and item.cosigned_at is None:
         item.cosigned_by, item.cosigned_at = user, timezone.now()
         item.save(update_fields=["cosigned_by", "cosigned_at", "updated_at"])

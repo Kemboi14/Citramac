@@ -205,6 +205,7 @@ class PrescribingOrderTests(ModulesTestCase):
             self.assertEqual(CosignRequest.objects.filter(kind="PRESCRIBING_OVERRIDE").count(), 1)
 
     def phone_order(self, auth, **over):
+        over.setdefault("authorised_by", str(self.psych.pk))
         return self.order(auth, order_type="TELEPHONE", **over)
 
     def confirm(self, auth, item_id):
@@ -248,6 +249,36 @@ class PrescribingOrderTests(ModulesTestCase):
                     object_id=row["id"], field_diff__order_confirmation="confirmed"
                 ).exists()
             )
+
+    def test_a_telephone_order_names_its_prescriber_and_only_they_confirm_it(self):
+        state = self.as_(self.auth, "care-prescribing").data
+        self.assertIn(str(self.psych.pk), [p["id"] for p in state["prescribers"]])
+        self.assertEqual(self.phone_order(self.auth, authorised_by="").status_code, 400)
+        # Not a non-prescriber, and not yourself.
+        self.assertEqual(
+            self.phone_order(self.auth, authorised_by=str(self.clerk.pk)).status_code, 400
+        )
+        other, other_auth = self.user_with_role("Psychiatrist", "Other", "Senior")
+        placed = self.phone_order(self.auth, authorised_by=str(other.pk))
+        self.assertEqual(placed.status_code, 201, placed.data)
+        row = placed.data["orders"][0]
+        self.assertEqual(row["authorised_by"], "Other Senior")
+        # Dr Senior is a senior clinician but did not give this order.
+        self.assertEqual(self.confirm(self.psych_auth, row["id"]).status_code, 403)
+        # It waits in the named prescriber's "Needs my decision", not every senior's.
+        kinds = lambda auth: [  # noqa: E731
+            i.get("kind")
+            for i in self.client.get(reverse("care-decisions"), **auth).data["results"]
+        ]
+        self.assertNotIn("TELEPHONE_ORDER", kinds(self.psych_auth))
+        self.assertIn("TELEPHONE_ORDER", kinds(other_auth))
+        self.assertEqual(self.confirm(other_auth, row["id"]).status_code, 200)
+
+    def test_a_telephone_order_placed_before_prescribers_were_named_goes_to_a_senior(self):
+        row = self.phone_order(self.auth).data["orders"][0]
+        with platform_admin_context():
+            PrescriptionItem.objects.filter(pk=row["id"]).update(authorised_by=None)
+        self.assertEqual(self.confirm(self.psych_auth, row["id"]).status_code, 200)
 
     def test_signing_the_request_in_the_inbox_confirms_and_declining_stops_the_order(self):
         first = self.phone_order(self.auth).data["orders"][0]["id"]

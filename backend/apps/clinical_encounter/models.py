@@ -250,6 +250,11 @@ class PrescriptionItem(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     cosigned_at = models.DateTimeField(null=True, blank=True)
+    # A telephone order: the prescriber who gave it (on whose authority, CLAUDE.md
+    # §3 item 4). Only that prescriber confirms it (owner decision 2026-11-13).
+    authorised_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
     # Set by the prescriber at order time so the MAR asks for a witness.
     # VERIFY: derive from the national controlled-drug schedule once it is mirrored.
     controlled_drug = models.BooleanField(default=False)
