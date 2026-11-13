@@ -404,7 +404,7 @@ export function Composer({
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKey}
             plain
-            className="block max-h-[220px] min-h-[26px] w-full resize-none bg-transparent py-0.5 text-[15.5px] leading-normal text-ink-900 outline-none placeholder:text-ink-500 disabled:opacity-60"
+            className="block max-h-[220px] min-h-[26px] w-full resize-none bg-transparent py-0.5 text-[15.5px] leading-normal text-ink-900 outline-none placeholder:text-ink-500 focus:border-transparent focus:shadow-none disabled:opacity-60"
           />
           <div className="flex items-center justify-end gap-2">
             {modeMenu}

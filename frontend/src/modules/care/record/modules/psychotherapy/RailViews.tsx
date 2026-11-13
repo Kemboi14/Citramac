@@ -91,7 +91,7 @@ export function SessionHistory({
       <Heading
         label={onBack && "Chat"}
         title="Session history"
-        sub={`${note.patient.name} · ${note.patient.number || "—"} · ${(notes ?? []).length || 1} sessions`}
+        sub={`Record ${note.patient.number || "—"} · ${(notes ?? []).length || 1} sessions`}
       />
       <Block title="Current">
         <button

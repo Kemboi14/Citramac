@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ChevronDown,
   Clock,
+  Ellipsis,
   FileText,
   Keyboard,
   Layers,
@@ -232,9 +233,9 @@ const TAB_VIEWS: { label: string; views: View[]; to: View }[] = [
   { label: "Audit trail", views: ["audit"], to: "audit" },
 ];
 
-/** The inline workspace's views, as the underline tabs every clinical module
- * uses (Record / History / Info), with its two actions on the right. */
-function WorkspaceTabs({
+/** The inline workspace's views and actions, folded into one menu so the
+ * session header stays quiet — the client is already named in the banner. */
+function ActionsMenu({
   view,
   setView,
   onNew,
@@ -245,53 +246,102 @@ function WorkspaceTabs({
   onNew: () => void;
   onApproaches: () => void;
 }) {
-  const action =
-    "inline-flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg hover:text-ink-900";
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    const onClick = (e: MouseEvent) =>
+      ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    ref.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+  const item =
+    "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-ink-900 hover:bg-surface-bg focus-visible:bg-surface-bg focus-visible:outline-none";
+  const choose = (v: View) => {
+    setView(v);
+    setOpen(false);
+  };
   return (
-    <div className="flex items-center gap-2 border-b border-surface-border px-4 sm:px-5">
-      <nav aria-label="Psychotherapy views" className="min-w-0 flex-1 overflow-x-auto">
-        <ul className="flex gap-0.5">
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        ref={button}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Session actions"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-2.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg hover:text-ink-900"
+      >
+        <Ellipsis className="h-4 w-4" />
+        <span className="hidden sm:inline">Actions</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Session actions"
+          className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-surface-border bg-surface-card p-1 shadow-md"
+        >
           {TAB_VIEWS.map((t) => {
             const current = t.views.includes(view);
+            const Icon =
+              t.to === "chat"
+                ? MessageSquare
+                : t.to === "history"
+                  ? Clock
+                  : t.to === "client"
+                    ? User
+                    : FileText;
             return (
-              <li key={t.label}>
-                <button
-                  type="button"
-                  aria-current={current ? "page" : undefined}
-                  onClick={() => setView(t.to)}
-                  className={`min-h-[40px] whitespace-nowrap border-b-2 px-3 py-[9px] text-[13px] font-semibold transition-colors ${
-                    current
-                      ? "border-brand-green text-brand-green"
-                      : "border-transparent text-ink-500 hover:text-ink-900"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              </li>
+              <button
+                key={t.label}
+                type="button"
+                role="menuitem"
+                aria-current={current ? "page" : undefined}
+                onClick={() => choose(t.to)}
+                className={`${item} ${current ? "bg-surface-bg font-semibold" : ""}`}
+              >
+                <Icon className="h-4 w-4 text-ink-500" aria-hidden />
+                {t.label}
+              </button>
             );
           })}
-        </ul>
-      </nav>
-      <button
-        type="button"
-        className={action}
-        onClick={onNew}
-        aria-label="New session"
-        title="New session"
-      >
-        <Plus className="h-4 w-4" />
-        <span className="hidden md:inline">New session</span>
-      </button>
-      <button
-        type="button"
-        className={action}
-        onClick={onApproaches}
-        aria-label="Therapy approaches"
-        title="Therapy approaches"
-      >
-        <Layers className="h-4 w-4" />
-        <span className="hidden md:inline">Therapy approaches</span>
-      </button>
+          <div className="my-1 h-px bg-surface-border" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onNew();
+            }}
+            className={item}
+          >
+            <Plus className="h-4 w-4 text-ink-500" aria-hidden /> New session
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onApproaches();
+            }}
+            className={item}
+          >
+            <Layers className="h-4 w-4 text-ink-500" aria-hidden /> Therapy approaches
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -876,6 +926,7 @@ function WorkspaceBody({
 
   function editAnswer(key: string) {
     quiet();
+    setNotesOpen(false);
     setView("chat");
     setEditKey(key);
     setDraft(answerText(note, key));
@@ -885,6 +936,11 @@ function WorkspaceBody({
   function jump(i: number) {
     setView("chat");
     if (i === REVIEW_STEP) {
+      openNotes();
+      return;
+    }
+    // Answered questions now live in the right-hand transcript.
+    if (i < QUESTION_COUNT && i !== step) {
       openNotes();
       return;
     }
@@ -990,10 +1046,7 @@ function WorkspaceBody({
     </button>
   );
   const sessionCrumb = (
-    <>
-      <span className="hidden sm:inline">Session {note.session_number ?? ""} · </span>
-      <strong className="font-semibold text-ink-900">{note.patient.name}</strong>
-    </>
+    <span className="font-semibold text-ink-900">Session {note.session_number ?? ""}</span>
   );
   const sep = (
     <li
@@ -1098,6 +1151,14 @@ function WorkspaceBody({
         >
           {segments}
         </div>
+      )}
+      {inline && (
+        <ActionsMenu
+          view={view}
+          setView={setView}
+          onNew={() => void newSession()}
+          onApproaches={() => setLibraryOpen(true)}
+        />
       )}
       {noteToggle}
     </header>
@@ -1205,10 +1266,13 @@ function WorkspaceBody({
 
   const welcome = (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="m-auto flex w-full max-w-[680px] flex-col gap-[22px] px-5 pb-[10vh] pt-6">
-        <h1 className="flex flex-col items-center text-center font-doc font-medium leading-tight text-ink-900">
-          <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(19px,2.6vw,23px)] font-normal text-ink-500">
-            Psychotherapy session {note.session_number ?? ""} done on
+      <div className="mx-auto flex w-full max-w-[680px] flex-col gap-5 px-5 py-6">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="text-[12px] font-semibold uppercase tracking-[.08em] text-ink-500">
+            Session {note.session_number ?? ""}
+          </p>
+          <h1 className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(17px,2.4vw,20px)] font-medium text-ink-900">
+            Done on
             <input
               type="text"
               inputMode="numeric"
@@ -1235,23 +1299,19 @@ function WorkspaceBody({
               }}
               className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`}
             />
-            with
-          </span>
+          </h1>
           <span
             id="psy-date-error"
             role="status"
-            className="font-sans text-[12.5px] font-normal text-priority-red"
+            className="text-[12.5px] font-normal text-priority-red"
           >
             {dateError}
           </span>
-          <span className="mt-1 text-[clamp(38px,6vw,54px)] font-semibold tracking-[-0.01em] text-brand-green">
-            {note.patient.name}
-          </span>
-          <small className="mt-2 font-sans text-[14.5px] font-normal text-ink-500">
-            {note.author}, I’ll ask five short questions and one safety question, then organise your
+          <small className="max-w-[48ch] text-[13.5px] text-ink-500">
+            {note.author}, I’ll ask five short questions and one safety question, then organise the
             note.
           </small>
-        </h1>
+        </div>
         <div className="flex items-center gap-2 rounded-[22px] border border-surface-border bg-surface-card py-2.5 pl-2.5 pr-3 shadow-md hover:border-brand-green">
           <button
             type="button"
@@ -1345,6 +1405,7 @@ function WorkspaceBody({
       config={config}
       note={note}
       step={step}
+      editing={editKey}
       acks={acks}
       busy={busy}
       reviewExtras={
@@ -1353,7 +1414,6 @@ function WorkspaceBody({
         ) : null
       }
       h={{
-        onEdit: editAnswer,
         onReview: (key) => void save({ resolve_detection: { key } }),
         onModel: (code, include) =>
           void save({ model_decision: { code, decision: include ? "INCLUDE" : "EXCLUDE" } }),
@@ -1445,15 +1505,7 @@ function WorkspaceBody({
       controls={panelControls}
       example={example}
       busy={busy}
-    />
-  );
-
-  const tabs = inline && (
-    <WorkspaceTabs
-      view={view}
-      setView={setView}
-      onNew={() => void newSession()}
-      onApproaches={() => setLibraryOpen(true)}
+      onEditAnswer={editAnswer}
     />
   );
 
@@ -1506,7 +1558,6 @@ function WorkspaceBody({
       {!(wide && panel === "expanded") && (
         <section className="flex min-w-0 flex-1 flex-col" aria-label="Session">
           {header}
-          {tabs}
           {error && (
             <div className="px-4 pt-2">
               <ErrorNote>{error}</ErrorNote>
@@ -1518,8 +1569,10 @@ function WorkspaceBody({
             welcome
           ) : (
             <>
-              <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-                <div className="mx-auto w-full max-w-[760px] px-4 py-5 sm:px-6">{thread}</div>
+              <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                <div className="mx-auto my-auto w-full max-w-[760px] px-4 py-5 sm:px-6">
+                  {thread}
+                </div>
               </div>
               {!example && !signed && note.is_author && composer}
             </>

@@ -24,8 +24,8 @@ const NOTE_SECTIONS = (config: PsyConfig) =>
 const STATUS =
   "whitespace-nowrap rounded-[5px] px-[7px] py-[3px] font-mono text-[10.5px] font-medium uppercase tracking-[.06em]";
 /** Mockup section heading: small accent capitals. */
-const SEC_H = "font-sans text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green";
-const LINK = "font-sans text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900";
+const SEC_H = "text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green";
+const LINK = "text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900";
 
 function StatusPill({ signed, example }: { signed: boolean; example?: boolean }) {
   if (example)
@@ -55,6 +55,7 @@ export function NotePanel({
   controls,
   example,
   busy,
+  onEditAnswer,
 }: {
   config: PsyConfig;
   note: PsyNote;
@@ -65,8 +66,12 @@ export function NotePanel({
   controls: ReactNode;
   example: boolean;
   busy: boolean;
+  onEditAnswer?: (key: string) => void;
 }) {
-  const [tab, setTab] = useState<"note" | "transcript">("note");
+  // Until the clinician picks a view, a draft shows what has been captured in
+  // the transcript; once the note is organised the note itself leads.
+  const [chosen, setChosen] = useState<"note" | "transcript" | null>(null);
+  const tab = chosen ?? (example || note.generated_at ? "note" : "transcript");
   const signed = note.status === "SIGNED";
   const noteText = example ? exampleText(config) : note.rendered;
   return (
@@ -94,7 +99,7 @@ export function NotePanel({
                 aria-selected={tab === t}
                 id={`psy-tab-${t}`}
                 aria-controls={`psy-panel-${t}`}
-                onClick={() => setTab(t)}
+                onClick={() => setChosen(t)}
                 className={`rounded-[7px] px-3 py-1 text-[12.5px] font-semibold ${tab === t ? "bg-surface-card text-ink-900 shadow-sm" : "text-ink-500 hover:text-ink-900"}`}
               >
                 {t === "note" ? "Note" : "Transcript"}
@@ -119,7 +124,7 @@ export function NotePanel({
         ) : tab === "note" ? (
           <NoteBody config={config} note={note} save={save} organise={organise} busy={busy} />
         ) : (
-          <Transcript config={config} note={note} />
+          <Transcript config={config} note={note} onEditAnswer={onEditAnswer} />
         )}
       </div>
       {example ? (
@@ -167,7 +172,7 @@ function ExamplePreview({ config }: { config: PsyConfig }) {
           <section key={s.key}>
             <h3 className={SEC_H}>{s.title}</h3>
             {/* eslint-disable-next-line security/detect-object-injection -- question / section key from the fixed example map. */}
-            <p className="mt-1.5 whitespace-pre-wrap font-doc text-[15.5px] leading-[1.55] text-ink-900">
+            <p className="mt-1.5 whitespace-pre-wrap text-[14.5px] leading-[1.6] text-ink-900">
               {key ? EXAMPLE_ANSWERS[key] : "Not part of the example."}
             </p>
           </section>
@@ -327,7 +332,7 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
   }
   if (!editing) {
     return (
-      <div className="flex items-start gap-2 font-sans text-[12.5px] text-ink-500">
+      <div className="flex items-start gap-2 text-[12.5px] text-ink-500">
         <div className="flex flex-1 flex-wrap gap-x-1.5">
           <span>
             {ddmmyyyy(s.session_date)} · {hhmm(s.session_date)}
@@ -355,7 +360,7 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
     );
   }
   return (
-    <fieldset className="grid grid-cols-1 gap-2 rounded-lg border border-surface-border p-2.5 font-sans sm:grid-cols-2">
+    <fieldset className="grid grid-cols-1 gap-2 rounded-lg border border-surface-border p-2.5 sm:grid-cols-2">
       <legend className={`${FIELD_LABEL} px-1`}>Session information</legend>
       <label className="text-[12px]">
         <span className={FIELD_LABEL}>Date and start time</span>
@@ -458,10 +463,10 @@ function NoteBody({
   const hasSections = Object.values(note.sections).some((v) => v);
   const hasAnswers = Object.values(note.answers).some((a) => a?.text?.trim());
   return (
-    <div className="flex flex-col gap-[18px] font-doc text-[15.5px] leading-[1.55]">
+    <div className="flex flex-col gap-[18px] text-[14.5px] leading-[1.6]">
       <SessionInfo config={config} note={note} save={save} />
       {!signed && !note.generated_at && hasAnswers && (
-        <Callout tone="warning" className="font-sans">
+        <Callout tone="warning">
           {hasSections
             ? "The answers changed since the note was organised."
             : "The note has not been organised yet."}
@@ -521,7 +526,7 @@ function NoteText({ text }: { text: string }) {
     if (!line.trim()) continue;
     blocks.push(
       /:$/.test(line.trim()) ? (
-        <div key={blocks.length} className="font-sans text-[12.5px] font-semibold text-ink-500">
+        <div key={blocks.length} className="text-[12.5px] font-semibold text-ink-500">
           {line}
         </div>
       ) : (
@@ -565,7 +570,7 @@ function Section({
   }
   return (
     <section aria-labelledby={`psy-sec-${sectionKey}`} className="flex flex-col gap-[5px]">
-      <div className="flex flex-wrap items-center justify-between gap-2 font-sans">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <h3 id={`psy-sec-${sectionKey}`} className={SEC_H}>
             {title}
@@ -601,7 +606,7 @@ function Section({
       {editing ? (
         <div className="mt-1.5 flex flex-col gap-1.5">
           <AutoResizeTextarea
-            className="min-h-[130px] font-doc text-[15px] leading-normal"
+            className="min-h-[130px] text-[14.5px] leading-normal"
             aria-label={`Edit ${title}`}
             rows={Math.min(14, Math.max(4, draft.split("\n").length + 1))}
             value={draft}
@@ -628,15 +633,12 @@ function Section({
         </p>
       )}
       {flags.map((f, i) => (
-        <p key={i} className="font-sans text-[12px] text-priority-orange">
+        <p key={i} className="text-[12px] text-priority-orange">
           Language suggestion: “{f.term}” — {f.suggestion}
         </p>
       ))}
       {amendments.map((a) => (
-        <p
-          key={a.id}
-          className="border-l-2 border-brand-green pl-2.5 font-sans text-[11.5px] text-ink-500"
-        >
+        <p key={a.id} className="border-l-2 border-brand-green pl-2.5 text-[11.5px] text-ink-500">
           Amended {formatDateTime(a.at)} by {a.by} — {a.reason}
         </p>
       ))}
@@ -644,8 +646,24 @@ function Section({
   );
 }
 
-function Transcript({ config, note }: { config: PsyConfig; note: PsyNote }) {
+function Transcript({
+  config,
+  note,
+  onEditAnswer,
+}: {
+  config: PsyConfig;
+  note: PsyNote;
+  onEditAnswer?: (key: string) => void;
+}) {
   const languages = new Map(config.languages.map((l) => [l.code, l.label]));
+  const editable = note.status !== "SIGNED" && note.is_author && !!onEditAnswer;
+  if (note.transcript.length === 0) {
+    return (
+      <p className="text-[13.5px] text-ink-500">
+        Each answer appears here as you give it. Nothing has been captured yet.
+      </p>
+    );
+  }
   return (
     <ol className="flex flex-col gap-4">
       {note.transcript.map((t, i) => (
@@ -653,10 +671,21 @@ function Transcript({ config, note }: { config: PsyConfig; note: PsyNote }) {
           <div className="text-[12.5px] font-semibold text-ink-900">
             Q{i + 1}. {t.title}
           </div>
-          <div className="text-[11px] text-ink-500">
-            {modeLabel(t.mode)}
-            {t.answered_at ? ` · ${hhmm(t.answered_at)}` : ""} ·{" "}
-            {languages.get(t.language) ?? t.language}
+          <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-ink-500">
+            <span>
+              {modeLabel(t.mode)}
+              {t.answered_at ? ` · ${hhmm(t.answered_at)}` : ""} ·{" "}
+              {languages.get(t.language) ?? t.language}
+            </span>
+            {editable && t.text && (
+              <button
+                type="button"
+                className="font-semibold underline underline-offset-2 hover:text-ink-900"
+                onClick={() => onEditAnswer?.(t.question)}
+              >
+                Edit answer
+              </button>
+            )}
           </div>
           <p className="mt-1 whitespace-pre-wrap text-[13px]">
             {t.text || <span className="text-ink-500">Not answered.</span>}

@@ -8,8 +8,7 @@ import type {
   SafetyAnswer,
 } from "../../../../../lib/psychotherapyNoteApi";
 import { BTN, BTN_GHOST, BTN_SM } from "../../../shared/styles";
-import { EXAMPLE_ANSWERS } from "./exampleSession";
-import { answerText, hhmm, modeLabel, QUESTION_COUNT, REVIEW_STEP, SAFETY_STEP } from "./helpers";
+import { hhmm, QUESTION_COUNT, REVIEW_STEP, SAFETY_STEP } from "./helpers";
 
 // The conversation, derived from the server draft (questions asked so far,
 // the clinician's answers, the inline checks the server ran on them) plus a
@@ -45,7 +44,7 @@ function Sys({ children, id }: { children: ReactNode; id?: string }) {
     <div id={id} className="flex scroll-mt-4 gap-2.5">
       <div
         aria-hidden
-        className="mt-px grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] bg-brand-green-tint font-doc text-[15px] font-semibold text-brand-green"
+        className="mt-px grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] bg-brand-green-tint text-[14px] font-semibold text-brand-green"
       >
         C
       </div>
@@ -67,14 +66,14 @@ function Mine({ children, foot }: { children: ReactNode; foot?: ReactNode }) {
   );
 }
 
-/** v4 question: small counter, the question in the document face, its hint. */
+/** The question: small counter, the question itself, its hint. */
 function QuestionHead({ n, title, hint }: { n: number; title: string; hint: string }) {
   return (
     <>
       <span className="text-[12px] font-medium text-ink-500">
         Question {n} of {QUESTION_COUNT}
       </span>
-      <div className="font-doc text-[21px] font-medium leading-[1.3]">{title}</div>
+      <div className="text-[19px] font-semibold leading-[1.3]">{title}</div>
       <div className="max-w-[60ch] text-[14px] text-ink-500">{hint}</div>
     </>
   );
@@ -112,7 +111,6 @@ function categoryLabel(config: PsyConfig, code: string) {
 }
 
 export interface ThreadHandlers {
-  onEdit: (key: string) => void;
   onReview: (key: string) => void;
   onModel: (code: string, include: boolean) => void;
   onGoal: (index: number, decision: GoalDecision) => void;
@@ -128,8 +126,8 @@ export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave:
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-priority-orange bg-priority-orange-tint px-3 py-2 text-[12.5px] text-priority-orange">
         <span>
-          <strong>Example — not saved.</strong> Sample answers show how the workspace works. Nothing
-          here is stored or can be signed.
+          <strong>Example — not saved.</strong> This shows how a session runs. Nothing here is
+          stored or can be signed.
         </span>
         <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onLeave}>
           Leave example
@@ -138,18 +136,15 @@ export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave:
       <Sys>
         <p>Example session. I’ll ask five questions, one at a time, then the safety question.</p>
       </Sys>
-      {config.questions.map((q, i) => (
-        <div key={q.key} className="flex flex-col gap-3">
-          <Sys>
-            <QuestionHead n={i + 1} title={q.title} hint={q.hint} />
-          </Sys>
-          <Mine foot={<span>Typed · example</span>}>{EXAMPLE_ANSWERS[q.key]}</Mine>
-        </div>
+      {config.questions.slice(0, 1).map((q, i) => (
+        <Sys key={q.key}>
+          <QuestionHead n={i + 1} title={q.title} hint={q.hint} />
+        </Sys>
       ))}
       <Sys>
         <p>
-          In a real session the safety question comes next, then the note is organised on the server
-          for your review.
+          One question at a time: each answer moves you to the next and appears in the therapy note
+          on the right. The safety question comes after question five, then you review and sign.
         </p>
       </Sys>
     </div>
@@ -160,6 +155,7 @@ export function Thread({
   config,
   note,
   step,
+  editing,
   acks,
   busy,
   h,
@@ -168,6 +164,8 @@ export function Thread({
   config: PsyConfig;
   note: PsyNote;
   step: number;
+  /** The answer being reworded, if any — its question stays in view. */
+  editing?: string | null;
   acks: Ack[];
   busy: boolean;
   h: ThreadHandlers;
@@ -182,7 +180,17 @@ export function Thread({
           <p>{a.text}</p>
         </Sys>
       ));
-  const shown = Math.min(step, QUESTION_COUNT - 1);
+  // Only the question in hand stays on screen: once answered it moves to the
+  // transcript on the right, leaving the next question on its own. While an
+  // earlier answer is being reworded, its own question is the one in hand.
+  const editingIndex = editing ? config.questions.findIndex((q) => q.key === editing) : -1;
+  const current = editingIndex >= 0 ? editingIndex : step < QUESTION_COUNT ? step : -1;
+  // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
+  const q = current >= 0 ? config.questions[current] : null;
+  const qKey = q?.key ?? "";
+  const qFlags = qKey ? note.detections.filter((d) => d.question === qKey) : [];
+  const qLanguage = qKey ? note.flags.filter((f) => f.where === qKey) : [];
+  const earlierFlags = note.detections.filter((d) => !d.resolution && d.question !== qKey);
   const decided = note.goal_links.filter((g) => DECISIONS.some((d) => d.code === g.status));
   const goals = [
     ...note.goal_suggestions.map((g) => ({
@@ -205,173 +213,174 @@ export function Thread({
     <div className="flex flex-col gap-4">
       <Sys>
         <p>
-          Session started for <strong>{note.patient.name}</strong>. I’ll ask five questions, one at
-          a time, then the safety question. Answer naturally; there’s no need for headings or formal
-          language. Your note builds on the right as you go.
+          Session started. I’ll ask five questions, one at a time, then the safety question. Answer
+          naturally; there’s no need for headings or formal language. Your note builds on the right
+          as you go.
         </p>
       </Sys>
-      {config.questions.slice(0, shown + 1).map((q, i) => {
-        const text = answerText(note, q.key);
-
-        const answer = note.answers[q.key];
-        const flags = note.detections.filter((d) => d.question === q.key);
-        const language = note.flags.filter((f) => f.where === q.key);
-        return (
-          <div key={q.key} className="flex flex-col gap-3">
-            <Sys id={`psy-m-q${i}`}>
-              <QuestionHead n={i + 1} title={q.title} hint={q.hint} />
-            </Sys>
-            {text.trim() && (
-              <Mine
-                foot={
-                  <>
-                    <span>
-                      {modeLabel(answer?.mode)}
-                      {answer?.answered_at ? ` · ${hhmm(answer.answered_at)}` : ""}
-                    </span>
-                    {!locked && (
-                      <button
-                        type="button"
-                        className="text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900"
-                        onClick={() => h.onEdit(q.key)}
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </>
-                }
+      {q && (
+        <div key={q.key} className="flex flex-col gap-3">
+          <Sys id={`psy-m-q${current}`}>
+            <QuestionHead n={current + 1} title={q.title} hint={q.hint} />
+          </Sys>
+          {qFlags.length > 0 && (
+            <Sys>
+              <div
+                role="status"
+                className="flex flex-col gap-2 rounded-lg border border-priority-red bg-priority-red-tint p-3"
               >
-                {text}
-              </Mine>
-            )}
-            {flags.length > 0 && (
-              <Sys>
-                <div
-                  role="status"
-                  className="flex flex-col gap-2 rounded-lg border border-priority-red bg-priority-red-tint p-3"
-                >
-                  <strong className="text-priority-red">{config.detection_prompt}</strong>
-                  <span className="text-[12.5px] text-ink-500">{config.detection_note}</span>
-                  {flags.map((d) => (
-                    <div
-                      key={d.key}
-                      className="flex flex-col gap-1.5 rounded-md bg-surface-card p-2 text-[13px]"
-                    >
-                      <Highlight d={d} />
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-full bg-priority-red-tint px-2 py-0.5 text-[11px] font-semibold text-priority-red">
-                          {categoryLabel(config, d.category)}
+                <strong className="text-priority-red">{config.detection_prompt}</strong>
+                <span className="text-[12.5px] text-ink-500">{config.detection_note}</span>
+                {qFlags.map((d) => (
+                  <div
+                    key={d.key}
+                    className="flex flex-col gap-1.5 rounded-md bg-surface-card p-2 text-[13px]"
+                  >
+                    <Highlight d={d} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-priority-red-tint px-2 py-0.5 text-[11px] font-semibold text-priority-red">
+                        {categoryLabel(config, d.category)}
+                      </span>
+                      {d.source === "translation" && (
+                        <span className="text-[11px] text-ink-500">in the English translation</span>
+                      )}
+                      {d.resolution ? (
+                        <span className="rounded-full bg-brand-green-tint px-2 py-0.5 text-[11px] font-semibold text-brand-green">
+                          Reviewed {hhmm(d.resolution.at)} · {d.resolution.by}
                         </span>
-                        {d.source === "translation" && (
-                          <span className="text-[11px] text-ink-500">
-                            in the English translation
-                          </span>
-                        )}
-                        {d.resolution ? (
-                          <span className="rounded-full bg-brand-green-tint px-2 py-0.5 text-[11px] font-semibold text-brand-green">
-                            Reviewed {hhmm(d.resolution.at)} · {d.resolution.by}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className={`${BTN_GHOST} ${BTN_SM}`}
-                            disabled={locked || busy}
-                            onClick={() => h.onReview(d.key)}
-                          >
-                            Mark reviewed
-                          </button>
-                        )}
-                      </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`${BTN_GHOST} ${BTN_SM}`}
+                          disabled={locked || busy}
+                          onClick={() => h.onReview(d.key)}
+                        >
+                          Mark reviewed
+                        </button>
+                      )}
                     </div>
-                  ))}
-                  {step < SAFETY_STEP ? (
-                    <span className="text-[12px] text-ink-500">
-                      You will be asked the safety question after question 5.
-                    </span>
-                  ) : locked ? null : note.safety_answer === "YES" ? (
-                    <div>
-                      <button
-                        type="button"
-                        className={`${BTN_GHOST} ${BTN_SM}`}
-                        onClick={h.onOpenRisk}
-                      >
-                        Open risk assessment
-                      </button>
-                    </div>
-                  ) : (
-                    flags.some((d) => !d.resolution) && (
-                      // Review gate: flagged language with a No / Not-assessed answer must be
-                      // either a formal risk assessment or explicitly reviewed — never ignored.
-                      <div className="flex flex-col gap-1.5 text-[12.5px]">
-                        <span>
-                          If this is a new or changed concern, change the safety answer to Yes and
-                          complete the risk assessment. Otherwise mark each passage reviewed.
-                        </span>
-                        <div>
-                          <button
-                            type="button"
-                            className={`${BTN_GHOST} ${BTN_SM}`}
-                            disabled={busy}
-                            onClick={() => h.onSafety("YES")}
-                          >
-                            Answer Yes and complete the risk assessment
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </Sys>
-            )}
-            {language.length > 0 && (
-              <Sys>
-                <div className="flex flex-col gap-1 rounded-lg border border-priority-orange bg-priority-orange-tint p-3">
-                  <strong className="text-[13px]">Language suggestion</strong>
-                  {language.map((f, n) => (
-                    <div key={n} className="text-[13px]">
-                      <mark className="rounded bg-priority-orange-tint px-0.5">{f.term}</mark>{" "}
-                      {f.suggestion}
-                    </div>
-                  ))}
+                  </div>
+                ))}
+                {step < SAFETY_STEP ? (
                   <span className="text-[12px] text-ink-500">
-                    Advisory only — the note keeps your words unless you edit them.
+                    You will be asked the safety question after question 5.
                   </span>
-                </div>
-              </Sys>
-            )}
-            {q.key === "q3" && text.trim() && note.models_detected.length > 0 && (
-              <Sys>
-                <p>
-                  I recognised{" "}
-                  {note.models_detected.length === 1 ? "this approach" : "these approaches"}. Tap to
-                  include or remove from the note.
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {note.models_detected.map((m) => (
+                ) : locked ? null : note.safety_answer === "YES" ? (
+                  <div>
                     <button
-                      key={m.code}
                       type="button"
-                      aria-pressed={m.included}
-                      disabled={locked || busy}
-                      className={pill(m.included)}
-                      title={
-                        m.how === "named"
-                          ? "Named by you"
-                          : `Suggested by the elements you described: ${m.concepts.join(", ")}`
-                      }
-                      onClick={() => h.onModel(m.code, !m.included)}
+                      className={`${BTN_GHOST} ${BTN_SM}`}
+                      onClick={h.onOpenRisk}
                     >
-                      {m.name}
-                      {m.how === "suggested" ? " · suggested" : ""}
+                      Open risk assessment
                     </button>
-                  ))}
-                </div>
-              </Sys>
-            )}
-            {ackFor(`q${i}`)}
+                  </div>
+                ) : (
+                  qFlags.some((d) => !d.resolution) && (
+                    // Review gate: flagged language with a No / Not-assessed answer must be
+                    // either a formal risk assessment or explicitly reviewed — never ignored.
+                    <div className="flex flex-col gap-1.5 text-[12.5px]">
+                      <span>
+                        If this is a new or changed concern, change the safety answer to Yes and
+                        complete the risk assessment. Otherwise mark each passage reviewed.
+                      </span>
+                      <div>
+                        <button
+                          type="button"
+                          className={`${BTN_GHOST} ${BTN_SM}`}
+                          disabled={busy}
+                          onClick={() => h.onSafety("YES")}
+                        >
+                          Answer Yes and complete the risk assessment
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </Sys>
+          )}
+          {qLanguage.length > 0 && (
+            <Sys>
+              <div className="flex flex-col gap-1 rounded-lg border border-priority-orange bg-priority-orange-tint p-3">
+                <strong className="text-[13px]">Language suggestion</strong>
+                {qLanguage.map((f, n) => (
+                  <div key={n} className="text-[13px]">
+                    <mark className="rounded bg-priority-orange-tint px-0.5">{f.term}</mark>{" "}
+                    {f.suggestion}
+                  </div>
+                ))}
+                <span className="text-[12px] text-ink-500">
+                  Advisory only — the note keeps your words unless you edit them.
+                </span>
+              </div>
+            </Sys>
+          )}
+          {ackFor(`q${current}`)}
+        </div>
+      )}
+      {note.models_detected.length > 0 && (
+        <Sys>
+          <p>
+            I recognised {note.models_detected.length === 1 ? "this approach" : "these approaches"}.
+            Tap to include or remove from the note.
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {note.models_detected.map((m) => (
+              <button
+                key={m.code}
+                type="button"
+                aria-pressed={m.included}
+                disabled={locked || busy}
+                className={pill(m.included)}
+                title={
+                  m.how === "named"
+                    ? "Named by you"
+                    : `Suggested by the elements you described: ${m.concepts.join(", ")}`
+                }
+                onClick={() => h.onModel(m.code, !m.included)}
+              >
+                {m.name}
+                {m.how === "suggested" ? " · suggested" : ""}
+              </button>
+            ))}
           </div>
-        );
-      })}
+        </Sys>
+      )}
+      {earlierFlags.length > 0 && (
+        <Sys>
+          <div className="flex flex-col gap-2 rounded-lg border border-priority-red bg-priority-red-tint p-3">
+            <strong className="text-[13px] text-priority-red">Earlier flagged language</strong>
+            <span className="text-[12.5px] text-ink-500">
+              These passages still need review before the note can be signed.
+            </span>
+            {earlierFlags.map((d) => (
+              <div
+                key={d.key}
+                className="flex flex-col gap-1.5 rounded-md bg-surface-card p-2 text-[13px]"
+              >
+                <Highlight d={d} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-priority-red-tint px-2 py-0.5 text-[11px] font-semibold text-priority-red">
+                    {categoryLabel(config, d.category)}
+                  </span>
+                  {d.source === "translation" && (
+                    <span className="text-[11px] text-ink-500">in the English translation</span>
+                  )}
+                  <button
+                    type="button"
+                    className={`${BTN_GHOST} ${BTN_SM}`}
+                    disabled={locked || busy}
+                    onClick={() => h.onReview(d.key)}
+                  >
+                    Mark reviewed
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Sys>
+      )}
       {goals.length > 0 && note.status === "DRAFT" && (
         <Sys>
           <div className="flex flex-col gap-2 rounded-lg border border-surface-border p-3">
@@ -450,7 +459,7 @@ export function Thread({
       {step >= SAFETY_STEP && (
         <Sys id="psy-m-safety">
           <span className="text-[12px] font-medium text-ink-500">Required · every session</span>
-          <div className="font-doc text-[18.5px] leading-[1.4]">{config.safety_question}</div>
+          <div className="text-[17px] font-medium leading-[1.4]">{config.safety_question}</div>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Safety answer">
             {config.safety_options.map((o) => (
               <button
