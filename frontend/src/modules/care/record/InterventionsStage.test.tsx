@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InterventionsStage } from "./InterventionsStage";
 
@@ -65,11 +66,13 @@ describe("InterventionsStage", () => {
 
   it("lists accepted care-plan actions before the plan is signed", async () => {
     render(
-      <InterventionsStage
-        patientId="patient-77"
-        banner={{} as never}
-        onRecordChanged={() => undefined}
-      />,
+      <MemoryRouter>
+        <InterventionsStage
+          patientId="patient-77"
+          banner={{} as never}
+          onRecordChanged={() => undefined}
+        />
+      </MemoryRouter>,
     );
 
     expect(await screen.findByText("Psychiatric review")).toBeInTheDocument();
@@ -86,11 +89,13 @@ describe("InterventionsStage", () => {
       }),
     );
     render(
-      <InterventionsStage
-        patientId="patient-77"
-        banner={{} as never}
-        onRecordChanged={() => undefined}
-      />,
+      <MemoryRouter>
+        <InterventionsStage
+          patientId="patient-77"
+          banner={{} as never}
+          onRecordChanged={() => undefined}
+        />
+      </MemoryRouter>,
     );
 
     expect(

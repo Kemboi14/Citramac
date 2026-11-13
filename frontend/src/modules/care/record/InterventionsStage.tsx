@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
+import { clientRecordPath, psychotherapyEntryPath } from "../shared/recordRoutes";
 import { Callout, Card, ErrorNote } from "../shared/ui";
 import { formatDateTime } from "../shared/format";
 import { CarePlanActionsTable } from "./interventions/CarePlanActionsTable";
@@ -20,6 +22,7 @@ const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-
  * nothing is kept in browser storage (CLAUDE.md §5).
  */
 export function InterventionsStage({ patientId, banner, onRecordChanged }: RecordViewProps) {
+  const navigate = useNavigate();
   const [version, setVersion] = useState(0);
   const workspace = useRecordData(
     patientId,
@@ -145,7 +148,22 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
             {data ? (
-              <ModuleList modules={shown} actions={actions} onOpen={setOpenCode} />
+              <ModuleList
+                modules={shown}
+                actions={actions}
+                onOpen={(code) => {
+                  // The psychotherapy module is a guided session, not a form:
+                  // open it as its own page (client banner included) instead of
+                  // inside the Interventions list.
+                  if (code === "psychotherapy") {
+                    navigate(psychotherapyEntryPath(patientId), {
+                      state: { from: clientRecordPath(patientId, "interventions") },
+                    });
+                    return;
+                  }
+                  setOpenCode(code);
+                }}
+              />
             ) : (
               <p className="p-4 text-xs text-ink-500">
                 {workspace.loading

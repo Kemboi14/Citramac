@@ -15,12 +15,15 @@ export function PsychotherapyRecord({
   patientId,
   onClose,
   header,
+  backLabel = "Interventions",
 }: {
   patientId: string;
   onClose: () => void;
   /** The module's back link and header, shown until the session workspace
    * (which has its own) opens. */
   header?: ReactNode;
+  /** Where the workspace's back crumb returns to. */
+  backLabel?: string;
 }) {
   const { data, error } = useModule<TherapyState>(patientId, getTherapy);
   const ready = (data?.results ?? []).filter((e) => !e.ended && e.confidentiality_agreed);
@@ -50,6 +53,7 @@ export function PsychotherapyRecord({
         patientId={patientId}
         episodeId={episodeId}
         onClose={onClose}
+        backLabel={backLabel}
       />
     );
   }

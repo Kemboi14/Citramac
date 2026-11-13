@@ -1,5 +1,6 @@
 import { ArrowLeft, FileText } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { PsychotherapyRecord } from "./record/interventions/PsychotherapyRecord";
 import { PsychotherapyWorkspace } from "./record/modules/psychotherapy/Workspace";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
@@ -39,14 +40,25 @@ export function PsychotherapySessionPage() {
         </Link>
       </div>
       <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card shadow-sm">
-        <PsychotherapyWorkspace
-          inline
-          patientId={patientId}
-          episodeId={episodeId || undefined}
-          noteId={noteId}
-          backLabel="Individual Psychotherapy"
-          onClose={() => navigate(backTo)}
-        />
+        {episodeId || noteId ? (
+          <PsychotherapyWorkspace
+            inline
+            patientId={patientId}
+            episodeId={episodeId || undefined}
+            noteId={noteId}
+            backLabel="Individual Psychotherapy"
+            onClose={() => navigate(backTo)}
+          />
+        ) : (
+          // Opened from Interventions without an episode in the URL: resolve
+          // the client's open therapy episode, or set one up, on this page —
+          // never inside the Interventions list.
+          <PsychotherapyRecord
+            patientId={patientId}
+            onClose={() => navigate(backTo)}
+            backLabel="Individual Psychotherapy"
+          />
+        )}
       </div>
     </div>
   );

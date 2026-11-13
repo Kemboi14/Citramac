@@ -380,6 +380,10 @@ function App() {
             <Route path="inpatient/ward" element={<WardBoardPage />} />
             <Route path="psychotherapy/individual" element={<PsychotherapyClientsPage />} />
             <Route
+              path="psychotherapy/individual/session/:patientId"
+              element={<PsychotherapySessionPage />}
+            />
+            <Route
               path="psychotherapy/individual/session/:patientId/:episodeId"
               element={<PsychotherapySessionPage />}
             />
