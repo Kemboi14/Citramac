@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   agreeConfidentiality,
   getTherapy,
@@ -7,11 +8,15 @@ import {
   type TherapyState,
 } from "../../../../lib/carePathwayApi";
 import { formatDate } from "../../shared/format";
+import {
+  clientRecordPath,
+  psychotherapyNotePath,
+  psychotherapySessionPath,
+} from "../../shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT, TABLE, TD, TH } from "../../shared/styles";
 import { Callout, ErrorNote, Tag } from "../../shared/ui";
 import { useValueSets } from "../../shared/useValueSets";
 import { Row } from "./ClinicalExtras";
-import { PsychotherapySessionNote } from "./PsychotherapySessionNote";
 import { useModule } from "./useModule";
 
 const PHASES: [number, string][] = [
@@ -162,10 +167,10 @@ function TherapyEpisode({
   act: (work: (token: string) => Promise<unknown>) => Promise<boolean>;
 }) {
   const vs = useValueSets();
+  const navigate = useNavigate();
   // PSY-WF: the session note is written through the Psychotherapy Session
-  // workflow (five questions, mandatory safety question, review and sign).
-  const [writing, setWriting] = useState(false);
-  const [viewing, setViewing] = useState<string | null>(null);
+  // workflow (five questions, mandatory safety question, review and sign),
+  // opened as the routed session page so the client banner stays visible.
   const n = e.sessions.length + 1;
   const linkTitle = (id: string) => state.link_options.find((l) => l.id === id)?.title ?? "";
   return (
@@ -200,40 +205,19 @@ function TherapyEpisode({
         </div>
       ) : (
         <div className="mt-3 flex flex-col gap-2">
-          {writing ? (
-            <PsychotherapySessionNote
-              patientId={patientId}
-              episodeId={e.id}
-              onClose={() => {
-                setWriting(false);
-                void act(async () => undefined);
-              }}
-            />
-          ) : (
-            <div>
-              <button
-                type="button"
-                className={`${BTN} ${BTN_SM}`}
-                onClick={() => {
-                  setViewing(null);
-                  setWriting(true);
-                }}
-              >
-                Start new session{" "}
-                <span className="font-normal">
-                  · session {n}
-                  {e.planned_sessions ? ` of ${e.planned_sessions}` : ""} (resumes an open draft)
-                </span>
-              </button>
-            </div>
-          )}
-          {viewing && (
-            <PsychotherapySessionNote
-              patientId={patientId}
-              noteId={viewing}
-              onClose={() => setViewing(null)}
-            />
-          )}
+          <div>
+            <button
+              type="button"
+              className={`${BTN} ${BTN_SM}`}
+              onClick={() => navigate(psychotherapySessionPath(patientId, e.id))}
+            >
+              Start new session{" "}
+              <span className="font-normal">
+                · session {n}
+                {e.planned_sessions ? ` of ${e.planned_sessions}` : ""} (resumes an open draft)
+              </span>
+            </button>
+          </div>
         </div>
       )}
       {e.sessions.length > 0 && (
@@ -271,10 +255,11 @@ function TherapyEpisode({
                         <button
                           type="button"
                           className={`${BTN_GHOST} ${BTN_SM}`}
-                          onClick={() => {
-                            setWriting(false);
-                            setViewing(s.note_id);
-                          }}
+                          onClick={() =>
+                            navigate(psychotherapyNotePath(patientId, e.id, s.note_id as string), {
+                              state: { from: clientRecordPath(patientId, "interventions") },
+                            })
+                          }
                         >
                           Open note
                         </button>

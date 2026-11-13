@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { listPsyClients, type PsyClientRow } from "../../lib/psychotherapyNoteApi";
-import { PsychotherapySessionNote } from "./record/modules/PsychotherapySessionNote";
-import { clientRecordPath } from "./shared/recordRoutes";
+import { clientRecordPath, psychotherapySessionPath } from "./shared/recordRoutes";
 import { formatDate, formatDateTime } from "./shared/format";
 import { BTN, BTN_GHOST, BTN_SM, TABLE, TD, TH } from "./shared/styles";
 import { Card, ErrorNote, PageHeader } from "./shared/ui";
@@ -20,7 +19,6 @@ export function PsychotherapyClientsPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<PsyClientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<{ patientId: string; episodeId: string } | null>(null);
 
   const load = useCallback(() => {
     if (!accessToken) return;
@@ -103,10 +101,9 @@ export function PsychotherapyClientsPage() {
                           type="button"
                           className={`${BTN} ${BTN_SM}`}
                           onClick={() =>
-                            setSession({
-                              patientId: row.patient_id,
-                              episodeId: row.episode_id as string,
-                            })
+                            navigate(
+                              psychotherapySessionPath(row.patient_id, row.episode_id as string),
+                            )
                           }
                         >
                           Start session
@@ -134,16 +131,6 @@ export function PsychotherapyClientsPage() {
           “Start session” opens the client record for clients without a therapy episode whose
           confidentiality limits have been agreed — start the episode there first.
         </p>
-      )}
-      {session && (
-        <PsychotherapySessionNote
-          patientId={session.patientId}
-          episodeId={session.episodeId}
-          onClose={() => {
-            setSession(null);
-            load();
-          }}
-        />
       )}
     </div>
   );

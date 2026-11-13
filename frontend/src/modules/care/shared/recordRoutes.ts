@@ -52,3 +52,13 @@ export function clientRecordPath(patientId: string, view: RecordView = "triage")
 export function psychiatryAssessmentPath(patientId: string) {
   return `/clinical/psychiatry/assessments/${patientId}`;
 }
+
+/** The Individual Psychotherapy session workspace, inside the clinical shell. */
+export function psychotherapySessionPath(patientId: string, episodeId: string) {
+  return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}`;
+}
+
+/** A saved psychotherapy note (draft or signed) opened in the same workspace. */
+export function psychotherapyNotePath(patientId: string, episodeId: string, noteId: string) {
+  return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}/note/${noteId}`;
+}

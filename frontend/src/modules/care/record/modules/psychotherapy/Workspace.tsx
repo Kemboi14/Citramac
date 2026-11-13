@@ -124,12 +124,16 @@ export function PsychotherapyWorkspace({
   noteId,
   onClose,
   inline = false,
+  backLabel = "Interventions",
 }: {
   patientId: string;
   episodeId?: string;
   noteId?: string;
   onClose: () => void;
   inline?: boolean;
+  /** Where the back crumb returns to. Defaults to the client record's
+   * Interventions card; the routed Individual Psychotherapy page names itself. */
+  backLabel?: string;
 }) {
   const { accessToken } = useAuth();
   const [config, setConfig] = useState<PsyConfig | null>(null);
@@ -180,6 +184,7 @@ export function PsychotherapyWorkspace({
           onClose={onClose}
           onReplace={setNote}
           inline={inline}
+          backLabel={backLabel}
         />
       ) : (
         <div className="m-auto flex max-w-md flex-col items-center gap-3 p-6 text-center">
@@ -480,6 +485,7 @@ function WorkspaceBody({
   onClose,
   onReplace,
   inline,
+  backLabel,
 }: {
   config: PsyConfig;
   initial: PsyNote;
@@ -490,6 +496,7 @@ function WorkspaceBody({
    * the app frame, so the workspace drops its own icon rail and shows its
    * views as tabs under one header, like the other clinical modules. */
   inline: boolean;
+  backLabel: string;
 }) {
   const { accessToken } = useAuth();
   const wide = useMedia(WIDE);
@@ -1004,9 +1011,14 @@ function WorkspaceBody({
       >
         <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
           <li>
-            <button type="button" onClick={onClose} className={crumb} title="Back to Interventions">
+            <button
+              type="button"
+              onClick={onClose}
+              className={crumb}
+              title={`Back to ${backLabel}`}
+            >
               <ArrowLeft className="h-[15px] w-[15px]" />
-              <span className="hidden sm:inline">Interventions</span>
+              <span className="hidden sm:inline">{backLabel}</span>
             </button>
           </li>
           {sep}
@@ -1452,7 +1464,7 @@ function WorkspaceBody({
           aria-label="Workspace"
           className="flex w-14 flex-shrink-0 flex-col items-center gap-1.5 border-r border-surface-border bg-surface-card py-3 sm:w-16"
         >
-          <RailButton label="Back to Interventions" onClick={onClose}>
+          <RailButton label={`Back to ${backLabel}`} onClick={onClose}>
             <ArrowLeft className="h-5 w-5" />
           </RailButton>
           <div

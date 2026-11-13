@@ -142,7 +142,13 @@ export function AppShell({
   // A focus route only changes the content area's layout. The sidebar keeps the
   // user's own setting: forcing it to the icon rail on entry hid the navigation
   // every time Group Psychotherapy was opened.
-  const focusLayout = Boolean(focusRoutes?.includes(location.pathname));
+  const focusLayout = Boolean(
+    focusRoutes?.some(
+      (route) =>
+        location.pathname === route ||
+        location.pathname.startsWith(`${route.replace(/\/+$/, "")}/`),
+    ),
+  );
   const pageTitle =
     resolvePageTitle(pageTitles, location.pathname) ??
     navGroups
