@@ -1209,7 +1209,9 @@ class PsychotherapyPlanScheduleView(APIView):
         requested_activity = request.data.get("care_plan_activity")
         if requested_activity:
             if plan is None:
-                raise ValidationError({"care_plan_activity": "The client has no current care plan."})
+                raise ValidationError(
+                    {"care_plan_activity": "The client has no current care plan."}
+                )
             activity = get_object_or_404(
                 CarePlanActivity.objects.select_for_update(),
                 pk=requested_activity,
@@ -1233,7 +1235,9 @@ class PsychotherapyPlanScheduleView(APIView):
 
         notes = request.data.get("notes") or ""
         if not isinstance(notes, str) or len(notes) > 500:
-            raise ValidationError({"notes": "Use a brief scheduling note of at most 500 characters."})
+            raise ValidationError(
+                {"notes": "Use a brief scheduling note of at most 500 characters."}
+            )
         duration = request.data.get("duration_minutes") or 30
         try:
             duration = int(duration)
@@ -1258,7 +1262,8 @@ class PsychotherapyPlanScheduleView(APIView):
             patient,
             {
                 "reason": "CARE_PLAN_REVIEW",
-                "appointment_type": request.data.get("appointment_type") or "Individual psychotherapy",
+                "appointment_type": request.data.get("appointment_type")
+                or "Individual psychotherapy",
                 "scheduled_for": scheduled_at.isoformat(),
                 "provider": str(request.user.pk),
                 "mode": request.data.get("mode") or "IN_PERSON",

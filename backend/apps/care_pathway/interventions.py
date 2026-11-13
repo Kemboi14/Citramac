@@ -354,6 +354,9 @@ def _order_row(item):
         "prn_max_per_24h": item.prn_max_per_24h,
         "indication": item.indication,
         "controlled_drug": item.controlled_drug,
+        "order_type": item.order_type,
+        "cosigned_by": _name(item.cosigned_by) if item.cosigned_by_id else "",
+        "cosigned_at": item.cosigned_at,
         "findings": item.check_findings,
         "allergy_override_reason": item.allergy_override_reason,
         "prescribed_by": _name(rx.prescribed_by),
@@ -397,10 +400,15 @@ def place_order(patient, user, data):
     from . import plan_extras, services
     from .models import LocalConcept
 
-    if not can_prescribe(user):
+    order_type = str(data.get("order_type") or "PRESCRIPTION").upper()
+    if order_type not in ("PRESCRIPTION", "PRN", "TELEPHONE"):
+        raise ValidationError({"order_type": "Choose prescription, PRN or telephone order."})
+    if order_type == "PRESCRIPTION" and not can_prescribe(user):
         raise PermissionDenied(
-            "Only a prescriber can place a medication order — request a psychiatrist review instead."
+            "Only a prescriber can place a prescription — request a psychiatrist review instead."
         )
+    if order_type in ("PRN", "TELEPHONE") and not is_clinical_staff(user):
+        raise PermissionDenied("Only clinical staff can place a PRN or telephone order.")
     from apps.accounts.practitioner_profile import require_current_licence
 
     require_current_licence(user)
@@ -469,10 +477,13 @@ def place_order(patient, user, data):
         dose=dose,
         route=route.display,
         frequency=frequency,
-        is_prn=is_prn,
+        is_prn=is_prn or order_type == "PRN",
         prn_max_per_24h=maximum,
         indication=indication,
         controlled_drug=bool(data.get("controlled_drug")),
+        order_type=order_type,
+        cosigned_by=user if order_type == "PRESCRIPTION" else None,
+        cosigned_at=timezone.now() if order_type == "PRESCRIPTION" else None,
         allergy_check_passed=not checks["blocking"],
         check_findings=[{"level": "HARD", "text": t} for t in checks["blocking"]]
         + [{"level": "WARN", "text": t} for t in checks["warnings"]],
@@ -487,6 +498,33 @@ def place_order(patient, user, data):
             subject_type="PrescriptionItem",
             subject_id=item.pk,
         )
+    if order_type in ("PRN", "TELEPHONE"):
+        kind = "TELEPHONE_ORDER" if order_type == "TELEPHONE" else "PRN_ORDER"
+        label = (
+            "Telephone order to countersign"
+            if order_type == "TELEPHONE"
+            else "PRN order to confirm"
+        )
+        plan_extras.request_cosign(
+            patient,
+            user,
+            kind,
+            f"{label}: {drug.generic_name} {dose} {route.display}",
+            subject_type="PrescriptionItem",
+            subject_id=item.pk,
+        )
+    return item
+
+
+def cosign_order(item, user):
+    """Countersign a telephone order (or any order) so it becomes administerable."""
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
+    if item.cosigned_at is None:
+        item.cosigned_by = user
+        item.cosigned_at = timezone.now()
+        item.save(update_fields=["cosigned_by", "cosigned_at", "updated_at"])
     return item
 
 
@@ -667,6 +705,14 @@ def administer_order(admission, item, user, outcome, *, slot="", **documentation
     from apps.ipd_ward.models import MedicationAdministration
 
     now = timezone.now()
+    if getattr(item, "order_type", "PRESCRIPTION") != "PRESCRIPTION" and not getattr(
+        item, "cosigned_at", None
+    ):
+        raise ValidationError(
+            {
+                "detail": "This order is not administerable until it is confirmed by the psychiatrist."
+            }
+        )
     if slot:
         when = parse_datetime(str(slot))
         if when is None:

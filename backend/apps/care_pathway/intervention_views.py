@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.clinical_encounter.models import PrescriptionItem
 from apps.ipd_ward.models import MedicationAdministration
 
 from . import intervention_catalogue
@@ -126,6 +127,15 @@ class PrescribingView(APIView):
                 status=status.HTTP_402_PAYMENT_REQUIRED,
             )
         return Response(iv.prescribing_state(patient, request.user), status=status.HTTP_201_CREATED)
+
+
+class PrescriptionCosignView(APIView):
+    @clinical_only()
+    def post(self, request, pk):
+        item = get_object_or_404(PrescriptionItem, pk=pk)
+        iv.cosign_order(item, request.user)
+        patient = item.prescription.encounter.patient
+        return Response(iv.prescribing_state(patient, request.user))
 
 
 class MarView(APIView):

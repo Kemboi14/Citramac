@@ -156,7 +156,13 @@ export function PsychotherapyWorkspace({
       .catch((e) => setError(errorText(e, "Couldn't load the session note settings.")));
     const load = noteId
       ? getPsyNote(accessToken, noteId)
-      : startPsyNote(accessToken, patientId, { episode: episodeId, session_type: sessionType, session_objective: sessionObjective, primary_goal: primaryGoal, secondary_goals: secondaryGoals });
+      : startPsyNote(accessToken, patientId, {
+          episode: episodeId,
+          session_type: sessionType,
+          session_objective: sessionObjective,
+          primary_goal: primaryGoal,
+          secondary_goals: secondaryGoals,
+        });
     load.then(setNote).catch((e) => setError(errorText(e, "Couldn't open the session note.")));
   }, [accessToken, patientId, episodeId, noteId]);
   useEffect(() => {

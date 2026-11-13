@@ -218,6 +218,11 @@ urlpatterns = [
         iview.PrescribingView.as_view(),
         name="care-prescribing",
     ),
+    path(
+        "care/prescriptions/<uuid:pk>/cosign/",
+        iview.PrescriptionCosignView.as_view(),
+        name="care-prescription-cosign",
+    ),
     path("care/clients/<uuid:patient_id>/mar/", iview.MarView.as_view(), name="care-mar"),
     path(
         "care/mar/<uuid:pk>/administer/",

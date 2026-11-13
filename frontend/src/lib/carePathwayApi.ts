@@ -705,9 +705,12 @@ export interface PsychotherapyPlanSchedule {
 }
 
 export function getPsychotherapyPlanSchedule(accessToken: string, patientId: string) {
-  return apiRequest<PsychotherapyPlanSchedule>(`/care/clients/${patientId}/psychotherapy/schedule/`, {
-    accessToken,
-  });
+  return apiRequest<PsychotherapyPlanSchedule>(
+    `/care/clients/${patientId}/psychotherapy/schedule/`,
+    {
+      accessToken,
+    },
+  );
 }
 
 export function schedulePsychotherapySession(
@@ -723,11 +726,14 @@ export function schedulePsychotherapySession(
     appointment_type?: string;
   },
 ) {
-  return apiRequest<PsychotherapyPlanSchedule>(`/care/clients/${patientId}/psychotherapy/schedule/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
+  return apiRequest<PsychotherapyPlanSchedule>(
+    `/care/clients/${patientId}/psychotherapy/schedule/`,
+    {
+      method: "POST",
+      body: payload,
+      accessToken,
+    },
+  );
 }
 /** Structured MSE shape shared with the intake (INT-16): domain codes plus notes.
  * Free-text MSE is stored as a single `free_text` narrative for the psychiatry module.
@@ -2525,6 +2531,9 @@ export interface MedicationOrder {
   allergy_override_reason: string;
   prescribed_by: string;
   prescribed_at: string;
+  order_type: "PRESCRIPTION" | "PRN" | "TELEPHONE";
+  cosigned_by: string;
+  cosigned_at: string | null;
 }
 export interface MarOrder extends MedicationOrder {
   /** Today's dose times; `entry` is null until the dose is charted. */
@@ -2589,6 +2598,7 @@ export interface OrderPayload {
   controlled_drug: boolean;
   acknowledged_warnings: boolean;
   override_reason?: string;
+  order_type?: "PRESCRIPTION" | "PRN" | "TELEPHONE";
 }
 export const getPrescribing = (t: string, id: string) =>
   apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, { accessToken: t });
@@ -2596,6 +2606,11 @@ export const placeOrder = (t: string, id: string, body: OrderPayload) =>
   apiRequest<PrescribingState>(`/care/clients/${id}/prescribing/`, {
     method: "POST",
     body,
+    accessToken: t,
+  });
+export const cosignPrescription = (t: string, id: string) =>
+  apiRequest<PrescribingState>(`/care/prescriptions/${id}/cosign/`, {
+    method: "POST",
     accessToken: t,
   });
 export const recordPrnEffect = (t: string, entryId: string, effect: string) =>

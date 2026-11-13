@@ -374,9 +374,7 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           <span>· {type}</span>
           <span>· {note.author}</span>
           {s.location && <span>· {s.location}</span>}
-          {s.session_objective && (
-            <span className="block">Objective: {s.session_objective}</span>
-          )}
+          {s.session_objective && <span className="block">Objective: {s.session_objective}</span>}
           {s.primary_goal && <span className="block">Primary goal: {s.primary_goal}</span>}
           {s.secondary_goals && <span className="block">Secondary goals: {s.secondary_goals}</span>}
         </div>
@@ -428,10 +426,10 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           {config.attendance_modes
             .filter((m) => !note.inpatient || m.code === "IN_PERSON")
             .map((m) => (
-            <option key={m.code} value={m.code}>
-              {m.label}
-            </option>
-          ))}
+              <option key={m.code} value={m.code}>
+                {m.label}
+              </option>
+            ))}
         </select>
       </label>
       <label className="text-[12px]">
@@ -995,8 +993,6 @@ function SignedFooter({
   );
 }
 
-
-
 export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
   const { accessToken } = useAuth();
   const [schedule, setSchedule] = useState<PsychotherapyPlanSchedule | null>(null);
@@ -1017,7 +1013,9 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
       .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load sessions."));
   };
 
-  useEffect(() => { load(); }, [accessToken, patientId]);
+  useEffect(() => {
+    load();
+  }, [accessToken, patientId]);
 
   const psychActivity =
     schedule?.plan?.activities.find(
@@ -1042,7 +1040,7 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
         client_request_id: requestId,
         appointment_type: appointmentTypeCode,
       });
-      // Override appointment_type is set server-side; we pass session type via notes? 
+      // Override appointment_type is set server-side; we pass session type via notes?
       setSchedule(updated);
       setScheduledFor("");
       setSessionNote("");
@@ -1055,7 +1053,8 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
   };
 
   // map session type to appointment_type code
-  const appointmentTypeCode = sessionType === "FAMILY" ? "Family psychotherapy" : "Individual psychotherapy";
+  const appointmentTypeCode =
+    sessionType === "FAMILY" ? "Family psychotherapy" : "Individual psychotherapy";
 
   return (
     <section className="mt-4 border-t border-surface-border pt-3">
@@ -1081,7 +1080,10 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
           <p className="text-xs font-semibold text-ink-700">Booked sessions</p>
           <ul className="mt-1 flex flex-col gap-1">
             {schedule.scheduled_sessions.map((s) => (
-              <li key={s.id} className="rounded border border-surface-border px-2 py-1 text-xs text-ink-700">
+              <li
+                key={s.id}
+                className="rounded border border-surface-border px-2 py-1 text-xs text-ink-700"
+              >
                 {s.activity_title} · {s.scheduled_for} · {s.duration_minutes} min · {s.mode}
                 {s.notes ? ` — ${s.notes}` : ""}
               </li>
@@ -1092,55 +1094,55 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
         <p className="mt-2 text-xs text-ink-500">No sessions booked yet.</p>
       )}
       <div className="mt-3 grid gap-2">
-          <p className="text-xs font-semibold text-ink-700">Add another session</p>
-          <select
-            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-            value={sessionType}
-            onChange={(e) => setSessionType(e.target.value as "INDIVIDUAL" | "FAMILY")}
-          >
-            <option value="INDIVIDUAL">Individual psychotherapy</option>
-            <option value="FAMILY">Family psychotherapy</option>
-          </select>
-          <input
-            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-            type="datetime-local"
-            value={scheduledFor}
-            onChange={(e) => setScheduledFor(e.target.value)}
-          />
-          <select
-            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
-          >
-            <option value="IN_PERSON">In person</option>
-            <option value="PHONE">Phone</option>
-            <option value="VIDEO">Video</option>
-          </select>
-          <input
-            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-            type="number"
-            min={5}
-            max={240}
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value) || 30)}
-          />
-          <AutoResizeTextarea
-            className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-            placeholder="Brief note (optional)"
-            value={sessionNote}
-            onChange={(e) => setSessionNote(e.target.value)}
-          />
-          <p className="text-[10px] text-ink-500">Appointment type: {appointmentTypeCode}</p>
-          <button
-            type="button"
-            disabled={scheduling || !scheduledFor}
-            onClick={() => void scheduleSession()}
-            className="rounded bg-brand-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-          >
-            {scheduling ? "Scheduling…" : "Schedule next psychotherapy session"}
-          </button>
-        </div>
-      
+        <p className="text-xs font-semibold text-ink-700">Add another session</p>
+        <select
+          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+          value={sessionType}
+          onChange={(e) => setSessionType(e.target.value as "INDIVIDUAL" | "FAMILY")}
+        >
+          <option value="INDIVIDUAL">Individual psychotherapy</option>
+          <option value="FAMILY">Family psychotherapy</option>
+        </select>
+        <input
+          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+          type="datetime-local"
+          value={scheduledFor}
+          onChange={(e) => setScheduledFor(e.target.value)}
+        />
+        <select
+          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+          value={mode}
+          onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
+        >
+          <option value="IN_PERSON">In person</option>
+          <option value="PHONE">Phone</option>
+          <option value="VIDEO">Video</option>
+        </select>
+        <input
+          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+          type="number"
+          min={5}
+          max={240}
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value) || 30)}
+        />
+        <AutoResizeTextarea
+          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
+          placeholder="Brief note (optional)"
+          value={sessionNote}
+          onChange={(e) => setSessionNote(e.target.value)}
+        />
+        <p className="text-[10px] text-ink-500">Appointment type: {appointmentTypeCode}</p>
+        <button
+          type="button"
+          disabled={scheduling || !scheduledFor}
+          onClick={() => void scheduleSession()}
+          className="rounded bg-brand-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+        >
+          {scheduling ? "Scheduling…" : "Schedule next psychotherapy session"}
+        </button>
+      </div>
+
       {scheduleMessage && <p className="mt-2 text-xs text-brand-green">{scheduleMessage}</p>}
       {error && <p className="mt-2 text-xs text-priority-red">{error}</p>}
     </section>

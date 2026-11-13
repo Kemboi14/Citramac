@@ -13,8 +13,7 @@ import {
   schedulePsychiatrySession,
   savePsychiatryAssessment,
   signPsychiatryAssessment,
-  listIntakeAssessments,
-  type IntakeAssessment,
+  // listIntakeAssessments, IntakeAssessment removed
   type IntakeSchema,
   type PlanCatalogueItem,
   type PlanWorkspace,
@@ -267,8 +266,7 @@ export function PsychiatryAssessmentPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
-  const [latestIntake, setLatestIntake] = useState<IntakeAssessment | null>(null);
-  const [intakeError, setIntakeError] = useState<string | null>(null);
+  // latestIntake no longer used in Psychiatry.
   const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
   const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
   const [catalogue, setCatalogue] = useState<PlanCatalogueItem[]>([]);
@@ -404,25 +402,7 @@ export function PsychiatryAssessmentPage() {
     };
   }, [accessToken]);
 
-  useEffect(() => {
-    if (!accessToken || !patientId) return;
-    let cancelled = false;
-    listIntakeAssessments(accessToken, patientId)
-      .then(({ results }) => {
-        if (!cancelled) {
-          setLatestIntake(results[0] ?? null);
-          setIntakeError(null);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setIntakeError(errorText(error, "Couldn't load the existing medication reconciliation."));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, patientId]);
+  // Intake medication reconciliation is no longer shown in Psychiatry.
 
   const locked = signedLocked(workspace);
   const canEdit = Boolean(workspace?.assessment?.can_edit ?? !locked);
@@ -558,7 +538,6 @@ export function PsychiatryAssessmentPage() {
   const assessment = workspace.assessment;
   const signed = assessment?.status === "SIGNED";
   const riskSpec = schema?.sections.find((section) => section.key === "risk");
-  const intakeMeds = latestIntake?.sections?.meds;
   const scheduledActivityIds = new Set(
     (planSchedule?.scheduled_sessions ?? []).map((session) => session.care_plan_activity_id),
   );
@@ -997,75 +976,6 @@ export function PsychiatryAssessmentPage() {
                 source="Psychiatry"
                 onListChanged={() => undefined}
               />
-            </section>
-            <section
-              aria-labelledby="psychiatry-medication-reconciliation"
-              className="border-t border-surface-border pt-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3
-                    id="psychiatry-medication-reconciliation"
-                    className="text-sm font-bold text-ink-900"
-                  >
-                    Intake medication reconciliation
-                  </h3>
-                  <p className="mt-1 text-xs text-ink-500">
-                    Reuses the existing Intake Section 5 record. Edit it in Intake; Psychiatry does
-                    not create a second reconciliation record.
-                  </p>
-                </div>
-                <Link
-                  to={clientRecordPath(patientId, "intake")}
-                  className={`${BTN_GHOST} ${BTN_SM}`}
-                >
-                  Open / update in Intake
-                </Link>
-              </div>
-              <ErrorNote>{intakeError}</ErrorNote>
-              {latestIntake ? (
-                <div
-                  data-testid="psychiatry-intake-medication-summary"
-                  className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2"
-                >
-                  {[
-                    ["none", "No current medication"],
-                    ["reconciled", "Medication reconciliation completed"],
-                    [
-                      "unavailable",
-                      "Prescription / medication list unavailable — follow-up required",
-                    ],
-                  ].map(([key, label]) => (
-                    <div
-                      key={key}
-                      className="rounded-md border border-surface-border px-3 py-2 text-[13px]"
-                    >
-                      <span className="font-medium">{label}</span>
-                      <span className="ml-2 text-ink-500">
-                        {intakeMeds?.[key] === true ? "Yes" : "Not selected"}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="rounded-md border border-surface-border px-3 py-2 text-[13px] sm:col-span-2">
-                    <span className="font-medium">
-                      Reasons for non-adherence or treatment discontinuation
-                    </span>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-700">
-                      {typeof intakeMeds?.non_adherence === "string" &&
-                      intakeMeds.non_adherence.trim()
-                        ? intakeMeds.non_adherence
-                        : "Not recorded"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-ink-500 sm:col-span-2">
-                    Intake {latestIntake.status.toLowerCase()} · version {latestIntake.version}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-3 text-[13px] text-ink-500">
-                  No Intake Section 5 answers are available yet.
-                </p>
-              )}
             </section>
           </div>
         </Card>

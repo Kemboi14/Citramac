@@ -423,35 +423,6 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     );
   });
 
-  it("uses the shared intake medication history in psychiatry", async () => {
-    render(
-      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
-        <Routes>
-          <Route
-            path="/care/clients/:patientId/psychiatry"
-            element={<PsychiatryAssessmentPage />}
-          />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(await screen.findByRole("tab", { name: "Medication" }));
-
-    expect(await screen.findByText("Medication orders & History")).toBeInTheDocument();
-    expect(await screen.findByTestId("psychiatry-medication-orders")).toBeInTheDocument();
-    expect(await screen.findByTestId("psychiatry-medication-history")).toHaveTextContent(
-      "Psychiatry medication history",
-    );
-    expect(await screen.findByTestId("psychiatry-intake-medication-summary")).toHaveTextContent(
-      "Medication reconciliation completed",
-    );
-    expect(screen.getByText("Stopped due to nausea")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open / update in Intake" })).toHaveAttribute(
-      "href",
-      "/clinical/clients/patient-77/intake",
-    );
-  });
-
   it("confirms a care plan with a note and schedules the next psychiatric review session", async () => {
     apiMocks.decidePlan.mockResolvedValue({
       actions: [

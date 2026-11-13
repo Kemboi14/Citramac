@@ -95,15 +95,39 @@ export function PsychotherapyRecord({
           </label>
           <label className={FIELD_LABEL}>
             Session objective
-            <AutoResizeTextarea className={`${INPUT} min-h-[64px]`} rows={2} value={sessionObjective} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSessionObjective(e.target.value)} placeholder="e.g. To process a specific traumatic memory" />
+            <AutoResizeTextarea
+              className={`${INPUT} min-h-[64px]`}
+              rows={2}
+              value={sessionObjective}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setSessionObjective(e.target.value)
+              }
+              placeholder="e.g. To process a specific traumatic memory"
+            />
           </label>
           <label className={FIELD_LABEL}>
             Primary goal
-            <AutoResizeTextarea className={`${INPUT} min-h-[64px]`} rows={2} value={primaryGoal} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrimaryGoal(e.target.value)} placeholder="e.g. Help the client process trauma-related emotions" />
+            <AutoResizeTextarea
+              className={`${INPUT} min-h-[64px]`}
+              rows={2}
+              value={primaryGoal}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setPrimaryGoal(e.target.value)
+              }
+              placeholder="e.g. Help the client process trauma-related emotions"
+            />
           </label>
           <label className={FIELD_LABEL}>
             Secondary goals
-            <AutoResizeTextarea className={`${INPUT} min-h-[64px]`} rows={2} value={secondaryGoals} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSecondaryGoals(e.target.value)} placeholder="e.g. Enhance self-awareness of trauma triggers" />
+            <AutoResizeTextarea
+              className={`${INPUT} min-h-[64px]`}
+              rows={2}
+              value={secondaryGoals}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setSecondaryGoals(e.target.value)
+              }
+              placeholder="e.g. Enhance self-awareness of trauma triggers"
+            />
           </label>
           <div className="flex gap-2">
             <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => setLaunched(true)}>

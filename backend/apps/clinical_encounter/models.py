@@ -238,6 +238,18 @@ class PrescriptionItem(TenantScopedModel):
     is_prn = models.BooleanField(default=False)
     prn_max_per_24h = models.PositiveSmallIntegerField(null=True, blank=True)
     indication = models.CharField(max_length=255, blank=True)
+    # Order type: psychiatrist prescription, nurse PRN under protocol, or nurse
+    # telephone order (pending co-signature until the prescriber countersigns).
+    ORDER_TYPE_CHOICES = [
+        ("PRESCRIPTION", "Prescription"),
+        ("PRN", "PRN (as needed)"),
+        ("TELEPHONE", "Telephone order"),
+    ]
+    order_type = models.CharField(max_length=16, choices=ORDER_TYPE_CHOICES, default="PRESCRIPTION")
+    cosigned_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    cosigned_at = models.DateTimeField(null=True, blank=True)
     # Set by the prescriber at order time so the MAR asks for a witness.
     # VERIFY: derive from the national controlled-drug schedule once it is mirrored.
     controlled_drug = models.BooleanField(default=False)

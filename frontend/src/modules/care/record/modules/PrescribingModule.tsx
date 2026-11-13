@@ -5,6 +5,7 @@ import {
   checkPrescribing,
   getPrescribing,
   placeOrder,
+  cosignPrescription,
   type PrescribingCheck,
   type PrescribingState,
 } from "../../../../lib/carePathwayApi";
@@ -33,6 +34,7 @@ interface OrderForm {
   max: string;
   indication: string;
   controlled: boolean;
+  order_type: "PRESCRIPTION" | "PRN" | "TELEPHONE";
 }
 const EMPTY: OrderForm = {
   dose: "",
@@ -42,6 +44,7 @@ const EMPTY: OrderForm = {
   max: "",
   indication: "",
   controlled: false,
+  order_type: "PRESCRIPTION",
 };
 
 /** Structured medication orders. Checks run before the order exists: a recorded
@@ -112,7 +115,7 @@ export function PrescribingModule({
     !drug && "medicine",
     !form.dose.trim() && "dose",
     !form.route && "route",
-    !form.is_prn && !form.frequency && "frequency (or mark PRN)",
+    form.order_type !== "TELEPHONE" && !form.is_prn && !form.frequency && "frequency (or mark PRN)",
     form.is_prn && !(Number(form.max) > 0) && "maximum PRN doses in 24 h",
     form.is_prn && !form.indication.trim() && "PRN indication",
   ].filter(Boolean);
@@ -146,6 +149,7 @@ export function PrescribingModule({
           controlled_drug: form.controlled,
           acknowledged_warnings: ack,
           override_reason: override ?? undefined,
+          order_type: form.order_type,
         }),
       );
       setDrug(null);
@@ -155,6 +159,15 @@ export function PrescribingModule({
       resetChecks();
     } catch (e) {
       setError(errorText(e, "Couldn't place the order."));
+    }
+  }
+
+  async function cosign(id: string) {
+    if (!accessToken) return;
+    try {
+      setState(await cosignPrescription(accessToken, id));
+    } catch (e) {
+      setError(errorText(e, "Couldn't confirm the order."));
     }
   }
 
@@ -181,13 +194,7 @@ export function PrescribingModule({
           <Tag tone={state.allergy_status === "NONE" ? "brand" : "risk"}>{state.allergy_text}</Tag>
         </div>
       )}
-      {!state.locked && !state.can_prescribe && (
-        <Callout>
-          Only a prescriber can place medication orders. Request a psychiatric review from
-          Psychiatric Nursing.
-        </Callout>
-      )}
-      {!state.locked && state.can_prescribe && (
+      {!state.locked && (
         <div className="flex flex-col gap-2 rounded-lg border border-surface-border p-3">
           <div className={FIELD_LABEL}>New order — checks run before the order is placed</div>
           {drug ? (
@@ -279,6 +286,21 @@ export function PrescribingModule({
                 ))}
               </select>
             )}
+            <label className="flex flex-col gap-1 text-[13px]">
+              <span>Order type</span>
+              <select
+                className={INPUT}
+                aria-label="Order type"
+                value={form.order_type}
+                onChange={(e) =>
+                  edit({ order_type: e.target.value as "PRESCRIPTION" | "PRN" | "TELEPHONE" })
+                }
+              >
+                <option value="PRESCRIPTION">Prescription (psychiatrist)</option>
+                <option value="PRN">PRN (nurse, under protocol)</option>
+                <option value="TELEPHONE">Telephone order (nurse, pending co-sign)</option>
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-[13px]">
               <input
                 type="checkbox"
@@ -415,6 +437,7 @@ export function PrescribingModule({
             <thead>
               <tr>
                 <th className={TH}>Order</th>
+                <th className={TH}>Type</th>
                 <th className={TH}>Checks</th>
                 <th className={TH}>By</th>
               </tr>
@@ -431,6 +454,21 @@ export function PrescribingModule({
                       <>
                         {" "}
                         <Tag>CD</Tag>
+                      </>
+                    )}
+                  </td>
+                  <td className={TD}>
+                    {o.order_type}
+                    {!o.cosigned_at && o.order_type !== "PRESCRIPTION" && (
+                      <>
+                        <Tag tone="risk">pending confirmation</Tag>
+                        <button
+                          type="button"
+                          className={`${BTN_GHOST} ${BTN_SM} ml-2`}
+                          onClick={() => void cosign(o.id)}
+                        >
+                          Confirm
+                        </button>
                       </>
                     )}
                   </td>
