@@ -321,6 +321,15 @@ def start_or_resume(patient, user, data):
         patient=patient, author=user, therapy_episode=ep, status="DRAFT"
     ).first()
     if existing:
+        # Resuming from the session-details screen: what the clinician just
+        # entered is kept (validated and audited as any edit); blanks change nothing.
+        details = {
+            k: data[k]
+            for k in ("session_type", "session_objective", "primary_goal", "secondary_goals")
+            if data.get(k)
+        }
+        if details:
+            _set_session_info(existing, user, details)
         return existing, False
     session_type = data.get("session_type") or "INDIVIDUAL"
     if session_type not in SESSION_TYPES:

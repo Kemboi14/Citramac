@@ -73,6 +73,24 @@ class PsyNoteTestCase(RecordsTestCase):
 
 
 class DraftAndResumeTests(PsyNoteTestCase):
+    def test_resuming_a_draft_keeps_the_session_details_just_entered(self):
+        first = self.start()
+        self.assertEqual(first.status_code, 201)
+        resumed = self.client.post(
+            reverse("care-client-psy-notes", args=[self.pid]),
+            {
+                "episode": self.eid,
+                "session_objective": "Process the accident memory",
+                "primary_goal": "",
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual((resumed.status_code, resumed.data["id"]), (200, first.data["id"]))
+        self.assertEqual(
+            resumed.data["session"]["session_objective"], "Process the accident memory"
+        )
+
     def test_draft_resumes_server_side_and_stays_out_of_session_lists_until_signed(self):
         first = self.start()
         self.assertEqual(first.status_code, 201)
