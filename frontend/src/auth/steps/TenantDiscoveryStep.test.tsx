@@ -64,4 +64,26 @@ describe("TenantDiscoveryStep", () => {
       screen.queryByText("We couldn't continue with the information provided."),
     ).not.toBeInTheDocument();
   });
+
+  it("shows the platform logo configured by Super Admin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify(
+            url.includes("/platform/branding/")
+              ? { logo: "https://example.test/platform-logo.png" }
+              : { tenant: null },
+          ),
+      })),
+    );
+    renderStep();
+
+    expect(await screen.findByRole("img", { name: "CITRAMAC logo" })).toHaveAttribute(
+      "src",
+      "https://example.test/platform-logo.png",
+    );
+  });
 });

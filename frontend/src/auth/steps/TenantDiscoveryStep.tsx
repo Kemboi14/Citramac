@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { tenantDiscovery, type TenantBranding } from "../../lib/authApi";
 import { ApiError } from "../../lib/apiClient";
+import { getPlatformBranding } from "../../lib/brandingApi";
 import { AuthButton, AuthField, SecureFooter } from "./AuthCard";
 import { AlertTriangleIcon, ArrowRightIcon, MailIcon } from "./icons";
 
@@ -41,6 +42,21 @@ export function TenantDiscoveryStep({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [platformLogo, setPlatformLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlatformBranding()
+      .then(({ logo }) => {
+        if (!cancelled) setPlatformLogo(logo);
+      })
+      .catch(() => {
+        // The logo is optional; email discovery must remain available if branding can't load.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -68,12 +84,19 @@ export function TenantDiscoveryStep({
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8">
       <div className="w-full max-w-md overflow-hidden rounded-lg border border-surface-border bg-surface-card px-11 pb-7 pt-11 shadow-md">
+        {platformLogo && (
+          <img
+            src={platformLogo}
+            alt="CITRAMAC logo"
+            className="mx-auto h-32 w-[320px] max-w-full object-contain"
+          />
+        )}
         <h1 className="text-center font-display text-[25px] font-semibold leading-tight text-ink-900">
           {notFound ? "We couldn't continue with the information provided." : "Welcome to CITRAMAC"}
         </h1>
         {!notFound && (
           <p className="mx-auto mt-3 max-w-[310px] text-center text-sm leading-relaxed text-ink-500">
-            To continue, please enter your work email address.
+            To continue, please enter your organization email address.
           </p>
         )}
 
