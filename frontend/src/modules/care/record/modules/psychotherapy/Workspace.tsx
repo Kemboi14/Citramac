@@ -38,6 +38,7 @@ import {
   getPsyNote,
   listPsyNotes,
   savePsyNote,
+  savePsySelfAssessment,
   signPsyNote,
   startPsyNote,
   type ChangeDecision,
@@ -46,6 +47,7 @@ import {
   type PsyNote,
   type PsyNoteSummary,
   type SafetyAnswer,
+  type SelfAssessmentPayload,
 } from "../../../../../lib/psychotherapyNoteApi";
 import { BTN_GHOST, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { ErrorNote, Tag } from "../../../shared/ui";
@@ -70,6 +72,7 @@ import {
 import { NotePanel } from "./NotePanel";
 import { ApproachesDialog, AuditTrail, ClientFile, PastNote, SessionHistory } from "./RailViews";
 import { SafetyModal } from "./SafetyModal";
+import { SelfAssessmentPage, SelfAssessmentPrompt } from "./SelfAssessment";
 import { safetyFromSpeech, speak, stopSpeaking, synthesisAvailable, useDictation } from "./speech";
 import { ExampleThread, Thread, type Ack } from "./Thread";
 
@@ -81,7 +84,7 @@ import { ExampleThread, Thread, type Ack } from "./Thread";
 // storage (CLAUDE.md §5). Only UI preferences (panel width, answer mode,
 // language, read-aloud) are remembered locally.
 
-type View = "chat" | "history" | "past" | "client" | "audit";
+type View = "chat" | "history" | "past" | "client" | "audit" | "self-assessment";
 type PanelState = "open" | "expanded" | "min" | "closed";
 
 const WIDE = "(min-width: 1100px)";
@@ -586,6 +589,7 @@ function WorkspaceBody({
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [assessmentPrompt, setAssessmentPrompt] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [panel, setPanel] = useState<PanelState>("open");
   const [notesOpen, setNotesOpen] = useState(false);
@@ -662,7 +666,10 @@ function WorkspaceBody({
   const organise = () => run((t) => generatePsyNote(t, note.id), "Couldn't organise the note.");
   const sign = async () => {
     const ok = await run((t) => signPsyNote(t, note.id), "Couldn't sign the note.");
-    if (ok) flash("Note signed");
+    if (ok) {
+      flash("Note signed");
+      setAssessmentPrompt(true);
+    }
     return ok;
   };
   const amend = async (body: { section: string; text: string; reason: string }) => {
@@ -675,6 +682,21 @@ function WorkspaceBody({
     } catch (e) {
       setError(errorText(e, "Couldn't add the amendment."));
       return false;
+    }
+  };
+
+  const saveSelfAssessment = async (payload: SelfAssessmentPayload) => {
+    if (!accessToken) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      setNote(await savePsySelfAssessment(accessToken, note.id, payload));
+      return true;
+    } catch (e) {
+      setError(errorText(e, "Couldn't save the self-assessment."));
+      return false;
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -1155,6 +1177,16 @@ function WorkspaceBody({
               </li>
             </>
           )}
+          {view === "self-assessment" && (
+            <>
+              {sep}
+              <li>
+                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                  Self-assessment
+                </span>
+              </li>
+            </>
+          )}
         </ol>
       </nav>
       {view === "chat" && !example && (
@@ -1410,6 +1442,15 @@ function WorkspaceBody({
     centre = <ClientFile note={note} notes={notes} onBack={backToSession} />;
   } else if (view === "audit") {
     centre = <AuditTrail note={note} onBack={backToSession} />;
+  } else if (view === "self-assessment") {
+    centre = (
+      <SelfAssessmentPage
+        config={config}
+        note={note}
+        save={saveSelfAssessment}
+        onClose={() => setView("chat")}
+      />
+    );
   }
 
   const thread = example ? (
@@ -1508,6 +1549,13 @@ function WorkspaceBody({
       </button>
     </>
   );
+  // The reflection lives in the centre pane, so leave the note full width and
+  // close the mobile slide-over before opening it.
+  const openSelfAssessment = () => {
+    setView("self-assessment");
+    if (wide) setPanel((p) => (p === "expanded" ? "open" : p));
+    else setNotesOpen(false);
+  };
   const notePanel = (
     <NotePanel
       config={config}
@@ -1520,6 +1568,7 @@ function WorkspaceBody({
       example={example}
       busy={busy}
       onEditAnswer={editAnswer}
+      onSelfAssessment={openSelfAssessment}
       patientId={patientId}
     />
   );
@@ -1672,6 +1721,16 @@ function WorkspaceBody({
 
       {safetyOpen && (
         <SafetyModal config={config} note={note} onClose={closeSafety} onSave={save} />
+      )}
+      {assessmentPrompt && (
+        <SelfAssessmentPrompt
+          intro={config.self_assessment.intro}
+          onStart={() => {
+            setAssessmentPrompt(false);
+            openSelfAssessment();
+          }}
+          onSkip={() => setAssessmentPrompt(false)}
+        />
       )}
       {libraryOpen && (
         <ApproachesDialog

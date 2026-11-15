@@ -78,6 +78,117 @@ NA_ACK_TEXT = "I have reviewed that safety was not assessed and will follow up a
 ATTESTATION_TEXT = "I have reviewed this note and confirm it accurately reflects the session."
 DETECTION_NOTE = "This is a language screen only. It does not decide risk level."
 
+# ── therapist self-assessment (after the note is signed) ──
+# A reflective record about the clinician's own practice, not the client's
+# clinical data. It is kept with the session (mhp_program.PsychotherapySession.extra)
+# and has no FHIR resource — like clinical supervision, it is workforce
+# development, not patient data (CLAUDE.md §5). Visible to its author only;
+# the supervisor sees it only through the supervision request it raises.
+SELF_ASSESSMENT_VERSION = 1
+SELF_ASSESSMENT_SCALES = {
+    "YES_NO": (("YES", "Yes"), ("NO", "No")),
+    "EXTENT": (("YES", "Yes"), ("SOMEWHAT", "Somewhat"), ("NO", "No")),
+}
+SELF_ASSESSMENT_QUESTIONS = (
+    {
+        "key": "readiness",
+        "label": "Session readiness",
+        "prompt": "Was I fully present and grounded at the start?",
+        "kind": "CHOICE",
+        "scale": "EXTENT",
+    },
+    {
+        "key": "readiness_impact",
+        "label": "What impacted my readiness",
+        "prompt": "What impacted your readiness?",
+        "kind": "TEXT",
+        "limit": 1000,
+        "rows": 2,
+        "show_when": {"key": "readiness", "in": ("SOMEWHAT", "NO")},
+    },
+    {
+        "key": "countertransference",
+        "label": "Emotional regulation",
+        "prompt": "Did I notice countertransference or emotional activation?",
+        "kind": "CHOICE",
+        "scale": "YES_NO",
+    },
+    {
+        "key": "countertransference_detail",
+        "label": "Countertransference noted",
+        "prompt": "Briefly describe what you noticed.",
+        "kind": "TEXT",
+        "limit": 1000,
+        "rows": 2,
+        "show_when": {"key": "countertransference", "in": ("YES",)},
+    },
+    {
+        "key": "pacing",
+        "label": "Session flow",
+        "prompt": "Did I pace the session appropriately for the client’s window of tolerance?",
+        "kind": "CHOICE",
+        "scale": "EXTENT",
+    },
+    {
+        "key": "client_regulated",
+        "label": "Client response",
+        "prompt": "Was the client regulated and emotionally safe at the end?",
+        "kind": "CHOICE",
+        "scale": "EXTENT",
+    },
+    {
+        "key": "grounding_used",
+        "label": "Grounding or safety plan",
+        "prompt": "Was a grounding or safety plan used?",
+        "kind": "CHOICE",
+        "scale": "YES_NO",
+        "show_when": {"key": "client_regulated", "in": ("NO",)},
+    },
+    {
+        "key": "unsure",
+        "label": "Clinical decisions",
+        "prompt": "Were there moments I felt unsure or struggled to decide?",
+        "kind": "CHOICE",
+        "scale": "YES_NO",
+    },
+    {
+        "key": "unsure_detail",
+        "label": "Moments of uncertainty",
+        "prompt": "Note the moment briefly for supervision.",
+        "kind": "TEXT",
+        "limit": 1000,
+        "rows": 2,
+        "show_when": {"key": "unsure", "in": ("YES",)},
+    },
+    {
+        "key": "confident_skill",
+        "label": "Skill reflection",
+        "prompt": "What skill or technique did I feel most confident using?",
+        "kind": "TEXT",
+        "limit": 1000,
+        "rows": 2,
+        "required": False,
+    },
+    {
+        "key": "struggle_skill",
+        "label": "Area to strengthen",
+        "prompt": "What area did I struggle with or want to strengthen?",
+        "kind": "TEXT",
+        "limit": 1000,
+        "rows": 2,
+        "required": False,
+    },
+)
+SELF_ASSESSMENT_INTRO = (
+    "A short reflection on your own practice in this session. It is kept with the signed "
+    "session note and is shown only to you. Use it to decide whether to ask for supervision."
+)
+SELF_ASSESSMENT_SUPERVISION = {
+    "prompt": "Do you need supervision for this case or session?",
+    "focus_label": "What would you like your supervisor to focus on?",
+    "focus_placeholder": "e.g. I was unsure how to respond when the client disclosed …",
+}
+
 
 def _by(user):
     return services.user_display(user)
@@ -272,6 +383,26 @@ def config(user):
         ],
         "not_assessed_ack_text": NA_ACK_TEXT,
         "attestation_text": ATTESTATION_TEXT,
+        "self_assessment": {
+            "intro": SELF_ASSESSMENT_INTRO,
+            "questions": [
+                {
+                    "key": q["key"],
+                    "label": q["label"],
+                    "prompt": q["prompt"],
+                    "kind": q["kind"],
+                    "required": q.get("required", True),
+                    "rows": q.get("rows", 3),
+                    "options": [
+                        {"code": code, "display": display}
+                        for code, display in SELF_ASSESSMENT_SCALES.get(q.get("scale"), ())
+                    ],
+                    "show_when": q.get("show_when"),
+                }
+                for q in SELF_ASSESSMENT_QUESTIONS
+            ],
+            "supervision": SELF_ASSESSMENT_SUPERVISION,
+        },
         # X-12: browser dictation is off unless the organisation has approved it —
         # most browsers send the audio to the vendor's speech service.
         # Two keys per organisation (Super Admin allows, Org Admin turns on); AI
@@ -1730,6 +1861,154 @@ def amend(note, user, data):
     )
 
 
+# ── therapist self-assessment (opens once the note is signed) ──
+
+
+def _question_shown(question, answers):
+    condition = question.get("show_when")
+    return not condition or answers.get(condition["key"]) in condition["in"]
+
+
+def _clean_self_assessment(data):
+    """The served questionnaire decides what is asked; the server decides what
+    is accepted. Questions hidden by the clinician's own answers are dropped."""
+    answers = data.get("answers")
+    if not isinstance(answers, dict):
+        raise ValidationError({"answers": "Answer the reflection questions."})
+    cleaned = {}
+    for question in SELF_ASSESSMENT_QUESTIONS:
+        if not _question_shown(question, answers):
+            continue
+        value = answers.get(question["key"])
+        if question["kind"] == "CHOICE":
+            code = str(value or "").upper()
+            allowed = {code for code, _ in SELF_ASSESSMENT_SCALES[question["scale"]]}
+            if code not in allowed:
+                raise ValidationError({question["key"]: "Choose one of the options."})
+            cleaned[question["key"]] = code
+        else:
+            text = str(value or "").strip()
+            if question.get("required", True) and not text:
+                raise ValidationError({question["key"]: "Answer this question."})
+            cleaned[question["key"]] = text[: question.get("limit", 1000)]
+    return cleaned
+
+
+def _self_assessment_lines(answers):
+    lines = []
+    for question in SELF_ASSESSMENT_QUESTIONS:
+        if question["key"] not in answers:
+            continue
+        value = answers[question["key"]]
+        if question["kind"] == "TEXT" and not value:
+            continue
+        if question["kind"] == "CHOICE":
+            value = dict(SELF_ASSESSMENT_SCALES[question["scale"]]).get(value, value)
+        lines.append(f"{question['label']}: {value}")
+    return lines
+
+
+def _self_assessment_note(note, answers, focus):
+    """The supervisor's readable copy of the reflection — never a JSON blob."""
+    when = facility_time.local_format(note.session.session_date, "%d/%m/%Y")
+    kind = note.session.get_session_type_display()
+    lines = [f"Reflection recorded with the signed {kind.lower()} note for {when}.", ""]
+    lines.extend(_self_assessment_lines(answers))
+    if focus:
+        lines.extend(["", f"Supervision focus: {focus}"])
+    return "\n".join(lines)[:6000]
+
+
+@transaction.atomic
+def save_self_assessment(note, user, data):
+    """The therapist's reflection on a signed session, and — when asked — the
+    supervision request it raises. One request per note: a second save updates
+    the reflection but never duplicates the request."""
+    from apps.mhp_program.models import SupervisionRequest
+
+    note = PsychotherapyNote.objects.select_for_update().get(pk=note.pk)
+    _require_author(user, note)
+    if note.status != "SIGNED":
+        raise ValidationError(
+            {"detail": "The therapist self-assessment opens once the note is signed."}
+        )
+    answers = _clean_self_assessment(data)
+
+    requested = data.get("request_supervision") is True
+    focus = str(data.get("supervision_focus") or "").strip()[:1000]
+    decision = str(data.get("supervision") or "").upper()
+    if decision and decision not in ("YES", "NO"):
+        raise ValidationError({"supervision": "Choose Yes or No."})
+    if requested and decision != "YES":
+        raise ValidationError({"supervision": "Answer Yes before requesting supervision."})
+    if requested and not focus:
+        raise ValidationError({"supervision_focus": "Say what you would like to focus on."})
+
+    session = note.session
+    extra = dict(session.extra or {})
+    previous = extra.get("therapist_self_assessment")
+    previous = previous if isinstance(previous, dict) else {}
+    supervision = dict(previous.get("supervision") or {})
+    open_request = (
+        SupervisionRequest.objects.filter(pk=supervision.get("request_id"), status="OPEN").first()
+        if supervision.get("request_id")
+        else None
+    )
+    if open_request is not None and decision != "YES":
+        raise ValidationError(
+            {"supervision": "A supervision request is already open for this session."}
+        )
+    now = _now_iso()
+
+    record = {
+        "version": SELF_ASSESSMENT_VERSION,
+        "completed_at": previous.get("completed_at") or now,
+        "updated_at": now,
+        "by": _by(user),
+        "answers": answers,
+        "supervision": {
+            "decision": decision,
+            "focus": focus,
+            "request_id": supervision.get("request_id", ""),
+            "requested_at": supervision.get("requested_at"),
+        },
+    }
+
+    raised = False
+    if requested:
+        row = open_request
+        if row is None:
+            when = facility_time.local_format(session.session_date, "%d/%m/%Y")
+            row = SupervisionRequest.objects.create(
+                organization_id=note.organization_id,
+                patient=note.patient,
+                requested_by=user,
+                topic=f"Therapist self-assessment — session {when}",
+                notes=_self_assessment_note(note, answers, focus),
+            )
+            raised = True
+        else:
+            readable = _self_assessment_note(note, answers, focus)
+            if row.notes != readable:
+                row.notes = readable
+                row.save(update_fields=["notes"])
+        record["supervision"]["request_id"] = str(row.pk)
+        record["supervision"]["requested_at"] = record["supervision"]["requested_at"] or now
+
+    extra["therapist_self_assessment"] = record
+    session.extra = extra
+    session.save(update_fields=["extra", "updated_at"])
+    _audit(
+        note,
+        user,
+        "SELF_ASSESSMENT",
+        supervision=decision or "NOT_ANSWERED",
+        request_raised=raised,
+    )
+    note.save(update_fields=["history", "updated_at"])
+    return note
+
+
 # ── payloads ──
 
 
@@ -1815,6 +2094,10 @@ def detail(note, user):
             "session_objective": extra.get("session_objective", ""),
             "primary_goal": extra.get("primary_goal", ""),
             "secondary_goals": extra.get("secondary_goals", ""),
+            # The therapist's own reflection — its author only.
+            "therapist_self_assessment": (
+                extra.get("therapist_self_assessment") if note.author_id == user.pk else None
+            ),
             "measure": extra.get("measure"),
             "process_notes": extra.get("process_notes", "") if "process_notes" in extra else None,
         },

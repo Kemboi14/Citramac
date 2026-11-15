@@ -471,6 +471,11 @@ urlpatterns = [
         name="care-psy-note-amend",
     ),
     path(
+        "care/psychotherapy-notes/<uuid:pk>/self-assessment/",
+        psyview.PsyNoteSelfAssessmentView.as_view(),
+        name="care-psy-note-self-assessment",
+    ),
+    path(
         "care/psychotherapy-notes/<uuid:pk>/fhir/",
         psyview.PsyNoteFhirView.as_view(),
         name="care-psy-note-fhir",

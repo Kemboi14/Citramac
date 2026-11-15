@@ -103,6 +103,15 @@ class PsyNoteAmendView(APIView):
         return Response(psy.detail(note, request.user), status=status.HTTP_201_CREATED)
 
 
+class PsyNoteSelfAssessmentView(APIView):
+    """POST the therapist's self-assessment of a signed note, and optionally the
+    supervision request it raises (psychotherapy.save_self_assessment)."""
+
+    def post(self, request, pk):
+        note = psy.save_self_assessment(_note(pk), request.user, request.data)
+        return Response(psy.detail(note, request.user))
+
+
 class PsyNoteFhirView(APIView):
     """GET care/psychotherapy-notes/<id>/fhir/ — the signed note as a FHIR R4
     document Bundle (psychotherapy_fhir.py). Same access as reading the note;

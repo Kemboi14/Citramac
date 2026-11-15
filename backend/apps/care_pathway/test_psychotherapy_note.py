@@ -570,3 +570,128 @@ class SignRecordsDeliveryTests(PsyNoteTestCase):
                 ).count(),
                 1,
             )
+
+
+class TherapistSelfAssessmentTests(PsyNoteTestCase):
+    """The therapist's reflection after signing, and the supervision request it
+    can raise. Workforce data, kept with the session — no FHIR resource."""
+
+    def signed(self):
+        nid = self.start().data["id"]
+        self.ready(nid, safety_answer="NO", **self.answers(q1="Talked about a difficult week."))
+        self.assertEqual(self.act("care-psy-note-sign", nid).data["status"], "SIGNED")
+        return nid
+
+    def reflection(self, **overrides):
+        body = {
+            "readiness": "YES",
+            "countertransference": "NO",
+            "pacing": "YES",
+            "client_regulated": "YES",
+            "unsure": "NO",
+            "confident_skill": "Reflective listening",
+            "struggle_skill": "",
+        }
+        body.update(overrides)
+        return body
+
+    def assess(self, nid, body=None, auth=None):
+        payload = {"answers": body or self.reflection(), "supervision": "NO"}
+        return self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            payload,
+            format="json",
+            **(auth or self.auth),
+        )
+
+    def test_opens_only_after_the_note_is_signed_and_only_for_its_author(self):
+        nid = self.start().data["id"]
+        self.ready(nid, safety_answer="NO", **self.answers(q1="Talked about sleep."))
+        self.assertEqual(self.assess(nid).status_code, 400)
+        self.act("care-psy-note-sign", nid)
+        self.assertEqual(self.assess(nid, auth=self.psych_auth).status_code, 403)
+
+    def test_hidden_questions_are_dropped_and_every_shown_one_is_required(self):
+        nid = self.signed()
+        self.assertEqual(self.assess(nid, {"readiness": "YES"}).status_code, 400)
+        self.assertEqual(self.assess(nid, self.reflection(readiness="NO")).status_code, 400)
+        self.assertEqual(self.assess(nid, self.reflection(client_regulated="NO")).status_code, 400)
+        hidden = self.assess(nid, self.reflection(countertransference_detail="dropped"))
+        self.assertEqual(hidden.status_code, 200)
+        answers = hidden.data["session"]["therapist_self_assessment"]["answers"]
+        self.assertNotIn("countertransference_detail", answers)
+        self.assertNotIn("grounding_used", answers)  # only shown when the client was not
+        shown = self.assess(
+            nid,
+            self.reflection(client_regulated="NO", grounding_used="YES"),
+        )
+        self.assertEqual(
+            shown.data["session"]["therapist_self_assessment"]["answers"]["grounding_used"], "YES"
+        )
+
+    def test_the_reflection_is_returned_to_its_author_only(self):
+        nid = self.signed()
+        saved = self.assess(
+            nid, self.reflection(readiness="SOMEWHAT", readiness_impact="Poor sleep")
+        )
+        self.assertEqual(saved.status_code, 200)
+        record = saved.data["session"]["therapist_self_assessment"]
+        self.assertTrue(record["completed_at"])
+        self.assertEqual(record["answers"]["readiness_impact"], "Poor sleep")
+        self.assertEqual(record["supervision"]["decision"], "NO")
+
+    def test_supervision_request_is_raised_once_with_a_readable_note(self):
+        from apps.mhp_program.models import SupervisionRequest
+
+        nid = self.signed()
+        payload = {
+            "answers": self.reflection(
+                unsure="YES", unsure_detail="Froze when the disclosure came."
+            ),
+            "supervision": "YES",
+            "supervision_focus": "How to respond to a disclosure without steering it.",
+            "request_supervision": True,
+        }
+        first = self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            payload,
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(first.status_code, 200)
+        record = first.data["session"]["therapist_self_assessment"]
+        self.assertTrue(record["supervision"]["request_id"])
+        with platform_admin_context():
+            rows = list(SupervisionRequest.objects.filter(patient_id=self.pid))
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Clinical decisions: Yes", rows[0].notes)
+        self.assertIn("Supervision focus: How to respond", rows[0].notes)
+        self.assertNotIn("{", rows[0].notes)  # readable text, never the stored JSON
+        self.assertIn("self-assessment", rows[0].topic.lower())
+        self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            payload,
+            format="json",
+            **self.auth,
+        )
+        with platform_admin_context():
+            self.assertEqual(SupervisionRequest.objects.filter(patient_id=self.pid).count(), 1)
+        # A second save refreshes the open request's readable note, never duplicates it.
+        self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {**payload, "supervision_focus": "How to stay with the feeling without steering."},
+            format="json",
+            **self.auth,
+        )
+        with platform_admin_context():
+            rows = list(SupervisionRequest.objects.filter(patient_id=self.pid))
+        self.assertEqual(len(rows), 1)
+        self.assertIn("How to stay with the feeling", rows[0].notes)
+        # The open request is never withdrawn from the reflection screen.
+        refused = self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {**payload, "supervision": "NO", "request_supervision": False},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(refused.status_code, 400)

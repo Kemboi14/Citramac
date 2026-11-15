@@ -74,10 +74,50 @@ export interface PsyConfig {
   goal_decisions: { code: GoalDecision; label: string }[];
   not_assessed_ack_text: string;
   attestation_text: string;
+  self_assessment: SelfAssessmentConfig;
   dictation_enabled: boolean;
   ai_enabled: boolean;
   processed_labels: { ai: string; rules: string; not_translated: string };
   can_configure: boolean;
+}
+
+/** The served reflection questionnaire (backend psychotherapy.SELF_ASSESSMENT_*):
+ * the server decides what is asked and validates the answers it accepts. */
+export interface SelfAssessmentQuestion {
+  key: string;
+  label: string;
+  prompt: string;
+  kind: "CHOICE" | "TEXT";
+  required: boolean;
+  rows: number;
+  options: { code: string; display: string }[];
+  show_when: { key: string; in: string[] } | null;
+}
+export interface SelfAssessmentConfig {
+  intro: string;
+  questions: SelfAssessmentQuestion[];
+  supervision: { prompt: string; focus_label: string; focus_placeholder: string };
+}
+/** Stored with the session (extra.therapist_self_assessment); shown to its
+ * author only. Workforce data — not a patient FHIR resource. */
+export interface SelfAssessmentRecord {
+  version: number;
+  completed_at: string;
+  updated_at: string;
+  by: string;
+  answers: Record<string, string>;
+  supervision: {
+    decision: "" | "YES" | "NO";
+    focus: string;
+    request_id: string;
+    requested_at: string | null;
+  };
+}
+export interface SelfAssessmentPayload {
+  answers: Record<string, string>;
+  supervision: "" | "YES" | "NO";
+  supervision_focus?: string;
+  request_supervision?: boolean;
 }
 
 export type Concern =
@@ -221,6 +261,7 @@ export interface PsyNote extends Omit<PsyNoteSummary, "amendments"> {
     session_objective: string;
     primary_goal: string;
     secondary_goals: string;
+    therapist_self_assessment: SelfAssessmentRecord | null;
     measure: { name: string; total: number } | null;
     process_notes: string | null;
   };
@@ -319,6 +360,8 @@ export const amendPsyNote = (
   id: string,
   body: { section: string; text: string; reason: string },
 ) => json("POST", t, `/care/psychotherapy-notes/${id}/amend/`, body);
+export const savePsySelfAssessment = (t: string, id: string, body: SelfAssessmentPayload) =>
+  json("POST", t, `/care/psychotherapy-notes/${id}/self-assessment/`, body);
 
 export const listTherapyModels = (t: string) =>
   apiRequest<{ results: TherapyModelRow[]; can_configure: boolean }>(

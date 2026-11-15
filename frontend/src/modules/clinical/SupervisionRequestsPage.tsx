@@ -131,40 +131,49 @@ export function SupervisionRequestsPage() {
           {requests
             .filter((r) => r.patient === selected.patientId)
             .map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-surface-border p-3 text-sm"
-              >
-                <span>{r.topic}</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
-                      STATUS_TINT[r.status] ?? ""
-                    }`}
-                  >
-                    {r.status}
-                  </span>
-                  {r.status === "OPEN" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="text-sm font-semibold text-brand-green hover:underline"
-                      onClick={() => schedule(r.id)}
+              <div key={r.id} className="rounded-sm border border-surface-border text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+                  <span>{r.topic}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
+                        STATUS_TINT[r.status] ?? ""
+                      }`}
                     >
-                      Schedule
-                    </button>
-                  )}
-                  {r.status === "SCHEDULED" && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="text-sm font-semibold text-brand-green hover:underline"
-                      onClick={() => complete(r.id)}
-                    >
-                      Mark Complete
-                    </button>
-                  )}
+                      {r.status}
+                    </span>
+                    {r.status === "OPEN" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="text-sm font-semibold text-brand-green hover:underline"
+                        onClick={() => schedule(r.id)}
+                      >
+                        Schedule
+                      </button>
+                    )}
+                    {r.status === "SCHEDULED" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="text-sm font-semibold text-brand-green hover:underline"
+                        onClick={() => complete(r.id)}
+                      >
+                        Mark Complete
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {r.notes.trim() && (
+                  <details className="border-t border-surface-border px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-brand-green">
+                      Self-assessment notes
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-ink-700">
+                      {r.notes}
+                    </p>
+                  </details>
+                )}
               </div>
             ))}
         </div>

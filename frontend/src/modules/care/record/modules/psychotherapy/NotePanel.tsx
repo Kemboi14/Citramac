@@ -1,5 +1,5 @@
 import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
-import { ChevronDown, Copy, Download, Pencil, Share2 } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Copy, Download, Pencil, Share2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../../../../auth/useAuth";
 import type { PsyConfig, PsyNote } from "../../../../../lib/psychotherapyNoteApi";
@@ -63,6 +63,7 @@ export function NotePanel({
   example,
   busy,
   onEditAnswer,
+  onSelfAssessment,
   patientId,
 }: {
   config: PsyConfig;
@@ -75,6 +76,7 @@ export function NotePanel({
   example: boolean;
   busy: boolean;
   onEditAnswer?: (key: string) => void;
+  onSelfAssessment?: () => void;
   patientId?: string;
 }) {
   // Until the clinician picks a view, a draft shows what has been captured in
@@ -164,7 +166,12 @@ export function NotePanel({
           </button>
         </div>
       ) : signed ? (
-        <SignedFooter config={config} note={note} amend={amend} />
+        <SignedFooter
+          config={config}
+          note={note}
+          amend={amend}
+          onSelfAssessment={onSelfAssessment}
+        />
       ) : (
         <SignFooter config={config} note={note} save={save} sign={sign} busy={busy} />
       )}
@@ -903,13 +910,16 @@ function SignedFooter({
   config,
   note,
   amend,
+  onSelfAssessment,
 }: {
   config: PsyConfig;
   note: PsyNote;
   amend: (b: { section: string; text: string; reason: string }) => Promise<boolean>;
+  onSelfAssessment?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const sections = NOTE_SECTIONS(config);
+  const selfAssessment = note.session.therapist_self_assessment;
   const [section, setSection] = useState(sections[0]?.key ?? "");
   // eslint-disable-next-line security/detect-object-injection -- section key from the served config.
   const [text, setText] = useState(note.sections[section] ?? "");
@@ -976,9 +986,18 @@ function SignedFooter({
           </div>
         </div>
       )}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        {note.is_author && onSelfAssessment && (
+          <button type="button" className={`${BTN} ${BTN_SM}`} onClick={onSelfAssessment}>
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            {selfAssessment ? "View self-assessment" : "Do self-assessment"}
+            <span className="font-normal opacity-80">
+              {selfAssessment ? "· completed" : "· not started"}
+            </span>
+          </button>
+        )}
         {!open && (
-          <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => setOpen(true)}>
+          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => setOpen(true)}>
             Add amendment
           </button>
         )}
