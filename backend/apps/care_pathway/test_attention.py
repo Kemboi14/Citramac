@@ -41,6 +41,7 @@ class MyWorkTests(CarePlanTestCase):
     def setUp(self):
         super().setUp()
         import uuid
+        from datetime import time
 
         from django.utils import timezone
 
@@ -71,7 +72,12 @@ class MyWorkTests(CarePlanTestCase):
             someone_else.allergy_status = "UNKNOWN"
             someone_else.save()
             self.someone_else = someone_else
-            now = timezone.now()
+            # Anchor appointments inside the facility day rather than "now + N
+            # minutes", which crosses midnight when the suite runs late and
+            # drops them out of the dashboard's [start, end) bounds.
+            from . import facility_time
+
+            today_at_9 = facility_time.combine_local(facility_time.local_date(), time(9, 0))
             CareTask.objects.create(
                 organization=self.org,
                 patient=someone_else,
@@ -99,13 +105,13 @@ class MyWorkTests(CarePlanTestCase):
                 organization=self.org,
                 patient=mine,
                 provider=self.nurse,
-                scheduled_for=now + timezone.timedelta(minutes=30),
+                scheduled_for=today_at_9,
             )
             Appointment.objects.create(
                 organization=self.org,
                 patient=someone_else,
                 provider=self.other,
-                scheduled_for=now + timezone.timedelta(minutes=40),
+                scheduled_for=today_at_9 + timezone.timedelta(minutes=10),
             )
         self.other_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.other)[0]}"}
 

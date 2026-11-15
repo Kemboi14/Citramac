@@ -323,6 +323,7 @@ class SupervisionRequest(TenantScopedModel):
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="OPEN")
     requested_at = models.DateTimeField(default=timezone.now)
+    scheduled_for = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):

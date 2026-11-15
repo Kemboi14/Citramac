@@ -187,6 +187,10 @@ const SupervisionRequestsPage = lazyNamed(
   () => import("./modules/clinical/SupervisionRequestsPage"),
   "SupervisionRequestsPage",
 );
+const SupervisionRequestDetailPage = lazyNamed(
+  () => import("./modules/clinical/SupervisionRequestDetailPage"),
+  "SupervisionRequestDetailPage",
+);
 const NacadaReportPage = lazyNamed(
   () => import("./modules/clinical/NacadaReportPage"),
   "NacadaReportPage",
@@ -443,6 +447,7 @@ function App() {
               element={<Navigate to="/clinical/psychotherapy/group" replace />}
             />
             <Route path="mhp/supervision" element={<SupervisionRequestsPage />} />
+            <Route path="mhp/supervision/:id" element={<SupervisionRequestDetailPage />} />
             <Route path="mhp/nacada" element={<NacadaReportPage />} />
             <Route path="profile" element={<MyProfilePage />} />
             <Route path="notifications" element={<NotificationsPage showDecisionInbox />} />

@@ -45,15 +45,39 @@ export function decideClinicalReview(
 export interface SupervisionRequest {
   id: string;
   patient: string;
+  patient_name: string;
+  requested_by: string | null;
+  requested_by_name: string;
+  supervisor: string | null;
+  supervisor_name: string;
   topic: string;
   notes: string;
-  status: string;
+  status: "OPEN" | "SCHEDULED" | "COMPLETED";
   requested_at: string;
+  scheduled_for: string | null;
   completed_at: string | null;
 }
 
-export function listSupervisionRequests(accessToken: string) {
-  return apiRequest<Paginated<SupervisionRequest>>("/mhp/supervision-requests/", { accessToken });
+export function getSupervisionRequest(accessToken: string, requestId: string) {
+  return apiRequest<SupervisionRequest>(`/mhp/supervision-requests/${requestId}/`, { accessToken });
+}
+
+export function listSupervisionRequests(
+  accessToken: string,
+  params: {
+    page?: number;
+    status?: SupervisionRequest["status"] | "ALL";
+    q?: string;
+  } = {},
+) {
+  const search = new URLSearchParams();
+  if (params.page && params.page > 1) search.set("page", String(params.page));
+  if (params.status && params.status !== "ALL") search.set("status", params.status);
+  if (params.q?.trim()) search.set("q", params.q.trim());
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest<Paginated<SupervisionRequest>>(`/mhp/supervision-requests/${suffix}`, {
+    accessToken,
+  });
 }
 
 export function createSupervisionRequest(accessToken: string, patientId: string, topic: string) {
@@ -64,9 +88,14 @@ export function createSupervisionRequest(accessToken: string, patientId: string,
   });
 }
 
-export function scheduleSupervisionRequest(accessToken: string, requestId: string) {
+export function scheduleSupervisionRequest(
+  accessToken: string,
+  requestId: string,
+  scheduledFor: string,
+) {
   return apiRequest<SupervisionRequest>(`/mhp/supervision-requests/${requestId}/schedule/`, {
     method: "POST",
+    body: { scheduled_for: scheduledFor },
     accessToken,
   });
 }

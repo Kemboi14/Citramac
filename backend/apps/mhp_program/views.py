@@ -1,5 +1,7 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -331,21 +333,66 @@ class ClinicalReviewViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return Response(ClinicalReviewSerializer(review).data)
 
 
+def _can_manage_supervision(user):
+    """
+    Who may work any request in the supervision queue: the named
+    ``clinical.supervision.manage`` permission, an Org Admin, or a platform
+    Super Admin. It is the named exception to "nobody supervises their own
+    request" — see ``clinical.supervision.manage`` in apps.accounts.catalogue.
+    """
+    from apps.accounts.access import has_permission, is_org_admin
+
+    return bool(
+        user.is_superuser
+        or is_org_admin(user)
+        or has_permission(user, "clinical.supervision.manage")
+    )
+
+
 class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.5 — mirrors the mockup's nav item."""
 
     serializer_class = SupervisionRequestSerializer
 
     def get_queryset(self):
-        return SupervisionRequest.objects.select_related("patient").order_by("-requested_at")
+        queryset = SupervisionRequest.objects.select_related(
+            "patient", "requested_by", "supervisor"
+        )
+        params = self.request.query_params
+        status = params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+        patient = params.get("patient")
+        if patient:
+            queryset = queryset.filter(patient_id=patient)
+        requested_by = params.get("requested_by")
+        if requested_by:
+            queryset = queryset.filter(requested_by_id=requested_by)
+        supervisor = params.get("supervisor")
+        if supervisor:
+            queryset = queryset.filter(supervisor_id=supervisor)
+        search = params.get("q")
+        if search:
+            queryset = queryset.filter(
+                Q(patient__first_name__icontains=search)
+                | Q(patient__last_name__icontains=search)
+                | Q(requested_by__first_name__icontains=search)
+                | Q(requested_by__last_name__icontains=search)
+                | Q(topic__icontains=search)
+            )
+        return queryset.order_by("-requested_at")
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, requested_by=self.request.user)
 
     def perform_update(self, serializer):
         request_ = serializer.instance
-        if request_.requested_by_id != self.request.user.id or request_.status != "OPEN":
+        if request_.requested_by_id != self.request.user.id and not _can_manage_supervision(
+            self.request.user
+        ):
             raise PermissionDenied("Only the requester can edit an open supervision request.")
+        if request_.status != "OPEN":
+            raise PermissionDenied("Only an open supervision request can be edited.")
         serializer.save()
 
     @action(detail=True, methods=["post"])
@@ -358,11 +405,25 @@ class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
             return Response(
                 {"error": "This request is already scheduled or completed."}, status=400
             )
-        if supervision_request.requested_by_id == request.user.id:
+        if supervision_request.requested_by_id == request.user.id and not (
+            _can_manage_supervision(request.user)
+        ):
             raise PermissionDenied("Nobody supervises their own request.")
+        raw_scheduled_for = request.data.get("scheduled_for")
+        if raw_scheduled_for:
+            scheduled_for = parse_datetime(str(raw_scheduled_for))
+            if scheduled_for is None:
+                return Response(
+                    {"error": "scheduled_for must be an ISO-8601 date and time."}, status=400
+                )
+            if timezone.is_naive(scheduled_for):
+                scheduled_for = timezone.make_aware(scheduled_for)
+        else:
+            scheduled_for = timezone.now()
         supervision_request.status = "SCHEDULED"
         supervision_request.supervisor = request.user
-        supervision_request.save(update_fields=["status", "supervisor"])
+        supervision_request.scheduled_for = scheduled_for
+        supervision_request.save(update_fields=["status", "supervisor", "scheduled_for"])
         return Response(SupervisionRequestSerializer(supervision_request).data)
 
     @action(detail=True, methods=["post"])
@@ -373,7 +434,9 @@ class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         )
         if supervision_request.status != "SCHEDULED":
             return Response({"error": "Only a scheduled request can be completed."}, status=400)
-        if supervision_request.supervisor_id != request.user.id:
+        if supervision_request.supervisor_id != request.user.id and not (
+            _can_manage_supervision(request.user)
+        ):
             raise PermissionDenied("Only the supervisor who took the request completes it.")
         supervision_request.status = "COMPLETED"
         supervision_request.completed_at = timezone.now()

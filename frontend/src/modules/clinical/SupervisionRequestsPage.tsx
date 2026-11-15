@@ -1,17 +1,15 @@
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
 import {
-  completeSupervisionRequest,
   createSupervisionRequest,
   listSupervisionRequests,
-  scheduleSupervisionRequest,
   type SupervisionRequest,
 } from "../../lib/mhpExtrasApi";
-import { PageHeader } from "../care/shared/ui";
-import { ClientPicker } from "../../clinical/ClientPicker";
-import { ClientContext } from "../../clinical/ClientContext";
+import { formatDateTime } from "../care/shared/format";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -19,51 +17,82 @@ const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
-const STATUS_TINT: Record<string, string> = {
-  OPEN: "bg-ink-100 text-ink-700",
+const STATUS_TINT: Record<SupervisionRequest["status"], string> = {
+  OPEN: "bg-status-amber-tint text-status-amber",
   SCHEDULED: "bg-brand-green-tint text-brand-green-dark",
   COMPLETED: "bg-surface-border text-ink-500",
 };
+const STATUS_LABEL: Record<SupervisionRequest["status"], string> = {
+  OPEN: "Open",
+  SCHEDULED: "Scheduled",
+  COMPLETED: "Completed",
+};
 
-/**
- * Junior clinician requests supervisor time on a case — mirrors the
- * mockup's "Supervision Requests" nav item, docs/07-CLINICAL-MODULES-SPEC.md
- * §7.14.5.
- */
+const PAGE_SIZE = 25;
+
 export function SupervisionRequestsPage() {
   const { accessToken } = useAuth();
   const { selected } = usePatientContext();
+  const navigate = useNavigate();
 
   const [topic, setTopic] = useState("");
   const [requests, setRequests] = useState<SupervisionRequest[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const refresh = async () => {
+  const [statusFilter, setStatusFilter] = useState<SupervisionRequest["status"] | "ALL">("ALL");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(searchInput), 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, debouncedSearch]);
+
+  const refresh = async (targetPage = page) => {
     if (!accessToken) return;
-    setRequests((await listSupervisionRequests(accessToken)).results);
+    const res = await listSupervisionRequests(accessToken, {
+      page: targetPage,
+      status: statusFilter,
+      q: debouncedSearch,
+    });
+    setRequests(res.results);
+    setCount(res.count);
   };
 
   useEffect(() => {
     if (!accessToken) return;
-    listSupervisionRequests(accessToken)
-      .then((res) => setRequests(res.results))
-      .catch(() => setError("Couldn't load supervision requests."));
-  }, [accessToken]);
-
-  if (!selected) {
-    return <ClientPicker action="raise a supervision request for" />;
-  }
+    setLoaded(false);
+    listSupervisionRequests(accessToken, {
+      page,
+      status: statusFilter,
+      q: debouncedSearch,
+    })
+      .then((res) => {
+        setRequests(res.results);
+        setCount(res.count);
+      })
+      .catch(() => setError("Couldn't load supervision requests."))
+      .finally(() => setLoaded(true));
+  }, [accessToken, page, statusFilter, debouncedSearch]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!accessToken || !topic.trim()) return;
+    if (!accessToken || !topic.trim() || !selected) return;
     setError(null);
     setBusy(true);
     try {
       await createSupervisionRequest(accessToken, selected.patientId, topic);
       setTopic("");
-      await refresh();
+      await refresh(1);
+      setPage(1);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't create the request.");
     } finally {
@@ -71,117 +100,181 @@ export function SupervisionRequestsPage() {
     }
   };
 
-  const schedule = async (id: string) => {
-    if (!accessToken) return;
-    setBusy(true);
-    try {
-      await scheduleSupervisionRequest(accessToken, id);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't schedule.");
-    } finally {
-      setBusy(false);
-    }
+  const openRequest = (request: SupervisionRequest) => {
+    navigate(`/clinical/mhp/supervision/${request.id}`);
   };
 
-  const complete = async (id: string) => {
-    if (!accessToken) return;
-    setBusy(true);
-    try {
-      await completeSupervisionRequest(accessToken, id, "");
-      await refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't complete.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const errorBlock = error ? (
+    <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-6">
-      <ClientContext />
-      <PageHeader
-        eyebrow="Clinical"
-        title={"Supervision requests"}
-        subtitle={selected.patientName}
-      />
-
-      <form
-        onSubmit={submit}
-        className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
-      >
-        <label className={LABEL_CLASS}>
-          Topic
-          <input
-            className={FIELD_CLASS}
-            placeholder="e.g. Risk escalation review"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={busy} className={`${BUTTON_CLASS} mt-4`}>
-          Request Supervision
-        </button>
-      </form>
-
-      <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
-        <h2 className="mb-4 font-display text-base font-semibold text-ink-900">Requests</h2>
-        <div className="flex flex-col gap-3">
-          {requests
-            .filter((r) => r.patient === selected.patientId)
-            .map((r) => (
-              <div key={r.id} className="rounded-sm border border-surface-border text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 p-3">
-                  <span>{r.topic}</span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${
-                        STATUS_TINT[r.status] ?? ""
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                    {r.status === "OPEN" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="text-sm font-semibold text-brand-green hover:underline"
-                        onClick={() => schedule(r.id)}
-                      >
-                        Schedule
-                      </button>
-                    )}
-                    {r.status === "SCHEDULED" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="text-sm font-semibold text-brand-green hover:underline"
-                        onClick={() => complete(r.id)}
-                      >
-                        Mark Complete
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {r.notes.trim() && (
-                  <details className="border-t border-surface-border px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-brand-green">
-                      Self-assessment notes
-                    </summary>
-                    <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-ink-700">
-                      {r.notes}
-                    </p>
-                  </details>
-                )}
-              </div>
-            ))}
-        </div>
+      <div className="text-[13px] leading-5 text-ink-700">
+        Requests raised by therapists and clinicians from psychotherapy sessions.
       </div>
 
-      {error && (
-        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
+      {selected && (
+        <form
+          onSubmit={submit}
+          className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
+        >
+          <p className="mb-4 text-[12.5px] text-ink-500">
+            Raising for {selected.patientName}. Requests raised from a psychotherapy self-assessment
+            appear here automatically.
+          </p>
+          <label className={LABEL_CLASS}>
+            Topic
+            <input
+              className={FIELD_CLASS}
+              placeholder="e.g. Risk escalation review"
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
+              required
+            />
+          </label>
+          <button type="submit" disabled={busy} className={`${BUTTON_CLASS} mt-4`}>
+            Request Supervision
+          </button>
+        </form>
       )}
+
+      <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
+          <h2 className="font-display text-base font-semibold text-ink-900">Queue</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-ink-500">
+              Status
+              <select
+                className={FIELD_CLASS}
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as SupervisionRequest["status"] | "ALL")
+                }
+              >
+                <option value="ALL">All</option>
+                <option value="OPEN">Open</option>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="COMPLETED">Completed</option>
+              </select>
+            </label>
+            <label className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+              <input
+                className={`${FIELD_CLASS} pl-8`}
+                placeholder="Search client, requester, topic…"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </label>
+            {loaded && (
+              <span className="text-xs text-ink-500">
+                {count} {count === 1 ? "request" : "requests"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {requests.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-surface-border bg-surface-bg/60 text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                <tr>
+                  <th className="px-5 py-3">Requested by</th>
+                  <th className="px-5 py-3">Requested on</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Scheduled session</th>
+                  <th className="px-5 py-3 text-right"> </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-border">
+                {requests.map((request) => (
+                  <tr
+                    key={request.id}
+                    onClick={() => openRequest(request)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openRequest(request);
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-label={`Open supervision request for ${
+                      request.patient_name || "unknown client"
+                    }`}
+                    className="cursor-pointer transition-colors hover:bg-surface-bg focus:bg-surface-bg focus:outline-none"
+                  >
+                    <td className="px-5 py-3 text-ink-700">
+                      {request.requested_by_name || "Unknown clinician"}
+                    </td>
+                    <td className="px-5 py-3 text-ink-500">
+                      {formatDateTime(request.requested_at)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-flex rounded-sm px-2 py-0.5 text-[11px] font-semibold ${
+                          STATUS_TINT[request.status]
+                        }`}
+                      >
+                        {STATUS_LABEL[request.status]}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-ink-500">
+                      {request.status === "COMPLETED" && request.completed_at
+                        ? `Completed ${formatDateTime(request.completed_at)}`
+                        : request.scheduled_for
+                          ? `${formatDateTime(request.scheduled_for)} · ${request.patient_name || "client"}`
+                          : request.supervisor_name
+                            ? `Supervisor ${request.supervisor_name}`
+                            : "Awaiting a supervisor"}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <ChevronRight className="inline h-4 w-4 text-ink-400" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          loaded && (
+            <p className="px-5 py-8 text-center text-sm text-ink-500">
+              {debouncedSearch || statusFilter !== "ALL"
+                ? "No requests match these filters."
+                : "No supervision requests yet."}
+            </p>
+          )
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-surface-border px-5 py-3 text-xs text-ink-500">
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {errorBlock}
     </div>
   );
 }

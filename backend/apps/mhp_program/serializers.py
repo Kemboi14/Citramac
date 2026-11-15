@@ -247,21 +247,45 @@ class ClinicalReviewSerializer(serializers.ModelSerializer):
 
 
 class SupervisionRequestSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    requested_by_name = serializers.SerializerMethodField()
+    supervisor_name = serializers.SerializerMethodField()
+
     class Meta:
         model = SupervisionRequest
         fields = [
             "id",
             "patient",
+            "patient_name",
             "requested_by",
+            "requested_by_name",
             "supervisor",
+            "supervisor_name",
             "topic",
             "notes",
             "status",
             "requested_at",
+            "scheduled_for",
             "completed_at",
         ]
-        # The supervisor is whoever takes the request (`schedule`).
-        read_only_fields = ["requested_by", "supervisor", "status", "requested_at", "completed_at"]
+        # The supervisor and scheduled time are set by `schedule`.
+        read_only_fields = [
+            "requested_by",
+            "supervisor",
+            "status",
+            "requested_at",
+            "scheduled_for",
+            "completed_at",
+        ]
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name() if obj.patient_id else ""
+
+    def get_requested_by_name(self, obj):
+        return obj.requested_by.get_full_name() if obj.requested_by_id else ""
+
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.get_full_name() if obj.supervisor_id else ""
 
     def update(self, instance, validated_data):
         validated_data.pop("patient", None)  # fixed once requested

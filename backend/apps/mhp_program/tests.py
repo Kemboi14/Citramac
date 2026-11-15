@@ -194,12 +194,16 @@ class MhpExtensionsTests(APITestCase):
                 password="Password123!",
                 organization=self.org,
                 is_active=True,
+                first_name="Grace",
+                last_name="Wanjiru",
             )
             self.supervisor = User.objects.create_user(
                 email="supervisor@org.test",
                 password="Password123!",
                 organization=self.org,
                 is_active=True,
+                first_name="Samuel",
+                last_name="Kiptoo",
             )
         self.access, _ = issue_tokens(self.case_manager)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
@@ -230,15 +234,23 @@ class MhpExtensionsTests(APITestCase):
             **self.auth,
         )
         self.assertEqual(create_response.status_code, 201, create_response.data)
+        self.assertEqual(create_response.data["patient_name"], "Kevin Otieno")
+        self.assertEqual(create_response.data["requested_by_name"], "Grace Wanjiru")
+        self.assertEqual(create_response.data["supervisor_name"], "")
+        self.assertIsNone(create_response.data["scheduled_for"])
         request_id = create_response.data["id"]
 
         access_supervisor, _ = issue_tokens(self.supervisor)
         schedule_response = self.client.post(
             reverse("supervision-request-schedule", args=[request_id]),
+            {"scheduled_for": "2026-12-01T09:00:00Z"},
+            format="json",
             **{"HTTP_AUTHORIZATION": f"Bearer {access_supervisor}"},
         )
         self.assertEqual(schedule_response.status_code, 200)
         self.assertEqual(schedule_response.data["status"], "SCHEDULED")
+        self.assertEqual(schedule_response.data["supervisor_name"], "Samuel Kiptoo")
+        self.assertEqual(schedule_response.data["scheduled_for"], "2026-12-01T09:00:00Z")
 
         complete_response = self.client.post(
             reverse("supervision-request-complete", args=[request_id]),
@@ -248,6 +260,25 @@ class MhpExtensionsTests(APITestCase):
         )
         self.assertEqual(complete_response.status_code, 200)
         self.assertEqual(complete_response.data["status"], "COMPLETED")
+        self.assertEqual(complete_response.data["supervisor_name"], "Samuel Kiptoo")
+        self.assertIsNotNone(complete_response.data["completed_at"])
+
+    def test_schedule_rejects_an_unparseable_time(self):
+        request_id = self.client.post(
+            reverse("supervision-request-list"),
+            {"patient": str(self.patient.id), "topic": "Boundaries"},
+            format="json",
+            **self.auth,
+        ).data["id"]
+        sup = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"}
+        response = self.client.post(
+            reverse("supervision-request-schedule", args=[request_id]),
+            {"scheduled_for": "next Tuesday"},
+            format="json",
+            **sup,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "scheduled_for must be an ISO-8601 date and time.")
 
     def test_supervision_cannot_be_self_taken_or_completed_by_someone_else(self):
         request_id = self.client.post(
@@ -263,6 +294,46 @@ class MhpExtensionsTests(APITestCase):
         sup = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"}
         self.assertEqual(self.client.post(schedule, **sup).status_code, 200)
         self.assertEqual(self.client.post(complete, **self.auth).status_code, 403)  # not theirs
+
+    def test_supervision_manager_can_work_their_own_request(self):
+        """clinical.supervision.manage is the named exception to self-supervision."""
+        with platform_admin_context():
+            self.case_manager.roles.add(
+                Role.objects.get(name="Clinical Supervisor", organization__isnull=True)
+            )
+        request_id = self.client.post(
+            reverse("supervision-request-list"),
+            {"patient": str(self.patient.id), "topic": "Risk escalation review"},
+            format="json",
+            **self.auth,
+        ).data["id"]
+        schedule = reverse("supervision-request-schedule", args=[request_id])
+        complete = reverse("supervision-request-complete", args=[request_id])
+        self.assertEqual(self.client.post(schedule, **self.auth).status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                complete, {"notes": "Closed."}, format="json", **self.auth
+            ).status_code,
+            200,
+        )
+
+    def test_org_admin_can_complete_a_request_someone_else_took(self):
+        with platform_admin_context():
+            self.case_manager.roles.add(
+                Role.objects.get(name="Org Admin", organization__isnull=True)
+            )
+        request_id = self.client.post(
+            reverse("supervision-request-list"),
+            {"patient": str(self.patient.id), "topic": "Working with a disclosure"},
+            format="json",
+            **self.auth,
+        ).data["id"]
+        schedule = reverse("supervision-request-schedule", args=[request_id])
+        complete = reverse("supervision-request-complete", args=[request_id])
+        sup = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.supervisor)[0]}"}
+        self.assertEqual(self.client.post(schedule, **sup).status_code, 200)
+        # The Org Admin raised the request but is not the supervisor who took it.
+        self.assertEqual(self.client.post(complete, **self.auth).status_code, 200)
 
     def test_clinical_review_needs_a_senior_who_is_not_the_requester(self):
         with platform_admin_context():

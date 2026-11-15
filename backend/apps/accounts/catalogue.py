@@ -220,6 +220,17 @@ PERMISSIONS = [
         ["Supervisor", "Clinical Supervisor"],
     ),
     (
+        "clinical.supervision.manage",
+        "clinical",
+        "Manage supervision requests",
+        "Schedule and complete supervision requests for any client, including one you "
+        "raised yourself. Normally the clinician who raised a request cannot supervise "
+        "it; this permission is the named exception. Org Admin can always manage every "
+        "request.",
+        SCOPE_ORG,
+        ["Clinical Supervisor", "Supervisor", "Psychiatrist"],
+    ),
+    (
         "clinical.care_team.assign",
         "clinical",
         "Assign a client's care team",
