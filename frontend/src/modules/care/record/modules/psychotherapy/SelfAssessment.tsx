@@ -13,17 +13,12 @@ import { formatDateTime } from "../../../shared/format";
 import { BTN, BTN_GHOST, FIELD_LABEL } from "../../../shared/styles";
 import { Callout, ErrorNote, RadioChoices } from "../../../shared/ui";
 
-// The therapist's reflection on a signed session: a short served questionnaire,
-// then — if they want it — the supervision request it raises. The reflection is
-// workforce data kept with the session; only its author can read it.
+// The therapist's reflection on a signed session, and the supervision request
+// it can raise. The reflection is workforce data kept with the session and is
+// shown only to its author. Requesting supervision is a separate, deliberately
+// bare page: just the focus the supervisor needs, never the therapy note.
 
-const SUPERVISION_OPTIONS = [
-  { code: "YES", display: "Yes" },
-  { code: "NO", display: "No" },
-];
-
-type SupervisionDecision = "" | "YES" | "NO";
-type Mode = "questions" | "supervision" | "done";
+type Mode = "questions" | "done";
 
 function shown(question: SelfAssessmentQuestion, answers: Record<string, string>) {
   return (
@@ -107,20 +102,22 @@ export function SelfAssessmentPage({
   note,
   save,
   onClose,
+  onRequestSupervision,
 }: {
   config: PsyConfig;
   note: PsyNote;
   save: (payload: SelfAssessmentPayload) => Promise<boolean>;
   onClose: () => void;
+  onRequestSupervision: () => void;
 }) {
   const record = note.session.therapist_self_assessment;
   const questions = config.self_assessment.questions;
   const supervisionCopy = config.self_assessment.supervision;
-  const requestOpen = Boolean(record?.supervision.request_id);
+  const requestStatus = record?.supervision.request_status ?? null;
+  const requestOpen = requestStatus === "OPEN";
+  const requestActive = requestStatus === "OPEN" || requestStatus === "SCHEDULED";
   const [mode, setMode] = useState<Mode>(record ? "done" : "questions");
   const [answers, setAnswers] = useState<Record<string, string>>(record?.answers ?? {});
-  const [decision, setDecision] = useState<SupervisionDecision>(record?.supervision.decision ?? "");
-  const [focus, setFocus] = useState(record?.supervision.focus ?? "");
   const [invalid, setInvalid] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,28 +150,13 @@ export function SelfAssessmentPage({
     setError(null);
   }
 
-  function toSupervision() {
+  async function saveReflection() {
     const missing = visible
       .filter((q) => q.required && !(answers[q.key] ?? "").trim())
       .map((q) => q.key);
     setInvalid(missing);
     if (missing.length) {
-      setError("Answer every question before continuing.");
-      return;
-    }
-    setError(null);
-    setMode("supervision");
-  }
-
-  async function submit() {
-    // An open request is never withdrawn here — saving keeps it and refreshes it.
-    const wantsSupervision = requestOpen || decision === "YES";
-    if (!wantsSupervision && !decision) {
-      setError("Choose whether you need supervision for this session.");
-      return;
-    }
-    if (wantsSupervision && !focus.trim()) {
-      setError(`${supervisionCopy.focus_label} Add a short focus before requesting supervision.`);
+      setError("Answer every question before saving.");
       return;
     }
     setSaving(true);
@@ -182,9 +164,11 @@ export function SelfAssessmentPage({
     const saved = Object.fromEntries(visible.map((q) => [q.key, (answers[q.key] ?? "").trim()]));
     const ok = await save({
       answers: saved,
-      supervision: wantsSupervision ? "YES" : "NO",
-      supervision_focus: focus.trim(),
-      request_supervision: wantsSupervision,
+      // An OPEN request is preserved and refreshed; any other state leaves the
+      // reflection alone, so a completed request is never raised again by an edit.
+      supervision: requestStatus ? "YES" : "",
+      supervision_focus: record?.supervision.focus ?? "",
+      request_supervision: requestOpen,
     });
     setSaving(false);
     if (ok) setMode("done");
@@ -247,75 +231,12 @@ export function SelfAssessmentPage({
 
           <ErrorNote>{error}</ErrorNote>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={BTN} onClick={toSupervision}>
-              Continue to supervision
-            </button>
-          </div>
-        </>
-      )}
-
-      {mode === "supervision" && (
-        <>
-          <div>
-            <div className={FIELD_LABEL}>Supervision</div>
-            <h1 className="font-display text-xl font-semibold text-ink-900">
-              Request supervision?
-            </h1>
-            <p className="mt-1 max-w-[620px] text-[13px] leading-6 text-ink-500">
-              {supervisionCopy.prompt}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-surface-border bg-surface-card p-4">
-            {requestOpen ? (
-              <Callout tone="info">
-                A supervision request is already open for this session. Saving keeps it open and
-                refreshes the note your supervisor sees.
-              </Callout>
-            ) : (
-              <fieldset>
-                <legend className={FIELD_LABEL}>Supervision needed</legend>
-                <div className="mt-2">
-                  <RadioChoices
-                    name="self-assessment-supervision"
-                    options={SUPERVISION_OPTIONS}
-                    value={decision}
-                    onChange={(code) => {
-                      setDecision(code as SupervisionDecision);
-                      setError(null);
-                    }}
-                  />
-                </div>
-              </fieldset>
-            )}
-            {(requestOpen || decision === "YES") && (
-              <>
-                <label className="mt-4 flex flex-col gap-1.5">
-                  <span className={FIELD_LABEL}>{supervisionCopy.focus_label}</span>
-                  <AutoResizeTextarea
-                    rows={3}
-                    value={focus}
-                    placeholder={supervisionCopy.focus_placeholder}
-                    onChange={(e) => {
-                      setFocus(e.target.value);
-                      setError(null);
-                    }}
-                  />
-                </label>
-                <Callout tone="info" className="mt-4">
-                  A supervision request is opened with this reflection. Your supervisor sees the
-                  reflection and the session date — never the client’s note.
-                </Callout>
-              </>
-            )}
-          </div>
-
-          <ErrorNote>{error}</ErrorNote>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={BTN_GHOST} onClick={() => setMode("questions")}>
-              Back
-            </button>
-            <button type="button" className={BTN} disabled={saving} onClick={() => void submit()}>
+            <button
+              type="button"
+              className={BTN}
+              disabled={saving}
+              onClick={() => void saveReflection()}
+            >
               {saving ? "Saving…" : "Save reflection"}
             </button>
           </div>
@@ -361,29 +282,50 @@ export function SelfAssessmentPage({
 
           <section className="rounded-lg border border-surface-border bg-surface-card p-4">
             <h2 className="text-[13px] font-bold text-ink-900">Supervision</h2>
-            {decision === "YES" ? (
+            {requestActive ? (
               <div className="mt-2">
-                <Callout tone="success" label="Requested">
-                  A supervision request is open with this reflection.
+                <Callout
+                  tone="success"
+                  label={requestStatus === "SCHEDULED" ? "Scheduled" : "Requested"}
+                >
+                  {requestStatus === "SCHEDULED"
+                    ? "A supervision request is scheduled with your supervisor."
+                    : "A supervision request is open with this reflection."}
                 </Callout>
-                <div className="mt-2.5">
-                  <div className="text-[12px] font-semibold text-ink-700">
-                    {supervisionCopy.focus_label}
+                {record?.supervision.focus && (
+                  <div className="mt-2.5">
+                    <div className="text-[12px] font-semibold text-ink-700">
+                      {supervisionCopy.focus_label}
+                    </div>
+                    <p className="whitespace-pre-wrap text-[13.5px] leading-6 text-ink-900">
+                      {record.supervision.focus}
+                    </p>
                   </div>
-                  <p className="whitespace-pre-wrap text-[13.5px] leading-6 text-ink-900">
-                    {focus}
-                  </p>
-                </div>
+                )}
               </div>
             ) : (
-              <p className="mt-1 text-[13px] text-ink-500">
-                No supervision was requested for this session.
-              </p>
+              <div className="mt-1">
+                {requestStatus === "COMPLETED" && (
+                  <p className="mb-1.5 text-[12px] text-ink-500">
+                    Your last supervision request for this session is complete.
+                  </p>
+                )}
+                <p className="text-[13px] text-ink-700">{supervisionCopy.prompt}</p>
+                <p className="mt-1 text-[12px] text-ink-500">
+                  Your supervisor sees your reflection and the session date — never the client’s
+                  note.
+                </p>
+                <button type="button" className={`${BTN} mt-3`} onClick={onRequestSupervision}>
+                  {requestStatus === "COMPLETED"
+                    ? "Request supervision again"
+                    : "Request supervision"}
+                </button>
+              </div>
             )}
           </section>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={BTN} onClick={onClose}>
+            <button type="button" className={requestActive ? BTN : BTN_GHOST} onClick={onClose}>
               Back to session
             </button>
             <button
@@ -396,22 +338,154 @@ export function SelfAssessmentPage({
             >
               Edit reflection
             </button>
-            {decision !== "YES" && (
-              <button
-                type="button"
-                className={BTN_GHOST}
-                onClick={() => {
-                  setDecision("YES");
-                  setError(null);
-                  setMode("supervision");
-                }}
-              >
-                Request supervision
-              </button>
-            )}
           </div>
         </>
       )}
+    </Page>
+  );
+}
+
+/** The dedicated supervision request: just the focus, then a clean success. */
+export function SupervisionRequestPage({
+  config,
+  note,
+  save,
+  onBack,
+  onClose,
+}: {
+  config: PsyConfig;
+  note: PsyNote;
+  save: (payload: SelfAssessmentPayload) => Promise<boolean>;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const record = note.session.therapist_self_assessment;
+  const supervisionCopy = config.self_assessment.supervision;
+  const [focus, setFocus] = useState(record?.supervision.focus ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+  const requestStatus = record?.supervision.request_status ?? null;
+  const requestActive = requestStatus === "OPEN" || requestStatus === "SCHEDULED";
+
+  if (!note.is_author || note.status !== "SIGNED") {
+    return (
+      <Page>
+        <Callout tone="warning">
+          The supervision request is only available to the clinician who signed this note.
+        </Callout>
+        <BackButton onClick={onClose} />
+      </Page>
+    );
+  }
+
+  if (!record) {
+    return (
+      <Page>
+        <Callout tone="warning">
+          Complete the self-assessment first — the supervision request is raised from it.
+        </Callout>
+        <BackButton onClick={onBack} label="Back to reflection" />
+      </Page>
+    );
+  }
+
+  async function submit() {
+    if (!focus.trim()) {
+      setError(`${supervisionCopy.focus_label} Add a short focus before sending.`);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const ok = await save({
+      answers: record?.answers ?? {},
+      supervision: "YES",
+      supervision_focus: focus.trim(),
+      request_supervision: true,
+    });
+    setSaving(false);
+    if (ok) setSent(true);
+    else setError("Couldn't send the supervision request. Check the connection and try again.");
+  }
+
+  if (sent || requestActive) {
+    const scheduled = !sent && requestStatus === "SCHEDULED";
+    return (
+      <Page>
+        <div className="flex items-start gap-3">
+          <CheckCircle2 aria-hidden="true" className="mt-0.5 h-6 w-6 text-brand-green" />
+          <div>
+            <div className={FIELD_LABEL}>Supervision</div>
+            <h1 className="font-display text-xl font-semibold text-ink-900">
+              {sent
+                ? "Supervision request sent"
+                : scheduled
+                  ? "Supervision request scheduled"
+                  : "Supervision request open"}
+            </h1>
+            <p className="mt-1 max-w-[520px] text-[13px] leading-6 text-ink-500">
+              {scheduled
+                ? "Your supervision session is scheduled. Your supervisor has your reflection and the focus you set."
+                : "Your supervisor can now see your reflection and the focus you set. You’ll be notified when it is scheduled."}
+            </p>
+          </div>
+        </div>
+
+        <section className="rounded-lg border border-surface-border bg-surface-card p-4">
+          <h2 className="text-[13px] font-bold text-ink-900">{supervisionCopy.focus_label}</h2>
+          <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-6 text-ink-900">{focus}</p>
+        </section>
+
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={BTN} onClick={onClose}>
+            Back to session
+          </button>
+          <button type="button" className={BTN_GHOST} onClick={onBack}>
+            View reflection
+          </button>
+        </div>
+      </Page>
+    );
+  }
+
+  return (
+    <Page>
+      <BackButton onClick={onBack} label="Back to reflection" />
+
+      <div>
+        <div className={FIELD_LABEL}>Supervision</div>
+        <h1 className="font-display text-xl font-semibold text-ink-900">Request supervision</h1>
+        <p className="mt-1 max-w-[620px] text-[13px] leading-6 text-ink-500">
+          Share the one thing you would like your supervisor to help with. Your reflection and the
+          session date go with it; the client’s note never does.
+        </p>
+      </div>
+
+      <section className="rounded-lg border border-surface-border bg-surface-card p-4">
+        <label className="flex flex-col gap-1.5">
+          <span className={FIELD_LABEL}>{supervisionCopy.focus_label}</span>
+          <AutoResizeTextarea
+            rows={5}
+            value={focus}
+            aria-required="true"
+            placeholder={supervisionCopy.focus_placeholder}
+            onChange={(e) => {
+              setFocus(e.target.value);
+              setError(null);
+            }}
+          />
+        </label>
+      </section>
+
+      <ErrorNote>{error}</ErrorNote>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={BTN} disabled={saving} onClick={() => void submit()}>
+          {saving ? "Sending…" : "Send supervision request"}
+        </button>
+        <button type="button" className={BTN_GHOST} onClick={onBack}>
+          Cancel
+        </button>
+      </div>
     </Page>
   );
 }
@@ -424,14 +498,20 @@ function Page({ children }: { children: ReactNode }) {
   );
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
+function BackButton({
+  onClick,
+  label = "Back to session",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="inline-flex w-fit items-center gap-1.5 text-[12.5px] font-semibold text-brand-green hover:underline"
     >
-      <ArrowLeft className="h-4 w-4" /> Back to session
+      <ArrowLeft className="h-4 w-4" /> {label}
     </button>
   );
 }

@@ -661,6 +661,7 @@ class TherapistSelfAssessmentTests(PsyNoteTestCase):
         self.assertEqual(first.status_code, 200)
         record = first.data["session"]["therapist_self_assessment"]
         self.assertTrue(record["supervision"]["request_id"])
+        self.assertEqual(record["supervision"]["request_status"], "OPEN")
         with platform_admin_context():
             rows = list(SupervisionRequest.objects.filter(patient_id=self.pid))
         self.assertEqual(len(rows), 1)
@@ -695,3 +696,67 @@ class TherapistSelfAssessmentTests(PsyNoteTestCase):
             **self.auth,
         )
         self.assertEqual(refused.status_code, 400)
+
+    def test_a_reflection_can_be_saved_before_supervision_is_requested(self):
+        nid = self.signed()
+        saved = self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {"answers": self.reflection(), "supervision": ""},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(saved.status_code, 200)
+        record = saved.data["session"]["therapist_self_assessment"]
+        self.assertFalse(record["supervision"]["request_id"])
+        self.assertIsNone(record["supervision"]["request_status"])
+        # The dedicated supervision step then raises it and reports its status.
+        raised = self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {
+                "answers": self.reflection(),
+                "supervision": "YES",
+                "supervision_focus": "How to stay with the disclosure without steering it.",
+                "request_supervision": True,
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(raised.status_code, 200)
+        record = raised.data["session"]["therapist_self_assessment"]
+        self.assertEqual(record["supervision"]["request_status"], "OPEN")
+
+    def test_editing_after_the_request_completes_does_not_raise_another(self):
+        from apps.mhp_program.models import SupervisionRequest
+
+        nid = self.signed()
+        self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {
+                "answers": self.reflection(),
+                "supervision": "YES",
+                "supervision_focus": "How to respond to the disclosure.",
+                "request_supervision": True,
+            },
+            format="json",
+            **self.auth,
+        )
+        with platform_admin_context():
+            SupervisionRequest.objects.filter(patient_id=self.pid).update(status="COMPLETED")
+        # Editing the reflection keeps the completed request's history and never
+        # silently raises a second one.
+        edited = self.client.post(
+            reverse("care-psy-note-self-assessment", args=[nid]),
+            {
+                "answers": self.reflection(confident_skill="Staying quiet"),
+                "supervision": "YES",
+                "supervision_focus": "How to respond to the disclosure.",
+                "request_supervision": False,
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(edited.status_code, 200)
+        record = edited.data["session"]["therapist_self_assessment"]
+        self.assertEqual(record["supervision"]["request_status"], "COMPLETED")
+        with platform_admin_context():
+            self.assertEqual(SupervisionRequest.objects.filter(patient_id=self.pid).count(), 1)

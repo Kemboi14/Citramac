@@ -72,7 +72,7 @@ import {
 import { NotePanel } from "./NotePanel";
 import { ApproachesDialog, AuditTrail, ClientFile, PastNote, SessionHistory } from "./RailViews";
 import { SafetyModal } from "./SafetyModal";
-import { SelfAssessmentPage, SelfAssessmentPrompt } from "./SelfAssessment";
+import { SelfAssessmentPage, SelfAssessmentPrompt, SupervisionRequestPage } from "./SelfAssessment";
 import { safetyFromSpeech, speak, stopSpeaking, synthesisAvailable, useDictation } from "./speech";
 import { ExampleThread, Thread, type Ack } from "./Thread";
 
@@ -84,7 +84,7 @@ import { ExampleThread, Thread, type Ack } from "./Thread";
 // storage (CLAUDE.md §5). Only UI preferences (panel width, answer mode,
 // language, read-aloud) are remembered locally.
 
-type View = "chat" | "history" | "past" | "client" | "audit" | "self-assessment";
+type View = "chat" | "history" | "past" | "client" | "audit" | "self-assessment" | "supervision";
 type PanelState = "open" | "expanded" | "min" | "closed";
 
 const WIDE = "(min-width: 1100px)";
@@ -583,6 +583,9 @@ function WorkspaceBody({
   const [focusSignal, setFocusSignal] = useState(1);
   const [example, setExample] = useState(false);
   const [view, setView] = useState<View>("chat");
+  // The reflection and supervision pages take the whole centre pane; restore
+  // the note panel as it was when the clinician leaves them.
+  const panelBeforeReflection = useRef<PanelState | null>(null);
   const [pastId, setPastId] = useState<string | null>(null);
   const [notes, setNotes] = useState<PsyNoteSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -595,6 +598,36 @@ function WorkspaceBody({
   const [notesOpen, setNotesOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [width, setWidth] = useState(() => clampWidth(Number(readPref("noteWidth")) || 420));
+
+  // The reflection and supervision pages take the whole centre pane; close the
+  // note (and the mobile slide-over) and restore the panel when leaving.
+  const openReflectionView = (next: "self-assessment" | "supervision") => {
+    if (view !== "self-assessment" && view !== "supervision") {
+      panelBeforeReflection.current = panel;
+    }
+    setView(next);
+    if (wide) setPanel("closed");
+    else setNotesOpen(false);
+  };
+  const closeReflectionView = () => {
+    setView("chat");
+    if (wide) setPanel(panelBeforeReflection.current ?? "open");
+    panelBeforeReflection.current = null;
+  };
+  const openSelfAssessment = () => openReflectionView("self-assessment");
+  const openSupervision = () => openReflectionView("supervision");
+
+  // Leaving the reflection pages by any route — breadcrumb, rail, back link —
+  // puts the note panel back the way the clinician had it.
+  useEffect(() => {
+    if (view !== "self-assessment" && view !== "supervision") {
+      if (panelBeforeReflection.current) {
+        if (wide) setPanel(panelBeforeReflection.current);
+        panelBeforeReflection.current = null;
+      }
+    }
+  }, [view, wide]);
+
   const [mode, setModeState] = useState<InputChoice>(() =>
     config.dictation_enabled && readPref("mode") === "dictate" ? "dictate" : "type",
   );
@@ -1187,6 +1220,22 @@ function WorkspaceBody({
               </li>
             </>
           )}
+          {view === "supervision" && (
+            <>
+              {sep}
+              <li>
+                <button type="button" onClick={() => setView("self-assessment")} className={crumb}>
+                  Self-assessment
+                </button>
+              </li>
+              {sep}
+              <li>
+                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                  Supervision
+                </span>
+              </li>
+            </>
+          )}
         </ol>
       </nav>
       {view === "chat" && !example && (
@@ -1448,7 +1497,18 @@ function WorkspaceBody({
         config={config}
         note={note}
         save={saveSelfAssessment}
-        onClose={() => setView("chat")}
+        onClose={closeReflectionView}
+        onRequestSupervision={openSupervision}
+      />
+    );
+  } else if (view === "supervision") {
+    centre = (
+      <SupervisionRequestPage
+        config={config}
+        note={note}
+        save={saveSelfAssessment}
+        onBack={() => setView("self-assessment")}
+        onClose={closeReflectionView}
       />
     );
   }
@@ -1549,13 +1609,6 @@ function WorkspaceBody({
       </button>
     </>
   );
-  // The reflection lives in the centre pane, so leave the note full width and
-  // close the mobile slide-over before opening it.
-  const openSelfAssessment = () => {
-    setView("self-assessment");
-    if (wide) setPanel((p) => (p === "expanded" ? "open" : p));
-    else setNotesOpen(false);
-  };
   const notePanel = (
     <NotePanel
       config={config}

@@ -1919,6 +1919,26 @@ def _self_assessment_note(note, answers, focus):
     return "\n".join(lines)[:6000]
 
 
+def _self_assessment_detail(note, user, extra):
+    """The author's reflection with the supervision request's live status, so
+    the client never treats a completed request as still open."""
+    assessment = extra.get("therapist_self_assessment")
+    if not assessment or note.author_id != user.pk:
+        return None
+    from apps.mhp_program.models import SupervisionRequest
+
+    assessment = dict(assessment)
+    supervision = dict(assessment.get("supervision") or {})
+    request_id = supervision.get("request_id")
+    supervision["request_status"] = (
+        SupervisionRequest.objects.filter(pk=request_id).values_list("status", flat=True).first()
+        if request_id
+        else None
+    )
+    assessment["supervision"] = supervision
+    return assessment
+
+
 @transaction.atomic
 def save_self_assessment(note, user, data):
     """The therapist's reflection on a signed session, and — when asked — the
@@ -1949,14 +1969,16 @@ def save_self_assessment(note, user, data):
     previous = extra.get("therapist_self_assessment")
     previous = previous if isinstance(previous, dict) else {}
     supervision = dict(previous.get("supervision") or {})
-    open_request = (
-        SupervisionRequest.objects.filter(pk=supervision.get("request_id"), status="OPEN").first()
+    active_request = (
+        SupervisionRequest.objects.filter(
+            pk=supervision.get("request_id"), status__in=("OPEN", "SCHEDULED")
+        ).first()
         if supervision.get("request_id")
         else None
     )
-    if open_request is not None and decision != "YES":
+    if active_request is not None and decision != "YES":
         raise ValidationError(
-            {"supervision": "A supervision request is already open for this session."}
+            {"supervision": "A supervision request is already active for this session."}
         )
     now = _now_iso()
 
@@ -1976,7 +1998,7 @@ def save_self_assessment(note, user, data):
 
     raised = False
     if requested:
-        row = open_request
+        row = active_request
         if row is None:
             when = facility_time.local_format(session.session_date, "%d/%m/%Y")
             row = SupervisionRequest.objects.create(
@@ -2095,9 +2117,7 @@ def detail(note, user):
             "primary_goal": extra.get("primary_goal", ""),
             "secondary_goals": extra.get("secondary_goals", ""),
             # The therapist's own reflection — its author only.
-            "therapist_self_assessment": (
-                extra.get("therapist_self_assessment") if note.author_id == user.pk else None
-            ),
+            "therapist_self_assessment": _self_assessment_detail(note, user, extra),
             "measure": extra.get("measure"),
             "process_notes": extra.get("process_notes", "") if "process_notes" in extra else None,
         },

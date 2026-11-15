@@ -111,6 +111,8 @@ export interface SelfAssessmentRecord {
     focus: string;
     request_id: string;
     requested_at: string | null;
+    /** Live status of the stored request, filled in when the note is read. */
+    request_status?: "OPEN" | "SCHEDULED" | "COMPLETED" | null;
   };
 }
 export interface SelfAssessmentPayload {
