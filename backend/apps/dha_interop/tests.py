@@ -112,7 +112,7 @@ class ClientHistoryFhirBundleTests(APITestCase):
         observation = next(
             e["resource"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Observation"
         )
-        # CLAUDE.md §6: no LOINC code is verified for this yet — text only.
+        # guide.md §6: no LOINC code is verified for this yet — text only.
         self.assertEqual(observation["code"], {"text": "Substance use"})
         self.assertEqual(observation["category"][0]["coding"][0]["code"], "social-history")
         self.assertEqual(observation["valueCodeableConcept"]["text"], "Alcohol")
@@ -137,15 +137,15 @@ class ClientHistoryFhirBundleTests(APITestCase):
 
 class FhirR4ConformanceTests(APITestCase):
     """
-    CLAUDE.md "Project standing rules — FHIR R4 conformance" §2 rung 2 —
+    guide.md "Project standing rules — FHIR R4 conformance" §2 rung 2 —
     every FHIR bundle/resource this app actually constructs must pass HL7's
     real R4 4.0.1 base schema (`apps.dha_interop.fhir_validation`),
     independent of `fhir_mapper.py`'s use of `fhir.resources.R4B` for
-    construction (see that module's docstring, and CLAUDE.md §1's documented
+    construction (see that module's docstring, and guide.md §1's documented
     exception, for why R4B). A failure here means `fhir_mapper.py` produced
     something R4B allows but real R4 doesn't — exactly the drift this
     validator exists to catch, and exactly what "Validator green in CI ...
-    a profile violation fails the build" (CLAUDE.md §3 item 5) means for the
+    a profile violation fails the build" (guide.md §3 item 5) means for the
     resources this app already builds.
     """
 
@@ -294,7 +294,7 @@ class FhirR4ConformanceTests(APITestCase):
 
 
 class FhirR4ConformanceInteropExamplesTests(SimpleTestCase):
-    """Published admission and client-history examples (CLAUDE.md §3 item 8): a
+    """Published admission and client-history examples (guide.md §3 item 8): a
     routine case, an edge case and a refusal or omission for each."""
 
     def _folder(self):

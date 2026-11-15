@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
  * Debounced server-side autosave for a form. `value` is the draft payload as the
  * server would receive it; every change is saved `delayMs` after the last
  * keystroke through `save` (a PUT to the draft endpoint — never browser
- * storage, CLAUDE.md §5). A failed save is retried after a longer pause and
+ * storage, guide.md §5). A failed save is retried after a longer pause and
  * reported, and the browser warns before the tab closes while a change is
  * still unsaved.
  */

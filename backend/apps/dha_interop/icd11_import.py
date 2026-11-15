@@ -1,5 +1,5 @@
 """
-ICD-11 MMS from WHO's own release file — never from memory (CLAUDE.md §6).
+ICD-11 MMS from WHO's own release file — never from memory (guide.md §6).
 
 The source is WHO's "simple tabulation" for a release, published at
 icdcdn.who.int/static/releasefiles/<release>/SimpleTabulation-ICD-11-MMS-en.zip.

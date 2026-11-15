@@ -40,7 +40,7 @@ class Encounter(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     encounter_type = models.CharField(max_length=100, blank=True, choices=TYPE_CHOICES)
-    # CLAUDE.md §4 — every encounter hangs off an EpisodeOfCare.
+    # guide.md §4 — every encounter hangs off an EpisodeOfCare.
     episode = models.ForeignKey(
         "care_pathway.EpisodeOfCare",
         on_delete=models.PROTECT,
@@ -250,7 +250,7 @@ class PrescriptionItem(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     cosigned_at = models.DateTimeField(null=True, blank=True)
-    # A telephone order: the prescriber who gave it (on whose authority, CLAUDE.md
+    # A telephone order: the prescriber who gave it (on whose authority, guide.md
     # §3 item 4). Only that prescriber confirms it (owner decision 2026-11-13).
     authorised_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

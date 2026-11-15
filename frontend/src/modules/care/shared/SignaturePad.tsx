@@ -5,7 +5,7 @@ import { BTN_GHOST, BTN_SM, INPUT } from "./styles";
 /**
  * An on-screen signature (owner decisions 2026-11-13): drawn with a finger,
  * stylus or mouse, witnessed by the staff member present. The drawing is sent as
- * a PNG and held only in memory here — never in browser storage (CLAUDE.md §5).
+ * a PNG and held only in memory here — never in browser storage (guide.md §5).
  *
  * To clear it (e.g. after the consent is saved), remount it with a new `key`.
  * `allowUnable` offers "Unable to sign" with a reason instead of a drawing, for

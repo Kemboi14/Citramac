@@ -4,7 +4,7 @@ for their role, the submit → verify / return workflow, and the one hard rule
 that follows from it: a clinician whose recorded practising licence has
 expired cannot sign a clinical record.
 
-Owner decisions of 2026-11-05 (CLAUDE.md amendment of that date):
+Owner decisions of 2026-11-05 (guide.md amendment of that date):
 
 - Staff fill in their own profile after their first sign-in, and are reminded
   (in-app notice + banner) until it is complete and verified. Existing staff are
@@ -36,7 +36,7 @@ VERIFY_PERMISSION = "staff.credentials.verify"
 
 # The regulator each built-in role is normally registered with, by
 # Role.system_key (never by name — an organisation may rename its roles).
-# VERIFY (CLAUDE.md §6): proposed mapping awaiting the owner's confirmation —
+# VERIFY (guide.md §6): proposed mapping awaiting the owner's confirmation —
 # notably the radiologist's regulator and the Counsellors and Psychologists
 # Board. It only pre-selects the regulator on the form; the practitioner picks
 # the body that actually registered them.

@@ -7,7 +7,7 @@ Two parts in one JSON document:
 - `fhir`: an R4 collection Bundle (machine-readable, interoperable copy),
   built with the same fhir.resources builders as the rest of the system.
   Observations for vital signs and instrument scores are NOT emitted until
-  their LOINC codes are verified (CLAUDE.md §6) — that data is in `record`.
+  their LOINC codes are verified (guide.md §6) — that data is in `record`.
 - `record`: the full chart as structured sections, which also drives the
   printable copy in the UI.
 """

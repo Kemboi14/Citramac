@@ -1,4 +1,4 @@
-"""Registration identity, consent and HIE outbox (CLAUDE.md §4, §6).
+"""Registration identity, consent and HIE outbox (guide.md §4, §6).
 
 Classes whose name starts with `FhirR4Conformance` run in the CI conformance step.
 """
@@ -985,7 +985,7 @@ class DuplicateCheckEndpointTests(CarePathwayApiTestCase):
 
 
 class FhirR4ConformanceRegistrationExamplesTests(SimpleTestCase):
-    """Published registration examples (CLAUDE.md §3 item 8): routine, an edge
+    """Published registration examples (guide.md §3 item 8): routine, an edge
     case (unidentified emergency, merged record) and a refusal (restricted)."""
 
     def _folder(self):
@@ -1018,7 +1018,7 @@ class FhirR4ConformanceRegistrationExamplesTests(SimpleTestCase):
                 resources = [e["resource"] for e in bundle["entry"]]
                 consents = [r for r in resources if r["resourceType"] == "Consent"]
                 for consent in consents:
-                    # By whom and when (CLAUDE.md §3 item 4).
+                    # By whom and when (guide.md §3 item 4).
                     provenance = next(
                         r
                         for r in resources

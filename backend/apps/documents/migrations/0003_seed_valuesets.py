@@ -1,6 +1,6 @@
 from django.db import migrations
 
-# Served value sets for the document module's drop-downs (CLAUDE.md §4
+# Served value sets for the document module's drop-downs (guide.md §4
 # "Terminology is served, not compiled"). Local codes only; urgency reuses the
 # one priority language (RULE-07).
 VALUESETS = {

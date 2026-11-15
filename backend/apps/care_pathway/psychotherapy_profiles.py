@@ -1,5 +1,5 @@
 """
-Our own profiles for the psychotherapy note document (CLAUDE.md §3 item 2),
+Our own profiles for the psychotherapy note document (guide.md §3 item 2),
 read from `fhir_profiles/` — the same files HL7's validator loads in CI.
 
 Kenya Core 1.0.0 has no Composition profile, and no published IG profiles a

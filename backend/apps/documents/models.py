@@ -11,7 +11,7 @@ apps/documents/catalogue.py and the VERIFY list in the build report):
                        template — VERIFY, none is invented here.
   DocumentEvent      → Provenance (activity = the transition) per version.
   DisclosureRecord   → AuditEvent (disclosure) citing the Consent relied on.
-The episode link keeps every document on the EpisodeOfCare spine (CLAUDE.md §4).
+The episode link keeps every document on the EpisodeOfCare spine (guide.md §4).
 """
 
 import uuid

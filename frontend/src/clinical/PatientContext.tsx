@@ -7,7 +7,7 @@ import { PatientContext, type SelectedPatient } from "./patientContextObject";
  * persistent patient-banner (mockups/citramac_clinical_workspace.html) that
  * carries across Triage/MSE, Clinical Encounter, and MHP session tabs.
  *
- * In memory only (CLAUDE.md §5: no browser storage for clinical data — a
+ * In memory only (guide.md §5: no browser storage for clinical data — a
  * client's identity and open encounter are exactly that). A page reload or a
  * sign-out forgets the selection; every screen that needs a client offers a
  * search box (ClientPicker) so choosing again takes a few keystrokes.

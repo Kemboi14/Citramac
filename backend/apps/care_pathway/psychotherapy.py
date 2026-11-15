@@ -60,7 +60,7 @@ ACTION_VALUESET = "psy-safety-action"
 ATTENDANCE_VALUESET = "psy-attendance-mode"
 ALERT_LABELS = dict(psy_seed.ALERTS)
 # Group attendance: group_programme.py only. Couple and family sessions are one
-# note per client — each person's record stands alone (CLAUDE.md §4).
+# note per client — each person's record stands alone (guide.md §4).
 SESSION_TYPES = ("INDIVIDUAL", "FAMILY")
 PROPOSAL_SOURCE = "Psychotherapy session safety question"
 DEFAULT_LANGUAGE = "en-GB"
@@ -82,7 +82,7 @@ DETECTION_NOTE = "This is a language screen only. It does not decide risk level.
 # A reflective record about the clinician's own practice, not the client's
 # clinical data. It is kept with the session (mhp_program.PsychotherapySession.extra)
 # and has no FHIR resource — like clinical supervision, it is workforce
-# development, not patient data (CLAUDE.md §5). Visible to its author only;
+# development, not patient data (guide.md §5). Visible to its author only;
 # the supervisor sees it only through the supervision request it raises.
 SELF_ASSESSMENT_VERSION = 1
 SELF_ASSESSMENT_SCALES = {

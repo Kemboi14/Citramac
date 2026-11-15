@@ -1,4 +1,4 @@
-"""Published discharge-summary and triage examples (CLAUDE.md §3 item 8).
+"""Published discharge-summary and triage examples (guide.md §3 item 8).
 
 Every example under `fhir_examples/` must stay valid against HL7's R4 4.0.1
 base schema. The class name starts with `FhirR4Conformance` so the CI step that
@@ -36,7 +36,7 @@ class FhirR4ConformanceDischargeExamplesTests(SimpleTestCase):
                 self.assertEqual(bundle["type"], "document")
                 self.assertEqual(_types(bundle)[0], "Composition")
                 composition = bundle["entry"][0]["resource"]
-                # Who, when and on whose authority (CLAUDE.md §3 item 4).
+                # Who, when and on whose authority (guide.md §3 item 4).
                 self.assertTrue(composition["author"])
                 self.assertEqual(composition["attester"][0]["mode"], "legal")
                 provenance = bundle["entry"][-1]["resource"]
@@ -103,7 +103,7 @@ class FhirR4ConformanceTriageExamplesTests(SimpleTestCase):
                     for e in bundle["entry"]
                     if e["resource"]["resourceType"] == "Encounter"
                 )
-                # Every encounter hangs off the episode (CLAUDE.md §4).
+                # Every encounter hangs off the episode (guide.md §4).
                 self.assertTrue(encounter["episodeOfCare"])
 
     def test_signed_triage_carries_its_provenance(self):

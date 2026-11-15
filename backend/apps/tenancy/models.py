@@ -745,7 +745,7 @@ class BranchRegulatoryRecord(TenantScopedModel):
     Removing a record hides it (`removed_at`); the row and its files are kept.
     """
 
-    # VERIFY (CLAUDE.md §6): display labels only, for the person filling the
+    # VERIFY (guide.md §6): display labels only, for the person filling the
     # form in. No code system, identifier `system` URI or regulator registry
     # is derived from them; which regulators license which kind of facility
     # is for the owner to confirm. Anything else is "Other", named as written

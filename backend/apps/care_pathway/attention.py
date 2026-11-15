@@ -1,7 +1,7 @@
 """
 Derived "needs attention" layer: the live risk register for one client and the
 cross-client task list. Nothing here is stored — every item is computed from the
-one shared record (CLAUDE.md §4: modules are views over one store), so it can
+one shared record (guide.md §4: modules are views over one store), so it can
 never disagree with the source. Items are shown to a clinician; none of them
 changes the record or sets a priority.
 

@@ -4,7 +4,7 @@ import type { NacadaSummary } from "./mhpExtrasApi";
 
 // Mirrors backend/apps/care_pathway (views.py) — docs/15-CLINICAL-WORKSPACE-V3.md.
 // Every clinical screen of the approved 2026-10-07 mockup reads/writes here.
-// Nothing in this module touches browser storage (CLAUDE.md §5).
+// Nothing in this module touches browser storage (guide.md §5).
 
 export type Priority = "RED" | "ORANGE" | "YELLOW" | "GREEN";
 export type PriorityOrBlank = Priority | "";

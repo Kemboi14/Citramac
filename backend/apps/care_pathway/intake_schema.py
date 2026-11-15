@@ -6,7 +6,7 @@ The schema is *served* (GET care/intake/schema/) so the screen is rendered from
 it rather than from a compiled list. Every drop-down is a value set id; the
 option lists below seed `LocalValueSet` (migration) and are database-owned
 afterwards. Codes are local — VERIFY: coding of these lists to SNOMED CT / ICD-11
-must come from the terminology server, never from this file (CLAUDE.md §6).
+must come from the terminology server, never from this file (guide.md §6).
 
 A field is {key, label, type, ...}. Types: text, textarea, number, date,
 datetime, select (valueset), multi (valueset), check. `restricted` fields are
@@ -381,7 +381,7 @@ _CODED_OPTIONS = {
 }
 
 # MSE domains: key → (label, valueset id or None for free text). Stored in
-# triage.MentalStatusExam (one store — CLAUDE.md §4); the options are served.
+# triage.MentalStatusExam (one store — guide.md §4); the options are served.
 MSE_DOMAINS = [
     ("appearance", "Appearance & self-care", ["Appropriate", "Dishevelled", "Unusual", "Other"]),
     (

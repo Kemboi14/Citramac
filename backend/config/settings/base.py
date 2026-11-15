@@ -292,7 +292,7 @@ CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_TASK_EAGER_PROPAGATES = CELERY_TASK_ALWAYS_EAGER
 
 CELERY_BEAT_SCHEDULE = {
-    # Durable HIE outbox (CLAUDE.md §4): deliver queued / retry-due resources.
+    # Durable HIE outbox (guide.md §4): deliver queued / retry-due resources.
     "drain-hie-outbox": {
         "task": "apps.dha_interop.tasks.drain_hie_outbox",
         "schedule": crontab(minute="*/5"),
@@ -535,7 +535,7 @@ PSYCHOTHERAPY_AI_MODEL = env("PSYCHOTHERAPY_AI_MODEL", default="claude-opus-5-5"
 PSYCHOTHERAPY_AI_TIMEOUT = env.int("PSYCHOTHERAPY_AI_TIMEOUT", default=60)
 # DOC-CI-07: investigations per medication, {"<national drug index code>":
 # ["<LOINC code>", ...]}. Facility configuration only — no monitoring schedule
-# ships in code (CLAUDE.md §6). Empty = the clinician selects the tests.
+# ships in code (guide.md §6). Empty = the clinician selects the tests.
 DOC_MEDICATION_MONITORING = env.json("DOC_MEDICATION_MONITORING", default={})
 # Interventions — VERIFY every value against the facility's own policy; these
 # are the owner's mockup defaults, labelled illustrative there.

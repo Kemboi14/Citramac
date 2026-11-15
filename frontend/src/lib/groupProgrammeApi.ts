@@ -1,7 +1,7 @@
 import { apiRequest } from "./apiClient";
 
 // Mirrors backend/apps/care_pathway/group_views.py — the v4 mockup's Group
-// Psychotherapy workspace. Nothing here touches browser storage (CLAUDE.md §5):
+// Psychotherapy workspace. Nothing here touches browser storage (guide.md §5):
 // attendance being marked before confirmation lives in React state only.
 
 /** Code from the served `group-attendance` value set. */

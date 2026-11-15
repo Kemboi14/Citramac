@@ -1,7 +1,7 @@
 """
 FHIR R4 view of one client's group-session entry — read-time, built from the
 entry and the shared session facts (no second store). fhir.resources R4B models
-(CLAUDE.md 2026-09-18 amendment), checked against base R4 4.0.1 and our profiles
+(guide.md 2026-09-18 amendment), checked against base R4 4.0.1 and our profiles
 in `fhir_profiles/` in tests, and by HL7's validator in CI.
 
 Mapping (approved in group_programme.py; per-client export, owner 2026-11-12):
@@ -16,7 +16,7 @@ Mapping (approved in group_programme.py; per-client export, owner 2026-11-12):
 | risk disclosure alert | Flag | base R4 |
 | confirmation, each correction | Provenance | base R4 |
 
-Per-subject separation (CLAUDE.md §4): a client's export never names another
+Per-subject separation (guide.md §4): a client's export never names another
 attendee. The cohort (FHIR Group) and the other participants' Encounters are not
 in it, and the Appointment lists only the facilitator. Attendance is not mapped
 to Appointment.participant.status, because R4 binds that to participationstatus

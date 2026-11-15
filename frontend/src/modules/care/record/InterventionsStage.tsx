@@ -19,7 +19,7 @@ const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-
  * Psychiatric review opens): what the plan asked for, the clinical modules care
  * is recorded from, and a full-screen module drawer. Recommendations, tariff and
  * payer codes come from the server (care/clients/<id>/interventions/workspace/);
- * nothing is kept in browser storage (CLAUDE.md §5).
+ * nothing is kept in browser storage (guide.md §5).
  */
 export function InterventionsStage({ patientId, banner, onRecordChanged }: RecordViewProps) {
   const navigate = useNavigate();

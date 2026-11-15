@@ -1,7 +1,7 @@
 # Provenance: WHO ICD-11 MMS release file
 
 Every ICD-11 code the system offers or accepts for a diagnosis comes from this file. None is
-typed in or recalled from memory (CLAUDE.md §6).
+typed in or recalled from memory (guide.md §6).
 
 - **Publisher:** World Health Organization, ICD-11 for Mortality and Morbidity Statistics
   (MMS), simple tabulation, English.

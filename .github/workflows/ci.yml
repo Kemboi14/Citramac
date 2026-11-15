@@ -94,7 +94,7 @@ jobs:
       - name: Tenant-isolation negative-path tests (cannot be skipped)
         run: pytest --ds=config.settings.test apps/tenancy/tests.py -v
 
-      - name: FHIR R4 4.0.1 conformance validator (CLAUDE.md — cannot be skipped)
+      - name: FHIR R4 4.0.1 conformance validator (guide.md — cannot be skipped)
         run: pytest --ds=config.settings.test apps/dha_interop/tests.py apps/dha_interop/test_hie.py apps/care_pathway/test_fhir_examples.py apps/care_pathway/test_registration_hie.py apps/sysadmin_audit/tests.py apps/mhp_program/test_nacada.py apps/dha_interop/test_icd11.py apps/care_pathway/test_clinical_report.py apps/care_pathway/test_psychotherapy_fhir.py apps/care_pathway/test_group_fhir.py apps/documents/test_consent_signatures.py -k FhirR4Conformance -v
 
       - uses: actions/setup-java@v4
@@ -102,7 +102,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      # Rung 4 (CLAUDE.md §2): HL7's own validator checks every published
+      # Rung 4 (guide.md §2): HL7's own validator checks every published
       # example (SHR ones against the vendored Kenya Core IG,
       # apps/dha_interop/fhir_validation/kenya_core/; the rest against base R4,
       # bundle invariants and reference resolution included; the psychotherapy

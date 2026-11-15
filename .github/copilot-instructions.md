@@ -1,8 +1,8 @@
 # CITRAMAC HMIS — Copilot standing instructions
 
-> **Read `CLAUDE.md` at the repo root first, every session.** It is the binding
+> **Read `guide.md` at the repo root first, every session.** It is the binding
 > specification for this codebase. Where anything here or in a mockup disagrees
-> with it, `CLAUDE.md` wins.
+> with it, `guide.md` wins.
 
 ## What you are building
 
@@ -15,13 +15,13 @@ not R5. "v4" in a mockup's name is a design revision, never a FHIR version.
 1. **FHIR R4 4.0.1 is what the clinical data is.** Every clinical feature names its
    R4 resource, profile, terminology binding and where it hangs off
    `EpisodeOfCare` *before* any code is written, and waits for the owner's
-   confirmation (`CLAUDE.md` §3, §7).
+   confirmation (`guide.md` §3, §7).
 2. **Never invent codes, canonical URLs, identifier systems or statute
    citations.** Mark them `VERIFY:` with what is needed and where to get it
-   (`CLAUDE.md` §6).
+   (`guide.md` §6).
 3. **Mockups set layout, not the data model.** A field a mockup shows that has
    no R4 home is raised with the owner, never stored in a repurposed element or
-   a private table (`CLAUDE.md` §5).
+   a private table (`guide.md` §5).
 4. **Multi-tenancy is structural.** Every table, query, cache key, Celery task,
    file path and audit entry is scoped to an organization; Postgres RLS enforces it.
 5. **SHA integration is API-native** — never a portal workaround.

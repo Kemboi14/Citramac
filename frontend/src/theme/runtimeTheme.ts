@@ -20,7 +20,7 @@ import {
  *
  * Both layers are cached in localStorage so the next page load paints the
  * right colors immediately instead of flashing the stock palette. This is
- * presentation only — never clinical data (CLAUDE.md §5).
+ * presentation only — never clinical data (guide.md §5).
  */
 
 const STYLE_ID = "citramac-theme-overrides";

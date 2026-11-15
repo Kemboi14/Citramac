@@ -145,7 +145,7 @@ def build_bundle(
     systems=NACADA_SYSTEMS,
 ):
     """Collection Bundle: the MeasureReport and the Provenance saying who
-    compiled it and when (CLAUDE.md §3 item 4)."""
+    compiled it and when (guide.md §3 item 4)."""
     measure_report = build_measure_report(
         report_id, summary, generated_at, branch_id, measure, systems
     )

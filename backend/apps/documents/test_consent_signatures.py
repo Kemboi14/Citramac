@@ -3,7 +3,7 @@ consents and consent documents are signed on screen by the deciding party and th
 staff witness, bound to the content signed, printed, and exported as FHIR R4.
 
 Classes named `FhirR4Conformance*` run in CI's conformance step: the published
-examples in `fhir_examples/consent-*.json` (CLAUDE.md §3 item 8) and bundles built
+examples in `fhir_examples/consent-*.json` (guide.md §3 item 8) and bundles built
 from real consents, against base R4 4.0.1 and our profiles (HL7's validator checks
 the same in CI)."""
 

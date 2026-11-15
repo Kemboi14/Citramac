@@ -2,7 +2,7 @@
 Patient-side FHIR resources: Patient (sliced identifiers), RelatedPerson
 (next of kin), Consent (HIE sharing decisions) and Provenance (registration).
 
-CLAUDE.md rules applied here:
+guide.md rules applied here:
 - §4 identifiers sliced, each with its own `system`; the system URI comes from
   settings, never from code. A national identifier with no configured system is
   *omitted* from outbound FHIR and reported in `omitted` so the caller can log
@@ -264,7 +264,7 @@ def provenance_id(kind, target_id):
 
 def build_merge_provenance(merge):
     """Who merged a temporary record into an identified client, when, and why
-    (CLAUDE.md §3 item 4). Both Patients are targets: the stub that now says
+    (guide.md §3 item 4). Both Patients are targets: the stub that now says
     replaced-by and the survivor that now holds its rows. VERIFY: a coded
     Provenance.activity for a record merge (hl7.org/fhir/R4/valueset-provenance-activity-type.html)
     — until one is confirmed the activity and reason are text only."""
@@ -289,7 +289,7 @@ def build_merge_provenance(merge):
 
 
 def build_registration_provenance(patient, user, recorded_at):
-    """Who recorded the registration, when, for whom (CLAUDE.md §3 item 4)."""
+    """Who recorded the registration, when, for whom (guide.md §3 item 4)."""
     name = (user.get_full_name() if hasattr(user, "get_full_name") else "") or str(user)
     return Provenance(
         id=provenance_id("registration", patient.id),

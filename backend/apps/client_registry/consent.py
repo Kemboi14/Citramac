@@ -4,7 +4,7 @@ call writes an immutable ConsentRecord (the audit-defensible history) and
 updates the Patient's denormalized "current state" fields (used by
 existing reads/serializers) to match the latest record.
 
-CLAUDE.md §4 "Consent and sensitivity before capture": a record states what
+guide.md §4 "Consent and sensitivity before capture": a record states what
 was permitted (`consent_type`), the decision (yes / no / restricted to the
 treating facility / not asked), the purpose and how long it lasts.
 """
@@ -95,7 +95,7 @@ def may_send_to_hie(patient, consent_type=HIE_GENERAL):
 # Fail safe like the HIE: only an explicit YES lets a message go; NOT_ASKED
 # and NO send nothing. Both decisions snapshot the facility's own
 # APPOINTMENT_MESSAGES wording (care_pathway.ConsentTemplate) — the system
-# never writes consent text (CLAUDE.md §6).
+# never writes consent text (guide.md §6).
 APPOINTMENT_SMS = "APPOINTMENT_SMS"
 APPOINTMENT_EMAIL = "APPOINTMENT_EMAIL"
 APPOINTMENT_TYPES = {"sms": APPOINTMENT_SMS, "email": APPOINTMENT_EMAIL}

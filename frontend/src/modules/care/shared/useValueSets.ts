@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import { getValueSets, type ValueSet, type ValueSetConcept } from "../../../lib/carePathwayApi";
 
-// Served value sets (CLAUDE.md §4 "Terminology is served, not compiled"), loaded
+// Served value sets (guide.md §4 "Terminology is served, not compiled"), loaded
 // once per page session and held in memory only — never browser storage.
 let cache: Record<string, ValueSet> | null = null;
 let inflight: Promise<Record<string, ValueSet>> | null = null;

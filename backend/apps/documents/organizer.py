@@ -126,7 +126,7 @@ def organize(
     ]
     # A consent document carries the facility's own wording (Org Admin → Consent
     # wording), frozen into the content its signatures attest to. Without it the
-    # document stays a structured draft (CLAUDE.md §6: the system writes no legal text).
+    # document stays a structured draft (guide.md §6: the system writes no legal text).
     wording = consent_wording(spec, organization)
     sensitivity = ["MH"]
     if "SUBSTANCE_USE" in draft.include:

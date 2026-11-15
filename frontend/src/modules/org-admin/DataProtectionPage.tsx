@@ -19,7 +19,7 @@ import { PsychotherapyAssistCard } from "./PsychotherapyAssistCard";
 // of 2 Oct 2026 §4.3, §5, §6): its Data Protection Officer, ODPC registration
 // evidence, the data processing agreement and the compliance warranty. The
 // warranty wording is published by the platform and shown verbatim; this
-// screen never writes or paraphrases legal text (CLAUDE.md §6).
+// screen never writes or paraphrases legal text (guide.md §6).
 
 const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 

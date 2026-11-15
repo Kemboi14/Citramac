@@ -14,7 +14,7 @@ import { Callout, StatusPill } from "../care/shared/ui";
 // processing of psychotherapy notes and SMS / email about appointments, each
 // versioned separately. The legal
 // text is set by the facility and never written or suggested by the system
-// (CLAUDE.md §6). Every consent record keeps the version the client was shown,
+// (guide.md §6). Every consent record keeps the version the client was shown,
 // so wording is never edited in place: saving creates a new version and the
 // server retires the previous one.
 

@@ -8,12 +8,12 @@ paths lands on a visible branch, or when none of them reaches a branch at all
 (records from before branches were stamped).
 
 Branch isolation covers the episode and everything recorded inside it — the
-clinical spine (CLAUDE.md §4) — plus appointments, wards, stores and the
+clinical spine (guide.md §4) — plus appointments, wards, stores and the
 finance records hanging off them. A client's own registration (Patient and its
 identifiers, contacts, allergies, consents) stays organization-wide so one
 person is one record across branches. Patient-level clinical records with no
 episode link (safety plans, outcome scores, alerts and the like) are not yet
-branch-scoped — an open decision, see the 2026-10-26 CLAUDE.md amendment.
+branch-scoped — an open decision, see the 2026-10-26 guide.md amendment.
 
 `STAMPED` models take the request's working branch on create when no branch
 was given (apps.tenancy.models.TenantScopedModel.save).

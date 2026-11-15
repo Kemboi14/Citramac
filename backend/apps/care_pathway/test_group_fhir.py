@@ -4,7 +4,7 @@ one client's entry as a FHIR R4 Bundle.
 `FhirR4Conformance*` classes run in CI's conformance step: the published
 examples in `fhir_examples/group-session-*.json` and the bundle built from a
 real confirmed session, against base R4 4.0.1 and our profiles (HL7's validator
-checks the same in CI). Per-subject separation (CLAUDE.md §4) is asserted on
+checks the same in CI). Per-subject separation (guide.md §4) is asserted on
 every bundle: nothing in it names another attendee.
 """
 

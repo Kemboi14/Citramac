@@ -2,7 +2,7 @@ import { apiRequest } from "./apiClient";
 
 // Psychotherapy Session note — master prompt §7 (PSY-*). Server:
 // backend/apps/care_pathway/psychotherapy.py. Drafts are saved on the server
-// only (X-09); nothing here touches browser storage (CLAUDE.md §5). AI
+// only (X-09); nothing here touches browser storage (guide.md §5). AI
 // assistance (translation, rewording) runs on the server only — the browser
 // never calls a model.
 

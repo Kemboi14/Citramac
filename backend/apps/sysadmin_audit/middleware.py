@@ -44,7 +44,7 @@ NOT_RECORD_READS = frozenset({"care-client-banner-version"})
 
 
 def log_client_record_read(request, response):
-    """CLAUDE.md §4: an AuditEvent on every access to a psychiatric record. Every
+    """guide.md §4: an AuditEvent on every access to a psychiatric record. Every
     successful read of a URL that names a client (`<patient_id>` — the whole
     client record, care/clients/<id>/…) writes one VIEW entry on that client,
     naming the route. Runs while the request's tenant context is still bound

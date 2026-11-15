@@ -11,7 +11,7 @@ Shape of IntakeAssessment.sections["mse"] since v4:
 
 A section without "findings" is in the legacy shape (before v4: one free-text
 value per domain, often a picked option's display). Signed intakes are immutable
-(CLAUDE.md §3 item 7), so legacy records are read as they are — each consumer
+(guide.md §3 item 7), so legacy records are read as they are — each consumer
 keeps its old text check for them — and nothing here rewrites a stored intake.
 """
 

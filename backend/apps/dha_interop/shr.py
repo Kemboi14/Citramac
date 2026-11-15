@@ -14,14 +14,14 @@ Consent → visit → write → read → close:
 - read_records: GET /shr/patient-records with the per-visit X-Consent-Token.
 - close_visit: POST /shr/visits/{visit_id}/close (usually a two-step OTP).
 
-Resource mapping (stated in the plan the project owner approved — CLAUDE.md §7):
+Resource mapping (stated in the plan the project owner approved — guide.md §7):
 | Ours                         | R4 resource   | Profile                    | Binding                         |
 | care_pathway.EpisodeOfCare   | EpisodeOfCare | kenya-core-episodeofcare   | status: episode-of-care-status  |
 | clinical_encounter.Encounter | Encounter     | kenya-core-encounter       | encounter-status-vs, -type-vs   |
 | clinical_encounter.Diagnosis | Condition     | kenya-core-condition       | ICD-11 MMS; Kenya Core statuses |
 
 Sending is irreversible — once in the national record it cannot be recalled
-(CLAUDE.md §3 item 7: P0). So a bundle leaves only when every gate passes:
+(guide.md §3 item 7: P0). So a bundle leaves only when every gate passes:
 - the SHR consent for this visit is APPROVED;
 - the client's own HIE consent is an explicit YES for general AND mental-health
   sharing, and for substance-use sharing whenever the content touches SUD;

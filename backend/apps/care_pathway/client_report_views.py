@@ -4,7 +4,7 @@ document (Preview, or `?output=pdf`). Both come from
 `client_report.compile_report`, so the page and the PDF cannot drift apart.
 
 Clinical staff only. Every opening is a VIEW entry in the audit log and every
-PDF download an EXPORT entry (CLAUDE.md §4).
+PDF download an EXPORT entry (guide.md §4).
 """
 
 from rest_framework.response import Response

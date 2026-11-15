@@ -9,7 +9,7 @@ import {
 
 // Org Admin — the facility tariff that prices every delivered service in
 // clinical billing (docs/15-CLINICAL-WORKSPACE-V3.md §1.15). Rates are entered
-// by the organisation; this screen never pre-fills or suggests one (CLAUDE.md
+// by the organisation; this screen never pre-fills or suggests one (guide.md
 // §6 — tariff values are not something the software may invent). A service
 // with no rate is excluded from billing with a visible notice until one is set.
 

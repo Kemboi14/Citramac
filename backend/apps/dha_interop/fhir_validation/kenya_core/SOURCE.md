@@ -12,9 +12,9 @@
 Vendored verbatim (not unpacked, not edited). `fhir_validation.kenya_core` reads the
 StructureDefinitions, ValueSets and CodeSystems straight out of the archive, so the profile
 URLs, identifier `system` URIs and code lists the Shared Health Record exporter uses cite this
-file rather than memory (CLAUDE.md §6).
+file rather than memory (guide.md §6).
 
-This is the regulator-supplied national IG that CLAUDE.md §8 names as binding. It is FHIR
+This is the regulator-supplied national IG that guide.md §8 names as binding. It is FHIR
 R4 4.0.1, consistent with §1. Note: DHA's public HAPI server at `fhir.dha.go.ke/fhir`
 reports FHIR 4.3.0 (R4B) in its CapabilityStatement; that server is not what this package
 targets, and nothing here talks to it.
@@ -23,7 +23,7 @@ The package profiles the resources the SHR accepts except `Medication`,
 `MedicationRequest`, `MedicationDispense`, `MedicationAdministration` and `Immunization`,
 which are therefore sent against base R4.
 
-Re-fetch only as a deliberate, reviewed version change (CLAUDE.md §1):
+Re-fetch only as a deliberate, reviewed version change (guide.md §1):
 
 ```bash
 curl -fsSL -o ke.fhir.core-<version>.tgz https://fhir.dha.go.ke/ig/package.tgz

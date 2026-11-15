@@ -8,7 +8,7 @@ DHA HIE registries (hie_spec/openapi/registries.openapi.json):
 A registry answer is evidence, not an instruction: a Client Registry match is
 shown to the clerk, who confirms it is the same person before anything is
 recorded, and what is recorded is an *added*, verified identifier slice — the
-local UHID and CITRAMAC number are never overwritten (CLAUDE.md §4). Names,
+local UHID and CITRAMAC number are never overwritten (guide.md §4). Names,
 date of birth and dependants returned by the registry are displayed, never
 copied over what the client told us.
 """

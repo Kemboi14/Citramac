@@ -12,7 +12,7 @@ FHIR R4 mapping (approved by the project owner):
 | linked InterventionRecord | Procedure (module `group_psychotherapy`, not billable) |
 | GroupProgrammeCategory | tenant-configured category list (local, not a clinical code) |
 
-Per-subject separation (CLAUDE.md §4) is enforced here, not in the UI: the
+Per-subject separation (guide.md §4) is enforced here, not in the UI: the
 shared session list, the session history and utilisation never carry an
 observation or a risk detail; a client's record carries only that client's own
 entries plus the shared session facts.

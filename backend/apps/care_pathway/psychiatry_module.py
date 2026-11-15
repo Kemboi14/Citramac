@@ -7,7 +7,7 @@ suggests for psychiatric review **or** who has a signed intake, and gives the
 psychiatrist one place to record the assessment, MSE, ICD-11 diagnosis and
 medication orders.
 
-Stores (CLAUDE.md §4 — one store per clinical concept):
+Stores (guide.md §4 — one store per clinical concept):
 - assessment → `care_pathway.ProgressNote` of type PSYCHIATRY (the one note
   store); `data` keeps the structured capture behind the rendered note;
 - MSE → `triage.MentalStatusExam` (the one MSE store), with structured findings
@@ -228,7 +228,7 @@ def _workspace_state(patient, encounter, note, user):
 def open_workspace(patient, user):
     encounter = ensure_psychiatry_encounter(patient, user)
     note = _latest_note(patient, status="DRAFT")
-    # Every read of the client's record is audited (CLAUDE.md §4,
+    # Every read of the client's record is audited (guide.md §4,
     # 2026-11-06 item 9). This POST is the read — there is no GET patient_id
     # for the middleware to catch — so log the client, not only a draft note.
     log_view(patient)
@@ -579,7 +579,7 @@ def _save_mse(patient, encounter, user, mse, note=None):
     Each draft note owns one exam (`data["mse_exam_id"]`). The first save of a
     draft creates a new exam; later saves of the same draft update it. A new
     assessment after a signed one creates a new exam and leaves the signed one
-    untouched — overwriting it would mutate a signed record (CLAUDE.md §3
+    untouched — overwriting it would mutate a signed record (guide.md §3
     item 7, P0), which the intake mirror (`intake._sync_mse`) avoids by keeping
     the exam on the draft itself.
     """

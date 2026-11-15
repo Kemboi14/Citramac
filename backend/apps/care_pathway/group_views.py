@@ -3,7 +3,7 @@ Group programme API — the v4 mockup's Group Psychotherapy workspace. Logic liv
 in group_programme.py; these views only route, check access and log views.
 
 Reading any client-specific content (a saved session's entries, a client's own
-group entries) writes an audit view entry per entry returned (CLAUDE.md §4,
+group entries) writes an audit view entry per entry returned (guide.md §4,
 "AuditEvent on every access to a psychiatric record").
 """
 

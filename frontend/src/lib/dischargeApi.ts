@@ -2,7 +2,7 @@ import { apiRequest } from "./apiClient";
 
 // Mirrors backend/apps/care_pathway (views.py, services.py) — discharge planning
 // and follow-up, docs/17-DISCHARGE-AND-FOLLOW-UP.md. Nothing here touches browser
-// storage (CLAUDE.md §5): drafts live on the server.
+// storage (guide.md §5): drafts live on the server.
 
 // ── Discharge planning ──
 

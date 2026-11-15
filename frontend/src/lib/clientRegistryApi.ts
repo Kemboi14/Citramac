@@ -4,7 +4,7 @@ import type { PatientDetail } from "./clinicalApi";
 // Mirrors `PatientViewSet.client_registry` (backend/apps/client_registry/views.py)
 // over apps.dha_interop.registries — DHA's national Client Registry. Nothing the
 // registry returns overwrites our record; confirming a match only adds a verified
-// Client Registry ID slice. Nothing here touches browser storage (CLAUDE.md §5).
+// Client Registry ID slice. Nothing here touches browser storage (guide.md §5).
 
 /** DHA's published identification types, offered exactly as given. */
 export const IDENTIFICATION_TYPES = [

@@ -514,7 +514,7 @@ class PractitionerCredential(TenantScopedModel):
     organisation — the practitioner profile the statutory recommendation form
     reads (master prompt LGL-R-01/02/08). FHIR: Practitioner.qualification
     (identifier = registration number; issuer and identifier `system` URI are
-    VERIFY — CLAUDE.md §6, never invented here).
+    VERIFY — guide.md §6, never invented here).
 
     `mha_recommendation_approved` is the MHA_RECOMMENDATION_APPROVED flag: the
     organisation has confirmed this practitioner is approved to make
@@ -557,7 +557,7 @@ class PractitionerCredential(TenantScopedModel):
     # NACADA accreditation / licence held by the staff member (addiction
     # treatment practice). FHIR: a further Practitioner.qualification
     # (identifier, period, issuer). NACADA's own accreditation categories and
-    # its identifier `system` URI are VERIFY (CLAUDE.md §6) — the category is
+    # its identifier `system` URI are VERIFY (guide.md §6) — the category is
     # recorded as NACADA wrote it on the certificate, never picked from a list
     # invented here.
     nacada_number = models.CharField(
@@ -574,7 +574,7 @@ class PractitionerCredential(TenantScopedModel):
     # ── Self-service professional profile (2026-11-05) ─────────────────────
     # The practitioner fills these in themself; an Org Admin or a holder of
     # staff.credentials.verify verifies them (apps.accounts.practitioner_profile).
-    # VERIFY (CLAUDE.md §6): the regulator for each cadre, whether it issues a
+    # VERIFY (guide.md §6): the regulator for each cadre, whether it issues a
     # separate practising licence, and its identifier `system` URIs. The labels
     # below are display names awaiting the owner's confirmation; no code, URI
     # or registry value is derived from them (the HIE registry keeps using
@@ -678,7 +678,7 @@ class PractitionerCredentialItem(TenantScopedModel):
     FHIR (not emitted yet): one `Practitioner.qualification` each (identifier
     = number, period = issued/expires, issuer = the regulator or institution,
     code = the qualification). Workforce data, not patient data. VERIFY
-    (CLAUDE.md §6): the regulators' identifier `system` URIs and any
+    (guide.md §6): the regulators' identifier `system` URIs and any
     qualification code system — none is invented; title and issuer are
     recorded as written on the document.
 

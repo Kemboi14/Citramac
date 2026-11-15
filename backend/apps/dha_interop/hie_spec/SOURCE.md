@@ -2,7 +2,7 @@
 
 Every endpoint path, query parameter, request field and enum value used by
 `apps/dha_interop/hie_api.py` and the services built on it is taken from the files
-in this directory — not from memory and not from third-party SDKs (CLAUDE.md §6).
+in this directory — not from memory and not from third-party SDKs (guide.md §6).
 
 - **Publisher:** Digital Health Agency (DHA), Kenya — "Health Information Exchange"
   developer documentation, <https://hie-docs.dha.go.ke>
@@ -56,5 +56,5 @@ These are absent from both the specs and the guides. The code does not fill them
 
 ## Re-fetch
 
-Re-fetch only as a deliberate, reviewed change (CLAUDE.md §1). The extraction script used is
+Re-fetch only as a deliberate, reviewed change (guide.md §1). The extraction script used is
 reproduced in the commit that added this directory; compare hashes before replacing files.

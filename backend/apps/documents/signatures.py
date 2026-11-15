@@ -17,7 +17,7 @@ witnessed. Every signature is bound to the SHA-256 of what was signed, so a
 document changed after signing must be signed again. Rows are append-only and
 every capture is in the audit trail, with the image only as a fingerprint.
 
-VERIFY (owner / legal counsel, CLAUDE.md §6): that a drawn, witnessed signature
+VERIFY (owner / legal counsel, guide.md §6): that a drawn, witnessed signature
 meets Kenyan electronic-signature and data-protection consent requirements for
 each of these consents. No statute is cited here.
 """

@@ -57,7 +57,7 @@ class ClinicalEncounterAndTriageTests(APITestCase):
         )
 
     def test_outpatient_encounter_joins_the_clients_episode(self):
-        """CLAUDE.md §4: every encounter hangs off an EpisodeOfCare."""
+        """guide.md §4: every encounter hangs off an EpisodeOfCare."""
         from apps.care_pathway.models import EpisodeOfCare
 
         first = self._open_encounter()

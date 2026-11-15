@@ -1,7 +1,7 @@
 """
 FHIR R4 for a signed consent — read-time, built from the consent and its
 signatures (no second store). Built with fhir.resources R4B models, as everywhere
-else (CLAUDE.md 2026-09-18 amendment); checked against the vendored R4 4.0.1
+else (guide.md 2026-09-18 amendment); checked against the vendored R4 4.0.1
 schema and our profiles in tests, and by HL7's validator in CI.
 
 Mapping (owner, 2026-11-13):
@@ -31,7 +31,7 @@ Sensitivity (§3 item 6): R + PSY on the Consent and Provenance (a consent given
 a mental-health / addiction service discloses that care), as on the psychotherapy
 note. Consents are not sent to the SHR.
 
-VERIFY (CLAUDE.md §6), local until confirmed:
+VERIFY (guide.md §6), local until confirmed:
 - ISO-ASTM E1762 signature-type codes for Signature.type (the base binding is
   `preferred`; ours are local `urn:citramac:codesystem:signature-role`);
 - that a drawn, witnessed signature meets Kenyan e-signature / data-protection

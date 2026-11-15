@@ -2,7 +2,7 @@
 FHIR R4 4.0.1 resources built from our models.
 
 Constructed with `fhir.resources.R4B` classes — the documented construction-only
-exception (CLAUDE.md, 2026-09-18). R4B is not R4: conformance is checked against
+exception (guide.md, 2026-09-18). R4B is not R4: conformance is checked against
 HL7's R4 4.0.1 schema (fhir_validation), never against the library.
 """
 
@@ -124,7 +124,7 @@ def build_medication_request_resource(item, patient_ref):
 def build_observation_resource(substance_use_entry, patient_ref):
     """
     Substance-use finding from a Client History intake's `SubstanceUseEntry`.
-    `code` is text only: no LOINC code for it has been verified (CLAUDE.md §6 —
+    `code` is text only: no LOINC code for it has been verified (guide.md §6 —
     VERIFY: the LOINC code for substance use, from loinc.org), and a plausible
     wrong code is worse than none.
     """
@@ -162,7 +162,7 @@ _ENCOUNTER_STATUS_MAP = {
 
 def build_encounter_resource(admission, patient_ref, episode_ref=None):
     """The inpatient stay: R4 Encounter class IMP, inside its EpisodeOfCare
-    (CLAUDE.md §4). Its id is the clinical Encounter the admission opened, the
+    (guide.md §4). Its id is the clinical Encounter the admission opened, the
     same id the SHR uses, so one stay is one Encounter everywhere."""
     from fhir.resources.R4B.period import Period
 

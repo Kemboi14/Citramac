@@ -361,7 +361,7 @@ class ClaimLine(TenantScopedModel):
         return self.unit_price * self.quantity
 
 
-# Minimum-necessary claim attachments (CLAUDE.md §4 consent & sensitivity,
+# Minimum-necessary claim attachments (guide.md §4 consent & sensitivity,
 # DS4P). Psychotherapy/process notes and trauma history are never attached to
 # a payer claim — enforced here, in the serializer, by a database CHECK
 # constraint, and again when the gateway payload is built.

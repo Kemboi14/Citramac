@@ -4,7 +4,7 @@ shared printable document (Preview / `?output=pdf`), and as a FHIR R4 Bundle.
 
 Each call compiles the counts for the chosen branch and period afresh — nothing
 is stored. Clinical staff and Org Admin can open it, for their own branches
-only. Every compile is a VIEW entry in the audit log (CLAUDE.md §4).
+only. Every compile is a VIEW entry in the audit log (guide.md §4).
 """
 
 import uuid

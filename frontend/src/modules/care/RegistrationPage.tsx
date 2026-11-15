@@ -58,7 +58,7 @@ import {
 // selectExistingClientForRegistration, updateIdentityFields, registerTier1Client
 // and beginIdentityResolution, with the client's v4 registration mockup (split
 // name, social & personal details, emergency arrival). Every option list is a
-// served value set; nothing is held in browser storage (CLAUDE.md §5).
+// served value set; nothing is held in browser storage (guide.md §5).
 
 // Each registration type has its own colour — the selected tab, focused fields
 // and submit button — so the type in use is recognisable at a glance (QA

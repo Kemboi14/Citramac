@@ -36,7 +36,7 @@ import { useValueSets, type ValueSetsApi } from "./shared/useValueSets";
 
 // Inpatient Admissions — docs/15-CLINICAL-WORKSPACE-V3.md §1.10, mockup `inpatient()`.
 // The admission is an Encounter (class IMP) inside the client's EpisodeOfCare;
-// the server opens/links both on create (CLAUDE.md §4).
+// the server opens/links both on create (guide.md §4).
 //
 // Legal status first (owner decision 2026-10-22): the legal basis is the
 // client's legal admission status — one store, worked here inline. Voluntary:

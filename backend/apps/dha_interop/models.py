@@ -238,7 +238,7 @@ class FhirResourceCache(models.Model):
     related_object_id = models.UUIDField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="CACHED")
     transmission_detail = models.TextField(blank=True)
-    # Outbox behaviour (CLAUDE.md §4 "Fail safely"). `idempotency_key` is the
+    # Outbox behaviour (guide.md §4 "Fail safely"). `idempotency_key` is the
     # stable business identifier that makes enqueue and retry safe;
     # `retry_safe` is true only when a repeat send cannot create a duplicate
     # (an update-as-create PUT by id) — otherwise a timeout is never retried blind.

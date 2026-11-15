@@ -25,7 +25,7 @@ const CLINICAL_STATUSES: { code: DiagnosisStatus; display: string }[] = [
 const CELL = "rounded-lg border border-surface-border bg-surface-bg px-2 py-1 text-[12.5px]";
 
 /**
- * Diagnosis tab — ICD-11 search only, no free-text diagnosis (CLAUDE.md §3.3,
+ * Diagnosis tab — ICD-11 search only, no free-text diagnosis (guide.md §3.3,
  * conflict C4). Each diagnosis hangs off the psychiatry encounter. Diagnostic
  * certainty (Provisional / Differential / Confirmed / Ruled out — the served
  * `intake-dx-status`, FHIR Condition.verificationStatus) is kept separate from

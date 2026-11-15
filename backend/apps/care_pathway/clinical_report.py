@@ -1,6 +1,6 @@
 """
 The Clinical Report: what the service did for one branch over one period,
-counts only (owner, 2026-11-10 — design confirmed before building, CLAUDE.md §7).
+counts only (owner, 2026-11-10 — design confirmed before building, guide.md §7).
 
 It is computed when opened and never stored: nothing here is a second store of
 clinical data, and it holds no names, identifiers or free text. Clients are
@@ -236,7 +236,7 @@ def psychiatric_reviews(branch, start, end):
             ),
         ],
         notes=[
-            "Raised when a triage or intake identifies withdrawal (CLAUDE.md 2026-10-29). A "
+            "Raised when a triage or intake identifies withdrawal (guide.md 2026-10-29). A "
             "review raised before the period can be completed in it."
         ],
     )

@@ -19,7 +19,7 @@ credentials (Branch.sha_api_credentials_encrypted, JSON {client_id,
 client_secret}) uses those instead and sends no headers — the documentation
 discourages sending both.
 
-Failure handling (CLAUDE.md §4 "Fail safely"):
+Failure handling (guide.md §4 "Fail safely"):
 - not configured → HieNotConfigured, logged, never a silent success;
 - every call is written to ShaTransactionLog with OTPs, secrets, biometric
   data and file contents redacted;

@@ -4,7 +4,7 @@ import { apiRequest } from "./apiClient";
 // shr.py) — the DHA national Shared Health Record. Care team only: every call
 // 403s for anyone without full access to the client. Sending is irreversible —
 // once a bundle is in the national record it cannot be recalled — so the UI
-// always previews first. Nothing here touches browser storage (CLAUDE.md §5).
+// always previews first. Nothing here touches browser storage (guide.md §5).
 
 export type ShrVisitType = "OP" | "IP";
 export type ShrConsentStatus = "PENDING" | "APPROVED" | "REJECTED" | "CLOSING" | "CLOSED";

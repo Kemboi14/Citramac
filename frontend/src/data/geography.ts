@@ -3,7 +3,7 @@
  * on Organization and Branch forms (docs/04-MULTI-TENANCY.md §4.1's address
  * fields). Not a terminology-server binding — these are administrative
  * location labels, not clinical codes, so a static list is the right tool
- * (see CLAUDE.md §4: the "served, not compiled" rule is scoped to clinical
+ * (see guide.md §4: the "served, not compiled" rule is scoped to clinical
  * drop-downs).
  *
  * Kenya's 47 counties and their sub-counties are modelled on the country's

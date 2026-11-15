@@ -648,7 +648,7 @@ function AdmissionLegal({
 // decides and fulfils it. Access/portability are fulfilled by the server's
 // record export, which marks the request fulfilled and writes an EXPORT audit
 // entry. The export is held in memory only and handed to the browser as a
-// download — never written to browser storage (CLAUDE.md §5).
+// download — never written to browser storage (guide.md §5).
 
 const REQUEST_STATUS_TONE: Record<SubjectRequestStatus, "neutral" | "risk" | "brand" | "warn"> = {
   RECEIVED: "warn",

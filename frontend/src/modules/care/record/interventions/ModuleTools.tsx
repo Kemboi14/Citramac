@@ -64,7 +64,7 @@ function ClientFollowUps({ patientId, clientName }: Target) {
 
 /** Each intervention module opens the system's own module for this client —
  * the same components and pages the record and sidebar use, so each concept
- * keeps one store (CLAUDE.md §4). Pages outside the record open scoped to the
+ * keeps one store (guide.md §4). Pages outside the record open scoped to the
  * client: the record selects it in the shared patient context, and the
  * admissions page takes `?patient=`. Modules with no dedicated module yet
  * (medical review, psychosocial support, nutrition & fitness) record through

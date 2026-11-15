@@ -2,7 +2,7 @@ import { apiRequest } from "./apiClient";
 import type { PartySignatureRow, SignatureInput } from "./carePathwayApi";
 
 // Mirrors backend/apps/documents (master prompt §6 Document Generation).
-// Nothing here touches browser storage (CLAUDE.md §5).
+// Nothing here touches browser storage (guide.md §5).
 
 export type DocStatus = "DRAFT" | "IN_REVIEW" | "SIGNED" | "RELEASED" | "FILED" | "BLOCKED_CONSENT";
 

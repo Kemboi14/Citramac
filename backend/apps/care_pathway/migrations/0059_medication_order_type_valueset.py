@@ -3,7 +3,7 @@ from django.db import migrations
 
 def seed(apps, schema_editor):
     # Idempotent: the order types for structured medication orders, served like
-    # every other drop-down (CLAUDE.md §4 "Terminology is served").
+    # every other drop-down (guide.md §4 "Terminology is served").
     from apps.care_pathway.interventions import (
         ORDER_TYPE_VALUESET_ID,
         ORDER_TYPE_VALUESET_TITLE,

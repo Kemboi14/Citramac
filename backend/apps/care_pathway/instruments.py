@@ -3,7 +3,7 @@ Assessment instruments — one registry, one scoring path (mockup v4 MEAS / TOOL
 
 A score is the clinician's recorded result: the system sums item points or
 accepts a total, labels it with a band and describes change over time in words.
-It never decides care (CLAUDE.md §6 / mockup rule: priority is never set from a
+It never decides care (guide.md §6 / mockup rule: priority is never set from a
 single number).
 
 `approval` states how far a definition is cleared for clinical use:

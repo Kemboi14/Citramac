@@ -1,12 +1,12 @@
 """
-FHIR R4 4.0.1 conformance validator — CLAUDE.md "Project standing rules —
+FHIR R4 4.0.1 conformance validator — guide.md "Project standing rules —
 FHIR R4 conformance", §2 rung 2 (valid R4 that passes the base schema).
 
 Checks constructed resources against HL7's own combined JSON Schema for R4
 4.0.1 (vendored verbatim in `schemas/fhir.schema.json`, see `schemas/SOURCE.md`),
 never against `fhir.resources`' bundled schema. This is deliberate:
 `apps.dha_interop.fhir_mapper` constructs resources via `fhir.resources.R4B`
-(see that module's docstring and CLAUDE.md §1's documented exception) because
+(see that module's docstring and guide.md §1's documented exception) because
 no maintained release of that library still ships a true-R4 default
 namespace. Validating against the library's own R4B schema would silently
 legitimize any R4B-only shape it happens to produce; validating against the
@@ -15,11 +15,11 @@ real, independently-sourced R4 schema is what actually enforces the pinned
 `additionalProperties: false`.
 
 Rung 2 only: the base R4 schema makes almost every element optional (see
-CLAUDE.md §2), so a resource passing here is schema-valid, not necessarily
+guide.md §2), so a resource passing here is schema-valid, not necessarily
 complete or clinically sound. Profile conformance is checked elsewhere: the
 national IG, Kenya Core 1.0.0, is vendored in `kenya_core/` and read by
 `kenya_core.py`, and CI runs HL7's own validator over every published example
-against it (rung 4, CLAUDE.md amendment 2026-10-23; scripts/hl7_validator_gate.py).
+against it (rung 4, guide.md amendment 2026-10-23; scripts/hl7_validator_gate.py).
 """
 
 import json

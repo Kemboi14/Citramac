@@ -1,7 +1,7 @@
 """
 Identity services — identifiers, duplicate detection, temporary→permanent merge.
 
-CLAUDE.md §4: identifiers are sliced, never overwritten; a local business
+guide.md §4: identifiers are sliced, never overwritten; a local business
 identifier exists before any network call; a local number cannot reconcile a
 person across sites, so national identifiers sit beside it, each with its own
 kind (and, in FHIR, its own `system`).

@@ -1598,7 +1598,7 @@ def billing_overview(patient=None):
 
 def episode_summary(patient):
     """Current (or latest) episode with its status history and the waiting time
-    — waitlist start to first active (CLAUDE.md §4: unrecoverable later)."""
+    — waitlist start to first active (guide.md §4: unrecoverable later)."""
     episode = current_or_latest_episode(patient)
     if episode is None:
         return None

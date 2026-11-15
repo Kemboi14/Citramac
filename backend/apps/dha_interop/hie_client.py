@@ -2,7 +2,7 @@
 Durable outbox for clinical data bound for the DHA Shared Health Record
 (POST /shr/bundles — hie_spec/openapi/sharedhealthrecord.openapi.json).
 
-CLAUDE.md §4 "Fail safely":
+guide.md §4 "Fail safely":
 - every outbound bundle is first written to a durable outbox row
   (`FhirResourceCache`) keyed by a stable idempotency key, so enqueueing twice
   is a no-op and clinical work never blocks on the network;
@@ -20,7 +20,7 @@ DHA publishes no endpoint for pushing a Patient (the Client Registry is
 read through GET /patients) nor for a free-standing referral document;
 registration identity is reconciled by a Client Registry lookup instead
 (apps.dha_interop.registries). Referrals are not sent at all: no destination
-FR code is captured, so shr.py lists them as omitted (CLAUDE.md 2026-10-23).
+FR code is captured, so shr.py lists them as omitted (guide.md 2026-10-23).
 """
 
 import logging

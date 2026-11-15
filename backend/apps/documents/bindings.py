@@ -1,6 +1,6 @@
 """
 Auto-populated field bindings (DOC-SPEC #4) — read-only views over the one
-shared store (CLAUDE.md §4). Nothing here copies or re-derives clinical data
+shared store (guide.md §4). Nothing here copies or re-derives clinical data
 into a second store: each resolver reads the source object at organize time
 and returns the value with its source (RULE-03) and time (RULE-04).
 

@@ -12,7 +12,7 @@ interface Loaded<T> {
 /**
  * Loads one API resource for a record view. `scope` identifies what is loaded
  * (e.g. the patient id); bump `version` to refetch after a save — the previous
- * data stays on screen while the refetch runs. Held in memory only (CLAUDE.md §5).
+ * data stays on screen while the refetch runs. Held in memory only (guide.md §5).
  */
 export function useRecordData<T>(
   scope: string | null,

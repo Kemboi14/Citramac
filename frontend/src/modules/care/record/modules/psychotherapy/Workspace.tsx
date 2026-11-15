@@ -81,7 +81,7 @@ import { ExampleThread, Thread, type Ack } from "./Thread";
 // suggestions, the sign-off checklist, AI assistance) is the server's
 // (care_pathway/psychotherapy.py); this screen asks, shows and sends.
 // Clinical content lives on the server draft only (X-09) — never in browser
-// storage (CLAUDE.md §5). Only UI preferences (panel width, answer mode,
+// storage (guide.md §5). Only UI preferences (panel width, answer mode,
 // language, read-aloud) are remembered locally.
 
 type View = "chat" | "history" | "past" | "client" | "audit" | "self-assessment" | "supervision";

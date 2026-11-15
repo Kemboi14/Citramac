@@ -267,7 +267,7 @@ class AdmissionSerializer(serializers.ModelSerializer):
             return attrs
         # Owner decision 2026-10-22 ("legal status first"): a new admission's legal
         # basis is the client's Active legal admission status — the single store
-        # (CLAUDE.md §5). Voluntary: the signed application and the admitting
+        # (guide.md §5). Voluntary: the signed application and the admitting
         # officer's decision; involuntary: the application, the signed medical
         # recommendation(s) and the decision. No free-text legal basis at create.
         from apps.care_pathway.legal_models import LegalStatus

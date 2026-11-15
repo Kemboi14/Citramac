@@ -61,7 +61,7 @@ function uniqueSorted(values: string[]) {
  * (FHIR Appointment + Group), one separate entry per client (FHIR Encounter), each
  * linked to that client's own Group Psychotherapy intervention record. Attendance
  * being marked lives in React state only until the reviewed session is confirmed
- * (CLAUDE.md §5); the server does the saving, linking and per-client separation.
+ * (guide.md §5); the server does the saving, linking and per-client separation.
  */
 export function GroupProgrammePage() {
   const { accessToken, claims } = useAuth();

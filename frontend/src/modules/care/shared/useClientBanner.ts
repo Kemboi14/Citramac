@@ -18,7 +18,7 @@ const TAB_ID = Math.random().toString(36).slice(2);
 /**
  * Tell every open banner for this client to reload now: on this page and in the
  * user's other tabs. Only the client's id is sent, never record content, and
- * nothing is stored (CLAUDE.md §5).
+ * nothing is stored (guide.md §5).
  */
 export function notifyClientChanged(patientId: string) {
   window.dispatchEvent(new CustomEvent<string>(CHANGED_EVENT, { detail: patientId }));

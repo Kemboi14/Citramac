@@ -1,7 +1,7 @@
 """
 FHIR R4 bundle for one triage encounter — docs/15-CLINICAL-WORKSPACE-V3.md §3
 (M1–M3). Built with the fhir.resources R4B models, as everywhere else
-(CLAUDE.md 2026-09-18 amendment), and validated against the vendored R4 4.0.1
+(guide.md 2026-09-18 amendment), and validated against the vendored R4 4.0.1
 schema in tests.
 
 Local code systems use `urn:citramac:codesystem:<value set id>`.
@@ -267,7 +267,7 @@ def build_triage_bundle(triage_encounter):
             )
         )
         if task.outcome and task.completed_by:
-            # Whose review the outcome is (CLAUDE.md §4 provenance on every assertion).
+            # Whose review the outcome is (guide.md §4 provenance on every assertion).
             resources.append(
                 (
                     _urn("Provenance", f"task-{task.id}"),

@@ -1,7 +1,7 @@
 """Psychotherapy note across sessions (PSY-CHANGE) and as a FHIR R4 document.
 
 Classes named `FhirR4Conformance*` run in CI's conformance step: the published
-examples in `fhir_examples/psychotherapy-note-*.json` (CLAUDE.md §3 item 8) and
+examples in `fhir_examples/psychotherapy-note-*.json` (guide.md §3 item 8) and
 the bundle built from a real signed note, each against base R4 4.0.1 and our
 profiles in `fhir_profiles/` (HL7's validator checks the same in CI).
 """

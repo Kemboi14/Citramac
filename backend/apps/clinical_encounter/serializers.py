@@ -62,7 +62,7 @@ class DiagnosisCodeSerializer(serializers.ModelSerializer):
         ]
 
     def validate_icd11_code(self, value):
-        # Only a code from the WHO release loaded here can be recorded (CLAUDE.md §6).
+        # Only a code from the WHO release loaded here can be recorded (guide.md §6).
         if self.instance is None or value != self.instance.icd11_code:
             problem = value.diagnosis_problem()
             if problem:

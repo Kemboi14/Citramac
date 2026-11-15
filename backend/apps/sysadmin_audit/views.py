@@ -123,7 +123,7 @@ def _operation_outcome(code, diagnostics, status):
 class PatientAuditEventView(APIView):
     """
     FHIR R4 `GET fhir/AuditEvent?patient=<id>` — one client's access and change
-    history as a searchset Bundle of AuditEvents (CLAUDE.md §4), mapped from the
+    history as a searchset Bundle of AuditEvents (guide.md §4), mapped from the
     same append-only trail the Audit Log screen reads (see .fhir). Same readers
     as that screen, scoped to their own organization, and opening it is itself
     audited.

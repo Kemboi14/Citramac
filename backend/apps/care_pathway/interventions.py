@@ -3,7 +3,7 @@ Intervention modules (mockup v4 stage 5): SBAR handover, observation & safety,
 observation sets (EWS), prescribing checks and structured orders, the MAR and
 restrictive practice.
 
-What is deliberately *not* here (CLAUDE.md §6): a drug formulary, interaction
+What is deliberately *not* here (guide.md §6): a drug formulary, interaction
 rules, maximum-dose ceilings or class duplication — those need a licensed or
 national source (VERIFY). The prescribing check says so in every result instead
 of implying a clean bill of health. Timed monitoring schedules are

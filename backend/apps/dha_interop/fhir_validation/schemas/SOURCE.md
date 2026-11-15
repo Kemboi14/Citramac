@@ -9,7 +9,7 @@ This is HL7's own combined JSON Schema for every R4 resource type, vendored verb
 regenerated, not hand-edited) so `fhir_validation.validator` can check constructed resources
 against real R4 4.0.1 without a network call at test/CI time. Re-fetch and replace this file
 (and update the hash above) only for a deliberate, reviewed R4 patch release — not casually,
-per `CLAUDE.md` §1 ("treat a version bump as a project, not a dependency upgrade").
+per `guide.md` §1 ("treat a version bump as a project, not a dependency upgrade").
 
 Re-fetch:
 

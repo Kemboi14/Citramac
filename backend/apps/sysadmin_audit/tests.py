@@ -222,7 +222,7 @@ class AppendOnlyAndCoverageTests(TestCase):
 
 
 class FhirR4ConformanceAuditEventTests(APITestCase):
-    """CLAUDE.md §4 — AuditEvent for every access to a psychiatric record,
+    """guide.md §4 — AuditEvent for every access to a psychiatric record,
     mapped from the one append-only trail. The class name starts with
     `FhirR4Conformance` so the CI conformance step runs it on every build."""
 
@@ -342,7 +342,7 @@ class FhirR4ConformanceAuditEventTests(APITestCase):
 
 
 class FhirR4ConformanceAuditEventExamplesTests(SimpleTestCase):
-    """Published AuditEvent examples (CLAUDE.md §3 item 8): a psychiatric note
+    """Published AuditEvent examples (guide.md §3 item 8): a psychiatric note
     viewed, a system action with no human actor, and an update whose changed
     values are withheld."""
 

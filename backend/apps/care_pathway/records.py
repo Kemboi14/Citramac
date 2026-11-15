@@ -1,7 +1,7 @@
 """
 Risk proposals, decision-specific capacity, visit consent, progress notes and
 episode outcome. Everything here is append-only once signed: a correction is a
-new record (CLAUDE.md §3 item 7), never an edit of a signed one.
+new record (guide.md §3 item 7), never an edit of a signed one.
 """
 
 from django.db import transaction

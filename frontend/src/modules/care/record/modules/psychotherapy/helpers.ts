@@ -3,7 +3,7 @@ import type { InputMode, PsyConfig, PsyNote } from "../../../../../lib/psychothe
 // Small pure helpers for the psychotherapy session workspace. Nothing here
 // touches browser storage except `readPref`/`writePref`, which hold
 // non-clinical UI preferences only (panel width, input mode, language,
-// read-aloud) — never note content (CLAUDE.md §5).
+// read-aloud) — never note content (guide.md §5).
 
 export const QUESTION_COUNT = 5;
 export const SAFETY_STEP = 5;

@@ -1,7 +1,7 @@
 """
 Psychotherapy Session note API (master prompt §7). Logic lives in
 psychotherapy.py; these views route, and every return of note content is
-audit-logged there (CLAUDE.md §4, AuditEvent on psychiatric record access).
+audit-logged there (guide.md §4, AuditEvent on psychiatric record access).
 """
 
 from django.shortcuts import get_object_or_404

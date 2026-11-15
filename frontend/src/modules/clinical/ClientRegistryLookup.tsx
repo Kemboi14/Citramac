@@ -55,7 +55,7 @@ function Lines({ lines }: { lines: string[] }) {
  * searches — by default with the client's own identifier — and compares the
  * registry's record side by side with ours. Only "This is the same person"
  * changes anything, and all it adds is a verified Client Registry ID: the
- * registry never overwrites our record. Held in memory only (CLAUDE.md §5).
+ * registry never overwrites our record. Held in memory only (guide.md §5).
  */
 export function ClientRegistryLookup({
   patient,

@@ -15,7 +15,7 @@ risk register, intake substance, admission state, appointments, care-plan
 actions). VERIFY (clinical approval): these rules are the owner's illustrative
 mockup. Diagnosis cues match words in the coded ICD-11 display text and the
 drug-level cue matches medicine names — both heuristics, not coded rules; no
-ICD-11 or drug codes are asserted here (CLAUDE.md §6).
+ICD-11 or drug codes are asserted here (guide.md §6).
 """
 
 import re
@@ -32,7 +32,7 @@ GROUPS = ["Assess", "Treat", "Support", "Close-out"]
 # separately priced), unit, sub-interventions and the module note — all as the
 # v4 workflow's CARE_MENU. Sub-interventions are labels for what was done, not
 # clinical codes. Payer codes and pre-authorisation are never written here: they
-# come from the facility's configured ServicePayerCode rows (CLAUDE.md §6).
+# come from the facility's configured ServicePayerCode rows (guide.md §6).
 MODULES = [
     {
         "code": "emergency_care",
@@ -455,7 +455,7 @@ PRIORITY_ORDER = {"RED": 0, "ORANGE": 1, "YELLOW": 2, "GREEN": 3, "": 4}
 
 def _payer_terms(services):
     """{service id: {"sha_code": str, "preauth": bool}} from the facility's
-    configured payer codes — never generated (CLAUDE.md §6)."""
+    configured payer codes — never generated (guide.md §6)."""
     from apps.insurance_claims.models import ServicePayerCode
 
     out = {}

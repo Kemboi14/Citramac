@@ -10,7 +10,7 @@ FHIR R4 mapping (no export is built here; this is the internal model):
 - payments → PaymentReconciliation / PaymentNotice (billing.Payment;
   insurer remittance also kept as insurance_claims.Remittance)
 
-Rules carried from the mockup and CLAUDE.md:
+Rules carried from the mockup and guide.md:
 - Lines come only from priced, non-voided ChargeItems; rates are the tariff
   snapshot on the charge, never a value held here.
 - Payer codes come only from ServicePayerCode (for SHA, the facility's map

@@ -244,7 +244,7 @@ class FhirR4ConformanceClinicalReportTests(ClinicalReportTestCase):
 
 
 class FhirR4ConformanceClinicalReportExamplesTests(SimpleTestCase):
-    """Published examples (CLAUDE.md §3 item 8): a routine month, an edge case
+    """Published examples (guide.md §3 item 8): a routine month, an edge case
     with withheld small numbers, and an omission (a month with no activity)."""
 
     EXAMPLES = Path(__file__).parent / "fhir_examples"

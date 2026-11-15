@@ -3,7 +3,7 @@ from django.db import migrations
 # Each existing diagnosis keeps the display text the clinician chose it by —
 # the (unverified) stub title at the time — before dha_interop 0009 replaces
 # the index's titles with WHO's. Without this, loading the WHO release would
-# silently change what signed diagnoses say (CLAUDE.md §3 item 7).
+# silently change what signed diagnoses say (guide.md §3 item 7).
 
 
 def _platform_admin(schema_editor):

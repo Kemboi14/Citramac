@@ -4,7 +4,7 @@ import { apiDownload, apiRequest } from "./apiClient";
 // regulatory documents (Org Admin → Branch Settings), each with many files.
 // Organisation administration, not patient data: no FHIR.
 
-/** Display labels only (VERIFY, CLAUDE.md §6) — the server's choice list. */
+/** Display labels only (VERIFY, guide.md §6) — the server's choice list. */
 export type BranchRegulator = "KMPDC" | "NACADA" | "PPB" | "OTHER";
 
 export const BRANCH_REGULATOR_OPTIONS: { value: BranchRegulator; label: string }[] = [

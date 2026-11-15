@@ -140,7 +140,7 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
         ).exists():
             raise ValidationError({"patient": "This client is already admitted."})
         # The admission is an Encounter (class IMP) inside the client's
-        # EpisodeOfCare — CLAUDE.md §4, docs/15-CLINICAL-WORKSPACE-V3.md §1.10.
+        # EpisodeOfCare — guide.md §4, docs/15-CLINICAL-WORKSPACE-V3.md §1.10.
         episode = get_or_open_episode(patient, user)
         admitted_at = serializer.validated_data.get("admitted_at") or timezone.now()
         encounter = serializer.validated_data.get("encounter") or Encounter.objects.create(

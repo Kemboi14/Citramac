@@ -3,7 +3,7 @@ Therapy contract and sessions. Sessions live in the existing mhp_program
 PsychotherapySession table (one store). Family sessions are written as one row
 per participant, each with that participant's own note: no shared note, no list of
 the other attendees on any row — a lawful disclosure about one participant must not
-reveal the others' therapy (CLAUDE.md §4, unfixable after the fact).
+reveal the others' therapy (guide.md §4, unfixable after the fact).
 
 Group psychotherapy attendance is recorded only through the Group Programme
 workspace (group_programme.py — one GroupSessionEntry per client), so there is

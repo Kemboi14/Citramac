@@ -90,7 +90,7 @@ interface Payload {
 /**
  * Intake & Clinical Assessment — mockup v4 stage 3. Rendered from the served
  * section schema (GET care/intake/schema/); a draft autosaves to the server
- * (never browser storage, CLAUDE.md §5) and signing locks the version. What
+ * (never browser storage, guide.md §5) and signing locks the version. What
  * Registration and Triage captured is pre-populated with its source.
  */
 export function IntakeStage(props: RecordViewProps) {

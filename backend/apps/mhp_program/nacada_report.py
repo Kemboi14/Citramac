@@ -15,7 +15,7 @@ worked out by subtraction, so the next-smallest row is withheld too
 ("secondary"). A median over 1–4 people is withheld for the same reason.
 
 Branch: episode-based indicators count the chosen branch only. OAT and naloxone
-records carry no branch (patient-level, not yet branch-scoped — CLAUDE.md
+records carry no branch (patient-level, not yet branch-scoped — guide.md
 2026-10-26), so those two sections are organisation-wide and labelled as such.
 """
 
@@ -336,7 +336,7 @@ def naloxone(start, end):
 def waiting_time(branch, start, end):
     """Days from joining the waitlist to treatment starting, for episodes whose
     treatment started in the period — from the episode status history, the only
-    record of waiting time (CLAUDE.md §4)."""
+    record of waiting time (guide.md §4)."""
     started = (
         EpisodeStatusHistory.objects.filter(episode__branch=branch, status="active")
         .values("episode_id")

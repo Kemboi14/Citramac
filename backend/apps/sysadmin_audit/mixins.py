@@ -5,7 +5,7 @@ FREE_TEXT_PARAMS = ("q", "search", "query", "name")
 
 
 class AuditedReadMixin:
-    """CLAUDE.md §4: an AuditEvent on every access to a psychiatric record.
+    """guide.md §4: an AuditEvent on every access to a psychiatric record.
 
     A detail read logs the row it returned. A list logs one VIEW entry naming the
     model and the filters it was asked for (the patient, usually) — never row content."""

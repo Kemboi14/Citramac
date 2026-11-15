@@ -288,7 +288,7 @@ def _doc(pk, user, action="view"):
 class GeneratedDetailView(APIView):
     def get(self, request, pk):
         doc, spec = _doc(pk, request.user)
-        log_view(doc)  # AuditEvent on every access to psychiatric content (CLAUDE.md §4)
+        log_view(doc)  # AuditEvent on every access to psychiatric content (guide.md §4)
         return Response(_doc_payload(doc, spec, request.user))
 
     def patch(self, request, pk):

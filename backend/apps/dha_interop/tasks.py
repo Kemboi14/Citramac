@@ -27,7 +27,7 @@ def recheck_facility_registry():
 
 @shared_task
 def drain_hie_outbox():
-    """Deliver queued / retry-due HIE resources (CLAUDE.md §4 durable outbox)."""
+    """Deliver queued / retry-due HIE resources (guide.md §4 durable outbox)."""
     from .hie_client import drain_outbox
 
     return drain_outbox()

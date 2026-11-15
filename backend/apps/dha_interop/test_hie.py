@@ -769,7 +769,7 @@ class ShrOutboxTests(HieFixture):
 
 
 class FhirR4ConformanceShrExamplesTests(SimpleTestCase):
-    """Published SHR examples (CLAUDE.md §3 item 8): a routine visit, an edge
+    """Published SHR examples (guide.md §3 item 8): a routine visit, an edge
     case (inpatient, substance use) and an omission. Each must be valid base
     R4 4.0.1 and conform to its Kenya Core profile."""
 

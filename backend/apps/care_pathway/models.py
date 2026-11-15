@@ -2,7 +2,7 @@
 Care pathway — docs/15-CLINICAL-WORKSPACE-V3.md. The approved 2026-10-07
 clinical workspace: Registration → Triage → Psychiatry → Intake → Care Plan →
 Interventions → Outcomes → Billing → Follow-up, all hanging off one
-EpisodeOfCare per period of care (CLAUDE.md §4, "the clinical spine").
+EpisodeOfCare per period of care (guide.md §4, "the clinical spine").
 
 FHIR R4 mapping (doc 15 §3, confirmed by the project owner 2026-10-07):
 
@@ -20,7 +20,7 @@ FHIR R4 mapping (doc 15 §3, confirmed by the project owner 2026-10-07):
 | InterventionRecord | Procedure (performed intervention) |
 | BillingService / ChargeItem | ChargeItemDefinition / ChargeItem |
 | DischargeSummary (+ lines) | Composition (discharge summary) in a document Bundle — docs/17 |
-| LocalValueSet / LocalConcept | ValueSet / CodeSystem (served, CLAUDE.md §4) |
+| LocalValueSet / LocalConcept | ValueSet / CodeSystem (served, guide.md §4) |
 """
 
 from django.db import models
@@ -39,7 +39,7 @@ PRIORITY_CHOICES = [
 PRIORITY_ORDER = {"RED": 0, "ORANGE": 1, "YELLOW": 2, "GREEN": 3}
 
 
-# ── Served terminology (CLAUDE.md §4 "Terminology is served, not compiled") ──
+# ── Served terminology (guide.md §4 "Terminology is served, not compiled") ──
 
 
 class LocalValueSet(TimestampedModel):
@@ -80,7 +80,7 @@ class LocalConcept(TimestampedModel):
 
 
 class EpisodeOfCare(TenantScopedModel):
-    """Organisational container only (CLAUDE.md §4): client, service, start,
+    """Organisational container only (guide.md §4): client, service, start,
     coordinator, presenting problems, state. Never clinical content."""
 
     STATUS_CHOICES = [
@@ -117,7 +117,7 @@ class EpisodeOfCare(TenantScopedModel):
 
     def transition(self, new_status, user=None, at=None):
         """Change state and record it in the status history — the waitlist →
-        active timestamp is the only record of waiting time (CLAUDE.md §4)."""
+        active timestamp is the only record of waiting time (guide.md §4)."""
         if new_status == self.status:
             return
         at = at or timezone.now()
@@ -179,7 +179,7 @@ class TriageEncounter(TenantScopedModel):
     encounter = models.OneToOneField(
         Encounter, on_delete=models.PROTECT, related_name="triage_encounter"
     )
-    # Idempotency key from the registration form (CLAUDE.md §4 "Fail safely").
+    # Idempotency key from the registration form (guide.md §4 "Fail safely").
     client_request_id = models.CharField(max_length=64)
     visit_number = models.PositiveIntegerField(default=1)
     arrival_at = models.DateTimeField(default=timezone.now)
@@ -520,7 +520,7 @@ class IntakeAssessment(TenantScopedModel):
     symptoms = models.JSONField(default=list, blank=True)
     risk_level = models.CharField(max_length=10, choices=RISK_CHOICES, blank=True)
     risk_notes = models.TextField(blank=True)
-    # The MSE lives in one store only — triage.MentalStatusExam (CLAUDE.md §4/§5,
+    # The MSE lives in one store only — triage.MentalStatusExam (guide.md §4/§5,
     # "if a clinical concept appears in two places in the UI it is one profile and
     # one store"). The intake's four MSE fields are saved there and linked here.
     mse = models.ForeignKey(
@@ -541,7 +541,7 @@ class IntakeAssessment(TenantScopedModel):
 
     # ── Sectioned intake (mockup v4 stage 3). A DRAFT is edited in place and
     # autosaved; signing locks it (never edited again — a correction is a new
-    # version cloned from it, CLAUDE.md §3 item 7). `sections` is keyed by the
+    # version cloned from it, guide.md §3 item 7). `sections` is keyed by the
     # served schema's section keys (care_pathway.intake_schema); `section_state`
     # holds Not started / In progress / Complete / Not applicable per section.
     STATUS_DRAFT = "DRAFT"
@@ -574,7 +574,7 @@ class MedicationHistoryEntry(TenantScopedModel):
     """One line of the client's current / past medication list taken at intake
     (FHIR MedicationStatement — what the client reports taking, not an order).
     One shared list for intake, the MAR and discharge reconciliation
-    (CLAUDE.md §4 one store). VERIFY: bind `name` to the national drug index via
+    (guide.md §4 one store). VERIFY: bind `name` to the national drug index via
     the terminology server; until then `drug_code` stays blank rather than guessed."""
 
     STATUS_CHOICES = [
@@ -633,7 +633,7 @@ class OutcomeScore(TenantScopedModel):
     instrument = models.CharField(max_length=8, choices=INSTRUMENT_CHOICES)
     score = models.PositiveSmallIntegerField()
     # Item-level answers (option points, in item order) when the instrument is
-    # scored from items — kept so a total can always be re-derived (CLAUDE.md §3
+    # scored from items — kept so a total can always be re-derived (guide.md §3
     # item 7: never store only a total when the items exist).
     items = models.JSONField(default=list, blank=True)
     # Findings the clinician had to see at recording (e.g. PHQ-9 item 9 positive).
@@ -1116,7 +1116,7 @@ class DischargeSummary(SignedRecordMixin, TenantScopedModel):
     Encounter (`hospitalization.dischargeDisposition`, `period.end`), coded
     Conditions, MedicationRequests and a Provenance. It hangs off the
     admission's Encounter inside the client's EpisodeOfCare and puts no
-    clinical content on the episode (CLAUDE.md §4).
+    clinical content on the episode (guide.md §4).
 
     A signed row is immutable (SignedRecordMixin). A correction is a new
     version whose `supersedes` points at the row it replaces; the original is
@@ -1174,7 +1174,7 @@ class DischargeSummary(SignedRecordMixin, TenantScopedModel):
     signed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
-    # Authority (CLAUDE.md §3.4: "on whose authority"): the signer's role at the
+    # Authority (guide.md §3.4: "on whose authority"): the signer's role at the
     # moment of signing, kept because roles can change later.
     signed_role = models.CharField(max_length=100, blank=True)
 
@@ -1502,7 +1502,7 @@ class ProgressNote(TenantScopedModel):
 
 class EpisodeOutcome(TenantScopedModel):
     """How an episode ended. Organisational only — no clinical content lives on
-    the episode (CLAUDE.md §4). Closing also writes the episode status history."""
+    the episode (guide.md §4). Closing also writes the episode status history."""
 
     OUTCOME_CHOICES = [
         ("PLANNED", "Discharged — planned"),
@@ -1606,7 +1606,7 @@ class LegalForm(TenantScopedModel):
     """A statutory form completed for a client. The catalogue of forms (numbers,
     titles, who may sign) is configuration — settings.LEGAL_FORM_CATALOGUE — because
     form numbers and statutory references must come from the regulator, not from us
-    (CLAUDE.md §6). FHIR: Consent (policy) or DocumentReference, to be confirmed."""
+    (guide.md §6). FHIR: Consent (policy) or DocumentReference, to be confirmed."""
 
     STATUS_CHOICES = [
         ("DRAFT", "Draft"),
@@ -1686,7 +1686,7 @@ class GroupProgrammeCategory(TenantScopedModel):
 class GroupSession(TenantScopedModel):
     """One confirmed group session: the shared facts only. FHIR Appointment (the
     session) with the cohort as a FHIR Group. Each attendee's record is a separate
-    GroupSessionEntry — nothing client-specific is ever stored here (CLAUDE.md §4,
+    GroupSessionEntry — nothing client-specific is ever stored here (guide.md §4,
     per-subject separation of multi-party sessions)."""
 
     category = models.ForeignKey(

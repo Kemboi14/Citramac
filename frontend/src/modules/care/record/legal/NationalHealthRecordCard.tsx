@@ -64,7 +64,7 @@ async function loadConsents(token: string, patientId: string) {
  * starts with the client's consent (OTP), and only an approved visit can be
  * previewed, sent, or read. Sending is irreversible — once in the national
  * record it cannot be recalled — so Send is only reachable from the preview
- * and behind an explicit confirmation. Held in memory only (CLAUDE.md §5).
+ * and behind an explicit confirmation. Held in memory only (guide.md §5).
  */
 export function NationalHealthRecordCard({
   patientId,

@@ -3,11 +3,11 @@ Psychotherapy Session note (master prompt §7 PSY-*). Imported by models.py so
 Django registers these under the care_pathway app.
 
 FHIR R4 mapping (VERIFY with the project owner before export is built —
-CLAUDE.md §7 asks for confirmation before a clinical feature is implemented):
+guide.md §7 asks for confirmation before a clinical feature is implemented):
 
 | Model | FHIR R4 resource |
 |---|---|
-| PsychotherapyNote | Composition (psychotherapy progress note): subject = Patient, encounter = the PSYCHOTHERAPY Encounter in the EpisodeOfCare, author = therapist, attester(legal) on sign, one Composition.section per PSY-OUT section. VERIFY: the LOINC document type code for a psychotherapy note — not invented here (CLAUDE.md §6). Sensitivity: DS4P confidentiality label — VERIFY the code system URL and code against hl7.org/fhir/uv/security-label-ds4p/ |
+| PsychotherapyNote | Composition (psychotherapy progress note): subject = Patient, encounter = the PSYCHOTHERAPY Encounter in the EpisodeOfCare, author = therapist, attester(legal) on sign, one Composition.section per PSY-OUT section. VERIFY: the LOINC document type code for a psychotherapy note — not invented here (guide.md §6). Sensitivity: DS4P confidentiality label — VERIFY the code system URL and code against hl7.org/fhir/uv/security-label-ds4p/ |
 | PsychotherapyNote.safety_answer | Observation (session safety screen), value from a local value set |
 | PsychotherapyNoteAmendment | Composition.relatesTo (appends) + Provenance (who/when/why) |
 | TherapyModel | local CodeSystem (served, tenant-configurable registry) |

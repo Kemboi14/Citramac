@@ -11,7 +11,7 @@ VERIFY (clinical approval): the trigger rules and priority mapping below are
 the owner's mockup, labelled illustrative there; `RULES_VERSION` is stored with
 every decision so a signed plan says which rules produced its recommendations.
 SHA tariff / fund codes and pre-authorisation flags from the mockup are NOT
-carried over — national programme codes must come from the regulator (CLAUDE.md §6).
+carried over — national programme codes must come from the regulator (guide.md §6).
 Drug-specific instructions (e.g. for withdrawal) are deliberately left out of the
 task templates: they belong to the facility's protocol, entered by clinicians.
 """

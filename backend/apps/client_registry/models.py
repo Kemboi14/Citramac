@@ -194,7 +194,7 @@ class Patient(TenantScopedModel):
         related_name="+",
     )
 
-    # Temporary → permanent merge (CLAUDE.md §4: identifiers are sliced, never
+    # Temporary → permanent merge (guide.md §4: identifiers are sliced, never
     # overwritten). The surviving record keeps every clinical row; the merged
     # record stays addressable and maps to FHIR `Patient.link` (replaced-by).
     # PatientMerge holds who merged, why, and what moved.
@@ -320,7 +320,7 @@ class EmergencyContact(TenantScopedModel):
 
 class PatientIdentifier(TenantScopedModel):
     """
-    One row per identifier a person carries — CLAUDE.md §4 "Identifiers are
+    One row per identifier a person carries — guide.md §4 "Identifiers are
     sliced, never overwritten". The FHIR `system` URI is *not* stored here: it
     is resolved from `settings.FHIR_IDENTIFIER_SYSTEMS` so a national system
     URI is configuration that can be set once the regulator's IG supplies it,
@@ -582,7 +582,7 @@ class Appointment(TenantScopedModel):
     missed_reason = models.CharField(max_length=30, blank=True)
     dna_actioned_at = models.DateTimeField(null=True, blank=True)
     # Follow-up context (docs/17-DISCHARGE-AND-FOLLOW-UP.md). The episode is the
-    # clinical spine (CLAUDE.md §4); `reason` is a code from the served
+    # clinical spine (guide.md §4); `reason` is a code from the served
     # `follow-up-reason` value set. Manual appointments leave these blank.
     ORIGIN_CHOICES = [
         ("MANUAL", "Booked manually"),
@@ -618,7 +618,7 @@ class Appointment(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     # Stable business identifier so a retried booking never double-books
-    # (CLAUDE.md "fail safely": idempotent writes).
+    # (guide.md "fail safely": idempotent writes).
     client_request_id = models.CharField(max_length=64, blank=True)
 
     class Meta(TenantScopedModel.Meta):

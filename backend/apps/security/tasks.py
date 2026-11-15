@@ -21,7 +21,7 @@ def purge_expired_auth_artifacts():
     BlacklistedToken rows past their own expiry (equivalent to simplejwt's
     `flushexpiredtokens` management command). This does NOT touch clinical/
     patient records, Organization/User rows, or AuditLogEntry (the audit
-    trail is a distinct, longer-retention safety control per CLAUDE.md, not
+    trail is a distinct, longer-retention safety control per guide.md, not
     shortened by this policy) — a real clinical-data retention policy is a
     separate decision requiring per-resource rules, not something to infer
     from one platform-wide integer.

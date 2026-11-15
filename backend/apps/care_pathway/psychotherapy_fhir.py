@@ -1,7 +1,7 @@
 """
 FHIR R4 document for one SIGNED psychotherapy progress note — read-time, built
 from the note (no second store). Built with the fhir.resources R4B models, as
-everywhere else (CLAUDE.md 2026-09-18 amendment). Checked against the vendored
+everywhere else (guide.md 2026-09-18 amendment). Checked against the vendored
 R4 4.0.1 schema and our profiles in tests, and by HL7's validator in CI.
 
 Mapping (owner, 2026-11-12):
@@ -14,7 +14,7 @@ Mapping (owner, 2026-11-12):
 | signature, each amendment | Provenance | base R4 |
 
 - Composition: subject = the client, encounter = the session's Encounter (which
-  hangs off the EpisodeOfCare, CLAUDE.md §4), author and legal attester = the
+  hangs off the EpisodeOfCare, guide.md §4), author and legal attester = the
   signer, one section per output section (local section codes, in order). The
   Risk & Safety section's entry is the safety Observation. An amended note is
   `status=amended` with each section as it now stands; each amendment is a
@@ -35,7 +35,7 @@ Composition.confidentiality is R. Psychotherapy notes are never sent to the
 SHR (2026-10-23 amendment); this document is for the client's own record
 requests and our archive only.
 
-VERIFY (CLAUDE.md §6), carried as text until confirmed:
+VERIFY (guide.md §6), carried as text until confirmed:
 - the LOINC document type for a psychotherapy progress note (Composition.type);
 - a LOINC or SNOMED CT code for the session safety screen (Observation.code);
 - the HL7 v3-ActCode psychotherapy-note sensitivity code, from

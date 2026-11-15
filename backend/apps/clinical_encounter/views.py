@@ -48,7 +48,7 @@ class EncounterViewSet(
     viewsets.GenericViewSet,
 ):
     """Encounter = R4 Encounter. Every one hangs off the client's EpisodeOfCare
-    (CLAUDE.md §4): an outpatient visit opened here joins the open episode, or
+    (guide.md §4): an outpatient visit opened here joins the open episode, or
     opens one. Who it is about, its type and its episode never change after it is
     opened — the SHR export decides what may leave the facility from them."""
 

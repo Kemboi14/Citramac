@@ -1,5 +1,5 @@
 """
-The shared clinical finding store (triage spec §17–§19; CLAUDE.md §4 "one
+The shared clinical finding store (triage spec §17–§19; guide.md §4 "one
 shared resource store, many views").
 
 One finding per client per key ("SUICIDE_SELF_HARM", "SUBSTANCE:alcohol", …).

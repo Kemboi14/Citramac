@@ -4,7 +4,7 @@ Intake & Clinical Assessment service (mockup v4 stage 3).
 Lifecycle: a DRAFT is created (cloned from the latest signed version, or fresh
 with triage carry-forward) and autosaved; `sign_intake` validates and locks it.
 A signed intake is never edited — a correction is a new version
-(CLAUDE.md §3 item 7: no re-authoring of signed records).
+(guide.md §3 item 7: no re-authoring of signed records).
 
 Carry-forward (core workflow rule): what Registration and Triage already
 captured is pre-populated *with its source*, and the clinician confirms or
@@ -375,7 +375,7 @@ FORMULATION_REQUIRED = ["static", "dynamic", "protective", "change_72h", "summar
 
 def _pop_formulation_signature(risk_payload, previous_risk):
     """The client may only *request* a signature (truthy) or clear it (falsy);
-    the signer and time are always set by the server (CLAUDE.md §4 provenance).
+    the signer and time are always set by the server (guide.md §4 provenance).
     Returns None when the payload leaves the signature as it is — including an
     autosave echoing back the stored signature time."""
     if not isinstance(risk_payload, dict):
@@ -548,7 +548,7 @@ def outstanding_items(draft):
 
     from . import tools
 
-    # A diagnosis is always an ICD-11 coded record (CLAUDE.md §5: no coded
+    # A diagnosis is always an ICD-11 coded record (guide.md §5: no coded
     # clinical concept as free text); the Diagnosis tab writes it.
     if (
         not DiagnosisCode.objects.filter(encounter__patient=patient, status="ACTIVE")

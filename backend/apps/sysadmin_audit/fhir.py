@@ -1,5 +1,5 @@
 """
-FHIR R4 AuditEvent — CLAUDE.md §4 "AuditEvent on every access to a
+FHIR R4 AuditEvent — guide.md §4 "AuditEvent on every access to a
 psychiatric record".
 
 One store, many views: the append-only AuditLogEntry trail stays the only

@@ -3,21 +3,21 @@ Legal admission status — master prompt §7A (LGL-DATA, LGL-V, LGL-I, LGL-R, LG
 LGL-DOC). Imported by models.py so the classes register under `care_pathway`.
 
 One `LegalStatus` per EpisodeOfCare is the single store of a client's admission
-legal category, decision, notice and expiry (CLAUDE.md §4 "one shared resource
+legal category, decision, notice and expiry (guide.md §4 "one shared resource
 store"). `ipd_ward.Admission.legal_status_record` links an admission to it; the
 admission's older free-text legal fields are legacy, kept read-only for records
-made before this module (they cannot be rewritten — CLAUDE.md §3.7).
+made before this module (they cannot be rewritten — guide.md §3.7).
 
-FHIR R4 mapping (no extension invented — CLAUDE.md §5):
+FHIR R4 mapping (no extension invented — guide.md §5):
 
 | Model | FHIR R4 | Notes |
 |---|---|---|
 | LegalStatus | Consent — VERIFY | Base R4 has no element for an admission's statutory basis. The closest base fit is `Consent` with `policy.uri` → the statute, `provision.period` → effectiveFrom..maxExpiryAt, `status` active/inactive, `dateTime` = decisionAt, `performer` = applicant, `organization` = facility. For an involuntary admission "Consent" is a misnomer (the client did not consent); VERIFY with the national IG whether a profile or a `Basic` resource is intended. Consent.scope / category codes: VERIFY — none asserted here. |
-| LegalStatus (on the admission) | none in base R4 — VERIFY | Encounter.hospitalization.admitSource is where the patient came from, not the legal basis; repurposing it is forbidden (CLAUDE.md §5). `Encounter.hospitalization` has no legal-status element in R4 — VERIFY national IG extension. |
+| LegalStatus (on the admission) | none in base R4 — VERIFY | Encounter.hospitalization.admitSource is where the patient came from, not the legal basis; repurposing it is forbidden (guide.md §5). `Encounter.hospitalization` has no legal-status element in R4 — VERIFY national IG extension. |
 | LegalDocument | DocumentReference (signed form, `docStatus` final/amended, `relatesTo.code` = replaces for an amendment) + Provenance (signature: who, when, on whose authority) | `type` code for each template: VERIFY (no LOINC asserted). |
 | DischargeNotice | Communication (from patient to facility, `sent` = givenAt) — VERIFY | earliestDepartureAt is derived; no base element. |
 | LegalStatusEvent | AuditEvent | Append-only. |
-| Recommendation practitioner credential | Practitioner.qualification (identifier = registration number, period, issuer) | issuer and identifier `system` URI: VERIFY (CLAUDE.md §6). |
+| Recommendation practitioner credential | Practitioner.qualification (identifier = registration number, period, issuer) | issuer and identifier `system` URI: VERIFY (guide.md §6). |
 """
 
 from django.db import models

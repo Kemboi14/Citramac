@@ -5,7 +5,7 @@ One compiler (`compile_report`) feeds both the screen (`ClientReportView`) and
 the printable document (`ClientReportPrintView`), so the two cannot drift apart.
 Nothing is stored: the report is worked out from the records each time it is
 opened. Every opening is a VIEW entry and every PDF download an EXPORT entry in
-the audit log (CLAUDE.md §4).
+the audit log (guide.md §4).
 
 The report includes the client's signed notes and, by explicit project-owner
 decision, the confidential psychotherapy session notes for all clinicians.
