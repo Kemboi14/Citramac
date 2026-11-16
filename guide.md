@@ -966,3 +966,15 @@ canonical URL or new code system.
 
 Reversibility: cheap. The task detail field and action are additive; signed triage answers and
 legacy form behavior are not rewritten.
+
+### 2026-11-16 — registration: required details for an identified client
+
+On the owner's decision of 2026-11-16, an identified client needs, besides first and last name:
+sex, date of birth (or an estimated age when it is not known), a mobile phone, and a next of kin /
+emergency contact with a phone. `services._require_core_details` enforces it on a registration
+submit, an identity resolution (upgrade in place, not a merge into a client who already has them)
+and a details edit; the registration form marks the fields with a red asterisk and checks them
+before sending. Unidentified and emergency (identity unknown) records still need none of them. A
+value already on file counts, so a returning client is not asked again; an edit cannot clear one.
+Identity resolution now also saves the next of kin it is given. FHIR: unchanged (`Patient.gender`,
+`birthDate`, `telecom`, `contact`). Reversibility: cheap — validation only, no record changes.

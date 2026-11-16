@@ -198,6 +198,49 @@ def _require_names(data, first, last, patient=None):
         raise ValidationError({"last_name": "Enter the client’s last name."})
 
 
+CORE_DETAILS_REQUIRED = {
+    "sex": "Select the client’s sex.",
+    "date_of_birth": "Enter the client’s date of birth, or an estimated age.",
+    "phone": "Enter the client’s mobile phone number.",
+    "next_of_kin_name": "Enter the next of kin / emergency contact’s name.",
+    "next_of_kin_phone": "Enter the next of kin / emergency contact’s phone number.",
+}
+
+
+def _require_core_details(data, patient=None, edit=False):
+    """Sex, date of birth (or an estimated age), mobile phone and a next of kin
+    with a phone are required for an identified client (owner's decision,
+    2026-11-16). A value already on file counts, because a registration submit
+    and an unsent key in a details edit both leave it as it is. A key a details
+    edit (`edit=True`) sends blank clears the field, so it does not count. The
+    next of kin is never cleared by a blank, so the one on file always counts."""
+
+    def sent(key):
+        value = data.get(key)
+        return value not in (None, "") and str(value).strip() != ""
+
+    def kept(key, stored):
+        return bool(stored) and not (edit and key in data)
+
+    on_file = patient
+    kin = patient.next_of_kin if patient is not None else None
+    present = {
+        "sex": sent("sex") or kept("sex", on_file and on_file.gender),
+        "date_of_birth": sent("date_of_birth")
+        or sent("estimated_age")
+        or kept("date_of_birth", on_file and on_file.date_of_birth)
+        or kept("estimated_age", on_file is not None and on_file.estimated_age is not None),
+        "phone": sent("phone") or kept("phone", on_file and on_file.contact_phone),
+        "next_of_kin_name": sent("next_of_kin_name")
+        or sent("next_of_kin")
+        or bool(kin and kin.name),
+        "next_of_kin_phone": sent("next_of_kin_phone") or bool(kin and kin.phone),
+    }
+    missing = {key: message for key, message in CORE_DETAILS_REQUIRED.items() if not present[key]}
+    if missing:
+        raise ValidationError(missing)
+
+
 def _set_names(patient, first, middle, last):
     patient.first_name = first
     patient.last_name = last
@@ -433,6 +476,7 @@ def register_arrival(user, data):
     first_name, middle_names, last_name = _names_from(data)
     if identity == Patient.IDENTITY_IDENTIFIED:
         _require_names(data, first_name, last_name, patient)
+        _require_core_details(data, patient)
 
     now = timezone.now()
     claimed = _claimed_identifiers(data)
@@ -592,11 +636,15 @@ def resolve_identity(user, patient, data):
         identity_service.merge_patients(user, patient, target, data.get("merge_reason"))
         return target
 
+    # Upgraded in place (not merged into a client who already has them): the
+    # details an identified client needs are required now.
+    _require_core_details(data, patient)
     _set_names(patient, first_name, middle_names, last_name)
     patient.identity_status = Patient.IDENTITY_IDENTIFIED
     patient.identity_confirmed_at = timezone.now()
     _apply_details(patient, data)
     patient.save()
+    _apply_next_of_kin(patient, data)
     identity_service.sync_identifiers(patient)
     for kind, value in claimed.items():
         identity_service.record_identifier(patient, kind, value)
@@ -620,6 +668,7 @@ def update_registration(user, patient, data):
         )
     first_name, middle_names, last_name = _names_from(data)
     _require_names(data, first_name, last_name, patient)
+    _require_core_details(data, patient, edit=True)
     claimed = _claimed_identifiers(data)
     duplicates = identity_service.find_duplicates(
         patient.organization_id, identifiers=claimed, exclude_patient_id=patient.pk

@@ -23,6 +23,14 @@ from .tests import CarePathwayApiTestCase
 
 NATIONAL_SYSTEM = "https://example.test/national-id"  # test value only
 REASON = "National ID card seen; matches the existing record"
+# What an identified client needs (sex, date of birth, phone, next of kin).
+CORE_DETAILS = {
+    "sex": "FEMALE",
+    "date_of_birth": "1990-01-01",
+    "phone": "+254700555666",
+    "next_of_kin_name": "Ruth Akinyi",
+    "next_of_kin_phone": "+254700777888",
+}
 
 
 def give_role(org, user, name, *codenames):
@@ -75,7 +83,9 @@ class IdentifierTests(CarePathwayApiTestCase):
     def test_numbers_are_sequential_and_unique(self):
         numbers = set()
         for index in range(4):
-            response = self.register(full_name=f"Client{index} Person{index}", date_of_birth="")
+            response = self.register(
+                full_name=f"Client{index} Person{index}", date_of_birth="", estimated_age=30
+            )
             with platform_admin_context():
                 numbers.add(Patient.objects.get(pk=response.data["patient_id"]).citramac_number)
         self.assertEqual(len(numbers), 4)
@@ -180,7 +190,12 @@ class MergeTests(CarePathwayApiTestCase):
         url = reverse("care-resolve-identity", args=[temp.data["patient_id"]])
         ok = self.client.post(
             url,
-            {"full_name": "New Person", "id_document_type": "PASSPORT", "id_document_number": "A1"},
+            {
+                "full_name": "New Person",
+                "id_document_type": "PASSPORT",
+                "id_document_number": "A1",
+                **CORE_DETAILS,
+            },
             format="json",
             **self.auth,
         )
@@ -897,6 +912,8 @@ class RegistrationV4Tests(CarePathwayApiTestCase):
                 "employment_status": "SELF_EMPLOYED",
                 "occupation": "Trader",
                 "living_with_disability": "NO",
+                "next_of_kin_name": "Peter Mwangi",
+                "next_of_kin_phone": "+254722444555",
             },
             format="json",
             **self.auth,

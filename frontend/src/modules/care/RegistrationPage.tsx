@@ -46,7 +46,7 @@ import {
   TIP_CUE,
 } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
-import { REQUIRED_MARK, errorText } from "./triage/helpers";
+import { errorText } from "./triage/helpers";
 import {
   AppointmentMessagesFields,
   appointmentMessagesPayload,
@@ -55,6 +55,7 @@ import {
 } from "./registration/AppointmentMessagesFields";
 import DateInput from "../../components/DateInput";
 import PhoneInput, { phoneProblem } from "../../components/PhoneInput";
+import { capitalizeName } from "./shared/names";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — mockup frontdesk(), filterClients,
 // selectExistingClientForRegistration, updateIdentityFields, registerTier1Client
@@ -346,6 +347,18 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
 /** `.registration-stage .field` — label + control. `tip` explains the field on
  * hovering its label or focusing the field, above the label so it never covers
  * what is being typed. */
+/** Red asterisk after a required field's label; screen readers hear "required". */
+function RequiredMark() {
+  return (
+    <>
+      <span aria-hidden="true" className="ml-0.5 text-priority-red">
+        *
+      </span>
+      <span className="sr-only"> (required)</span>
+    </>
+  );
+}
+
 function RegField({
   id,
   label,
@@ -514,6 +527,9 @@ export function RegistrationPage() {
   const tone = MODE_TONE[resolving ? "IDENTIFIED" : mode];
   const identified = mode === "IDENTIFIED";
   const emergency = mode === "UNKNOWN" && !resolving;
+  /** An identified client needs sex, date of birth or age, a phone and a next
+   * of kin with a phone (the server enforces the same rule). */
+  const coreRequired = identified || resolving;
   // A returning client whose stored name is one word can still be registered.
   const lastNameOptional =
     !resolving && Boolean(selected?.first_name) && !selected?.last_name && identified;
@@ -776,6 +792,23 @@ export function RegistrationPage() {
     };
   }
 
+  /** The details an identified client needs, checked before sending. */
+  function validateCore() {
+    if (!coreRequired) return true;
+    const missing: [string, string, boolean][] = [
+      ["reg-dob", "date of birth or estimated age", !form.dob && !form.estimatedAge],
+      ["reg-sex", "sex", !form.sex],
+      ["reg-phone", "mobile phone", !form.phone.trim()],
+      ["reg-nok", "next of kin name", !form.nextOfKin.trim()],
+      ["reg-nok-phone", "next of kin phone", !form.nokPhone.trim()],
+    ];
+    const gaps = missing.filter(([, , empty]) => empty);
+    if (!gaps.length) return true;
+    setFeedback(`Fill in the required fields: ${gaps.map(([, label]) => label).join(", ")}.`);
+    document.getElementById(gaps[0][0])?.focus();
+    return false;
+  }
+
   /** A phone number that is clearly incomplete is fixed before saving. */
   function validatePhones() {
     const fields: [string, string, string][] = [
@@ -798,6 +831,7 @@ export function RegistrationPage() {
   async function saveDetails() {
     if (!accessToken || submitting || !selected) return;
     if (!validateNames()) return;
+    if (!validateCore()) return;
     if (!validatePhones()) return;
     if (!formRef.current?.reportValidity()) return;
     setFeedback(null);
@@ -835,6 +869,7 @@ export function RegistrationPage() {
       descriptionRef.current?.focus();
       return;
     }
+    if (!validateCore()) return;
     if (!validatePhones()) return;
     if (!formRef.current?.reportValidity()) return;
     setFeedback(null);
@@ -869,6 +904,9 @@ export function RegistrationPage() {
         }
         await resolveIdentity(accessToken, resolveId, {
           ...identityDetails(),
+          next_of_kin_name: form.nextOfKin.trim() || undefined,
+          next_of_kin_phone: form.nokPhone.trim() || undefined,
+          next_of_kin_relationship: display("next-of-kin-relationship", form.nokRelationship),
           merge_into_patient_id: mergeTarget?.id,
           merge_reason: mergeTarget ? mergeReason.trim() : undefined,
         });
@@ -1021,7 +1059,7 @@ export function RegistrationPage() {
   const textInput = (
     id: string,
     key: keyof RegForm,
-    attrs: { type?: string; placeholder?: string; autoComplete?: string } = {},
+    attrs: { type?: string; placeholder?: string; autoComplete?: string; name?: boolean } = {},
   ) => (
     <input
       id={id}
@@ -1030,7 +1068,8 @@ export function RegistrationPage() {
       placeholder={attrs.placeholder}
       className={REG_INPUT}
       value={form[key] as string}
-      onChange={(e) => set(key)(e.target.value)}
+      autoCapitalize={attrs.name ? "words" : undefined}
+      onChange={(e) => set(key)(attrs.name ? capitalizeName(e.target.value) : e.target.value)}
     />
   );
 
@@ -1103,6 +1142,9 @@ export function RegistrationPage() {
         {vs.error && <ErrorNote>{vs.error}</ErrorNote>}
 
         <form ref={formRef} noValidate onSubmit={onSubmit}>
+          <p className="mb-3 text-[12px] text-ink-500">
+            Fields marked <span className="font-semibold text-priority-red">*</span> are required.
+          </p>
           {resolving ? (
             <div className="mb-3">
               {resolveError ? (
@@ -1295,7 +1337,7 @@ export function RegistrationPage() {
                 {textInput("reg-found-location", "foundLocation")}
               </RegField>
               <RegField id="reg-brought-by-name" label="Person who brought / referred them — name">
-                {textInput("reg-brought-by-name", "broughtByName")}
+                {textInput("reg-brought-by-name", "broughtByName", { name: true })}
               </RegField>
               <RegField id="reg-brought-by-relationship" label="Relationship to client">
                 <SelectChoices
@@ -1375,7 +1417,8 @@ export function RegistrationPage() {
                       error={firstNameError}
                       label={
                         <>
-                          First name <span className={REQUIRED_MARK}>REQUIRED</span>
+                          First name
+                          <RequiredMark />
                         </>
                       }
                     >
@@ -1384,13 +1427,14 @@ export function RegistrationPage() {
                         id="reg-first-name"
                         type="text"
                         autoComplete="given-name"
+                        autoCapitalize="words"
                         required
                         className={REG_INPUT}
                         aria-invalid={firstNameError ? true : undefined}
                         value={form.firstName}
                         onChange={(e) => {
                           setFirstNameError(null);
-                          set("firstName")(e.target.value);
+                          set("firstName")(capitalizeName(e.target.value));
                         }}
                       />
                     </RegField>
@@ -1400,12 +1444,7 @@ export function RegistrationPage() {
                       label={
                         <>
                           Last name
-                          {!lastNameOptional && (
-                            <>
-                              {" "}
-                              <span className={REQUIRED_MARK}>REQUIRED</span>
-                            </>
-                          )}
+                          {!lastNameOptional && <RequiredMark />}
                         </>
                       }
                     >
@@ -1414,13 +1453,14 @@ export function RegistrationPage() {
                         id="reg-last-name"
                         type="text"
                         autoComplete="family-name"
+                        autoCapitalize="words"
                         required={!lastNameOptional}
                         className={REG_INPUT}
                         aria-invalid={lastNameError ? true : undefined}
                         value={form.lastName}
                         onChange={(e) => {
                           setLastNameError(null);
-                          set("lastName")(e.target.value);
+                          set("lastName")(capitalizeName(e.target.value));
                         }}
                       />
                     </RegField>
@@ -1432,8 +1472,8 @@ export function RegistrationPage() {
                     error={descriptionError}
                     label={
                       <>
-                        Observed description / temporary alias{" "}
-                        <span className={REQUIRED_MARK}>REQUIRED</span>
+                        Observed description / temporary alias
+                        <RequiredMark />
                       </>
                     }
                   >
@@ -1443,7 +1483,7 @@ export function RegistrationPage() {
                       type="text"
                       required
                       maxLength={255}
-                      placeholder="Required: brief description or reported temporary alias"
+                      placeholder="Brief description or reported temporary alias"
                       className={REG_INPUT}
                       aria-invalid={descriptionError ? true : undefined}
                       value={form.description}
@@ -1455,7 +1495,7 @@ export function RegistrationPage() {
                   </RegField>
                 )}
                 <RegField id="reg-preferred-name" label="Preferred name">
-                  {textInput("reg-preferred-name", "preferredName")}
+                  {textInput("reg-preferred-name", "preferredName", { name: true })}
                 </RegField>
                 <RegField id="reg-pronouns" label="Pronouns">
                   <SelectChoices
@@ -1467,7 +1507,11 @@ export function RegistrationPage() {
                     onChange={set("pronouns")}
                   />
                 </RegField>
-                <RegField id="reg-dob" label="Date of birth">
+                <RegField
+                  id="reg-dob"
+                  label={<>Date of birth{coreRequired && <RequiredMark />}</>}
+                  tip="Not known? Leave it blank and enter an estimated age."
+                >
                   <DateInput
                     id="reg-dob"
                     max={todayIso()}
@@ -1477,7 +1521,7 @@ export function RegistrationPage() {
                   />
                 </RegField>
                 {ageField}
-                <RegField id="reg-sex" label="Sex">
+                <RegField id="reg-sex" label={<>Sex{coreRequired && <RequiredMark />}</>}>
                   <SelectChoices
                     className={REG_SELECT}
                     id="reg-sex"
@@ -1487,7 +1531,10 @@ export function RegistrationPage() {
                     onChange={set("sex")}
                   />
                 </RegField>
-                <RegField id="reg-phone" label="Mobile phone">
+                <RegField
+                  id="reg-phone"
+                  label={<>Mobile phone{coreRequired && <RequiredMark />}</>}
+                >
                   {phoneInput("reg-phone", "phone")}
                 </RegField>
                 <RegField id="reg-id-type" label="ID / passport (where available)">
@@ -1518,49 +1565,58 @@ export function RegistrationPage() {
                 </RegField>
               </RegSection>
 
-              {!resolving && (
-                <RegSection title="Next of kin / emergency contact">
-                  <RegField id="reg-nok" label="Next of kin / emergency contact — name">
-                    {textInput("reg-nok", "nextOfKin")}
-                  </RegField>
-                  <RegField id="reg-nok-phone" label="Next of kin — phone">
-                    {phoneInput("reg-nok-phone", "nokPhone")}
-                  </RegField>
-                  <RegField id="reg-nok-relationship" label="Next of kin — relationship">
-                    <SelectChoices
-                      className={REG_SELECT}
-                      id="reg-nok-relationship"
-                      options={vs.options("next-of-kin-relationship")}
-                      placeholder="— select —"
-                      value={form.nokRelationship}
-                      onChange={set("nokRelationship")}
+              <RegSection title="Next of kin / emergency contact">
+                <RegField
+                  id="reg-nok"
+                  label={
+                    <>
+                      Next of kin / emergency contact — name
+                      {coreRequired && <RequiredMark />}
+                    </>
+                  }
+                >
+                  {textInput("reg-nok", "nextOfKin", { name: true })}
+                </RegField>
+                <RegField
+                  id="reg-nok-phone"
+                  label={<>Next of kin — phone{coreRequired && <RequiredMark />}</>}
+                >
+                  {phoneInput("reg-nok-phone", "nokPhone")}
+                </RegField>
+                <RegField id="reg-nok-relationship" label="Next of kin — relationship">
+                  <SelectChoices
+                    className={REG_SELECT}
+                    id="reg-nok-relationship"
+                    options={vs.options("next-of-kin-relationship")}
+                    placeholder="— select —"
+                    value={form.nokRelationship}
+                    onChange={set("nokRelationship")}
+                  />
+                </RegField>
+                <div className="flex min-w-0 flex-col justify-end gap-1.5 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.nokGuardian}
+                      onChange={(e) => setForm((p) => ({ ...p, nokGuardian: e.target.checked }))}
                     />
+                    This person is the client’s legal guardian
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.nokMayInform}
+                      onChange={(e) => setForm((p) => ({ ...p, nokMayInform: e.target.checked }))}
+                    />
+                    Client agrees this person may be told about their care
+                  </label>
+                </div>
+                {form.nokGuardian && (
+                  <RegField id="reg-guardian-status" label="Guardian legal status / authority">
+                    {textInput("reg-guardian-status", "guardianStatus")}
                   </RegField>
-                  <div className="flex min-w-0 flex-col justify-end gap-1.5 text-xs">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={form.nokGuardian}
-                        onChange={(e) => setForm((p) => ({ ...p, nokGuardian: e.target.checked }))}
-                      />
-                      This person is the client’s legal guardian
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={form.nokMayInform}
-                        onChange={(e) => setForm((p) => ({ ...p, nokMayInform: e.target.checked }))}
-                      />
-                      Client agrees this person may be told about their care
-                    </label>
-                  </div>
-                  {form.nokGuardian && (
-                    <RegField id="reg-guardian-status" label="Guardian legal status / authority">
-                      {textInput("reg-guardian-status", "guardianStatus")}
-                    </RegField>
-                  )}
-                </RegSection>
-              )}
+                )}
+              </RegSection>
 
               <RegSection
                 title="Social & personal details"
@@ -1824,8 +1880,8 @@ export function RegistrationPage() {
               id="reg-merge-reason"
               label={
                 <>
-                  How do you know this is the same person?{" "}
-                  <span className={REQUIRED_MARK}>REQUIRED</span>
+                  How do you know this is the same person?
+                  <RequiredMark />
                 </>
               }
               error={mergeReasonError}

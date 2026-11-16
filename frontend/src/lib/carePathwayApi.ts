@@ -221,7 +221,13 @@ export function updateRegistration(
 export function resolveIdentity(
   accessToken: string,
   patientId: string,
-  payload: IdentityDetails & { merge_into_patient_id?: string; merge_reason?: string },
+  payload: IdentityDetails & {
+    next_of_kin_name?: string;
+    next_of_kin_phone?: string;
+    next_of_kin_relationship?: string;
+    merge_into_patient_id?: string;
+    merge_reason?: string;
+  },
 ) {
   return apiRequest<RegistrationRow>(`/care/patients/${patientId}/resolve-identity/`, {
     method: "POST",

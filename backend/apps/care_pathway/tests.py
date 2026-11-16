@@ -148,6 +148,11 @@ class CarePathwayApiTestCase(APITestCase):
             "full_name": "Amina Wanjiku Kamau",
             "sex": "FEMALE",
             "date_of_birth": "1992-03-14",
+            # A different number each time, so a phone match never makes two
+            # test clients look like the same person.
+            "phone": f"+2547{uuid.uuid4().int % 10**8:08d}",
+            "next_of_kin_name": "Grace Kamau",
+            "next_of_kin_phone": "+254700300400",
             "reason": "Low mood, drinking more",
             **data,
         }
@@ -442,6 +447,58 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertEqual(names("+254733111222"), ["Brian Otieno"])
         self.assertEqual(names("Amina Otieno"), [])  # every word must match
         self.assertEqual(names("0799000000"), [])
+
+
+class RequiredRegistrationDetailsTests(CarePathwayApiTestCase):
+    """Sex, date of birth or age, phone and next of kin + phone (2026-11-16)."""
+
+    REQUIRED = {"sex", "date_of_birth", "phone", "next_of_kin_name", "next_of_kin_phone"}
+
+    def test_identified_client_needs_every_core_detail(self):
+        response = self.register(
+            sex="", date_of_birth="", phone="", next_of_kin_name="", next_of_kin_phone=""
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(self.REQUIRED <= set(response.data), response.data)
+
+    def test_estimated_age_stands_in_for_date_of_birth(self):
+        response = self.register(date_of_birth="", estimated_age=40)
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_temporary_records_do_not_need_them(self):
+        response = self.register(
+            identity_status="UNKNOWN",
+            full_name="",
+            sex="",
+            date_of_birth="",
+            phone="",
+            next_of_kin_name="",
+            next_of_kin_phone="",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_returning_client_details_on_file_count(self):
+        pid = self.register().data["patient_id"]
+        again = self.register(
+            patient_id=pid,
+            sex="",
+            date_of_birth="",
+            phone="",
+            next_of_kin_name="",
+            next_of_kin_phone="",
+        )
+        self.assertEqual(again.status_code, 201, again.data)
+
+    def test_edit_cannot_clear_a_required_detail(self):
+        pid = self.register().data["patient_id"]
+        response = self.client.patch(
+            reverse("care-registration-details", args=[pid]),
+            {"first_name": "Amina", "last_name": "Kamau", "phone": ""},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("phone", response.data)
 
 
 class RegistrationEditTests(CarePathwayApiTestCase):
