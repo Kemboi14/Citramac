@@ -94,8 +94,6 @@ def set_status(task, user, status):
     else:
         task.completed_at = None
         task.completed_by = None
-    task.save(
-        update_fields=["status", "completed_at", "completed_by", "updated_at"]
-    )
+    task.save(update_fields=["status", "completed_at", "completed_by", "updated_at"])
     _audit(task, "STATUS_CHANGED", {"status": status})
     return task

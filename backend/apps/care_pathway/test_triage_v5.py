@@ -381,15 +381,15 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
             reverse("care-triage-tasks", args=[self.te_id]),
             {
                 "schema": "v5",
-                "tasks": [
-                    {"action": "psychiatric_review", "assignee": str(self.nurse.pk)}
-                ],
+                "tasks": [{"action": "psychiatric_review", "assignee": str(self.nurse.pk)}],
             },
             format="json",
             **self.auth,
         )
         self.assertEqual(registered.status_code, 201, registered.data)
-        self.assertEqual(len([t for t in registered.data if t["action_code"] == "psychiatric_review"]), 1)
+        self.assertEqual(
+            len([t for t in registered.data if t["action_code"] == "psychiatric_review"]), 1
+        )
 
         answers = {
             **BASE,
