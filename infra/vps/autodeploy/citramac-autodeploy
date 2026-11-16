@@ -226,7 +226,7 @@ $backend && deployments+=(citramac-backend citramac-celery-worker citramac-celer
 $frontend && deployments+=(citramac-frontend)
 
 rollout() {
-  k apply -k "$APP_DIR/infra/k8s/overlays/vps" >/dev/null || return 1
+  k apply -k "${OVERLAY_DIR:-$APP_DIR/infra/k8s/overlays/vps}" >/dev/null || return 1
   for d in "${deployments[@]}"; do k rollout restart "deployment/$d" >/dev/null || return 1; done
   for d in "${deployments[@]}"; do k rollout status "deployment/$d" --timeout=5m >/dev/null || return 1; done
 }
@@ -256,7 +256,7 @@ for c in "${components[@]}"; do
   fi
 done
 git_app reset -q --keep "$deployed" || true
-k apply -k "$APP_DIR/infra/k8s/overlays/vps" >/dev/null || true
+k apply -k "${OVERLAY_DIR:-$APP_DIR/infra/k8s/overlays/vps}" >/dev/null || true
 for d in "${deployments[@]}"; do k rollout restart "deployment/$d" >/dev/null || true; done
 for d in "${deployments[@]}"; do k rollout status "deployment/$d" --timeout=5m >/dev/null || true; done
 echo "$target" >"$STATE_DIR/failed"

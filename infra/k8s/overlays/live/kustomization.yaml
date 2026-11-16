@@ -1,0 +1,28 @@
+# Live (app.citramac.com): a second single-node k3s server set up like the
+# demo VPS, so it reuses the vps overlay and changes only what differs.
+# The live server's auto-deploy applies this overlay
+# (OVERLAY_DIR in /etc/citramac-autodeploy.env, see infra/vps/autodeploy).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../vps
+patches:
+  - target:
+      kind: Ingress
+      name: citramac
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.citramac.com
+  # Celery defaults to one worker process per CPU. This server has 8, and
+  # 8 x ~120 MB does not fit the base 512Mi limit (OOM-killed in a loop).
+  - target:
+      kind: Deployment
+      name: citramac-celery-worker
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command
+        value: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency=4"]
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 1Gi

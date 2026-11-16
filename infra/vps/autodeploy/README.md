@@ -1,6 +1,19 @@
 # VPS auto-deploy
 
-The k3s VPS (`demo.citramac.com`) deploys itself: every 3 minutes a systemd timer
+Two single-node k3s servers deploy themselves the same way, from the same
+`master`:
+
+| Server | Site | Overlay |
+|---|---|---|
+| demo | `demo.citramac.com` | `infra/k8s/overlays/vps` (default) |
+| live | `app.citramac.com` | `infra/k8s/overlays/live` (`OVERLAY_DIR`) |
+
+Each server polls GitHub on its own; neither knows about the other, and a
+commit reaches both only after CI passes. The live server's
+`/etc/citramac-autodeploy.env` sets `API_BASE_URL`, `HEALTH_URL` and
+`OVERLAY_DIR=/opt/citramac/app/infra/k8s/overlays/live`.
+
+Each server every 3 minutes a systemd timer
 runs `citramac-autodeploy`, which looks for the newest `master` commit whose
 **CI** workflow passed and deploys it.
 
@@ -25,7 +38,7 @@ For each new green commit:
    touched), then migrate with `MIGRATION_DATABASE_URL`. A failed backup or
    migration stops the deploy. The running pods are not touched.
 4. The old `:latest` becomes `:previous` and the candidate becomes `:latest`. Then
-   `kubectl apply -k infra/k8s/overlays/vps` runs and the changed deployments
+   `kubectl apply -k` of the overlay (`OVERLAY_DIR`, default `infra/k8s/overlays/vps`) runs and the changed deployments
    (backend + celery worker + beat, and/or frontend) restart and roll out.
 5. `/healthz` must answer. If the rollout or health check fails, the images go back to
    `:previous`. **Migrations already applied stay applied.** The log and
@@ -65,5 +78,5 @@ bash /opt/citramac/app/infra/vps/autodeploy/install.sh
 
 The script is copied to `/usr/local/sbin`, not run from the checkout. A push
 can change the application, but it cannot change the root-run deployer until
-someone installs it. Settings (`APP_DIR`, `API_BASE_URL`, `HEALTH_URL`,
+someone installs it. Settings (`APP_DIR`, `OVERLAY_DIR`, `API_BASE_URL`, `HEALTH_URL`,
 `KEEP_BACKUPS`, …) can be overridden in `/etc/citramac-autodeploy.env`.
