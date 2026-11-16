@@ -18,3 +18,37 @@ export const EXAMPLE_SECTION: Record<string, string> = {
   q4: "response",
   q5: "plan",
 };
+
+export const FAMILY_EXAMPLE_ANSWERS: Record<string, string> = {
+  family_clinicians: "The lead clinician and co-facilitator took part.",
+  family_present: "The client and one selected family contact attended.",
+  family_issues:
+    "The family discussed communication during disagreements and how they share responsibilities at home.",
+  family_dynamics:
+    "Members took turns speaking. One person initially spoke for the client, then made space for the client to respond.",
+  family_interventions:
+    "The clinician used reflective listening and helped the family agree on a clear way to pause and resume difficult conversations.",
+  family_progress:
+    "The family identified one shared goal and each member described a practical step they can try before the next session.",
+  family_attention:
+    "Check whether the agreed conversation plan was used and whether each member had a chance to share their view.",
+  family_recommendations:
+    "Continue family sessions and review progress toward the shared goal at the next appointment.",
+};
+
+export const FAMILY_EXAMPLE_SECTION: Record<string, string> = {
+  family_issues: "presenting_focus",
+  family_dynamics: "assessment",
+  family_interventions: "interventions",
+  family_progress: "response",
+  family_attention: "plan",
+  family_recommendations: "plan",
+};
+
+export function exampleAnswers(sessionType: string) {
+  return sessionType === "FAMILY" ? FAMILY_EXAMPLE_ANSWERS : EXAMPLE_ANSWERS;
+}
+
+export function exampleSections(sessionType: string) {
+  return sessionType === "FAMILY" ? FAMILY_EXAMPLE_SECTION : EXAMPLE_SECTION;
+}

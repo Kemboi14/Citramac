@@ -696,6 +696,7 @@ export interface PsychotherapyScheduledSession {
   /** Null when the session was booked without a planned action. */
   care_plan_activity_id: string | null;
   activity_title: string;
+  appointment_type: string;
   scheduled_for: string;
   duration_minutes: number;
   mode: "IN_PERSON" | "PHONE" | "VIDEO";

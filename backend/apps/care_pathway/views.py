@@ -1212,6 +1212,7 @@ def _psychotherapy_plan_schedule(patient, plan, episode=None):
                     if appointment.care_plan_activity_id
                     else appointment.appointment_type
                 ),
+                "appointment_type": appointment.appointment_type,
                 "scheduled_for": _iso(appointment.scheduled_for),
                 "duration_minutes": appointment.duration_minutes,
                 "mode": appointment.mode,

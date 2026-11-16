@@ -570,6 +570,146 @@ class ClientListTests(ChatTestCase):
         self.assertIn(self.pid, entry.field_diff["patients"])
 
 
+class FamilyQuestionnaireTests(ChatTestCase):
+    def test_new_family_draft_uses_its_own_questions_and_requires_consent_for_contacts(self):
+        response = self.start(session_type="FAMILY")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["questionnaire_version"], org.FAMILY_QUESTIONNAIRE)
+        configured = self.client.get(reverse("care-psy-config"), **self.auth)
+        self.assertEqual(configured.status_code, 200)
+        self.assertEqual(
+            [
+                question["key"]
+                for question in configured.data["questionnaires"][org.FAMILY_QUESTIONNAIRE]
+            ],
+            list(org.FAMILY_QUESTION_KEYS),
+        )
+        self.assertEqual(
+            [
+                question["title"]
+                for question in configured.data["questionnaires"][org.FAMILY_QUESTIONNAIRE]
+            ],
+            [
+                "Clinicians in the session",
+                "Family present",
+                "Key issues discussed",
+                "Family dynamics observed",
+                "Interventions used",
+                "Progress made toward the goals",
+                "Areas needing attention",
+                "Recommendations",
+            ],
+        )
+        options = self.detail(response.data["id"])["participant_options"]
+        self.assertTrue(options["family_consent_required"])
+        self.assertEqual(options["family"], [])
+
+    def test_family_attendees_and_custom_answers_are_saved_and_organised(self):
+        response = self.start(session_type="FAMILY")
+        self.assertEqual(response.status_code, 201, response.data)
+        note_id = response.data["id"]
+        answers = {
+            "family_clinicians": {
+                "participant_ids": [str(self.nurse.pk)],
+                "none_present": False,
+            },
+            "family_present": {"participant_ids": [], "none_present": True},
+            "family_issues": {
+                "text": "The family discussed communication at home.",
+                "mode": "TYPED",
+            },
+            "family_dynamics": {"text": "Members took turns speaking.", "mode": "TYPED"},
+            "family_interventions": {"text": "Practised reflective listening.", "mode": "TYPED"},
+            "family_progress": {"text": "They agreed on a weekly check-in.", "mode": "TYPED"},
+            "family_attention": {"text": "Review conflict escalation.", "mode": "TYPED"},
+            "family_recommendations": {"text": "Continue family sessions.", "mode": "TYPED"},
+        }
+        saved = self.patch(note_id, {"answers": answers})
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(
+            saved.data["answers"]["family_clinicians"]["participants"][0]["resource_type"],
+            "Practitioner",
+        )
+        self.assertEqual(
+            saved.data["answers"]["family_present"]["text"], "No family members were present."
+        )
+        generated = self.act("care-psy-note-generate", note_id)
+        self.assertEqual(generated.status_code, 200, generated.data)
+        self.assertIn(
+            "The family discussed communication at home.",
+            generated.data["sections"]["presenting_focus"],
+        )
+        self.assertEqual(generated.data["sections"]["assessment"], "- Members took turns speaking.")
+        for section in (
+            generated.data["sections"]["presenting_focus"],
+            generated.data["sections"]["assessment"],
+            generated.data["sections"]["interventions"],
+            generated.data["sections"]["response"],
+        ):
+            self.assertNotIn("Client report:", section)
+            self.assertNotIn("Clinician observation / assessment:", section)
+            self.assertNotIn("Session work and interventions:", section)
+            self.assertNotIn("Client response as observed:", section)
+        self.assertIn("Continue family sessions.", generated.data["sections"]["plan"])
+
+    def test_family_draft_coexists_without_reclassifying_an_individual_draft(self):
+        individual = self.start()
+        self.assertEqual(individual.status_code, 201)
+        family = self.start(session_type="FAMILY")
+        self.assertEqual(family.status_code, 201, family.data)
+        self.assertNotEqual(family.data["id"], individual.data["id"])
+        self.assertEqual(family.data["questionnaire_version"], org.FAMILY_QUESTIONNAIRE)
+        self.assertEqual(family.data["session_type"], "FAMILY")
+        resumed_family = self.start(session_type="FAMILY")
+        self.assertEqual((resumed_family.status_code, resumed_family.data["id"]), (200, family.data["id"]))
+        existing_individual = self.detail(individual.data["id"])
+        self.assertEqual(existing_individual["questionnaire_version"], org.INDIVIDUAL_QUESTIONNAIRE)
+        self.assertEqual(existing_individual["session_type"], "INDIVIDUAL")
+
+
+class FamilySessionListTests(PsyNoteTestCase):
+    def test_list_includes_family_drafts_and_signed_notes_but_not_individual_notes(self):
+        family = self.start().data["id"]
+        self.patch(family, {"session_type": "FAMILY"})
+        response = self.client.get(reverse("care-psy-family-sessions"), **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(row["id"], row["status"]) for row in response.data["results"]],
+            [(family, "DRAFT")],
+        )
+
+        self.ready(family, safety_answer="NO", **self.answers(q1="Family session."))
+        self.assertEqual(self.act("care-psy-note-sign", family).data["status"], "SIGNED")
+
+        individual = self.start().data["id"]
+        self.patch(individual, {"session_type": "INDIVIDUAL"})
+        response = self.client.get(reverse("care-psy-family-sessions"), **self.auth)
+        self.assertEqual(
+            [(row["id"], row["status"]) for row in response.data["results"]],
+            [(family, "SIGNED")],
+        )
+        self.assertTrue(all(row["patient_id"] == self.pid for row in response.data["results"]))
+
+    def test_list_does_not_disclose_a_non_care_team_clinicians_family_note(self):
+        note = self.start().data["id"]
+        self.patch(note, {"session_type": "FAMILY"})
+        response = self.client.get(reverse("care-psy-family-sessions"), **self.psych_auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"], [])
+
+    def test_list_access_is_audited(self):
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        note = self.start().data["id"]
+        self.patch(note, {"session_type": "FAMILY"})
+        self.client.get(reverse("care-psy-family-sessions"), **self.auth)
+        with platform_admin_context():
+            entry = AuditLogEntry.objects.filter(
+                model="care_pathway.psychotherapynote", object_id="family-session-list"
+            ).first()
+        self.assertIn(note, entry.field_diff["notes"])
+
+
 class OrganizerChatUnitTests(PsyNoteTestCase):
     def test_translation_is_screened_for_risk_language_too(self):
         answers = {

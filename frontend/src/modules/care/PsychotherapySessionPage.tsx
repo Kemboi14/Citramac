@@ -13,9 +13,12 @@ import { useClientBanner } from "./shared/useClientBanner";
 // session fills the page. The draft itself still lives on the server (X-09),
 // so leaving and returning resumes the same session.
 
-const LIST_PATH = "/clinical/psychotherapy/individual";
+const INDIVIDUAL_LIST_PATH = "/clinical/psychotherapy/individual";
+const FAMILY_LIST_PATH = "/clinical/psychotherapy/family";
 
-export function PsychotherapySessionPage() {
+export function PsychotherapySessionPage({ kind = "individual" }: { kind?: "individual" | "family" }) {
+  const LIST_PATH = kind === "family" ? FAMILY_LIST_PATH : INDIVIDUAL_LIST_PATH;
+  const backLabel = kind === "family" ? "Family Psychotherapy" : "Individual Psychotherapy";
   const { patientId = "", episodeId = "", noteId } = useParams();
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -45,14 +48,16 @@ export function PsychotherapySessionPage() {
             inline
             patientId={patientId}
             noteId={noteId}
-            backLabel="Individual Psychotherapy"
+            sessionType={kind === "family" ? "FAMILY" : undefined}
+            backLabel={backLabel}
             onClose={() => navigate(backTo)}
           />
         ) : episodeId ? (
           <PsychotherapyRecord
             patientId={patientId}
             initialEpisodeId={episodeId}
-            backLabel="Individual Psychotherapy"
+            backLabel={backLabel}
+            initialSessionType={kind === "family" ? "FAMILY" : "INDIVIDUAL"}
             onClose={() => navigate(backTo)}
           />
         ) : (
@@ -62,7 +67,8 @@ export function PsychotherapySessionPage() {
           <PsychotherapyRecord
             patientId={patientId}
             onClose={() => navigate(backTo)}
-            backLabel="Individual Psychotherapy"
+            backLabel={backLabel}
+            initialSessionType={kind === "family" ? "FAMILY" : "INDIVIDUAL"}
           />
         )}
       </div>

@@ -357,9 +357,68 @@ def concern_options():
     }
 
 
+def questions_for(note):
+    return org.QUESTIONNAIRES.get(note.questionnaire_version, org.QUESTIONS)
+
+
+def question_keys_for(note):
+    return tuple(question["key"] for question in questions_for(note))
+
+
+def text_question_keys_for(note):
+    return tuple(
+        question["key"]
+        for question in questions_for(note)
+        if question.get("kind") != "PARTICIPANTS"
+    )
+
+
+def _family_questionnaire(note):
+    return note.questionnaire_version == org.FAMILY_QUESTIONNAIRE
+
+
+def _question_for(note, key):
+    return next((question for question in questions_for(note) if question["key"] == key), None)
+
+
+def _participant_choices(note, user):
+    if (
+        not _family_questionnaire(note)
+        or note.status != "DRAFT"
+        or note.author_id != user.pk
+    ):
+        return {"clinicians": [], "family": [], "family_consent_required": False}
+
+    from apps.client_registry.consent import current_decision
+    from apps.client_registry.models import EmergencyContact
+    from . import task_assignees
+
+    branch_id = note.episode.branch_id
+    clinicians = task_assignees.people_at_branch(note.organization_id, branch_id)
+    if not any(person["id"] == str(user.pk) for person in clinicians):
+        clinicians.append({"id": str(user.pk), "name": services.user_display(user)})
+    family_consent = current_decision(note.patient, "FAMILY_INVOLVEMENT") == "YES"
+    contacts = []
+    if family_consent:
+        contacts = [
+            {"id": str(contact.pk), "name": contact.name}
+            for contact in EmergencyContact.objects.filter(
+                patient=note.patient,
+                contact_role=EmergencyContact.ROLE_CONTACT,
+                may_be_informed=True,
+            ).order_by("name", "pk")
+        ]
+    return {
+        "clinicians": clinicians,
+        "family": contacts,
+        "family_consent_required": not family_consent,
+    }
+
+
 def config(user):
     return {
         "questions": org.QUESTIONS,
+        "questionnaires": org.QUESTIONNAIRES,
         "safety_question": org.SAFETY_QUESTION,
         "safety_options": [{"code": c, "label": label} for c, label in org.SAFETY_OPTIONS],
         "detection_prompt": org.DETECTION_PROMPT,
@@ -444,24 +503,9 @@ def _require_draft(note):
 
 @transaction.atomic
 def start_or_resume(patient, user, data):
-    """The clinician's open draft for this therapy episode, or a new one. One
-    draft per clinician per episode, so a retried request resumes it rather
-    than creating a second session (idempotent)."""
+    """The clinician's open draft for this therapy type and episode, or a new one.
+    A retried request resumes that draft rather than creating a second session."""
     ep = therapy._open_episode(patient, data.get("episode"))
-    existing = PsychotherapyNote.objects.filter(
-        patient=patient, author=user, therapy_episode=ep, status="DRAFT"
-    ).first()
-    if existing:
-        # Resuming from the session-details screen: what the clinician just
-        # entered is kept (validated and audited as any edit); blanks change nothing.
-        details = {
-            k: data[k]
-            for k in ("session_type", "session_objective", "primary_goal", "secondary_goals")
-            if data.get(k)
-        }
-        if details:
-            _set_session_info(existing, user, details)
-        return existing, False
     session_type = data.get("session_type") or "INDIVIDUAL"
     if session_type not in SESSION_TYPES:
         raise ValidationError(
@@ -469,6 +513,24 @@ def start_or_resume(patient, user, data):
                 "session_type": "Individual or family — group sessions are recorded in the group programme."
             }
         )
+    existing = PsychotherapyNote.objects.filter(
+        patient=patient,
+        author=user,
+        therapy_episode=ep,
+        session__session_type=session_type,
+        status="DRAFT",
+    ).first()
+    if existing:
+        # Resuming from the session-details screen: what the clinician just
+        # entered is kept (validated and audited as any edit); blanks change nothing.
+        details = {
+            k: data[k]
+            for k in ("session_type", "session_objective", "primary_goal", "secondary_goals", "session_phase", "family_members")
+            if data.get(k)
+        }
+        if details:
+            _set_session_info(existing, user, details)
+        return existing, False
     activity = (
         therapy._activity(patient, data.get("activity")) if data.get("activity") else ep.activity
     )
@@ -482,9 +544,11 @@ def start_or_resume(patient, user, data):
         status="IN_PROGRESS",
     )
     extra = {"therapy_episode": str(ep.pk), "activity": str(activity.pk if activity else "")}
-    for field in ("session_objective", "primary_goal", "secondary_goals"):
+    for field in ("session_objective", "primary_goal", "secondary_goals", "session_phase"):
         if data.get(field):
             extra[field] = str(data.get(field) or "").strip()[:4000]
+    if data.get("family_members"):
+        extra["family_members"] = str(data.get("family_members") or "").strip()[:4000]
     session = PsychotherapySession.objects.create(
         organization_id=patient.organization_id,
         patient=patient,
@@ -502,9 +566,16 @@ def start_or_resume(patient, user, data):
         encounter=encounter,
         session=session,
         author=user,
+        questionnaire_version=(
+            org.FAMILY_QUESTIONNAIRE if session_type == "FAMILY" else org.INDIVIDUAL_QUESTIONNAIRE
+        ),
         answers={
             k: {"text": "", "mode": "TYPED", "language": DEFAULT_LANGUAGE, "answered_at": None}
-            for k in org.QUESTION_KEYS
+            for k in (
+                org.FAMILY_QUESTION_KEYS
+                if session_type == "FAMILY"
+                else org.QUESTION_KEYS
+            )
         },
     )
     _audit(note, user, "CREATE")
@@ -526,9 +597,60 @@ def _set_answers(note, user, answers, to_translate):
     languages = dict(org.LANGUAGES)
     ai_on = psy_ai.enabled_for(note.patient)
     for key, value in answers.items():
-        if key not in org.QUESTION_KEYS or not isinstance(value, dict):
+        question = _question_for(note, key)
+        if question is None or not isinstance(value, dict):
             raise ValidationError({"answers": f"Unknown question {key!r}."})
         prev = current.get(key) or {}
+        if question.get("kind") == "PARTICIPANTS":
+            kind = question["participant_kind"]
+            options = _participant_choices(note, user)
+            participant_ids = value.get("participant_ids", [])
+            if not isinstance(participant_ids, list) or any(
+                not isinstance(item, str) for item in participant_ids
+            ):
+                raise ValidationError({"answers": "Choose attendees from the offered list."})
+            if len(set(participant_ids)) != len(participant_ids):
+                raise ValidationError({"answers": "An attendee can only be selected once."})
+            if kind == "clinician" and not participant_ids:
+                raise ValidationError({"answers": "Select at least one clinician."})
+            none_present = value.get("none_present") is True
+            if none_present and (kind != "family" or participant_ids):
+                raise ValidationError({"answers": "Choose family attendees or none, not both."})
+            if kind == "family" and not participant_ids and not none_present:
+                raise ValidationError(
+                    {"answers": "Select family attendees or confirm that none were present."}
+                )
+            choice_key = "clinicians" if kind == "clinician" else "family"
+            available = {row["id"]: row for row in options[choice_key]}
+            if any(item not in available for item in participant_ids):
+                raise ValidationError(
+                    {"answers": "One or more attendees are no longer available for this session."}
+                )
+            participants = [
+                {
+                    "id": item,
+                    "name": available[item]["name"],
+                    "resource_type": "Practitioner" if kind == "clinician" else "RelatedPerson",
+                }
+                for item in participant_ids
+            ]
+            text = (
+                "No family members were present."
+                if none_present
+                else ", ".join(person["name"] for person in participants)
+            )
+            entry = {
+                "text": text,
+                "participants": participants,
+                "mode": "TYPED",
+                "language": DEFAULT_LANGUAGE,
+                "answered_at": prev.get("answered_at"),
+            }
+            if entry != prev:
+                entry["answered_at"] = _now_iso()
+                _audit(note, user, "ANSWER", question=key, mode="SELECTED")
+                current[key] = entry
+            continue
         mode = (
             org.LEGACY_MODES.get(value.get("mode"), value.get("mode"))
             or org.LEGACY_MODES.get(prev.get("mode"), prev.get("mode"))
@@ -676,7 +798,7 @@ def _set_session_info(note, user, data):
         if text and not intake.can_view_restricted(user):
             raise PermissionDenied("Process notes are restricted to treating clinicians.")
         extra["process_notes"] = text  # restricted: therapy.visible_extra
-    for field in ("session_objective", "primary_goal", "secondary_goals"):
+    for field in ("session_objective", "primary_goal", "secondary_goals", "session_phase", "family_members"):
         if field in data:
             extra[field] = str(data.get(field) or "").strip()[:4000]
     if "score_id" in data:
@@ -860,7 +982,11 @@ def _goal_link(note, user, data):
         raise ValidationError({"goal_link": "Write the progress statement you are confirming."})
     suggested = {
         s["goal_index"]: s["evidence"]
-        for s in org.goal_suggestions(list(goals.values()), note.answers or {})
+        for s in org.goal_suggestions(
+            list(goals.values()),
+            note.answers or {},
+            evidence_keys=("family_progress",) if _family_questionnaire(note) else ("q4", "q1"),
+        )
     }
     evidence = suggested.get(index) or str(data.get("evidence") or "").strip()[:2000]
     links = [link for link in (note.goal_links or []) if link["goal_index"] != index]
@@ -1139,7 +1265,10 @@ def run_reword(note_id, token, failure=None):
                     text = org.english_text((note.answers or {}).get(q))
                     if text.strip():
                         out, model = psy_ai.rewrite_section(q, text, names)
-                        reworded[section] = org.compose_reworded(q, out, proc.get("fixed") or {})
+                        result = org.compose_reworded(q, out, proc.get("fixed") or {})
+                        reworded[section] = (
+                            f"{reworded[section]}\n\n{result}" if section in reworded else result
+                        )
             except psy_ai.AIUnavailable as exc:
                 logger.warning(
                     "psychotherapy note rewording failed: %s", exc, extra={"note": note_id}
@@ -1439,7 +1568,9 @@ def context(note, user):
 
 
 def detections(note):
-    return org.detect_risk_language(note.answers or {}, lexicon("PSY_RISK"))
+    answers = note.answers or {}
+    screened = {key: answers.get(key) for key in text_question_keys_for(note)}
+    return org.detect_risk_language(screened, lexicon("PSY_RISK"))
 
 
 def detected_models(note):
@@ -1447,8 +1578,15 @@ def detected_models(note):
     is included (the clinician's decision, else named → in, suggested → out)."""
     registry = [model_row(m) for m in therapy_models(note.organization_id)]
     answers = note.answers or {}
+    intervention_key, progress_key = (
+        ("family_interventions", "family_progress")
+        if _family_questionnaire(note)
+        else ("q3", "q4")
+    )
     found = org.detect_models(
-        org.english_text(answers.get("q3")), org.english_text(answers.get("q4")), registry
+        org.english_text(answers.get(intervention_key)),
+        org.english_text(answers.get(progress_key)),
+        registry,
     )
     decisions = note.model_decisions or {}
     for m in found:
@@ -1459,7 +1597,15 @@ def detected_models(note):
 
 def applied_models(note):
     registry = {m["code"]: m for m in (model_row(x) for x in therapy_models(note.organization_id))}
-    texts = [org.english_text((note.answers or {}).get(k)) for k in ("q3", "q4")]
+    intervention_key, progress_key = (
+        ("family_interventions", "family_progress")
+        if _family_questionnaire(note)
+        else ("q3", "q4")
+    )
+    texts = [
+        org.english_text((note.answers or {}).get(k))
+        for k in (intervention_key, progress_key)
+    ]
     applied = [m for m in detected_models(note) if m["included"]]
     for code in note.selected_models or []:  # ticked on an earlier draft
         if code in registry and code not in {m["code"] for m in applied}:
@@ -1556,22 +1702,35 @@ def generate(note, user):
         "link": detail.get("risk_link") if note.safety_answer == org.SAFETY_YES else None,
         "ack_reason": note.safety_ack_reason,
     }
-    result = org.organize(
-        note.answers or {},
-        safety,
-        _session_info(note),
-        registry,
-        lexicon("PSY_REPORT_CUE"),
-        detections=detections(note),
-        resolutions=note.detection_resolutions or {},
-        confirmed_links=[link for link in note.goal_links or [] if link["status"] == "CONFIRMED"],
-        goal_links=note.goal_links or [],
-        measure=(note.session.extra or {}).get("measure"),
-        context={"safety_plan": _safety_plan(note.patient), **_history_context(note, user)},
-        applied_models=applied_models(note),
-        changes=score_changes(note),
-        change_links=note.change_links or [],
-    )
+    context = {"safety_plan": _safety_plan(note.patient), **_history_context(note, user)}
+    if _family_questionnaire(note):
+        result = org.organize_family(
+            note.answers or {},
+            safety,
+            _session_info(note),
+            detections=detections(note),
+            resolutions=note.detection_resolutions or {},
+            context=context,
+        )
+    else:
+        result = org.organize(
+            note.answers or {},
+            safety,
+            _session_info(note),
+            registry,
+            lexicon("PSY_REPORT_CUE"),
+            detections=detections(note),
+            resolutions=note.detection_resolutions or {},
+            confirmed_links=[
+                link for link in note.goal_links or [] if link["status"] == "CONFIRMED"
+            ],
+            goal_links=note.goal_links or [],
+            measure=(note.session.extra or {}).get("measure"),
+            context=context,
+            applied_models=applied_models(note),
+            changes=score_changes(note),
+            change_links=note.change_links or [],
+        )
     if (
         not note.generated_sections
         and note.sections
@@ -1617,7 +1776,10 @@ def generate(note, user):
 
 
 def flags(note):
-    texts = {k: (note.answers.get(k) or {}).get("text", "") for k in org.QUESTION_KEYS}
+    texts = {
+        k: (note.answers.get(k) or {}).get("text", "")
+        for k in text_question_keys_for(note)
+    }
     texts.update({f"section:{k}": v for k, v in (effective_sections(note) or {}).items()})
     return org.stigma_flags(texts, lexicon("PSY_STIGMA"))
 
@@ -1626,7 +1788,10 @@ def _goal_progress(note):
     """(all goal suggestions, the undecided ones)."""
     if note.status != "DRAFT":
         return [], []
-    suggestions = org.goal_suggestions(context_goals(note.patient), note.answers or {})
+    evidence_keys = ("family_progress",) if _family_questionnaire(note) else ("q4", "q1")
+    suggestions = org.goal_suggestions(
+        context_goals(note.patient), note.answers or {}, evidence_keys=evidence_keys
+    )
     decided = {link["goal_index"] for link in note.goal_links or []}
     return suggestions, [g for g in suggestions if g["goal_index"] not in decided]
 
@@ -1641,8 +1806,15 @@ def blockers(note, found=None):
 
     answer = note.safety_answer
     detail = note.safety_detail or {}
-    if not any((note.answers.get(k) or {}).get("text", "").strip() for k in org.QUESTION_KEYS):
-        add("NO_CONTENT", "Answer at least one of the five questions.")
+    if not any(
+        (note.answers.get(k) or {}).get("text", "").strip()
+        for k in text_question_keys_for(note)
+    ):
+        add("NO_CONTENT", "Record clinical content in at least one guided question.")
+    if _family_questionnaire(note):
+        attendee_questions = ("family_clinicians", "family_present")
+        if any(not (note.answers.get(key) or {}).get("answered_at") for key in attendee_questions):
+            add("ATTENDEES", "Record the clinicians and family members present, or confirm none.")
     if not answer:
         add("SAFETY_UNANSWERED", "Answer the safety question (PSY-S-04).")
     if answer == org.SAFETY_NOT_ASSESSED and not note.safety_ack_at:
@@ -1693,7 +1865,7 @@ def checklist(note, found, pending):
     answer = note.safety_answer
     detail = note.safety_detail or {}
     answered = sum(
-        1 for k in org.QUESTION_KEYS if (note.answers.get(k) or {}).get("text", "").strip()
+        1 for k in question_keys_for(note) if (note.answers.get(k) or {}).get("text", "").strip()
     )
     reviewed = sum(1 for d in found if d["key"] in (note.detection_resolutions or {}))
     suggestions, undecided = _goal_progress(note)
@@ -1704,7 +1876,7 @@ def checklist(note, found, pending):
             "key": "questions",
             "label": "Guided questions answered",
             "done": answered > 0,
-            "detail": f"{answered} of {len(org.QUESTION_KEYS)} answered",
+            "detail": f"{answered} of {len(question_keys_for(note))} answered",
         },
         {
             "key": "safety",
@@ -2038,6 +2210,7 @@ def summary(note, user):
     row = {
         "id": str(note.pk),
         "status": note.status,
+        "questionnaire_version": note.questionnaire_version,
         "session_date": note.session.session_date.isoformat(),
         "session_type": note.session.session_type,
         "author": _by(note.author),
@@ -2060,15 +2233,18 @@ def summary(note, user):
 def transcript(note):
     """Each answer verbatim, with how and when it was given, its language and —
     for Kiswahili / Sheng — the English translation and its provenance."""
-    titles = {q["key"]: q["title"] for q in org.QUESTIONS}
+    questions = questions_for(note)
+    titles = {q["key"]: q["title"] for q in questions}
     out = []
-    for key in org.QUESTION_KEYS:
+    for question in questions:
+        key = question["key"]
         answer = (note.answers or {}).get(key) or {}
         out.append(
             {
                 "question": key,
                 "title": titles[key],
                 "text": answer.get("text", ""),
+                "participants": answer.get("participants", []),
                 "mode": org.LEGACY_MODES.get(answer.get("mode"), answer.get("mode") or "TYPED"),
                 "answered_at": answer.get("answered_at"),
                 "language": answer.get("language") or DEFAULT_LANGUAGE,
@@ -2097,6 +2273,7 @@ def detail(note, user):
     return {
         **summary(note, user),
         "is_author": note.author_id == user.pk,
+        "participant_options": _participant_choices(note, user),
         "patient": {
             "id": str(patient.pk),
             "name": patient.get_full_name(),
@@ -2182,28 +2359,88 @@ def detail(note, user):
 
 def patient_notes(patient, user):
     rows = PsychotherapyNote.objects.filter(patient=patient).select_related("session", "author")
-    return [summary(n, user) for n in rows]
+    notes = list(rows)
+    write_event(
+        user.organization_id,
+        "VIEW",
+        "care_pathway.psychotherapynote",
+        str(patient.pk),
+        {
+            "context": "client_psychotherapy_sessions",
+            "notes": [str(note.pk) for note in notes if can_read(user, note)],
+        },
+    )
+    return [summary(note, user) for note in notes]
 
 
-# ── Individual Psychotherapy client list ──
+def family_sessions(user):
+    rows = (
+        PsychotherapyNote.objects.filter(
+            organization_id=user.organization_id,
+            session__session_type="FAMILY",
+        )
+        .select_related("session", "author", "patient")
+        .order_by("-session__session_date", "-pk")
+    )
+    results = []
+    viewed = []
+    for note in rows:
+        if not can_read(user, note):
+            continue
+        results.append(
+            {
+                **summary(note, user),
+                "patient_id": str(note.patient_id),
+                "patient_name": note.patient.get_full_name(),
+                "patient_number": note.patient.citramac_number,
+            }
+        )
+        viewed.append(str(note.pk))
+    write_event(
+        user.organization_id,
+        "VIEW",
+        "care_pathway.psychotherapynote",
+        "family-session-list",
+        {"context": "family_psychotherapy_sessions", "notes": viewed},
+    )
+    return results
 
 
-def client_list(user):
+# ── Psychotherapy client list ──
+
+
+def client_list(user, kind="individual"):
     """Clients with an open therapy episode or a psychotherapy action on their
     care plan. Session counts and dates are psychotherapy content: they are sent
     only for clients the user has full MHP access to (care team / Org Admin);
-    everyone else sees that the client is in therapy. The view is audit-logged."""
+    everyone else sees that the client is in therapy. The view is audit-logged.
+
+    ``kind`` selects which flavour of psychotherapy the page serves:
+    ``individual`` (the default) covers individual therapy episodes and
+    therapy-module care-plan actions; ``family`` covers care-plan actions
+    recorded as family interventions."""
     from apps.client_registry.models import Appointment, Patient
 
-    episode_patients = set(
-        TherapyEpisode.objects.filter(ended_at__isnull=True).values_list("patient_id", flat=True)
-    )
-    activity_patients = set(
-        CarePlanActivity.objects.exclude(decision="DECLINED")
-        .exclude(status="COMPLETED")
-        .filter(Q(action_key__in=("therapy", "family")) | Q(module="THERAPY"))
-        .values_list("care_plan__patient_id", flat=True)
-    )
+    kind = kind if kind in ("individual", "family") else "individual"
+
+    if kind == "family":
+        episode_patients = set()
+        activity_patients = set(
+            CarePlanActivity.objects.exclude(decision="DECLINED")
+            .exclude(status="COMPLETED")
+            .filter(action_key="family")
+            .values_list("care_plan__patient_id", flat=True)
+        )
+    else:
+        episode_patients = set(
+            TherapyEpisode.objects.filter(ended_at__isnull=True).values_list("patient_id", flat=True)
+        )
+        activity_patients = set(
+            CarePlanActivity.objects.exclude(decision="DECLINED")
+            .exclude(status="COMPLETED")
+            .filter(Q(action_key="therapy") | Q(module="THERAPY"))
+            .values_list("care_plan__patient_id", flat=True)
+        )
     patients = Patient.objects.filter(
         pk__in=episode_patients | activity_patients, archived_at__isnull=True
     ).order_by("last_name", "first_name")
@@ -2236,6 +2473,8 @@ def client_list(user):
         }
         if has_full_mhp_access(user, patient):
             signed = PsychotherapyNote.objects.filter(patient=patient, status="SIGNED")
+            if kind == "family":
+                signed = signed.filter(session__session_type="FAMILY")
             last = signed.aggregate(last=Max("session__session_date"))["last"]
             row.update(
                 {
@@ -2252,6 +2491,6 @@ def client_list(user):
         "VIEW",
         "care_pathway.psychotherapynote",
         "client-list",
-        {"context": "individual_psychotherapy_list", "patients": viewed},
+        {"context": ("family" if kind == "family" else "individual") + "_psychotherapy_list", "patients": viewed},
     )
     return rows

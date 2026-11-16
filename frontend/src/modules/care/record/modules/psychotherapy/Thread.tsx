@@ -8,7 +8,7 @@ import type {
   SafetyAnswer,
 } from "../../../../../lib/psychotherapyNoteApi";
 import { BTN, BTN_GHOST, BTN_SM } from "../../../shared/styles";
-import { hhmm, QUESTION_COUNT, REVIEW_STEP, SAFETY_STEP } from "./helpers";
+import { hhmm, questionCount, reviewStep, safetyStep } from "./helpers";
 
 // The conversation, derived from the server draft (questions asked so far,
 // the clinician's answers, the inline checks the server ran on them) plus a
@@ -67,11 +67,21 @@ function Mine({ children, foot }: { children: ReactNode; foot?: ReactNode }) {
 }
 
 /** The question: small counter, the question itself, its hint. */
-function QuestionHead({ n, title, hint }: { n: number; title: string; hint: string }) {
+function QuestionHead({
+  n,
+  total,
+  title,
+  hint,
+}: {
+  n: number;
+  total: number;
+  title: string;
+  hint: string;
+}) {
   return (
     <>
       <span className="text-[12px] font-medium text-ink-500">
-        Question {n} of {QUESTION_COUNT}
+        Question {n} of {total}
       </span>
       <div className="text-[19px] font-semibold leading-[1.3]">{title}</div>
       <div className="max-w-[60ch] text-[14px] text-ink-500">{hint}</div>
@@ -122,6 +132,7 @@ export interface ThreadHandlers {
 
 /** The example session: the fixed sample answers, page state only. */
 export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave: () => void }) {
+  const count = questionCount(config);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-priority-orange bg-priority-orange-tint px-3 py-2 text-[12.5px] text-priority-orange">
@@ -134,17 +145,19 @@ export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave:
         </button>
       </div>
       <Sys>
-        <p>Example session. I’ll ask five questions, one at a time, then the safety question.</p>
+        <p>
+          Example session. I’ll ask {count} questions, one at a time, then the safety question.
+        </p>
       </Sys>
       {config.questions.slice(0, 1).map((q, i) => (
         <Sys key={q.key}>
-          <QuestionHead n={i + 1} title={q.title} hint={q.hint} />
+          <QuestionHead n={i + 1} total={count} title={q.title} hint={q.hint} />
         </Sys>
       ))}
       <Sys>
         <p>
           One question at a time: each answer moves you to the next and appears in the therapy note
-          on the right. The safety question comes after question five, then you review and sign.
+          on the right. The safety question comes next, then you review and sign.
         </p>
       </Sys>
     </div>
@@ -171,6 +184,9 @@ export function Thread({
   h: ThreadHandlers;
   reviewExtras: ReactNode;
 }) {
+  const count = questionCount(config);
+  const safety = safetyStep(config);
+  const review = reviewStep(config);
   const locked = note.status === "SIGNED" || !note.is_author;
   const ackFor = (anchor: string) =>
     acks
@@ -184,7 +200,7 @@ export function Thread({
   // transcript on the right, leaving the next question on its own. While an
   // earlier answer is being reworded, its own question is the one in hand.
   const editingIndex = editing ? config.questions.findIndex((q) => q.key === editing) : -1;
-  const current = editingIndex >= 0 ? editingIndex : step < QUESTION_COUNT ? step : -1;
+  const current = editingIndex >= 0 ? editingIndex : step < count ? step : -1;
   // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
   const q = current >= 0 ? config.questions[current] : null;
   const qKey = q?.key ?? "";
@@ -214,7 +230,7 @@ export function Thread({
       {q && (
         <div key={q.key} className="flex flex-col gap-3">
           <Sys id={`psy-m-q${current}`}>
-            <QuestionHead n={current + 1} title={q.title} hint={q.hint} />
+            <QuestionHead n={current + 1} total={count} title={q.title} hint={q.hint} />
           </Sys>
           {qFlags.length > 0 && (
             <Sys>
@@ -254,9 +270,9 @@ export function Thread({
                     </div>
                   </div>
                 ))}
-                {step < SAFETY_STEP ? (
+                {step < safety ? (
                   <span className="text-[12px] text-ink-500">
-                    You will be asked the safety question after question 5.
+                    You will be asked the safety question after the guided questions.
                   </span>
                 ) : locked ? null : note.safety_answer === "YES" ? (
                   <div>
@@ -449,7 +465,7 @@ export function Thread({
           </div>
         </Sys>
       )}
-      {step >= SAFETY_STEP && (
+      {step >= safety && (
         <Sys id="psy-m-safety">
           <span className="text-[12px] font-medium text-ink-500">Required · every session</span>
           <div className="text-[17px] font-medium leading-[1.4]">{config.safety_question}</div>
@@ -492,7 +508,7 @@ export function Thread({
         <Mine>{note.not_assessed_reason}</Mine>
       )}
       {ackFor("safety")}
-      {step >= REVIEW_STEP && note.status === "DRAFT" && (
+      {step >= review && note.status === "DRAFT" && (
         <Sys id="psy-m-review">
           <p>
             Your draft note is ready. Review it, edit any section in place, then sign. It stays

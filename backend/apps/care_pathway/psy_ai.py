@@ -89,6 +89,18 @@ SECTION_INSTRUCTIONS = {
     "q5": "Section: Plan. Write bullets: next steps, between-session practice, referrals or "
     "consultations, "
     "and follow-up, as the clinician stated them.",
+    "family_issues": "Reword only the key issues discussed with the family. Do not frame them as "
+    "a client report or add a heading.",
+    "family_dynamics": "Reword only the family dynamics the clinician observed; do not infer "
+    "motives or diagnoses, and do not add a heading.",
+    "family_interventions": "Reword only the interventions used in this family session. Do not "
+    "describe individual therapy work or add a heading.",
+    "family_progress": "Reword only the progress explicitly stated toward the goals. Do not infer "
+    "improvement or deterioration, and do not add a heading.",
+    "family_attention": "Reword only the areas needing attention that the clinician stated. Do not "
+    "add a heading.",
+    "family_recommendations": "Reword only the recommendations and next steps the clinician "
+    "stated. Do not add a heading.",
 }
 
 # Models whose server-side refusal fallback accepts `fallbacks: "default"`.

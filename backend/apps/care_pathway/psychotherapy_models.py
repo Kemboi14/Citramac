@@ -106,6 +106,7 @@ class PsychotherapyNote(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
     )
     status = models.CharField(max_length=6, choices=STATUS_CHOICES, default="DRAFT")
+    questionnaire_version = models.CharField(max_length=32, default="INDIVIDUAL_V1")
     # {"q1".."q5": {"text", "mode": "TYPED" | "DICTATED", "answered_at", "language",
     #  "translation": {"status": pending|done|error|unavailable, "text", "model", "at", ...}}}
     # `text` is always the clinician's own words; a translation is kept beside it

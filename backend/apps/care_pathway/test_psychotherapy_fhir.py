@@ -110,6 +110,53 @@ class FhirR4ConformancePsychotherapyExamplesTests(PsyDocumentAssertions, SimpleT
             with self.subTest(example=path.name):
                 self.assert_document(json.loads(path.read_text()))
 
+    def test_family_examples_show_family_type_and_only_the_recorded_attendees(self):
+        paths = sorted(EXAMPLES.glob("psychotherapy-note-family-*.json"))
+        self.assertGreaterEqual(len(paths), 3)
+        actor_types = {}
+        for path in paths:
+            bundle = json.loads(path.read_text())
+            encounter = _one(bundle, "Encounter")
+            self.assertEqual(encounter["type"][0]["coding"][0]["code"], "FAMILY")
+            actor_types[path.name] = {
+                resource["resourceType"]
+                for resource in _resources(bundle)
+                if resource["resourceType"] in {"Practitioner", "RelatedPerson"}
+            }
+        self.assertEqual(
+            actor_types["psychotherapy-note-family-routine.json"],
+            {"Practitioner", "RelatedPerson"},
+        )
+        self.assertEqual(
+            actor_types["psychotherapy-note-family-omission-no-family-present.json"],
+            {"Practitioner"},
+        )
+
+    def test_family_answers_map_to_the_existing_profiled_sections(self):
+        organized = org.organize_family(
+            {
+                "family_clinicians": {"text": "Clinician Example"},
+                "family_present": {"text": "Family Member A"},
+                "family_issues": {"text": "They discussed communication at home."},
+                "family_dynamics": {"text": "Members took turns speaking."},
+                "family_interventions": {"text": "Practised reflective listening."},
+                "family_progress": {"text": "Agreed on a weekly check-in."},
+                "family_attention": {"text": "Review conflict escalation."},
+                "family_recommendations": {"text": "Continue family sessions."},
+            },
+            {"answer": "NO"},
+            {"date": "16/11/2026", "time": "11:50", "session_type": "Family psychotherapy"},
+        )
+        sections = organized["sections"]
+        self.assertIn("Clinicians present", sections["session_information"])
+        self.assertIn("Family Member A", sections["session_information"])
+        self.assertIn("They discussed communication at home.", sections["presenting_focus"])
+        self.assertIn("Members took turns speaking.", sections["assessment"])
+        self.assertIn("Practised reflective listening.", sections["interventions"])
+        self.assertIn("Agreed on a weekly check-in.", sections["response"])
+        self.assertIn("Review conflict escalation.", sections["plan"])
+        self.assertIn("Continue family sessions.", sections["plan"])
+
     def test_routine_example_records_no_new_concern_and_a_decided_change(self):
         bundle = self.load("routine-cbt-no-new-concern")
         obs = _one(bundle, "Observation")
@@ -189,6 +236,36 @@ class FhirR4ConformancePsychotherapyExportTests(PsyDocumentAssertions, PsyNoteTe
             )
         # The same note is the same document.
         self.assertEqual(self.fhir(nid).data["identifier"], response.data["identifier"])
+
+    def test_family_attendee_is_a_per_client_encounter_participant(self):
+        started = self.start(session_type="FAMILY")
+        self.assertEqual(started.status_code, 201, started.data)
+        nid = started.data["id"]
+        answers = {
+            "family_clinicians": {
+                "participant_ids": [str(self.nurse.pk)],
+                "none_present": False,
+            },
+            "family_present": {"participant_ids": [], "none_present": True},
+            "family_issues": {
+                "text": "The family discussed communication at home.",
+                "mode": "TYPED",
+            },
+        }
+        self.ready(nid, safety_answer="NO", answers=answers)
+        self.assertEqual(self.act("care-psy-note-sign", nid).status_code, 200)
+
+        bundle = self.fhir(nid).data
+        self.assert_document(bundle)
+        encounter = _one(bundle, "Encounter")
+        self.assertEqual(len(encounter["participant"]), 1)
+        reference = encounter["participant"][0]["individual"]["reference"]
+        self.assertTrue(reference.startswith("urn:uuid:"))
+        actor = next(
+            resource for resource in _resources(bundle) if reference == f"urn:uuid:{resource['id']}"
+        )
+        self.assertEqual(actor["resourceType"], "Practitioner")
+        self.assertEqual(actor["name"][0]["text"], self.nurse.get_full_name())
 
     def test_amended_yes_note_carries_concerns_and_the_amendment(self):
         nid = self.start().data["id"]

@@ -58,12 +58,27 @@ export function psychotherapySessionPath(patientId: string, episodeId: string) {
   return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}`;
 }
 
+/** The Family Psychotherapy session workspace, inside the clinical shell. */
+export function psychotherapyFamilySessionPath(patientId: string, episodeId: string) {
+  return `/clinical/psychotherapy/family/session/${patientId}/${episodeId}`;
+}
+
 /** Entry page that resolves the client's open therapy episode before opening a session. */
 export function psychotherapyEntryPath(patientId: string) {
   return `/clinical/psychotherapy/individual/session/${patientId}`;
 }
 
+/** Entry page for a family session. */
+export function psychotherapyFamilyEntryPath(patientId: string) {
+  return `/clinical/psychotherapy/family/session/${patientId}`;
+}
+
 /** A saved psychotherapy note (draft or signed) opened in the same workspace. */
 export function psychotherapyNotePath(patientId: string, episodeId: string, noteId: string) {
   return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}/note/${noteId}`;
+}
+
+/** A saved family psychotherapy note (draft or signed) opened in the same workspace. */
+export function psychotherapyFamilyNotePath(patientId: string, episodeId: string, noteId: string) {
+  return `/clinical/psychotherapy/family/session/${patientId}/${episodeId}/note/${noteId}`;
 }

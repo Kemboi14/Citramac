@@ -11,6 +11,7 @@ Mapping (owner, 2026-11-12):
 | PsychotherapyNote | Composition | citramac-psychotherapy-note |
 | PsychotherapyNote.safety_answer | Observation | citramac-psychotherapy-safety-screen |
 | PSYCHOTHERAPY clinical Encounter | Encounter, in its EpisodeOfCare | base R4 |
+| Selected family-session attendees | Encounter.participant, Practitioner / RelatedPerson actors | base R4 |
 | signature, each amendment | Provenance | base R4 |
 
 - Composition: subject = the client, encounter = the session's Encounter (which
@@ -23,7 +24,10 @@ Mapping (owner, 2026-11-12):
   `psy-safety-answer`), one component per concern ticked on a YES, the
   clinician's description or the not-assessed reason as a note.
 - Practitioners are not emitted (workforce data, not yet profiled): the signer
-  is named, not linked, as on the discharge summary.
+  is named, not linked, as on the discharge summary. Family-session attendees
+  selected on the note are the exception: the Bundle carries only a minimal
+  name snapshot for each selected actor, without workforce credentials or
+  family contact details.
 
 Sensitivity (§3 item 6): every resource carries `R` (HL7 v3-Confidentiality,
 settings.FHIR_PSYCH_CONFIDENTIALITY_CODE) and `PSY` (HL7 v3-ActCode) — the two
@@ -57,7 +61,8 @@ from fhir.resources.R4B.bundle import Bundle, BundleEntry
 from fhir.resources.R4B.codeableconcept import CodeableConcept
 from fhir.resources.R4B.coding import Coding
 from fhir.resources.R4B.composition import Composition, CompositionAttester, CompositionSection
-from fhir.resources.R4B.encounter import Encounter
+from fhir.resources.R4B.encounter import Encounter, EncounterParticipant
+from fhir.resources.R4B.humanname import HumanName
 from fhir.resources.R4B.identifier import Identifier
 from fhir.resources.R4B.meta import Meta
 from fhir.resources.R4B.narrative import Narrative
@@ -65,6 +70,8 @@ from fhir.resources.R4B.observation import Observation, ObservationComponent
 from fhir.resources.R4B.period import Period
 from fhir.resources.R4B.provenance import Provenance, ProvenanceAgent
 from fhir.resources.R4B.reference import Reference
+from fhir.resources.R4B.practitioner import Practitioner
+from fhir.resources.R4B.relatedperson import RelatedPerson
 
 from apps.dha_interop.fhir_mapper import build_patient_resource
 from apps.dha_interop.fhir_patient import CONFIDENTIALITY_SYSTEM
@@ -172,6 +179,7 @@ def _encounter(note, patient_ref, episode_ref):
     mode = (session.extra or {}).get("attendance_mode")
     if mode:
         types.append(_local(ATTENDANCE_VALUESET, mode, labels.get((ATTENDANCE_VALUESET, mode))))
+    attendees, _ = _participant_resources(note, patient_ref)
     return Encounter(
         id=str(note.encounter_id),
         meta=_meta(),
@@ -180,8 +188,47 @@ def _encounter(note, patient_ref, episode_ref):
         type=types,
         subject=Reference(reference=patient_ref),
         episodeOfCare=[Reference(reference=episode_ref)],
+        participant=attendees or None,
         period=Period(start=start.isoformat(), end=end.isoformat() if end else None),
     )
+
+
+def _participant_resources(note, patient_ref):
+    """FHIR actor snapshots for the selected attendees; no contact data is exported."""
+    attendees = []
+    resources = []
+    for key in ("family_clinicians", "family_present"):
+        answer = (note.answers or {}).get(key) or {}
+        for person in answer.get("participants") or []:
+            resource_type = person.get("resource_type")
+            if resource_type not in ("Practitioner", "RelatedPerson"):
+                continue
+            name = str(person.get("name") or "").strip()
+            local_id = person.get("id")
+            if not name or not local_id:
+                continue
+            resource_id = str(_derived_id(f"participant-{resource_type}", local_id))
+            resource_ref = f"urn:uuid:{resource_id}"
+            if resource_type == "Practitioner":
+                resource = Practitioner(
+                    id=resource_id,
+                    meta=_meta(),
+                    name=[HumanName(text=name)],
+                )
+            else:
+                resource = RelatedPerson(
+                    id=resource_id,
+                    meta=_meta(),
+                    patient=Reference(reference=patient_ref),
+                    name=[HumanName(text=name)],
+                )
+            resources.append(BundleEntry(fullUrl=resource_ref, resource=resource))
+            attendees.append(
+                EncounterParticipant(
+                    individual=Reference(reference=resource_ref, display=name)
+                )
+            )
+    return attendees, resources
 
 
 def _concern_components(note):
@@ -260,6 +307,7 @@ def build_psychotherapy_bundle(note):
     composition_ref = _ref(note.pk)
     observation = _safety_observation(note, patient_ref, encounter_ref)
     observation_ref = f"urn:uuid:{observation.id}"
+    _, participant_entries = _participant_resources(note, patient_ref)
 
     amendments = list(note.amendments.select_related("amended_by").order_by("amended_at"))
     sections = effective_sections(note)
@@ -325,6 +373,7 @@ def build_psychotherapy_bundle(note):
         BundleEntry(fullUrl=encounter_ref, resource=_encounter(note, patient_ref, episode_ref)),
         BundleEntry(fullUrl=observation_ref, resource=observation),
     ]
+    entries.extend(participant_entries)
     entries += [BundleEntry(fullUrl=f"urn:uuid:{p.id}", resource=p) for p in provenances]
     bundle = Bundle(
         meta=Meta(security=security_labels()),

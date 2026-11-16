@@ -5,9 +5,52 @@ import type { InputMode, PsyConfig, PsyNote } from "../../../../../lib/psychothe
 // non-clinical UI preferences only (panel width, input mode, language,
 // read-aloud) — never note content (guide.md §5).
 
-export const QUESTION_COUNT = 5;
-export const SAFETY_STEP = 5;
-export const REVIEW_STEP = 6;
+export const questionCount = (config: PsyConfig) => config.questions.length;
+export const safetyStep = (config: PsyConfig) => questionCount(config);
+export const reviewStep = (config: PsyConfig) => safetyStep(config) + 1;
+
+const FAMILY_SECTION_TITLES = new Map([
+  ["session_information", "Session details"],
+  ["presenting_focus", "Key issues discussed"],
+  ["assessment", "Family dynamics observed"],
+  ["interventions", "Interventions used"],
+  ["response", "Progress toward goals"],
+  ["risk_safety", "Risk & Safety"],
+  ["plan", "Areas needing attention & recommendations"],
+]);
+
+export function noteSections(config: Pick<PsyConfig, "sections">, sessionType: string) {
+  return config.sections
+    .filter((section) => section.key !== "session_information")
+    .map((section) => {
+      const familyTitle =
+        sessionType === "FAMILY" ? FAMILY_SECTION_TITLES.get(section.key) : undefined;
+      return familyTitle ? { ...section, title: familyTitle } : section;
+    });
+}
+
+const INDIVIDUAL_SECTION_LABELS = new Set([
+  "client report",
+  "clinician observation / assessment",
+  "session work and interventions",
+  "client response as observed",
+  "client reported",
+]);
+
+export function familyDraftDisplayText(
+  note: Pick<PsyNote, "status"> & {
+    session: Pick<PsyNote["session"], "session_type">;
+  },
+  text: string,
+) {
+  if (note.session.session_type !== "FAMILY" || note.status === "SIGNED") return text;
+  return text
+    .split("\n")
+    .filter((line) => !INDIVIDUAL_SECTION_LABELS.has(line.trim().replace(/:$/, "").toLowerCase()))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -77,7 +120,7 @@ export function answerText(note: PsyNote, key: string) {
 export function currentStep(note: PsyNote, config: PsyConfig) {
   const open = config.questions.findIndex((q) => !answerText(note, q.key).trim());
   if (open >= 0) return open;
-  return note.safety_answer ? REVIEW_STEP : SAFETY_STEP;
+  return note.safety_answer ? reviewStep(config) : safetyStep(config);
 }
 
 export type StepStatus = "Current" | "Done" | "Needs review" | "Open" | "Not yet";
@@ -88,28 +131,33 @@ export function stepStatus(
   index: number,
   active: number,
 ): StepStatus {
+  const count = questionCount(config);
+  const safety = safetyStep(config);
+  const review = reviewStep(config);
   if (index === active) return "Current";
-  if (index < QUESTION_COUNT) {
+  if (index < count) {
     // eslint-disable-next-line security/detect-object-injection -- index within the served list.
     const key = config.questions[index].key;
     if (note.detections.some((d) => d.question === key && !d.resolution)) return "Needs review";
     return answerText(note, key).trim() ? "Done" : index < active ? "Open" : "Not yet";
   }
-  if (index === SAFETY_STEP) {
-    if (!note.safety_answer) return currentStep(note, config) >= SAFETY_STEP ? "Open" : "Not yet";
+  if (index === safety) {
+    if (!note.safety_answer) return currentStep(note, config) >= safety ? "Open" : "Not yet";
     const pending = note.blockers.some((b) =>
       ["SAFETY_DETAIL", "RISK_LINK", "SAFETY_NOT_ASSESSED"].includes(b.code),
     );
     return pending ? "Needs review" : "Done";
   }
-  if (note.status === "SIGNED") return "Done";
+  if (index === review && note.status === "SIGNED") return "Done";
   return note.safety_answer ? "Open" : "Not yet";
 }
 
 export function stepLabel(config: PsyConfig, index: number) {
+  const count = questionCount(config);
+  const safety = safetyStep(config);
   // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
-  if (index < QUESTION_COUNT) return `Q${index + 1} · ${config.questions[index]?.title ?? ""}`;
-  return index === SAFETY_STEP ? "Safety question" : "Review & sign";
+  if (index < count) return `Q${index + 1} · ${config.questions[index]?.title ?? ""}`;
+  return index === safety ? "Safety question" : "Review & sign";
 }
 
 /** Non-clinical UI preference (panel width, input mode, language, read-aloud). */

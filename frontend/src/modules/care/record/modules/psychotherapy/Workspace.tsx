@@ -46,10 +46,12 @@ import {
   type PsyConfig,
   type PsyNote,
   type PsyNoteSummary,
+  type PsyParticipantOptions,
+  type PsyQuestion,
   type SafetyAnswer,
   type SelfAssessmentPayload,
 } from "../../../../../lib/psychotherapyNoteApi";
-import { BTN_GHOST, FIELD_LABEL, INPUT } from "../../../shared/styles";
+import { BTN, BTN_GHOST, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { ErrorNote, Tag } from "../../../shared/ui";
 import { errorText } from "../../../triage/helpers";
 import { AssessmentForm } from "../../intake/AssessmentForm";
@@ -59,13 +61,14 @@ import {
   currentStep,
   ddmmyyyy,
   parseDdMmYyyy,
-  QUESTION_COUNT,
   readPref,
-  REVIEW_STEP,
-  SAFETY_STEP,
+  questionCount,
+  reviewStep,
+  safetyStep,
   speechLang,
   stepLabel,
   stepStatus,
+  toLocalInput,
   withDate,
   writePref,
 } from "./helpers";
@@ -89,7 +92,6 @@ type PanelState = "open" | "expanded" | "min" | "closed";
 
 const WIDE = "(min-width: 1100px)";
 const MIN_WIDTH = 320;
-const STEP_COUNT = REVIEW_STEP + 1;
 
 function useMedia(query: string) {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -130,6 +132,8 @@ export function PsychotherapyWorkspace({
   sessionObjective,
   primaryGoal,
   secondaryGoals,
+  sessionPhase,
+  familyMembers,
   onClose,
   inline = false,
   backLabel = "Interventions",
@@ -138,6 +142,8 @@ export function PsychotherapyWorkspace({
   episodeId?: string;
   noteId?: string;
   sessionType?: "INDIVIDUAL" | "FAMILY";
+  sessionPhase?: string;
+  familyMembers?: string;
   sessionObjective?: string;
   primaryGoal?: string;
   secondaryGoals?: string;
@@ -152,6 +158,8 @@ export function PsychotherapyWorkspace({
   const [note, setNote] = useState<PsyNote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const familySession =
+    note?.session.session_type === "FAMILY" || (!note && sessionType === "FAMILY");
   useEffect(() => {
     if (!accessToken) return;
     getPsyConfig(accessToken)
@@ -162,12 +170,25 @@ export function PsychotherapyWorkspace({
       : startPsyNote(accessToken, patientId, {
           episode: episodeId,
           session_type: sessionType,
+          session_phase: sessionPhase,
+          family_members: familyMembers,
           session_objective: sessionObjective,
           primary_goal: primaryGoal,
           secondary_goals: secondaryGoals,
         });
     load.then(setNote).catch((e) => setError(errorText(e, "Couldn't open the session note.")));
-  }, [accessToken, patientId, episodeId, noteId]);
+  }, [
+    accessToken,
+    patientId,
+    episodeId,
+    noteId,
+    sessionType,
+    sessionPhase,
+    familyMembers,
+    sessionObjective,
+    primaryGoal,
+    secondaryGoals,
+  ]);
   useEffect(() => {
     if (inline) return () => stopSpeaking();
     const opener = document.activeElement as HTMLElement | null;
@@ -185,8 +206,17 @@ export function PsychotherapyWorkspace({
       ref={root}
       tabIndex={-1}
       {...(inline
-        ? { role: "region", "aria-label": "Guided individual psychotherapy session" }
-        : { role: "dialog", "aria-modal": true, "aria-label": "Psychotherapy session" })}
+        ? {
+            role: "region",
+            "aria-label": familySession
+              ? "Guided family psychotherapy session"
+              : "Guided individual psychotherapy session",
+          }
+        : {
+            role: "dialog",
+            "aria-modal": true,
+            "aria-label": familySession ? "Family psychotherapy session" : "Psychotherapy session",
+          })}
       className={
         inline
           ? "relative flex min-h-0 flex-1 overflow-hidden bg-surface-bg text-ink-900 outline-none [transform:translateZ(0)]"
@@ -196,13 +226,17 @@ export function PsychotherapyWorkspace({
       {config && note ? (
         <WorkspaceBody
           key={note.id}
-          config={config}
+          config={{
+            ...config,
+            questions: config.questionnaires[note.questionnaire_version] ?? config.questions,
+          }}
           initial={note}
           patientId={patientId}
           onClose={onClose}
           onReplace={setNote}
           inline={inline}
           backLabel={backLabel}
+          sessionType={sessionType}
         />
       ) : (
         <div className="m-auto flex max-w-md flex-col items-center gap-3 p-6 text-center">
@@ -379,6 +413,9 @@ function StepMenu({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const count = questionCount(config);
+  const safety = safetyStep(config);
+  const review = reviewStep(config);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -398,13 +435,13 @@ function StepMenu({
   }, [open]);
   const label = signed
     ? "Signed"
-    : step < QUESTION_COUNT
-      ? `Question ${step + 1} of ${QUESTION_COUNT}`
+    : step < count
+      ? `Question ${step + 1} of ${count}`
       : stepLabel(config, step);
   const short = signed
     ? "Signed"
-    : step < QUESTION_COUNT
-      ? `Q${step + 1} of ${QUESTION_COUNT}`
+    : step < count
+      ? `Q${step + 1} of ${count}`
       : stepLabel(config, step);
   return (
     <li ref={ref} className="relative flex items-center">
@@ -427,11 +464,9 @@ function StepMenu({
           aria-label="Jump to step"
           className="absolute left-0 top-full z-30 mt-1 w-[min(320px,calc(100vw-32px))] rounded-lg border border-surface-border bg-surface-card p-1 shadow-md"
         >
-          {Array.from({ length: STEP_COUNT }, (_, i) => {
+          {Array.from({ length: review + 1 }, (_, i) => {
             const status =
-              signed && i === REVIEW_STEP
-                ? "Done"
-                : stepStatus(note, config, i, signed ? -1 : step);
+              signed && i === review ? "Done" : stepStatus(note, config, i, signed ? -1 : step);
             const tone =
               status === "Done"
                 ? "text-brand-green"
@@ -453,11 +488,11 @@ function StepMenu({
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="w-6 font-mono text-[11px] text-ink-500">
-                  {i < QUESTION_COUNT ? `Q${i + 1}` : i === SAFETY_STEP ? "S" : "✓"}
+                  {i < count ? `Q${i + 1}` : i === safety ? "S" : "✓"}
                 </span>
                 {/* eslint-disable-next-line security/detect-object-injection -- index within the served question list. */}
                 <span className="min-w-0 flex-1 truncate">
-                  {i < QUESTION_COUNT ? config.questions[i]?.title : stepLabel(config, i)}
+                  {i < count ? config.questions[i]?.title : stepLabel(config, i)}
                 </span>
                 <span className={`text-[11px] font-semibold ${tone}`}>{status}</span>
               </button>
@@ -545,6 +580,110 @@ function SessionExtras({
   );
 }
 
+function ParticipantComposer({
+  question,
+  options,
+  answer,
+  disabled,
+  busy,
+  editing,
+  onSave,
+  onCancelEdit,
+}: {
+  question: PsyQuestion;
+  options: PsyParticipantOptions;
+  answer: PsyNote["answers"][string] | undefined;
+  disabled: boolean;
+  busy: boolean;
+  editing: boolean;
+  onSave: (ids: string[], nonePresent: boolean) => void;
+  onCancelEdit: () => void;
+}) {
+  const clinicians = question.participant_kind === "clinician";
+  const kind = clinicians ? "clinicians" : "family";
+  const people = clinicians ? options.clinicians : options.family;
+  const initialIds = answer?.participants?.map((person) => person.id) ?? [];
+  const [selected, setSelected] = useState<string[]>(initialIds);
+  const [nonePresent, setNonePresent] = useState(
+    kind === "family" && answer?.text === "No family members were present.",
+  );
+  const chooseNone = (checked: boolean) => {
+    setNonePresent(checked);
+    if (checked) setSelected([]);
+  };
+  const toggle = (id: string, checked: boolean) => {
+    setSelected((current) =>
+      checked ? [...current, id] : current.filter((value) => value !== id),
+    );
+    if (checked) setNonePresent(false);
+  };
+  const canSave = kind === "clinicians" ? selected.length > 0 : selected.length > 0 || nonePresent;
+
+  return (
+    <div className="px-4 pb-[18px] sm:px-5">
+      <div className="mx-auto w-full max-w-[740px] rounded-[18px] border border-surface-border bg-surface-card p-4 shadow-md">
+        <fieldset disabled={disabled || busy} className="flex flex-col gap-3">
+          <legend className={`${FIELD_LABEL} px-1`}>
+            {kind === "clinicians" ? "Select clinicians" : "Select family members"}
+          </legend>
+          {people.length === 0 && kind === "family" && !options.family_consent_required && (
+            <p className="text-[12.5px] text-ink-500">
+              No eligible family contacts are on this client record.
+            </p>
+          )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {people.map((person) => (
+              <label
+                key={person.id}
+                className="flex items-start gap-2.5 rounded-lg border border-surface-border px-3 py-2.5 text-[13px] hover:border-brand-green"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(person.id)}
+                  onChange={(event) => toggle(person.id, event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-brand-green"
+                />
+                <span>{person.name}</span>
+              </label>
+            ))}
+          </div>
+          {kind === "family" && (
+            <label className="flex items-start gap-2.5 rounded-lg border border-surface-border px-3 py-2.5 text-[13px]">
+              <input
+                type="checkbox"
+                checked={nonePresent}
+                onChange={(event) => chooseNone(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand-green"
+              />
+              <span>No family members were present</span>
+            </label>
+          )}
+          <div className="flex justify-end gap-2">
+            {editing && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                disabled={disabled || busy}
+                onClick={onCancelEdit}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="button"
+              className={BTN}
+              disabled={!canSave || disabled || busy}
+              onClick={() => onSave(selected, nonePresent)}
+            >
+              {busy ? "Saving…" : editing ? "Save changes" : "Save and continue"}
+            </button>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceBody({
   config,
   initial,
@@ -553,6 +692,7 @@ function WorkspaceBody({
   onReplace,
   inline,
   backLabel,
+  sessionType,
 }: {
   config: PsyConfig;
   initial: PsyNote;
@@ -564,15 +704,20 @@ function WorkspaceBody({
    * views as tabs under one header, like the other clinical modules. */
   inline: boolean;
   backLabel: string;
+  sessionType?: "INDIVIDUAL" | "FAMILY";
 }) {
   const { accessToken } = useAuth();
   const wide = useMedia(WIDE);
+  const count = questionCount(config);
+  const safety = safetyStep(config);
+  const review = reviewStep(config);
+  const stepCount = review + 1;
   const [note, setNote] = useState(initial);
   const signed = note.status === "SIGNED";
   const locked = signed || !note.is_author;
   const [begun, setBegun] = useState(() => started(initial));
   const [step, setStep] = useState(() =>
-    initial.status === "SIGNED" ? REVIEW_STEP : started(initial) ? currentStep(initial, config) : 0,
+    initial.status === "SIGNED" ? review : started(initial) ? currentStep(initial, config) : 0,
   );
   const [awaitingReason, setAwaitingReason] = useState(
     () => initial.safety_answer === "NOT_ASSESSED" && !initial.not_assessed_reason,
@@ -643,6 +788,7 @@ function WorkspaceBody({
   });
   const [speaking, setSpeaking] = useState(false);
   const [dateText, setDateText] = useState(() => ddmmyyyy(initial.session.session_date));
+  const [startAtText, setStartAtText] = useState(() => toLocalInput(initial.session.session_date));
   const [dateError, setDateError] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
   const afterSafetyModal = useRef(false);
@@ -698,10 +844,14 @@ function WorkspaceBody({
   }
   const organise = () => run((t) => generatePsyNote(t, note.id), "Couldn't organise the note.");
   const sign = async () => {
-    const ok = await run((t) => signPsyNote(t, note.id), "Couldn't sign the note.");
+    const familySession = note.session.session_type === "FAMILY";
+    const ok = await run(
+      (t) => signPsyNote(t, note.id),
+      familySession ? "Couldn't submit the family report." : "Couldn't sign the note.",
+    );
     if (ok) {
-      flash("Note signed");
-      setAssessmentPrompt(true);
+      flash(familySession ? "Family report submitted" : "Note signed");
+      if (!familySession) setAssessmentPrompt(true);
     }
     return ok;
   };
@@ -764,7 +914,7 @@ function WorkspaceBody({
     )
       return;
     const live = !config.ai_enabled && Object.values(note.answers).some((a) => a?.text?.trim());
-    const atReview = step >= REVIEW_STEP && !organisedOnce.current;
+    const atReview = step >= review && !organisedOnce.current;
     if (!live && !atReview) return;
     if (atReview) organisedOnce.current = true;
     void organise().then((ok) => {
@@ -781,7 +931,7 @@ function WorkspaceBody({
   }, [accessToken, patientId, view]);
 
   // ── speech ──
-  const safetyListening = step === SAFETY_STEP && !awaitingReason && !editKey;
+  const safetyListening = step === safety && !awaitingReason && !editKey;
   const dict = useDictation(speechLang(language), safetyListening, {
     onCommit: (text) => void submit(join(draft, text), "DICTATED"),
     onRepeat: () => repeatQuestion(),
@@ -804,12 +954,16 @@ function WorkspaceBody({
   }
 
   function announce(i: number, opts: { prefix?: string; force?: boolean } = {}) {
-    const listen = mode === "dictate" && config.dictation_enabled && i <= SAFETY_STEP;
+    const listen =
+      mode === "dictate" &&
+      config.dictation_enabled &&
+      i <= safety &&
+      config.questions[i]?.kind !== "PARTICIPANTS";
     // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
     const text =
-      i < QUESTION_COUNT
+      i < count
         ? (config.questions[i]?.title ?? "")
-        : i === SAFETY_STEP
+        : i === safety
           ? `Safety question. ${config.safety_question} Please answer yes, no, or not assessed.`
           : "Thank you. Your draft note is ready for review.";
     setFocusSignal((n) => n + 1);
@@ -850,9 +1004,9 @@ function WorkspaceBody({
 
   // ── conversation ──
   function goReview() {
-    setStep(REVIEW_STEP);
+    setStep(review);
     if (wide && panel !== "expanded") setPanel("open");
-    announce(REVIEW_STEP);
+    announce(review);
     scrollDown();
   }
 
@@ -868,6 +1022,28 @@ function WorkspaceBody({
     return true;
   }
 
+  async function beginSession() {
+    if (note.session.session_type !== "FAMILY") {
+      begin();
+      return;
+    }
+    const start = new Date(startAtText);
+    if (!startAtText || Number.isNaN(start.getTime())) {
+      setDateError("Enter the session date and start time.");
+      return;
+    }
+    if (start.getTime() > Date.now() + 12 * 60 * 60 * 1000) {
+      setDateError("The session start time cannot be in the future.");
+      return;
+    }
+    setDateError("");
+    if (!(await save({ session_date: startAtText }))) return;
+    setDateText(ddmmyyyy(start.toISOString()));
+    setBegun(true);
+    setStep(0);
+    announce(0);
+  }
+
   async function commitDate() {
     const parsed = parseDdMmYyyy(dateText);
     if ("error" in parsed) {
@@ -878,6 +1054,30 @@ function WorkspaceBody({
     const when = withDate(note.session.session_date, parsed.date);
     setDateText(ddmmyyyy(when));
     if (ddmmyyyy(when) !== ddmmyyyy(note.session.session_date)) await save({ session_date: when });
+  }
+
+  async function submitParticipants(ids: string[], nonePresent: boolean) {
+    const editing = !!editKey;
+    const question = editing
+      ? config.questions.find((item) => item.key === editKey)
+      : config.questions.at(step);
+    if (!question || question.kind !== "PARTICIPANTS") return;
+    const at = config.questions.findIndex((item) => item.key === question.key);
+    if (
+      !(await save({
+        answers: { [question.key]: { participant_ids: ids, none_present: nonePresent } },
+      }))
+    ) {
+      return;
+    }
+    setEditKey(null);
+    setDraft("");
+    if (!editing) {
+      const next = at + 1;
+      setStep(next);
+      announce(next);
+    }
+    scrollDown();
   }
 
   async function submit(raw: string, via: "TYPED" | "DICTATED") {
@@ -905,7 +1105,7 @@ function WorkspaceBody({
       flash(`Answer to Q${config.questions.findIndex((q) => q.key === key) + 1} updated`);
       return true;
     }
-    if (at < QUESTION_COUNT) {
+    if (at < count) {
       // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
       const key = config.questions[at].key;
       if (!accessToken) return false;
@@ -936,7 +1136,7 @@ function WorkspaceBody({
       scrollDown();
       return true;
     }
-    if (at === SAFETY_STEP) {
+    if (at === safety) {
       const answer = safetyFromSpeech(text);
       setDraft("");
       if (answer) return chooseSafety(answer);
@@ -957,7 +1157,7 @@ function WorkspaceBody({
     quiet();
     const first = !note.safety_answer;
     if (answer !== note.safety_answer && !(await save({ safety_answer: answer }))) return false;
-    const atSafety = step === SAFETY_STEP && first;
+    const atSafety = step === safety && first;
     if (answer === "YES") {
       if (atSafety)
         addAck("safety", "Concern flagged. Please record what you assessed in the risk workflow.");
@@ -1004,17 +1204,17 @@ function WorkspaceBody({
 
   function jump(i: number) {
     setView("chat");
-    if (i === REVIEW_STEP) {
+    if (i === review) {
       openNotes();
       return;
     }
     // Answered questions now live in the right-hand transcript.
-    if (i < QUESTION_COUNT && i !== step) {
+    if (i < count && i !== step) {
       openNotes();
       return;
     }
     window.requestAnimationFrame(() => {
-      const el = document.getElementById(i < QUESTION_COUNT ? `psy-m-q${i}` : "psy-m-safety");
+      const el = document.getElementById(i < count ? `psy-m-q${i}` : "psy-m-safety");
       el?.scrollIntoView({
         block: "start",
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
@@ -1034,7 +1234,7 @@ function WorkspaceBody({
     if (!signed) {
       flash(
         begun
-          ? "Sign this session first — there is one open draft per therapy episode."
+          ? "Sign this draft first — only one open draft of this type is allowed per therapy episode."
           : `Session ${note.session_number ?? ""} is ready to begin`,
       );
       return;
@@ -1042,7 +1242,10 @@ function WorkspaceBody({
     if (!accessToken) return;
     try {
       onReplace(
-        await startPsyNote(accessToken, patientId, { episode: note.therapy_episode || undefined }),
+        await startPsyNote(accessToken, patientId, {
+          episode: note.therapy_episode || undefined,
+          session_type: sessionType ?? note.session.session_type,
+        }),
       );
     } catch (e) {
       setError(errorText(e, "Couldn't start a new session."));
@@ -1077,10 +1280,10 @@ function WorkspaceBody({
 
   // ── layout pieces ──
   const flags = note.detections.filter((d) => !d.resolution);
-  const segments = Array.from({ length: STEP_COUNT }, (_, i) => {
+  const segments = Array.from({ length: stepCount }, (_, i) => {
     const status = signed ? "Done" : stepStatus(note, config, i, begun ? step : -1);
     // eslint-disable-next-line security/detect-object-injection -- index within the served question list.
-    const alert = i < QUESTION_COUNT && flags.some((d) => d.question === config.questions[i]?.key);
+    const alert = i < count && flags.some((d) => d.question === config.questions[i]?.key);
     const tone = alert
       ? "bg-priority-red"
       : status === "Current"
@@ -1107,8 +1310,16 @@ function WorkspaceBody({
     <button
       type="button"
       onClick={() => (wide ? setPanel("open") : setNotesOpen(true))}
-      aria-label="Open therapy note"
-      title="Open therapy note"
+      aria-label={
+        note.session.session_type === "FAMILY"
+          ? "Open family psychotherapy note"
+          : "Open therapy note"
+      }
+      title={
+        note.session.session_type === "FAMILY"
+          ? "Open family psychotherapy note"
+          : "Open therapy note"
+      }
       className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-[9px] text-ink-500 hover:bg-surface-bg hover:text-ink-900"
     >
       <FileText className="h-[19px] w-[19px]" />
@@ -1241,7 +1452,7 @@ function WorkspaceBody({
       {view === "chat" && !example && (
         <div
           className="flex gap-[3px]"
-          aria-label={`Session progress — ${signed ? "signed" : !begun ? "not started" : step < QUESTION_COUNT ? `question ${step + 1} of ${QUESTION_COUNT}` : stepLabel(config, step)}`}
+          aria-label={`Session progress — ${signed ? "signed" : !begun ? "not started" : step < count ? `question ${step + 1} of ${count}` : stepLabel(config, step)}`}
           role="group"
         >
           {segments}
@@ -1272,12 +1483,15 @@ function WorkspaceBody({
             ? "paused"
             : "idle";
   const composed = join(draft, dict.finalText, dict.interim);
-  const questionsDone = step >= REVIEW_STEP && !editKey && !awaitingReason;
+  const activeQuestion = editKey
+    ? config.questions.find((item) => item.key === editKey)
+    : config.questions.at(step);
+  const questionsDone = step >= review && !editKey && !awaitingReason;
   const placeholder = awaitingReason
     ? "Reason safety was not assessed…"
     : editKey
       ? "Edit your answer…"
-      : step === SAFETY_STEP
+      : step === safety
         ? "Type yes, no or not assessed, or use the buttons above…"
         : questionsDone
           ? "Questions complete — use Edit under an answer to change it"
@@ -1300,64 +1514,81 @@ function WorkspaceBody({
     quiet();
     if (text.trim()) void submit(text, "DICTATED");
   };
-  const composer = (
-    <Composer
-      value={composed}
-      onChange={(v) => {
-        dict.reset();
-        setDraft(v);
-      }}
-      onSend={() => void submit(composed, dictationOn ? "DICTATED" : "TYPED")}
-      placeholder={placeholder}
-      disabled={locked || busy || questionsDone}
-      mode={dictationOn ? "dictate" : "type"}
-      modeMenu={modeMenu}
-      editing={editKey ? `Q${config.questions.findIndex((q) => q.key === editKey) + 1}` : null}
-      onCancelEdit={() => {
-        setEditKey(null);
-        setDraft("");
-      }}
-      focusSignal={focusSignal}
-      hint={
-        dictationOn
-          ? "Questions are read aloud. Say “next question” when you finish, or pause and it moves on."
-          : "Enter to send · Shift+Enter for a new line"
-      }
-      dictation={
-        dictationOn
-          ? {
-              state: dictState,
-              countdown: dict.countdown,
-              error: dict.error,
-              safety: safetyListening,
-              done: questionsDone,
-              onRepeat: repeatQuestion,
-              onPause: () => {
-                stopSpeaking();
-                setSpeaking(false);
-                dict.pause();
-              },
-              onDone: finishDictation,
-              onStop: finishDictation,
-              onSkip: () => {
-                stopSpeaking();
-                setSpeaking(false);
-                if (step <= SAFETY_STEP) dict.start();
-              },
-              onSwitch: () => {
-                dict.setError(null);
-                setMode("type");
-              },
-              onMic: () => {
-                stopSpeaking();
-                setSpeaking(false);
-                dict.start();
-              },
-            }
-          : null
-      }
-    />
-  );
+  const composer =
+    activeQuestion?.kind === "PARTICIPANTS" ? (
+      <ParticipantComposer
+        key={activeQuestion.key}
+        question={activeQuestion}
+        options={note.participant_options}
+        answer={note.answers[activeQuestion.key]}
+        disabled={locked}
+        busy={busy}
+        editing={!!editKey}
+        onCancelEdit={() => {
+          setEditKey(null);
+          setDraft("");
+        }}
+        onSave={(ids, nonePresent) => void submitParticipants(ids, nonePresent)}
+      />
+    ) : (
+      <Composer
+        value={composed}
+        onChange={(v) => {
+          dict.reset();
+          setDraft(v);
+        }}
+        onSend={() => void submit(composed, dictationOn ? "DICTATED" : "TYPED")}
+        placeholder={placeholder}
+        disabled={locked || busy || questionsDone}
+        mode={dictationOn ? "dictate" : "type"}
+        modeMenu={modeMenu}
+        editing={editKey ? (activeQuestion?.title ?? "previous answer") : null}
+        onCancelEdit={() => {
+          setEditKey(null);
+          setDraft("");
+        }}
+        focusSignal={focusSignal}
+        hint={
+          dictationOn
+            ? "Questions are read aloud. Say “next question” when you finish, or pause and it moves on."
+            : "Enter to send · Shift+Enter for a new line"
+        }
+        dictation={
+          dictationOn
+            ? {
+                state: dictState,
+                countdown: dict.countdown,
+                error: dict.error,
+                safety: safetyListening,
+                done: questionsDone,
+                onRepeat: repeatQuestion,
+                onPause: () => {
+                  stopSpeaking();
+                  setSpeaking(false);
+                  dict.pause();
+                },
+                onDone: finishDictation,
+                onStop: finishDictation,
+                onSkip: () => {
+                  stopSpeaking();
+                  setSpeaking(false);
+                  if (step <= safety && config.questions.at(step)?.kind !== "PARTICIPANTS")
+                    dict.start();
+                },
+                onSwitch: () => {
+                  dict.setError(null);
+                  setMode("type");
+                },
+                onMic: () => {
+                  stopSpeaking();
+                  setSpeaking(false);
+                  dict.start();
+                },
+              }
+            : null
+        }
+      />
+    );
 
   const welcome = (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -1366,35 +1597,53 @@ function WorkspaceBody({
           <p className="text-[12px] font-semibold uppercase tracking-[.08em] text-ink-500">
             Session {note.session_number ?? ""}
           </p>
-          <h1 className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(17px,2.4vw,20px)] font-medium text-ink-900">
-            Done on
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="dd/mm/yyyy"
-              maxLength={10}
-              value={dateText}
-              aria-label="Session date (dd/mm/yyyy)"
-              aria-describedby="psy-date-error"
-              aria-invalid={!!dateError}
-              disabled={locked}
-              onChange={(e) => {
-                let v = e.target.value.replace(/[^\d/]/g, "").replace(/\/{2,}/g, "/");
-                const typing = v.length > dateText.length;
-                if (typing && (/^\d{2}$/.test(v) || /^\d{1,2}\/\d{2}$/.test(v))) v += "/";
-                setDateText(v.slice(0, 10));
-                setDateError("");
-              }}
-              onBlur={() => void commitDate()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void commitDate();
-                }
-              }}
-              className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`}
-            />
-          </h1>
+          {note.session.session_type === "FAMILY" ? (
+            <label className="flex w-full max-w-[360px] flex-col gap-1 text-left text-[12px]">
+              <span className={FIELD_LABEL}>Session date and start time</span>
+              <input
+                type="datetime-local"
+                value={startAtText}
+                aria-describedby="psy-date-error"
+                aria-invalid={!!dateError}
+                disabled={locked}
+                onChange={(e) => {
+                  setStartAtText(e.target.value);
+                  setDateError("");
+                }}
+                className={`${INPUT} ${dateError ? "border-priority-red" : ""}`}
+              />
+            </label>
+          ) : (
+            <h1 className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[clamp(17px,2.4vw,20px)] font-medium text-ink-900">
+              Done on
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="dd/mm/yyyy"
+                maxLength={10}
+                value={dateText}
+                aria-label="Session date (dd/mm/yyyy)"
+                aria-describedby="psy-date-error"
+                aria-invalid={!!dateError}
+                disabled={locked}
+                onChange={(e) => {
+                  let v = e.target.value.replace(/[^\d/]/g, "").replace(/\/{2,}/g, "/");
+                  const typing = v.length > dateText.length;
+                  if (typing && (/^\d{2}$/.test(v) || /^\d{1,2}\/\d{2}$/.test(v))) v += "/";
+                  setDateText(v.slice(0, 10));
+                  setDateError("");
+                }}
+                onBlur={() => void commitDate()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void commitDate();
+                  }
+                }}
+                className={`w-[6.4em] rounded-t border-0 border-b-[1.5px] border-dashed bg-surface-card px-1 text-center tabular-nums text-ink-900 focus:border-solid focus:bg-brand-green-tint focus:outline-none ${dateError ? "border-priority-red text-priority-red" : "border-brand-green"}`}
+              />
+            </h1>
+          )}
           <span
             id="psy-date-error"
             role="status"
@@ -1403,15 +1652,15 @@ function WorkspaceBody({
             {dateError}
           </span>
           <small className="max-w-[48ch] text-[13.5px] text-ink-500">
-            {note.author}, I’ll ask five short questions and one safety question, then organise the
-            note.
+            {note.author}, I’ll ask {count} questions and one safety question, then organise the
+            note. Reporting time is captured when you sign.
           </small>
         </div>
         <div className="flex items-center gap-2 rounded-[22px] border border-surface-border bg-surface-card py-2.5 pl-2.5 pr-3 shadow-md hover:border-brand-green">
           <button
             type="button"
             disabled={locked}
-            onClick={() => begin()}
+            onClick={() => void beginSession()}
             className="flex min-w-0 flex-1 items-center gap-3.5 rounded-[14px] px-2 py-2 text-left disabled:opacity-60"
           >
             <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[12px] bg-brand-green-tint text-brand-green">
@@ -1431,7 +1680,7 @@ function WorkspaceBody({
             type="button"
             aria-label="Begin session"
             disabled={locked}
-            onClick={() => begin()}
+            onClick={() => void beginSession()}
             className="grid h-9 w-9 place-items-center rounded-[11px] bg-brand-green text-on-primary disabled:opacity-40"
           >
             {dictationOn ? <Mic className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
@@ -1476,6 +1725,7 @@ function WorkspaceBody({
       <SessionHistory
         note={note}
         notes={notes}
+        questionCount={config.questions.length}
         onBack={backToSession}
         onOpenCurrent={() => setView("chat")}
         onOpenPast={(id) => {
@@ -1621,7 +1871,7 @@ function WorkspaceBody({
       example={example}
       busy={busy}
       onEditAnswer={editAnswer}
-      onSelfAssessment={openSelfAssessment}
+      onSelfAssessment={note.session.session_type === "FAMILY" ? undefined : openSelfAssessment}
       patientId={patientId}
     />
   );
@@ -1715,7 +1965,9 @@ function WorkspaceBody({
       )}
       {wide && (panel === "open" || panel === "expanded") && (
         <aside
-          aria-label="Therapy note"
+          aria-label={
+            note.session.session_type === "FAMILY" ? "Family psychotherapy note" : "Therapy note"
+          }
           style={panel === "open" ? { width } : undefined}
           className={`min-h-0 border-l border-surface-border ${panel === "expanded" ? "min-w-0 flex-1" : "flex-shrink-0"}`}
         >
@@ -1724,7 +1976,11 @@ function WorkspaceBody({
       )}
       {wide && panel === "min" && (
         <aside
-          aria-label="Therapy note (minimised)"
+          aria-label={
+            note.session.session_type === "FAMILY"
+              ? "Family psychotherapy note (minimised)"
+              : "Therapy note (minimised)"
+          }
           className="flex w-[52px] flex-shrink-0 flex-col items-center gap-2.5 border-l border-surface-border bg-surface-card py-3"
         >
           <button
@@ -1750,7 +2006,8 @@ function WorkspaceBody({
             className={`h-[7px] w-[7px] rounded-full ${signed ? "bg-brand-green" : "bg-priority-orange"}`}
           />
           <span className="rotate-180 text-[12.5px] font-semibold tracking-[.04em] text-ink-500 [writing-mode:vertical-rl]">
-            Therapy note · {signed ? "Signed" : "Draft"}
+            {note.session.session_type === "FAMILY" ? "Family note" : "Therapy note"} ·{" "}
+            {signed ? "Signed" : "Draft"}
           </span>
         </aside>
       )}
@@ -1764,7 +2021,9 @@ function WorkspaceBody({
             ref={slideOver}
             role="dialog"
             aria-modal="true"
-            aria-label="Therapy note"
+            aria-label={
+              note.session.session_type === "FAMILY" ? "Family psychotherapy note" : "Therapy note"
+            }
             className={`fixed inset-y-0 right-0 z-[105] w-full shadow-md ${full ? "" : "max-w-[520px]"}`}
           >
             {notePanel}
@@ -1775,7 +2034,7 @@ function WorkspaceBody({
       {safetyOpen && (
         <SafetyModal config={config} note={note} onClose={closeSafety} onSave={save} />
       )}
-      {assessmentPrompt && (
+      {assessmentPrompt && note.session.session_type !== "FAMILY" && (
         <SelfAssessmentPrompt
           intro={config.self_assessment.intro}
           onStart={() => {

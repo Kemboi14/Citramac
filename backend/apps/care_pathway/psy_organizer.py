@@ -24,6 +24,8 @@ writes to the database and nothing here invents content (PSY-GEN-1/6):
 import re
 
 QUESTION_KEYS = ("q1", "q2", "q3", "q4", "q5")
+INDIVIDUAL_QUESTIONNAIRE = "INDIVIDUAL_V1"
+FAMILY_QUESTIONNAIRE = "FAMILY_V1"
 
 # PSY-Q — the five questions (fixed, model-independent; master prompt §7).
 QUESTIONS = [
@@ -53,6 +55,61 @@ QUESTIONS = [
         "hint": "Next steps, between-session practice, treatment-plan changes, referrals/consultations, follow-up.",
     },
 ]
+
+FAMILY_QUESTIONS = [
+    {
+        "key": "family_clinicians",
+        "title": "Clinicians in the session",
+        "hint": "Select each clinician who took part.",
+        "kind": "PARTICIPANTS",
+        "participant_kind": "clinician",
+    },
+    {
+        "key": "family_present",
+        "title": "Family present",
+        "hint": "Select each family member who took part, or record that none were present.",
+        "kind": "PARTICIPANTS",
+        "participant_kind": "family",
+    },
+    {
+        "key": "family_issues",
+        "title": "Key issues discussed",
+        "hint": "Record the issues discussed, in the clinician's own words.",
+    },
+    {
+        "key": "family_dynamics",
+        "title": "Family dynamics observed",
+        "hint": "Record observed interactions and dynamics without adding interpretation.",
+    },
+    {
+        "key": "family_interventions",
+        "title": "Interventions used",
+        "hint": "Record the therapeutic work and interventions used.",
+    },
+    {
+        "key": "family_progress",
+        "title": "Progress made toward the goals",
+        "hint": "Record progress as observed or reported, and link it to the agreed goals.",
+    },
+    {
+        "key": "family_attention",
+        "title": "Areas needing attention",
+        "hint": "Record issues that need follow-up; do not infer a risk finding.",
+    },
+    {
+        "key": "family_recommendations",
+        "title": "Recommendations",
+        "hint": "Record recommendations and agreed next steps.",
+    },
+]
+FAMILY_QUESTION_KEYS = tuple(q["key"] for q in FAMILY_QUESTIONS)
+FAMILY_TEXT_QUESTION_KEYS = tuple(
+    q["key"] for q in FAMILY_QUESTIONS if q.get("kind") != "PARTICIPANTS"
+)
+QUESTIONNAIRES = {
+    INDIVIDUAL_QUESTIONNAIRE: QUESTIONS,
+    FAMILY_QUESTIONNAIRE: FAMILY_QUESTIONS,
+}
 
 # PSY-S — the mandatory safety question, verbatim.
 SAFETY_QUESTION = (
@@ -269,7 +326,7 @@ def detect_risk_language(answers, risk_terms):
     with its key (question + term), the triggering passage and the match offsets
     in the answer (for highlighting). A prompt only — no label, no score."""
     out = []
-    for key in QUESTION_KEYS:
+    for key in answers:
         answer = answers.get(key) or {}
         translation = answer.get("translation") or {}
         sources = [("original", answer.get("text", ""), "")]
@@ -400,7 +457,7 @@ def _join(*blocks):
     return text or NOT_RECORDED
 
 
-def goal_suggestions(goals, answers):
+def goal_suggestions(goals, answers, evidence_keys=("q4", "q1")):
     """PSY-LINK: a session sentence that shares a meaningful word with a named
     care-plan goal is offered as possible progress toward it. Suggestion only —
     the clinician confirms, edits or dismisses."""
@@ -413,7 +470,7 @@ def goal_suggestions(goals, answers):
         }
 
     out = []
-    pool = [s for k in ("q4", "q1") for s in sentences(english_text(answers.get(k)))]
+    pool = [s for k in evidence_keys for s in sentences(english_text(answers.get(k)))]
     for goal in goals:
         g = stems(goal["goal"])
         if not g:
@@ -659,6 +716,49 @@ def organize(
     }
 
 
+def organize_family(
+    answers,
+    safety,
+    info,
+    detections=(),
+    resolutions=None,
+    context=None,
+):
+    """Organise the family prompts into the existing, profiled note sections."""
+    resolutions = resolutions or {}
+    context = context or {}
+    text = {key: english_text(answers.get(key)) for key in FAMILY_QUESTION_KEYS}
+    clinician_text = text["family_clinicians"] or NOT_RECORDED
+    family_text = text["family_present"] or NOT_RECORDED
+    session_information = _join(
+        _session_information(info),
+        f"Clinicians present:\n{clinician_text}",
+        f"Family present:\n{family_text}",
+    )
+    return {
+        "sections": {
+            "session_information": session_information,
+            "presenting_focus": _bullets(sentences(text["family_issues"])) or NOT_RECORDED,
+            "assessment": _bullets(sentences(text["family_dynamics"])) or NOT_RECORDED,
+            "interventions": _bullets(sentences(text["family_interventions"])) or NOT_RECORDED,
+            "response": _bullets(sentences(text["family_progress"])) or NOT_RECORDED,
+            "risk_safety": _risk_safety(safety, list(detections), resolutions, context),
+            "plan": _join(
+                _block(
+                    "Areas needing attention",
+                    sentences(text["family_attention"]),
+                ),
+                _block(
+                    "Recommendations",
+                    sentences(text["family_recommendations"]),
+                ),
+            ),
+        },
+        "models_applied": [],
+        "fixed": {"interventions": "", "response": ""},
+    }
+
+
 # Which section each question's narrative feeds (for the reworded sections).
 QUESTION_SECTION = {
     "q1": "presenting_focus",
@@ -666,6 +766,12 @@ QUESTION_SECTION = {
     "q3": "interventions",
     "q4": "response",
     "q5": "plan",
+    "family_issues": "presenting_focus",
+    "family_dynamics": "assessment",
+    "family_interventions": "interventions",
+    "family_progress": "response",
+    "family_attention": "plan",
+    "family_recommendations": "plan",
 }
 
 
@@ -675,6 +781,16 @@ def compose_reworded(question_key, reworded, fixed):
         return _join(fixed.get("interventions", ""), f"Session work and interventions:\n{reworded}")
     if question_key == "q4":
         return _join(reworded, fixed.get("response", ""))
+    if question_key == "family_interventions":
+        return _join(fixed.get("interventions", ""), reworded)
+    if question_key == "family_progress":
+        return _join(reworded, fixed.get("response", ""))
+    family_headings = {
+        "family_attention": "Areas needing attention",
+        "family_recommendations": "Recommendations",
+    }
+    if question_key in family_headings:
+        return f"{family_headings[question_key]}:\n{reworded}"
     return reworded
 
 

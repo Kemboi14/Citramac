@@ -32,10 +32,13 @@ class PsyNoteTestCase(RecordsTestCase):
         self.post("care-therapy-confidentiality", {}, eid)
         self.eid = eid
 
-    def start(self, auth=None):
+    def start(self, auth=None, session_type=None):
+        body = {"episode": self.eid}
+        if session_type:
+            body["session_type"] = session_type
         return self.client.post(
             reverse("care-client-psy-notes", args=[self.pid]),
-            {"episode": self.eid},
+            body,
             format="json",
             **(auth or self.auth),
         )

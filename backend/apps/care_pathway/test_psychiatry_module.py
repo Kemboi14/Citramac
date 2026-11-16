@@ -213,6 +213,7 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         [session] = response.data["scheduled_sessions"]
         self.assertIsNone(session["care_plan_activity_id"])
         self.assertEqual(session["activity_title"], "Family psychotherapy")
+        self.assertEqual(session["appointment_type"], "Family psychotherapy")
         with platform_admin_context():
             appointment = Appointment.objects.get(patient_id=self.pid)
             self.assertIsNone(appointment.care_plan_activity_id)

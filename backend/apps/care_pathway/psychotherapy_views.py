@@ -5,6 +5,7 @@ audit-logged there (guide.md §4, AuditEvent on psychiatric record access).
 """
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -53,13 +54,23 @@ class TherapyModelView(APIView):
 
 
 class PsyClientListView(APIView):
-    """GET care/psychotherapy/clients/ — the Individual Psychotherapy list:
+    """GET care/psychotherapy/clients/ — the Psychotherapy client list:
     clients in therapy or with a psychotherapy care-plan action (session
-    counts only where the user has full MHP access; the view is audit-logged)."""
+    counts only where the user has full MHP access; the view is audit-logged).
+
+    ``?kind=family`` restricts the list to family-intervention clients."""
 
     def get(self, request):
-        rows = psy.client_list(request.user)
+        kind = (request.query_params.get("kind") or "individual").strip().lower()
+        rows = psy.client_list(request.user, kind=kind)
         return Response({"results": rows, "count": len(rows)})
+
+
+class PsyFamilySessionsView(APIView):
+    """GET care/psychotherapy/sessions/ — family sessions the user may read."""
+
+    def get(self, request):
+        return Response({"results": psy.family_sessions(request.user)})
 
 
 class ClientPsyNotesView(APIView):

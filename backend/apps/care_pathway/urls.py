@@ -443,6 +443,11 @@ urlpatterns = [
         "care/psychotherapy/clients/", psyview.PsyClientListView.as_view(), name="care-psy-clients"
     ),
     path(
+        "care/psychotherapy/sessions/",
+        psyview.PsyFamilySessionsView.as_view(),
+        name="care-psy-family-sessions",
+    ),
+    path(
         "care/psychotherapy/models/<slug:code>/",
         psyview.TherapyModelView.as_view(),
         name="care-psy-model",

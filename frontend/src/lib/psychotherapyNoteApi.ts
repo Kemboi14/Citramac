@@ -36,6 +36,18 @@ export interface PsyQuestion {
   key: string;
   title: string;
   hint: string;
+  kind?: "TEXT" | "PARTICIPANTS";
+  participant_kind?: "clinician" | "family";
+}
+export interface PsyParticipant {
+  id: string;
+  name: string;
+  resource_type: "Practitioner" | "RelatedPerson";
+}
+export interface PsyParticipantOptions {
+  clinicians: { id: string; name: string }[];
+  family: { id: string; name: string }[];
+  family_consent_required: boolean;
 }
 export interface TherapyModelRow {
   code: string;
@@ -55,6 +67,7 @@ export interface ConcernCategory {
 }
 export interface PsyConfig {
   questions: PsyQuestion[];
+  questionnaires: Record<string, PsyQuestion[]>;
   safety_question: string;
   safety_options: { code: Exclude<SafetyAnswer, "">; label: string }[];
   detection_prompt: string;
@@ -135,6 +148,7 @@ export interface Translation {
 export interface Answer {
   text: string;
   mode: InputMode;
+  participants?: PsyParticipant[];
   language?: string;
   answered_at?: string | null;
   translation?: Translation;
@@ -204,6 +218,7 @@ export interface TranscriptRow {
   question: string;
   title: string;
   text: string;
+  participants?: PsyParticipant[];
   mode: InputMode;
   answered_at: string | null;
   language: string;
@@ -235,6 +250,7 @@ export interface HistoryEntry {
 export interface PsyNoteSummary {
   id: string;
   status: "DRAFT" | "SIGNED";
+  questionnaire_version: string;
   session_date: string;
   session_type: string;
   author: string;
@@ -247,6 +263,7 @@ export interface PsyNoteSummary {
 }
 
 export interface PsyNote extends Omit<PsyNoteSummary, "amendments"> {
+  participant_options: PsyParticipantOptions;
   is_author: boolean;
   patient: { id: string; name: string; number: string };
   session_number: number | null;
@@ -334,13 +351,26 @@ export interface PsyClientRow {
   last_session?: string | null;
 }
 
+export interface PsyFamilySession extends PsyNoteSummary {
+  patient_id: string;
+  patient_name: string;
+  patient_number: string;
+}
+
 const json = (method: "POST" | "PATCH", t: string, path: string, body?: unknown) =>
   apiRequest<PsyNote>(path, { method, body, accessToken: t });
 
 export const getPsyConfig = (t: string) =>
   apiRequest<PsyConfig>("/care/psychotherapy/config/", { accessToken: t });
-export const listPsyClients = (t: string) =>
-  apiRequest<{ results: PsyClientRow[]; count: number }>("/care/psychotherapy/clients/", {
+export const listPsyClients = (t: string, kind: "individual" | "family" = "individual") => {
+  const query = kind === "family" ? "?kind=family" : "";
+  return apiRequest<{ results: PsyClientRow[]; count: number }>(
+    `/care/psychotherapy/clients/${query}`,
+    { accessToken: t },
+  );
+};
+export const listPsyFamilySessions = (t: string) =>
+  apiRequest<{ results: PsyFamilySession[] }>("/care/psychotherapy/sessions/", {
     accessToken: t,
   });
 export const listPsyNotes = (t: string, patientId: string) =>

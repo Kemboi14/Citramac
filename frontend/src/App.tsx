@@ -67,10 +67,6 @@ const InpatientAdmissionsPage = lazyNamed(
   "InpatientAdmissionsPage",
 );
 const WardBoardPage = lazyNamed(() => import("./modules/care/WardBoardPage"), "WardBoardPage");
-const OutpatientCarePage = lazyNamed(
-  () => import("./modules/care/OutpatientCarePage"),
-  "OutpatientCarePage",
-);
 const PsychotherapyClientsPage = lazyNamed(
   () => import("./modules/care/PsychotherapyClientsPage"),
   "PsychotherapyClientsPage",
@@ -397,7 +393,19 @@ function App() {
             />
             <Route
               path="psychotherapy/family"
-              element={<OutpatientCarePage key="family" kind="family" />}
+              element={<PsychotherapyClientsPage kind="family" />}
+            />
+            <Route
+              path="psychotherapy/family/session/:patientId"
+              element={<PsychotherapySessionPage kind="family" />}
+            />
+            <Route
+              path="psychotherapy/family/session/:patientId/:episodeId"
+              element={<PsychotherapySessionPage kind="family" />}
+            />
+            <Route
+              path="psychotherapy/family/session/:patientId/:episodeId/note/:noteId"
+              element={<PsychotherapySessionPage kind="family" />}
             />
             <Route path="psychotherapy/group" element={<GroupProgrammePage />} />
             <Route path="documents" element={<DocumentsPage />} />

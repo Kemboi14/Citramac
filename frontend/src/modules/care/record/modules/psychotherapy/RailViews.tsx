@@ -18,7 +18,7 @@ import { formatDate, formatDateTime } from "../../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { ErrorNote, Tag } from "../../../shared/ui";
 import { errorText } from "../../../triage/helpers";
-import { ddmmyyyy, hhmm } from "./helpers";
+import { ddmmyyyy, hhmm, noteSections } from "./helpers";
 
 // Rail views of the psychotherapy workspace: session history (and a read-only
 // signed note), the client file, the audit trail and the therapy-approach
@@ -71,6 +71,7 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 export function SessionHistory({
   note,
   notes,
+  questionCount,
   onBack,
   onOpenCurrent,
   onOpenPast,
@@ -78,20 +79,23 @@ export function SessionHistory({
 }: {
   note: PsyNote;
   notes: PsyNoteSummary[] | null;
+  questionCount: number;
   onBack?: () => void;
   onOpenCurrent: () => void;
   onOpenPast: (id: string) => void;
   onNew: () => void;
 }) {
-  const earlier = (notes ?? []).filter((n) => n.id !== note.id);
+  const family = note.session.session_type === "FAMILY";
+  const scopedNotes = (notes ?? []).filter((n) => n.session_type === note.session.session_type);
+  const earlier = scopedNotes.filter((n) => n.id !== note.id);
   const answered = Object.values(note.answers).filter((a) => a?.text?.trim()).length;
   return (
     <Page>
       <Back label="Back to session" onClick={onBack} />
       <Heading
         label={onBack && "Chat"}
-        title="Session history"
-        sub={`Record ${note.patient.number || "—"} · ${(notes ?? []).length || 1} sessions`}
+        title={family ? "Family session history" : "Session history"}
+        sub={`Record ${note.patient.number || "—"} · ${scopedNotes.length || 1} sessions`}
       />
       <Block title="Current">
         <button
@@ -102,19 +106,23 @@ export function SessionHistory({
         >
           <strong className="text-[13px]">Session {note.session_number ?? ""} · current</strong>
           <Tag tone={note.status === "SIGNED" ? "brand" : "warn"}>
-            {note.status === "SIGNED" ? "Signed" : "Draft"}
+            {note.status === "SIGNED" ? (family ? "Submitted" : "Signed") : "Draft"}
           </Tag>
           <span className="w-full text-[12px] text-ink-500">
-            {ddmmyyyy(note.session.session_date)} · {answered} of 5 questions answered
+            {ddmmyyyy(note.session.session_date)} · {answered} of {questionCount} questions answered
             {note.signed_at ? ` · signed ${formatDateTime(note.signed_at)}` : ""}
           </span>
         </button>
       </Block>
-      <Block title="Earlier · psychotherapy notes">
+      <Block
+        title={family ? "Earlier · family psychotherapy notes" : "Earlier · psychotherapy notes"}
+      >
         {!notes && <p className="text-[13px] text-ink-500">Loading…</p>}
         {notes && earlier.length === 0 && (
           <p className="text-[13px] text-ink-500">
-            No earlier psychotherapy notes for this client.
+            {family
+              ? "No earlier family psychotherapy notes for this client."
+              : "No earlier psychotherapy notes for this client."}
           </p>
         )}
         <div className="flex flex-col gap-1.5">
@@ -128,7 +136,7 @@ export function SessionHistory({
             >
               <strong className="text-[13px]">{formatDate(n.session_date)}</strong>
               <Tag tone={n.status === "SIGNED" ? "brand" : "warn"}>
-                {n.status === "SIGNED" ? "Signed" : "Draft"}
+                {n.status === "SIGNED" ? (family ? "Submitted" : "Signed") : "Draft"}
               </Tag>
               <span className="w-full text-[12px] text-ink-500">
                 {n.author}
@@ -178,31 +186,40 @@ export function PastNote({
       {past && (
         <>
           <Heading
-            label="Read-only · signed record"
+            label={
+              past.session.session_type === "FAMILY"
+                ? "Read-only · submitted report"
+                : "Read-only · signed record"
+            }
             title={`Session ${past.session_number ?? ""}`}
-            sub={`${ddmmyyyy(past.session.session_date)} · ${past.author} · ${past.models_applied.map((m) => m.name).join("; ") || "Approach not specified"}`}
+            sub={`${ddmmyyyy(past.session.session_date)} · ${past.author}${
+              past.session.session_type === "FAMILY"
+                ? ""
+                : ` · ${past.models_applied.map((m) => m.name).join("; ") || "Approach not specified"}`
+            }`}
           />
           <div className="flex flex-col gap-3 rounded-lg border border-surface-border bg-surface-card p-4">
-            {config.sections
-              .filter((s) => s.key !== "session_information")
-              .map((s) => (
-                <section key={s.key}>
-                  <h3 className={FIELD_LABEL}>{s.title}</h3>
-                  {}
-                  <p className="mt-1 whitespace-pre-wrap text-[13px]">
-                    {past.sections[s.key] || "—"}
-                  </p>
-                  {past.amendments
-                    .filter((a) => a.section === s.key)
-                    .map((a) => (
-                      <p key={a.id} className="mt-1 text-[11.5px] text-ink-500">
-                        Amended {formatDateTime(a.at)} by {a.by} — {a.reason}
-                      </p>
-                    ))}
-                </section>
-              ))}
+            {noteSections(config, past.session.session_type).map((s) => (
+              <section key={s.key}>
+                <h3 className={FIELD_LABEL}>{s.title}</h3>
+                {}
+                <p className="mt-1 whitespace-pre-wrap text-[13px]">
+                  {past.sections[s.key] || "—"}
+                </p>
+                {past.amendments
+                  .filter((a) => a.section === s.key)
+                  .map((a) => (
+                    <p key={a.id} className="mt-1 text-[11.5px] text-ink-500">
+                      Amended {formatDateTime(a.at)} by {a.by} — {a.reason}
+                    </p>
+                  ))}
+              </section>
+            ))}
             <div className="border-t border-surface-border pt-2 text-[12px] text-ink-500">
-              Electronically signed by {past.author} · {formatDateTime(past.signed_at)}
+              {past.session.session_type === "FAMILY"
+                ? "Report submitted"
+                : "Electronically signed"}{" "}
+              by {past.author} · {formatDateTime(past.signed_at)}
             </div>
           </div>
         </>
@@ -222,7 +239,9 @@ export function ClientFile({
   onBack?: () => void;
 }) {
   const c = note.context;
-  const signed = (notes ?? []).filter((n) => n.status === "SIGNED");
+  const family = note.session.session_type === "FAMILY";
+  const scopedNotes = (notes ?? []).filter((n) => n.session_type === note.session.session_type);
+  const signed = scopedNotes.filter((n) => n.status === "SIGNED");
   return (
     <Page>
       <Back label="Back to session" onClick={onBack} />
@@ -288,10 +307,14 @@ export function ClientFile({
           <p className="text-[13px] text-ink-500">No goals on the current care plan.</p>
         )}
       </Block>
-      <Block title="Session history">
+      <Block title={family ? "Family psychotherapy history" : "Session history"}>
         {!notes && <p className="text-[13px] text-ink-500">Loading…</p>}
         {notes && signed.length === 0 && (
-          <p className="text-[13px] text-ink-500">No signed psychotherapy notes yet.</p>
+          <p className="text-[13px] text-ink-500">
+            {family
+              ? "No signed family psychotherapy notes yet."
+              : "No signed psychotherapy notes yet."}
+          </p>
         )}
         <ul className="flex flex-col gap-1">
           {signed.map((n) => (
@@ -310,7 +333,8 @@ export function ClientFile({
             </li>
           ))}
         </ul>
-        {c.previous_note &&
+        {!family &&
+          c.previous_note &&
           !c.previous_note.restricted &&
           (c.previous_note.plan || c.previous_note.text) && (
             <div className="mt-2 rounded-md bg-surface-bg p-2 text-[12.5px]">

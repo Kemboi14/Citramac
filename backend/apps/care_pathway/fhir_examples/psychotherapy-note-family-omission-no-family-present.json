@@ -1,0 +1,442 @@
+{
+  "resourceType": "Bundle",
+  "meta": {
+    "security": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+        "code": "R"
+      },
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+        "code": "PSY"
+      }
+    ]
+  },
+  "identifier": {
+    "system": "urn:ietf:rfc:3986",
+    "value": "urn:uuid:351d2397-abff-5274-9a1b-a4b15856dd10"
+  },
+  "type": "document",
+  "timestamp": "2026-11-12T08:50:37.470310Z",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:3146c886-8221-543b-82ee-d4f72f94bce3",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "3146c886-8221-543b-82ee-d4f72f94bce3",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:psychotherapy-note"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "identifier": {
+          "system": "urn:ietf:rfc:3986",
+          "value": "urn:uuid:3146c886-8221-543b-82ee-d4f72f94bce3"
+        },
+        "status": "final",
+        "type": {
+          "text": "Psychotherapy progress note"
+        },
+        "subject": {
+          "reference": "urn:uuid:093c4dea-ddb8-54d1-8c68-b233ee493af9"
+        },
+        "encounter": {
+          "reference": "urn:uuid:8ad0be25-1850-5747-ab93-04cbf3bb3627"
+        },
+        "date": "2026-11-12T08:50:37.470310Z",
+        "author": [
+          {
+            "display": "Jane Njoroge"
+          }
+        ],
+        "title": "Psychotherapy progress note",
+        "confidentiality": "R",
+        "attester": [
+          {
+            "mode": "legal",
+            "time": "2026-11-12T08:50:37.470310Z",
+            "party": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ],
+        "section": [
+          {
+            "title": "Session Information",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "session_information",
+                  "display": "Session Information"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Date: 2026-11-16<br/>Time: 11:50<br/>Duration: 50 minutes<br/>Clinician: Jane Njoroge<br/>Session type: Family Psychotherapy<br/>Clinicians present: Jane Njoroge<br/>Family present: No family members were present.</div>"
+            }
+          },
+          {
+            "title": "Presenting Focus / Client Report",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "presenting_focus",
+                  "display": "Presenting Focus / Client Report"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Key issues discussed:<br/>- The client discussed a family disagreement and asked to plan a future family meeting.</div>"
+            }
+          },
+          {
+            "title": "Clinical Assessment / Observations",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "assessment",
+                  "display": "Clinical Assessment / Observations"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Family dynamics observed:<br/>- Not recorded in this session.</div>"
+            }
+          },
+          {
+            "title": "Therapeutic Focus & Interventions",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "interventions",
+                  "display": "Therapeutic Focus & Interventions"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Interventions used:<br/>- The clinician discussed preparation for a future family meeting.</div>"
+            }
+          },
+          {
+            "title": "Client Response & Progress",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "response",
+                  "display": "Client Response & Progress"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Progress made toward the goals:<br/>- Not recorded in this session.</div>"
+            }
+          },
+          {
+            "title": "Risk & Safety",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "risk_safety",
+                  "display": "Risk & Safety"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Safety was not assessed. The reason is documented in the signed note.</div>"
+            },
+            "entry": [
+              {
+                "reference": "urn:uuid:4a3ee7a3-5f35-5cb0-a49a-e302d0a3e4b7"
+              }
+            ]
+          },
+          {
+            "title": "Plan",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:psy-note-section",
+                  "code": "plan",
+                  "display": "Plan"
+                }
+              ]
+            },
+            "text": {
+              "status": "additional",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Areas needing attention:<br/>- Not recorded in this session.<br/><br/>Recommendations:<br/>- Confirm consent and attendees before arranging a family meeting.</div>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:093c4dea-ddb8-54d1-8c68-b233ee493af9",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "093c4dea-ddb8-54d1-8c68-b233ee493af9",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            }
+          ]
+        },
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CITRAMAC number"
+            },
+            "system": "urn:citramac:citramac-number",
+            "value": "202611ORG--001"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "use": "official",
+            "family": "Kamau",
+            "given": [
+              "Amina",
+              "Wanjiku"
+            ]
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1992-03-14"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8cf03a3c-3246-5249-8751-d1bf9e9dbb12",
+      "resource": {
+        "resourceType": "EpisodeOfCare",
+        "id": "8cf03a3c-3246-5249-8751-d1bf9e9dbb12",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "waitlist",
+        "statusHistory": [
+          {
+            "status": "waitlist",
+            "period": {
+              "start": "2026-11-12T08:50:36.315862Z"
+            }
+          }
+        ],
+        "patient": {
+          "reference": "urn:uuid:093c4dea-ddb8-54d1-8c68-b233ee493af9"
+        },
+        "period": {
+          "start": "2026-11-12T08:50:36.315862Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:8ad0be25-1850-5747-ab93-04cbf3bb3627",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "8ad0be25-1850-5747-ab93-04cbf3bb3627",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "finished",
+        "class": {
+          "display": "psychotherapy session"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "urn:citramac:codesystem:psychotherapy-session-type",
+                "code": "FAMILY",
+                "display": "Family"
+              }
+            ]
+          }
+        ],
+        "subject": {
+          "reference": "urn:uuid:093c4dea-ddb8-54d1-8c68-b233ee493af9"
+        },
+        "episodeOfCare": [
+          {
+            "reference": "urn:uuid:8cf03a3c-3246-5249-8751-d1bf9e9dbb12"
+          }
+        ],
+        "period": {
+          "start": "2026-11-12T08:50:36.484333Z",
+          "end": "2026-11-12T09:10:36.484333Z"
+        },
+        "participant": [
+          {
+            "individual": {
+              "reference": "urn:uuid:93212e41-38cb-542a-8524-fa916fc4d8f3",
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:4a3ee7a3-5f35-5cb0-a49a-e302d0a3e4b7",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "4a3ee7a3-5f35-5cb0-a49a-e302d0a3e4b7",
+        "meta": {
+          "profile": [
+            "urn:citramac:StructureDefinition:psychotherapy-safety-screen"
+          ],
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:psy-session-safety",
+              "code": "session-safety-question",
+              "display": "Psychotherapy session safety question"
+            }
+          ],
+          "text": "Was there any new or changed concern today regarding suicide, self-harm, harm to others, abuse or exploitation, severe deterioration, intoxication or withdrawal, inability to care for self, or another immediate safety concern?"
+        },
+        "subject": {
+          "reference": "urn:uuid:093c4dea-ddb8-54d1-8c68-b233ee493af9"
+        },
+        "encounter": {
+          "reference": "urn:uuid:8ad0be25-1850-5747-ab93-04cbf3bb3627"
+        },
+        "effectiveDateTime": "2026-11-12T08:50:36.484333Z",
+        "performer": [
+          {
+            "display": "Jane Njoroge"
+          }
+        ],
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "urn:citramac:codesystem:psy-safety-answer",
+              "code": "NOT_ASSESSED",
+              "display": "Not assessed"
+            }
+          ]
+        },
+        "note": [
+          {
+            "text": "Not assessed: Session ended early: the client left to collect her child from school."
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:52ec9488-8246-5317-b49a-804c87b10bde",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "52ec9488-8246-5317-b49a-804c87b10bde",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "target": [
+          {
+            "reference": "urn:uuid:3146c886-8221-543b-82ee-d4f72f94bce3"
+          },
+          {
+            "reference": "urn:uuid:4a3ee7a3-5f35-5cb0-a49a-e302d0a3e4b7"
+          }
+        ],
+        "recorded": "2026-11-12T08:50:37.470310Z",
+        "activity": {
+          "text": "Signed by the treating clinician"
+        },
+        "agent": [
+          {
+            "who": {
+              "display": "Jane Njoroge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:93212e41-38cb-542a-8524-fa916fc4d8f3",
+      "resource": {
+        "resourceType": "Practitioner",
+        "id": "93212e41-38cb-542a-8524-fa916fc4d8f3",
+        "meta": {
+          "security": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+              "code": "R"
+            },
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "PSY"
+            }
+          ]
+        },
+        "name": [
+          {
+            "text": "Jane Njoroge"
+          }
+        ]
+      }
+    }
+  ]
+}

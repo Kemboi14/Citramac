@@ -12,21 +12,20 @@ import { formatDateTime } from "../../../shared/format";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../../shared/styles";
 import { Callout, Tag } from "../../../shared/ui";
 import { useValueSets } from "../../../shared/useValueSets";
-import { EXAMPLE_ANSWERS, EXAMPLE_SECTION } from "./exampleSession";
+import { exampleAnswers, exampleSections } from "./exampleSession";
 import {
   copyText,
   ddmmyyyy,
   downloadText,
+  familyDraftDisplayText,
   hhmm,
   modeLabel,
+  noteSections,
   toLocalInput,
   transcriptText,
 } from "./helpers";
 
 type Save = (body: Record<string, unknown>) => Promise<boolean>;
-
-const NOTE_SECTIONS = (config: PsyConfig) =>
-  config.sections.filter((s) => s.key !== "session_information");
 
 const STATUS =
   "whitespace-nowrap rounded-[5px] px-[7px] py-[3px] font-mono text-[10.5px] font-medium uppercase tracking-[.06em]";
@@ -34,7 +33,15 @@ const STATUS =
 const SEC_H = "text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green";
 const LINK = "text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900";
 
-function StatusPill({ signed, example }: { signed: boolean; example?: boolean }) {
+function StatusPill({
+  signed,
+  example,
+  family,
+}: {
+  signed: boolean;
+  example?: boolean;
+  family?: boolean;
+}) {
   if (example)
     return (
       <span className={`${STATUS} bg-priority-orange-tint text-priority-orange`}>
@@ -42,10 +49,12 @@ function StatusPill({ signed, example }: { signed: boolean; example?: boolean })
       </span>
     );
   return signed ? (
-    <span className={`${STATUS} bg-brand-green-tint text-brand-green`}>Signed</span>
+    <span className={`${STATUS} bg-brand-green-tint text-brand-green`}>
+      {family ? "Submitted" : "Signed"}
+    </span>
   ) : (
     <span className={`${STATUS} bg-priority-orange-tint text-priority-orange`}>
-      Draft — review required
+      {family ? "Draft — submission required" : "Draft — review required"}
     </span>
   );
 }
@@ -84,7 +93,9 @@ export function NotePanel({
   const [chosen, setChosen] = useState<"note" | "transcript" | null>(null);
   const tab = chosen ?? (example || note.generated_at ? "note" : "transcript");
   const signed = note.status === "SIGNED";
-  const noteText = example ? exampleText(config) : note.rendered;
+  const noteText = example
+    ? exampleText(config, note.session.session_type)
+    : familyDraftDisplayText(note, note.rendered);
   // Keep the newest captured answer in view as the session moves on.
   const bodyRef = useRef<HTMLDivElement>(null);
   const answered = note.transcript.filter((t) => t.text.trim() !== "").length;
@@ -97,8 +108,14 @@ export function NotePanel({
     <div className="flex h-full min-h-0 flex-col bg-surface-card">
       <div className="flex flex-col gap-2.5 border-b border-surface-border px-[18px] pb-2.5 pt-3.5">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-          <h2 className="whitespace-nowrap text-[15px] font-semibold text-ink-900">Therapy note</h2>
-          <StatusPill signed={signed} example={example} />
+          <h2 className="whitespace-nowrap text-[15px] font-semibold text-ink-900">
+            {note.session.session_type === "FAMILY" ? "Family psychotherapy note" : "Therapy note"}
+          </h2>
+          <StatusPill
+            signed={signed}
+            example={example}
+            family={note.session.session_type === "FAMILY"}
+          />
           <div className="ml-auto flex items-center gap-0.5">
             {!example && <ShareMenu note={note} />}
             {controls}
@@ -107,7 +124,11 @@ export function NotePanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
             role="tablist"
-            aria-label="Therapy note views"
+            aria-label={
+              note.session.session_type === "FAMILY"
+                ? "Family psychotherapy note views"
+                : "Therapy note views"
+            }
             className="flex gap-0.5 rounded-[9px] bg-surface-bg p-[3px]"
           >
             {(["note", "transcript"] as const).map((t) => (
@@ -137,9 +158,9 @@ export function NotePanel({
       >
         {example ? (
           tab === "note" ? (
-            <ExamplePreview config={config} />
+            <ExamplePreview config={config} note={note} />
           ) : (
-            <ExampleTranscript config={config} />
+            <ExampleTranscript config={config} note={note} />
           )
         ) : tab === "note" ? (
           <NoteBody
@@ -170,7 +191,7 @@ export function NotePanel({
           config={config}
           note={note}
           amend={amend}
-          onSelfAssessment={onSelfAssessment}
+          onSelfAssessment={note.session.session_type === "FAMILY" ? undefined : onSelfAssessment}
         />
       ) : (
         <SignFooter config={config} note={note} save={save} sign={sign} busy={busy} />
@@ -179,33 +200,36 @@ export function NotePanel({
   );
 }
 
-function exampleText(config: PsyConfig) {
-  return NOTE_SECTIONS(config)
+function exampleText(config: PsyConfig, sessionType: string) {
+  const answers = exampleAnswers(sessionType);
+  const sections = exampleSections(sessionType);
+  return noteSections(config, sessionType)
     .map((s) => {
+      const key = Object.entries(sections).find(([, sectionKey]) => sectionKey === s.key)?.[0];
       // eslint-disable-next-line security/detect-object-injection -- question / section key from the fixed example map.
-      const key = Object.keys(EXAMPLE_SECTION).find((k) => EXAMPLE_SECTION[k] === s.key);
-      // eslint-disable-next-line security/detect-object-injection -- question / section key from the fixed example map.
-      return `${s.title}\n${key ? EXAMPLE_ANSWERS[key] : "Not part of the example."}`;
+      return `${s.title}\n${key ? answers[key] : "Not part of the example."}`;
     })
     .join("\n\n");
 }
 
-function ExamplePreview({ config }: { config: PsyConfig }) {
+function ExamplePreview({ config, note }: { config: PsyConfig; note: PsyNote }) {
+  const answers = exampleAnswers(note.session.session_type);
+  const sections = exampleSections(note.session.session_type);
   return (
     <div className="flex flex-col gap-[18px]">
       <Callout tone="warning">
         Example — not saved. The answers are placed under the section each question feeds; a real
         session is organised by the server and reviewed by you.
       </Callout>
-      {NOTE_SECTIONS(config).map((s) => {
-        // eslint-disable-next-line security/detect-object-injection -- question / section key from the fixed example map.
-        const key = Object.keys(EXAMPLE_SECTION).find((k) => EXAMPLE_SECTION[k] === s.key);
+      {noteSections(config, note.session.session_type).map((s) => {
+        const key = Object.entries(sections).find(([, sectionKey]) => sectionKey === s.key)?.[0];
+        // eslint-disable-next-line security/detect-object-injection -- key comes from the fixed example section map.
+        const answer = key ? answers[key] : "Not part of the example.";
         return (
           <section key={s.key}>
             <h3 className={SEC_H}>{s.title}</h3>
-            {/* eslint-disable-next-line security/detect-object-injection -- question / section key from the fixed example map. */}
             <p className="mt-1.5 whitespace-pre-wrap text-[14.5px] leading-[1.6] text-ink-900">
-              {key ? EXAMPLE_ANSWERS[key] : "Not part of the example."}
+              {answer}
             </p>
           </section>
         );
@@ -214,7 +238,8 @@ function ExamplePreview({ config }: { config: PsyConfig }) {
   );
 }
 
-function ExampleTranscript({ config }: { config: PsyConfig }) {
+function ExampleTranscript({ config, note }: { config: PsyConfig; note: PsyNote }) {
+  const answers = exampleAnswers(note.session.session_type);
   return (
     <ol className="flex flex-col gap-3">
       {config.questions.map((q, i) => (
@@ -223,7 +248,7 @@ function ExampleTranscript({ config }: { config: PsyConfig }) {
             Q{i + 1}. {q.title}
           </div>
           <div className="text-[11px] text-ink-500">Typed · English (UK) · example</div>
-          <p className="mt-1 whitespace-pre-wrap text-[13px]">{EXAMPLE_ANSWERS[q.key]}</p>
+          <p className="mt-1 whitespace-pre-wrap text-[13px]">{answers[q.key]}</p>
         </li>
       ))}
     </ol>
@@ -247,6 +272,7 @@ function ShareMenu({ note }: { note: PsyNote }) {
     };
   }, [open]);
   const date = ddmmyyyy(note.session.session_date).split("/").reverse().join("-");
+  const rendered = familyDraftDisplayText(note, note.rendered);
   async function act(label: string, work: () => Promise<boolean> | void) {
     const ok = await work();
     setDone(ok === false ? "Couldn't copy — select the text instead." : label);
@@ -281,7 +307,7 @@ function ShareMenu({ note }: { note: PsyNote }) {
             type="button"
             role="menuitem"
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg"
-            onClick={() => void act("Note copied", () => copyText(note.rendered))}
+            onClick={() => void act("Note copied", () => copyText(rendered))}
           >
             <Copy className="h-3.5 w-3.5" /> Copy note
           </button>
@@ -299,7 +325,7 @@ function ShareMenu({ note }: { note: PsyNote }) {
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg"
             onClick={() =>
               void act("Note downloaded", () =>
-                downloadText(`psychotherapy-note-${date}.txt`, note.rendered),
+                downloadText(`psychotherapy-note-${date}.txt`, rendered),
               )
             }
           >
@@ -351,6 +377,7 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
     session_objective: s.session_objective ?? "",
     primary_goal: s.primary_goal ?? "",
     secondary_goals: s.secondary_goals ?? "",
+    goals: [s.primary_goal, s.secondary_goals].filter(Boolean).join("\n"),
   });
   const mode = config.attendance_modes.find((m) => m.code === s.attendance_mode)?.label;
   const type = config.session_types.find((t) => t.code === s.session_type)?.label ?? s.session_type;
@@ -360,11 +387,12 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
       session_date: form.when,
       duration_minutes: form.duration || null,
       attendance_mode: form.mode,
-      session_type: form.type,
+      session_type: s.session_type === "FAMILY" ? s.session_type : form.type,
       location: form.location,
       session_objective: form.session_objective,
-      primary_goal: form.primary_goal,
-      secondary_goals: form.secondary_goals,
+      ...(s.session_type === "FAMILY"
+        ? { primary_goal: form.goals, secondary_goals: "" }
+        : { primary_goal: form.primary_goal, secondary_goals: form.secondary_goals }),
     });
     if (ok) setEditing(false);
   }
@@ -382,9 +410,23 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           <span>· {type}</span>
           <span>· {note.author}</span>
           {s.location && <span>· {s.location}</span>}
-          {s.session_objective && <span className="block">Objective: {s.session_objective}</span>}
-          {s.primary_goal && <span className="block">Primary goal: {s.primary_goal}</span>}
-          {s.secondary_goals && <span className="block">Secondary goals: {s.secondary_goals}</span>}
+          {s.session_type !== "FAMILY" && s.session_objective && (
+            <span className="block">Objective: {s.session_objective}</span>
+          )}
+          {s.session_type === "FAMILY" ? (
+            [s.primary_goal, s.secondary_goals].filter(Boolean).length > 0 && (
+              <span className="block whitespace-pre-line">
+                Goals: {[s.primary_goal, s.secondary_goals].filter(Boolean).join("\n")}
+              </span>
+            )
+          ) : (
+            <>
+              {s.primary_goal && <span className="block">Primary goal: {s.primary_goal}</span>}
+              {s.secondary_goals && (
+                <span className="block">Secondary goals: {s.secondary_goals}</span>
+              )}
+            </>
+          )}
         </div>
         {!locked && note.is_author && (
           <button
@@ -442,20 +484,24 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
       </label>
       <label className="text-[12px]">
         <span className={FIELD_LABEL}>Type</span>
-        <select
-          className={INPUT}
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value })}
-        >
-          {config.session_types.map((t) => (
-            <option key={t.code} value={t.code}>
-              {t.label}
+        {s.session_type === "FAMILY" ? (
+          <div className={INPUT}>Family</div>
+        ) : (
+          <select
+            className={INPUT}
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+          >
+            {config.session_types.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.label}
+              </option>
+            ))}
+            <option value="GROUP" disabled>
+              Group psychotherapy — recorded in the group programme
             </option>
-          ))}
-          <option value="GROUP" disabled>
-            Group psychotherapy — recorded in the group programme
-          </option>
-        </select>
+          </select>
+        )}
       </label>
       <label className="text-[12px]">
         <span className={FIELD_LABEL}>Clinician</span>
@@ -469,33 +515,49 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           onChange={(e) => setForm({ ...form, location: e.target.value })}
         />
       </label>
-      <label className="text-[12px] sm:col-span-2">
-        <span className={FIELD_LABEL}>Session objective</span>
-        <AutoResizeTextarea
-          className={INPUT}
-          rows={2}
-          value={form.session_objective}
-          onChange={(e) => setForm({ ...form, session_objective: e.target.value })}
-        />
-      </label>
-      <label className="text-[12px] sm:col-span-2">
-        <span className={FIELD_LABEL}>Primary goal</span>
-        <AutoResizeTextarea
-          className={INPUT}
-          rows={2}
-          value={form.primary_goal}
-          onChange={(e) => setForm({ ...form, primary_goal: e.target.value })}
-        />
-      </label>
-      <label className="text-[12px] sm:col-span-2">
-        <span className={FIELD_LABEL}>Secondary goals</span>
-        <AutoResizeTextarea
-          className={INPUT}
-          rows={2}
-          value={form.secondary_goals}
-          onChange={(e) => setForm({ ...form, secondary_goals: e.target.value })}
-        />
-      </label>
+      {s.session_type !== "FAMILY" && (
+        <label className="text-[12px] sm:col-span-2">
+          <span className={FIELD_LABEL}>Session objective</span>
+          <AutoResizeTextarea
+            className={INPUT}
+            rows={2}
+            value={form.session_objective}
+            onChange={(e) => setForm({ ...form, session_objective: e.target.value })}
+          />
+        </label>
+      )}
+      {s.session_type === "FAMILY" ? (
+        <label className="text-[12px] sm:col-span-2">
+          <span className={FIELD_LABEL}>Goals</span>
+          <AutoResizeTextarea
+            className={INPUT}
+            rows={3}
+            value={form.goals}
+            onChange={(e) => setForm({ ...form, goals: e.target.value })}
+          />
+        </label>
+      ) : (
+        <>
+          <label className="text-[12px] sm:col-span-2">
+            <span className={FIELD_LABEL}>Primary goal</span>
+            <AutoResizeTextarea
+              className={INPUT}
+              rows={2}
+              value={form.primary_goal}
+              onChange={(e) => setForm({ ...form, primary_goal: e.target.value })}
+            />
+          </label>
+          <label className="text-[12px] sm:col-span-2">
+            <span className={FIELD_LABEL}>Secondary goals</span>
+            <AutoResizeTextarea
+              className={INPUT}
+              rows={2}
+              value={form.secondary_goals}
+              onChange={(e) => setForm({ ...form, secondary_goals: e.target.value })}
+            />
+          </label>
+        </>
+      )}
       <p className="text-[11px] text-ink-500 sm:col-span-2">
         Encounter {s.encounter.slice(0, 8).toUpperCase()} · one note per client — couple and family
         sessions are recorded for each person separately.
@@ -552,7 +614,7 @@ function NoteBody({
           </button>
         </Callout>
       )}
-      {NOTE_SECTIONS(config).map((s) => (
+      {noteSections(config, note.session.session_type).map((s) => (
         <Section
           key={`${s.key}-${note.generated_at ?? ""}`}
           config={config}
@@ -567,7 +629,14 @@ function NoteBody({
           {note.watermark}
         </p>
       )}
-      {patientId && <PsychotherapyPlanCard patientId={patientId} />}
+      {patientId && (
+        <PsychotherapyPlanCard
+          patientId={patientId}
+          fixedAppointmentType={
+            note.session.session_type === "FAMILY" ? "Family psychotherapy" : undefined
+          }
+        />
+      )}
     </div>
   );
 }
@@ -627,7 +696,7 @@ function Section({
   save: Save;
 }) {
   // eslint-disable-next-line security/detect-object-injection -- section key from the served config.
-  const text = note.sections[sectionKey] ?? "";
+  const text = familyDraftDisplayText(note, note.sections[sectionKey] ?? "");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(text);
   const signed = note.status === "SIGNED";
@@ -821,7 +890,9 @@ function SignFooter({
             onClick={() => setOpen((o) => !o)}
             className="flex w-full items-center justify-between gap-2 text-left text-[13px] text-ink-500"
           >
-            <span>Before signing</span>
+            <span>
+              {note.session.session_type === "FAMILY" ? "Before submitting" : "Before signing"}
+            </span>
             <span className="inline-flex items-center gap-1">
               {list.done} of {list.total} complete
               <ChevronDown
@@ -891,12 +962,12 @@ function SignFooter({
           title={ready ? undefined : note.blockers.map((b) => b.text).join("\n")}
           className="flex-1 rounded-[11px] bg-brand-green p-2.5 text-[13.5px] font-semibold text-on-primary disabled:cursor-not-allowed disabled:bg-surface-bg disabled:text-ink-500"
         >
-          Sign note
+          {note.session.session_type === "FAMILY" ? "Submit report" : "Sign note"}
         </button>
         <button
           type="button"
           className="rounded-[10px] border border-surface-border bg-surface-card px-3.5 py-2 text-[13.5px] font-medium hover:border-brand-green"
-          onClick={() => void copyText(note.rendered)}
+          onClick={() => void copyText(familyDraftDisplayText(note, note.rendered))}
         >
           Copy
         </button>
@@ -918,7 +989,7 @@ function SignedFooter({
   onSelfAssessment?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const sections = NOTE_SECTIONS(config);
+  const sections = noteSections(config, note.session.session_type);
   const selfAssessment = note.session.therapist_self_assessment;
   const [section, setSection] = useState(sections[0]?.key ?? "");
   // eslint-disable-next-line security/detect-object-injection -- section key from the served config.
@@ -933,8 +1004,9 @@ function SignedFooter({
   return (
     <div className="flex flex-col gap-2 border-t border-surface-border px-4 py-3">
       <p className="text-[12px] text-ink-500">
-        Signed by {note.author} · {formatDateTime(note.signed_at)}. A signed note is locked —
-        changes are dated, named amendments.
+        {note.session.session_type === "FAMILY"
+          ? `Report submitted by ${note.author} · ${formatDateTime(note.signed_at)}. The submitted report is locked — changes are dated, named amendments.`
+          : `Signed by ${note.author} · ${formatDateTime(note.signed_at)}. A signed note is locked — changes are dated, named amendments.`}
       </p>
       {open && (
         <div className="flex flex-col gap-1.5">
@@ -1017,14 +1089,22 @@ function SignedFooter({
 // group programme. The server enforces the same list.
 const PSYCHOTHERAPY_APPOINTMENT_TYPES = ["Individual psychotherapy", "Family psychotherapy"];
 
-export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
+export function PsychotherapyPlanCard({
+  patientId,
+  fixedAppointmentType,
+}: {
+  patientId: string;
+  fixedAppointmentType?: string;
+}) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const [schedule, setSchedule] = useState<PsychotherapyPlanSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scheduledFor, setScheduledFor] = useState("");
   const [mode, setMode] = useState<"IN_PERSON" | "PHONE" | "VIDEO">("IN_PERSON");
-  const [appointmentType, setAppointmentType] = useState(PSYCHOTHERAPY_APPOINTMENT_TYPES[0]);
+  const [appointmentType, setAppointmentType] = useState(
+    fixedAppointmentType ?? PSYCHOTHERAPY_APPOINTMENT_TYPES[0],
+  );
   const [duration, setDuration] = useState(30);
   const [sessionNote, setSessionNote] = useState("");
   const [scheduling, setScheduling] = useState(false);
@@ -1034,7 +1114,11 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const typeOptions = vs
     .options("appointment-type")
-    .filter((o) => PSYCHOTHERAPY_APPOINTMENT_TYPES.includes(o.code));
+    .filter(
+      (o) =>
+        PSYCHOTHERAPY_APPOINTMENT_TYPES.includes(o.code) &&
+        (!fixedAppointmentType || o.code === fixedAppointmentType),
+    );
 
   const load = () => {
     if (!accessToken || !patientId) return;
@@ -1054,6 +1138,10 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
         a.status === "PLANNED" &&
         !(schedule?.scheduled_sessions ?? []).some((s) => s.care_plan_activity_id === a.id),
     ) ?? null;
+  const scheduledSessions =
+    schedule?.scheduled_sessions.filter(
+      (session) => !fixedAppointmentType || session.appointment_type === fixedAppointmentType,
+    ) ?? [];
 
   const scheduleSession = async () => {
     if (!accessToken || !scheduledFor) return;
@@ -1074,7 +1162,11 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
       setRequestId(crypto.randomUUID());
       setScheduledFor("");
       setSessionNote("");
-      setScheduleMessage("Next psychotherapy session scheduled.");
+      setScheduleMessage(
+        fixedAppointmentType
+          ? "Family psychotherapy session scheduled."
+          : "Next psychotherapy session scheduled.",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't schedule session.");
     } finally {
@@ -1083,97 +1175,148 @@ export function PsychotherapyPlanCard({ patientId }: { patientId: string }) {
   };
 
   return (
-    <section className="mt-4 border-t border-surface-border pt-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green">
-          Next sessions (Question 5)
-        </h3>
-        <button
-          type="button"
-          className="text-[11px] font-semibold text-brand-green hover:underline"
-          onClick={load}
-        >
-          Refresh
+    <section className="mt-4 rounded-xl border border-surface-border bg-surface-card p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-ink-900">
+            {fixedAppointmentType
+              ? "Family psychotherapy schedule"
+              : "Upcoming psychotherapy sessions"}
+          </h3>
+          <p className="mt-1 text-xs text-ink-500">
+            {fixedAppointmentType
+              ? "Review and book this client’s next family session."
+              : "Review and book the client’s next psychotherapy session."}
+          </p>
+        </div>
+        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={load}>
+          Refresh schedule
         </button>
       </div>
       {schedule?.plan && (
-        <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
-          {schedule.plan.goals || "No plan goals recorded."}
-        </p>
+        <div className="mt-4 rounded-lg bg-surface-bg p-3">
+          <h4 className="text-xs font-semibold text-ink-700">Care plan goals</h4>
+          <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+            {schedule.plan.goals || "No plan goals recorded."}
+          </p>
+        </div>
       )}
-      {schedule && schedule.scheduled_sessions.length > 0 ? (
-        <div className="mt-2">
-          <p className="text-xs font-semibold text-ink-700">Booked sessions</p>
-          <ul className="mt-1 flex flex-col gap-1">
-            {schedule.scheduled_sessions.map((s) => (
+      {schedule && scheduledSessions.length > 0 ? (
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold text-ink-700">Upcoming appointments</h4>
+          <ul className="mt-2 flex flex-col gap-2">
+            {scheduledSessions.map((s) => (
               <li
                 key={s.id}
-                className="rounded border border-surface-border px-2 py-1 text-xs text-ink-700"
+                className="rounded-lg border border-surface-border px-3 py-2 text-xs text-ink-700"
               >
-                {s.activity_title} · {s.scheduled_for} · {s.duration_minutes} min · {s.mode}
-                {s.notes ? ` — ${s.notes}` : ""}
+                <p className="font-semibold text-ink-900">{s.activity_title}</p>
+                <p className="mt-1 text-ink-500">
+                  {formatDateTime(s.scheduled_for)} · {s.duration_minutes} min ·{" "}
+                  {s.mode.replace("_", " ").toLowerCase()}
+                  {s.provider_name ? ` · ${s.provider_name}` : ""}
+                </p>
+                {s.notes && <p className="mt-1 whitespace-pre-wrap">{s.notes}</p>}
               </li>
             ))}
           </ul>
         </div>
       ) : (
-        <p className="mt-2 text-xs text-ink-500">No sessions booked yet.</p>
+        <p className="mt-4 rounded-lg bg-surface-bg px-3 py-2 text-xs text-ink-500">
+          No upcoming sessions are booked.
+        </p>
       )}
-      <div className="mt-3 grid gap-2">
-        <p className="text-xs font-semibold text-ink-700">Add another session</p>
-        <select
-          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          value={appointmentType}
-          onChange={(e) => setAppointmentType(e.target.value)}
-          disabled={!typeOptions.length}
-        >
-          {typeOptions.map((o) => (
-            <option key={o.code} value={o.code}>
-              {o.display}
-            </option>
-          ))}
-        </select>
-        <input
-          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          type="datetime-local"
-          value={scheduledFor}
-          onChange={(e) => setScheduledFor(e.target.value)}
-        />
-        <select
-          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
-        >
-          <option value="IN_PERSON">In person</option>
-          <option value="PHONE">Phone</option>
-          <option value="VIDEO">Video</option>
-        </select>
-        <input
-          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          type="number"
-          min={5}
-          max={240}
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value) || 30)}
-        />
-        <AutoResizeTextarea
-          className="w-full rounded border border-surface-border px-2 py-1 text-xs"
-          placeholder="Brief note (optional)"
-          value={sessionNote}
-          onChange={(e) => setSessionNote(e.target.value)}
-        />
+      <div className="mt-5 border-t border-surface-border pt-4">
+        <h4 className="text-xs font-bold text-ink-900">Schedule a session</h4>
+        {fixedAppointmentType && (
+          <p className="mt-1 text-xs text-ink-500">
+            Appointment type: <strong className="text-ink-700">{fixedAppointmentType}</strong>
+          </p>
+        )}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {!fixedAppointmentType && (
+            <label className="text-xs font-medium text-ink-700 sm:col-span-2">
+              Appointment type
+              <select
+                className={`${INPUT} mt-1`}
+                value={appointmentType}
+                onChange={(e) => setAppointmentType(e.target.value)}
+                disabled={!typeOptions.length}
+              >
+                {typeOptions.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.display}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="text-xs font-medium text-ink-700">
+            Date and time
+            <input
+              className={`${INPUT} mt-1`}
+              type="datetime-local"
+              value={scheduledFor}
+              onChange={(e) => setScheduledFor(e.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium text-ink-700">
+            Session format
+            <select
+              className={`${INPUT} mt-1`}
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
+            >
+              <option value="IN_PERSON">In person</option>
+              <option value="PHONE">Phone</option>
+              <option value="VIDEO">Video</option>
+            </select>
+          </label>
+          <label className="text-xs font-medium text-ink-700">
+            Duration (minutes)
+            <input
+              className={`${INPUT} mt-1`}
+              type="number"
+              min={5}
+              max={240}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value) || 30)}
+            />
+          </label>
+          <label className="text-xs font-medium text-ink-700 sm:col-span-2">
+            Scheduling note (optional)
+            <AutoResizeTextarea
+              className={`${INPUT} mt-1`}
+              rows={2}
+              placeholder="Add a brief logistical note."
+              value={sessionNote}
+              onChange={(e) => setSessionNote(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
+      {scheduleMessage && (
+        <p className="mt-3 text-xs font-medium text-brand-green">{scheduleMessage}</p>
+      )}
+      {(error || vs.error) && (
+        <p role="alert" className="mt-3 text-xs text-priority-red">
+          {error || vs.error}
+        </p>
+      )}
+      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 border-t border-surface-border bg-surface-card/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5">
         <button
           type="button"
           disabled={scheduling || !scheduledFor || !typeOptions.length}
           onClick={() => void scheduleSession()}
-          className="rounded bg-brand-green px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          className={`${BTN} ${BTN_SM} w-full sm:w-auto`}
         >
-          {scheduling ? "Scheduling…" : "Schedule next psychotherapy session"}
+          {scheduling
+            ? "Scheduling…"
+            : fixedAppointmentType
+              ? "Schedule family session"
+              : "Schedule psychotherapy session"}
         </button>
       </div>
-
-      {scheduleMessage && <p className="mt-2 text-xs text-brand-green">{scheduleMessage}</p>}
-      {(error || vs.error) && <p className="mt-2 text-xs text-priority-red">{error || vs.error}</p>}
     </section>
   );
 }
