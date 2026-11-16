@@ -38,6 +38,24 @@ CORE_NO = {
     "i_safe": "yes",
     "j_concern": "no",
 }
+# A complete, negative v5 screen. New triages are signed on v5 only (2026-11-13);
+# v5 keeps the v3 answer keys, so the helpers below lay any answers over this.
+V5_BASE = {
+    "schema": "v5",
+    "b_informant": "client",
+    "b_present": "yes",
+    "c_concern": "Low mood, drinking more",
+    "d_suicidal": "no",
+    "d_attempt": "no",
+    "d_means": "no",
+    "d_safety": "yes",
+    "e_thoughts": "no",
+    "f_change": "no",
+    "g_use": "no",
+    "h_concern": "no",
+    "i_safe": "yes",
+    "j_concern": "no",
+}
 
 
 # Every task a triage signature can raise (triage_sign_v4.signing_tasks); each
@@ -141,12 +159,48 @@ class CarePathwayApiTestCase(APITestCase):
 
     def sign(self, te_id, answers, priority="GREEN", **extra):
         extra.setdefault("task_assignees", self.assign_all())
+        if "schema" not in answers:
+            answers = v5_answers(answers)
+            if priority and extra.get("decision", "CONFIRM") == "CONFIRM":
+                # A test asking for a priority v5 does not recommend records it
+                # as the clinician's override, with a reason (as on the form).
+                from . import triage_v5
+
+                recommended = triage_v5.evaluate(triage_v5.clean_answers(answers))["priority"]
+                if priority != recommended:
+                    extra = {
+                        **extra,
+                        "decision": "OVERRIDE",
+                        "override_reason": "Clinical judgement differs from the recommendation.",
+                    }
         return self.client.post(
             reverse("care-triage-sign", args=[te_id]),
-            {"answers": answers, "final_priority": priority, "decision": "CONFIRM", **extra},
+            {
+                "answers": answers,
+                **({"final_priority": priority} if priority else {}),
+                "decision": extra.pop("decision", "CONFIRM"),
+                **extra,
+            },
             format="json",
             **self.auth,
         )
+
+
+# The waiting-area safety a RED / ORANGE in-person triage records (v5).
+V5_SAFETY = {
+    "safety_obs": "ARMS_LENGTH",
+    "safety_location": "QUIET_ROOM",
+    "safety_observer": "L. Wambui",
+}
+
+
+def v5_answers(answers):
+    """Lay answers written on the shared v3 keys over a complete v5 screen, with
+    the follow-ups v5 asks for when a screen is positive."""
+    out = {**V5_BASE, **V5_SAFETY, **answers}
+    if out.get("d_suicidal") == "yes":
+        out.setdefault("d_act_now", "no")
+    return out
 
 
 class RegistrationTests(CarePathwayApiTestCase):
@@ -472,11 +526,26 @@ class TriageFlowTests(CarePathwayApiTestCase):
         self.assertEqual(detail.data["status"], "IN_TRIAGE")
         self.assertEqual(detail.data["draft"]["answers"], {"d_suicidal": "yes"})
 
-    def test_sign_is_blocked_until_core_screens_and_priority_are_complete(self):
-        response = self.sign(self.te_id, {"d_suicidal": "no"})
-        self.assertEqual(response.status_code, 400)
-        response = self.sign(self.te_id, CORE_NO, priority="")
-        self.assertEqual(response.status_code, 400)
+    def raw_sign(self, answers, **extra):
+        return self.client.post(
+            reverse("care-triage-sign", args=[self.te_id]),
+            {"answers": answers, "task_assignees": self.assign_all(), **extra},
+            format="json",
+            **self.auth,
+        )
+
+    def test_sign_is_blocked_until_the_v5_screen_is_complete(self):
+        incomplete = self.raw_sign({"schema": "v5", "d_suicidal": "no"})
+        self.assertEqual(incomplete.status_code, 400)
+        self.assertIn("missing_keys", incomplete.data)
+
+    def test_new_triages_are_never_signed_on_v3_or_v4(self):
+        for answers in (CORE_NO, {"schema": "v4", **CORE_NO}):
+            refused = self.raw_sign(answers, final_priority="GREEN")
+            self.assertEqual(refused.status_code, 400, answers)
+            self.assertIn("v5", str(refused.data))
+        with platform_admin_context():
+            self.assertFalse(TriageAssessment.objects.filter(status="COMPLETED").exists())
 
     def test_override_requires_a_reason(self):
         response = self.sign(self.te_id, CORE_NO, priority="YELLOW", decision="OVERRIDE")
@@ -486,8 +555,11 @@ class TriageFlowTests(CarePathwayApiTestCase):
         answers = {
             **CORE_NO,
             "d_suicidal": "yes",
-            "h_bp": "128/82",
-            "h_pulse": "88",
+            "v_sbp": "128",
+            "v_dbp": "82",
+            "v_hr": "88",
+            "v_measured_at": "2026-11-13T08:15",
+            "v_source": "here",
             "a_allergy_status": "known",
             "a_allergy_detail": "Penicillin",
             "c_concern": "Low mood and alcohol",
@@ -621,6 +693,7 @@ class TriageFlowTests(CarePathwayApiTestCase):
                 "Encounter",
                 "EpisodeOfCare",
                 "Flag",
+                "Observation",
                 "Patient",
                 "Provenance",
                 "QuestionnaireResponse",

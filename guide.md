@@ -930,6 +930,19 @@ Reversibility: cheap. Everything is additive; no signed record changes. Consents
 before today show no signatures; a telephone order placed before today names no prescriber,
 so a senior clinician confirms it as before.
 
+### 2026-11-13 — new triages are signed on v5 only
+
+On the owner's decision of 2026-11-13, this closes the open "retiring v3/v4 triage signing" item from
+2026-11-06. `services.sign_triage` signs only a v5 answer set (`triage_v5`). A v3- or v4-shaped draft
+is refused with a message to reload, and reloading opens it on the v5 form (an editable triage always
+opens on v5, keeping what the forms share). Triages already signed on v3 or v4 keep their record and
+rule set: they still open and print on the form they were signed with. The test fixtures were rebuilt
+on v5 (`care_pathway/tests.py` `v5_answers`). A test asking for a priority v5 does not recommend signs
+it as the clinician's override with a reason, as the form does. FHIR: unchanged; a v5 signature emits
+the vital-signs `Observation` it always did.
+
+Reversibility: cheap. No signed record changes. Only future signatures are affected.
+
 ### 2026-11-16 — Triage v5 Section N: one psychiatric review action; described Other
 
 On the project owner's instruction, editable v5 triages show one Section N action,

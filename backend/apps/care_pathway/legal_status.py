@@ -58,6 +58,7 @@ from .models import (
     CapacityAssessment,
     CareTask,
     ClinicalAlert,
+    ClinicalFinding,
     LocalConcept,
     TriageAssessment,
     VisitConsent,
@@ -412,6 +413,31 @@ def evidence_context(patient):
             "danger_to_others": {"Risk to others", "Immediate danger"},
             "unable_self_care": {"Functional safety concern"},
         }
+        # A v5 triage's rows carry domain titles and summaries, not v3 labels, and
+        # say nothing about whether the domain was positive. Its findings in the
+        # shared store do (status PRESENT), so they are what is shown for it.
+        by_domain = {
+            "SUICIDE_SELF_HARM": "danger_to_self",
+            "HARM_TO_OTHERS": "danger_to_others",
+            "FUNCTIONAL": "unable_self_care",
+        }
+        recorded = ClinicalFinding.objects.filter(
+            source_type="TriageAssessment",
+            source_id=triage.id,
+            status="PRESENT",
+            domain__in=by_domain,
+        ).order_by("key")
+        for finding in recorded:
+            groups[by_domain[finding.domain]].append(
+                {
+                    "label": finding.title,
+                    "value": finding.summary,
+                    "source": finding.source_code or "PREVIOUS_RECORD",
+                    "record": "Triage (signed)",
+                    "recorded_at": _iso(triage.signed_at),
+                    "recorded_by": _name(triage.signed_by),
+                }
+            )
         for row in triage.findings or []:
             if not isinstance(row, (list, tuple)) or len(row) < 3:
                 continue

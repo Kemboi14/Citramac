@@ -779,107 +779,21 @@ def sign_triage(triage_encounter, user, payload):
 
     require_current_licence(user)
     answers = payload.get("answers") or {}
-    from . import triage_v4, triage_v5
+    from . import triage_v5
 
-    if triage_v5.is_v5(answers) or triage_v4.is_v4(answers):
-        # New triages use the v5 rule set (triage_v5.py); a draft still shaped
-        # for v4 is signed by v4, and a v3-shaped answer set by the v3 rules below.
-        from .triage_sign_v4 import sign_triage_v4
-
-        rules = triage_v5 if triage_v5.is_v5(answers) else triage_v4
-        return sign_triage_v4(triage_encounter, user, payload, rules)
-    merged = {**triage_rules.DEFAULT_ANSWERS, **answers}
-    missing_keys = [key for key, _ in triage_rules.CORE_SCREENS if not merged.get(key)]
-    missing = [name for key, name in triage_rules.CORE_SCREENS if key in missing_keys]
-    final_priority = payload.get("final_priority") or ""
-    decision = payload.get("decision") or "CONFIRM"
-    override_reason = (payload.get("override_reason") or "").strip()
-    if missing or final_priority not in PRIORITY_ORDER:
+    if not triage_v5.is_v5(answers):
+        # Owner decision 2026-11-13: new triages are signed on v5 only. Triages
+        # already signed on v3 / v4 keep their record and rule set (they still
+        # open and print); nothing new is signed under them.
         raise ValidationError(
             {
-                "detail": "Complete the required safety screens and select a final priority "
-                "before signing.",
-                "missing": missing,
-                "missing_keys": missing_keys,
+                "detail": "New triages are signed on the current (v5) triage form. Reload the "
+                "triage to continue on it."
             }
         )
-    if decision == "OVERRIDE" and not override_reason:
-        raise ValidationError({"override_reason": "A reason is required to override."})
-    if triage_encounter.status not in (
-        TriageEncounter.STATUS_AWAITING,
-        TriageEncounter.STATUS_IN_TRIAGE,
-    ):
-        raise ValidationError({"detail": "This triage has already been signed."})
+    from .triage_sign_v4 import sign_triage_v4
 
-    result = triage_rules.evaluate(answers, concept_labels())
-    now = timezone.now()
-    assessment = save_triage_draft(triage_encounter, user, answers)
-    assessment.findings = result["findings"]
-    assessment.alerts = result["alerts"]
-    assessment.recommendation = result["recommendation"]
-    assessment.recommendation_reasons = result["reasons"]
-    assessment.final_priority = final_priority
-    assessment.decision = decision
-    assessment.override_reason = override_reason if decision == "OVERRIDE" else ""
-    assessment.rules_version = triage_rules.RULES_VERSION
-    assessment.tasks_snapshot = list(
-        triage_encounter.tasks.values("action_label", "owner", "status", "created_at")
-    )
-    for task in assessment.tasks_snapshot:
-        task["created_at"] = task["created_at"].isoformat()
-    assessment.signed_at = now
-    assessment.signed_by = user
-    assessment.status = "COMPLETED"
-    assessment.save()
-
-    patient = triage_encounter.patient
-    triage_encounter.priority = final_priority
-    concern = (answers.get("c_concern") or "").strip()
-    if concern:
-        triage_encounter.presenting_concern = concern
-    triage_encounter.triage_version += 1
-    triage_encounter.status = TriageEncounter.STATUS_COMPLETED
-    triage_encounter.last_triaged_at = now
-    triage_encounter.last_triaged_by = user
-    triage_encounter.next_recheck_at = triage_rules.recheck_due_after(final_priority, now)
-    triage_encounter.save()
-
-    encounter = triage_encounter.encounter
-    if encounter.status != "CLOSED":
-        encounter.status = "CLOSED"
-        encounter.closed_at = now
-        encounter.save(update_fields=["status", "closed_at", "updated_at"])
-
-    active_codes = set(
-        ClinicalAlert.objects.filter(patient=patient, status="ACTIVE").values_list(
-            "alert_code", flat=True
-        )
-    )
-    for alert in result["alerts"]:
-        if alert["code"] not in active_codes:
-            ClinicalAlert.objects.create(
-                organization_id=patient.organization_id,
-                patient=patient,
-                alert_code=alert["code"],
-                label=alert["label"],
-                source_assessment=assessment,
-                raised_at=now,
-                raised_by=user,
-            )
-
-    _record_vitals(
-        encounter,
-        user,
-        bp=answers.get("h_bp"),
-        pulse=answers.get("h_pulse"),
-        rr=answers.get("h_rr"),
-        temp=answers.get("h_temp"),
-        spo2=answers.get("h_spo2"),
-        glucose=answers.get("h_glucose"),
-    )
-
-    apply_triage_allergies(patient, answers, user)
-    return assessment
+    return sign_triage_v4(triage_encounter, user, payload, triage_v5)
 
 
 def apply_triage_allergies(patient, answers, user):

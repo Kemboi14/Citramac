@@ -298,7 +298,13 @@ class InvoluntaryTests(LegalStatusTestCase):
             )
         doc = self.start("INVOLUNTARY")
         evidence = self.ws()["evidence"]["danger_to_self"]
-        self.assertTrue(any(e["label"] == "Suicide risk" for e in evidence))
+        # A v5 triage: the positive domain from the shared finding store, with its
+        # source; a domain screened negative is not offered as evidence.
+        self.assertEqual(
+            [(e["label"], e["source"]) for e in evidence],
+            [("Suicide / self-harm", "CLIENT_REPORT")],
+        )
+        self.assertEqual(self.ws()["evidence"]["danger_to_others"], [])
         draft = [d for d in self.ws()["documents"] if d["id"] == doc][0]
         self.assertNotIn("assertions", draft["content"])  # never auto-ticked
         person = self.nok()

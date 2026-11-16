@@ -413,7 +413,9 @@ class TriageCarryForwardMappingTests(IntakeTestCase):
         self.assertNotIn("safeguarding", rows)
 
     def test_medical_concern_carries_forward(self):
-        self.sign_triage(h_concern="yes", h_flags=["chest_pain"])
+        self.sign_triage(
+            h_concern="yes", h_flags=["chest_pain"], h_next="managed_here", h_referred_in="no"
+        )
         self.assertEqual(self.rows()["medical"], ["Concern identified"])
 
 

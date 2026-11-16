@@ -18,6 +18,7 @@ from apps.triage.models import VitalSigns
 
 from . import facility_time, triage_queue, triage_rules
 from . import triage_v4 as v4
+from . import triage_v5 as v5
 from .models import (
     CareTask,
     ClinicalAlert,
@@ -26,6 +27,8 @@ from .models import (
     TriageAssessment,
     TriageEncounter,
 )
+from .test_triage_v5 import BASE as V5_BASE
+from .test_triage_v5 import REMOTE as V5_REMOTE
 from .tests import CORE_NO, CarePathwayApiTestCase
 
 BASE = {
@@ -53,6 +56,21 @@ SAFETY = {
     "safety_obs": "ARMS_LENGTH",
     "safety_location": "QUIET_ROOM",
     "safety_observer": "L. Wambui",
+}
+# v5 equivalents for the signing tests (new triages are signed on v5 only).
+SUICIDAL = {"d_suicidal": "yes", "d_act_now": "no"}  # ORANGE
+V5_VITALS = {
+    **FULL_VITALS,
+    "v_measured_at": (facility_time.local_now() - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M"),
+    "v_source": "here",
+}
+V5_RED = {
+    **V5_BASE,
+    **SAFETY,
+    "h_concern": "yes",
+    "h_flags": ["recent_seizure"],
+    "h_next": "managed_here",
+    "h_referred_in": "no",
 }
 
 
@@ -179,7 +197,11 @@ class RulesetTests(SimpleTestCase):
         self.assertEqual(triage_rules.evaluate(CORE_NO)["recommendation"], "GREEN")
 
 
-class TriageV4ApiTests(CarePathwayApiTestCase):
+class TriageSigningApiTests(CarePathwayApiTestCase):
+    """The signing behaviour v4 introduced and v5 keeps (triage_sign_v4.py), on v5
+    answers: new triages are signed on v5 only (2026-11-13). A record already
+    signed on v3 or v4 is shown on its own form and never re-evaluated."""
+
     def setUp(self):
         super().setUp()
         self.make_clinical()
@@ -199,7 +221,7 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             self.psych.roles.add(role)
         self.psych_auth = {"HTTP_AUTHORIZATION": f"Bearer {issue_tokens(self.psych)[0]}"}
 
-    def sign_v4(self, answers, priority=None, auth=None, te_id=None, **extra):
+    def sign_v5(self, answers, priority=None, auth=None, te_id=None, **extra):
         body = {"answers": answers, "task_assignees": self.assign_all(), **extra}
         if priority:
             body["final_priority"] = priority
@@ -210,23 +232,31 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             **(auth or self.auth),
         )
 
-    def test_new_triage_opens_on_v5_and_a_v4_draft_still_signs_on_v4(self):
-        # Since 2026-10-28 new triages use the v5 rule set (test_triage_v5.py);
-        # an answer set still marked v4 is signed by the v4 rules (this file).
+    def test_new_triage_opens_on_v5(self):
         data = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
         self.assertEqual(data["schema"], "v5")
-        self.assertEqual(data["evaluation"]["rules_version"], "2026-10-29.1")
+        self.assertEqual(data["evaluation"]["rules_version"], v5.RULES_VERSION)
         config = self.client.get(reverse("care-triage-v4-config"), **self.auth).data
         self.assertEqual(len(config["flags"]), 24)
 
     def test_sign_stores_rules_version_vitals_and_stamped_summary(self):
-        answers = {**BASE, **FULL_VITALS, "v_rr": "22", "v_hr": "105", **SAFETY}
-        response = self.sign_v4(answers)
+        # An urgent EWS is also an acute medical concern (rules 2026-10-28.2), which
+        # asks for the next step and whether the client came with a referral.
+        answers = {
+            **V5_BASE,
+            **V5_VITALS,
+            "v_rr": "22",
+            "v_hr": "105",
+            **SAFETY,
+            "h_next": "managed_here",
+            "h_referred_in": "no",
+        }
+        response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["rules_version"], "v4-demo")
+        self.assertEqual(response.data["rules_version"], v5.RULES_VERSION)
         self.assertEqual(response.data["final_priority"], "ORANGE")
         detail = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
-        self.assertEqual(detail["schema"], "v4")
+        self.assertEqual(detail["schema"], "v5")
         # AT-20: every row has finding, status, source, time and recorder.
         for row in response.data["findings"]:
             self.assertEqual(len(row), 5)
@@ -248,20 +278,20 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             )
 
     def test_orange_in_person_requires_waiting_room_safety(self):
-        response = self.sign_v4({**BASE, "screen_self": "yes", "suic": "active"})
+        response = self.sign_v5({**V5_BASE, **SUICIDAL})
         self.assertEqual(response.status_code, 400)
         self.assertIn("safety_obs", response.data["missing_keys"])
 
     def test_hard_range_vital_blocks_signing(self):
-        response = self.sign_v4({**BASE, "v_hr": "400"})
+        response = self.sign_v5({**V5_BASE, **V5_VITALS, "v_hr": "400"})
         self.assertEqual(response.status_code, 400)
         self.assertIn("v_hr", response.data["missing_keys"])
 
     def test_override_is_blocked_without_reason_and_audited(self):
         """AT-05."""
-        answers = {**BASE, "screen_self": "yes", "suic": "passive"}  # YELLOW
-        self.assertEqual(self.sign_v4(answers, priority="ORANGE").status_code, 400)
-        response = self.sign_v4(
+        answers = {**V5_BASE, "d_means": "yes"}  # YELLOW
+        self.assertEqual(self.sign_v5(answers, priority="ORANGE").status_code, 400)
+        response = self.sign_v5(
             {**answers, **SAFETY},
             priority="ORANGE",
             override_reason="Collateral history suggests rapid deterioration.",
@@ -278,9 +308,8 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             self.assertEqual(entry.field_diff["final_priority"], "ORANGE")
 
     def test_downgrade_by_non_psychiatrist_requests_cosign(self):
-        answers = {**BASE, "screen_self": "yes", "suic": "active"}  # ORANGE
-        response = self.sign_v4(
-            answers,
+        response = self.sign_v5(
+            {**V5_BASE, **SUICIDAL, **SAFETY},  # ORANGE
             priority="YELLOW",
             override_reason="Long-standing thoughts, well supported at home today.",
         )
@@ -290,9 +319,8 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             self.assertIn("ORANGE → YELLOW", req.what)
 
     def test_downgrade_by_psychiatrist_self_signs(self):
-        answers = {**BASE, "screen_self": "yes", "suic": "active"}
-        response = self.sign_v4(
-            answers,
+        response = self.sign_v5(
+            {**V5_BASE, **SUICIDAL, **SAFETY},
             priority="YELLOW",
             auth=self.psych_auth,
             override_reason="Long-standing thoughts, well supported at home today.",
@@ -306,20 +334,18 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         """AT-08: client not present — no vitals, same alerts, timed call-back task."""
         callback = (facility_time.local_now() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
         answers = {
-            **BASE,
-            "b_present": "no",
-            "b_informant": "family",
-            "b_third_party": "Sister — Jane",
-            "r_suicide": "talked",
+            **V5_REMOTE,
+            "k_bring": "no",
+            "k_flags": ["suicide_concern"],
             "r_disposition": "callback",
             "r_callback_at": callback,
             "r_callback_owner": "triage_nurse",
             "v_hr": "80",
         }
-        response = self.sign_v4(answers)
+        response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
         self.assertNotIn("v_hr", response.data["answers"])
-        self.assertIn("Third-party report", response.data["findings"][1][2])
+        self.assertTrue(any("Third-party" in row[2] for row in response.data["findings"]))
         with platform_admin_context():
             te = TriageEncounter.objects.get(pk=self.te_id)
             self.assertFalse(VitalSigns.objects.filter(encounter=te.encounter).exists())
@@ -336,16 +362,18 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
     def test_gbv_and_duty_to_protect_tasks(self):
         incident = (facility_time.local_now() - timedelta(hours=10)).strftime("%Y-%m-%dT%H:%M")
         answers = {
-            **BASE,
+            **V5_BASE,
             **SAFETY,
-            "screen_others": "yes",
-            "screen_safeguarding": "yes",
-            "flags": ["gbv_72h", "homicidal_named"],
-            "gbv_incident_at": incident,
+            "e_thoughts": "yes",
+            "e_named": "yes",
             "duty_victim": "Neighbour",
             "duty_informed": "On-call psychiatrist",
+            "i_safe": "no",
+            "i_flags": ["sexual_violence"],
+            "i_sv_recent": "yes",
+            "gbv_incident_at": incident,
         }
-        response = self.sign_v4(answers)
+        response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
         with platform_admin_context():
             pep = CareTask.objects.get(focus_type="PEP_EC_DECISION")
@@ -355,26 +383,36 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
             self.assertTrue(CareTask.objects.filter(focus_type="DUTY_TO_PROTECT").exists())
             self.assertTrue(CosignRequest.objects.filter(kind="DUTY_TO_PROTECT").exists())
 
-    def test_v3_signed_record_is_never_re_evaluated(self):
-        response = self.sign(self.te_id, {**CORE_NO, "d_suicidal": "yes"}, priority="ORANGE")
-        self.assertEqual(response.status_code, 201)
+    def _signed_as(self, answers, rules_version, recommendation):
+        """A record signed before v5-only signing, as stored then."""
+        self.assertEqual(self.sign_v5({**V5_BASE}).status_code, 201)
         with platform_admin_context():
-            a = TriageAssessment.objects.get(triage_encounter_id=self.te_id)
-            self.assertEqual(a.rules_version, "2026-10-07.1")
+            TriageAssessment.objects.filter(triage_encounter_id=self.te_id).update(
+                answers=answers, rules_version=rules_version, recommendation=recommendation
+            )
+
+    def test_v3_signed_record_is_never_re_evaluated(self):
+        self._signed_as({**CORE_NO, "d_suicidal": "yes"}, "2026-10-07.1", "ORANGE")
         data = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
         self.assertEqual(data["schema"], "v3")
         self.assertEqual(data["signed"]["rules_version"], "2026-10-07.1")
+        self.assertEqual(data["signed"]["recommendation"], "ORANGE")
+
+    def test_v4_signed_record_opens_on_v4(self):
+        self._signed_as({**BASE, "screen_self": "yes", "suic": "active"}, "v4-demo", "ORANGE")
+        data = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
+        self.assertEqual(data["schema"], "v4")
+        self.assertEqual(data["signed"]["rules_version"], "v4-demo")
         self.assertEqual(data["signed"]["recommendation"], "ORANGE")
 
     def test_live_queue_lanes_and_order(self):
         second = self.register(full_name="Brian Otieno Mwangi")
         third = self.register(full_name="Carol Akinyi Omondi")
         self.assertEqual(
-            self.sign_v4({**BASE}, te_id=second.data["triage_encounter_id"]).status_code, 201
+            self.sign_v5({**V5_BASE}, te_id=second.data["triage_encounter_id"]).status_code, 201
         )
-        red = {**BASE, **SAFETY, "screen_medical": "yes", "flags": ["seizure"]}
         self.assertEqual(
-            self.sign_v4(red, te_id=third.data["triage_encounter_id"]).status_code, 201
+            self.sign_v5(V5_RED, te_id=third.data["triage_encounter_id"]).status_code, 201
         )
         data = self.client.get(reverse("care-live-queue"), **self.auth).data
         lanes = data["lanes"]
@@ -391,8 +429,7 @@ class TriageV4ApiTests(CarePathwayApiTestCase):
         self.assertTrue(any(t.startswith("Complete vital signs — EWS incomplete") for t in texts))
 
     def test_retriage_overdue_flagged_on_worklist(self):
-        red = {**BASE, **SAFETY, "screen_medical": "yes", "flags": ["seizure"]}
-        self.assertEqual(self.sign_v4(red).status_code, 201)
+        self.assertEqual(self.sign_v5(V5_RED).status_code, 201)
         with platform_admin_context():
             TriageEncounter.objects.filter(pk=self.te_id).update(
                 next_recheck_at=timezone.now() - timedelta(minutes=1)
