@@ -53,32 +53,31 @@ export function psychiatryAssessmentPath(patientId: string) {
   return `/clinical/psychiatry/assessments/${patientId}`;
 }
 
-/** The Individual Psychotherapy session workspace, inside the clinical shell. */
-export function psychotherapySessionPath(patientId: string, episodeId: string) {
-  return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}`;
+/** Individual or Family Psychotherapy — the main-menu list a session belongs to. */
+export type PsychotherapyKind = "individual" | "family";
+
+/** The psychotherapy menu list (Clients or Sessions tab). */
+export function psychotherapyListPath(kind: PsychotherapyKind, tab?: "sessions") {
+  return `/clinical/psychotherapy/${kind}${tab ? `?tab=${tab}` : ""}`;
 }
 
-/** The Family Psychotherapy session workspace, inside the clinical shell. */
-export function psychotherapyFamilySessionPath(patientId: string, episodeId: string) {
-  return `/clinical/psychotherapy/family/session/${patientId}/${episodeId}`;
+/** The session page, inside the clinical shell. Without an episode it sets up or
+ * picks the client's therapy episode first; with one it prepares the session. */
+export function psychotherapySessionPath(
+  kind: PsychotherapyKind,
+  patientId: string,
+  episodeId?: string,
+) {
+  const base = `/clinical/psychotherapy/${kind}/session/${patientId}`;
+  return episodeId ? `${base}/${episodeId}` : base;
 }
 
-/** Entry page that resolves the client's open therapy episode before opening a session. */
-export function psychotherapyEntryPath(patientId: string) {
-  return `/clinical/psychotherapy/individual/session/${patientId}`;
-}
-
-/** Entry page for a family session. */
-export function psychotherapyFamilyEntryPath(patientId: string) {
-  return `/clinical/psychotherapy/family/session/${patientId}`;
-}
-
-/** A saved psychotherapy note (draft or signed) opened in the same workspace. */
-export function psychotherapyNotePath(patientId: string, episodeId: string, noteId: string) {
-  return `/clinical/psychotherapy/individual/session/${patientId}/${episodeId}/note/${noteId}`;
-}
-
-/** A saved family psychotherapy note (draft or signed) opened in the same workspace. */
-export function psychotherapyFamilyNotePath(patientId: string, episodeId: string, noteId: string) {
-  return `/clinical/psychotherapy/family/session/${patientId}/${episodeId}/note/${noteId}`;
+/** A saved psychotherapy note (draft or signed) opened in the session page. */
+export function psychotherapyNotePath(
+  kind: PsychotherapyKind,
+  patientId: string,
+  episodeId: string,
+  noteId: string,
+) {
+  return `${psychotherapySessionPath(kind, patientId, episodeId || "history")}/note/${noteId}`;
 }

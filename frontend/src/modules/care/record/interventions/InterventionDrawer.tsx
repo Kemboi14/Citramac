@@ -12,7 +12,7 @@ import { ModuleHistory } from "./ModuleHistory";
 import { ModuleIcon, ModuleMeta } from "./ModuleList";
 import { ModuleInfo, ModuleNote } from "./ModuleInfo";
 import { ModuleTools } from "./ModuleTools";
-import { PsychotherapyRecord } from "./PsychotherapyRecord";
+import { TherapyModule } from "../modules/TherapyModule";
 
 /** v4 `appendModuleRecord`: the delivery form shows for separately priced
  * modules, except where the module's own workflow records the delivery
@@ -70,9 +70,10 @@ export function InterventionDrawer({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [tab, setTab] = useState<Tab>("Record");
   const showForm = Boolean(module.billing_service) && !OWN_DELIVERY.has(module.code);
-  // v4: the psychotherapy module is the guided session itself — no tabs, and
-  // the workflow fills the screen under the module header.
-  const guided = module.code === "psychotherapy";
+  // Psychotherapy is a launcher: therapy episodes, a start button per session
+  // type and the session history. Sessions are written on their own routed
+  // page (PsychotherapySessionPage), never inside this panel.
+  const launcher = module.code === "psychotherapy";
 
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -82,8 +83,7 @@ export function InterventionDrawer({
     tabRefs.current.at(next)?.focus();
   };
 
-  // Back link + module header. The guided session draws its own single
-  // header (breadcrumb back to Interventions), so it isn't framed twice.
+  // Back link + module header.
   const moduleHeader = (
     <>
       <button
@@ -123,13 +123,15 @@ export function InterventionDrawer({
       onKeyDown={(event) => {
         if (event.key === "Escape" && event.target === event.currentTarget) onClose();
       }}
-      style={guided ? { height: `max(560px, calc(100dvh - ${bannerHeight + 28}px))` } : undefined}
       className="flex flex-col overflow-hidden rounded-lg border border-surface-border bg-surface-card shadow-sm outline-none"
     >
-      {guided ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <PsychotherapyRecord patientId={patientId} onClose={onClose} header={moduleHeader} />
-        </div>
+      {launcher ? (
+        <>
+          {moduleHeader}
+          <div className={`py-4 ${GUTTER}`}>
+            <TherapyModule patientId={patientId} />
+          </div>
+        </>
       ) : (
         <>
           {moduleHeader}

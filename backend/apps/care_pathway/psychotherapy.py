@@ -2370,11 +2370,16 @@ def patient_notes(patient, user):
     return [summary(note, user) for note in notes]
 
 
-def family_sessions(user):
+def session_list(user, kind="family"):
+    """Psychotherapy notes of one session type the user may read, newest first.
+
+    ``kind`` is "individual" or "family"; group sessions live in the group
+    programme. The list view is audit-logged with every note id shown."""
+    session_type = "INDIVIDUAL" if kind == "individual" else "FAMILY"
     rows = (
         PsychotherapyNote.objects.filter(
             organization_id=user.organization_id,
-            session__session_type="FAMILY",
+            session__session_type=session_type,
         )
         .select_related("session", "author", "patient")
         .order_by("-session__session_date", "-pk")
@@ -2397,8 +2402,8 @@ def family_sessions(user):
         user.organization_id,
         "VIEW",
         "care_pathway.psychotherapynote",
-        "family-session-list",
-        {"context": "family_psychotherapy_sessions", "notes": viewed},
+        f"{session_type.lower()}-session-list",
+        {"context": f"{session_type.lower()}_psychotherapy_sessions", "notes": viewed},
     )
     return results
 

@@ -68,8 +68,8 @@ function ClientFollowUps({ patientId, clientName }: Target) {
  * client: the record selects it in the shared patient context, and the
  * admissions page takes `?patient=`. Modules with no dedicated module yet
  * (medical review, psychosocial support, nutrition & fitness) record through
- * the delivery form only. Psychotherapy is the guided session itself
- * (PsychotherapyRecord), drawn by the drawer instead of a tool here. */
+ * the delivery form only. Psychotherapy is a launcher (TherapyModule) drawn
+ * by the drawer instead of a tool here; its sessions open on their own page. */
 const MODULES = new Map<string, ModuleDef>(
   Object.entries({
     emergency_care: {

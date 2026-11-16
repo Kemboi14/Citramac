@@ -66,10 +66,15 @@ class PsyClientListView(APIView):
 
 
 class PsyFamilySessionsView(APIView):
-    """GET care/psychotherapy/sessions/ — family sessions the user may read."""
+    """GET care/psychotherapy/sessions/ — sessions the user may read.
+
+    ``?kind=individual`` lists individual sessions; the default is family."""
 
     def get(self, request):
-        return Response({"results": psy.family_sessions(request.user)})
+        kind = (request.query_params.get("kind") or "family").strip().lower()
+        if kind not in ("individual", "family"):
+            kind = "family"
+        return Response({"results": psy.session_list(request.user, kind)})
 
 
 class ClientPsyNotesView(APIView):

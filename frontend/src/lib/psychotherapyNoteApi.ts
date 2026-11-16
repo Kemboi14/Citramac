@@ -351,7 +351,8 @@ export interface PsyClientRow {
   last_session?: string | null;
 }
 
-export interface PsyFamilySession extends PsyNoteSummary {
+/** A row in the Individual / Family Psychotherapy "Sessions" list. */
+export interface PsySessionRow extends PsyNoteSummary {
   patient_id: string;
   patient_name: string;
   patient_number: string;
@@ -362,15 +363,17 @@ const json = (method: "POST" | "PATCH", t: string, path: string, body?: unknown)
 
 export const getPsyConfig = (t: string) =>
   apiRequest<PsyConfig>("/care/psychotherapy/config/", { accessToken: t });
-export const listPsyClients = (t: string, kind: "individual" | "family" = "individual") => {
+/** Which psychotherapy menu a list or session belongs to. */
+export type PsyKind = "individual" | "family";
+export const listPsyClients = (t: string, kind: PsyKind = "individual") => {
   const query = kind === "family" ? "?kind=family" : "";
   return apiRequest<{ results: PsyClientRow[]; count: number }>(
     `/care/psychotherapy/clients/${query}`,
     { accessToken: t },
   );
 };
-export const listPsyFamilySessions = (t: string) =>
-  apiRequest<{ results: PsyFamilySession[] }>("/care/psychotherapy/sessions/", {
+export const listPsySessions = (t: string, kind: PsyKind) =>
+  apiRequest<{ results: PsySessionRow[] }>(`/care/psychotherapy/sessions/?kind=${kind}`, {
     accessToken: t,
   });
 export const listPsyNotes = (t: string, patientId: string) =>

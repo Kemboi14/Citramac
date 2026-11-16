@@ -3,15 +3,16 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
   listPsyClients,
-  listPsyFamilySessions,
+  listPsySessions,
   type PsyClientRow,
-  type PsyFamilySession,
+  type PsySessionRow,
 } from "../../lib/psychotherapyNoteApi";
 import {
   clientRecordPath,
-  psychotherapyFamilyNotePath,
-  psychotherapyFamilySessionPath,
+  psychotherapyListPath,
+  psychotherapyNotePath,
   psychotherapySessionPath,
+  type PsychotherapyKind,
 } from "./shared/recordRoutes";
 import { formatDate, formatDateTime } from "./shared/format";
 import { BTN, BTN_GHOST, BTN_SM, TABLE, TD, TH } from "./shared/styles";
@@ -24,21 +25,16 @@ import { errorText } from "./triage/helpers";
 // dates are psychotherapy content, so the server sends them only for clients
 // the user has full MHP access to; the list view is audit-logged there.
 
-export function PsychotherapyClientsPage({
-  kind = "individual",
-}: {
-  kind?: "individual" | "family";
-}) {
+export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: PsychotherapyKind }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<PsyClientRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<PsyFamilySession[] | null>(null);
+  const [sessions, setSessions] = useState<PsySessionRow[] | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const activeTab =
-    kind === "family" && searchParams.get("tab") === "sessions" ? "sessions" : "clients";
+  const activeTab = searchParams.get("tab") === "sessions" ? "sessions" : "clients";
 
   const title = kind === "family" ? "Family Psychotherapy" : "Individual Psychotherapy";
   const subtitle =
@@ -57,18 +53,18 @@ export function PsychotherapyClientsPage({
   useEffect(() => {
     if (!accessToken || activeTab !== "sessions") return;
     let active = true;
-    listPsyFamilySessions(accessToken)
+    listPsySessions(accessToken, kind)
       .then((res) => {
         if (active) setSessions(res.results);
       })
       .catch((e) => {
         if (active)
-          setSessionsError(errorText(e, "Couldn't load the family psychotherapy sessions."));
+          setSessionsError(errorText(e, `Couldn't load the ${kind} psychotherapy sessions.`));
       });
     return () => {
       active = false;
     };
-  }, [accessToken, activeTab]);
+  }, [accessToken, activeTab, kind]);
 
   const selectTab = (tab: "clients" | "sessions") => {
     if (tab === "sessions") {
@@ -83,46 +79,45 @@ export function PsychotherapyClientsPage({
 
   const openRecord = (row: PsyClientRow) =>
     navigate(clientRecordPath(row.patient_id, "interventions"));
-  const openSession = (session: PsyFamilySession) =>
-    navigate(
-      psychotherapyFamilyNotePath(
-        session.patient_id,
-        session.therapy_episode || "history",
-        session.id,
-      ),
-      { state: { from: `${location.pathname}?tab=sessions` } },
-    );
+  const openSession = (session: PsySessionRow) =>
+    navigate(psychotherapyNotePath(kind, session.patient_id, session.therapy_episode, session.id), {
+      state: { from: psychotherapyListPath(kind, "sessions") },
+    });
+  // With an agreed episode the session page prepares the session; without one
+  // it sets up the episode first. Either way the session is written there.
+  const startSession = (row: PsyClientRow) =>
+    navigate(psychotherapySessionPath(kind, row.patient_id, row.episode_id ?? undefined), {
+      state: { from: location.pathname },
+    });
 
   return (
     <div className="flex animate-fade-in flex-col gap-5">
       <PageHeader title={title} subtitle={subtitle} />
-      {kind === "family" && (
-        <div role="tablist" aria-label="Family psychotherapy" className="flex gap-2">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "clients"}
-            className={activeTab === "clients" ? BTN : BTN_GHOST}
-            onClick={() => selectTab("clients")}
-          >
-            Clients
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "sessions"}
-            className={activeTab === "sessions" ? BTN : BTN_GHOST}
-            onClick={() => selectTab("sessions")}
-          >
-            Sessions
-          </button>
-        </div>
-      )}
+      <div role="tablist" aria-label={title} className="flex gap-2">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "clients"}
+          className={activeTab === "clients" ? BTN : BTN_GHOST}
+          onClick={() => selectTab("clients")}
+        >
+          Clients
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "sessions"}
+          className={activeTab === "sessions" ? BTN : BTN_GHOST}
+          onClick={() => selectTab("sessions")}
+        >
+          Sessions
+        </button>
+      </div>
       {activeTab === "sessions" ? (
         <>
           <ErrorNote>{sessionsError}</ErrorNote>
           <Card
-            title={`Family psychotherapy sessions (${sessions?.length ?? 0})`}
+            title={`${kind === "family" ? "Family" : "Individual"} psychotherapy sessions (${sessions?.length ?? 0})`}
             bodyClassName="p-0"
           >
             <div className="overflow-x-auto">
@@ -147,7 +142,7 @@ export function PsychotherapyClientsPage({
                   {sessions && sessions.length === 0 && (
                     <tr>
                       <td colSpan={5} className={`${TD} py-6 text-center text-ink-500`}>
-                        No family psychotherapy sessions are available to view.
+                        No {kind} psychotherapy sessions are available to view.
                       </td>
                     </tr>
                   )}
@@ -163,9 +158,7 @@ export function PsychotherapyClientsPage({
                       <td className={`${TD} whitespace-nowrap`}>
                         {formatDateTime(session.session_date)}
                       </td>
-                      <td className={TD}>
-                        {session.status === "SIGNED" ? "Completed" : "In progress"}
-                      </td>
+                      <td className={TD}>{session.status === "SIGNED" ? "Signed" : "Draft"}</td>
                       <td className={TD}>{session.author}</td>
                       <td className={TD}>
                         <button
@@ -250,38 +243,13 @@ export function PsychotherapyClientsPage({
                           >
                             Open client record
                           </button>
-                          {row.episode_id ? (
-                            <button
-                              type="button"
-                              className={`${BTN} ${BTN_SM}`}
-                              onClick={() =>
-                                navigate(
-                                  kind === "family"
-                                    ? row.episode_id
-                                      ? psychotherapyFamilySessionPath(
-                                          row.patient_id,
-                                          row.episode_id as string,
-                                        )
-                                      : `/clinical/psychotherapy/family/session/${row.patient_id}`
-                                    : psychotherapySessionPath(
-                                        row.patient_id,
-                                        row.episode_id as string,
-                                      ),
-                                )
-                              }
-                            >
-                              Start session
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={`${BTN} ${BTN_SM}`}
-                              onClick={() => openRecord(row)}
-                              title="No therapy episode with agreed confidentiality limits yet — set it up on the client record (Interventions › Therapy)."
-                            >
-                              Start session
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            className={`${BTN} ${BTN_SM}`}
+                            onClick={() => startSession(row)}
+                          >
+                            {row.episode_id ? "Start session" : "Set up therapy"}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -292,8 +260,8 @@ export function PsychotherapyClientsPage({
           </Card>
           {rows?.some((r) => !r.episode_id) && (
             <p className="text-[12px] text-ink-500">
-              “Start session” opens the client record for clients without a therapy episode whose
-              confidentiality limits have been agreed — start the episode there first.
+              “Set up therapy” starts the client’s therapy episode and agrees the limits of
+              confidentiality before the first session.
             </p>
           )}
         </>

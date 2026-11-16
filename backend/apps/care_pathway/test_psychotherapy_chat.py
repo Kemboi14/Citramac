@@ -692,6 +692,17 @@ class FamilySessionListTests(PsyNoteTestCase):
         )
         self.assertTrue(all(row["patient_id"] == self.pid for row in response.data["results"]))
 
+    def test_individual_kind_lists_only_individual_notes(self):
+        family = self.start().data["id"]
+        self.patch(family, {"session_type": "FAMILY"})
+        self.ready(family, safety_answer="NO", **self.answers(q1="Family session."))
+        self.act("care-psy-note-sign", family)
+        individual = self.start().data["id"]
+        url = reverse("care-psy-family-sessions") + "?kind=individual"
+        response = self.client.get(url, **self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["id"] for row in response.data["results"]], [individual])
+
     def test_list_does_not_disclose_a_non_care_team_clinicians_family_note(self):
         note = self.start().data["id"]
         self.patch(note, {"session_type": "FAMILY"})

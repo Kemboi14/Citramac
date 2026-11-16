@@ -2,33 +2,30 @@ import { ArrowLeft, FileText } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { PsychotherapyRecord } from "./record/interventions/PsychotherapyRecord";
 import { PsychotherapyWorkspace } from "./record/modules/psychotherapy/Workspace";
-import { clientRecordPath } from "./shared/recordRoutes";
+import {
+  clientRecordPath,
+  psychotherapyListPath,
+  type PsychotherapyKind,
+} from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { useClientBanner } from "./shared/useClientBanner";
 
-// Individual Psychotherapy → Start session. A routed page inside the clinical
-// shell (like the Psychiatry assessment workspace) instead of an overlay that
-// covered the app: the client safety banner stays visible and the guided
-// session fills the page. The draft itself still lives on the server (X-09),
+// The one place a psychotherapy session is written: a routed page inside the
+// clinical shell, so the client safety banner stays visible. Opened from the
+// Individual / Family Psychotherapy lists and from the client record's
+// Interventions › Psychotherapy launcher. The draft lives on the server (X-09),
 // so leaving and returning resumes the same session.
 
-const INDIVIDUAL_LIST_PATH = "/clinical/psychotherapy/individual";
-const FAMILY_LIST_PATH = "/clinical/psychotherapy/family";
-
-export function PsychotherapySessionPage({
-  kind = "individual",
-}: {
-  kind?: "individual" | "family";
-}) {
-  const LIST_PATH = kind === "family" ? FAMILY_LIST_PATH : INDIVIDUAL_LIST_PATH;
+export function PsychotherapySessionPage({ kind = "individual" }: { kind?: PsychotherapyKind }) {
   const backLabel = kind === "family" ? "Family Psychotherapy" : "Individual Psychotherapy";
-  const { patientId = "", episodeId = "", noteId } = useParams();
+  const { patientId = "", episodeId, noteId } = useParams();
   const { state } = useLocation();
   const navigate = useNavigate();
   const { banner, error } = useClientBanner(patientId || undefined);
-  // Opened from the client record's Therapy tab → return there, not the list.
-  const backTo = (state as { from?: string } | null)?.from ?? LIST_PATH;
+  // Opened from the client record → return there, not the list.
+  const backTo = (state as { from?: string } | null)?.from ?? psychotherapyListPath(kind);
+  const close = () => navigate(backTo);
 
   return (
     <div className="clinical-readable flex h-full min-h-0 flex-col gap-3 p-3 sm:p-5">
@@ -48,31 +45,24 @@ export function PsychotherapySessionPage({
       </div>
       <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card shadow-sm">
         {noteId ? (
+          // A saved note keeps its own session type.
           <PsychotherapyWorkspace
             inline
             patientId={patientId}
             noteId={noteId}
-            sessionType={kind === "family" ? "FAMILY" : undefined}
             backLabel={backLabel}
-            onClose={() => navigate(backTo)}
-          />
-        ) : episodeId ? (
-          <PsychotherapyRecord
-            patientId={patientId}
-            initialEpisodeId={episodeId}
-            backLabel={backLabel}
-            initialSessionType={kind === "family" ? "FAMILY" : "INDIVIDUAL"}
-            onClose={() => navigate(backTo)}
+            onClose={close}
           />
         ) : (
-          // Opened from Interventions without an episode in the URL: resolve
-          // the client's open therapy episode, or set one up, on this page —
-          // never inside the Interventions list.
           <PsychotherapyRecord
+            // A new episode in the URL (set up on this page) starts afresh.
+            key={episodeId ?? "none"}
             patientId={patientId}
-            onClose={() => navigate(backTo)}
+            kind={kind}
+            initialEpisodeId={episodeId}
+            returnTo={backTo}
             backLabel={backLabel}
-            initialSessionType={kind === "family" ? "FAMILY" : "INDIVIDUAL"}
+            onClose={close}
           />
         )}
       </div>

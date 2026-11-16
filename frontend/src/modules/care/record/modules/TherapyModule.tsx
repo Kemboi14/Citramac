@@ -12,6 +12,7 @@ import {
   clientRecordPath,
   psychotherapyNotePath,
   psychotherapySessionPath,
+  type PsychotherapyKind,
 } from "../../shared/recordRoutes";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT, TABLE, TD, TH } from "../../shared/styles";
 import { Callout, ErrorNote, Tag } from "../../shared/ui";
@@ -36,8 +37,22 @@ const START = {
 
 /** Therapy contract and numbered session notes. Measurement-based care scores go
  * to the shared outcome store through the instruments form; process notes are
- * offered only to roles that may see restricted content. */
-export function TherapyModule({ patientId }: { patientId: string }) {
+ * offered only to roles that may see restricted content.
+ *
+ * Every session is written on the routed session page (client banner in view):
+ * `kinds` are the session types offered here — both from Interventions, one from
+ * the Individual or Family Psychotherapy menu — and `returnTo` is where that
+ * page's Back goes. */
+export function TherapyModule({
+  patientId,
+  kinds = ["individual", "family"],
+  returnTo,
+}: {
+  patientId: string;
+  kinds?: PsychotherapyKind[];
+  returnTo?: string;
+}) {
+  const from = returnTo ?? clientRecordPath(patientId, "interventions");
   const vs = useValueSets();
   const { data, error, act } = useModule<TherapyState>(patientId, getTherapy);
   const [start, setStart] = useState(START);
@@ -49,7 +64,15 @@ export function TherapyModule({ patientId }: { patientId: string }) {
       <ErrorNote>{error}</ErrorNote>
       {data &&
         open.map((e) => (
-          <TherapyEpisode key={e.id} patientId={patientId} episode={e} state={data} act={act} />
+          <TherapyEpisode
+            key={e.id}
+            patientId={patientId}
+            episode={e}
+            state={data}
+            act={act}
+            kinds={kinds}
+            from={from}
+          />
         ))}
       <div className="rounded-lg border border-surface-border p-3">
         <div className={FIELD_LABEL}>Start a therapy episode</div>
@@ -160,11 +183,15 @@ function TherapyEpisode({
   episode: e,
   state,
   act,
+  kinds,
+  from,
 }: {
   patientId: string;
   episode: TherapyEpisodeRow;
   state: TherapyState;
   act: (work: (token: string) => Promise<unknown>) => Promise<boolean>;
+  kinds: PsychotherapyKind[];
+  from: string;
 }) {
   const vs = useValueSets();
   const navigate = useNavigate();
@@ -204,20 +231,23 @@ function TherapyEpisode({
           </button>
         </div>
       ) : (
-        <div className="mt-3 flex flex-col gap-2">
-          <div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {kinds.map((kind, i) => (
             <button
+              key={kind}
               type="button"
-              className={`${BTN} ${BTN_SM}`}
-              onClick={() => navigate(psychotherapySessionPath(patientId, e.id))}
+              className={`${i === 0 ? BTN : BTN_GHOST} ${BTN_SM}`}
+              onClick={() =>
+                navigate(psychotherapySessionPath(kind, patientId, e.id), { state: { from } })
+              }
             >
-              Start new session{" "}
-              <span className="font-normal">
-                · session {n}
-                {e.planned_sessions ? ` of ${e.planned_sessions}` : ""} (resumes an open draft)
-              </span>
+              {kind === "family" ? "Start family session" : "Start individual session"}
             </button>
-          </div>
+          ))}
+          <span className="text-xs text-ink-500">
+            Session {n}
+            {e.planned_sessions ? ` of ${e.planned_sessions}` : ""} · an open draft is resumed
+          </span>
         </div>
       )}
       {e.sessions.length > 0 && (
@@ -256,9 +286,15 @@ function TherapyEpisode({
                           type="button"
                           className={`${BTN_GHOST} ${BTN_SM}`}
                           onClick={() =>
-                            navigate(psychotherapyNotePath(patientId, e.id, s.note_id as string), {
-                              state: { from: clientRecordPath(patientId, "interventions") },
-                            })
+                            navigate(
+                              psychotherapyNotePath(
+                                "individual",
+                                patientId,
+                                e.id,
+                                s.note_id as string,
+                              ),
+                              { state: { from } },
+                            )
                           }
                         >
                           Open note
