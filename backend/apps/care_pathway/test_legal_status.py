@@ -431,7 +431,8 @@ class InvoluntaryTests(LegalStatusTestCase):
         person = self.nok()
         ws = self.ws()
         self.assertEqual(ws["next_of_kin_id"], str(person.pk))
-        self.assertEqual(ws["related_persons"][0]["name"], "Peter Kamau")
+        peter = next(r for r in ws["related_persons"] if r["id"] == str(person.pk))
+        self.assertEqual(peter["name"], "Peter Kamau")
         with platform_admin_context():
             count = EmergencyContact.objects.filter(patient_id=self.pid).count()
         doc = self.start("INVOLUNTARY")
@@ -449,7 +450,8 @@ class InvoluntaryTests(LegalStatusTestCase):
             self.assertEqual(EmergencyContact.objects.filter(patient_id=self.pid).count(), count)
             self.assertEqual(EmergencyContact.objects.get(pk=person.pk).id_number, "12345678")
         # Masked in the workspace; unmasking needs the permission.
-        self.assertEqual(self.ws()["related_persons"][0]["id_number_masked"], "•••••678")
+        masked = next(r for r in self.ws()["related_persons"] if r["id"] == str(person.pk))
+        self.assertEqual(masked["id_number_masked"], "•••••678")
         ls_id = self.ws()["legal_status"]["id"]
         denied = self.client.get(
             reverse("care-legal-identity", args=[ls_id]),

@@ -860,6 +860,8 @@ class RegistrationV4Tests(CarePathwayApiTestCase):
             brought_by_address="Central Police Station",
             allergy_status="ACTIVE_ALLERGIES",
             allergy_details="Penicillin — rash",
+            next_of_kin_name="",
+            next_of_kin_phone="",
         )
         patient = self.get_patient(response)
         self.assertEqual(patient.estimated_age, 35)
