@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { ChevronRight, Loader2, Plus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
@@ -130,7 +130,11 @@ export function ClientRegistryPage() {
     };
   }, [reload]);
 
+  // The row being opened, so it shows "Opening…" until the record loads.
+  const [opening, setOpening] = useState<string | null>(null);
   const openPatient = (patient: ClientRegistryRow) => {
+    if (opening) return;
+    setOpening(patient.id);
     selectPatient(patient.id, patient.name);
     navigate(clientRecordPath(patient.id, "triage"));
   };
@@ -253,19 +257,22 @@ export function ClientRegistryPage() {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Allergies</th>
               <th className="px-4 py-3">Responsible team</th>
+              <th className="px-4 py-3">
+                <span className="sr-only">Open</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-500">
                   Loading clients…
                 </td>
               </tr>
             )}
             {!isLoading && error && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-status-red" role="alert">
+                <td colSpan={8} className="px-4 py-6 text-center text-status-red" role="alert">
                   <div>{error}</div>
                   <button
                     type="button"
@@ -279,7 +286,7 @@ export function ClientRegistryPage() {
             )}
             {!isLoading && !error && patients.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-500">
                   No clients in this view.
                 </td>
               </tr>
@@ -298,7 +305,8 @@ export function ClientRegistryPage() {
                   }}
                   tabIndex={0}
                   aria-current={patient.id === registered?.id ? "true" : undefined}
-                  className="cursor-pointer border-b aria-[current=true]:bg-brand-green-tint border-surface-border last:border-b-0 transition-colors duration-150 hover:bg-brand-green-tint-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
+                  aria-busy={opening === patient.id || undefined}
+                  className="group cursor-pointer border-b aria-[current=true]:bg-brand-green-tint border-surface-border last:border-b-0 transition-colors duration-150 hover:bg-brand-green-tint-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
                 >
                   <td className="px-4 py-3 font-semibold text-ink-900">
                     <span>{patient.name}</span>
@@ -328,6 +336,22 @@ export function ClientRegistryPage() {
                     {allergyLabel(patient)}
                   </td>
                   <td className="px-4 py-3 text-ink-700">{patient.responsible_team || "—"}</td>
+                  <td className="w-px whitespace-nowrap px-4 py-3 text-right">
+                    {opening === patient.id ? (
+                      <span
+                        role="status"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-green-dark"
+                      >
+                        <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                        Opening…
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-surface-border px-2.5 py-1 text-xs font-semibold text-brand-green-dark transition-colors group-hover:border-brand-green group-hover:bg-brand-green group-hover:text-on-primary">
+                        Open
+                        <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
           </tbody>
