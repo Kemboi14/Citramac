@@ -54,6 +54,7 @@ import {
   type AppointmentMessagesForm,
 } from "./registration/AppointmentMessagesFields";
 import DateInput from "../../components/DateInput";
+import PhoneInput, { phoneProblem } from "../../components/PhoneInput";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — mockup frontdesk(), filterClients,
 // selectExistingClientForRegistration, updateIdentityFields, registerTier1Client
@@ -86,21 +87,21 @@ const MODES: { status: IdentityStatus; label: string; submit: string }[] = [
   {
     status: "IDENTIFIED",
     label: "Tier 1 registration",
-    submit: "Register & queue to triage",
+    submit: "Register client",
   },
   {
     status: "UNIDENTIFIED",
     label: "Unidentified person",
-    submit: "Register unidentified person & queue to triage",
+    submit: "Register unidentified person",
   },
   {
     status: "UNKNOWN",
     label: "Emergency — identity unknown",
-    submit: "Create emergency record & queue to triage",
+    submit: "Create emergency record",
   },
 ];
 
-const SELECTED_SUBMIT = "Register & send new encounter to triage";
+const SELECTED_SUBMIT = "Register new visit";
 const NAME_REQUIRED =
   "Enter the client’s first and last name, or change Identity status to Unidentified or Unknown to register without one.";
 const MERGE_REASON_REQUIRED =
@@ -775,10 +776,29 @@ export function RegistrationPage() {
     };
   }
 
+  /** A phone number that is clearly incomplete is fixed before saving. */
+  function validatePhones() {
+    const fields: [string, string, string][] = [
+      ["reg-phone", "Mobile phone", form.phone],
+      ["reg-nok-phone", "Next of kin — phone", form.nokPhone],
+      ["reg-brought-by-phone", "Contact phone", form.broughtByPhone],
+    ];
+    for (const [fieldId, label, value] of fields) {
+      const problem = phoneProblem(value);
+      if (problem && document.getElementById(fieldId)) {
+        setFeedback(`${label}: ${problem}`);
+        document.getElementById(fieldId)?.focus();
+        return false;
+      }
+    }
+    return true;
+  }
+
   /** Save corrected details only — no triage encounter. */
   async function saveDetails() {
     if (!accessToken || submitting || !selected) return;
     if (!validateNames()) return;
+    if (!validatePhones()) return;
     if (!formRef.current?.reportValidity()) return;
     setFeedback(null);
     setSaved(null);
@@ -815,6 +835,7 @@ export function RegistrationPage() {
       descriptionRef.current?.focus();
       return;
     }
+    if (!validatePhones()) return;
     if (!formRef.current?.reportValidity()) return;
     setFeedback(null);
     setFirstNameError(null);
@@ -920,9 +941,25 @@ export function RegistrationPage() {
             referral_source: form.referral.trim() || undefined,
             payer: form.payer || undefined,
           };
-      await registerArrival(accessToken, payload);
+      const result = await registerArrival(accessToken, payload);
+      const name = identified
+        ? [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(" ")
+        : emergency
+          ? "Emergency record (identity unknown)"
+          : "Unidentified person";
       clearSelection();
-      setSaved("Client registered and queued for triage.");
+      // Registered: show the client in the registry, with confirmation.
+      navigate("/clinical/registry", {
+        state: {
+          registered: {
+            id: result.patient_id,
+            name,
+            returning: Boolean(selected),
+            queuedForTriage: result.open_triage,
+          },
+        },
+      });
+      return;
     } catch (err) {
       const duplicateOf = (err as { fields?: Record<string, unknown> })?.fields?.duplicate_of;
       if (resolving && Array.isArray(duplicateOf) && duplicateOf[0]) {
@@ -994,6 +1031,16 @@ export function RegistrationPage() {
       className={REG_INPUT}
       value={form[key] as string}
       onChange={(e) => set(key)(e.target.value)}
+    />
+  );
+
+  const phoneInput = (id: string, key: "phone" | "nokPhone" | "broughtByPhone") => (
+    <PhoneInput
+      id={id}
+      className={REG_INPUT}
+      autoComplete={key === "phone" ? "tel" : "off"}
+      value={form[key]}
+      onChange={set(key)}
     />
   );
 
@@ -1261,7 +1308,7 @@ export function RegistrationPage() {
                 />
               </RegField>
               <RegField id="reg-brought-by-phone" label="Contact phone">
-                {textInput("reg-brought-by-phone", "broughtByPhone", { type: "tel" })}
+                {phoneInput("reg-brought-by-phone", "broughtByPhone")}
               </RegField>
               <RegField id="reg-brought-by-id" label="Identifier / ID of that person">
                 {textInput("reg-brought-by-id", "broughtById")}
@@ -1441,7 +1488,7 @@ export function RegistrationPage() {
                   />
                 </RegField>
                 <RegField id="reg-phone" label="Mobile phone">
-                  {textInput("reg-phone", "phone", { type: "tel", autoComplete: "tel" })}
+                  {phoneInput("reg-phone", "phone")}
                 </RegField>
                 <RegField id="reg-id-type" label="ID / passport (where available)">
                   <SelectChoices
@@ -1477,7 +1524,7 @@ export function RegistrationPage() {
                     {textInput("reg-nok", "nextOfKin")}
                   </RegField>
                   <RegField id="reg-nok-phone" label="Next of kin — phone">
-                    {textInput("reg-nok-phone", "nokPhone", { type: "tel" })}
+                    {phoneInput("reg-nok-phone", "nokPhone")}
                   </RegField>
                   <RegField id="reg-nok-relationship" label="Next of kin — relationship">
                     <SelectChoices

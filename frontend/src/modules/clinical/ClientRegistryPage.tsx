@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
@@ -9,7 +9,7 @@ import {
   type ClientRegistryCategory,
   type ClientRegistryRow,
 } from "../../lib/clinicalApi";
-import { PageHeader, PriorityPill } from "../care/shared/ui";
+import { Callout, PageHeader, PriorityPill } from "../care/shared/ui";
 import { clientRecordPath } from "../care/shared/recordRoutes";
 
 const TABS: { label: string; category?: ClientRegistryCategory }[] = [
@@ -52,10 +52,28 @@ function allergyLabel(patient: ClientRegistryRow) {
   return "Active allergies on file";
 }
 
+/** Set by the registration page after a successful registration. */
+interface RegisteredNotice {
+  id: string;
+  name: string;
+  returning: boolean;
+  queuedForTriage: boolean;
+}
+
 export function ClientRegistryPage() {
   const { accessToken } = useAuth();
   const { selectPatient } = usePatientContext();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [registered, setRegistered] = useState<RegisteredNotice | null>(
+    () => (location.state as { registered?: RegisteredNotice } | null)?.registered ?? null,
+  );
+  // Drop the notice from history so a refresh or Back does not show it again.
+  useEffect(() => {
+    if ((location.state as { registered?: unknown } | null)?.registered) {
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, [location, navigate]);
   const [patients, setPatients] = useState<ClientRegistryRow[]>([]);
   const [count, setCount] = useState(0);
   const [category, setCategory] = useState<ClientRegistryCategory | undefined>();
@@ -140,6 +158,37 @@ export function ClientRegistryPage() {
           </button>
         }
       />
+
+      {registered && (
+        <Callout tone="success" role="status" className="mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              <strong>{registered.name}</strong>{" "}
+              {registered.returning ? "— new visit registered" : "registered successfully"}
+              {registered.queuedForTriage ? " and added to the triage queue." : "."}
+            </span>
+            <span className="flex gap-3">
+              <button
+                type="button"
+                className="font-semibold text-brand-green-dark underline"
+                onClick={() => {
+                  selectPatient(registered.id, registered.name);
+                  navigate(clientRecordPath(registered.id, "snapshot"));
+                }}
+              >
+                Open client record
+              </button>
+              <button
+                type="button"
+                className="font-semibold text-ink-700 underline"
+                onClick={() => setRegistered(null)}
+              >
+                Dismiss
+              </button>
+            </span>
+          </div>
+        </Callout>
+      )}
 
       <div
         role="tablist"
@@ -248,7 +297,8 @@ export function ClientRegistryPage() {
                     }
                   }}
                   tabIndex={0}
-                  className="cursor-pointer border-b border-surface-border last:border-b-0 transition-colors duration-150 hover:bg-brand-green-tint-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
+                  aria-current={patient.id === registered?.id ? "true" : undefined}
+                  className="cursor-pointer border-b aria-[current=true]:bg-brand-green-tint border-surface-border last:border-b-0 transition-colors duration-150 hover:bg-brand-green-tint-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green"
                 >
                   <td className="px-4 py-3 font-semibold text-ink-900">
                     <span>{patient.name}</span>
