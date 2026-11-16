@@ -171,6 +171,14 @@ const CONSENT_STATUS: Record<
   },
 };
 
+const DOCUMENT_NUMBER_LABELS: Record<string, string> = {
+  NATIONAL_ID: "National ID number",
+  PASSPORT: "Passport number",
+  REFUGEE_ID: "Refugee ID number",
+  ALIEN_ID: "Alien ID number",
+  BIRTH_CERTIFICATE: "Birth certificate number",
+};
+
 interface ConsentForm {
   general: ConsentDecision;
   mental_health: ConsentDecision;
@@ -588,6 +596,20 @@ export function RegistrationPage() {
   const allergyStatus = form.allergyStatus || firstCode(allergyValueSet);
   const showAllergyDetails = allergyStatus === "ACTIVE_ALLERGIES";
   const showDisabilityDetails = form.disability === "YES";
+  /** The number field is named after the document chosen; with "None / unknown"
+   * there is no number to ask for. An older record with a number but no type
+   * keeps the generic field so the number is not lost. */
+  const documentNumberLabel: string | null =
+    form.idType === "NONE"
+      ? null
+      : form.idType
+        ? (DOCUMENT_NUMBER_LABELS[form.idType] ?? "Document number")
+        : form.documentNumber.trim()
+          ? "Document number"
+          : null;
+  const documentNumber = documentNumberLabel ? form.documentNumber.trim() : "";
+  /** Occupation is asked only of someone in work. */
+  const showOccupation = form.employment === "EMPLOYED" || form.employment === "SELF_EMPLOYED";
   const display = (valueSet: string, code: string) =>
     vs.options(valueSet).find((o) => o.code === code)?.display || undefined;
 
@@ -689,7 +711,7 @@ export function RegistrationPage() {
       phone: form.phone.trim() || undefined,
       address: form.address.trim() || undefined,
       id_document_type: form.idType || undefined,
-      id_document_number: form.documentNumber.trim() || undefined,
+      id_document_number: documentNumber || undefined,
       unhcr_number: form.unhcrNumber.trim() || undefined,
       sha_member_number: form.shaMemberNumber.trim() || undefined,
       living_with_disability: form.disability || undefined,
@@ -697,7 +719,7 @@ export function RegistrationPage() {
         ? form.disabilityDetails.trim() || undefined
         : undefined,
       employment_status: form.employment || undefined,
-      occupation: form.occupation.trim() || undefined,
+      occupation: showOccupation ? form.occupation.trim() || undefined : undefined,
       marital_status: form.marital || undefined,
     };
   }
@@ -730,13 +752,13 @@ export function RegistrationPage() {
       phone: form.phone.trim(),
       address: form.address.trim(),
       id_document_type: form.idType,
-      id_document_number: form.documentNumber.trim(),
+      id_document_number: documentNumber,
       unhcr_number: form.unhcrNumber.trim() || undefined,
       sha_member_number: form.shaMemberNumber.trim() || undefined,
       living_with_disability: form.disability,
       disability_details: showDisabilityDetails ? form.disabilityDetails.trim() : "",
       employment_status: form.employment,
-      occupation: form.occupation.trim(),
+      occupation: showOccupation ? form.occupation.trim() : "",
       marital_status: form.marital,
       next_of_kin_name: form.nextOfKin.trim() || undefined,
       next_of_kin_phone: form.nokPhone.trim() || undefined,
@@ -844,7 +866,7 @@ export function RegistrationPage() {
           sex: form.sex || undefined,
           phone: form.phone.trim() || undefined,
           id_document_type: form.idType || undefined,
-          id_document_number: form.documentNumber.trim() || undefined,
+          id_document_number: documentNumber || undefined,
           unhcr_number: form.unhcrNumber.trim() || undefined,
           sha_member_number: form.shaMemberNumber.trim() || undefined,
         });
@@ -1431,9 +1453,11 @@ export function RegistrationPage() {
                     onChange={set("idType")}
                   />
                 </RegField>
-                <RegField id="reg-document-number" label="Document number">
-                  {textInput("reg-document-number", "documentNumber")}
-                </RegField>
+                {documentNumberLabel && (
+                  <RegField id="reg-document-number" label={documentNumberLabel}>
+                    {textInput("reg-document-number", "documentNumber")}
+                  </RegField>
+                )}
                 <RegField id="reg-unhcr" label="UNHCR number (refugees / asylum-seekers)">
                   {textInput("reg-unhcr", "unhcrNumber")}
                 </RegField>
@@ -1525,9 +1549,11 @@ export function RegistrationPage() {
                     onChange={set("employment")}
                   />
                 </RegField>
-                <RegField id="reg-occupation" label="Occupation">
-                  {textInput("reg-occupation", "occupation")}
-                </RegField>
+                {showOccupation && (
+                  <RegField id="reg-occupation" label="Occupation">
+                    {textInput("reg-occupation", "occupation")}
+                  </RegField>
+                )}
                 <RegField id="reg-marital" label="Marital status">
                   <SelectChoices
                     className={REG_SELECT}
