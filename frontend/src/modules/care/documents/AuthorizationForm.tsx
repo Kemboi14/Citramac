@@ -5,6 +5,7 @@ import { recordReleaseAuthorization, type BlockInfo } from "../../../lib/documen
 import { BTN, INPUT } from "../shared/styles";
 import { CheckChoices, ErrorNote, Field } from "../shared/ui";
 import { useDocCatalogue } from "./useDocCatalogue";
+import DateInput from "../../../components/DateInput";
 
 const CONSENT_LABEL: Record<string, string> = {
   EMPLOYER_COMMUNICATION: "Communicating with the client's employer",
@@ -104,9 +105,8 @@ export function AuthorizationForm({
           />
         </Field>
         <Field label="Valid until" htmlFor="auth-valid">
-          <input
+          <DateInput
             id="auth-valid"
-            type="date"
             className={INPUT}
             value={form.valid_until}
             onChange={(e) => {

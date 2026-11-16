@@ -5,6 +5,7 @@ import {
   licenseStatusLabel,
   type BranchIdentifierValues,
 } from "../lib/branchIdentifiers";
+import DateInput from "./DateInput";
 
 // Form fields, licence badge, attention banner and history for a branch's
 // registration identifiers — helpers live in lib/branchIdentifiers.ts.
@@ -137,8 +138,7 @@ export function BranchIdentifierFields({
       </label>
       <label className={labelClassName}>
         <span>Licence Valid Until {licenceTouched && <Required />}</span>
-        <input
-          type="date"
+        <DateInput
           className={fieldClassName}
           value={values.facility_license_valid_until}
           onChange={(e) => onChange({ facility_license_valid_until: e.target.value })}

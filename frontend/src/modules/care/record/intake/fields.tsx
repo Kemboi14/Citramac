@@ -3,6 +3,7 @@ import { FIELD_LABEL, INPUT } from "../../shared/styles";
 import { CheckChoices, SelectChoices } from "../../shared/ui";
 import type { ValueSetsApi } from "../../shared/useValueSets";
 import { ListTextarea } from "./ListTextarea";
+import DateInput from "../../../../components/DateInput";
 
 export type SectionValues = Record<string, unknown>;
 
@@ -106,22 +107,30 @@ export function FieldControl({
     default:
       control = (
         <div className="flex items-center gap-2">
-          <input
-            id={id}
-            type={
-              field.type === "datetime"
-                ? "datetime-local"
-                : field.type === "number"
-                  ? "number"
-                  : field.type === "date"
-                    ? "date"
+          {field.type === "date" ? (
+            <DateInput
+              id={id}
+              className={INPUT}
+              value={text(value)}
+              required={field.required}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          ) : (
+            <input
+              id={id}
+              type={
+                field.type === "datetime"
+                  ? "datetime-local"
+                  : field.type === "number"
+                    ? "number"
                     : "text"
-            }
-            className={INPUT}
-            value={text(value)}
-            required={field.required}
-            onChange={(e) => onChange(e.target.value)}
-          />
+              }
+              className={INPUT}
+              value={text(value)}
+              required={field.required}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          )}
           {field.unit && <span className="text-xs text-ink-500">{field.unit}</span>}
         </div>
       );

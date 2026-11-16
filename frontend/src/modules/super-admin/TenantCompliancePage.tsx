@@ -9,6 +9,7 @@ import {
   updateTenantCompliance,
   type ComplianceProfile,
 } from "../../lib/complianceApi";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -326,8 +327,7 @@ function RowEditor({
         </label>
         <label className={LABEL_CLASS}>
           ODPC registration expires
-          <input
-            type="date"
+          <DateInput
             className={FIELD_CLASS}
             value={expires}
             onChange={(e) => setExpires(e.target.value)}
@@ -343,8 +343,7 @@ function RowEditor({
         </label>
         <label className={LABEL_CLASS}>
           DPA signed on
-          <input
-            type="date"
+          <DateInput
             className={FIELD_CLASS}
             value={dpaSigned}
             onChange={(e) => setDpaSigned(e.target.value)}

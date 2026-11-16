@@ -30,6 +30,7 @@ import { errorText } from "../../triage/helpers";
 import { useRecordData } from "../useRecordData";
 import { countdownText, useNow } from "./countdown";
 import { DocumentActions } from "../../../../components/DocumentActions";
+import DateInput from "../../../../components/DateInput";
 
 const VOL = "DOC-LEG-STAT-VOL-KE";
 const INV = "DOC-LEG-STAT-INV-APP-KE";
@@ -839,8 +840,7 @@ function RecommendationForm({ doc, data, busy, run }: PanelProps & { doc: LegalD
               )}
               {decl.number === 2 && draft && (
                 <div className="ml-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <input
-                    type="date"
+                  <DateInput
                     max={today}
                     className={INPUT}
                     value={exam}

@@ -12,6 +12,7 @@ import {
 import { Breadcrumbs } from "../care/shared/Breadcrumbs";
 import { formatDateTime } from "../care/shared/format";
 import { PageHeader } from "../care/shared/ui";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -268,8 +269,7 @@ export function SupervisionRequestDetailPage() {
               <form onSubmit={schedule} className="flex flex-col gap-3">
                 <label className={LABEL_CLASS}>
                   Date
-                  <input
-                    type="date"
+                  <DateInput
                     className={FIELD_CLASS}
                     value={scheduleDate}
                     onChange={(event) => setScheduleDate(event.target.value)}

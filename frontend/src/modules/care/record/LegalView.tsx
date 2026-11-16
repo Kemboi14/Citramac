@@ -29,6 +29,7 @@ import { DocumentActions } from "../../../components/DocumentActions";
 import { AppointmentMessagesCard } from "./AppointmentMessagesCard";
 import { LegalAdmissionStatus } from "./legal/LegalAdmissionStatus";
 import { NationalHealthRecordCard } from "./legal/NationalHealthRecordCard";
+import DateInput from "../../../components/DateInput";
 
 type AdmissionRow = ClientLegal["admissions"][number];
 
@@ -466,6 +467,14 @@ function AdmissionLegal({
         <AutoResizeTextarea
           id={`${id}-${key}`}
           rows={2}
+          // eslint-disable-next-line security/detect-object-injection -- typed key of LegalForm.
+          value={form[key]}
+          onChange={(e) => set({ [key]: e.target.value })}
+        />
+      ) : type === "date" ? (
+        <DateInput
+          id={`${id}-${key}`}
+          className={INPUT}
           // eslint-disable-next-line security/detect-object-injection -- typed key of LegalForm.
           value={form[key]}
           onChange={(e) => set({ [key]: e.target.value })}

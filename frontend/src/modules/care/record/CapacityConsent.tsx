@@ -17,6 +17,7 @@ import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../shared/styles";
 import { Callout, Card, ErrorNote, Tag } from "../shared/ui";
 import { useValueSets } from "../shared/useValueSets";
 import { errorText } from "../triage/helpers";
+import DateInput from "../../../components/DateInput";
 
 const QUESTIONS = [
   ["understand", "Understands the information"],
@@ -134,8 +135,7 @@ export function CapacityConsentCard({ patientId }: { patientId: string }) {
             <option>Unsure</option>
           </select>
         ))}
-        <input
-          type="date"
+        <DateInput
           className={INPUT}
           aria-label="Reassess by"
           value={cap.reassess_by ?? ""}

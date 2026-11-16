@@ -18,6 +18,7 @@ import {
 } from "../../lib/branchRegulatoryApi";
 import { SaveButton } from "../../components/SaveButton";
 import { StatusPill } from "../care/shared/ui";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -327,8 +328,7 @@ export function BranchRegulatoryDocumentsCard({ branches }: { branches: Branch[]
             </label>
             <label className={LABEL_CLASS}>
               Issued
-              <input
-                type="date"
+              <DateInput
                 className={FIELD_CLASS}
                 value={form.issued_on}
                 onChange={(e) => updateForm({ issued_on: e.target.value })}
@@ -336,8 +336,7 @@ export function BranchRegulatoryDocumentsCard({ branches }: { branches: Branch[]
             </label>
             <label className={LABEL_CLASS}>
               Valid until
-              <input
-                type="date"
+              <DateInput
                 className={FIELD_CLASS}
                 value={form.valid_until}
                 onChange={(e) => updateForm({ valid_until: e.target.value })}

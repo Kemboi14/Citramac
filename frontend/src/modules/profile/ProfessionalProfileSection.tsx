@@ -25,6 +25,7 @@ import {
   type ProfessionalProfile,
   type ProfessionalProfileFields,
 } from "../../lib/professionalProfileApi";
+import DateInput from "../../components/DateInput";
 
 const INPUT =
   "w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-surface-card";
@@ -417,9 +418,8 @@ function CredentialItemCard({
           <label className={LABEL} htmlFor={`${id}-from`}>
             {licence || registration ? "Issued on" : "Awarded on"}
           </label>
-          <input
+          <DateInput
             id={`${id}-from`}
-            type="date"
             className={INPUT}
             value={draft.issued_on}
             onChange={(e) => set({ issued_on: e.target.value })}
@@ -430,9 +430,8 @@ function CredentialItemCard({
             <label className={LABEL} htmlFor={`${id}-to`}>
               {registration ? "Expires on (if it does)" : "Expires on"}
             </label>
-            <input
+            <DateInput
               id={`${id}-to`}
-              type="date"
               className={INPUT}
               value={draft.expires_on}
               onChange={(e) => set({ expires_on: e.target.value })}
@@ -884,9 +883,8 @@ export function ProfessionalProfileSection() {
                 <label className={LABEL} htmlFor="pp-nacada-from">
                   Issued on
                 </label>
-                <input
+                <DateInput
                   id="pp-nacada-from"
-                  type="date"
                   className={INPUT}
                   value={form.nacada_issued_on ?? ""}
                   onChange={(e) => set({ nacada_issued_on: e.target.value })}
@@ -896,9 +894,8 @@ export function ProfessionalProfileSection() {
                 <label className={LABEL} htmlFor="pp-nacada-to">
                   Expires on
                 </label>
-                <input
+                <DateInput
                   id="pp-nacada-to"
-                  type="date"
                   className={INPUT}
                   value={form.nacada_expires_on ?? ""}
                   onChange={(e) => set({ nacada_expires_on: e.target.value })}
@@ -935,9 +932,8 @@ export function ProfessionalProfileSection() {
                 <label className={LABEL} htmlFor="pp-ind-to">
                   Cover expires on
                 </label>
-                <input
+                <DateInput
                   id="pp-ind-to"
-                  type="date"
                   className={INPUT}
                   value={form.indemnity_expires_on ?? ""}
                   onChange={(e) => set({ indemnity_expires_on: e.target.value })}

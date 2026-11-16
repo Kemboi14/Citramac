@@ -13,6 +13,7 @@ import {
 import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
 import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
 import { AppointmentMessages } from "../care/shared/AppointmentMessages";
+import DateInput from "../../components/DateInput";
 
 // Appointment types exactly as the approved mockup lists them
 // (docs/15-CLINICAL-WORKSPACE-V3.md §1.13). Stored as Appointment.appointment_type text, as
@@ -384,8 +385,7 @@ export function AppointmentsPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className={LABEL_CLASS}>
                 Date
-                <input
-                  type="date"
+                <DateInput
                   min={today}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}

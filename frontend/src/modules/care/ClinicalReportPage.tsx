@@ -12,6 +12,7 @@ import { CountSectionTable } from "../clinical/CountSectionTable";
 import { formatDateTime } from "./shared/format";
 import { BTN, FIELD_LABEL, INPUT } from "./shared/styles";
 import { Callout, Card, ErrorNote, PageHeader } from "./shared/ui";
+import DateInput from "../../components/DateInput";
 
 /**
  * Clinical Report — what the service did for one branch over one period:
@@ -112,8 +113,7 @@ export function ClinicalReportPage() {
           )}
           <label className="flex flex-col gap-1.5">
             <span className={FIELD_LABEL}>From</span>
-            <input
-              type="date"
+            <DateInput
               className={INPUT}
               value={form.period_start ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, period_start: e.target.value }))}
@@ -122,8 +122,7 @@ export function ClinicalReportPage() {
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={FIELD_LABEL}>To</span>
-            <input
-              type="date"
+            <DateInput
               className={INPUT}
               value={form.period_end ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, period_end: e.target.value }))}

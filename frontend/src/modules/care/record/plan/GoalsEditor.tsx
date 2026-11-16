@@ -3,6 +3,7 @@ import type { PlanGoal, PlanWorkspace } from "../../../../lib/carePathwayApi";
 import { BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles";
 import { SelectChoices } from "../../shared/ui";
 import { useValueSets } from "../../shared/useValueSets";
+import DateInput from "../../../../components/DateInput";
 
 const BLANK: PlanGoal = {
   goal: "",
@@ -111,8 +112,7 @@ export function GoalsEditor({
           </label>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Review date</span>
-            <input
-              type="date"
+            <DateInput
               className={INPUT}
               value={g.review_date}
               onChange={(e) => change(index, { review_date: e.target.value }, true)}

@@ -15,6 +15,7 @@ import {
 } from "../../lib/legalStatusApi";
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -487,8 +488,7 @@ export function PractitionerCredentialDrawer({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className={LABEL_CLASS}>
                   Issued
-                  <input
-                    type="date"
+                  <DateInput
                     className={FIELD_CLASS}
                     value={form.nacada_issued_on}
                     onChange={(e) => updateForm({ nacada_issued_on: e.target.value })}
@@ -497,8 +497,7 @@ export function PractitionerCredentialDrawer({
                 </label>
                 <label className={LABEL_CLASS}>
                   Expires
-                  <input
-                    type="date"
+                  <DateInput
                     className={FIELD_CLASS}
                     value={form.nacada_expires_on}
                     onChange={(e) => updateForm({ nacada_expires_on: e.target.value })}

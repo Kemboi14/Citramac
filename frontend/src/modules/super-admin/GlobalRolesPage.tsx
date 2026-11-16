@@ -15,6 +15,7 @@ import {
   type Staff,
   type StaffInvitePayload,
 } from "../../lib/governanceApi";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -332,8 +333,7 @@ export function GlobalRolesPage() {
                 </label>
                 <label className={LABEL_CLASS}>
                   Access ends (optional)
-                  <input
-                    type="date"
+                  <DateInput
                     className={FIELD_CLASS}
                     value={superEndsOn}
                     min={today()}

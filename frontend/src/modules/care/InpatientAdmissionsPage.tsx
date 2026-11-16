@@ -33,6 +33,7 @@ import {
   Tag,
 } from "./shared/ui";
 import { useValueSets, type ValueSetsApi } from "./shared/useValueSets";
+import DateInput from "../../components/DateInput";
 
 // Inpatient Admissions — docs/15-CLINICAL-WORKSPACE-V3.md §1.10, mockup `inpatient()`.
 // The admission is an Encounter (class IMP) inside the client's EpisodeOfCare;
@@ -558,9 +559,8 @@ export function InpatientAdmissionsPage() {
                 </fieldset>
               )}
               <Field label="Admission Date" htmlFor="adm-date">
-                <input
+                <DateInput
                   id="adm-date"
-                  type="date"
                   className={INPUT}
                   value={form.admissionDate}
                   max={todayIso()}

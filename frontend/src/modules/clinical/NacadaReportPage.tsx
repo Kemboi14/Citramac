@@ -25,6 +25,7 @@ import {
   type StatusTone,
 } from "../care/shared/ui";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../care/shared/styles";
+import DateInput from "../../components/DateInput";
 
 /**
  * NACADA National Drug Observatory (NDO) report — compiled per branch and
@@ -441,8 +442,7 @@ export function NacadaReportPage() {
             )}
             <label className="flex flex-col gap-1.5">
               <span className={FIELD_LABEL}>Period start</span>
-              <input
-                type="date"
+              <DateInput
                 className={INPUT}
                 value={periodStart}
                 onChange={(e) => setPeriodStart(e.target.value)}
@@ -451,8 +451,7 @@ export function NacadaReportPage() {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className={FIELD_LABEL}>Period end</span>
-              <input
-                type="date"
+              <DateInput
                 className={INPUT}
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}

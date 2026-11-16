@@ -19,6 +19,7 @@ import {
   type SessionForm,
 } from "./model";
 import { DETAILS, DETAILS_SUMMARY, NOTE } from "./styles";
+import DateInput from "../../../components/DateInput";
 
 /** Session detail inputs — shared by the editor and the "Correct session details" dialog. */
 export function SessionDetailsFields({
@@ -47,9 +48,8 @@ export function SessionDetailsFields({
   const dateField = (
     <>
       <Field label="Session date" htmlFor={id("date")} error={errors.sessionDate}>
-        <input
+        <DateInput
           id={id("date")}
-          type="date"
           className={INPUT}
           value={form.sessionDate}
           onChange={(e) => onChange({ sessionDate: e.target.value })}

@@ -7,6 +7,7 @@ import { BTN_GHOST, BTN_SM, INPUT } from "../shared/styles";
 import { CheckChoices, Field, SelectChoices } from "../shared/ui";
 import { useValueSets } from "../shared/useValueSets";
 import { useDocCatalogue } from "./useDocCatalogue";
+import DateInput from "../../../components/DateInput";
 
 // Clinician-entered fields of a document (DOC-SPEC #5) — only what the record
 // cannot supply. Recipient person / organisation / purpose are edited by the
@@ -209,20 +210,24 @@ export function DocumentInputsForm({
           }
           return (
             <Field key={field.key} label={label} htmlFor={id} error={err(field.key)}>
-              <input
-                id={id}
-                type={
-                  field.type === "date"
-                    ? "date"
-                    : field.type === "datetime"
-                      ? "datetime-local"
-                      : "text"
-                }
-                className={INPUT}
-                disabled={disabled}
-                value={text(field.key)}
-                onChange={(e) => set(field.key, e.target.value)}
-              />
+              {field.type === "date" ? (
+                <DateInput
+                  id={id}
+                  className={INPUT}
+                  disabled={disabled}
+                  value={text(field.key)}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+              ) : (
+                <input
+                  id={id}
+                  type={field.type === "datetime" ? "datetime-local" : "text"}
+                  className={INPUT}
+                  disabled={disabled}
+                  value={text(field.key)}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+              )}
             </Field>
           );
         })}

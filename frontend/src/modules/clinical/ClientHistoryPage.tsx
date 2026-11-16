@@ -16,6 +16,7 @@ import {
 import { PageHeader } from "../care/shared/ui";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -270,8 +271,7 @@ export function ClientHistoryPage() {
               <div className="grid grid-cols-3 gap-3">
                 <label className={LABEL_CLASS}>
                   Onset date
-                  <input
-                    type="date"
+                  <DateInput
                     className={FIELD_CLASS}
                     value={form.hpi_onset_date}
                     onChange={(e) => set("hpi_onset_date", e.target.value)}
@@ -386,8 +386,7 @@ export function ClientHistoryPage() {
                     setSubstanceDraft((prev) => ({ ...prev, substance: e.target.value }))
                   }
                 />
-                <input
-                  type="date"
+                <DateInput
                   className={FIELD_CLASS}
                   title="First use"
                   value={substanceDraft.first_use}
@@ -395,8 +394,7 @@ export function ClientHistoryPage() {
                     setSubstanceDraft((prev) => ({ ...prev, first_use: e.target.value }))
                   }
                 />
-                <input
-                  type="date"
+                <DateInput
                   className={FIELD_CLASS}
                   title="Last use"
                   value={substanceDraft.last_use}
@@ -475,8 +473,7 @@ export function ClientHistoryPage() {
                   <option key={option}>{option}</option>
                 ))}
               </select>
-              <input
-                type="date"
+              <DateInput
                 className={FIELD_CLASS}
                 title="Review date"
                 value={rosDraft.review_date}

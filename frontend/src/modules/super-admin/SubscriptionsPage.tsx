@@ -19,6 +19,7 @@ import {
 } from "../../lib/subscriptionDisplay";
 import { StatCard } from "../../components/StatCard";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import DateInput from "../../components/DateInput";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -37,7 +38,7 @@ const STATUS_FILTERS = [
   { key: "CANCELED", label: "Canceled" },
 ] as const;
 
-/** Today as "YYYY-MM-DD" in local time — compared against a `<input type="date">` value. */
+/** Today as "YYYY-MM-DD" in local time — compared against a date field value. */
 function todayIso(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -513,8 +514,7 @@ export function SubscriptionsPage() {
             </label>
             <label className={LABEL_CLASS}>
               Renewal Date
-              <input
-                type="date"
+              <DateInput
                 className={FIELD_CLASS}
                 value={newSub.current_period_end}
                 onChange={(e) => {
@@ -601,8 +601,7 @@ export function SubscriptionsPage() {
                   {renewal?.id === sub.id ? (
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-2">
-                        <input
-                          type="date"
+                        <DateInput
                           className={`${FIELD_CLASS} py-1`}
                           value={renewal.date}
                           onChange={(e) => {

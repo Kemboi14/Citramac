@@ -53,6 +53,7 @@ import {
   EMPTY_APPOINTMENT_MESSAGES,
   type AppointmentMessagesForm,
 } from "./registration/AppointmentMessagesFields";
+import DateInput from "../../components/DateInput";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — mockup frontdesk(), filterClients,
 // selectExistingClientForRegistration, updateIdentityFields, registerTier1Client
@@ -1398,9 +1399,8 @@ export function RegistrationPage() {
                   />
                 </RegField>
                 <RegField id="reg-dob" label="Date of birth">
-                  <input
+                  <DateInput
                     id="reg-dob"
-                    type="date"
                     max={todayIso()}
                     className={REG_INPUT}
                     value={form.dob}

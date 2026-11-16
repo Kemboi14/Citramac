@@ -33,6 +33,7 @@ import {
 } from "./shared/ui";
 import { useValueSets, type ValueSetsApi } from "./shared/useValueSets";
 import { TherapyModule } from "./record/modules/TherapyModule";
+import DateInput from "../../components/DateInput";
 
 // Outpatient Care — docs/15-CLINICAL-WORKSPACE-V3.md §1.11, mockup `outpatient()`.
 // All three Psychotherapy nav items open this page; `kind` picks which session
@@ -354,9 +355,8 @@ function TreatmentPlanCard({
           />
           <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
             <Field label="Review Date" htmlFor="plan-review">
-              <input
+              <DateInput
                 id="plan-review"
-                type="date"
                 className={INPUT}
                 value={draft.review_date}
                 onChange={(e) => edit({ review_date: e.target.value })}

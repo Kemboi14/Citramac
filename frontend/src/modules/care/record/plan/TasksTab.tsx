@@ -14,6 +14,7 @@ import { errorText } from "../../triage/helpers";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../../shared/styles";
 import { Card, ErrorNote, Tag } from "../../shared/ui";
 import { useRecordData } from "../useRecordData";
+import DateInput from "../../../../components/DateInput";
 
 const MDT_LABELS = {
   notes: "Decisions",
@@ -139,8 +140,7 @@ export function TasksTab({
                   ))}
                   <label className="flex flex-col gap-1">
                     <span className={FIELD_LABEL}>Next review</span>
-                    <input
-                      type="date"
+                    <DateInput
                       className={INPUT}
                       value={form.next_review}
                       onChange={(e) => setForm((f) => ({ ...f, next_review: e.target.value }))}
@@ -188,8 +188,7 @@ export function TasksTab({
           ))}
         </ul>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="date"
+          <DateInput
             aria-label="Review date"
             className={`${INPUT} max-w-[180px]`}
             value={day}
