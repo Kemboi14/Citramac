@@ -59,14 +59,8 @@ vi.mock("./record/intake/MseSection", () => ({
   MseSection: () => null,
 }));
 
-vi.mock("./record/intake/MedsSection", () => ({
-  MedsSection: ({ source }: { source: string }) => (
-    <div data-testid="psychiatry-medication-history">{source} medication history</div>
-  ),
-}));
-
-vi.mock("./record/modules/PrescribingModule", () => ({
-  PrescribingModule: () => <div data-testid="psychiatry-medication-orders">Medication orders</div>,
+vi.mock("./psychiatry/MedicationPanel", () => ({
+  PsychiatryMedicationPanel: () => <div data-testid="psychiatry-medication">Medication</div>,
 }));
 
 const workspace: PsychiatryWorkspace = {
@@ -302,7 +296,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
     expect(thoughts).toBeChecked();
 
     fireEvent.click(screen.getByRole("tab", { name: "Medication" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMocks.save).toHaveBeenCalledOnce());
     expect(apiMocks.save).toHaveBeenCalledWith(
@@ -406,7 +400,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
       target: { value: "Consider a substance-related condition." },
     });
     fireEvent.click(screen.getByRole("tab", { name: "Medication" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMocks.save).toHaveBeenCalledOnce());
     expect(apiMocks.save).toHaveBeenCalledWith(
@@ -421,6 +415,35 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
         }),
       }),
     );
+  });
+
+  it("ends every draft tab in one save bar with Save and Sign, in any order", async () => {
+    render(
+      <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
+        <Routes>
+          <Route
+            path="/care/clients/:patientId/psychiatry"
+            element={<PsychiatryAssessmentPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("tab", { name: "Assessment" });
+    for (const tab of ["Assessment", "MSE", "Formulation & diagnosis", "Medication"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
+      expect(screen.getByRole("button", { name: "Sign assessment" })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "MSE" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(apiMocks.save).toHaveBeenCalledOnce());
+    expect(screen.getByRole("tab", { name: "MSE" })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Plan & Schedule" }));
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 
   it("confirms a care plan with a note and schedules the next psychiatric review session", async () => {

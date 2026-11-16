@@ -2552,7 +2552,12 @@ export interface MedicationOrder {
   cosigned_by: string;
   cosigned_at: string | null;
   /** Telephone / PRN orders: awaiting a senior clinician, confirmed, or declined. */
-  confirmation: { state: "" | "AWAITING" | "CONFIRMED" | "DECLINED"; reason?: string };
+  confirmation: {
+    state: "" | "AWAITING" | "CONFIRMED" | "DECLINED";
+    reason?: string;
+    /** AWAITING: the open co-sign request, to sign or decline. */
+    request_id?: string;
+  };
   /** Telephone order: the prescriber who gave it (only they confirm it). */
   authorised_by: string;
 }
@@ -2610,6 +2615,22 @@ export interface PrescribingState {
   prescribers: { id: string; name: string }[];
   /** `can_confirm`: a senior clinician who did not place the order. */
   orders: (MedicationOrder & { can_confirm: boolean })[];
+  /** PRN doses given to the client in the last 14 days, newest first. */
+  prn_given: PrnDoseGiven[];
+}
+/** A PRN dose given, from the MAR (R4 MedicationAdministration). */
+export interface PrnDoseGiven {
+  id: string;
+  order: string;
+  drug: string;
+  dose: string;
+  route: string;
+  given_at: string;
+  given_by: string;
+  reason: string;
+  effect: string;
+  effect_recorded_at: string | null;
+  over_max_reason: string;
 }
 export interface OrderPayload {
   drug: string;

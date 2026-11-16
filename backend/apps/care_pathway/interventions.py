@@ -361,7 +361,9 @@ def _confirmation_state(item):
     declined = confirmation_request(item, status="DECLINED")
     if declined is not None and confirmation_request(item) is None:
         return {"state": "DECLINED", "reason": declined.decline_reason}
-    return {"state": "AWAITING"}
+    pending = confirmation_request(item)
+    # The open request, so the confirming clinician can sign or decline it.
+    return {"state": "AWAITING", "request_id": str(pending.pk) if pending else ""}
 
 
 def _order_row(item):
@@ -419,7 +421,46 @@ def prescribing_state(patient, user):
             }
             for i in orders
         ],
+        "prn_given": prn_given_recent(patient),
     }
+
+
+PRN_GIVEN_DAYS = 14
+
+
+def prn_given_recent(patient, now=None):
+    """PRN doses given to the client in the last ``PRN_GIVEN_DAYS`` days, newest
+    first, so the prescriber sees what was given under their orders: when, what,
+    why and its effect. Read from the MAR (one store); R4 MedicationAdministration."""
+    from apps.ipd_ward.models import MedicationAdministration
+
+    since = (now or timezone.now()) - timedelta(days=PRN_GIVEN_DAYS)
+    doses = (
+        MedicationAdministration.objects.filter(
+            admission__patient=patient,
+            is_prn=True,
+            status="ADMINISTERED",
+            administered_at__gte=since,
+        )
+        .select_related("prescription_item__drug", "administered_by")
+        .order_by("-administered_at")[:50]
+    )
+    return [
+        {
+            "id": str(e.pk),
+            "order": str(e.prescription_item_id or ""),
+            "drug": e.prescription_item.drug.generic_name if e.prescription_item_id else "",
+            "dose": e.prescription_item.dose if e.prescription_item_id else "",
+            "route": e.prescription_item.route if e.prescription_item_id else "",
+            "given_at": e.administered_at,
+            "given_by": _name(e.administered_by),
+            "reason": e.prn_indication,
+            "effect": e.effect,
+            "effect_recorded_at": e.effect_recorded_at,
+            "over_max_reason": e.prn_max_override_reason,
+        }
+        for e in doses
+    ]
 
 
 @transaction.atomic

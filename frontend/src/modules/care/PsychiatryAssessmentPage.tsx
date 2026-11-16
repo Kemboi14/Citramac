@@ -36,8 +36,7 @@ import { MseSection } from "./record/intake/MseSection";
 import { RiskSection } from "./record/intake/RiskSection";
 import type { SectionValues } from "./record/intake/fields";
 import { IntakeDiagnosisTab } from "./record/IntakeDiagnosisTab";
-import { MedsSection } from "./record/intake/MedsSection";
-import { PrescribingModule } from "./record/modules/PrescribingModule";
+import { PsychiatryMedicationPanel } from "./psychiatry/MedicationPanel";
 import { clientRecordPath } from "./shared/recordRoutes";
 
 const STRUCTURED_FIELDS: { key: string; label: string; hint: string; required?: boolean }[] = [
@@ -169,6 +168,17 @@ const SECTIONS = [
   { id: "psych-previous", label: "Previous" },
 ];
 
+/** Tabs that edit the assessment and so end in the save bar. Plan &
+ * Schedule saves each action as it is taken; Previous is read-only. */
+const EDIT_SECTIONS = new Set([
+  "psych-assessment",
+  "psych-mse",
+  "psych-formulation-diagnosis",
+  "psych-medication",
+]);
+
+const snapshot = (body: PsychiatrySaveBody) => JSON.stringify(body);
+
 /** The structured sections as one narrative, under their headings, so switching
  * to free text keeps what was written. */
 function sectionsAsNarrative(
@@ -266,7 +276,6 @@ export function PsychiatryAssessmentPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
-  // latestIntake no longer used in Psychiatry.
   const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
   const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
   const [catalogue, setCatalogue] = useState<PlanCatalogueItem[]>([]);
@@ -295,6 +304,8 @@ export function PsychiatryAssessmentPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  // The draft as last loaded or saved, to tell the clinician what isn't saved.
+  const [savedSnapshot, setSavedSnapshot] = useState("");
 
   useEffect(() => {
     if (!accessToken || !patientId) return;
@@ -313,6 +324,14 @@ export function PsychiatryAssessmentPage() {
         setStructured(structuredAssessment);
         setMse(state.mse ?? {});
         setMseFormat(inferMseFormat(state.mse ?? {}));
+        setSavedSnapshot(
+          snapshot({
+            format: assessment?.format ?? "STRUCTURED",
+            free_text: assessment?.free_text ?? "",
+            structured: normalizedStructuredAssessment(assessment?.structured ?? {}),
+            mse: state.mse ?? {},
+          }),
+        );
         setLoadError(null);
       })
       .catch((error) => {
@@ -402,8 +421,6 @@ export function PsychiatryAssessmentPage() {
     };
   }, [accessToken]);
 
-  // Intake medication reconciliation is no longer shown in Psychiatry.
-
   const locked = signedLocked(workspace);
   const canEdit = Boolean(workspace?.assessment?.can_edit ?? !locked);
   const readOnly = locked || !canEdit;
@@ -412,6 +429,14 @@ export function PsychiatryAssessmentPage() {
     () => ({ format, free_text: freeText, structured, mse }),
     [format, freeText, structured, mse],
   );
+  const dirty = Boolean(savedSnapshot) && snapshot(body) !== savedSnapshot;
+  // Leaving with unsaved draft changes asks first.
+  useEffect(() => {
+    if (!dirty || readOnly) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, readOnly]);
   const riskValue = useMemo(() => normalizeRiskValue(structured.risk), [structured.risk]);
 
   const withRiskPatch = (current: Record<string, unknown>, patch: Record<string, unknown>) => {
@@ -474,8 +499,8 @@ export function PsychiatryAssessmentPage() {
     setMseFormat(next);
   };
 
-  const run = async (action: "save" | "sign", payload = body) => {
-    if (!accessToken || !patientId) return;
+  const run = async (action: "save" | "sign", payload = body): Promise<boolean> => {
+    if (!accessToken || !patientId) return false;
     setSaving(true);
     setActionError(null);
     setNotice(null);
@@ -485,25 +510,34 @@ export function PsychiatryAssessmentPage() {
           ? await savePsychiatryAssessment(accessToken, patientId, payload)
           : await signPsychiatryAssessment(accessToken, patientId, payload);
       setWorkspace(state);
-      if (state.assessment) {
-        setFormat(state.assessment.format);
-        setFreeText(state.assessment.free_text);
-        setStructured(normalizedStructuredAssessment(state.assessment.structured));
-      }
+      const saved: PsychiatrySaveBody = state.assessment
+        ? {
+            format: state.assessment.format,
+            free_text: state.assessment.free_text,
+            structured: normalizedStructuredAssessment(state.assessment.structured),
+            mse: state.mse,
+          }
+        : { ...payload, mse: state.mse };
+      setFormat(saved.format);
+      setFreeText(saved.free_text);
+      setStructured(saved.structured);
       setMse(state.mse);
       setMseFormat(inferMseFormat(state.mse));
+      setSavedSnapshot(snapshot(saved));
       setNotice(
         action === "save"
-          ? "Draft saved. You can return to it from the Psychiatry list."
+          ? "Saved. Sign the assessment when it is complete."
           : "Assessment signed. The note is now read-only; a correction is a new assessment.",
       );
+      return true;
     } catch (error) {
       setActionError(
         errorText(
           error,
-          action === "save" ? "Couldn't save the draft." : "Couldn't sign the assessment.",
+          action === "save" ? "Couldn't save the assessment." : "Couldn't sign the assessment.",
         ),
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -635,8 +669,9 @@ export function PsychiatryAssessmentPage() {
           Full client record
         </Link>
       </div>
-      <ErrorNote>{actionError ?? schemaError}</ErrorNote>
-      {notice && <Callout tone="success">{notice}</Callout>}
+      <ErrorNote>{schemaError}</ErrorNote>
+      {/* While editing, save results show in the save bar; after signing, here. */}
+      {notice && readOnly && <Callout tone="success">{notice}</Callout>}
 
       {workspace.review && (
         <Callout
@@ -653,7 +688,7 @@ export function PsychiatryAssessmentPage() {
         <Callout tone={signed ? "success" : "warning"}>
           {signed
             ? "This assessment is signed and cannot be edited. A correction or follow-up is a new assessment."
-            : "This draft belongs to another clinician and is read-only for you."}
+            : "This unsigned assessment belongs to another clinician and is read-only for you."}
         </Callout>
       )}
 
@@ -948,60 +983,7 @@ export function PsychiatryAssessmentPage() {
         aria-labelledby="psych-medication-tab"
         className={`min-w-0 ${activeSection === "psych-medication" ? "" : "hidden"}`}
       >
-        <Card
-          title="Medication orders & History"
-          aside={
-            <div className="flex flex-wrap gap-1">
-              <Tag>MedicationRequest</Tag>
-              <Tag>MedicationStatement</Tag>
-            </div>
-          }
-          bodyClassName=""
-        >
-          <div className="flex flex-col gap-5 p-[18px]">
-            <section aria-labelledby="psychiatry-medication-orders">
-              <h3 id="psychiatry-medication-orders" className="mb-2 text-sm font-bold text-ink-900">
-                Medication orders
-              </h3>
-              <PrescribingModule patientId={patientId} />
-            </section>
-            <section aria-labelledby="psychiatry-medication-history">
-              <h3
-                id="psychiatry-medication-history"
-                className="mb-2 text-sm font-bold text-ink-900"
-              >
-                Shared medication history
-              </h3>
-              <MedsSection
-                patientId={patientId}
-                source="Psychiatry"
-                onListChanged={() => undefined}
-              />
-            </section>
-          </div>
-        </Card>
-        {!readOnly && (
-          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-surface-border bg-surface-card/95 p-3 shadow-sm backdrop-blur">
-            <button
-              type="button"
-              className={`${BTN_GHOST} ${BTN_SM}`}
-              disabled={saving}
-              onClick={() => void run("save")}
-            >
-              <Save aria-hidden className="h-4 w-4" />
-              {saving ? "Saving…" : "Save draft"}
-            </button>
-            <button
-              type="button"
-              className={`${BTN} ${BTN_SM}`}
-              disabled={saving}
-              onClick={() => void run("sign")}
-            >
-              <CheckCircle2 aria-hidden className="h-4 w-4" />
-              {saving ? "Signing…" : "Sign assessment"}
-            </button>
-          </div>
-        )}
+        <PsychiatryMedicationPanel patientId={patientId} />
       </div>
 
       <div
@@ -1291,6 +1273,71 @@ export function PsychiatryAssessmentPage() {
             </ol>
           )}
         </Card>
+      </div>
+
+      {EDIT_SECTIONS.has(activeSection) && !readOnly && (
+        <SaveBar
+          saving={saving}
+          dirty={dirty}
+          savedAt={assessment?.updated_at ?? null}
+          error={actionError}
+          notice={notice}
+          onSave={() => void run("save")}
+          onSign={() => void run("sign")}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The bottom of every editing tab: what is saved, Save and Sign. The
+ * assessment is one record, so each tab saves (or signs) all of it; the clinician moves
+ * between tabs in whatever order the visit takes — e.g. labs before medication. */
+function SaveBar({
+  saving,
+  dirty,
+  savedAt,
+  error,
+  notice,
+  onSave,
+  onSign,
+}: {
+  saving: boolean;
+  dirty: boolean;
+  savedAt: string | null;
+  error: string | null;
+  notice: string | null;
+  onSave: () => void;
+  onSign: () => void;
+}) {
+  return (
+    <div className="sticky bottom-3 z-10 flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card/95 p-3 shadow-sm backdrop-blur">
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="mr-auto text-[12.5px] text-ink-700" aria-live="polite">
+          {saving
+            ? "Saving…"
+            : dirty
+              ? "Unsaved changes"
+              : notice && !error
+                ? notice
+                : savedAt
+                  ? `Saved ${formatDateTime(savedAt)}`
+                  : "Not saved yet"}
+        </p>
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          disabled={saving}
+          onClick={onSave}
+        >
+          <Save aria-hidden className="h-4 w-4" />
+          Save
+        </button>
+        <button type="button" className={`${BTN} ${BTN_SM}`} disabled={saving} onClick={onSign}>
+          <CheckCircle2 aria-hidden className="h-4 w-4" />
+          Sign assessment
+        </button>
       </div>
     </div>
   );

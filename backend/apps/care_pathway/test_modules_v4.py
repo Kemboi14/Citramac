@@ -430,6 +430,19 @@ class MarOrderTests(ModulesTestCase):
         self.assertEqual(over.status_code, 201, over.data)
         self.assertTrue(any(e["prn_max_override_reason"] for e in over.data["entries"]))
 
+    def test_the_prescriber_sees_prn_doses_given_with_reason_and_effect(self):
+        self.give(self.regular)
+        self.give(self.prn, prn_indication="Pacing, distressed", witness_name="K. Mutua")
+        rows = self.get("care-prescribing").data["prn_given"]
+        self.assertEqual(len(rows), 1)  # the regular dose is not a PRN dose
+        row = rows[0]
+        self.assertEqual(
+            (row["drug"], row["dose"], row["reason"], row["effect"]),
+            ("Calmazine", "5 mg", "Pacing, distressed", ""),
+        )
+        self.assertEqual(row["order"], str(self.prn.pk))
+        self.assertTrue(row["given_by"])
+
     def test_an_order_for_another_client_is_not_found(self):
         other = self.other_client()
         response = self.client.post(

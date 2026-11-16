@@ -58,8 +58,11 @@ const EMPTY: OrderForm = {
 export function PrescribingModule({
   patientId,
   onOrdersChange,
+  showOrders = true,
 }: {
   patientId: string;
+  /** False where the page lists the orders itself (the Psychiatry Medication tab). */
+  showOrders?: boolean;
   /** Called with the order list whenever it is loaded or an order is placed. */
   onOrdersChange?: (orders: PrescribingState["orders"]) => void;
 }) {
@@ -461,7 +464,7 @@ export function PrescribingModule({
           )}
         </div>
       )}
-      {state.orders.length > 0 && (
+      {showOrders && state.orders.length > 0 && (
         <div className="overflow-x-auto">
           <table className={TABLE}>
             <thead>
