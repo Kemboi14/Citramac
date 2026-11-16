@@ -73,11 +73,16 @@ jobs:
             -c "ALTER DATABASE citramac OWNER TO citramac_app"
           psql -h localhost -U citramac -d citramac -v ON_ERROR_STOP=1 -c "ALTER SCHEMA public OWNER TO citramac_app"
 
-      - name: Lint (black, isort, ruff)
+      # Formatting is applied, not just checked: a push that only needs
+      # reformatting still gets its tests run (on the formatted code), and the
+      # autoformat job below commits the result. `ruff check --fix` applies
+      # ruff's safe fixes and still fails on anything it cannot fix, so real
+      # lint errors block the build as before.
+      - name: Format and lint (isort, black, ruff)
         run: |
-          black --check .
-          isort --check-only .
-          ruff check .
+          isort .
+          black .
+          ruff check --fix .
 
       - name: SAST (bandit)
         run: bandit -q -r apps config -x "*/migrations/*,*/tests.py,*/test_*.py"
@@ -137,11 +142,13 @@ jobs:
 
       - run: npm ci
 
+      # Applied, not just checked (see the backend job); the autoformat job
+      # commits the result.
+      - name: Format (prettier)
+        run: npm run format
+
       - name: Lint (eslint)
         run: npm run lint
-
-      - name: Format check (prettier)
-        run: npm run format:check
 
       - name: Dependency vulnerability scan
         run: npm audit --audit-level=high
@@ -165,3 +172,53 @@ jobs:
           cp .secrets.baseline /tmp/committed-baseline.json
           detect-secrets scan --baseline .secrets.baseline --exclude-lines "citramac:citramac"
           python backend/scripts/secrets_baseline_gate.py /tmp/committed-baseline.json .secrets.baseline
+
+  # After a green push to master, commit the formatting CI applied above, so
+  # master itself stays formatted without anyone having to run the formatters.
+  # Pushed with GITHUB_TOKEN, which does not start another workflow run (no
+  # loop). The servers deploy the green commit this job formatted: identical
+  # code, formatting aside. Nothing to format, or master moved in a way the
+  # commit no longer applies to, and it does nothing; the next push catches up.
+  autoformat:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [backend, frontend, secrets-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply the pinned formatters
+        run: |
+          pip install $(grep -hiE '^(black|isort|ruff)==' backend/requirements/dev.txt)
+          (cd backend && isort . && black . && ruff check --fix .)
+          (cd frontend && npm ci && npm run format)
+
+      - name: Commit and push the formatting
+        run: |
+          if git diff --quiet; then
+            echo "Already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "Auto-format ${GITHUB_SHA::7} (isort, black, ruff, prettier)"
+          git fetch -q origin master
+          if ! git rebase -q origin/master; then
+            git rebase --abort
+            echo "::warning::master moved and the formatting no longer applies; the next push will format it."
+            exit 0
+          fi
+          git push origin HEAD:master

@@ -29,7 +29,10 @@ Kenya Core validators, the frontend build and tests) is never deployed.
 For each new green commit:
 
 1. Fast-forward `/opt/citramac/app` to it. It never goes backwards, and it refuses if
-   history was rewritten or the checkout has local changes.
+   the checkout has local changes. If `master` was force-pushed but only commit
+   metadata changed (a message reworded, a trailer removed), it finds the
+   rewritten commit with exactly the deployed code and continues from that. A
+   rewrite that changed the deployed code is refused: deploy by hand.
 2. Build only what changed (`backend/`, `frontend/`) as `:candidate` and import
    it into k3s.
 3. Backend: a one-off pod runs `migrate --check` on the candidate. If the database
@@ -75,6 +78,9 @@ As root on the VPS, after reviewing the change:
 ```
 bash /opt/citramac/app/infra/vps/autodeploy/install.sh
 ```
+
+If a run already refused a commit before the update, remove
+`/var/lib/citramac-autodeploy/failed` so it is tried again.
 
 The script is copied to `/usr/local/sbin`, not run from the checkout. A push
 can change the application, but it cannot change the root-run deployer until

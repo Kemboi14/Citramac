@@ -115,6 +115,30 @@ if git_app merge-base --is-ancestor "$target" "$deployed"; then
   exit 0
 fi
 if ! git_app merge-base --is-ancestor "$deployed" "$target"; then
+  # History was rewritten under us. If only commit metadata changed (a
+  # message reworded, a trailer removed), master holds a commit with exactly
+  # the deployed code: move the clean checkout onto it and carry on from
+  # there. The running images were built from that same code.
+  equiv=""
+  if [[ $(git_app rev-parse HEAD) == "$deployed" ]] &&
+    [[ -z $(git_app status --porcelain --untracked-files=no) ]]; then
+    deployed_tree=$(git_app rev-parse "$deployed^{tree}")
+    for c in $(git_app rev-list --max-count=200 "$target"); do
+      if [[ $(git_app rev-parse "$c^{tree}") == "$deployed_tree" ]]; then
+        equiv=$c
+        break
+      fi
+    done
+  fi
+  if [[ -n $equiv ]]; then
+    git_app reset -q --keep "$equiv"
+    echo "$equiv" >"$STATE_DIR/deployed"
+    record_result "$equiv" ok "history rewritten: $deployed recorded as $equiv (same code)"
+    log "history rewritten; $equiv has the same code as the deployed $deployed, continuing from it"
+    deployed=$equiv
+  fi
+fi
+if ! git_app merge-base --is-ancestor "$deployed" "$target"; then
   log "REFUSED: $target does not descend from the deployed $deployed (history rewritten?). Deploy by hand."
   echo "$target" >"$STATE_DIR/failed"
   record_result "$target" failed "not a fast-forward from $deployed"
