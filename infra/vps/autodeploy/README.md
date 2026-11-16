@@ -13,7 +13,7 @@ commit reaches both only after CI passes. The live server's
 `/etc/citramac-autodeploy.env` sets `API_BASE_URL`, `HEALTH_URL` and
 `OVERLAY_DIR=/opt/citramac/app/infra/k8s/overlays/live`.
 
-Each server every 3 minutes a systemd timer
+On each server, every 3 minutes a systemd timer
 runs `citramac-autodeploy`, which looks for the newest `master` commit whose
 **CI** workflow passed and deploys it.
 
