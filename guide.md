@@ -978,3 +978,26 @@ before sending. Unidentified and emergency (identity unknown) records still need
 value already on file counts, so a returning client is not asked again; an edit cannot clear one.
 Identity resolution now also saves the next of kin it is given. FHIR: unchanged (`Patient.gender`,
 `birthDate`, `telecom`, `contact`). Reversibility: cheap — validation only, no record changes.
+
+### 2026-11-16 — client registry actions; the full client report connected
+
+On the owner's instruction, each row in Clients has a ⋮ menu: **View registration details** (a
+read-only drawer of the record as currently saved — the registration endpoint, audited as any
+client read), **Full client report**, and **Open client record**.
+
+The full client report (`care_pathway/client_report.py`, written 2026-11-12 but never routed) is now
+served at `care/clients/<id>/report/` and `…/report/print/` (Preview / Download PDF, template
+`documents/print/client_report.html`) and shown at `/clinical/clients/<id>/report`. It covers every
+triage (with re-checks) and every intake first to latest, the care plan, admissions, interventions
+with their delivery records and psychotherapy sessions, group sessions, outcomes, discharges, signed
+notes and follow-up. Clinical staff only (`clinical.care.record`); every opening is a VIEW and every
+PDF an EXPORT audit entry. Read-time, nothing stored, so it always reflects the record.
+
+Access: the module's docstring said the owner had decided psychotherapy session notes were for all
+clinicians; no such decision is recorded here, so the report applies the same rules as each record's
+own screen — psychotherapy content for the note's author or the client's care team
+(`psychotherapy.can_read`), process notes and restricted intake fields for
+`clinical.restricted_content.view`, a discharge summary in full for `can_view_discharge_in_full`.
+Withheld content is marked as withheld, never silently dropped. **Owner to confirm** if all
+clinicians should see psychotherapy content in this report. FHIR: no new resource (a read-time view
+over existing records). Reversibility: cheap — read-only.

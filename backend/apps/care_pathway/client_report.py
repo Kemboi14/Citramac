@@ -7,8 +7,12 @@ Nothing is stored: the report is worked out from the records each time it is
 opened. Every opening is a VIEW entry and every PDF download an EXPORT entry in
 the audit log (guide.md §4).
 
-The report includes the client's signed notes and, by explicit project-owner
-decision, the confidential psychotherapy session notes for all clinicians.
+Content follows the same access rules as the screens it comes from: a
+psychotherapy note's content only for its author or the client's care team
+(`psychotherapy.can_read`), process notes and restricted intake fields only
+for `clinical.restricted_content.view`, a discharge summary in full only for
+`services.can_view_discharge_in_full`. Anything withheld is marked as such,
+never silently dropped, so the reader knows it exists.
 """
 
 from django.utils import timezone
@@ -138,10 +142,11 @@ def _finding_lines(findings):
     return lines
 
 
-def _intake_sections(intake, labels):
-    """The saved intake sections as titled label/value rows."""
+def _intake_sections(intake, labels, can_view_restricted=False):
+    """The saved intake sections as titled label/value rows. Restricted fields
+    (trauma detail) are removed unless the reader may see them."""
     result = []
-    saved = intake.sections or {}
+    saved = intake_schema.strip_restricted(intake.sections or {}, can_view_restricted)
     for section in intake_schema.SECTIONS:
         payload = saved.get(section["key"])
         if not payload:
@@ -296,23 +301,45 @@ def _alerts(patient):
     ]
 
 
-def _triage(patient, labels):
-    encounter = (
-        TriageEncounter.objects.filter(patient=patient)
-        .select_related("triage_started_by")
-        .order_by("-arrival_at")
-        .first()
-    )
-    if encounter is None:
-        return None
-    assessment = encounter.assessments.filter(status="COMPLETED").order_by("-version").first()
+def _recheck(row):
+    def shown(code):
+        return code.replace("_", " ").capitalize() if code else ""
+
     return {
+        "version": row.version,
+        "signed_on": _when(row.signed_at),
+        "signed_by": _name(row.signed_by),
+        "change": shown(row.change_since_last_check),
+        "distress": shown(row.distress_behaviour),
+        "note": _text(row.note),
+    }
+
+
+def _triage_one(encounter, labels):
+    assessment = encounter.assessments.filter(status="COMPLETED").order_by("-version").first()
+    rechecks = encounter.rechecks.filter(status="COMPLETED").order_by("signed_at")
+    from .print_views import _triage_sections
+
+    answers = (
+        [
+            {"title": section["title"], "rows": section["lines"]}
+            for section in _triage_sections(assessment.answers, labels)
+        ]
+        if assessment
+        else []
+    )
+    return {
+        "id": str(encounter.id),
+        "assessment_id": str(assessment.id) if assessment else "",
+        "answers": answers,
+        "rules_version": assessment.rules_version if assessment else "",
         "arrival_at": _iso(encounter.arrival_at),
         "arrival_on": _when(encounter.arrival_at),
         "status": encounter.get_status_display(),
         "presenting_concern": _text(encounter.presenting_concern),
         "priority": encounter.priority,
         "priority_label": (encounter.get_priority_display() if encounter.priority else "Not set"),
+        "signed": assessment is not None,
         "signed_on": _when(assessment.signed_at) if assessment else "",
         "signed_by": _name(assessment.signed_by) if assessment else "",
         "recommendation": (
@@ -326,21 +353,40 @@ def _triage(patient, labels):
             if assessment and assessment.final_priority
             else ""
         ),
+        "override_reason": (
+            _text(assessment.override_reason)
+            if assessment and assessment.decision == "OVERRIDE"
+            else ""
+        ),
         "findings": _finding_lines(assessment.findings) if assessment else [],
         "alerts": _finding_lines(assessment.alerts) if assessment else [],
+        "rechecks": [_recheck(row) for row in rechecks],
     }
 
 
-def _intake(patient, labels):
-    intake = (
+def _triages(patient, labels):
+    """Every triage, first to latest: each arrival, its signed assessment and rechecks."""
+    encounters = (
+        TriageEncounter.objects.filter(patient=patient)
+        .prefetch_related("assessments__signed_by", "rechecks__signed_by")
+        .order_by("arrival_at")
+    )
+    return [_triage_one(encounter, labels) for encounter in encounters]
+
+
+def _intakes(patient, labels, can_view_restricted):
+    """Every intake, first to latest, each with what was recorded and decided."""
+    intakes = (
         IntakeAssessment.objects.filter(patient=patient)
         .select_related("author", "signed_by")
-        .order_by("-created_at", "-version")
-        .first()
+        .order_by("created_at", "version")
     )
-    if intake is None:
-        return None
+    return [_intake_one(intake, labels, can_view_restricted) for intake in intakes]
+
+
+def _intake_one(intake, labels, can_view_restricted):
     return {
+        "id": str(intake.id),
         "version": intake.version,
         "status": intake.get_status_display(),
         "completeness": (intake.get_completeness_display() if intake.completeness else ""),
@@ -356,7 +402,8 @@ def _intake(patient, labels):
         "gad7_score": intake.gad7_score,
         "phq9_score": intake.phq9_score,
         "outstanding": intake.outstanding or [],
-        "sections": _intake_sections(intake, labels),
+        "author": _name(intake.author),
+        "sections": _intake_sections(intake, labels, can_view_restricted),
     }
 
 
@@ -425,7 +472,7 @@ def _delivery(row):
     }
 
 
-def _interventions(patient, labels):
+def _interventions(patient, labels, user):
     activities = list(
         CarePlanActivity.objects.filter(care_plan__patient=patient)
         .exclude(decision="DECLINED")
@@ -486,7 +533,7 @@ def _interventions(patient, labels):
             }
         )
 
-    sessions = _psychotherapy(patient)
+    sessions = _psychotherapy(patient, user)
     if sessions:
         groups.append(
             {
@@ -508,7 +555,15 @@ def _interventions(patient, labels):
     return groups
 
 
-def _psychotherapy(patient):
+WITHHELD = "Withheld — only the author or the client's care team may read this content."
+
+
+def _psychotherapy(patient, user):
+    from apps.mhp_program.permissions import has_full_mhp_access
+
+    from . import psychotherapy, therapy
+
+    full_access = user is not None and has_full_mhp_access(user, patient)
     sessions = (
         PsychotherapySession.objects.filter(patient=patient)
         .select_related("therapist", "psy_note")
@@ -517,6 +572,11 @@ def _psychotherapy(patient):
     result = []
     for session in sessions:
         note = getattr(session, "psy_note", None)
+        readable = (
+            psychotherapy.can_read(user, note)
+            if note is not None and user is not None
+            else full_access or (user is not None and session.therapist_id == user.pk)
+        )
         details = []
         if session.duration_minutes:
             details.append({"label": "Duration", "value": f"{session.duration_minutes} minutes"})
@@ -526,9 +586,27 @@ def _psychotherapy(patient):
             details.append({"label": "Trauma phase", "value": session.trauma_processing_stage})
         if session.progress_rating:
             details.append({"label": "Progress", "value": f"{session.progress_rating}/10"})
+        if not readable:
+            result.append(
+                {
+                    "id": str(session.id),
+                    "kind": "session",
+                    "at": _iso(session.session_date),
+                    "on": _when(session.session_date),
+                    "provider": _name(session.therapist),
+                    "title": session.get_session_type_display(),
+                    "note": "",
+                    "response": "",
+                    "outcome": "",
+                    "next_action": "",
+                    "details": details,
+                    "restricted": WITHHELD,
+                }
+            )
+            continue
         if _text(session.goals):
             details.append({"label": "Goals", "value": _text(session.goals)})
-        extra = session.extra or {}
+        extra = therapy.visible_extra(session.extra or {}, user)
         if _text(extra.get("homework")):
             details.append({"label": "Homework", "value": _text(extra.get("homework"))})
         if _text(extra.get("process_notes")):
@@ -552,6 +630,7 @@ def _psychotherapy(patient):
                 "outcome": "",
                 "next_action": "",
                 "details": details,
+                "restricted": "",
             }
         )
     return result
@@ -621,7 +700,9 @@ def _outcomes(patient):
     }
 
 
-def _discharges(patient):
+def _discharges(patient, user):
+    from apps.mhp_program.permissions import has_full_mhp_access
+
     labels = services.concept_labels()
     rows = (
         DischargeSummary.objects.filter(patient=patient)
@@ -631,8 +712,41 @@ def _discharges(patient):
     )
     result = []
     for row in rows:
+        if row.admission_id:
+            full = user is not None and services.can_view_discharge_in_full(
+                user, row.admission, row
+            )
+        else:
+            full = user is not None and (
+                has_full_mhp_access(user, patient) or user.pk in (row.author_id, row.signed_by_id)
+            )
+        if not full:
+            result.append(
+                {
+                    "id": str(row.id),
+                    "printable": False,
+                    "version": row.version,
+                    "status": row.get_status_display(),
+                    "signed_on": _when(row.signed_at),
+                    "signed_by": _name(row.signed_by),
+                    "discharged_on": _when(row.discharged_at),
+                    "restricted": "Content withheld — the discharge summary is for the care "
+                    "team, the consultant and its author.",
+                    "destination": "",
+                    "disposition": "",
+                    "clinical_status": "",
+                    "treatment_summary": "",
+                    "legal_status": "",
+                    "diagnoses": [],
+                    "medications": [],
+                }
+            )
+            continue
         result.append(
             {
+                "restricted": "",
+                "id": str(row.id),
+                "printable": True,
                 "version": row.version,
                 "status": row.get_status_display(),
                 "signed_on": _when(row.signed_at),
@@ -666,6 +780,165 @@ def _discharges(patient):
             }
         )
     return result
+
+
+def _admissions(patient):
+    from apps.ipd_ward.models import Admission
+
+    rows = (
+        Admission.objects.filter(patient=patient)
+        .select_related("bed__ward", "consultant", "admitted_by")
+        .order_by("admitted_at")
+    )
+    result = []
+    for row in rows:
+        risks = [
+            label
+            for flag, label in (
+                (row.risk_self_harm, "Self-harm"),
+                (row.risk_to_others, "Harm to others"),
+                (row.risk_absconding, "Absconding"),
+                (row.risk_medical, "Medical"),
+            )
+            if flag
+        ]
+        result.append(
+            {
+                "id": str(row.id),
+                "admitted_on": _when(row.admitted_at),
+                "discharged_on": _when(row.discharged_at),
+                "status": row.get_status_display(),
+                "ward": row.bed.ward.name if row.bed_id and row.bed.ward_id else "",
+                "bed": row.bed.bed_number if row.bed_id else "",
+                "consultant": _name(row.consultant),
+                "admitted_by": _name(row.admitted_by),
+                "reason": _text(row.reason_for_admission),
+                "primary_diagnosis": _text(row.primary_diagnosis),
+                "risks": risks,
+                "observation_level": row.observation_level,
+                "risk_summary": _text(row.risk_summary),
+            }
+        )
+    return result
+
+
+def _group_sessions(patient, labels):
+    from .models import GroupSessionEntry
+
+    rows = (
+        GroupSessionEntry.objects.filter(patient=patient)
+        .select_related("session__category", "session__facilitator")
+        .order_by("session__session_date")
+    )
+    return [
+        {
+            "id": str(row.id),
+            "on": _day(row.session.session_date),
+            "topic": row.session.topic,
+            "category": (
+                row.session.category.display
+                if row.session.category_id
+                else row.session.category_other
+            ),
+            "facilitator": _name(row.session.facilitator) or row.session.facilitator_name,
+            "attendance": _concept(labels, "group-attendance", row.attendance),
+            "observation": _text(row.observation),
+            "risk_disclosure": row.risk_disclosure,
+        }
+        for row in rows
+    ]
+
+
+def _billing(patient, user):
+    """Services delivered, the invoice, payments, claims and the balance — the
+    billing workspace's own figures (insurance_claims.workspace), read-only."""
+    from django.utils.dateparse import parse_datetime
+
+    from apps.insurance_claims import workspace
+
+    data = workspace.workspace(user, patient)
+    currency = data.get("currency", "KES")
+
+    def money(value):
+        return f"{currency} {value}" if value not in (None, "") else ""
+
+    def when(iso):
+        parsed = parse_datetime(iso) if isinstance(iso, str) else iso
+        return _when(parsed, "%d %b %Y") if parsed else ""
+
+    invoice = data.get("invoice")
+    return {
+        "payer": data["payer"]["label"],
+        "totals": {
+            "services": money(data["totals"]["services"]),
+            "paid": money(data["totals"]["paid"]),
+            "outstanding": money(data["totals"]["outstanding"]),
+        },
+        "services": [
+            {
+                "on": when(e.get("delivered_at")),
+                "service": e.get("service", ""),
+                "status": str(e.get("status", "")).replace("_", " ").capitalize(),
+                "amount": money(e.get("amount")),
+            }
+            for e in sorted(data["overview"]["events"], key=lambda e: e.get("delivered_at") or "")
+        ],
+        "invoice": (
+            {
+                "number": invoice["number"],
+                "version": invoice["version"],
+                "issued_on": when(invoice["created_at"]),
+                "total": money(invoice["total"]),
+                "stale": invoice["stale"],
+            }
+            if invoice
+            else None
+        ),
+        "payments": [
+            {
+                "on": when(p["paid_at"]),
+                "amount": money(p["amount"]),
+                "method": p["method_label"],
+                "reference": p["reference"],
+                "received_by": p["received_by"],
+            }
+            for p in data["payments"]
+        ],
+        "claims": [
+            {
+                "number": c["claim_number"],
+                "payer": c["payer"],
+                "status": c["status_label"],
+                "claimed": money(c["total_claimed_amount"]),
+                "submitted_on": when(c["submitted_at"]),
+            }
+            for c in data["claims"]
+        ],
+    }
+
+
+def _activity(patient):
+    """Everything that happened, newest first — the client timeline
+    (services.client_timeline): arrivals, triage, re-checks, vitals, alerts,
+    scores, notes, risk findings, consents, plan signatures, MDT reviews,
+    co-signs, admissions and discharges."""
+    from django.utils.dateparse import parse_datetime
+
+    rows = []
+    for event in services.client_timeline(patient):
+        at = event.get("at")
+        parsed = parse_datetime(at) if isinstance(at, str) else at
+        rows.append(
+            {
+                "at": _iso(parsed) if parsed else "",
+                "on": _when(parsed) if parsed else "",
+                "kind": str(event.get("kind", "")).replace("_", " ").capitalize(),
+                "title": str(event.get("title", "")),
+                "detail": str(event.get("detail", "") or ""),
+            }
+        )
+    rows.sort(key=lambda row: row["at"], reverse=True)
+    return rows
 
 
 def _follow_ups(patient):
@@ -733,8 +1006,12 @@ def _notes(patient, labels):
 
 
 def compile_report(patient, user=None):
-    """The whole client report as plain, render-ready data."""
+    """The whole client report as plain, render-ready data, shaped by what
+    `user` may read."""
+    from . import intake as intake_module
+
     labels = services.concept_labels()
+    can_view_restricted = user is not None and intake_module.can_view_restricted(user)
     banner = services.banner_for(patient, include_journey=True)
     episode = services.current_or_latest_episode(patient)
     generated_at = timezone.now()
@@ -784,12 +1061,16 @@ def compile_report(patient, user=None):
             "alerts": _alerts(patient),
         },
         "care_plan": care_plan,
-        "triage": _triage(patient, labels),
-        "intake": _intake(patient, labels),
+        "triages": _triages(patient, labels),
+        "intakes": _intakes(patient, labels, can_view_restricted),
         "mse": _mse(patient),
-        "interventions": _interventions(patient, labels),
+        "admissions": _admissions(patient),
+        "interventions": _interventions(patient, labels, user),
+        "group_sessions": _group_sessions(patient, labels),
         "outcomes": _outcomes(patient),
-        "discharges": _discharges(patient),
+        "discharges": _discharges(patient, user),
+        "billing": _billing(patient, user),
+        "activity": _activity(patient),
         "follow_ups": _follow_ups(patient),
         "appointments": _appointments(patient, labels),
         "notes": _notes(patient, labels),

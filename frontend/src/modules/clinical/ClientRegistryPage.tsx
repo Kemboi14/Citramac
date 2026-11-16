@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight, Loader2, Plus } from "lucide-react";
+import { ChevronRight, ClipboardList, FileText, Loader2, MoreVertical, Plus } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ApiError } from "../../lib/apiClient";
@@ -10,7 +11,8 @@ import {
   type ClientRegistryRow,
 } from "../../lib/clinicalApi";
 import { Callout, PageHeader, PriorityPill } from "../care/shared/ui";
-import { clientRecordPath } from "../care/shared/recordRoutes";
+import { clientRecordPath, clientReportPath } from "../care/shared/recordRoutes";
+import { RegistrationDetailsDrawer } from "./RegistrationDetailsDrawer";
 
 const TABS: { label: string; category?: ClientRegistryCategory }[] = [
   { label: "All" },
@@ -130,6 +132,8 @@ export function ClientRegistryPage() {
     };
   }, [reload]);
 
+  // The client whose registration details are shown, read-only.
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   // The row being opened, so it shows "Opening…" until the record loads.
   const [opening, setOpening] = useState<string | null>(null);
   const openPatient = (patient: ClientRegistryRow) => {
@@ -337,20 +341,31 @@ export function ClientRegistryPage() {
                   </td>
                   <td className="px-4 py-3 text-ink-700">{patient.responsible_team || "—"}</td>
                   <td className="w-px whitespace-nowrap px-4 py-3 text-right">
-                    {opening === patient.id ? (
-                      <span
-                        role="status"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-green-dark"
-                      >
-                        <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-                        Opening…
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-surface-border px-2.5 py-1 text-xs font-semibold text-brand-green-dark transition-colors group-hover:border-brand-green group-hover:bg-brand-green group-hover:text-on-primary">
-                        Open
-                        <ChevronRight aria-hidden className="h-3.5 w-3.5" />
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1.5">
+                      {opening === patient.id ? (
+                        <span
+                          role="status"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-green-dark"
+                        >
+                          <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                          Opening…
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-surface-border px-2.5 py-1 text-xs font-semibold text-brand-green-dark transition-colors group-hover:border-brand-green group-hover:bg-brand-green group-hover:text-on-primary">
+                          Open
+                          <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                      <RowActions
+                        name={patient.name}
+                        onDetails={() => setDetailsFor(patient.id)}
+                        onReport={() => {
+                          selectPatient(patient.id, patient.name);
+                          navigate(clientReportPath(patient.id));
+                        }}
+                        onOpen={() => openPatient(patient)}
+                      />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -383,6 +398,132 @@ export function ClientRegistryPage() {
           </button>
         </div>
       )}
+      <RegistrationDetailsDrawer patientId={detailsFor} onClose={() => setDetailsFor(null)} />
     </div>
+  );
+}
+
+/** The ⋮ menu on a registry row. Its clicks never reach the row (which opens
+ * the record). */
+function RowActions({
+  name,
+  onDetails,
+  onReport,
+  onOpen,
+}: {
+  name: string;
+  onDetails: () => void;
+  onReport: () => void;
+  onOpen: () => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const height = menuRef.current?.offsetHeight ?? 140;
+      const below = rect.bottom + 4;
+      setPos({
+        top: below + height > window.innerHeight ? rect.top - height - 4 : below,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      const t = event.target as Node;
+      if (!buttonRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const choose = (action: () => void) => (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setOpen(false);
+    action();
+  };
+  const item =
+    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-ink-900 outline-none hover:bg-brand-green-tint focus-visible:bg-brand-green-tint";
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={`Actions for ${name}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-ink-500 hover:bg-surface-bg hover:text-ink-900"
+      >
+        <MoreVertical aria-hidden className="h-4 w-4" />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label={`Actions for ${name}`}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              event.preventDefault();
+              const items = [
+                ...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+              ];
+              const at = items.indexOf(document.activeElement as HTMLButtonElement);
+              const next =
+                (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+              items[next]?.focus();
+            }}
+            style={{ top: pos?.top ?? -9999, right: pos?.right ?? -9999 }}
+            className="fixed z-[70] w-60 rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+          >
+            <button type="button" role="menuitem" className={item} onClick={choose(onDetails)}>
+              <ClipboardList aria-hidden className="h-4 w-4 text-ink-500" />
+              View registration details
+            </button>
+            <button type="button" role="menuitem" className={item} onClick={choose(onReport)}>
+              <FileText aria-hidden className="h-4 w-4 text-ink-500" />
+              Full client report
+            </button>
+            <button type="button" role="menuitem" className={item} onClick={choose(onOpen)}>
+              <ChevronRight aria-hidden className="h-4 w-4 text-ink-500" />
+              Open client record
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }

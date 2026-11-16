@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import client_report_views as clrview
 from . import clinical_report_views as crview
 from . import group_views as gview
 from . import intervention_views as iview
@@ -161,6 +162,16 @@ urlpatterns = [
         "care/clients/<uuid:patient_id>/snapshot/",
         views.ClientSnapshotView.as_view(),
         name="care-client-snapshot",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/report/",
+        clrview.ClientReportView.as_view(),
+        name="care-client-report",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/report/print/",
+        clrview.ClientReportPrintView.as_view(),
+        name="care-client-report-print",
     ),
     path(
         "care/clients/<uuid:patient_id>/timeline/",

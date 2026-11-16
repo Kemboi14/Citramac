@@ -48,6 +48,11 @@ export function clientRecordPath(patientId: string, view: RecordView = "triage")
   return `/clinical/clients/${patientId}/${view}`;
 }
 
+/** The full read-only report of everything recorded for a client. */
+export function clientReportPath(patientId: string) {
+  return `/clinical/clients/${patientId}/report`;
+}
+
 /** The psychiatrist's assessment workspace for one client. */
 export function psychiatryAssessmentPath(patientId: string) {
   return `/clinical/psychiatry/assessments/${patientId}`;

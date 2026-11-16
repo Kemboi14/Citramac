@@ -1,0 +1,168 @@
+{% extends "documents/print/base.html" %}
+
+{% block extra_css %}
+  .withheld { font-style: italic; color: #666; }
+  h3 { font-size: 10.5pt; margin: 10pt 0 3pt; }
+{% endblock %}
+
+{% block content %}
+  {% with c=report.client r=record %}
+  <table class="fields">
+    <tr><th>Client</th><td>{{ c.name }}</td></tr>
+    <tr><th>Client number</th><td>{{ c.citramac_number|default:"—" }}</td></tr>
+    <tr><th>Sex / age</th><td>{{ c.sex|default:"—" }}{% if c.age is not None %} · {{ c.age }} years{% endif %}</td></tr>
+    {% if c.date_of_birth %}<tr><th>Date of birth</th><td>{{ c.date_of_birth }}</td></tr>{% endif %}
+  </table>
+
+  {% if part == "intake" %}
+    <h2>Intake {{ r.version }} · {{ r.status }}</h2>
+    <table class="fields">
+      <tr><th>Recorded by</th><td>{{ r.author|default:"—" }} · {{ r.saved_on }}</td></tr>
+      <tr><th>Signed</th><td>{% if r.signed_on %}{{ r.signed_on }} · {{ r.signed_by }}{% else %}Not signed{% endif %}</td></tr>
+      {% if r.completeness %}<tr><th>Completeness</th><td>{{ r.completeness }}</td></tr>{% endif %}
+      {% if r.presenting_concern %}<tr><th>Presenting concern</th><td class="pre">{{ r.presenting_concern }}</td></tr>{% endif %}
+      {% if r.history %}<tr><th>History</th><td class="pre">{{ r.history }}</td></tr>{% endif %}
+      {% if r.risk_level %}<tr><th>Risk</th><td>{{ r.risk_level }}{% if r.risk_notes %} — {{ r.risk_notes }}{% endif %}</td></tr>{% endif %}
+      {% if r.formulation %}<tr><th>Formulation</th><td class="pre">{{ r.formulation }}</td></tr>{% endif %}
+      {% if r.clinical_decision %}<tr><th>Clinical decision</th><td>{{ r.clinical_decision }}</td></tr>{% endif %}
+    </table>
+    {% for section in r.sections %}
+      <h2>{{ section.title }}</h2>
+      <table class="fields">{% for row in section.rows %}<tr><th>{{ row.label }}</th><td class="pre">{{ row.value }}</td></tr>{% endfor %}</table>
+    {% endfor %}
+    {% if r.outstanding %}<h2>Outstanding at the time</h2><ul>{% for o in r.outstanding %}<li>{{ o }}</li>{% endfor %}</ul>{% endif %}
+
+  {% elif part == "session" %}
+    <h2>{{ r.title }}</h2>
+    <table class="fields">
+      <tr><th>Date</th><td>{{ r.on }}</td></tr>
+      <tr><th>Clinician</th><td>{{ r.provider|default:"—" }}</td></tr>
+    </table>
+    {% if r.restricted %}<p class="withheld">{{ r.restricted }}</p>{% else %}
+      {% if r.note %}<h3>Session note</h3><p class="pre">{{ r.note }}</p>{% endif %}
+      {% if r.details %}<table class="fields">{% for d in r.details %}<tr><th>{{ d.label }}</th><td class="pre">{{ d.value }}</td></tr>{% endfor %}</table>{% endif %}
+      {% if r.response %}<h3>Response</h3><p class="pre">{{ r.response }}</p>{% endif %}
+      {% if r.outcome %}<h3>Outcome</h3><p class="pre">{{ r.outcome }}</p>{% endif %}
+      {% if r.next_action %}<h3>Next action</h3><p class="pre">{{ r.next_action }}</p>{% endif %}
+    {% endif %}
+
+  {% elif part == "action" %}
+    <h2>{{ r.title }}</h2>
+    <table class="fields">
+      {% if r.module %}<tr><th>Module</th><td>{{ r.module }}</td></tr>{% endif %}
+      {% if r.status_label %}<tr><th>Status</th><td>{{ r.status_label }}</td></tr>{% endif %}
+      {% if r.goal %}<tr><th>Goal</th><td class="pre">{{ r.goal }}</td></tr>{% endif %}
+      {% if r.instructions %}<tr><th>Instructions</th><td class="pre">{{ r.instructions }}</td></tr>{% endif %}
+    </table>
+    {% if r.note %}<h3>Plan note · {{ r.note.on }} · {{ r.note.by }}</h3><p class="pre">{{ r.note.text }}</p>{% endif %}
+    <h2>Delivery records ({{ r.records|length }})</h2>
+    {% for rec in r.records %}
+      <h3>{{ rec.on }}{% if rec.provider %} · {{ rec.provider }}{% endif %}</h3>
+      {% if rec.restricted %}<p class="withheld">{{ rec.restricted }}</p>{% else %}
+        {% if rec.note %}<p class="pre">{{ rec.note }}</p>{% endif %}
+        {% for d in rec.details %}<p><span class="muted">{{ d.label }}:</span> {{ d.value }}</p>{% endfor %}
+        {% if rec.response %}<p><span class="muted">Response:</span> {{ rec.response }}</p>{% endif %}
+        {% if rec.outcome %}<p><span class="muted">Outcome:</span> {{ rec.outcome }}</p>{% endif %}
+        {% if rec.next_action %}<p><span class="muted">Next:</span> {{ rec.next_action }}</p>{% endif %}
+      {% endif %}
+    {% empty %}<p class="not-recorded">Nothing delivered yet.</p>{% endfor %}
+
+  {% elif part == "note" %}
+    <h2>{{ r.type }}</h2>
+    <table class="fields">
+      <tr><th>Signed</th><td>{{ r.on }} · {{ r.by }}</td></tr>
+    </table>
+    <p class="pre">{{ r.text }}</p>
+
+  {% elif part == "group" %}
+    <h2>{{ r.topic|default:"Group session" }}</h2>
+    <table class="fields">
+      <tr><th>Date</th><td>{{ r.on }}</td></tr>
+      {% if r.category %}<tr><th>Category</th><td>{{ r.category }}</td></tr>{% endif %}
+      <tr><th>Facilitator</th><td>{{ r.facilitator|default:"—" }}</td></tr>
+      <tr><th>Attendance</th><td>{{ r.attendance }}</td></tr>
+      <tr><th>Observation</th><td class="pre">{{ r.observation|default:"None recorded." }}</td></tr>
+    </table>
+
+  {% elif part == "admission" %}
+    <h2>Admission · {{ r.status }}</h2>
+    <table class="fields">
+      <tr><th>Admitted</th><td>{{ r.admitted_on }}{% if r.admitted_by %} · {{ r.admitted_by }}{% endif %}</td></tr>
+      <tr><th>Discharged</th><td>{{ r.discharged_on|default:"—" }}</td></tr>
+      {% if r.ward %}<tr><th>Ward / bed</th><td>{{ r.ward }}{% if r.bed %} · {{ r.bed }}{% endif %}</td></tr>{% endif %}
+      {% if r.consultant %}<tr><th>Consultant</th><td>{{ r.consultant }}</td></tr>{% endif %}
+      {% if r.reason %}<tr><th>Reason</th><td class="pre">{{ r.reason }}</td></tr>{% endif %}
+      {% if r.primary_diagnosis %}<tr><th>Primary diagnosis</th><td>{{ r.primary_diagnosis }}</td></tr>{% endif %}
+      {% if r.risks %}<tr><th>Risks</th><td>{{ r.risks|join:", " }}</td></tr>{% endif %}
+      {% if r.observation_level %}<tr><th>Observation level</th><td>{{ r.observation_level }}</td></tr>{% endif %}
+      {% if r.risk_summary %}<tr><th>Risk summary</th><td class="pre">{{ r.risk_summary }}</td></tr>{% endif %}
+    </table>
+
+  {% elif part == "outcome" %}
+    <h2>{{ r.name }}</h2>
+    <table class="fields">
+      <tr><th>Latest</th><td>{{ r.latest }}{% if r.max %} / {{ r.max }}{% endif %}{% if r.band %} · {{ r.band }}{% endif %} ({{ r.latest_on }})</td></tr>
+      <tr><th>Baseline</th><td>{{ r.baseline }} ({{ r.baseline_on }})</td></tr>
+      <tr><th>Change</th><td>{{ r.change }}</td></tr>
+    </table>
+    <h2>Every score</h2>
+    <table class="grid">
+      <thead><tr><th>Date</th><th>Score</th></tr></thead>
+      <tbody>{% for p in r.series %}<tr><td>{{ p.on }}</td><td>{{ p.score }}</td></tr>{% endfor %}</tbody>
+    </table>
+
+  {% elif part == "plan" %}
+    <h2>Version {{ r.version }}</h2>
+    <table class="fields">
+      <tr><th>Confirmed</th><td>{% if r.confirmed_on %}{{ r.confirmed_on }} · {{ r.confirmed_by }}{% else %}Not confirmed{% endif %}</td></tr>
+      {% if r.goals %}<tr><th>Goals</th><td class="pre">{{ r.goals }}</td></tr>{% endif %}
+      {% if r.what_matters %}<tr><th>What matters to the client</th><td class="pre">{{ r.what_matters }}</td></tr>{% endif %}
+      {% if r.rationale %}<tr><th>Rationale</th><td class="pre">{{ r.rationale }}</td></tr>{% endif %}
+      {% if r.client_agreement %}<tr><th>Client agreement</th><td>{{ r.client_agreement }}</td></tr>{% endif %}
+      {% if r.care_coordinator %}<tr><th>Care coordinator</th><td>{{ r.care_coordinator }}</td></tr>{% endif %}
+      {% if r.review_date %}<tr><th>Review date</th><td>{{ r.review_date }}</td></tr>{% endif %}
+    </table>
+
+  {% elif part == "billing" %}
+  {% with b=report.billing %}
+  <h2>Billing</h2>
+  <table class="fields">
+    <tr><th>Payer</th><td>{{ b.payer }}</td></tr>
+    <tr><th>Total services</th><td>{{ b.totals.services }}</td></tr>
+    <tr><th>Paid</th><td>{{ b.totals.paid }}</td></tr>
+    <tr><th>Outstanding</th><td><strong>{{ b.totals.outstanding }}</strong></td></tr>
+    {% if b.invoice %}<tr><th>Invoice</th><td>{{ b.invoice.number }} v{{ b.invoice.version }} · issued {{ b.invoice.issued_on }} · {{ b.invoice.total }}</td></tr>{% endif %}
+  </table>
+  {% if b.services %}
+  <h3>Services delivered</h3>
+  <table class="grid">
+    <thead><tr><th>Date</th><th>Service</th><th>Status</th><th>Amount</th></tr></thead>
+    <tbody>{% for x in b.services %}<tr><td>{{ x.on }}</td><td>{{ x.service }}</td><td>{{ x.status }}</td><td>{{ x.amount }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% if b.payments %}
+  <h3>Payments</h3>
+  <table class="grid">
+    <thead><tr><th>Date</th><th>Reference</th><th>Method</th><th>Amount</th><th>Received by</th></tr></thead>
+    <tbody>{% for x in b.payments %}<tr><td>{{ x.on }}</td><td>{{ x.reference }}</td><td>{{ x.method }}</td><td>{{ x.amount }}</td><td>{{ x.received_by }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% if b.claims %}
+  <h3>Claims</h3>
+  <table class="grid">
+    <thead><tr><th>Claim</th><th>Payer</th><th>Status</th><th>Claimed</th><th>Submitted</th></tr></thead>
+    <tbody>{% for x in b.claims %}<tr><td>{{ x.number }}</td><td>{{ x.payer }}</td><td>{{ x.status }}</td><td>{{ x.claimed }}</td><td>{{ x.submitted_on }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% endwith %}
+  {% elif part == "mse" %}
+    <table class="fields">
+      <tr><th>Recorded</th><td>{{ r.recorded_on }} · {{ r.recorded_by }}</td></tr>
+      {% for f in r.fields %}<tr><th>{{ f.label }}</th><td class="pre">{{ f.value }}</td></tr>{% endfor %}
+    </table>
+    {% if r.risk %}<h2>Risk</h2><ul>{% for x in r.risk %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% endif %}
+  {% endwith %}
+{% endblock %}
+
+{% block end_meta %}Printed from the client record at {{ report.generated_on }} by {{ printed_by }}. Content the reader may not see is marked as withheld.{% endblock %}

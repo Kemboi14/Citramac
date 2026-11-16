@@ -7,7 +7,8 @@ import {
   type ClientBanner,
 } from "../../../lib/carePathwayApi";
 
-const CHANGED_EVENT = "citramac:client-changed";
+export const CLIENT_CHANGED_EVENT = "citramac:client-changed";
+const CHANGED_EVENT = CLIENT_CHANGED_EVENT;
 const CHANNEL = "citramac-client-banner";
 /** How often an open, visible page asks whether the banner changed. */
 export const BANNER_POLL_MS = 30_000;

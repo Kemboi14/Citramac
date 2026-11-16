@@ -3116,3 +3116,249 @@ export function approveAssessment(
     accessToken,
   });
 }
+
+/** One labelled value in the client report. */
+export interface ReportRow {
+  label: string;
+  value: string;
+}
+
+export interface ClientReportTriage {
+  id: string;
+  /** The signed assessment, for its full printout; "" when not signed. */
+  assessment_id: string;
+  /** Every recorded answer, by section, in the signed form's wording. */
+  answers: { title: string; rows: ReportRow[] }[];
+  rules_version: string;
+  arrival_on: string;
+  status: string;
+  presenting_concern: string;
+  priority: PriorityOrBlank;
+  priority_label: string;
+  signed: boolean;
+  signed_on: string;
+  signed_by: string;
+  recommendation: string;
+  recommendation_reasons: string;
+  final_priority: string;
+  override_reason: string;
+  findings: string[];
+  alerts: string[];
+  rechecks: {
+    version: number;
+    signed_on: string;
+    signed_by: string;
+    change: string;
+    distress: string;
+    note: string;
+  }[];
+}
+
+export interface ClientReportIntake {
+  id: string;
+  version: number;
+  status: string;
+  completeness: string;
+  saved_on: string;
+  signed_on: string;
+  signed_by: string;
+  author: string;
+  presenting_concern: string;
+  history: string;
+  risk_level: string;
+  risk_notes: string;
+  formulation: string;
+  clinical_decision: string;
+  outstanding: string[];
+  sections: { title: string; rows: ReportRow[] }[];
+}
+
+export interface ClientReportRecord {
+  id: string;
+  kind: "delivery" | "session";
+  on: string;
+  provider: string;
+  title: string;
+  note: string;
+  response: string;
+  outcome: string;
+  next_action: string;
+  details: ReportRow[];
+  restricted?: string;
+}
+
+/** Everything recorded for a client, compiled read-only by the server
+ * (care_pathway/client_report.py), shaped by what the reader may see. */
+export interface ClientReport {
+  reference: string;
+  generated_on: string;
+  generated_by: string;
+  client: {
+    id: string;
+    name: string;
+    preferred_name: string;
+    citramac_number: string;
+    age: number | null;
+    sex: string;
+    date_of_birth: string;
+    identity_label: string;
+  };
+  registration: Record<string, string>;
+  episode: {
+    status_label: string;
+    started_on: string;
+    ended_on: string;
+    care_manager: string;
+    branch: string;
+    presenting_problems: string;
+  } | null;
+  clinical: {
+    priority: PriorityOrBlank;
+    priority_label: string;
+    clinician: string;
+    team: string;
+    diagnoses: {
+      code: string;
+      label: string;
+      kind: string;
+      status: string;
+      certainty: string;
+      noted_on: string;
+    }[];
+    allergies: { substance: string; reaction: string; severity: string; verified: string }[];
+    medicines: {
+      drug: string;
+      dose: string;
+      route: string;
+      frequency: string;
+      duration: string;
+      prescribed_by: string;
+      prescribed_on: string;
+    }[];
+    alerts: { code: string; label: string; raised_on: string }[];
+  };
+  care_plan: {
+    version: number;
+    confirmed_on: string;
+    confirmed_by: string;
+    goals: string;
+    review_date: string;
+    care_coordinator: string;
+    client_agreement: string;
+    what_matters: string;
+    rationale: string;
+  } | null;
+  triages: ClientReportTriage[];
+  intakes: ClientReportIntake[];
+  mse: { recorded_on: string; recorded_by: string; fields: ReportRow[]; risk: string[] } | null;
+  admissions: {
+    id: string;
+    admitted_on: string;
+    discharged_on: string;
+    status: string;
+    ward: string;
+    bed: string;
+    consultant: string;
+    reason: string;
+    primary_diagnosis: string;
+    risks: string[];
+    risk_summary: string;
+  }[];
+  interventions: {
+    id: string;
+    title: string;
+    module: string;
+    status_label: string;
+    goal: string;
+    instructions: string;
+    note: { on: string; by: string; text: string } | null;
+    records: ClientReportRecord[];
+  }[];
+  group_sessions: {
+    id: string;
+    on: string;
+    topic: string;
+    category: string;
+    facilitator: string;
+    attendance: string;
+    observation: string;
+  }[];
+  outcomes: {
+    summary: {
+      instrument: string;
+      name: string;
+      max: number | null;
+      series: { score: number; on: string }[];
+      baseline: number;
+      baseline_on: string;
+      latest: number;
+      latest_on: string;
+      band: string;
+      change: string;
+      direction: string;
+    }[];
+    episode_outcome: {
+      outcome: string;
+      destination: string;
+      reason: string;
+      recorded_on: string;
+      recorded_by: string;
+    } | null;
+  };
+  discharges: {
+    id: string;
+    /** False when the reader may not see it in full (no printout then). */
+    printable: boolean;
+    version: number;
+    status: string;
+    signed_on: string;
+    signed_by: string;
+    discharged_on: string;
+    restricted: string;
+    disposition: string;
+    destination: string;
+    clinical_status: string;
+    treatment_summary: string;
+  }[];
+  follow_ups: {
+    id: string;
+    scheduled_for: string;
+    reason: string;
+    status: string;
+    provider: string;
+  }[];
+  billing: {
+    payer: string;
+    totals: { services: string; paid: string; outstanding: string };
+    services: { on: string; service: string; status: string; amount: string }[];
+    invoice: {
+      number: string;
+      version: number;
+      issued_on: string;
+      total: string;
+      stale: boolean;
+    } | null;
+    payments: {
+      on: string;
+      amount: string;
+      method: string;
+      reference: string;
+      received_by: string;
+    }[];
+    claims: {
+      number: string;
+      payer: string;
+      status: string;
+      claimed: string;
+      submitted_on: string;
+    }[];
+  };
+  /** Everything that happened, newest first (the client timeline). */
+  activity: { at: string; on: string; kind: string; title: string; detail: string }[];
+  appointments: { id: string; on: string; type: string; provider: string; status: string }[];
+  notes: { id: string; on: string; type: string; by: string; text: string }[];
+}
+
+export function getClientReport(accessToken: string, patientId: string) {
+  return apiRequest<ClientReport>(`/care/clients/${patientId}/report/`, { accessToken });
+}
