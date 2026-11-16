@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -122,6 +122,46 @@ describe("SupervisionRequestsPage", () => {
       await screen.findByRole("row", { name: /Open supervision request for Jane Client/ }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Therapist self-assessment/)).not.toBeInTheDocument();
+  });
+
+  it("ignores a list response for an outdated filter query", async () => {
+    type ListResult = Awaited<ReturnType<typeof listSupervisionRequests>>;
+    let resolveAll: ((result: ListResult) => void) | null = null;
+    let resolveOpen: ((result: ListResult) => void) | null = null;
+    const filteredRequest = {
+      ...openRequest,
+      id: "request-filtered",
+      patient_name: "Alex Client",
+    };
+    const staleRequest = {
+      ...scheduledRequest,
+      id: "request-stale",
+      patient_name: "Stale Client",
+    };
+    vi.mocked(listSupervisionRequests).mockImplementation(
+      (_token, params) =>
+        new Promise((resolve) => {
+          if (params?.status === "ALL") resolveAll = resolve;
+          else resolveOpen = resolve;
+        }),
+    );
+
+    renderPage();
+    await waitFor(() => expect(resolveAll).not.toBeNull());
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "OPEN" } });
+    await waitFor(() => expect(resolveOpen).not.toBeNull());
+
+    await act(async () => resolveOpen?.({ count: 1, results: [filteredRequest] }));
+    expect(
+      await screen.findByRole("row", { name: /Open supervision request for Alex Client/ }),
+    ).toBeInTheDocument();
+
+    await act(async () => resolveAll?.({ count: 1, results: [staleRequest] }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("row", { name: /Open supervision request for Stale Client/ }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("lists the request the clinician raises from this page", async () => {

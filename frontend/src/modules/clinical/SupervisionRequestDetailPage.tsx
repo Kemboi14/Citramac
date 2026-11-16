@@ -54,6 +54,12 @@ function nextFreeSlot() {
   return slot;
 }
 
+type SupervisionRequestLoad = {
+  key: string;
+  request?: SupervisionRequest;
+  error?: string;
+};
+
 function StatusPill({ status }: { status: SupervisionRequest["status"] }) {
   return (
     <span
@@ -78,35 +84,45 @@ export function SupervisionRequestDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
-  const [request, setRequest] = useState<SupervisionRequest | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [requestLoad, setRequestLoad] = useState<SupervisionRequestLoad | null>(null);
+  const [actionError, setActionError] = useState<{ key: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [completionNotes, setCompletionNotes] = useState("");
 
-  const load = async () => {
-    if (!accessToken || !id) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getSupervisionRequest(accessToken, id);
-      setRequest(data);
-      const slot = data.scheduled_for ? new Date(data.scheduled_for) : nextFreeSlot();
-      setScheduleDate(dateInputValue(slot));
-      setScheduleTime(timeInputValue(slot));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't load this supervision request.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const requestKey = JSON.stringify([id ?? null, accessToken ?? null]);
+  const currentLoad = requestLoad?.key === requestKey ? requestLoad : null;
+  const request = currentLoad?.request ?? null;
+  const loading = Boolean(id) && !currentLoad;
+  const error =
+    currentLoad?.error ?? (actionError?.key === requestKey ? actionError.message : null);
+  const setError = (message: string | null) =>
+    setActionError(message ? { key: requestKey, message } : null);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, id]);
+    if (!accessToken || !id) return;
+    let active = true;
+    getSupervisionRequest(accessToken, id)
+      .then((data) => {
+        if (!active) return;
+        setRequestLoad({ key: requestKey, request: data });
+        setActionError(null);
+        const slot = data.scheduled_for ? new Date(data.scheduled_for) : nextFreeSlot();
+        setScheduleDate(dateInputValue(slot));
+        setScheduleTime(timeInputValue(slot));
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setRequestLoad({
+          key: requestKey,
+          error: err instanceof ApiError ? err.message : "Couldn't load this supervision request.",
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, id, requestKey]);
 
   const schedule = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -120,7 +136,7 @@ export function SupervisionRequestDetailPage() {
     setBusy(true);
     try {
       const updated = await scheduleSupervisionRequest(accessToken, request.id, slot.toISOString());
-      setRequest(updated);
+      setRequestLoad({ key: requestKey, request: updated });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't schedule the session.");
     } finally {
@@ -134,7 +150,7 @@ export function SupervisionRequestDetailPage() {
     setBusy(true);
     try {
       const updated = await completeSupervisionRequest(accessToken, request.id, completionNotes);
-      setRequest(updated);
+      setRequestLoad({ key: requestKey, request: updated });
       setCompletionNotes("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't complete the request.");

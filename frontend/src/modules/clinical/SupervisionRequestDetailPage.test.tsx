@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   completeSupervisionRequest,
@@ -39,7 +39,15 @@ const renderDetail = () =>
   render(
     <MemoryRouter initialEntries={["/clinical/mhp/supervision/request-1"]}>
       <Routes>
-        <Route path="/clinical/mhp/supervision/:id" element={<SupervisionRequestDetailPage />} />
+        <Route
+          path="/clinical/mhp/supervision/:id"
+          element={
+            <>
+              <Link to="/clinical/mhp/supervision/request-2">Show second request</Link>
+              <SupervisionRequestDetailPage />
+            </>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -59,6 +67,31 @@ describe("SupervisionRequestDetailPage", () => {
     expect(screen.getByText("Self-assessment and reflection")).toBeInTheDocument();
     expect(screen.getByText(/I moved too quickly past the disclosure/)).toBeInTheDocument();
     expect(screen.getByText("Back to queue")).toBeInTheDocument();
+  });
+
+  it("ignores a response for an outdated route ID", async () => {
+    let resolveFirst: ((value: SupervisionRequest) => void) | null = null;
+    let resolveSecond: ((value: SupervisionRequest) => void) | null = null;
+    const secondRequest = { ...request, id: "request-2", patient_name: "Alex Client" };
+    vi.mocked(getSupervisionRequest).mockImplementation(
+      (_token, id) =>
+        new Promise((resolve) => {
+          if (id === "request-1") resolveFirst = resolve;
+          else resolveSecond = resolve;
+        }),
+    );
+
+    renderDetail();
+    await waitFor(() => expect(resolveFirst).not.toBeNull());
+    fireEvent.click(screen.getByRole("link", { name: "Show second request" }));
+    await waitFor(() => expect(resolveSecond).not.toBeNull());
+
+    await act(async () => resolveSecond?.(secondRequest));
+    expect(await screen.findByText("Alex Client", { selector: "dd" })).toBeInTheDocument();
+
+    await act(async () => resolveFirst?.(request));
+    expect(screen.queryByText("Jane Client", { selector: "dd" })).not.toBeInTheDocument();
+    expect(screen.getByText("Alex Client", { selector: "dd" })).toBeInTheDocument();
   });
 
   it("schedules an open request", async () => {

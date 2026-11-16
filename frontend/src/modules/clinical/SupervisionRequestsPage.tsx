@@ -39,8 +39,10 @@ export function SupervisionRequestsPage() {
   const [requests, setRequests] = useState<SupervisionRequest[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [completedQuery, setCompletedQuery] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ query: string; message: string } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<SupervisionRequest["status"] | "ALL">("ALL");
@@ -52,49 +54,53 @@ export function SupervisionRequestsPage() {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, debouncedSearch]);
-
-  const refresh = async (targetPage = page) => {
-    if (!accessToken) return;
-    const res = await listSupervisionRequests(accessToken, {
-      page: targetPage,
-      status: statusFilter,
-      q: debouncedSearch,
-    });
-    setRequests(res.results);
-    setCount(res.count);
-  };
+  const queryKey = JSON.stringify([
+    accessToken ?? null,
+    page,
+    statusFilter,
+    debouncedSearch,
+    refreshVersion,
+  ]);
+  const loaded = completedQuery === queryKey;
+  const error = actionError ?? (loadError?.query === queryKey ? loadError.message : null);
 
   useEffect(() => {
     if (!accessToken) return;
-    setLoaded(false);
+    let active = true;
     listSupervisionRequests(accessToken, {
       page,
       status: statusFilter,
       q: debouncedSearch,
     })
       .then((res) => {
+        if (!active) return;
         setRequests(res.results);
         setCount(res.count);
       })
-      .catch(() => setError("Couldn't load supervision requests."))
-      .finally(() => setLoaded(true));
-  }, [accessToken, page, statusFilter, debouncedSearch]);
+      .catch(() => {
+        if (active)
+          setLoadError({ query: queryKey, message: "Couldn't load supervision requests." });
+      })
+      .finally(() => {
+        if (active) setCompletedQuery(queryKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, page, statusFilter, debouncedSearch, queryKey]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!accessToken || !topic.trim() || !selected) return;
-    setError(null);
+    setActionError(null);
     setBusy(true);
     try {
       await createSupervisionRequest(accessToken, selected.patientId, topic);
       setTopic("");
-      await refresh(1);
       setPage(1);
+      setRefreshVersion((version) => version + 1);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't create the request.");
+      setActionError(err instanceof ApiError ? err.message : "Couldn't create the request.");
     } finally {
       setBusy(false);
     }
@@ -149,9 +155,11 @@ export function SupervisionRequestsPage() {
               <select
                 className={FIELD_CLASS}
                 value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as SupervisionRequest["status"] | "ALL")
-                }
+                onChange={(event) => {
+                  setStatusFilter(event.target.value as SupervisionRequest["status"] | "ALL");
+                  setPage(1);
+                  setActionError(null);
+                }}
               >
                 <option value="ALL">All</option>
                 <option value="OPEN">Open</option>
@@ -165,7 +173,11 @@ export function SupervisionRequestsPage() {
                 className={`${FIELD_CLASS} pl-8`}
                 placeholder="Search client, requester, topic…"
                 value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
+                onChange={(event) => {
+                  setSearchInput(event.target.value);
+                  setPage(1);
+                  setActionError(null);
+                }}
               />
             </label>
             {loaded && (
