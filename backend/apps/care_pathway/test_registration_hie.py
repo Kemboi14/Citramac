@@ -727,6 +727,9 @@ class FhirR4ConformancePatientTests(CarePathwayApiTestCase):
             apparent_sex="MALE_APPEARING",
             brought_by_name="PC Otieno",
             brought_by_relationship="Police officer",
+            # An unknown arrival has no known next of kin: only the escort.
+            next_of_kin_name="",
+            next_of_kin_phone="",
         )
         payload, _ = self.build(patient)
         self.assertEqual(payload["name"][0]["text"], f"UNKNOWN CLIENT — {patient.citramac_number}")
