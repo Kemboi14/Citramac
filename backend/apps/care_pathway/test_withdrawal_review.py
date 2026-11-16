@@ -44,7 +44,11 @@ class WithdrawalRulesTests(SimpleTestCase):
 
     def test_any_withdrawal_flags_a_psychiatric_review(self):
         self.assertEqual(v5.withdrawal_reasons({**BASE, **OPIOID_WD}), ["Opioids withdrawal"])
-        self.assertIn("PSYCHIATRIC_REVIEW", triggers(OPIOID_WD))
+        trigger = triggers(OPIOID_WD)["PSYCHIATRIC_REVIEW"]
+        self.assertEqual(trigger["pathway"], "psychiatric_review")
+        result = v5.evaluate({**BASE, **OPIOID_WD})
+        self.assertIn("psychiatric_review", result["recommended_actions"])
+        self.assertNotIn("psychiatric_review_withdrawal", result["recommended_actions"])
         self.assertEqual(
             v5.withdrawal_reasons({**BASE, **BENZO_WD}),
             ["Benzodiazepines / sedatives withdrawal"],

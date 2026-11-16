@@ -471,6 +471,7 @@ VALUESETS = {
             ("external_referral", "Refer to another facility"),
             # Spec item 10 (2026-10-29.1): withdrawal → psychiatric review (psychiatric_review.py).
             ("psychiatric_review_withdrawal", "Psychiatric review — withdrawal"),
+            ("psychiatric_review", "Psychiatric review"),
         ],
     ),
     "task-status": (

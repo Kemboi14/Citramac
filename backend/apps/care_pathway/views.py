@@ -660,6 +660,7 @@ class TriageTasksView(APIView):
 
     def post(self, request, pk):
         from . import task_assignees, task_notify
+        from . import triage_psychiatric_review
 
         te = _triage(pk)
         rows = request.data.get("tasks")
@@ -685,30 +686,55 @@ class TriageTasksView(APIView):
                     {"tasks": "One of the actions is not a triage action."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            raw_detail = row.get("detail")
+            if raw_detail is not None and not isinstance(raw_detail, str):
+                return Response(
+                    {"tasks": "Action detail must be text."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            detail = (raw_detail or "").strip()
+            if detail and code != "other":
+                return Response(
+                    {"tasks": "Only the Other action accepts a description."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if request.data.get("schema") == "v5" and code == "other" and not detail:
+                return Response(
+                    {"tasks": "Describe the other action before registering it."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             person = task_assignees.resolve(te.organization_id, te, row.get("assignee"))
             if person is None:
                 return Response(
                     {"tasks": f"Assign “{label}” to a named person from the list."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            planned.append((code, label, person))
+            planned.append((code, label, person, detail))
 
         created = []
         with transaction.atomic():
-            for code, label, person in planned:
-                created.append(
-                    CareTask.objects.create(
-                        organization_id=te.organization_id,
-                        patient=te.patient,
-                        triage_encounter=te,
-                        action_code=code,
-                        action_label=label,
-                        owner=person["name"][:150],
-                        assignee_id=person["id"],
-                        status=task_status,
-                        created_by=request.user,
+            for code, label, person, detail in planned:
+                if code == triage_psychiatric_review.ACTION_CODE:
+                    task, was_created = triage_psychiatric_review.register(
+                        te, request.user, person, task_status, label
                     )
-                )
+                    if was_created:
+                        created.append(task)
+                else:
+                    created.append(
+                        CareTask.objects.create(
+                            organization_id=te.organization_id,
+                            patient=te.patient,
+                            triage_encounter=te,
+                            action_code=code,
+                            action_label=label,
+                            action_detail=detail,
+                            owner=person["name"][:150],
+                            assignee_id=person["id"],
+                            status=task_status,
+                            created_by=request.user,
+                        )
+                    )
         by_person = {}
         for task in created:
             by_person.setdefault(str(task.assignee_id), []).append(task)
@@ -722,6 +748,7 @@ class TriageTasksView(APIView):
 class CareTaskView(APIView):
     def patch(self, request, pk):
         from . import psychiatric_review
+        from . import triage_psychiatric_review
 
         task = get_object_or_404(CareTask, pk=pk)
         if task.focus_type == psychiatric_review.FOCUS:
@@ -735,6 +762,13 @@ class CareTaskView(APIView):
             psychiatric_review.complete(
                 task, request.user, request.data.get("outcome"), request.data.get("outcome_note")
             )
+            return Response(CareTaskSerializer(task).data)
+        if task.focus_type == triage_psychiatric_review.FOCUS:
+            from apps.accounts.access import has_permission
+
+            if not has_permission(request.user, "clinical.care.record"):
+                raise PermissionDenied("Only clinical staff can update a psychiatric review task.")
+            triage_psychiatric_review.set_status(task, request.user, request.data.get("status"))
             return Response(CareTaskSerializer(task).data)
         from . import psychiatric_review_request
 
@@ -840,6 +874,7 @@ class PsychiatryQueueView(APIView):
         from django.conf import settings
 
         from . import psychiatric_review
+        from . import triage_psychiatric_review
         from .triage_queue import responsible
 
         targets = getattr(settings, "SEEN_BY_CLINICIAN_TARGET_MINUTES", None) or {}
@@ -871,6 +906,9 @@ class PsychiatryQueueView(APIView):
                     "signed_by": user_display(te.last_triaged_by),
                     "review_started_at": _iso(te.psychiatry_review_started_at),
                     "withdrawal_review": psychiatric_review.row(psychiatric_review.for_triage(te)),
+                    "triage_review": psychiatric_review.row(
+                        triage_psychiatric_review.for_triage(te)
+                    ),
                     "age": te.patient.age_years,
                     "sex": te.patient.gender,
                     "alerts": list(

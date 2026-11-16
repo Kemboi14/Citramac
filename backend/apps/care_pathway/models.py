@@ -444,6 +444,7 @@ class CareTask(TenantScopedModel):
     # Workflow code; triage actions use the `triage-action` LocalValueSet.
     action_code = models.CharField(max_length=40)
     action_label = models.CharField(max_length=255)
+    action_detail = models.TextField(blank=True)
     owner = models.CharField(max_length=150)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="INITIATED")
     created_by = models.ForeignKey(

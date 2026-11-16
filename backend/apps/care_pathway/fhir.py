@@ -241,6 +241,7 @@ def build_triage_bundle(triage_encounter):
                     status=_TASK_STATUS[task.status],
                     intent="order",
                     code=_local("triage-action", task.action_code, task.action_label),
+                    description=task.action_detail or None,
                     for_fhir=Reference(reference=patient_ref),
                     encounter=Reference(reference=encounter_ref),
                     authoredOn=task.created_at.isoformat(),

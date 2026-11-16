@@ -59,7 +59,11 @@ STRUCTURED_SECTIONS = (
 )
 # The structured assessment requires a clinical risk statement before signing.
 REQUIRED_TO_SIGN = (("risk", "Risk"),)
-REVIEW_FOCUS_TYPES = ("PSYCHIATRIC_REVIEW_WITHDRAWAL", "URGENT_PSYCHIATRIC_REVIEW")
+REVIEW_FOCUS_TYPES = (
+    "PSYCHIATRIC_REVIEW_WITHDRAWAL",
+    "URGENT_PSYCHIATRIC_REVIEW",
+    "TRIAGE_PSYCHIATRIC_REVIEW",
+)
 OPEN_TASK_STATUSES = ("INITIATED", "PENDING")
 
 
@@ -137,6 +141,9 @@ def ensure_psychiatry_encounter(patient, user):
             update_fields=["psychiatry_encounter", "psychiatry_review_started_at", "updated_at"]
         )
         psychiatric_review.start(signed)
+        from . import triage_psychiatric_review
+
+        triage_psychiatric_review.start(signed)
     if episode.status != "active":
         episode.transition("active", user=user, at=now)
     return encounter

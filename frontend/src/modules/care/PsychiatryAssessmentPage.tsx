@@ -645,6 +645,7 @@ export function PsychiatryAssessmentPage() {
         >
           <strong>{workspace.review.label}</strong>
           {workspace.review.priority ? ` · ${workspace.review.priority}` : ""}
+          {workspace.review.triage_priority ? ` · triage ${workspace.review.triage_priority}` : ""}
         </Callout>
       )}
 

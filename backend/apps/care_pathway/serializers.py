@@ -17,6 +17,7 @@ class CareTaskSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     # The named person the task is assigned to (task_assignees), as an id string.
     assignee = serializers.SerializerMethodField()
+    triage_priority = serializers.SerializerMethodField()
 
     class Meta:
         model = CareTask
@@ -24,8 +25,10 @@ class CareTaskSerializer(serializers.ModelSerializer):
             "id",
             "action_code",
             "action_label",
+            "action_detail",
             "owner",
             "assignee",
+            "triage_priority",
             "status",
             "created_at",
             "created_by_name",
@@ -39,9 +42,11 @@ class CareTaskSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "action_code",
             "action_label",
+            "action_detail",
             "owner",
             "created_at",
             "focus_type",
+            "triage_priority",
             "due_at",
             "priority",
             "outcome",
@@ -51,6 +56,9 @@ class CareTaskSerializer(serializers.ModelSerializer):
 
     def get_assignee(self, obj):
         return str(obj.assignee_id) if obj.assignee_id else None
+
+    def get_triage_priority(self, obj):
+        return obj.triage_encounter.priority if obj.triage_encounter_id else ""
 
     def get_created_by_name(self, obj):
         return user_display(obj.created_by)

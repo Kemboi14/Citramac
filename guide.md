@@ -929,3 +929,27 @@ On the owner's decisions of 2026-11-13 (method, signers and scope chosen; mappin
 Reversibility: cheap. Everything is additive; no signed record changes. Consents and documents recorded
 before today show no signatures; a telephone order placed before today names no prescriber,
 so a senior clinician confirms it as before.
+
+### 2026-11-16 — Triage v5 Section N: one psychiatric review action; described Other
+
+On the project owner's instruction, editable v5 triages show one Section N action,
+**Psychiatric review**, instead of routine / priority / urgent variants. The action is
+available at every triage priority; RED / ORANGE remains urgent and YELLOW / GREEN remains
+routine on the FHIR Task, while the exact priority remains on the linked Encounter. If acute
+medical escalation calls for psychiatric review, it reuses this same task rather than raising a
+second general review. Withdrawal rules and trigger conditions are unchanged, but their
+recommendation and auto-trigger pathway now point to **Psychiatric review**; the separate
+withdrawal-triggered task retains its coded-outcome workflow. Signed v3/v4 triages are unchanged.
+
+**Other** is last. Selecting it opens a required description field; registering it as a task
+requires the description, which is stored in `CareTask.action_detail`. The audit trail keeps
+only a fingerprint of that free text. Task assignees remain named people.
+
+FHIR: R4 `Task` uses the served local `triage-action` code; Other's description maps to
+`Task.description`. The Task references the triage Encounter, whose `EpisodeOfCare` link
+provides the episode connection. Task resources are not on the SHR export allow-list.
+VERIFY: a profile and bound ValueSet for the general triage-action Task; this change adds no
+canonical URL or new code system.
+
+Reversibility: cheap. The task detail field and action are additive; signed triage answers and
+legacy form behavior are not rewritten.

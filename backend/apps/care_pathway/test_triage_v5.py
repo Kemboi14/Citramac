@@ -13,7 +13,7 @@ from apps.tenancy.context import platform_admin_context
 
 from . import tools
 from . import triage_v5 as v5
-from .models import ClinicalAlert, ClinicalFinding, TriageEncounter
+from .models import CareTask, ClinicalAlert, ClinicalFinding, TriageEncounter
 from .tests import CarePathwayApiTestCase
 
 BASE = {
@@ -67,8 +67,27 @@ class RulesTests(SimpleTestCase):
     def test_completed_negative_screen_is_green_and_owner_approved(self):
         result = rec()
         self.assertEqual(result["recommendation"], "GREEN")
-        self.assertEqual(result["rules_version"], "2026-10-29.1")
-        self.assertEqual(result["ruleset_label"], "Approved by the project owner, 2026-10-29")
+        self.assertEqual(result["rules_version"], "2026-11-16.2")
+        self.assertEqual(result["ruleset_label"], "Approved by the project owner, 2026-11-16")
+
+    def test_every_triage_priority_uses_the_same_psychiatric_review_action(self):
+        cases = {
+            "GREEN": {},
+            "YELLOW": {"j_concern": "yes", "j_flags": ["eating_drinking"]},
+            "ORANGE": {"i_safe": "no"},
+            "RED": {"d_suicidal": "yes", "d_act_now": "yes"},
+        }
+        legacy = {
+            "routine_psychiatric_review",
+            "priority_psychiatric_review",
+            "urgent_psychiatric_review",
+        }
+        for priority, answers in cases.items():
+            with self.subTest(priority=priority):
+                result = rec(**answers)
+                self.assertEqual(result["priority"], priority)
+                self.assertIn("psychiatric_review", result["recommended_actions"])
+                self.assertTrue(legacy.isdisjoint(result["recommended_actions"]))
 
     def test_section_d_suicide_self_harm(self):
         self.assertEqual(rec(d_suicidal="yes", d_act_now="no")["priority"], "ORANGE")
@@ -271,7 +290,7 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
         }
         response = self.sign_v5(answers)
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["rules_version"], "2026-10-29.1")
+        self.assertEqual(response.data["rules_version"], "2026-11-16.2")
         self.assertEqual(response.data["final_priority"], "ORANGE")
         with platform_admin_context():
             codes = set(
@@ -309,6 +328,111 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
             why = tools.triggers(Patient.objects.get(pk=self.pid))
         self.assertIn("PAWSS", why)
         self.assertIn("SRA", why)
+
+    def test_other_action_requires_and_exports_its_description(self):
+        url = reverse("care-triage-tasks", args=[self.te_id])
+        payload = {
+            "schema": "v5",
+            "tasks": [{"action": "other", "assignee": str(self.nurse.pk)}],
+        }
+        missing = self.client.post(url, payload, format="json", **self.auth)
+        self.assertEqual(missing.status_code, 400)
+
+        detail = "Arrange a same-day family meeting"
+        registered = self.client.post(
+            url,
+            {
+                **payload,
+                "tasks": [{**payload["tasks"][0], "detail": detail}],
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(registered.status_code, 201, registered.data)
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        with platform_admin_context():
+            task = CareTask.objects.get(pk=registered.data[0]["id"])
+            audit_entry = AuditLogEntry.objects.filter(
+                model="care_pathway.caretask", object_id=str(task.pk)
+            ).first()
+        self.assertEqual(task.action_detail, detail)
+        self.assertIsNotNone(audit_entry)
+        self.assertNotIn(detail, str(audit_entry.field_diff))
+        self.assertIn("clinical content", str(audit_entry.field_diff))
+
+        missing_detail = self.sign_v5({**BASE, **SAFETY, "n_actions": ["other"]})
+        self.assertEqual(missing_detail.status_code, 400, missing_detail.data)
+
+        signed = self.sign_v5({**BASE, **SAFETY, "n_actions": ["other"], "n_actions_other": detail})
+        self.assertEqual(signed.status_code, 201, signed.data)
+        bundle = self.client.get(reverse("care-triage-fhir", args=[self.te_id]), **self.auth).data
+        self.assertEqual(validate_bundle(bundle), {})
+        fhir_task = next(
+            entry["resource"]
+            for entry in bundle["entry"]
+            if entry["resource"]["resourceType"] == "Task"
+            and entry["resource"]["code"]["coding"][0]["code"] == "other"
+        )
+        self.assertEqual(fhir_task["description"], detail)
+
+    def test_general_section_n_review_is_reused_by_signing_and_keeps_priority(self):
+        registered = self.client.post(
+            reverse("care-triage-tasks", args=[self.te_id]),
+            {
+                "schema": "v5",
+                "tasks": [
+                    {"action": "psychiatric_review", "assignee": str(self.nurse.pk)}
+                ],
+            },
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(registered.status_code, 201, registered.data)
+        self.assertEqual(len([t for t in registered.data if t["action_code"] == "psychiatric_review"]), 1)
+
+        answers = {
+            **BASE,
+            **SAFETY,
+            "d_suicidal": "yes",
+            "d_act_now": "no",
+            "h_concern": "yes",
+            "h_flags": ["severe_pain"],
+            "h_next": "psychiatric_review",
+            "h_referred_in": "no",
+        }
+        signed = self.sign_v5(answers)
+        self.assertEqual(signed.status_code, 201, signed.data)
+        with platform_admin_context():
+            task = CareTask.objects.get(
+                triage_encounter_id=self.te_id,
+                focus_type="TRIAGE_PSYCHIATRIC_REVIEW",
+            )
+            priority = task.triage_encounter.priority
+        self.assertEqual((task.priority, priority), ("urgent", "ORANGE"))
+        row = self.client.get(reverse("care-psych-queue"), **self.auth).data["results"][0]
+        self.assertEqual(row["triage_review"]["triage_priority"], "ORANGE")
+
+        opened = self.client.post(reverse("care-open-review", args=[self.te_id]), **self.auth)
+        self.assertEqual(opened.status_code, 200, opened.data)
+        with platform_admin_context():
+            task.refresh_from_db()
+        self.assertEqual(task.status, "PENDING")
+        bundle = self.client.get(reverse("care-triage-fhir", args=[self.te_id]), **self.auth).data
+        self.assertEqual(validate_bundle(bundle), {})
+        fhir_task = next(
+            entry["resource"]
+            for entry in bundle["entry"]
+            if entry["resource"]["resourceType"] == "Task"
+            and entry["resource"]["code"]["coding"][0]["code"] == "psychiatric_review"
+        )
+        self.assertEqual(fhir_task["priority"], "urgent")
+        encounter = next(
+            entry["resource"]
+            for entry in bundle["entry"]
+            if entry["resource"]["resourceType"] == "Encounter"
+        )
+        self.assertEqual(encounter["priority"]["coding"][0]["code"], "ORANGE")
 
     def test_the_episode_takes_its_presenting_problems_from_the_triage(self):
         # Registration no longer asks the reason for attending (QA, 2026-10-29).

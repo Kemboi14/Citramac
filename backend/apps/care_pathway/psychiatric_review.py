@@ -139,6 +139,9 @@ def row(task):
         "label": task.action_label,
         "status": task.status,
         "priority": task.priority,
+        "triage_priority": (
+            task.triage_encounter.priority if task.triage_encounter_id else ""
+        ),
         "outcome": task.outcome,
         "outcome_label": OUTCOMES.get(task.outcome, ""),
         "outcome_note": task.outcome_note,

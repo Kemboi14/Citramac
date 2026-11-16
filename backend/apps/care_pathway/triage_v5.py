@@ -59,8 +59,8 @@ from .triage_v4 import (  # noqa: F401 — shared with v4, re-exported for calle
     vitals_text,
 )
 
-RULES_VERSION = "2026-10-29.1"
-RULESET_LABEL = "Approved by the project owner, 2026-10-29"
+RULES_VERSION = "2026-11-16.2"
+RULESET_LABEL = "Approved by the project owner, 2026-11-16"
 SCHEMA = "v5"
 
 # Section G table rows, in the spec's order; Khat (miraa) kept as its own row
@@ -257,6 +257,8 @@ def clean_answers(answers):
     }
     a["schema"] = SCHEMA
     drop = set()
+    if "other" not in _list(a, "n_actions"):
+        drop.add("n_actions_other")
     if _text(a, "b_informant") in ("", "client"):
         drop.add("b_third_party")
     if _text(a, "b_encounter_type") != "other":
@@ -360,6 +362,8 @@ def required_problems(a):
         out.append(("Name / relationship of the third party", "b_third_party"))
     if _text(a, "b_encounter_type") == "other" and not _text(a, "b_encounter_type_other"):
         out.append(("Encounter type — describe “Other”", "b_encounter_type_other"))
+    if "other" in _list(a, "n_actions") and not _text(a, "n_actions_other"):
+        out.append(("Describe the other action", "n_actions_other"))
     present = present_of(a)
     if present == "yes":
         if _text(a, "d_suicidal") == "yes" and not _text(a, "d_act_now"):
@@ -1116,7 +1120,7 @@ def auto_triggers(a, alerts, labels=None, approved=None):
             "PSYCHIATRIC_REVIEW",
             "g",
             "Withdrawal suspected or identified",
-            act("psychiatric_review_withdrawal"),
+            act("psychiatric_review"),
         )
     if "suspected_overdose" in _list(a, "h_flags"):
         add("OVERDOSE", "h", "Suspected overdose", "Medical emergency first")
@@ -1147,14 +1151,7 @@ def _recommended_actions(level, alerts, a):
     out = []
     if level == "RED":
         out.append("emergency_intervention")
-    out.append(
-        {
-            "RED": "urgent_psychiatric_review",
-            "ORANGE": "urgent_psychiatric_review",
-            "YELLOW": "priority_psychiatric_review",
-            "GREEN": "routine_psychiatric_review",
-        }[level]
-    )
+    out.append("psychiatric_review")
     if "SUICIDE_RISK" in alerts:
         out += ["suicide_risk_assessment", "safety_plan"]
     red_medical = set(_list(a, "h_flags")) & RED_MEDICAL or set(_list(a, "k_flags")) & {

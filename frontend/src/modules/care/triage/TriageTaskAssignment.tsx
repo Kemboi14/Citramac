@@ -84,6 +84,9 @@ function PersonSelect({
 export function SectionNTaskRegister({
   triageId,
   actions,
+  actionDetails,
+  requiredDetailCodes = [],
+  schema,
   actionLabel,
   readOnly,
   status = "INITIATED",
@@ -93,6 +96,9 @@ export function SectionNTaskRegister({
   triageId: string;
   /** The ticked action codes. */
   actions: string[];
+  actionDetails?: Record<string, string>;
+  requiredDetailCodes?: string[];
+  schema?: "v3" | "v4" | "v5";
   actionLabel: (code: string) => string;
   readOnly: boolean;
   status?: CareTask["status"];
@@ -106,15 +112,31 @@ export function SectionNTaskRegister({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const missing = actions.filter((code) => !assignees[code]);
+  const missingDetails = actions.filter(
+    (code) => requiredDetailCodes.includes(code) && !actionDetails?.[code]?.trim(),
+  );
 
   async function register() {
-    if (!accessToken || readOnly || busy || !actions.length || missing.length) return;
+    if (
+      !accessToken ||
+      readOnly ||
+      busy ||
+      !actions.length ||
+      missing.length ||
+      missingDetails.length
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
       const tasks = await registerTriageTasks(accessToken, triageId, {
-        tasks: actions.map((code) => ({ action: code, assignee: assignees[code] })),
+        tasks: actions.map((code) => ({
+          action: code,
+          assignee: assignees[code],
+          ...(actionDetails?.[code]?.trim() ? { detail: actionDetails[code].trim() } : {}),
+        })),
         status,
+        schema,
       });
       setAssignees({});
       onRegistered(tasks);
@@ -156,7 +178,7 @@ export function SectionNTaskRegister({
         <button
           type="button"
           className={BTN}
-          disabled={busy || !actions.length || missing.length > 0}
+          disabled={busy || !actions.length || missing.length > 0 || missingDetails.length > 0}
           onClick={register}
         >
           {busy ? "Registering…" : "Register as tasks"}
@@ -164,6 +186,11 @@ export function SectionNTaskRegister({
         {actions.length > 0 && missing.length > 0 && (
           <span className="text-[12.5px] text-ink-500">
             Choose a person for every ticked action to register them.
+          </span>
+        )}
+        {missingDetails.length > 0 && (
+          <span className="text-[12.5px] text-ink-500">
+            Describe “Other” before registering it.
           </span>
         )}
       </div>

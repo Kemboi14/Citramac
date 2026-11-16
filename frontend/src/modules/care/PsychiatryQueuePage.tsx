@@ -43,6 +43,7 @@ const searchText = (row: PsychiatryQueueRow) =>
     row.signed_at ? formatDateTime(row.signed_at) : "",
     row.owner?.name,
     row.team,
+    row.triage_review?.label,
     ...row.alerts,
   ]
     .join(" ")
@@ -298,6 +299,14 @@ function QueueRow({
         )}
         {row.withdrawal_review && (
           <WithdrawalReviewCell review={row.withdrawal_review} onSaved={onSaved} />
+        )}
+        {row.triage_review && (
+          <Tag tone={row.triage_review.status === "PENDING" ? "brand" : "warn"}>
+            {row.triage_review.label} — {REVIEW_STATUS[row.triage_review.status]}
+            {row.triage_review.triage_priority
+              ? ` · triage ${row.triage_review.triage_priority}`
+              : ""}
+          </Tag>
         )}
       </div>
 

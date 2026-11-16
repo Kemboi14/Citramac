@@ -1051,6 +1051,9 @@ def open_psychiatry_review(triage_encounter, user):
     from . import psychiatric_review
 
     psychiatric_review.start(triage_encounter)
+    from . import triage_psychiatric_review
+
+    triage_psychiatric_review.start(triage_encounter)
     return triage_encounter
 
 

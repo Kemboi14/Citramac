@@ -303,7 +303,7 @@ def signing_tasks(answers, labels, rules=v4):
 
 
 def _plan(answers, labels, rules):
-    from . import psychiatric_review
+    from . import psychiatric_review, triage_psychiatric_review
 
     flags = answers.get("flags") or []
     # v4 flags, or the v5 answers that open the same detail blocks.
@@ -354,9 +354,14 @@ def _plan(answers, labels, rules):
             priority="asap",
         )
     elif step == "psychiatric_review":
+        focus = (
+            triage_psychiatric_review.FOCUS
+            if getattr(rules, "SCHEMA", "") == "v5"
+            else "URGENT_PSYCHIATRIC_REVIEW"
+        )
         add(
-            "URGENT_PSYCHIATRIC_REVIEW",
-            "Psychiatric review — acute medical concern",
+            focus,
+            "Psychiatric review",
             "Psychiatry on duty",
         )
     elif step == "refer_out":
@@ -388,11 +393,13 @@ def _plan(answers, labels, rules):
 
 
 def _existing(te, focus):
-    from . import psychiatric_review
+    from . import psychiatric_review, triage_psychiatric_review
 
     if focus == psychiatric_review.FOCUS:
         # One review per triage encounter, in any status (psychiatric_review.request).
         return psychiatric_review.for_triage(te)
+    if focus == triage_psychiatric_review.FOCUS:
+        return triage_psychiatric_review.for_triage(te)
     return CareTask.objects.filter(
         triage_encounter=te, focus_type=focus, status__in=("INITIATED", "PENDING")
     ).first()
@@ -402,14 +409,14 @@ def _signing_assignees(te, plan, chosen):
     """{focus: {"id", "name"}} for every planned task, or the problems to fix.
     A task that already exists with an assignee keeps them unless another
     person is picked; a psychiatric review already raised is not raised again."""
-    from . import psychiatric_review, task_assignees
+    from . import psychiatric_review, task_assignees, triage_psychiatric_review
 
     chosen = chosen if isinstance(chosen, dict) else {}
     out, problems = {}, []
     for spec in plan:
         focus = spec["focus"]
         existing = _existing(te, focus)
-        if focus == psychiatric_review.FOCUS and existing is not None:
+        if focus in (psychiatric_review.FOCUS, triage_psychiatric_review.FOCUS) and existing:
             continue
         picked = task_assignees.resolve(te.organization_id, te, chosen.get(focus))
         if picked:
@@ -424,11 +431,21 @@ def _signing_assignees(te, plan, chosen):
 def _create_tasks(te, user, plan, assignees, final):
     """Raise (or bring up to date) each planned task with its assignee, and tell
     each newly assigned person."""
-    from . import psychiatric_review, task_notify
+    from . import psychiatric_review, task_notify, triage_psychiatric_review
 
+    triage_psychiatric_review.set_final_priority(te, final)
     for spec in plan:
         focus = spec["focus"]
         person = assignees.get(focus)
+        if focus == triage_psychiatric_review.FOCUS:
+            if person is None:
+                continue
+            task, created = triage_psychiatric_review.register(
+                te, user, person, "INITIATED", spec["label"]
+            )
+            if created:
+                task_notify.tasks_assigned(te, [task], user, assignee_id=person["id"])
+            continue
         if focus == psychiatric_review.FOCUS:
             if person is None:
                 continue  # already raised for this triage encounter

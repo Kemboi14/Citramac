@@ -331,6 +331,7 @@ export interface CareTask {
   id: string;
   action_code: string;
   action_label: string;
+  action_detail?: string;
   owner: string;
   /** The named person the task is assigned to (user id); older tasks may have none. */
   assignee?: string | null;
@@ -341,6 +342,7 @@ export interface CareTask {
   focus_type?: string;
   due_at?: string | null;
   priority?: string;
+  triage_priority?: PriorityOrBlank;
   /** A psychiatric review's outcome (`psychiatric-review-outcome` code). */
   outcome?: string;
   outcome_note?: string;
@@ -452,7 +454,11 @@ export function signTriage(
 export function registerTriageTasks(
   accessToken: string,
   id: string,
-  payload: { tasks: { action: string; assignee: string }[]; status: CareTask["status"] },
+  payload: {
+    tasks: { action: string; assignee: string; detail?: string }[];
+    status: CareTask["status"];
+    schema?: "v3" | "v4" | "v5";
+  },
 ) {
   return apiRequest<CareTask[]>(`/care/triage/${id}/tasks/`, {
     method: "POST",
@@ -542,6 +548,8 @@ export interface PsychiatryQueueRow {
   over_target: boolean;
   /** The psychiatric review raised by withdrawal (triage spec item 10), if any. */
   withdrawal_review: WithdrawalReview | null;
+  /** General psychiatric review requested from the v5 triage action list, if any. */
+  triage_review: WithdrawalReview | null;
   age: number | null;
   sex: string;
   /** Active clinical alert labels. */
@@ -556,6 +564,7 @@ export interface WithdrawalReview {
   label: string;
   status: CareTask["status"];
   priority: string;
+  triage_priority?: PriorityOrBlank;
   outcome: string;
   outcome_label: string;
   outcome_note: string;

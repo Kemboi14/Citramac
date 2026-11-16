@@ -14,6 +14,7 @@ import {
   type TriageAnswers,
   type TriageAssessmentRecord,
   type TriageEncounterDetail,
+  type ValueSetConcept,
 } from "../../../lib/carePathwayApi";
 import { getClientFindings, type ClinicalFinding } from "../../../lib/findingsApi";
 import {
@@ -94,6 +95,30 @@ const SUBSTANCE_ROWS = [
 ];
 const DRAFT_FAILED = "Draft not saved — check your connection";
 const VITAL_KEYS = ["v_sbp", "v_dbp", ...VITALS.map((v) => v.key)];
+const LEGACY_PSYCHIATRIC_ACTIONS = new Set([
+  "urgent_psychiatric_review",
+  "priority_psychiatric_review",
+  "routine_psychiatric_review",
+  "psychiatric_review_withdrawal",
+]);
+
+export function sectionNActionOptions(
+  options: ValueSetConcept[],
+  legacyHistory: boolean,
+): ValueSetConcept[] {
+  if (legacyHistory) return options.filter((option) => option.code !== "psychiatric_review");
+  const visible = options.filter((option) => !LEGACY_PSYCHIATRIC_ACTIONS.has(option.code));
+  const review = visible.find((option) => option.code === "psychiatric_review");
+  const other = visible.find((option) => option.code === "other");
+  const ordered = visible.filter(
+    (option) => option.code !== "psychiatric_review" && option.code !== "other",
+  );
+  const medicalIndex = ordered.findIndex((option) => option.code === "urgent_medical_review");
+  if (review) ordered.splice(medicalIndex >= 0 ? medicalIndex + 1 : ordered.length, 0, review);
+  if (other) ordered.push(other);
+  return ordered;
+}
+
 /** What the early-warning score is computed from, to tell whether the shown score is current. */
 const ewsInput = (answers: TriageAnswers) =>
   JSON.stringify([...VITAL_KEYS, "v_o2", "acvpu"].map((k) => str(answers, k)));
@@ -198,6 +223,7 @@ function Txt({
   rows,
   grow,
   type,
+  disabled,
 }: {
   k: string;
   label: string;
@@ -206,6 +232,7 @@ function Txt({
   /** The box grows with its text so the whole entry stays readable. */
   grow?: boolean;
   type?: "datetime-local";
+  disabled?: boolean;
 }) {
   const { answers, set: setAnswer, invalid } = useCtx();
   const common = {
@@ -213,6 +240,7 @@ function Txt({
     placeholder,
     value: str(answers, k),
     "aria-invalid": invalid.has(k) || undefined,
+    disabled,
   };
   return (
     <Field label={label} htmlFor={fid(k)} error={invalid.has(k) ? "Required" : undefined}>
@@ -423,6 +451,17 @@ export function TriageFormV5({
   const [config, setConfig] = useState<TriageV4Config | null>(null);
   const [answers, setAnswers] = useState<TriageAnswers>(() => {
     const base: TriageAnswers = { ...detail.defaults, ...(stored?.answers ?? {}), schema: "v5" };
+    if (editable) {
+      const selected = list(base, "n_actions");
+      if (selected.some((code) => LEGACY_PSYCHIATRIC_ACTIONS.has(code))) {
+        base.n_actions = [
+          ...new Set([
+            ...selected.filter((code) => !LEGACY_PSYCHIATRIC_ACTIONS.has(code)),
+            "psychiatric_review",
+          ]),
+        ];
+      }
+    }
     if (!str(base, "c_concern")) base.c_concern = detail.presenting_concern;
     return base;
   });
@@ -702,6 +741,11 @@ export function TriageFormV5({
     readOnly,
   };
   const recActions = new Set(evaluation.recommended_actions ?? []);
+  const allActionOptions = vs.options("triage-action");
+  const legacyHistory = Boolean(
+    readOnly && detail.signed && detail.signed.rules_version !== detail.evaluation.rules_version,
+  );
+  const sectionNOptions = sectionNActionOptions(allActionOptions, legacyHistory);
   const findings = signed?.findings ?? evaluation.findings;
   const reasonList = evaluation.reason_list ?? [];
   const sexLabel = banner?.sex ? vs.label("sex", banner.sex) : "";
@@ -1494,19 +1538,20 @@ export function TriageFormV5({
                 <fieldset>
                   <legend className="sr-only">Immediate actions</legend>
                   <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    {vs.options("triage-action").map((o) => (
+                    {sectionNOptions.map((o) => (
                       <label key={o.code} className="flex items-center gap-2 py-1 text-[13px]">
                         <input
                           type="checkbox"
                           checked={list(answers, "n_actions").includes(o.code)}
-                          onChange={(e) =>
-                            set(
-                              "n_actions",
-                              e.target.checked
-                                ? [...list(answers, "n_actions"), o.code]
-                                : list(answers, "n_actions").filter((c) => c !== o.code),
-                            )
-                          }
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...list(answers, "n_actions"), o.code]
+                              : list(answers, "n_actions").filter((c) => c !== o.code);
+                            setMany({
+                              n_actions: next,
+                              ...(next.includes("other") ? {} : { n_actions_other: "" }),
+                            });
+                          }}
                         />
                         {o.display}
                         {recActions.has(o.code) && <Tag tone="brand">recommended</Tag>}
@@ -1514,15 +1559,28 @@ export function TriageFormV5({
                     ))}
                   </div>
                 </fieldset>
+                {list(answers, "n_actions").includes("other") && (
+                  <div className="mt-2 max-w-md">
+                    <Txt
+                      k="n_actions_other"
+                      label="Other — describe the action"
+                      rows={3}
+                      disabled={readOnly}
+                    />
+                  </div>
+                )}
                 <SectionNTaskRegister
                   triageId={detail.id}
                   actions={list(answers, "n_actions")}
+                  actionDetails={{ other: str(answers, "n_actions_other") }}
+                  requiredDetailCodes={["other"]}
+                  schema="v5"
                   actionLabel={(code) => vs.label("triage-action", code)}
                   readOnly={readOnly}
                   idPrefix={fid("n")}
                   onRegistered={(next) => {
                     setTasks(next);
-                    set("n_actions", []);
+                    setMany({ n_actions: [], n_actions_other: "" });
                   }}
                 />
                 {tasks.length > 0 && (
@@ -1535,6 +1593,7 @@ export function TriageFormV5({
                         <li key={t.id}>
                           <strong>{t.action_label}</strong> · assigned to {t.owner} ·{" "}
                           {taskStatusText(t)}
+                          {t.action_detail ? ` · ${t.action_detail}` : ""}
                           {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
                         </li>
                       ))}
