@@ -659,8 +659,7 @@ class TriageTasksView(APIView):
     to a named member of the clinical staff picked from the drop-down."""
 
     def post(self, request, pk):
-        from . import task_assignees, task_notify
-        from . import triage_psychiatric_review
+        from . import task_assignees, task_notify, triage_psychiatric_review
 
         te = _triage(pk)
         rows = request.data.get("tasks")
@@ -747,8 +746,7 @@ class TriageTasksView(APIView):
 
 class CareTaskView(APIView):
     def patch(self, request, pk):
-        from . import psychiatric_review
-        from . import triage_psychiatric_review
+        from . import psychiatric_review, triage_psychiatric_review
 
         task = get_object_or_404(CareTask, pk=pk)
         if task.focus_type == psychiatric_review.FOCUS:
@@ -873,8 +871,7 @@ class PsychiatryQueueView(APIView):
     def get(self, request):
         from django.conf import settings
 
-        from . import psychiatric_review
-        from . import triage_psychiatric_review
+        from . import psychiatric_review, triage_psychiatric_review
         from .triage_queue import responsible
 
         targets = getattr(settings, "SEEN_BY_CLINICIAN_TARGET_MINUTES", None) or {}
