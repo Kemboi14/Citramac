@@ -16,7 +16,11 @@ import { useClientBanner } from "./shared/useClientBanner";
 const INDIVIDUAL_LIST_PATH = "/clinical/psychotherapy/individual";
 const FAMILY_LIST_PATH = "/clinical/psychotherapy/family";
 
-export function PsychotherapySessionPage({ kind = "individual" }: { kind?: "individual" | "family" }) {
+export function PsychotherapySessionPage({
+  kind = "individual",
+}: {
+  kind?: "individual" | "family";
+}) {
   const LIST_PATH = kind === "family" ? FAMILY_LIST_PATH : INDIVIDUAL_LIST_PATH;
   const backLabel = kind === "family" ? "Family Psychotherapy" : "Individual Psychotherapy";
   const { patientId = "", episodeId = "", noteId } = useParams();

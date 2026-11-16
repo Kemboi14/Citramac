@@ -382,15 +382,12 @@ def _question_for(note, key):
 
 
 def _participant_choices(note, user):
-    if (
-        not _family_questionnaire(note)
-        or note.status != "DRAFT"
-        or note.author_id != user.pk
-    ):
+    if not _family_questionnaire(note) or note.status != "DRAFT" or note.author_id != user.pk:
         return {"clinicians": [], "family": [], "family_consent_required": False}
 
     from apps.client_registry.consent import current_decision
     from apps.client_registry.models import EmergencyContact
+
     from . import task_assignees
 
     branch_id = note.episode.branch_id
@@ -525,7 +522,14 @@ def start_or_resume(patient, user, data):
         # entered is kept (validated and audited as any edit); blanks change nothing.
         details = {
             k: data[k]
-            for k in ("session_type", "session_objective", "primary_goal", "secondary_goals", "session_phase", "family_members")
+            for k in (
+                "session_type",
+                "session_objective",
+                "primary_goal",
+                "secondary_goals",
+                "session_phase",
+                "family_members",
+            )
             if data.get(k)
         }
         if details:
@@ -571,11 +575,7 @@ def start_or_resume(patient, user, data):
         ),
         answers={
             k: {"text": "", "mode": "TYPED", "language": DEFAULT_LANGUAGE, "answered_at": None}
-            for k in (
-                org.FAMILY_QUESTION_KEYS
-                if session_type == "FAMILY"
-                else org.QUESTION_KEYS
-            )
+            for k in (org.FAMILY_QUESTION_KEYS if session_type == "FAMILY" else org.QUESTION_KEYS)
         },
     )
     _audit(note, user, "CREATE")
@@ -798,7 +798,13 @@ def _set_session_info(note, user, data):
         if text and not intake.can_view_restricted(user):
             raise PermissionDenied("Process notes are restricted to treating clinicians.")
         extra["process_notes"] = text  # restricted: therapy.visible_extra
-    for field in ("session_objective", "primary_goal", "secondary_goals", "session_phase", "family_members"):
+    for field in (
+        "session_objective",
+        "primary_goal",
+        "secondary_goals",
+        "session_phase",
+        "family_members",
+    ):
         if field in data:
             extra[field] = str(data.get(field) or "").strip()[:4000]
     if "score_id" in data:
@@ -1579,9 +1585,7 @@ def detected_models(note):
     registry = [model_row(m) for m in therapy_models(note.organization_id)]
     answers = note.answers or {}
     intervention_key, progress_key = (
-        ("family_interventions", "family_progress")
-        if _family_questionnaire(note)
-        else ("q3", "q4")
+        ("family_interventions", "family_progress") if _family_questionnaire(note) else ("q3", "q4")
     )
     found = org.detect_models(
         org.english_text(answers.get(intervention_key)),
@@ -1598,13 +1602,10 @@ def detected_models(note):
 def applied_models(note):
     registry = {m["code"]: m for m in (model_row(x) for x in therapy_models(note.organization_id))}
     intervention_key, progress_key = (
-        ("family_interventions", "family_progress")
-        if _family_questionnaire(note)
-        else ("q3", "q4")
+        ("family_interventions", "family_progress") if _family_questionnaire(note) else ("q3", "q4")
     )
     texts = [
-        org.english_text((note.answers or {}).get(k))
-        for k in (intervention_key, progress_key)
+        org.english_text((note.answers or {}).get(k)) for k in (intervention_key, progress_key)
     ]
     applied = [m for m in detected_models(note) if m["included"]]
     for code in note.selected_models or []:  # ticked on an earlier draft
@@ -1776,10 +1777,7 @@ def generate(note, user):
 
 
 def flags(note):
-    texts = {
-        k: (note.answers.get(k) or {}).get("text", "")
-        for k in text_question_keys_for(note)
-    }
+    texts = {k: (note.answers.get(k) or {}).get("text", "") for k in text_question_keys_for(note)}
     texts.update({f"section:{k}": v for k, v in (effective_sections(note) or {}).items()})
     return org.stigma_flags(texts, lexicon("PSY_STIGMA"))
 
@@ -1807,8 +1805,7 @@ def blockers(note, found=None):
     answer = note.safety_answer
     detail = note.safety_detail or {}
     if not any(
-        (note.answers.get(k) or {}).get("text", "").strip()
-        for k in text_question_keys_for(note)
+        (note.answers.get(k) or {}).get("text", "").strip() for k in text_question_keys_for(note)
     ):
         add("NO_CONTENT", "Record clinical content in at least one guided question.")
     if _family_questionnaire(note):
@@ -2433,7 +2430,9 @@ def client_list(user, kind="individual"):
         )
     else:
         episode_patients = set(
-            TherapyEpisode.objects.filter(ended_at__isnull=True).values_list("patient_id", flat=True)
+            TherapyEpisode.objects.filter(ended_at__isnull=True).values_list(
+                "patient_id", flat=True
+            )
         )
         activity_patients = set(
             CarePlanActivity.objects.exclude(decision="DECLINED")
@@ -2491,6 +2490,9 @@ def client_list(user, kind="individual"):
         "VIEW",
         "care_pathway.psychotherapynote",
         "client-list",
-        {"context": ("family" if kind == "family" else "individual") + "_psychotherapy_list", "patients": viewed},
+        {
+            "context": ("family" if kind == "family" else "individual") + "_psychotherapy_list",
+            "patients": viewed,
+        },
     )
     return rows

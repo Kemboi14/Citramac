@@ -661,7 +661,9 @@ class FamilyQuestionnaireTests(ChatTestCase):
         self.assertEqual(family.data["questionnaire_version"], org.FAMILY_QUESTIONNAIRE)
         self.assertEqual(family.data["session_type"], "FAMILY")
         resumed_family = self.start(session_type="FAMILY")
-        self.assertEqual((resumed_family.status_code, resumed_family.data["id"]), (200, family.data["id"]))
+        self.assertEqual(
+            (resumed_family.status_code, resumed_family.data["id"]), (200, family.data["id"])
+        )
         existing_individual = self.detail(individual.data["id"])
         self.assertEqual(existing_individual["questionnaire_version"], org.INDIVIDUAL_QUESTIONNAIRE)
         self.assertEqual(existing_individual["session_type"], "INDIVIDUAL")

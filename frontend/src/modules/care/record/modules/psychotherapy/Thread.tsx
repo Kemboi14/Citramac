@@ -145,9 +145,7 @@ export function ExampleThread({ config, onLeave }: { config: PsyConfig; onLeave:
         </button>
       </div>
       <Sys>
-        <p>
-          Example session. I’ll ask {count} questions, one at a time, then the safety question.
-        </p>
+        <p>Example session. I’ll ask {count} questions, one at a time, then the safety question.</p>
       </Sys>
       {config.questions.slice(0, 1).map((q, i) => (
         <Sys key={q.key}>

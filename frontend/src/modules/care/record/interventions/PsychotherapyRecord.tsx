@@ -227,7 +227,7 @@ export function PsychotherapyRecord({
                   <div className="flex items-center justify-between border-b border-surface-border pb-3 lg:col-span-2">
                     <span className="text-[13px] font-medium text-ink-700">Session type</span>
                     <span className="rounded-full bg-brand-green-tint px-3 py-1 text-xs font-semibold text-brand-green">
-                    Family psychotherapy
+                      Family psychotherapy
                     </span>
                   </div>
                 ) : (

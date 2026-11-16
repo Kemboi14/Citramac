@@ -68,9 +68,9 @@ from fhir.resources.R4B.meta import Meta
 from fhir.resources.R4B.narrative import Narrative
 from fhir.resources.R4B.observation import Observation, ObservationComponent
 from fhir.resources.R4B.period import Period
+from fhir.resources.R4B.practitioner import Practitioner
 from fhir.resources.R4B.provenance import Provenance, ProvenanceAgent
 from fhir.resources.R4B.reference import Reference
-from fhir.resources.R4B.practitioner import Practitioner
 from fhir.resources.R4B.relatedperson import RelatedPerson
 
 from apps.dha_interop.fhir_mapper import build_patient_resource
@@ -224,9 +224,7 @@ def _participant_resources(note, patient_ref):
                 )
             resources.append(BundleEntry(fullUrl=resource_ref, resource=resource))
             attendees.append(
-                EncounterParticipant(
-                    individual=Reference(reference=resource_ref, display=name)
-                )
+                EncounterParticipant(individual=Reference(reference=resource_ref, display=name))
             )
     return attendees, resources
 
