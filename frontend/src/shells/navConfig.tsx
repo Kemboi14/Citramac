@@ -157,15 +157,18 @@ export const CLINICAL_NAV: NavGroup[] = [
         matchPrefix: true,
       },
       {
-        label: "Individual Psychotherapy",
-        to: "/clinical/psychotherapy/individual",
-        icon: User,
-      },
-      { label: "Family Psychotherapy", to: "/clinical/psychotherapy/family", icon: Users },
-      {
-        label: "Group Psychotherapy",
-        to: "/clinical/psychotherapy/group",
-        icon: UsersRound,
+        label: "Psychotherapy",
+        icon: Users,
+        children: [
+          {
+            label: "Individual Psychotherapy",
+            to: "/clinical/psychotherapy/individual",
+            matchPrefix: true,
+            icon: User,
+          },
+          { label: "Family Psychotherapy", to: "/clinical/psychotherapy/family", icon: Users },
+          { label: "Group Psychotherapy", to: "/clinical/psychotherapy/group", icon: UsersRound },
+        ],
       },
       {
         label: "Pharmacy & medication",

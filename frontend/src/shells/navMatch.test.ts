@@ -18,16 +18,11 @@ describe("clinical nav matching", () => {
     expect(groups.some((item) => item.label === "Appointments & follow-up")).toBe(false);
     expect(everyLeaf.some((item) => item.label === "Appointments")).toBe(false);
     expect(everyLeaf.some((item) => item.label === "Follow-up")).toBe(false);
-    expect(topLevel.find((item) => item.label === "Individual Psychotherapy")?.to).toBe(
-      "/clinical/psychotherapy/individual",
-    );
-    expect(groups.some((item) => item.label === "Psychotherapy")).toBe(false);
-    expect(topLevel.find((item) => item.label === "Family Psychotherapy")?.to).toBe(
-      "/clinical/psychotherapy/family",
-    );
-    expect(topLevel.find((item) => item.label === "Group Psychotherapy")?.to).toBe(
-      "/clinical/psychotherapy/group",
-    );
+    expect(group("Psychotherapy").children?.map((item) => [item.label, item.to])).toEqual([
+      ["Individual Psychotherapy", "/clinical/psychotherapy/individual"],
+      ["Family Psychotherapy", "/clinical/psychotherapy/family"],
+      ["Group Psychotherapy", "/clinical/psychotherapy/group"],
+    ]);
     expect(topLevel.find((item) => item.label === "Supervision requests")?.to).toBe(
       "/clinical/mhp/supervision",
     );
