@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
 import { Callout, Card, ErrorNote } from "../shared/ui";
@@ -10,6 +11,11 @@ import { scopedModules, type ModuleScope } from "./interventions/scope";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
 import { clientRecordPath, psychotherapySessionPath } from "../shared/recordRoutes";
+
+const INTRO =
+  "Record what was delivered in response to the care plan. Each record links to a care-plan " +
+  "action and captures provider, time, intervention, client response, outcome and next action. " +
+  "Billable care creates the billing event automatically, so nothing is documented twice.";
 
 const SECTION_HEAD = "mb-2 mt-5 flex flex-wrap items-center justify-between gap-2.5";
 const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-700";
@@ -73,14 +79,21 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
       <div className="text-[11px] font-bold tracking-[.35px] text-brand-green">
         What did the team actually do?
       </div>
-      <h2 id="interventions-title" className="font-display text-xl font-semibold text-ink-900">
+      <h2
+        id="interventions-title"
+        className="mb-[18px] flex items-center gap-2 font-display text-xl font-semibold text-ink-900"
+      >
         Interventions
+        <span
+          tabIndex={0}
+          role="img"
+          aria-label={INTRO}
+          title={INTRO}
+          className="cursor-help rounded-full text-ink-400 outline-none hover:text-ink-700 focus-visible:text-ink-700"
+        >
+          <Info aria-hidden className="h-4 w-4" />
+        </span>
       </h2>
-      <p className="mb-[18px] mt-1 max-w-[74ch] text-[12.5px] leading-relaxed text-ink-700">
-        Record what was delivered in response to the Care Plan. Each record links to a care-plan
-        action and captures provider, time, intervention, client response, outcome and next action.
-        Billable care creates the billing event automatically — nothing is documented twice.
-      </p>
 
       <p role="status" aria-live="polite" className="mb-3.5 text-xs text-ink-500 empty:hidden">
         {status}
@@ -104,7 +117,11 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
               </span>
             </div>
           </div>
-          <CarePlanActionsTable actions={actions} loading={workspace.loading && !data} />
+          <CarePlanActionsTable
+            actions={actions}
+            loading={workspace.loading && !data}
+            moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
+          />
         </>
       )}
 
