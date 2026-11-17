@@ -24,7 +24,7 @@ import {
   formFieldErrors,
   type SessionForm,
 } from "./model";
-import { SessionDetailsFields } from "./SessionEditor";
+import { SessionDetailsFields } from "./SessionDetailsFields";
 import { NOTE } from "./styles";
 
 /** Where the page content starts: below the app bar, right of the navigation rail. */

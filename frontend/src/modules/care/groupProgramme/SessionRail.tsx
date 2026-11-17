@@ -1,4 +1,3 @@
-import { BTN } from "../shared/styles";
 import {
   SESSION_TABS,
   sessionDateLabel,
@@ -15,27 +14,16 @@ export function SessionRail({
   selectedKey,
   onTab,
   onSelect,
-  onNewSession,
 }: {
   items: WorkspaceItem[];
   tab: SessionTab;
   selectedKey: string | null;
   onTab: (tab: SessionTab) => void;
   onSelect: (key: string) => void;
-  onNewSession: () => void;
 }) {
   return (
-    <aside className="flex min-w-0 flex-col overflow-hidden border-b border-surface-border bg-surface-card max-lg:max-h-[280px] lg:border-b-0 lg:border-r">
-      <div className="px-5 pt-5">
-        <h1 className="font-display text-[19px] font-semibold tracking-tight text-ink-900">
-          Group programme
-        </h1>
-        <p className="text-xs text-ink-500">From the weekly programme calendar</p>
-      </div>
-      <button type="button" className={`${BTN} mx-5 mb-1 mt-3.5`} onClick={onNewSession}>
-        New group session
-      </button>
-      <div className="flex gap-1 px-5 pb-1.5 pt-2.5" role="tablist" aria-label="Filter sessions">
+    <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card max-lg:max-h-[320px]">
+      <div className="flex gap-1 px-3 pb-1.5 pt-3" role="tablist" aria-label="Filter sessions">
         {SESSION_TABS.map(([key, label]) => (
           <button
             key={key}
@@ -51,7 +39,7 @@ export function SessionRail({
           </button>
         ))}
       </div>
-      <div className="grid content-start gap-1.5 overflow-auto px-3 pb-4 pt-1 max-lg:max-h-[155px]">
+      <div className="grid content-start gap-1.5 overflow-auto px-3 pb-4 pt-1 lg:max-h-[calc(100vh-280px)]">
         {items.length ? (
           items.map((item) => {
             const status = sessionStatus(item);
@@ -82,9 +70,7 @@ export function SessionRail({
             );
           })
         ) : (
-          <p className="p-6 text-center text-xs text-ink-500">
-            No sessions in this view. Create a group session or check another tab.
-          </p>
+          <p className="p-6 text-center text-xs text-ink-500">No sessions in this list.</p>
         )}
       </div>
     </aside>

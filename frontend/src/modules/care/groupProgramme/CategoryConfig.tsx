@@ -94,8 +94,8 @@ export function CategoryConfig({
   };
 
   return (
-    <details className={DETAILS}>
-      <summary className={DETAILS_SUMMARY}>Category configuration · administrator workflow</summary>
+    <details className={DETAILS} open>
+      <summary className={DETAILS_SUMMARY}>Session categories</summary>
       <div className="grid gap-2.5 p-4">
         <p className={NOTE}>
           {canConfigure
@@ -237,7 +237,7 @@ export function ProgrammeConfig({
   };
 
   return (
-    <details className={DETAILS}>
+    <details className={DETAILS} open>
       <summary className={DETAILS_SUMMARY}>Programmes and session eligibility</summary>
       <div className="grid gap-2.5 p-4">
         <p className={NOTE}>

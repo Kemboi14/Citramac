@@ -158,7 +158,7 @@ export function SessionWorkspace({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-8 sm:py-6">
+      <div className="px-4 py-4 sm:px-8 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-[19px] font-semibold tracking-tight text-ink-900 sm:text-[25px]">
@@ -186,7 +186,7 @@ export function SessionWorkspace({
                 </button>
               </>
             )}
-            {item.kind === "scheduled" && (
+            {item.kind !== "saved" && (
               <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onEditScheduled}>
                 Edit details
               </button>
@@ -194,15 +194,13 @@ export function SessionWorkspace({
           </div>
         </div>
         <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
-          <Fact label="Date" value={isDraft ? "Not scheduled" : sessionDateLabel(item.date)} />
+          <Fact label="Date" value={item.date ? sessionDateLabel(item.date) : ""} />
           <Fact
             label="Time"
-            value={
-              isDraft ? "Not set" : `${item.time || "—"}${item.endTime ? `–${item.endTime}` : ""}`
-            }
+            value={item.time ? `${item.time}${item.endTime ? `–${item.endTime}` : ""}` : ""}
           />
-          <Fact label="Facilitator" value={isDraft ? "Not assigned" : item.facilitator} />
-          <Fact label="Location" value={isDraft ? "Not assigned" : item.location} />
+          <Fact label="Facilitator" value={item.facilitator} />
+          <Fact label="Location" value={item.location} />
           <Fact
             label="Documented by"
             value={item.session?.documented_by ?? (documentedBy || "Not yet documented")}
@@ -315,7 +313,7 @@ export function SessionWorkspace({
         <AuditTrail detail={editable ? null : detail} />
       </div>
       {editable && (
-        <footer className="sticky bottom-0 z-[2] mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-surface-border bg-surface-card px-4 py-3 sm:px-8">
+        <footer className="sticky bottom-0 z-[2] flex flex-wrap items-center justify-between gap-3 border-t border-surface-border bg-surface-card px-4 py-3 sm:px-8">
           <small className="text-ink-500">
             {plural(stillToMark, "client")} still to mark
             {risks ? ` · ${plural(risks, "risk flag")}` : ""}

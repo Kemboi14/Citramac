@@ -8,10 +8,7 @@ import { initialsAndLabel } from "./userDisplay";
 
 // Topbar titles where the mockup's title differs from the nav label
 // (docs/15-CLINICAL-WORKSPACE-V3.md §1.1).
-const FOCUS_ROUTES = [
-  "/clinical/psychotherapy/group",
-  "/clinical/psychotherapy/individual/session",
-];
+const FOCUS_ROUTES = ["/clinical/psychotherapy/individual/session"];
 
 const PAGE_TITLES: Record<string, string> = {
   "/clinical/registration": "Client registry",

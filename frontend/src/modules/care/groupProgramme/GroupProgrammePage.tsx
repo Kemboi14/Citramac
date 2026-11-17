@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
+import { INPUT } from "../shared/styles";
+import { Card, Field } from "../shared/ui";
 import { PanelSkeleton } from "../../../components/Skeleton";
 import { ApiError } from "../../../lib/apiClient";
 import { fieldErrorsFrom } from "../../../lib/formErrors";
@@ -18,7 +20,8 @@ import {
 } from "../../../lib/groupProgrammeApi";
 import { newRequestId } from "../shared/format";
 import { clientRecordPath } from "../shared/recordRoutes";
-import { Callout } from "../shared/ui";
+import { BTN } from "../shared/styles";
+import { Callout, PageHeader } from "../shared/ui";
 import { useValueSets } from "../shared/useValueSets";
 import { CategoryConfig, ProgrammeConfig } from "./CategoryConfig";
 import { EntryCorrectionDialog, SessionCorrectionDialog } from "./CorrectionDialogs";
@@ -28,7 +31,6 @@ import {
   formFieldErrors,
   initialDetails,
   itemTab,
-  localDateIso,
   eligibleFor,
   matchesFilters,
   scheduledLocal,
@@ -42,13 +44,21 @@ import {
   type WorkspaceItem,
 } from "./model";
 import { ReviewPanel } from "./ReviewPanel";
-import { SessionEditor } from "./SessionEditor";
-import { SessionHistory } from "./SessionHistory";
+import { SessionDetailsFields } from "./SessionDetailsFields";
 import { SessionRail } from "./SessionRail";
 import { SessionWorkspace } from "./SessionWorkspace";
 import { UtilisationView } from "./UtilisationView";
 
 const ATTENDANCE_VALUESET = "group-attendance";
+
+type Step = "details" | "attendance" | "review";
+type PageView = ProgrammeView | "settings";
+
+const STEPS: [Step, string][] = [
+  ["details", "Session details"],
+  ["attendance", "Attendance"],
+  ["review", "Review & confirm"],
+];
 
 type Dialog = { kind: "session" | "entry"; detail: GroupSessionDetail } | null;
 
@@ -64,7 +74,7 @@ function uniqueSorted(values: string[]) {
  * (guide.md §5); the server does the saving, linking and per-client separation.
  */
 export function GroupProgrammePage() {
-  const { accessToken, claims } = useAuth();
+  const { accessToken } = useAuth();
   const navigate = useNavigate();
   const valueSets = useValueSets();
   const attendanceOptions = valueSets.options(ATTENDANCE_VALUESET);
@@ -72,9 +82,9 @@ export function GroupProgrammePage() {
 
   const [workspace, setWorkspace] = useState<GroupWorkspace | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [view, setView] = useState<ProgrammeView>("session");
+  const [view, setView] = useState<PageView>("session");
   const [tab, setTab] = useState<SessionTab>("today");
-  const draftStarted = useRef(false);
+  const [step, setStep] = useState<Step>("details");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [draftKey, setDraftKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, SessionDraft>>({});
@@ -89,8 +99,7 @@ export function GroupProgrammePage() {
   const [observationOpen, setObservationOpen] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<GroupSessionDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [reviewKey, setReviewKey] = useState<string | null>(null);
+
   // Server risk screen of each observation, run at review (nothing stored).
   const [riskFlags, setRiskFlags] = useState<Record<string, RiskFlag[]>>({});
   const [editorErrors, setEditorErrors] = useState<Record<string, string>>({});
@@ -107,18 +116,6 @@ export function GroupProgrammePage() {
       .then((data) => {
         setWorkspace(data);
         setLoadError(null);
-        // First load only: start a draft when nothing is on today (mockup behaviour).
-        if (draftStarted.current) return;
-        draftStarted.current = true;
-        const today = localDateIso();
-        const hasToday =
-          data.scheduled.some((s) => scheduledLocal(s).date === today) ||
-          data.sessions.some((s) => s.session_date === today);
-        if (!hasToday) {
-          const key = `draft:${Date.now()}`;
-          setDraftKey(key);
-          setSelectedKey(key);
-        }
       })
       .catch((err) =>
         setLoadError(
@@ -232,7 +229,7 @@ export function GroupProgrammePage() {
 
   const changeAttendance = (clientId: string, updates: DraftAttendance) => {
     if (!editable) return;
-    setReviewKey(null);
+    setStep((current) => (current === "review" ? "attendance" : current));
     updateDraft(editable, (draft) => ({
       ...draft,
       attendance: {
@@ -258,7 +255,6 @@ export function GroupProgrammePage() {
 
   const changeDetails = (updates: Partial<SessionForm>) => {
     if (!editable) return;
-    setReviewKey(null);
     updateDraft(editable, (draft) => ({ ...draft, details: { ...draft.details, ...updates } }));
   };
 
@@ -266,20 +262,12 @@ export function GroupProgrammePage() {
     setSelectedKey(key);
     setSearch("");
     setView("session");
-    setReviewKey(null);
+    setStep("details");
     setEditorErrors({});
     setEditorStatus("");
     if (key !== selected?.key) setDetailError(null);
   };
 
-  // Two frames: the target (editor open, review panel) renders after this state update.
-  const scrollToId = (id: string) =>
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      ),
-    );
-  const scrollToEditor = () => scrollToId("group-session-editor");
   // The page scrolls in #main-content on wide screens and in the window on narrow ones.
   const scrollToTop = () =>
     requestAnimationFrame(() => {
@@ -293,8 +281,6 @@ export function GroupProgrammePage() {
     select(key);
     setTab("today");
     setStatusMessage("");
-    setEditorOpen(true);
-    scrollToEditor();
   };
 
   const chooseScheduled = (key: string) => {
@@ -310,32 +296,42 @@ export function GroupProgrammePage() {
       .filter((client) => matchesFilters(client, filters) && client.eligible)
       .map((client) => ({ client, entry: draft.attendance[client.id] ?? {} }));
 
+  const toAttendance = () => {
+    if (!currentDraft) return;
+    const errors = detailsErrors(currentDraft.details, categories);
+    setEditorErrors(errors);
+    if (Object.keys(errors).length) {
+      setEditorStatus("Complete the session details to continue.");
+      return;
+    }
+    setEditorStatus("");
+    setStep("attendance");
+    scrollToTop();
+  };
+
   const review = () => {
     if (!editable || !currentDraft) return;
-    setEditorOpen(true);
     setStatusMessage("");
     const rows = selectableRows(currentDraft);
     const errors = detailsErrors(currentDraft.details, categories);
     setEditorErrors(errors);
+    if (Object.keys(errors).length) {
+      setEditorStatus("Complete the session details before reviewing the session.");
+      setStep("details");
+      return;
+    }
     let problem = "";
     if (!rows.length) problem = "No eligible clients match the selected filters.";
     else if (rows.some((row) => !row.entry.attendance)) {
       problem = "Select an attendance status for every listed client.";
     } else if (rows.some((row) => row.entry.riskDisclosure && !row.entry.observation?.trim())) {
       problem = "Record an observation for every client with a risk disclosure.";
-    } else if (Object.keys(errors).length) {
-      problem = "Complete the session details before reviewing the session.";
     }
     setEditorStatus(problem);
-    if (problem || !accessToken) {
-      setReviewKey(null);
-      scrollToEditor();
-      return;
-    }
+    if (problem || !accessToken) return;
     // Owner decision 2026-10-22: risk language in an observation is flagged
     // automatically — pre-ticked as a disclosure with a follow-up; unticking
     // it needs a reason (the server enforces the same rule on confirm).
-    const key = editable.key;
     setEditorStatus("Checking observations for risk language…");
     screenGroupEntries(
       accessToken,
@@ -356,8 +352,8 @@ export function GroupProgrammePage() {
             changeAtReview(client.id, { riskDisclosure: true, followUp: true });
           }
         }
-        setReviewKey(key);
-        scrollToId("group-session-review");
+        setStep("review");
+        scrollToTop();
       })
       .catch((err) =>
         setEditorStatus(
@@ -395,8 +391,7 @@ export function GroupProgrammePage() {
           return next;
         });
         if (doneKey === draftKey) setDraftKey(null);
-        setReviewKey(null);
-        setEditorOpen(false);
+        setStep("details");
         setSelectedKey(`session:${saved.id}`);
         setTab(itemTab(saved.session_date));
         setView("session");
@@ -442,76 +437,130 @@ export function GroupProgrammePage() {
   const facilitatorName = (form: SessionForm) =>
     staff.find((s) => s.id === form.facilitatorId)?.name ?? form.facilitatorName;
 
+  const categoryLabel = (form: SessionForm) => {
+    const category = categories.find((c) => c.code === form.category);
+    return category?.is_other ? form.categoryOther.trim() : (category?.display ?? "");
+  };
+  // While a session is being recorded, show what has been entered so far.
+  const shownItem: WorkspaceItem | undefined =
+    selected && editable && currentDraft
+      ? {
+          ...selected,
+          date: currentDraft.details.sessionDate || selected.date,
+          time: currentDraft.details.startTime,
+          endTime: currentDraft.details.endTime,
+          topic: currentDraft.details.topic.trim() || selected.topic,
+          category: categoryLabel(currentDraft.details) || selected.category,
+          facilitator: facilitatorName(currentDraft.details),
+          location: currentDraft.details.location.trim(),
+        }
+      : selected;
+  const stepIndex = STEPS.findIndex(([key]) => key === step);
+
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex flex-col bg-surface-bg lg:h-[calc(100vh-56px)]">
-        <header className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-surface-card px-4 py-[9px] sm:px-6">
-          <div
-            className="flex gap-1 rounded-[10px] bg-surface-bg p-[3px]"
-            role="tablist"
-            aria-label="Programme views"
+    <div className="animate-fade-in">
+      <PageHeader
+        title="Group psychotherapy"
+        subtitle="One shared session, a separate record for each client"
+        actions={
+          <button type="button" className={BTN} onClick={startNewSession}>
+            New session
+          </button>
+        }
+      />
+
+      <div
+        className="mb-4 flex gap-1 border-b border-surface-border"
+        role="tablist"
+        aria-label="Group psychotherapy views"
+      >
+        {(
+          [
+            ["session", "Sessions"],
+            ["utilisation", "Utilisation"],
+            ["settings", "Settings"],
+          ] as [PageView, string][]
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => setView(key)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold transition-colors ${
+              view === key
+                ? "border-brand-green text-ink-900"
+                : "border-transparent text-ink-500 hover:text-ink-900"
+            }`}
           >
-            {(
-              [
-                ["session", "Session"],
-                ["utilisation", "Utilisation"],
-              ] as [ProgrammeView, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={view === key}
-                onClick={() => setView(key)}
-                className={`rounded-lg px-3.5 py-[7px] text-xs font-bold ${
-                  view === key ? "bg-surface-card text-ink-900 shadow-sm" : "text-ink-500"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="text-[11px] text-ink-500 sm:text-right">
-            Signed in: <strong className="text-ink-900">{currentUser.name}</strong> ·{" "}
-            {claims?.role.replace(/_/g, " ") || "Staff"}
-          </div>
-        </header>
-        {(loadError || valueSets.error) && (
-          <Callout tone="danger" role="alert" className="mx-5 mt-2.5">
-            {loadError || valueSets.error}
-          </Callout>
-        )}
-        {statusMessage && (
-          <Callout role="status" className="mx-5 mt-2.5">
-            {statusMessage}
-          </Callout>
-        )}
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {(loadError || valueSets.error) && (
+        <Callout tone="danger" role="alert" className="mb-4">
+          {loadError || valueSets.error}
+        </Callout>
+      )}
+      {statusMessage && (
+        <Callout role="status" className="mb-4">
+          {statusMessage}
+        </Callout>
+      )}
+
+      {view === "utilisation" && <UtilisationView data={utilisation} error={utilisationError} />}
+
+      {view === "settings" && (
+        <div className="grid gap-4 [&>*]:min-w-0">
+          <CategoryConfig
+            categories={categories}
+            canConfigure={workspace.can_configure}
+            onChanged={(payload) =>
+              setWorkspace((prev) =>
+                prev
+                  ? { ...prev, categories: payload.results, can_configure: payload.can_configure }
+                  : prev,
+              )
+            }
+          />
+          <ProgrammeConfig
+            categories={categories}
+            programmes={workspace.programmes ?? []}
+            canConfigure={workspace.can_configure}
+            onCategories={(payload) =>
+              setWorkspace((prev) => (prev ? { ...prev, categories: payload.results } : prev))
+            }
+            onProgrammes={(payload) =>
+              setWorkspace((prev) => (prev ? { ...prev, programmes: payload.results } : prev))
+            }
+          />
+        </div>
+      )}
+
+      {view === "session" && (
         <section
-          className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(275px,320px)_minmax(0,1fr)]"
-          aria-label="Group psychotherapy session workspace"
+          className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]"
+          aria-label="Group sessions"
         >
           <SessionRail
             items={visibleItems}
             tab={tab}
             selectedKey={selected?.key ?? null}
-            onTab={(next) => {
-              setTab(next);
-              setView("session");
-            }}
+            onTab={setTab}
             onSelect={select}
-            onNewSession={startNewSession}
           />
-          <section
-            // Below lg the workspace is a fixed 540px pane that scrolls inside
-            // (mockup), so the session rail above it stays in view.
-            className="flex min-w-0 flex-col overflow-hidden bg-surface-card max-lg:h-[540px] lg:min-h-0"
-            aria-live="polite"
-          >
-            {view === "utilisation" ? (
-              <UtilisationView data={utilisation} error={utilisationError} />
-            ) : selected ? (
+          <div className="min-w-0 overflow-hidden rounded-xl border border-surface-border bg-surface-card">
+            {!shownItem ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                <p className="text-sm text-ink-500">No sessions in this list.</p>
+                <button type="button" className={BTN} onClick={startNewSession}>
+                  New session
+                </button>
+              </div>
+            ) : !editable ? (
               <SessionWorkspace
-                item={selected}
+                item={shownItem}
                 documentedBy={currentUser.name}
                 attendanceOptions={attendanceOptions}
                 attendanceLabel={attendanceLabel}
@@ -522,26 +571,14 @@ export function GroupProgrammePage() {
                 onFilters={setFilters}
                 search={search}
                 onSearch={setSearch}
-                draft={currentDraft}
+                draft={undefined}
                 onDraftChange={changeAttendance}
-                observationOpen={Object.fromEntries(
-                  clients.map((c) => [c.id, Boolean(observationOpen[`${selected.key}:${c.id}`])]),
-                )}
-                onToggleObservation={(clientId) =>
-                  setObservationOpen((prev) => ({
-                    ...prev,
-                    [`${selected.key}:${clientId}`]: !prev[`${selected.key}:${clientId}`],
-                  }))
-                }
-                detail={
-                  selected.kind === "saved" && detail?.id === selectedSessionId ? detail : null
-                }
-                detailError={selected.kind === "saved" ? detailError : null}
+                observationOpen={{}}
+                onToggleObservation={() => undefined}
+                detail={detail?.id === selectedSessionId ? detail : null}
+                detailError={detailError}
                 onReview={review}
-                onEditScheduled={() => {
-                  setEditorOpen(true);
-                  scrollToEditor();
-                }}
+                onEditScheduled={() => undefined}
                 onEditDetails={() => selectedSessionId && openDialog("session", selectedSessionId)}
                 onCorrectEntry={() => selectedSessionId && openDialog("entry", selectedSessionId)}
                 onOpenInterventions={(patientId) =>
@@ -549,94 +586,175 @@ export function GroupProgrammePage() {
                 }
               />
             ) : (
-              <div className="min-h-0 flex-1 overflow-auto px-8 py-6">
-                <div className="p-6 text-center text-xs text-ink-500">
-                  No sessions here. Create a group session or choose another session period.
-                </div>
-              </div>
-            )}
-          </section>
-        </section>
-      </div>
+              <>
+                <ol
+                  className="flex flex-wrap gap-x-6 gap-y-2 border-b border-surface-border px-4 py-3 sm:px-8"
+                  aria-label="Recording steps"
+                >
+                  {STEPS.map(([key, label], index) => {
+                    const done = index < stepIndex;
+                    const current = index === stepIndex;
+                    return (
+                      <li key={key}>
+                        <button
+                          type="button"
+                          disabled={!done}
+                          onClick={() => setStep(key)}
+                          aria-current={current ? "step" : undefined}
+                          className={`flex items-center gap-2 text-[13px] ${
+                            current
+                              ? "font-semibold text-ink-900"
+                              : done
+                                ? "text-brand-green hover:underline"
+                                : "text-ink-400"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                              current || done
+                                ? "bg-brand-green text-on-primary"
+                                : "bg-surface-bg text-ink-500"
+                            }`}
+                          >
+                            {index + 1}
+                          </span>
+                          {label}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
 
-      <div className="grid min-w-0 gap-4 p-4 sm:p-5 [&>*]:min-w-0">
-        <SessionEditor
-          open={editorOpen}
-          onToggle={setEditorOpen}
-          editable={Boolean(editable)}
-          scheduled={workspace.scheduled}
-          scheduledKey={editable?.kind === "scheduled" ? editable.key : ""}
-          onSelectScheduled={chooseScheduled}
-          form={currentDraft?.details ?? null}
-          errors={editorErrors}
-          onFormChange={changeDetails}
-          categories={categories}
-          staff={staff}
-          documentedBy={currentUser.name}
-          clients={clients}
-          programmes={programmes}
-          units={units}
-          filters={filters}
-          onFilters={setFilters}
-          attendance={currentDraft?.attendance ?? {}}
-          attendanceOptions={attendanceOptions}
-          onDraftChange={changeAttendance}
-          onReview={review}
-          status={editorStatus}
-          review={
-            editable && reviewKey === editable.key && reviewDetails ? (
-              <ReviewPanel
-                summary={{
-                  category: categories.find((c) => c.code === reviewDetails.category)?.is_other
-                    ? reviewDetails.categoryOther.trim()
-                    : (categories.find((c) => c.code === reviewDetails.category)?.display ?? ""),
-                  topic: reviewDetails.topic.trim(),
-                  sessionDate: reviewDetails.sessionDate,
-                  startTime: reviewDetails.startTime,
-                  endTime: reviewDetails.endTime,
-                  location: reviewDetails.location.trim(),
-                  facilitator: facilitatorName(reviewDetails),
-                  documentedBy: currentUser.name,
-                }}
-                rows={reviewRows}
-                riskFlags={riskFlags}
-                onEntryChange={changeAtReview}
-                attendanceLabel={attendanceLabel}
-                confirming={confirming}
-                onConfirm={confirm}
-                onReturn={() => setReviewKey(null)}
-              />
-            ) : null
-          }
-        />
-        <CategoryConfig
-          categories={categories}
-          canConfigure={workspace.can_configure}
-          onChanged={(payload) =>
-            setWorkspace((prev) =>
-              prev
-                ? { ...prev, categories: payload.results, can_configure: payload.can_configure }
-                : prev,
-            )
-          }
-        />
-        <ProgrammeConfig
-          categories={categories}
-          programmes={workspace.programmes ?? []}
-          canConfigure={workspace.can_configure}
-          onCategories={(payload) =>
-            setWorkspace((prev) => (prev ? { ...prev, categories: payload.results } : prev))
-          }
-          onProgrammes={(payload) =>
-            setWorkspace((prev) => (prev ? { ...prev, programmes: payload.results } : prev))
-          }
-        />
-        <SessionHistory
-          sessions={workspace.sessions}
-          onCorrectDetails={(id) => openDialog("session", id)}
-          onCorrectEntry={(id) => openDialog("entry", id)}
-        />
-      </div>
+                {step === "details" && currentDraft && (
+                  <div className="grid gap-4 px-4 py-5 sm:px-8">
+                    <Card title="Session details">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
+                        {workspace.scheduled.length > 0 && (
+                          <Field label="From the programme calendar" htmlFor="group-scheduled">
+                            <select
+                              id="group-scheduled"
+                              className={INPUT}
+                              value={editable.kind === "scheduled" ? editable.key : ""}
+                              onChange={(e) => chooseScheduled(e.target.value)}
+                            >
+                              <option value="">Not scheduled: enter the details</option>
+                              {workspace.scheduled.map((item) => {
+                                const local = scheduledLocal(item);
+                                return (
+                                  <option key={item.key} value={item.key}>
+                                    {local.date} {local.time} · {item.category} · {item.facilitator}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </Field>
+                        )}
+                        <SessionDetailsFields
+                          idPrefix="group-editor"
+                          form={currentDraft.details}
+                          errors={editorErrors}
+                          categories={categories}
+                          staff={staff}
+                          onChange={changeDetails}
+                          documentedBy={
+                            <Field
+                              label="Documented by"
+                              htmlFor="group-author"
+                              hint="Your signed-in account."
+                            >
+                              <input
+                                id="group-author"
+                                className={INPUT}
+                                value={currentUser.name}
+                                readOnly
+                              />
+                            </Field>
+                          }
+                        />
+                      </div>
+                    </Card>
+                    <StepStatus text={editorStatus} />
+                    <div className="flex justify-end">
+                      <button type="button" className={BTN} onClick={toAttendance}>
+                        Next: attendance
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {step === "attendance" && (
+                  <>
+                    <SessionWorkspace
+                      item={shownItem}
+                      documentedBy={currentUser.name}
+                      attendanceOptions={attendanceOptions}
+                      attendanceLabel={attendanceLabel}
+                      clients={clients}
+                      programmes={programmes}
+                      units={units}
+                      filters={filters}
+                      onFilters={setFilters}
+                      search={search}
+                      onSearch={setSearch}
+                      draft={currentDraft}
+                      onDraftChange={changeAttendance}
+                      observationOpen={Object.fromEntries(
+                        clients.map((c) => [
+                          c.id,
+                          Boolean(observationOpen[`${shownItem.key}:${c.id}`]),
+                        ]),
+                      )}
+                      onToggleObservation={(clientId) =>
+                        setObservationOpen((prev) => ({
+                          ...prev,
+                          [`${shownItem.key}:${clientId}`]: !prev[`${shownItem.key}:${clientId}`],
+                        }))
+                      }
+                      detail={null}
+                      detailError={null}
+                      onReview={review}
+                      onEditScheduled={() => setStep("details")}
+                      onEditDetails={() => undefined}
+                      onCorrectEntry={() => undefined}
+                      onOpenInterventions={() => undefined}
+                    />
+                    {editorStatus && (
+                      <div className="px-4 pb-4 sm:px-8">
+                        <StepStatus text={editorStatus} />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {step === "review" && reviewDetails && (
+                  <div className="px-4 py-5 sm:px-8">
+                    <ReviewPanel
+                      summary={{
+                        category: categoryLabel(reviewDetails),
+                        topic: reviewDetails.topic.trim(),
+                        sessionDate: reviewDetails.sessionDate,
+                        startTime: reviewDetails.startTime,
+                        endTime: reviewDetails.endTime,
+                        location: reviewDetails.location.trim(),
+                        facilitator: facilitatorName(reviewDetails),
+                        documentedBy: currentUser.name,
+                      }}
+                      rows={reviewRows}
+                      riskFlags={riskFlags}
+                      onEntryChange={changeAtReview}
+                      attendanceLabel={attendanceLabel}
+                      confirming={confirming}
+                      onConfirm={confirm}
+                      onReturn={() => setStep("attendance")}
+                    />
+                    <StepStatus text={editorStatus} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {dialog?.kind === "session" && (
         <SessionCorrectionDialog
@@ -659,6 +777,19 @@ export function GroupProgrammePage() {
           )}
         />
       )}
+    </div>
+  );
+}
+
+/** A problem or progress note for the step being completed. */
+function StepStatus({ text }: { text: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={text ? "mt-3 rounded-lg bg-surface-bg px-3 py-2.5 text-xs text-ink-900" : ""}
+    >
+      {text}
     </div>
   );
 }
