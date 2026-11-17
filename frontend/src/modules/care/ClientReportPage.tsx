@@ -11,8 +11,7 @@ import {
   type ClientReportTriage,
   type ReportRow,
 } from "../../lib/carePathwayApi";
-import { RegistrationDetailsDrawer } from "../clinical/RegistrationDetailsDrawer";
-import { clientRecordPath } from "./shared/recordRoutes";
+import { clientRecordPath, clientRegistrationPath } from "./shared/recordRoutes";
 import { BTN_GHOST } from "./shared/styles";
 import { ErrorNote, PageHeader, PriorityPill } from "./shared/ui";
 
@@ -111,7 +110,6 @@ function ClientFiles({ report }: { report: ClientReport }) {
   const c = report.client;
   const [tab, setTab] = useState<TabKey>("overview");
   const [filter, setFilter] = useState<InterventionFilter>("psychotherapy");
-  const [showDetails, setShowDetails] = useState(false);
 
   const sessions = report.interventions.find((g) => g.id === "psychotherapy")?.records ?? [];
   const individual = sessions.filter((r) => !isFamily(r.title));
@@ -476,7 +474,7 @@ function ClientFiles({ report }: { report: ClientReport }) {
           <div className="grid grid-cols-2 gap-3">
             <ActionTile
               icon={<ClipboardList className="h-5 w-5" />}
-              onClick={() => setShowDetails(true)}
+              to={clientRegistrationPath(c.id)}
             >
               Registration details
             </ActionTile>
@@ -493,10 +491,6 @@ function ClientFiles({ report }: { report: ClientReport }) {
           </p>
         </aside>
       </div>
-      <RegistrationDetailsDrawer
-        patientId={showDetails ? c.id : null}
-        onClose={() => setShowDetails(false)}
-      />
     </div>
   );
 }

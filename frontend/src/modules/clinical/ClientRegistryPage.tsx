@@ -11,8 +11,11 @@ import {
   type ClientRegistryRow,
 } from "../../lib/clinicalApi";
 import { Callout, PageHeader, PriorityPill } from "../care/shared/ui";
-import { clientRecordPath, clientReportPath } from "../care/shared/recordRoutes";
-import { RegistrationDetailsDrawer } from "./RegistrationDetailsDrawer";
+import {
+  clientRecordPath,
+  clientRegistrationPath,
+  clientReportPath,
+} from "../care/shared/recordRoutes";
 
 const TABS: { label: string; category?: ClientRegistryCategory }[] = [
   { label: "All" },
@@ -132,8 +135,6 @@ export function ClientRegistryPage() {
     };
   }, [reload]);
 
-  // The client whose registration details are shown, read-only.
-  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   // The row being opened, so it shows "Opening…" until the record loads.
   const [opening, setOpening] = useState<string | null>(null);
   const openPatient = (patient: ClientRegistryRow) => {
@@ -358,12 +359,14 @@ export function ClientRegistryPage() {
                       )}
                       <RowActions
                         name={patient.name}
-                        onDetails={() => setDetailsFor(patient.id)}
+                        onDetails={() => {
+                          selectPatient(patient.id, patient.name);
+                          navigate(clientRegistrationPath(patient.id));
+                        }}
                         onReport={() => {
                           selectPatient(patient.id, patient.name);
                           navigate(clientReportPath(patient.id));
                         }}
-                        onOpen={() => openPatient(patient)}
                       />
                     </span>
                   </td>
@@ -398,7 +401,6 @@ export function ClientRegistryPage() {
           </button>
         </div>
       )}
-      <RegistrationDetailsDrawer patientId={detailsFor} onClose={() => setDetailsFor(null)} />
     </div>
   );
 }
@@ -409,12 +411,10 @@ function RowActions({
   name,
   onDetails,
   onReport,
-  onOpen,
 }: {
   name: string;
   onDetails: () => void;
   onReport: () => void;
-  onOpen: () => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -516,10 +516,6 @@ function RowActions({
             <button type="button" role="menuitem" className={item} onClick={choose(onReport)}>
               <FileText aria-hidden className="h-4 w-4 text-ink-500" />
               Client report
-            </button>
-            <button type="button" role="menuitem" className={item} onClick={choose(onOpen)}>
-              <ChevronRight aria-hidden className="h-4 w-4 text-ink-500" />
-              Open client record
             </button>
           </div>,
           document.body,

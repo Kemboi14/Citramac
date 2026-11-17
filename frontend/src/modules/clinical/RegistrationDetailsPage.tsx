@@ -1,25 +1,23 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
-import { Drawer } from "../../components/Drawer";
 import { ApiError } from "../../lib/apiClient";
 import { getRegistration, type RegistrationRow } from "../../lib/carePathwayApi";
+import { clientReportPath } from "../care/shared/recordRoutes";
+import { BTN_GHOST } from "../care/shared/styles";
+import { ErrorNote, PageHeader } from "../care/shared/ui";
 import { CLIENT_CHANGED_EVENT } from "../care/shared/useClientBanner";
 import { useValueSets } from "../care/shared/useValueSets";
 
 /**
- * A client's details as registered, read-only. Loaded fresh each time it
- * opens, and again whenever anything on the page reports the client changed,
+ * A client's details as registered, read-only, on a page of its own. Loaded
+ * fresh each time it opens, and again whenever anything on the page reports the client changed,
  * so it always shows the saved record. Reading it is an audited client-record
  * read on the server, like any other.
  */
-export function RegistrationDetailsDrawer({
-  patientId,
-  onClose,
-}: {
-  patientId: string | null;
-  onClose: () => void;
-}) {
+export function RegistrationDetailsPage() {
+  const { patientId = "" } = useParams();
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const [loaded, setLoaded] = useState<{ id: string; row: RegistrationRow } | null>(null);
@@ -61,16 +59,28 @@ export function RegistrationDetailsDrawer({
   const label = (set: string, code: string) => (code ? vs.label(set, code) : "");
 
   return (
-    <Drawer
-      open={Boolean(patientId)}
-      title={row ? row.name : "Registration details"}
-      subtitle={row ? `${row.citramac_number} · ${row.identity_label}` : undefined}
-      onClose={onClose}
-    >
+    <div className="mx-auto max-w-4xl animate-fade-in">
+      <PageHeader
+        eyebrow="Clients"
+        title={row ? row.name : "Registration details"}
+        subtitle={
+          row ? `Registration details · ${row.citramac_number} · ${row.identity_label}` : undefined
+        }
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link to="/clinical/registry" className={BTN_GHOST}>
+              Back to clients
+            </Link>
+            {row && (
+              <Link to={clientReportPath(patientId)} className={BTN_GHOST}>
+                Client report
+              </Link>
+            )}
+          </div>
+        }
+      />
       {failed ? (
-        <p role="alert" className="text-sm text-status-red">
-          {failed}
-        </p>
+        <ErrorNote>{failed}</ErrorNote>
       ) : !row ? (
         <p role="status" className="flex items-center gap-2 text-sm text-ink-500">
           <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> Loading details…
@@ -181,7 +191,7 @@ export function RegistrationDetailsDrawer({
           )}
         </div>
       )}
-    </Drawer>
+    </div>
   );
 }
 
@@ -189,7 +199,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
       <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-500">{title}</h3>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-surface-border px-4 py-3">
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-xl border border-surface-border bg-surface-card px-5 py-4 sm:grid-cols-3">
         {children}
       </dl>
     </section>
@@ -198,7 +208,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Item({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
   return (
-    <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}>
+    <div className={`min-w-0 ${wide ? "sm:col-span-3" : ""}`}>
       <dt className="text-[11px] font-semibold text-ink-500">{label}</dt>
       <dd className={`break-words text-[13px] ${value ? "text-ink-900" : "text-ink-300"}`}>
         {value || "Not recorded"}

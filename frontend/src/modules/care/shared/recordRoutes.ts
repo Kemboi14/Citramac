@@ -53,6 +53,11 @@ export function clientReportPath(patientId: string) {
   return `/clinical/clients/${patientId}/report`;
 }
 
+/** The client's registration details, read-only. */
+export function clientRegistrationPath(patientId: string) {
+  return `/clinical/clients/${patientId}/registration`;
+}
+
 /** The psychiatrist's assessment workspace for one client. */
 export function psychiatryAssessmentPath(patientId: string) {
   return `/clinical/psychiatry/assessments/${patientId}`;

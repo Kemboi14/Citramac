@@ -145,6 +145,10 @@ const ServiceTariffPage = lazyNamed(
   "ServiceTariffPage",
 );
 const CaseloadPage = lazyNamed(() => import("./modules/clinical/CaseloadPage"), "CaseloadPage");
+const RegistrationDetailsPage = lazyNamed(
+  () => import("./modules/clinical/RegistrationDetailsPage"),
+  "RegistrationDetailsPage",
+);
 const ClientReportPage = lazyNamed(
   () => import("./modules/care/ClientReportPage"),
   "ClientReportPage",
@@ -380,6 +384,7 @@ function App() {
             />
             <Route path="clients/:patientId" element={<Navigate to="triage" replace />} />
             <Route path="clients/:patientId/report" element={<ClientReportPage />} />
+            <Route path="clients/:patientId/registration" element={<RegistrationDetailsPage />} />
             <Route path="clients/:patientId/:view" element={<ClientRecordPage />} />
             <Route path="inpatient" element={<InpatientAdmissionsPage />} />
             <Route path="inpatient/ward" element={<WardBoardPage />} />
