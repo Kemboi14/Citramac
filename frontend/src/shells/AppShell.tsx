@@ -74,6 +74,7 @@ export function AppShell({
   profilePath,
   variant = "default",
   pageTitles,
+  workspaceTitle,
   searchSlot,
   focusRoutes,
 }: {
@@ -89,11 +90,13 @@ export function AppShell({
    * portal gets one so every user, any role, can set their own avatar. */
   profilePath: string;
   /** "brand" — the clinical workspace's topbar: light like the other shells, but
-   * carrying the current page title, a working search slot and a light/dark toggle. */
+   * carrying the workspace name, a working search slot and a light/dark toggle. */
   variant?: "default" | "brand";
-  /** Topbar titles for routes whose title differs from their nav label, or
-   * that have no nav entry. Falls back to the nav label of the current route. */
+  /** Page names for routes with no menu entry, used as the last breadcrumb. */
   pageTitles?: Record<string, string>;
+  /** The brand topbar names the workspace, never the page: each page carries
+   * its own heading, with the breadcrumbs above it, so it is never shown twice. */
+  workspaceTitle?: string;
   /** Replaces the topbar's plain search box (brand variant), e.g. with a working client search. */
   searchSlot?: ReactNode;
   /** Full-height workspaces (e.g. Group Psychotherapy): the page gets the whole
@@ -155,12 +158,6 @@ export function AppShell({
         location.pathname.startsWith(`${route.replace(/\/+$/, "")}/`),
     ),
   );
-  const pageTitle =
-    resolvePageTitle(pageTitles, location.pathname) ??
-    navGroups
-      .flatMap((group) => group.items.flatMap((item) => [item, ...(item.children ?? [])]))
-      .find((item) => item.to === location.pathname)?.label ??
-    "";
   const isBrand = variant === "brand";
 
   // Breadcrumbs, at the top of every page: the page's own when it gives them
@@ -528,7 +525,7 @@ export function AppShell({
             </button>
             {/* Narrow screens: wrap to two lines rather than cut the title off. */}
             <div className="min-w-0 flex-1 truncate font-display text-sm font-semibold max-[480px]:line-clamp-2 max-[480px]:whitespace-normal max-[480px]:text-[13px] max-[480px]:leading-tight">
-              {pageTitle}
+              {workspaceTitle}
             </div>
             <div className="relative hidden w-72 max-w-[34vw] min-[481px]:block">
               {searchSlot ?? (

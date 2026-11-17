@@ -26,7 +26,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/clinical/psychotherapy/group": "Group Psychotherapy",
   "/clinical/psychotherapy/individual": "Individual Psychotherapy",
   "/clinical/psychotherapy/individual/session/*": "Psychotherapy session",
-  "/clinical/psychotherapy/*": "Outpatient Care",
   "/clinical/documents": "Clinical Documents",
   "/clinical/documents/*": "Signed Triage Assessment",
   // More specific than documents/* (longest prefix wins), so a new or
@@ -76,6 +75,7 @@ export function ClinicalWorkspaceShell() {
       profilePath="/clinical/profile"
       variant="brand"
       pageTitles={PAGE_TITLES}
+      workspaceTitle="Clinical Workspace"
       focusRoutes={FOCUS_ROUTES}
       topbarRight={
         <TopbarActions pill={<OrgBranchPill />} notificationsPath="/clinical/notifications" />
