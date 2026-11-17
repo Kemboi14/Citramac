@@ -23,7 +23,6 @@ import { TimelineView } from "./record/TimelineView";
 import { TriageStage } from "./record/TriageStage";
 import type { RecordViewProps } from "./record/types";
 import { Breadcrumbs, carriedTrail, type Crumb } from "./shared/Breadcrumbs";
-import { GroupRecordEntries } from "./groupProgramme/GroupRecordEntries";
 
 const VIEWS = new Set<string>([
   "snapshot",
@@ -181,7 +180,6 @@ export function ClientRecordPage() {
       <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} banner={loadedBanner} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
-      {loadedBanner && <GroupRecordEntries patientId={patientId} />}
       {body}
     </div>
   );

@@ -558,7 +558,21 @@ def workspace(patient):
         modules = modules_for_activity(activity)
         for code in modules:
             linked.setdefault(code, activity)
-        own = [r for r in records if r.activity_id == activity.id]
+        # Its records: those linked to it, plus unlinked deliveries from the
+        # modules that deliver it (a group-session entry is never linked to an
+        # action, and counts towards Psychological therapy via history_modules).
+        history = {
+            h for code in modules for h in BY_CODE.get(code, {}).get("history_modules", [code])
+        }
+        own = sorted(
+            (
+                r
+                for r in records
+                if r.activity_id == activity.id or (r.activity_id is None and r.module in history)
+            ),
+            key=lambda r: r.performed_at,
+            reverse=True,
+        )
         latest = own[0] if own else None
         action_rows.append(
             {
@@ -581,6 +595,7 @@ def workspace(patient):
                     and activity.priority != "GREEN"
                 ),
                 "records": len(own),
+                "group_records": sum(1 for r in own if r.module == "group_psychotherapy"),
                 "latest_by": services.user_display(latest.provider) if latest else "",
                 "latest_at": latest.performed_at.isoformat() if latest else None,
                 "note": (

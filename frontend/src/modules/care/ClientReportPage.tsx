@@ -1,5 +1,5 @@
 import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ChevronDown, ClipboardList, FolderOpen, Loader2, Lock } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { DocumentActions } from "../../components/DocumentActions";
@@ -13,7 +13,7 @@ import {
 } from "../../lib/carePathwayApi";
 import { Breadcrumbs, useTrail } from "./shared/Breadcrumbs";
 import { clientRecordPath, clientRegistrationPath } from "./shared/recordRoutes";
-import { ErrorNote, PageHeader, PriorityPill } from "./shared/ui";
+import { ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
 
 /**
  * Everything recorded for one client, read-only: registration, every triage
@@ -98,6 +98,27 @@ type TabKey =
 type InterventionFilter =
   "psychiatry" | "psychotherapy" | "family" | "groups" | "care-plan" | "mse";
 
+const TAB_KEYS: TabKey[] = [
+  "overview",
+  "triage",
+  "intake",
+  "plan",
+  "interventions",
+  "inpatient",
+  "outcomes",
+  "billing",
+  "notes",
+  "activity",
+];
+const FILTER_KEYS: InterventionFilter[] = [
+  "psychiatry",
+  "psychotherapy",
+  "family",
+  "groups",
+  "care-plan",
+  "mse",
+];
+
 type SessionRecord = ClientReport["interventions"][number]["records"][number];
 
 const isPsychiatry = (type: string) => /psychiatr/i.test(type);
@@ -112,8 +133,16 @@ function ClientFiles({ report }: { report: ClientReport }) {
     [{ label: "Clients", to: "/clinical/registry" }],
     `Client report — ${c.name}`,
   );
-  const [tab, setTab] = useState<TabKey>("overview");
-  const [filter, setFilter] = useState<InterventionFilter>("psychotherapy");
+  // A link can open the report on a tab and list (?tab=interventions&filter=family).
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<TabKey>(() =>
+    TAB_KEYS.includes(params.get("tab") as TabKey) ? (params.get("tab") as TabKey) : "overview",
+  );
+  const [filter, setFilter] = useState<InterventionFilter>(() =>
+    FILTER_KEYS.includes(params.get("filter") as InterventionFilter)
+      ? (params.get("filter") as InterventionFilter)
+      : "psychotherapy",
+  );
 
   const sessions = report.interventions.find((g) => g.id === "psychotherapy")?.records ?? [];
   const individual = sessions.filter((r) => !isFamily(r.title));
@@ -148,7 +177,11 @@ function ClientFiles({ report }: { report: ClientReport }) {
   ];
 
   const filters: { key: InterventionFilter; label: string; count: number }[] = [
-    { key: "psychotherapy", label: "Psychotherapy", count: individual.length },
+    {
+      key: "psychotherapy",
+      label: "Psychotherapy",
+      count: individual.length + report.group_sessions.length,
+    },
     { key: "psychiatry", label: "Psychiatric reviews", count: psychiatryNotes.length },
     { key: "family", label: "Family & couple", count: family.length },
     { key: "groups", label: "Group sessions", count: report.group_sessions.length },
@@ -307,7 +340,7 @@ function ClientFiles({ report }: { report: ClientReport }) {
                     ))}
                   </div>
                   {filter === "psychotherapy" && (
-                    <SessionTable records={individual} empty="No psychotherapy sessions." />
+                    <PsychotherapyTable records={individual} groups={report.group_sessions} />
                   )}
                   {filter === "family" && (
                     <SessionTable records={family} empty="No family or couple sessions." />
@@ -743,6 +776,50 @@ function SessionTable({ records, empty }: { records: SessionRecord[]; empty: str
         cells: [`${records.length - index}`, r.on, r.title, r.provider],
         detail: <SessionSheet record={r} number={records.length - index} />,
       }))}
+    />
+  );
+}
+
+/** Individual sessions and, flagged, the client's own group-session entries,
+ * newest first. A group entry opens on its group sheet (attendance and the
+ * facilitator's observation about this client only). */
+function PsychotherapyTable({
+  records,
+  groups,
+}: {
+  records: SessionRecord[];
+  groups: ClientReport["group_sessions"];
+}) {
+  const when = (on: string) => {
+    const t = Date.parse(on);
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const rows = [
+    ...records.map((r, index) => ({
+      at: when(r.on),
+      id: r.id,
+      cells: [r.on, r.title, r.provider] as ReactNode[],
+      detail: <SessionSheet record={r} number={records.length - index} />,
+    })),
+    ...groups.map((g) => ({
+      at: when(g.on),
+      id: `group-${g.id}`,
+      cells: [
+        g.on,
+        <span key="t" className="inline-flex flex-wrap items-center gap-1.5">
+          {[g.topic, g.category].filter(Boolean).join(" · ") || "Group session"}
+          <Tag tone="brand">From group psychotherapy</Tag>
+        </span>,
+        g.facilitator,
+      ] as ReactNode[],
+      detail: <GroupSheet group={g} />,
+    })),
+  ].sort((a, b) => b.at - a.at);
+  return (
+    <ExpandTable
+      empty="No psychotherapy sessions."
+      head={["Date", "Session", "Clinician"]}
+      rows={rows.map(({ id, cells, detail }) => ({ id, cells, detail }))}
     />
   );
 }

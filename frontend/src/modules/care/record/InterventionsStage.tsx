@@ -119,6 +119,7 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
             actions={actions}
             loading={workspace.loading && !data}
             moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
+            patientId={patientId}
           />
         </>
       )}

@@ -1,6 +1,8 @@
 import { Clock } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { InterventionAction } from "../../../../lib/carePathwayApi";
 import { formatDate, formatDateTime } from "../../shared/format";
+import { clientReportPath } from "../../shared/recordRoutes";
 import { TABLE, TD, TH } from "../../shared/styles";
 import { Card, PriorityPill, Tag } from "../../shared/ui";
 
@@ -9,6 +11,14 @@ const STATUS_TONE: Record<string, "brand" | "warn" | undefined> = {
   PLANNED: "warn",
   SCHEDULED: "warn",
 };
+
+/** Where an action's records are listed in the client report. */
+function recordsList(modules: string[]) {
+  if (modules.includes("family_psychotherapy")) return { tab: "interventions", filter: "family" };
+  if (modules.includes("psychotherapy")) return { tab: "interventions", filter: "psychotherapy" };
+  if (modules.includes("psychiatry")) return { tab: "interventions", filter: "psychiatry" };
+  return { tab: "interventions", filter: "care-plan" };
+}
 
 /** The origin line, said once ("Added by clinician · Added by clinician" read twice). */
 function origin(action: InterventionAction) {
@@ -28,11 +38,14 @@ export function CarePlanActionsTable({
   actions,
   loading,
   moduleNames = {},
+  patientId,
 }: {
   actions: InterventionAction[];
   loading: boolean;
   /** Module code → name, to say which module delivers each action. */
   moduleNames?: Record<string, string>;
+  /** The client, for links to where the records are. */
+  patientId: string;
 }) {
   return (
     <Card bodyClassName="overflow-x-auto p-0">
@@ -45,6 +58,7 @@ export function CarePlanActionsTable({
             <th className={TH}>Due</th>
             <th className={TH}>Status</th>
             <th className={TH}>Last delivery</th>
+            <th className={`${TH} text-right`}>Records</th>
           </tr>
         </thead>
         <tbody>
@@ -111,12 +125,30 @@ export function CarePlanActionsTable({
                       <span className="text-ink-400">Nothing recorded yet</span>
                     )}
                   </td>
+                  <td className={`${TD} text-right tabular-nums`}>
+                    {action.records > 0 ? (
+                      <Link
+                        to={clientReportPath(patientId, recordsList(action.modules))}
+                        className="font-semibold text-brand-green hover:underline"
+                        title="Open these records in the client report"
+                      >
+                        {action.records}
+                      </Link>
+                    ) : (
+                      <span className="text-ink-400">0</span>
+                    )}
+                    {Boolean(action.group_records) && (
+                      <div className="mt-0.5 whitespace-nowrap text-[11px] text-ink-500">
+                        incl. {action.group_records} from group
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan={6} className={`${TD} py-6 text-center text-ink-500`}>
+              <td colSpan={7} className={`${TD} py-6 text-center text-ink-500`}>
                 {loading ? "Loading care plan…" : "No care plan actions documented yet."}
               </td>
             </tr>

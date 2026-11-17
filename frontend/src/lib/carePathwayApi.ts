@@ -1616,6 +1616,8 @@ export interface InterventionAction {
   /** Past due, not completed, and not Routine (v4). */
   overdue: boolean;
   records: number;
+  /** How many of `records` are this client's group-session entries. */
+  group_records?: number;
   latest_by: string;
   latest_at: string | null;
   /** Latest note logged when this action was confirmed, if one was written. */

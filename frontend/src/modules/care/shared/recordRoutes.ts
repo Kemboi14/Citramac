@@ -48,9 +48,16 @@ export function clientRecordPath(patientId: string, view: RecordView = "triage")
   return `/clinical/clients/${patientId}/${view}`;
 }
 
-/** The full read-only report of everything recorded for a client. */
-export function clientReportPath(patientId: string) {
-  return `/clinical/clients/${patientId}/report`;
+/** The full read-only report of everything recorded for a client, optionally
+ * opened on one of its tabs and lists. */
+export function clientReportPath(patientId: string, open?: { tab: string; filter?: string }) {
+  const base = `/clinical/clients/${patientId}/report`;
+  if (!open) return base;
+  const query = new URLSearchParams({
+    tab: open.tab,
+    ...(open.filter ? { filter: open.filter } : {}),
+  });
+  return `${base}?${query}`;
 }
 
 /** The client's registration details, read-only. */
