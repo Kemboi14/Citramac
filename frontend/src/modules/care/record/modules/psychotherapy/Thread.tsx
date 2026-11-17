@@ -44,11 +44,11 @@ function Sys({ children, id }: { children: ReactNode; id?: string }) {
     <div id={id} className="flex scroll-mt-4 gap-2.5">
       <div
         aria-hidden
-        className="mt-px grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] bg-brand-green-tint text-[14px] font-semibold text-brand-green"
+        className="mt-px grid h-6 w-6 flex-shrink-0 place-items-center rounded-[8px] bg-brand-green-tint text-[12px] font-semibold text-brand-green"
       >
         C
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2 text-[14.5px] leading-normal text-ink-900">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 text-[13.5px] leading-[1.5] text-ink-900">
         {children}
       </div>
     </div>
@@ -58,7 +58,7 @@ function Sys({ children, id }: { children: ReactNode; id?: string }) {
 function Mine({ children, foot }: { children: ReactNode; foot?: ReactNode }) {
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="max-w-[min(560px,88%)] whitespace-pre-wrap break-words rounded-[18px] bg-[color-mix(in_srgb,var(--border)_65%,var(--bg))] px-[15px] py-2.5 text-[15px] text-ink-900">
+      <div className="max-w-[min(560px,88%)] whitespace-pre-wrap break-words rounded-[18px] bg-[color-mix(in_srgb,var(--border)_65%,var(--bg))] px-[15px] py-2.5 text-[13.5px] text-ink-900">
         {children}
       </div>
       {foot && <div className="flex items-center gap-2.5 text-[12px] text-ink-500">{foot}</div>}
@@ -83,8 +83,8 @@ function QuestionHead({
       <span className="text-[12px] font-medium text-ink-500">
         Question {n} of {total}
       </span>
-      <div className="text-[19px] font-semibold leading-[1.3]">{title}</div>
-      <div className="max-w-[60ch] text-[14px] text-ink-500">{hint}</div>
+      <div className="text-[15px] font-semibold leading-snug">{title}</div>
+      <div className="max-w-[60ch] text-[12.5px] text-ink-500">{hint}</div>
     </>
   );
 }
@@ -465,8 +465,8 @@ export function Thread({
       )}
       {step >= safety && (
         <Sys id="psy-m-safety">
-          <span className="text-[12px] font-medium text-ink-500">Required · every session</span>
-          <div className="text-[17px] font-medium leading-[1.4]">{config.safety_question}</div>
+          <span className="text-[11.5px] font-medium text-ink-500">Required · every session</span>
+          <div className="text-[14px] font-semibold leading-[1.45]">{config.safety_question}</div>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Safety answer">
             {config.safety_options.map((o) => (
               <button
@@ -475,7 +475,7 @@ export function Thread({
                 role="radio"
                 aria-checked={note.safety_answer === o.code}
                 disabled={locked || busy}
-                className={`rounded-[12px] border-[1.5px] px-4 py-[9px] text-[13px] font-bold uppercase tracking-[.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`rounded-lg border px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   note.safety_answer === o.code
                     ? safetyOn(o.code)
                     : "border-surface-border bg-surface-card text-ink-900 hover:border-brand-green"
