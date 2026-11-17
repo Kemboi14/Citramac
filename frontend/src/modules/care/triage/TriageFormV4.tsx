@@ -1,6 +1,6 @@
 import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
 import {
@@ -268,7 +268,6 @@ export function TriageFormV4({
   onSigned: () => void;
 }) {
   const { accessToken } = useAuth();
-  const navigate = useNavigate();
   const vs = useValueSets();
   const editable = detail.status === "AWAITING" || detail.status === "IN_TRIAGE";
   const stored = editable ? detail.draft : detail.signed;
@@ -702,15 +701,6 @@ export function TriageFormV4({
         actions={
           <div className="flex items-center gap-2">
             {!readOnly && <Tag>{`${mm}:${ss} · aim 2–5 min`}</Tag>}
-            {
-              <button
-                type="button"
-                className={BTN_GHOST}
-                onClick={() => navigate("/clinical/triage")}
-              >
-                Back to queue
-              </button>
-            }
           </div>
         }
       />

@@ -23,6 +23,7 @@ import { formatDateTime } from "../care/shared/format";
 import { BTN, BTN_GHOST, BTN_SM, INPUT, TABLE, TD, TH } from "../care/shared/styles";
 import { Callout, Card, ErrorNote, Field, PageHeader, Tag } from "../care/shared/ui";
 import { useRecordData } from "../care/record/useRecordData";
+import { Breadcrumbs } from "../care/shared/Breadcrumbs";
 
 // Org Admin — personal-data breach incidents and their notification deadlines
 // (DPA 2019 s.43; Data Protection (General) Regulations 2021, regs 37–38;
@@ -727,12 +728,10 @@ function IncidentDetail({
           <Tag tone={statusTone(incident.status)}>{STATUS_LABEL[incident.status]}</Tag>
         </span>
       }
-      aside={
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onClose}>
-          Back to list
-        </button>
-      }
     >
+      <Breadcrumbs
+        items={[{ label: "Breach incidents", onClick: onClose }, { label: incident.reference }]}
+      />
       <div className="flex flex-col gap-5">
         {editing ? (
           <form onSubmit={(e) => void saveFacts(e)} className="flex flex-col gap-3">

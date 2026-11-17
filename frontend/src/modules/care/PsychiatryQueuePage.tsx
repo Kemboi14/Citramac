@@ -21,6 +21,7 @@ import { useValueSets } from "./shared/useValueSets";
 import { errorText } from "./triage/helpers";
 import { useRecordData } from "./record/useRecordData";
 import { LiveQueue } from "./triage/LiveQueue";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 const REFRESH_MS = 60_000;
 const PRIORITIES: Priority[] = ["RED", "ORANGE", "YELLOW", "GREEN"];
@@ -112,6 +113,11 @@ export function PsychiatryQueuePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {pathname === "/clinical/referrals/worklist" && (
+        <Breadcrumbs
+          items={[{ label: "Referrals", to: "/clinical/referrals" }, { label: "Psychiatry queue" }]}
+        />
+      )}
       <PageHeader
         eyebrow="Clinical workflow"
         title="Psychiatry queue"
@@ -121,11 +127,6 @@ export function PsychiatryQueuePage() {
             <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM}`}>
               Psychiatry assessments
             </Link>
-            {pathname === "/clinical/referrals/worklist" && (
-              <Link to="/clinical/referrals" className={BTN_GHOST}>
-                Back to Referrals
-              </Link>
-            )}
           </div>
         }
       />

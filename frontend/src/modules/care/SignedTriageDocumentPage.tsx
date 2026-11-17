@@ -6,8 +6,9 @@ import { ApiError } from "../../lib/apiClient";
 import { getSignedAssessment, type TriageAssessmentRecord } from "../../lib/carePathwayApi";
 import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
-import { BTN, BTN_GHOST, FIELD_LABEL, TABLE, TD, TH } from "./shared/styles";
+import { BTN, FIELD_LABEL, TABLE, TD, TH } from "./shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 // Read-only rendering of one signed triage assessment (doc 15 §1.6 "The signed
 // record holds…", §1.14 Documents → View). Coded answers are translated through
@@ -237,11 +238,14 @@ export function SignedTriageDocumentPage() {
   if (error) {
     return (
       <div className="animate-fade-in">
+        <Breadcrumbs
+          items={[
+            { label: "Documents", to: "/clinical/documents" },
+            { label: "Signed triage assessment" },
+          ]}
+        />
         <PageHeader eyebrow="Clinical records" title="Signed triage assessment" />
         <ErrorNote>{error}</ErrorNote>
-        <Link to="/clinical/documents" className={`${BTN_GHOST} mt-4`}>
-          Back to documents
-        </Link>
       </div>
     );
   }
@@ -255,6 +259,12 @@ export function SignedTriageDocumentPage() {
 
   return (
     <div className="animate-fade-in">
+      <Breadcrumbs
+        items={[
+          { label: "Documents", to: "/clinical/documents" },
+          { label: `Signed triage assessment — ${record.name || "Unknown client"}` },
+        ]}
+      />
       <PageHeader
         eyebrow={`Clinical records · Signed triage assessment${record.version > 1 ? ` · v${record.version}` : ""}`}
         title={record.name || "Unknown client"}
@@ -270,9 +280,6 @@ export function SignedTriageDocumentPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Link to="/clinical/documents" className={BTN_GHOST}>
-              Back to documents
-            </Link>
             <DocumentActions
               path={`/care/assessments/${record.id}/print/`}
               filename={`triage-${record.id.slice(0, 8)}-v${record.version}`}

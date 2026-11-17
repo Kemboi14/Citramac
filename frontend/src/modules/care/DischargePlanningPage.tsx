@@ -404,7 +404,7 @@ function DischargeDetail({ admissionId, onBack }: { admissionId: string; onBack:
     <div className="animate-fade-in">
       <Breadcrumbs
         items={[
-          { label: "Discharge planning", to: "/clinical/discharge" },
+          { label: "Discharge planning", onClick: onBack },
           { label: admission ? admission.patient_name : "Discharge" },
         ]}
       />
@@ -428,9 +428,6 @@ function DischargeDetail({ admissionId, onBack }: { admissionId: string; onBack:
                 Open client record
               </Link>
             )}
-            <button type="button" className={BTN_GHOST} onClick={onBack}>
-              Back to list
-            </button>
           </>
         }
       />

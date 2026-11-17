@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
   getTriageEncounter,
@@ -7,7 +7,6 @@ import {
   type TriageEncounterDetail,
 } from "../../lib/carePathwayApi";
 import { SafetyBanner } from "./shared/SafetyBanner";
-import { BTN_GHOST } from "./shared/styles";
 import { ErrorNote, PageHeader } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { EncounterContext } from "./triage/EncounterContext";
@@ -45,7 +44,6 @@ export function TriageEncounterScreen({
   inClientRecord?: boolean;
 }) {
   const { accessToken } = useAuth();
-  const navigate = useNavigate();
   const [detail, setDetail] = useState<TriageEncounterDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -80,14 +78,10 @@ export function TriageEncounterScreen({
   if (error && !detail) {
     return (
       <div className="mx-auto max-w-[1600px]">
+        <Breadcrumbs
+          items={[{ label: "Triage", to: "/clinical/triage" }, { label: "Encounter" }]}
+        />
         <ErrorNote>{error}</ErrorNote>
-        <button
-          type="button"
-          className={`${BTN_GHOST} mt-3`}
-          onClick={() => navigate("/clinical/triage")}
-        >
-          Back to queue
-        </button>
       </div>
     );
   }
@@ -128,15 +122,6 @@ export function TriageEncounterScreen({
         <PageHeader
           title="Triage re-check"
           subtitle="Record what has changed and repeat observations only when taken"
-          actions={
-            <button
-              type="button"
-              className={BTN_GHOST}
-              onClick={() => navigate("/clinical/triage")}
-            >
-              Back to queue
-            </button>
-          }
         />
         <QuickRecheck
           key={detail.id}

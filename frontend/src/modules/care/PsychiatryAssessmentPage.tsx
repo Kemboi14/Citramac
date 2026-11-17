@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, FileText, Save } from "lucide-react";
+import { CheckCircle2, FileText, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -561,10 +561,6 @@ export function PsychiatryAssessmentPage() {
           items={[{ label: "Psychiatry", to: "/clinical/psychiatry" }, { label: "Assessment" }]}
         />
         <ErrorNote>{loadError ?? "This client's psychiatric assessment is unavailable."}</ErrorNote>
-        <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM} mt-3`}>
-          <ArrowLeft aria-hidden className="h-4 w-4" />
-          Back to Psychiatry
-        </Link>
       </div>
     );
   }
@@ -658,12 +654,14 @@ export function PsychiatryAssessmentPage() {
 
   return (
     <div className="clinical-readable flex flex-col gap-4">
+      <Breadcrumbs
+        items={[
+          { label: "Psychiatry", to: "/clinical/psychiatry" },
+          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Assessment" },
+        ]}
+      />
       <SafetyBanner banner={banner} error={bannerError} />
       <div className="flex flex-wrap items-center gap-2">
-        <Link to="/clinical/psychiatry" className={`${BTN_GHOST} ${BTN_SM}`}>
-          <ArrowLeft aria-hidden className="h-4 w-4" />
-          Psychiatry list
-        </Link>
         <Link to={clientRecordPath(patientId, "snapshot")} className={`${BTN_GHOST} ${BTN_SM}`}>
           <FileText aria-hidden className="h-4 w-4" />
           Full client record

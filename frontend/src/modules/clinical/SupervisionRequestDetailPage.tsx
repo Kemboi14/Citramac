@@ -1,6 +1,5 @@
-import { ChevronLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -19,8 +18,6 @@ const FIELD_CLASS =
 const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
 const BUTTON_CLASS =
   "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
-const SECONDARY_BUTTON_CLASS =
-  "rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg transition-colors";
 
 const STATUS_TINT: Record<SupervisionRequest["status"], string> = {
   OPEN: "bg-status-amber-tint text-status-amber",
@@ -82,7 +79,6 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 export function SupervisionRequestDetailPage() {
   const { accessToken } = useAuth();
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
   const [requestLoad, setRequestLoad] = useState<SupervisionRequestLoad | null>(null);
@@ -160,8 +156,6 @@ export function SupervisionRequestDetailPage() {
     }
   };
 
-  const back = () => navigate("/clinical/mhp/supervision");
-
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
@@ -190,9 +184,6 @@ export function SupervisionRequestDetailPage() {
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
           {error || "This supervision request could not be found."}
         </p>
-        <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={back}>
-          Back to queue
-        </button>
       </div>
     );
   }
@@ -322,11 +313,6 @@ export function SupervisionRequestDetailPage() {
               </button>
             </section>
           )}
-
-          <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={back}>
-            <ChevronLeft className="mr-1 inline h-4 w-4" />
-            Back to queue
-          </button>
         </aside>
       </div>
     </div>

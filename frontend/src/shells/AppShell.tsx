@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Menu, Moon, Search, Sun, UserRound } from "lucide-react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -19,6 +19,12 @@ import {
 import { useAuth } from "../auth/useAuth";
 import { useTheme } from "../theme/useTheme";
 import { useWorkingBranch } from "./useWorkingBranch";
+import {
+  BreadcrumbBarContext,
+  BreadcrumbTrail,
+  type BreadcrumbBar,
+  type Crumb,
+} from "../modules/care/shared/Breadcrumbs";
 
 const COLLAPSE_KEY = "citramac.sidebar.collapsed";
 const DESKTOP_BREAKPOINT = 1024; // matches Tailwind's `lg`
@@ -156,6 +162,21 @@ export function AppShell({
       .find((item) => item.to === location.pathname)?.label ??
     "";
   const isBrand = variant === "brand";
+
+  // Breadcrumbs, at the top of every page: the page's own when it gives them
+  // (the latest <Breadcrumbs> mounted), otherwise built from the menu.
+  const [pageCrumbs, setPageCrumbs] = useState<{ owner: string; items: Crumb[] }[]>([]);
+  const breadcrumbBar = useMemo<BreadcrumbBar>(
+    () => ({
+      set: (owner, items) =>
+        setPageCrumbs((prev) => [...prev.filter((p) => p.owner !== owner), { owner, items }]),
+      clear: (owner) => setPageCrumbs((prev) => prev.filter((p) => p.owner !== owner)),
+    }),
+    [],
+  );
+  const crumbs =
+    pageCrumbs[pageCrumbs.length - 1]?.items ??
+    menuCrumbs(navGroups, location.pathname, resolvePageTitle(pageTitles, location.pathname));
   const toggleGroup = (label: string) =>
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -561,10 +582,15 @@ export function AppShell({
         >
           <div className={focusLayout ? "h-full w-full" : "mx-auto w-full max-w-[1920px]"}>
             <ErrorBoundary resetKey={location.pathname}>
+              {!focusLayout && crumbs.length > 1 && (
+                <BreadcrumbTrail items={crumbs} className="mb-4" />
+              )}
               <SubscriptionBanner />
               <ProfileCompletionBanner />
               {/* Keyed on the working branch: switching branch reloads the page's data under it. */}
-              <Outlet key={workingBranch} />
+              <BreadcrumbBarContext.Provider value={focusLayout ? null : breadcrumbBar}>
+                <Outlet key={workingBranch} />
+              </BreadcrumbBarContext.Provider>
             </ErrorBoundary>
           </div>
         </main>
@@ -608,6 +634,32 @@ function useScrollEdges() {
 }
 
 /** Exact route first, then the longest "prefix/*" pattern (e.g. "/clinical/triage/*"). */
+/**
+ * Breadcrumbs from the menu, for a page that gives none of its own: the menu
+ * group (when the item sits in an expandable one), the menu item the page
+ * belongs to, and, on a deeper page, that page's title.
+ */
+function menuCrumbs(groups: NavGroup[], pathname: string, title: string | undefined): Crumb[] {
+  const entries = groups.flatMap((group) =>
+    group.items.flatMap((item) =>
+      item.children
+        ? item.children.map((child) => ({ item: child, parent: item.label }))
+        : [{ item, parent: undefined as string | undefined }],
+    ),
+  );
+  const best = entries
+    .filter(({ item }) => item.to && (pathname === item.to || pathname.startsWith(`${item.to}/`)))
+    .sort((a, b) => (b.item.to?.length ?? 0) - (a.item.to?.length ?? 0))[0];
+  if (!best?.item.to) return title ? [{ label: title }] : [];
+  const trail: Crumb[] = best.parent ? [{ label: best.parent }] : [];
+  if (pathname === best.item.to) return [...trail, { label: best.item.label }];
+  return [
+    ...trail,
+    { label: best.item.label, to: best.item.to },
+    { label: title && title !== best.item.label ? title : "Details" },
+  ];
+}
+
 function resolvePageTitle(titles: Record<string, string> | undefined, pathname: string) {
   if (!titles) return undefined;
   if (Object.prototype.hasOwnProperty.call(titles, pathname)) {

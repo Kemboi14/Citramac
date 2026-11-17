@@ -66,7 +66,10 @@ describe("SupervisionRequestDetailPage", () => {
     expect(screen.getByText("Samuel Kiptoo")).toBeInTheDocument();
     expect(screen.getByText("Self-assessment and reflection")).toBeInTheDocument();
     expect(screen.getByText(/I moved too quickly past the disclosure/)).toBeInTheDocument();
-    expect(screen.getByText("Back to queue")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Supervision requests" })).toHaveAttribute(
+      "href",
+      "/clinical/mhp/supervision",
+    );
   });
 
   it("ignores a response for an outdated route ID", async () => {
@@ -107,7 +110,7 @@ describe("SupervisionRequestDetailPage", () => {
 
     renderDetail();
 
-    await screen.findByText("Back to queue");
+    await screen.findByRole("link", { name: "Supervision requests" });
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-12-01" } });
     fireEvent.change(screen.getByLabelText("Time"), { target: { value: "09:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule session" }));
@@ -126,7 +129,7 @@ describe("SupervisionRequestDetailPage", () => {
 
     renderDetail();
 
-    await screen.findByText("Back to queue");
+    await screen.findByRole("link", { name: "Supervision requests" });
     fireEvent.change(screen.getByLabelText("Completion notes (optional)"), {
       target: { value: "Agreed fortnightly check-ins." },
     });

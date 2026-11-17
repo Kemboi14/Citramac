@@ -15,6 +15,7 @@ import {
   GeneratedDocumentsCard,
 } from "./documents/DocumentCatalogueBrowser";
 import { Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.14 — mockup documents().
 
@@ -53,17 +54,15 @@ export function DocumentsPage() {
 
   return (
     <div className="animate-fade-in">
+      {pathname === "/clinical/referrals/documents" && (
+        <Breadcrumbs
+          items={[{ label: "Referrals", to: "/clinical/referrals" }, { label: "Documents" }]}
+        />
+      )}
       <PageHeader
         eyebrow="Clinical records"
         title="Documents"
         subtitle="Generate, review, sign and release documents; signed clinical documents linked to client records"
-        actions={
-          pathname === "/clinical/referrals/documents" ? (
-            <Link to="/clinical/referrals" className={BTN_GHOST}>
-              Back to Referrals
-            </Link>
-          ) : undefined
-        }
       />
 
       <div className="mb-4 flex flex-col gap-4">

@@ -608,11 +608,6 @@ export function TriageForm({
       <PageHeader
         title="Initial triage"
         subtitle="Safety screen and immediate disposition · Not the full assessment"
-        actions={
-          <button type="button" className={BTN_GHOST} onClick={() => navigate("/clinical/triage")}>
-            Back to queue
-          </button>
-        }
       />
       {vs.error && (
         <div className="mb-3">

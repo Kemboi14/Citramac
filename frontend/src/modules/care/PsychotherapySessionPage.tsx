@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { PsychotherapyRecord } from "./record/interventions/PsychotherapyRecord";
 import { PsychotherapyWorkspace } from "./record/modules/psychotherapy/Workspace";
@@ -10,6 +10,7 @@ import {
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { useClientBanner } from "./shared/useClientBanner";
+import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 // The one place a psychotherapy session is written: a routed page inside the
 // clinical shell, so the client safety banner stays visible. Opened from the
@@ -29,12 +30,17 @@ export function PsychotherapySessionPage({ kind = "individual" }: { kind?: Psych
 
   return (
     <div className="clinical-readable flex h-full min-h-0 flex-col gap-3 p-3 sm:p-5">
+      <Breadcrumbs
+        items={[
+          {
+            label: backTo.startsWith("/clinical/clients/") ? "Client record" : "Psychotherapy",
+            to: backTo,
+          },
+          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Session" },
+        ]}
+      />
       <SafetyBanner banner={banner} error={error} />
       <div className="flex flex-wrap items-center gap-2">
-        <Link to={backTo} className={`${BTN_GHOST} ${BTN_SM}`}>
-          <ArrowLeft aria-hidden className="h-4 w-4" />
-          Back
-        </Link>
         <Link
           to={clientRecordPath(patientId, "interventions")}
           className={`${BTN_GHOST} ${BTN_SM}`}

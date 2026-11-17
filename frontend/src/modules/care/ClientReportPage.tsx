@@ -13,7 +13,6 @@ import {
 } from "../../lib/carePathwayApi";
 import { Breadcrumbs, useTrail } from "./shared/Breadcrumbs";
 import { clientRecordPath, clientRegistrationPath } from "./shared/recordRoutes";
-import { BTN_GHOST } from "./shared/styles";
 import { ErrorNote, PageHeader, PriorityPill } from "./shared/ui";
 
 /**
@@ -59,10 +58,10 @@ export function ClientReportPage() {
     return (
       <div className="animate-fade-in">
         <PageHeader eyebrow="Clients" title="Client report" />
+        <Breadcrumbs
+          items={[{ label: "Clients", to: "/clinical/registry" }, { label: "Client report" }]}
+        />
         <ErrorNote>{failed}</ErrorNote>
-        <Link to="/clinical/registry" className={`${BTN_GHOST} mt-4 inline-flex`}>
-          Back to clients
-        </Link>
       </div>
     );
   }
