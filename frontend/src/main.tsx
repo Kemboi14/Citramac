@@ -8,6 +8,7 @@ import { AuthProvider } from "./auth/AuthContext.tsx";
 import { PatientProvider } from "./clinical/PatientContext.tsx";
 import { ThemeProvider } from "./theme/useTheme.ts";
 import { applyCachedPlatformTheme, setPlatformTheme } from "./theme/runtimeTheme.ts";
+import { GlobalTooltips } from "./components/Tooltip";
 import { getPlatformBranding } from "./lib/brandingApi.ts";
 
 // Paint the last-known platform theme before the first render, then refresh
@@ -45,6 +46,7 @@ createRoot(document.getElementById("root")!).render(
           <AuthProvider>
             <PatientProvider>
               <App />
+              <GlobalTooltips />
             </PatientProvider>
           </AuthProvider>
         </BrowserRouter>

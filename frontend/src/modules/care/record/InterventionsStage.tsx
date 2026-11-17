@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Tooltip } from "../../../components/Tooltip";
 import { useNavigate } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
 import { Callout, Card, ErrorNote } from "../shared/ui";
@@ -83,16 +83,14 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
         id="interventions-title"
         className="mb-[18px] flex items-center gap-2 font-display text-xl font-semibold text-ink-900"
       >
-        Interventions
-        <span
-          tabIndex={0}
-          role="img"
-          aria-label={INTRO}
-          title={INTRO}
-          className="cursor-help rounded-full text-ink-400 outline-none hover:text-ink-700 focus-visible:text-ink-700"
-        >
-          <Info aria-hidden className="h-4 w-4" />
-        </span>
+        <Tooltip label={INTRO}>
+          <span
+            tabIndex={0}
+            className="rounded outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+          >
+            Interventions
+          </span>
+        </Tooltip>
       </h2>
 
       <p role="status" aria-live="polite" className="mb-3.5 text-xs text-ink-500 empty:hidden">

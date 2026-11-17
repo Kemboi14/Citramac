@@ -41,6 +41,11 @@ body {
     text-wrap: pretty;
   }
 
+  /* Anything with a tooltip shows the hand cursor (components/Tooltip.tsx). */
+  :where([title]:not(iframe), [data-tip]):not(:disabled) {
+    cursor: pointer;
+  }
+
   ::selection {
     background: color-mix(in srgb, var(--green) 28%, transparent);
   }

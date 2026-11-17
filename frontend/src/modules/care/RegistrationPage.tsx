@@ -42,7 +42,6 @@ import {
   SelectChoices,
   Tag,
   Tip,
-  TIP_BUBBLE,
   TIP_CUE,
 } from "./shared/ui";
 import { useValueSets } from "./shared/useValueSets";
@@ -55,6 +54,7 @@ import {
 } from "./registration/AppointmentMessagesFields";
 import DateInput from "../../components/DateInput";
 import PhoneInput, { phoneProblem } from "../../components/PhoneInput";
+import { Tooltip } from "../../components/Tooltip";
 import { capitalizeName } from "./shared/names";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.4 — mockup frontdesk(), filterClients,
@@ -344,9 +344,8 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
   };
 }
 
-/** `.registration-stage .field` — label + control. `tip` explains the field on
- * hovering its label or focusing the field, above the label so it never covers
- * what is being typed. */
+/** `.registration-stage .field` — label + control. `tip` explains the field
+ * on hovering its label (the shared tooltip). */
 /** Red asterisk after a required field's label; screen readers hear "required". */
 function RequiredMark() {
   return (
@@ -378,20 +377,20 @@ function RegField({
     tip && isValidElement<{ "aria-describedby"?: string }>(children)
       ? cloneElement(children, { "aria-describedby": `${id}-tip` })
       : children;
+  const labelEl = (
+    <label
+      htmlFor={id}
+      className={`w-fit text-[13px] font-semibold text-ink-900 ${tip ? TIP_CUE : ""}`}
+    >
+      {label}
+    </label>
+  );
   return (
-    <div className={`group/field relative flex min-w-0 flex-col gap-1 ${className}`}>
-      <label
-        htmlFor={id}
-        className={`peer/label w-fit text-[13px] font-semibold text-ink-900 ${tip ? TIP_CUE : ""}`}
-      >
-        {label}
-      </label>
+    <div className={`relative flex min-w-0 flex-col gap-1 ${className}`}>
+      {tip ? <Tooltip label={tip}>{labelEl}</Tooltip> : labelEl}
+      {/* The guidance stays with the field for screen readers. */}
       {tip && (
-        <span
-          id={`${id}-tip`}
-          role="tooltip"
-          className={`${TIP_BUBBLE} bottom-full mb-1 peer-hover/label:visible peer-hover/label:opacity-100 peer-hover/label:delay-300 group-has-[:focus-visible]/field:visible group-has-[:focus-visible]/field:opacity-100`}
-        >
+        <span id={`${id}-tip`} className="sr-only">
           {tip}
         </span>
       )}

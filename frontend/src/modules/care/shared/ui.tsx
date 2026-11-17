@@ -1,8 +1,9 @@
-import { useId, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { PRIORITY_LABEL, type Priority, type PriorityOrBlank } from "../../../lib/carePathwayApi";
 import type { ValueSetConcept } from "../../../lib/carePathwayApi";
 import { FIELD_LABEL, INPUT } from "./styles";
+import { Tooltip } from "../../../components/Tooltip";
 
 // Shared building blocks for the v3 clinical workspace — the mockup's .card,
 // .field, .tag, .pill, .btn, .callout, .data-table, .checkbox-item classes
@@ -29,8 +30,19 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 title={titleTooltip} className="font-display text-xl font-semibold text-ink-900">
-          {title}
+        <h1 className="flex items-center gap-2 font-display text-xl font-semibold text-ink-900">
+          {titleTooltip ? (
+            <Tooltip label={titleTooltip}>
+              <span
+                tabIndex={0}
+                className="rounded outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+              >
+                {title}
+              </span>
+            </Tooltip>
+          ) : (
+            title
+          )}
         </h1>
         {subtitle && <div className="mt-1 text-[13px] leading-5 text-ink-700">{subtitle}</div>}
       </div>
@@ -160,50 +172,37 @@ export function PriorityPill({
   );
 }
 
-/** The dark hover bubble — hidden until its `group/tip` is hovered or reached by
- * keyboard. Exported for fields that show it from their own label. */
-export const TIP_BUBBLE =
-  "pointer-events-none invisible absolute left-0 z-30 w-max max-w-[280px] rounded-[10px] bg-[#16221d] px-3 py-[9px] text-left text-[13px] font-normal normal-case leading-[1.45] tracking-normal text-white opacity-0 shadow-[0_8px_24px_rgba(0,0,0,.18)] transition-[opacity,transform] duration-150 motion-reduce:transition-none";
-export const TIP_SHOW =
-  "group-hover/tip:visible group-hover/tip:opacity-100 group-hover/tip:delay-300 group-focus-visible/tip:visible group-focus-visible/tip:opacity-100 group-has-[:focus-visible]/tip:visible group-has-[:focus-visible]/tip:opacity-100";
-/** Marks text that has an explanation on hover — the cursor only, no underline
- * (QA 2026-10-30). */
-export const TIP_CUE = "cursor-help";
+/** Marks text that has an explanation on hover: the hand cursor, no underline. */
+export const TIP_CUE = "cursor-pointer";
 
 /**
- * An explanation shown on hover (after a short delay) or keyboard focus, so a
+ * An explanation shown on hover or keyboard focus (the shared Tooltip), so a
  * screen stays clean without losing its guidance. `focusable` makes plain text
- * reachable by Tab; leave it off when the child is already a control.
+ * reachable by Tab; leave it off when the child is already a control. The
+ * tooltip places itself below, or above when there is no room.
  */
 export function Tip({
   tip,
   children,
-  placement = "below",
   focusable = true,
   className = "",
 }: {
   tip: ReactNode;
   children: ReactNode;
+  /** Kept for callers; the tooltip now chooses below or above by itself. */
   placement?: "below" | "above";
   focusable?: boolean;
   className?: string;
 }) {
-  const id = useId();
   return (
-    <span
-      className={`group/tip relative inline-flex max-w-full items-center outline-none ${className}`}
-      tabIndex={focusable ? 0 : undefined}
-      aria-describedby={id}
-    >
-      {children}
+    <Tooltip label={tip}>
       <span
-        id={id}
-        role="tooltip"
-        className={`${TIP_BUBBLE} ${TIP_SHOW} ${placement === "below" ? "top-full mt-2" : "bottom-full mb-2"}`}
+        className={`inline-flex max-w-full items-center rounded outline-none ${className}`}
+        tabIndex={focusable ? 0 : undefined}
       >
-        {tip}
+        {children}
       </span>
-    </span>
+    </Tooltip>
   );
 }
 
