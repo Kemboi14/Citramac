@@ -110,10 +110,14 @@ describe("SupervisionRequestDetailPage", () => {
 
     renderDetail();
 
-    await screen.findByRole("link", { name: "Supervision requests" });
+    // Wait until the form holds its suggested slot, so typing is not overwritten
+    // by the load finishing afterwards (this raced on a busy machine).
+    const button = await screen.findByRole("button", { name: "Schedule session" });
+    await waitFor(() => expect(screen.getByLabelText("Time")).not.toHaveValue(""));
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-12-01" } });
     fireEvent.change(screen.getByLabelText("Time"), { target: { value: "09:00" } });
-    fireEvent.click(screen.getByRole("button", { name: "Schedule session" }));
+    await waitFor(() => expect(screen.getByLabelText("Time")).toHaveValue("09:00"));
+    fireEvent.click(button);
 
     await waitFor(() =>
       expect(scheduleSupervisionRequest).toHaveBeenCalledWith(
