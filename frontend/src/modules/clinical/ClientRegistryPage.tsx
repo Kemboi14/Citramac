@@ -515,7 +515,7 @@ function RowActions({
             </button>
             <button type="button" role="menuitem" className={item} onClick={choose(onReport)}>
               <FileText aria-hidden className="h-4 w-4 text-ink-500" />
-              Full client report
+              Client report
             </button>
             <button type="button" role="menuitem" className={item} onClick={choose(onOpen)}>
               <ChevronRight aria-hidden className="h-4 w-4 text-ink-500" />
