@@ -18,15 +18,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../../../auth/useAuth";
 import { useDialogA11y } from "../../../../../components/useDialogA11y";
@@ -84,14 +76,13 @@ import { ExampleThread, Thread, type Ack } from "./Thread";
 // suggestions, the sign-off checklist, AI assistance) is the server's
 // (care_pathway/psychotherapy.py); this screen asks, shows and sends.
 // Clinical content lives on the server draft only (X-09) — never in browser
-// storage (guide.md §5). Only UI preferences (panel width, answer mode,
+// storage (guide.md §5). Only UI preferences (answer mode,
 // language, read-aloud) are remembered locally.
 
 type View = "chat" | "history" | "past" | "client" | "audit" | "self-assessment" | "supervision";
 type PanelState = "open" | "expanded" | "min" | "closed";
 
 const WIDE = "(min-width: 1100px)";
-const MIN_WIDTH = 320;
 
 function useMedia(query: string) {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -109,8 +100,6 @@ const join = (...parts: string[]) =>
     .map((p) => p.trim())
     .filter(Boolean)
     .join(" ");
-const maxWidth = () => Math.max(MIN_WIDTH, window.innerWidth - 64 - 380);
-const clampWidth = (w: number) => Math.min(Math.max(MIN_WIDTH, w), maxWidth());
 const ttsLang = (code: string) => (code.startsWith("en") ? code : "en-GB");
 
 function started(note: PsyNote) {
@@ -742,7 +731,6 @@ function WorkspaceBody({
   const [panel, setPanel] = useState<PanelState>("open");
   const [notesOpen, setNotesOpen] = useState(false);
   const [full, setFull] = useState(false);
-  const [width, setWidth] = useState(() => clampWidth(Number(readPref("noteWidth")) || 420));
 
   // The reflection and supervision pages take the whole centre pane; close the
   // note (and the mobile slide-over) and restore the panel when leaving.
@@ -1252,30 +1240,6 @@ function WorkspaceBody({
     }
   }
 
-  // ── panel resizing (drag or arrow keys) ──
-  function startDrag(e: ReactPointerEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const move = (ev: PointerEvent) => setWidth(clampWidth(window.innerWidth - ev.clientX));
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      setWidth((w) => {
-        writePref("noteWidth", String(w));
-        return w;
-      });
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  }
-  function resizeKey(e: ReactKeyboardEvent<HTMLDivElement>) {
-    const delta = e.key === "ArrowLeft" ? 24 : e.key === "ArrowRight" ? -24 : 0;
-    if (!delta) return;
-    e.preventDefault();
-    const next = clampWidth(width + delta);
-    setWidth(next);
-    writePref("noteWidth", String(next));
-  }
-
   const slideOver = useDialogA11y<HTMLElement>(!wide && notesOpen, () => setNotesOpen(false));
 
   // ── layout pieces ──
@@ -1343,18 +1307,23 @@ function WorkspaceBody({
         className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto"
       >
         <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
-          <li>
-            <button
-              type="button"
-              onClick={onClose}
-              className={crumb}
-              title={`Back to ${backLabel}`}
-            >
-              <ArrowLeft className="h-[15px] w-[15px]" />
-              <span className="hidden sm:inline">{backLabel}</span>
-            </button>
-          </li>
-          {sep}
+          {/* On its own page the page's breadcrumbs lead back; only the overlay needs this. */}
+          {!inline && (
+            <>
+              <li>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={crumb}
+                  title={`Back to ${backLabel}`}
+                >
+                  <ArrowLeft className="h-[15px] w-[15px]" />
+                  <span className="hidden sm:inline">{backLabel}</span>
+                </button>
+              </li>
+              {sep}
+            </>
+          )}
           <li>
             <button
               type="button"
@@ -1949,27 +1918,12 @@ function WorkspaceBody({
         </section>
       )}
 
-      {wide && panel === "open" && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize the therapy note"
-          tabIndex={0}
-          aria-valuenow={width}
-          aria-valuemin={MIN_WIDTH}
-          aria-valuemax={maxWidth()}
-          onPointerDown={startDrag}
-          onKeyDown={resizeKey}
-          className="w-1.5 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-brand-green-tint focus-visible:bg-brand-green-tint"
-        />
-      )}
       {wide && (panel === "open" || panel === "expanded") && (
         <aside
           aria-label={
             note.session.session_type === "FAMILY" ? "Family psychotherapy note" : "Therapy note"
           }
-          style={panel === "open" ? { width } : undefined}
-          className={`min-h-0 border-l border-surface-border ${panel === "expanded" ? "min-w-0 flex-1" : "flex-shrink-0"}`}
+          className={`min-h-0 min-w-0 border-l border-surface-border ${panel === "expanded" ? "flex-1" : "w-1/2 flex-shrink-0"}`}
         >
           {notePanel}
         </aside>

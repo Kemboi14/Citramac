@@ -29,18 +29,17 @@ export function PsychotherapySessionPage({ kind = "individual" }: { kind?: Psych
   const close = () => navigate(backTo);
 
   return (
-    <div className="clinical-readable flex h-full min-h-0 flex-col gap-3 p-3 sm:p-5">
-      <Breadcrumbs
-        items={[
-          {
-            label: backTo.startsWith("/clinical/clients/") ? "Client record" : "Psychotherapy",
-            to: backTo,
-          },
-          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Session" },
-        ]}
-      />
-      <SafetyBanner banner={banner} error={error} />
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="clinical-readable flex h-full min-h-0 flex-col gap-3 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Breadcrumbs
+          items={[
+            {
+              label: backTo.startsWith("/clinical/clients/") ? "Client record" : "Psychotherapy",
+              to: backTo,
+            },
+            { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Session" },
+          ]}
+        />
         <Link
           to={clientRecordPath(patientId, "interventions")}
           className={`${BTN_GHOST} ${BTN_SM}`}
@@ -49,7 +48,8 @@ export function PsychotherapySessionPage({ kind = "individual" }: { kind?: Psych
           Full client record
         </Link>
       </div>
-      <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card shadow-sm">
+      <SafetyBanner banner={banner} error={error} />
+      <div className="flex min-h-[70vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-card">
         {noteId ? (
           // A saved note keeps its own session type.
           <PsychotherapyWorkspace
