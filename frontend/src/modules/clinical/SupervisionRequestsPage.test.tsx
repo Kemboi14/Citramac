@@ -164,27 +164,16 @@ describe("SupervisionRequestsPage", () => {
     );
   });
 
-  it("lists the request the clinician raises from this page", async () => {
-    vi.mocked(listSupervisionRequests)
-      .mockResolvedValueOnce({ count: 0, results: [] })
-      .mockResolvedValue({ count: 1, results: [scheduledRequest] });
-    vi.mocked(createSupervisionRequest).mockResolvedValue(scheduledRequest);
+  it("never offers a manual request form, even with a client selected", async () => {
+    vi.mocked(listSupervisionRequests).mockResolvedValue({ count: 1, results: [scheduledRequest] });
 
     renderPage();
-    expect(await screen.findByText("No supervision requests yet.")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Topic"), {
-      target: { value: "Working with a disclosure" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Request Supervision" }));
 
     expect(
       await screen.findByRole("row", { name: /Open supervision request for Jane Client/ }),
     ).toBeInTheDocument();
-    expect(createSupervisionRequest).toHaveBeenCalledWith(
-      "test-token",
-      "patient-1",
-      "Working with a disclosure",
-    );
+    expect(screen.queryByLabelText("Topic")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request Supervision" })).not.toBeInTheDocument();
+    expect(createSupervisionRequest).not.toHaveBeenCalled();
   });
 });

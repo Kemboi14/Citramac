@@ -2,20 +2,12 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
-import { usePatientContext } from "../../clinical/usePatientContext";
-import { ApiError } from "../../lib/apiClient";
-import {
-  createSupervisionRequest,
-  listSupervisionRequests,
-  type SupervisionRequest,
-} from "../../lib/mhpExtrasApi";
+import { listSupervisionRequests, type SupervisionRequest } from "../../lib/mhpExtrasApi";
 import { formatDateTime } from "../care/shared/format";
+import { PageHeader } from "../care/shared/ui";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
-const LABEL_CLASS = "flex flex-col gap-1.5 text-sm font-medium text-ink-700";
-const BUTTON_CLASS =
-  "rounded-md bg-brand-green px-4 py-2 text-sm font-semibold text-on-primary shadow-sm hover:bg-brand-green-dark active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 transition-all duration-150";
 
 const STATUS_TINT: Record<SupervisionRequest["status"], string> = {
   OPEN: "bg-status-amber-tint text-status-amber",
@@ -32,18 +24,14 @@ const PAGE_SIZE = 25;
 
 export function SupervisionRequestsPage() {
   const { accessToken } = useAuth();
-  const { selected } = usePatientContext();
   const navigate = useNavigate();
 
-  const [topic, setTopic] = useState("");
   const [requests, setRequests] = useState<SupervisionRequest[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
   const [completedQuery, setCompletedQuery] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<{ query: string; message: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const [busy, setBusy] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<SupervisionRequest["status"] | "ALL">("ALL");
   const [searchInput, setSearchInput] = useState("");
@@ -54,13 +42,7 @@ export function SupervisionRequestsPage() {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
-  const queryKey = JSON.stringify([
-    accessToken ?? null,
-    page,
-    statusFilter,
-    debouncedSearch,
-    refreshVersion,
-  ]);
+  const queryKey = JSON.stringify([accessToken ?? null, page, statusFilter, debouncedSearch]);
   const loaded = completedQuery === queryKey;
   const error = actionError ?? (loadError?.query === queryKey ? loadError.message : null);
 
@@ -89,23 +71,6 @@ export function SupervisionRequestsPage() {
     };
   }, [accessToken, page, statusFilter, debouncedSearch, queryKey]);
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!accessToken || !topic.trim() || !selected) return;
-    setActionError(null);
-    setBusy(true);
-    try {
-      await createSupervisionRequest(accessToken, selected.patientId, topic);
-      setTopic("");
-      setPage(1);
-      setRefreshVersion((version) => version + 1);
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Couldn't create the request.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const openRequest = (request: SupervisionRequest) => {
     navigate(`/clinical/mhp/supervision/${request.id}`);
   };
@@ -117,34 +82,10 @@ export function SupervisionRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="text-[13px] leading-5 text-ink-700">
-        Requests raised by therapists and clinicians from psychotherapy sessions.
-      </div>
-
-      {selected && (
-        <form
-          onSubmit={submit}
-          className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm"
-        >
-          <p className="mb-4 text-[12.5px] text-ink-500">
-            Raising for {selected.patientName}. Requests raised from a psychotherapy self-assessment
-            appear here automatically.
-          </p>
-          <label className={LABEL_CLASS}>
-            Topic
-            <input
-              className={FIELD_CLASS}
-              placeholder="e.g. Risk escalation review"
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              required
-            />
-          </label>
-          <button type="submit" disabled={busy} className={`${BUTTON_CLASS} mt-4`}>
-            Request Supervision
-          </button>
-        </form>
-      )}
+      <PageHeader
+        title="Supervision requests"
+        subtitle="Raised by therapists and clinicians from a psychotherapy self-assessment."
+      />
 
       <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
