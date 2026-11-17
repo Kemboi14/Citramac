@@ -29,8 +29,8 @@ type Save = (body: Record<string, unknown>) => Promise<boolean>;
 
 const STATUS =
   "whitespace-nowrap rounded-[5px] px-[7px] py-[3px] font-mono text-[10.5px] font-medium uppercase tracking-[.06em]";
-/** Mockup section heading: small accent capitals. */
-const SEC_H = "text-[11.5px] font-bold uppercase tracking-[.09em] text-brand-green";
+/** Section heading: small, quiet capitals; the content carries the weight. */
+const SEC_H = "text-[11px] font-semibold uppercase tracking-[.06em] text-ink-500";
 const LINK = "text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900";
 
 function StatusPill({
@@ -216,7 +216,7 @@ function ExamplePreview({ config, note }: { config: PsyConfig; note: PsyNote }) 
   const answers = exampleAnswers(note.session.session_type);
   const sections = exampleSections(note.session.session_type);
   return (
-    <div className="flex flex-col gap-[18px]">
+    <div className="flex flex-col gap-3">
       <Callout tone="warning">
         Example — not saved. The answers are placed under the section each question feeds; a real
         session is organised by the server and reviewed by you.
@@ -228,7 +228,7 @@ function ExamplePreview({ config, note }: { config: PsyConfig; note: PsyNote }) 
         return (
           <section key={s.key}>
             <h3 className={SEC_H}>{s.title}</h3>
-            <p className="mt-1.5 whitespace-pre-wrap text-[14.5px] leading-[1.6] text-ink-900">
+            <p className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.5] text-ink-900">
               {answer}
             </p>
           </section>
@@ -597,7 +597,7 @@ function NoteBody({
   const hasSections = Object.values(note.sections).some((v) => v);
   const hasAnswers = Object.values(note.answers).some((a) => a?.text?.trim());
   return (
-    <div className="flex flex-col gap-[18px] text-[14.5px] leading-[1.6]">
+    <div className="flex flex-col gap-3 text-[13px] leading-[1.5]">
       <SessionInfo config={config} note={note} save={save} />
       {!signed && !note.generated_at && hasAnswers && (
         <Callout tone="warning">
@@ -625,11 +625,12 @@ function NoteBody({
         />
       ))}
       {note.watermark && hasSections && (
-        <p className="text-center text-[11px] font-bold uppercase tracking-wide text-priority-orange">
+        <p className="border-t border-surface-border pt-3 text-center text-[10.5px] font-semibold uppercase tracking-wide text-priority-orange">
           {note.watermark}
         </p>
       )}
-      {patientId && (
+      {/* The next session is booked at the end of this one, once the note is signed. */}
+      {patientId && signed && (
         <PsychotherapyPlanCard
           patientId={patientId}
           fixedAppointmentType={
@@ -651,7 +652,7 @@ function NoteText({ text }: { text: string }) {
     const list = items;
     items = [];
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="flex list-disc flex-col gap-[3px] pl-[18px]">
+      <ul key={`ul-${blocks.length}`} className="flex list-disc flex-col gap-0.5 pl-4">
         {list.map((item, i) => (
           <li key={i}>{item}</li>
         ))}
@@ -668,7 +669,7 @@ function NoteText({ text }: { text: string }) {
     if (!line.trim()) continue;
     blocks.push(
       /:$/.test(line.trim()) ? (
-        <div key={blocks.length} className="text-[12.5px] font-semibold text-ink-500">
+        <div key={blocks.length} className="text-[12px] font-semibold text-ink-700">
           {line}
         </div>
       ) : (
@@ -679,7 +680,7 @@ function NoteText({ text }: { text: string }) {
     );
   }
   flush();
-  return <div className="flex flex-col gap-[5px] text-ink-900">{blocks}</div>;
+  return <div className="flex flex-col gap-1 text-ink-900">{blocks}</div>;
 }
 
 function Section({
@@ -711,7 +712,10 @@ function Section({
     if (await save({ sections: { [sectionKey]: draft } })) setEditing(false);
   }
   return (
-    <section aria-labelledby={`psy-sec-${sectionKey}`} className="flex flex-col gap-[5px]">
+    <section
+      aria-labelledby={`psy-sec-${sectionKey}`}
+      className="flex flex-col gap-1 border-t border-surface-border pt-3"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <h3 id={`psy-sec-${sectionKey}`} className={SEC_H}>
@@ -748,7 +752,7 @@ function Section({
       {editing ? (
         <div className="mt-1.5 flex flex-col gap-1.5">
           <AutoResizeTextarea
-            className="min-h-[130px] text-[14.5px] leading-normal"
+            className="min-h-[110px] text-[13px] leading-normal"
             aria-label={`Edit ${title}`}
             rows={Math.min(14, Math.max(4, draft.split("\n").length + 1))}
             value={draft}
@@ -770,7 +774,7 @@ function Section({
       ) : text ? (
         <NoteText text={text} />
       ) : (
-        <p className="italic text-ink-500">
+        <p className="text-ink-400">
           {note.generated_at ? "Not documented this session." : "Not organised yet."}
         </p>
       )}
