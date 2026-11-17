@@ -1923,7 +1923,7 @@ function WorkspaceBody({
           aria-label={
             note.session.session_type === "FAMILY" ? "Family psychotherapy note" : "Therapy note"
           }
-          className={`min-h-0 min-w-0 border-l border-surface-border ${panel === "expanded" ? "flex-1" : "w-1/2 flex-shrink-0"}`}
+          className={`min-h-0 min-w-0 border-l border-surface-border ${panel === "expanded" ? "flex-1" : "w-2/5 flex-shrink-0"}`}
         >
           {notePanel}
         </aside>
