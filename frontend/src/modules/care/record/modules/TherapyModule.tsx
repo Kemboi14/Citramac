@@ -198,6 +198,9 @@ function TherapyEpisode({
   // PSY-WF: the session note is written through the Psychotherapy Session
   // workflow (five questions, mandatory safety question, review and sign),
   // opened as the routed session page so the client banner stays visible.
+  // A module for one kind of session lists only that kind (Individual / Family).
+  const sessionTypes = new Set(kinds.map((k) => (k === "family" ? "FAMILY" : "INDIVIDUAL")));
+  const sessions = e.sessions.filter((s) => !s.session_type || sessionTypes.has(s.session_type));
   const n = e.sessions.length + 1;
   const linkTitle = (id: string) => state.link_options.find((l) => l.id === id)?.title ?? "";
   return (
@@ -250,7 +253,7 @@ function TherapyEpisode({
           </span>
         </div>
       )}
-      {e.sessions.length > 0 && (
+      {sessions.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className={TABLE}>
             <thead>
@@ -264,7 +267,7 @@ function TherapyEpisode({
               </tr>
             </thead>
             <tbody>
-              {e.sessions.map((s) => (
+              {sessions.map((s) => (
                 <tr key={s.id}>
                   <td className={TD}>{s.n}</td>
                   <td className={TD}>{formatDate(s.at)}</td>
@@ -288,7 +291,7 @@ function TherapyEpisode({
                           onClick={() =>
                             navigate(
                               psychotherapyNotePath(
-                                "individual",
+                                s.session_type === "FAMILY" ? "family" : "individual",
                                 patientId,
                                 e.id,
                                 s.note_id as string,

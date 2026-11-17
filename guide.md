@@ -1001,3 +1001,33 @@ own screen — psychotherapy content for the note's author or the client's care 
 Withheld content is marked as withheld, never silently dropped. **Owner to confirm** if all
 clinicians should see psychotherapy content in this report. FHIR: no new resource (a read-time view
 over existing records). Reversibility: cheap — read-only.
+
+### 2026-11-17 — Individual and Family Psychotherapy as separate Interventions modules
+
+On the owner's decisions of 2026-11-17 (mapping confirmed before building, §7):
+
+1. **Two modules.** The Interventions module `psychotherapy` is shown as **Individual Psychotherapy**
+   (code unchanged, so past individual deliveries, care-plan links and the "Psychotherapy" tariff keep
+   working) and a new `family_psychotherapy`, **Family Psychotherapy**, delivers the care plan's
+   "Family intervention" (`ACTION_MODULES["family"]`). "Psychological therapy" stays on Individual.
+   Each module starts and lists only its own session type. The served `intervention-module` value set
+   carries both (migration `care_pathway 0063`).
+2. **Billing.** Signing a family session note records the delivery on Family Psychotherapy and charges
+   the facility's **"Family Psychotherapy"** tariff line. It is seeded for every organisation with no
+   rate; until the Org Admin prices it, the module shows "No rate configured" and nothing is charged.
+   No price is invented.
+3. **Past records.** Earlier family-session deliveries move to the new module (module label only; the
+   signed note, dates, provider, signature and any charge already raised are unchanged).
+4. **Opening a psychotherapy module goes straight to its session page.** The "Start a therapy episode"
+   card is gone. For a client's first session the page asks only what the server requires: the therapy
+   approach (coded, `therapy-modality`; Family pre-selects "Family therapy" for the clinician to
+   confirm) and that the limits of confidentiality were explained and agreed, plus an optional number of
+   sessions. Frequency, trauma phase, care-plan goal and the two supervision checkboxes are no longer
+   asked for new courses of therapy; existing values are kept.
+5. **Number of sessions** can be set or changed on the session page (PATCH `care/therapy/<id>/plan/`,
+   1–100 or blank).
+
+FHIR: unchanged — the note, its Encounter and Provenance, and the InterventionRecord (Procedure) mapping
+are as before; only the local module code of a family delivery differs. Reversibility: cheap. No signed
+record changes. Reversing `0063` moves the deliveries back, restores the value set and removes the
+tariff line while it is unpriced and unused.

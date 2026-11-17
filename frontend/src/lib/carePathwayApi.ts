@@ -2918,6 +2918,8 @@ export interface TherapySessionRow {
   id: string;
   n: number;
   at: string;
+  /** INDIVIDUAL or FAMILY — each Interventions module lists its own. */
+  session_type?: string;
   by: string;
   notes: string;
   homework: string;

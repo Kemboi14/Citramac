@@ -50,6 +50,7 @@ def _session_row(session, number, show_process):
         "id": str(session.pk),
         "n": number,
         "at": session.session_date,
+        "session_type": session.session_type,
         "by": _by(session.therapist),
         "notes": session.session_notes,
         "homework": extra.get("homework", ""),

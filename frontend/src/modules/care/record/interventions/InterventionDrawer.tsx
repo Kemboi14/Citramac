@@ -17,7 +17,7 @@ import { TherapyModule } from "../modules/TherapyModule";
 /** v4 `appendModuleRecord`: the delivery form shows for separately priced
  * modules, except where the module's own workflow records the delivery
  * (the signed psychotherapy note; laboratory orders). */
-const OWN_DELIVERY = new Set(["psychotherapy", "blood_work"]);
+const OWN_DELIVERY = new Set(["psychotherapy", "family_psychotherapy", "blood_work"]);
 
 const TABS = ["Record", "History", "Info"] as const;
 type Tab = (typeof TABS)[number];
@@ -73,7 +73,7 @@ export function InterventionDrawer({
   // Psychotherapy is a launcher: therapy episodes, a start button per session
   // type and the session history. Sessions are written on their own routed
   // page (PsychotherapySessionPage), never inside this panel.
-  const launcher = module.code === "psychotherapy";
+  const launcher = module.code === "psychotherapy" || module.code === "family_psychotherapy";
 
   const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -129,7 +129,11 @@ export function InterventionDrawer({
         <>
           {moduleHeader}
           <div className={`py-4 ${GUTTER}`}>
-            <TherapyModule patientId={patientId} />
+            <TherapyModule
+              patientId={patientId}
+              // Each module starts only its own kind of session.
+              kinds={[module.code === "family_psychotherapy" ? "family" : "individual"]}
+            />
           </div>
         </>
       ) : (

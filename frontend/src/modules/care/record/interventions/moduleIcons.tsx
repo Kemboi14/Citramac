@@ -20,6 +20,10 @@ const PATHS = new Map<string, string[]>(
     psychiatric_nursing: ["M3 12h4l2 5 3-11 2 6h5"],
     restrictive_practice: ["R5 11 14 10 2", "M8 11V7a4 4 0 0 1 8 0v4"],
     psychotherapy: ["M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2Z"],
+    family_psychotherapy: [
+      "M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z",
+      "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8",
+    ],
     psychosocial_support: [
       "C9 8 3",
       "C17 9 2.5",

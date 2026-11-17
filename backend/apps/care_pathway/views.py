@@ -1190,7 +1190,10 @@ def _psychotherapy_plan_schedule(patient, plan, episode=None):
                         "status": activity.status,
                         "status_display": activity.get_status_display(),
                         "available_to_psychotherapy": (
-                            "psychotherapy" in intervention_catalogue.modules_for_activity(activity)
+                            bool(
+                                set(intervention_catalogue.PSYCHOTHERAPY_MODULES)
+                                & set(intervention_catalogue.modules_for_activity(activity))
+                            )
                         ),
                     }
                     for activity in activities
@@ -1289,7 +1292,9 @@ class PsychotherapyPlanScheduleView(APIView):
             )
             from . import intervention_catalogue
 
-            if "psychotherapy" not in intervention_catalogue.modules_for_activity(activity):
+            if not set(intervention_catalogue.PSYCHOTHERAPY_MODULES) & set(
+                intervention_catalogue.modules_for_activity(activity)
+            ):
                 raise ValidationError(
                     {"care_plan_activity": "Choose a planned action assigned to Psychotherapy."}
                 )

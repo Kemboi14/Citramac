@@ -1977,12 +1977,13 @@ def _record_delivery(note, user):
         else None
     ) or (note.therapy_episode.activity if note.therapy_episode_id else None)
     number = _session_number(note)
-    service = intervention_catalogue.billing_service_for("psychotherapy")
+    module = intervention_catalogue.psychotherapy_module(session.session_type)
+    service = intervention_catalogue.billing_service_for(module)
     note.intervention_record = services.record_intervention(
         user,
         note.patient,
         {
-            "module": "psychotherapy",
+            "module": module,
             "intervention": "Family therapy" if session.session_type == "FAMILY" else "Individual",
             "performed_at": session.session_date,
             "provider": note.author or user,

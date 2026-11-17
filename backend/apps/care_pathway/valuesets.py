@@ -719,6 +719,7 @@ BILLING_SERVICE_NAMES = [
     "Opioid Agonist Therapy",
     "Psychiatric Nursing",
     "Psychotherapy",
+    "Family Psychotherapy",
     "Psychosocial Support",
     "Nutrition & Fitness",
     "Discharge",

@@ -3,6 +3,7 @@ line, corrections (void), the workspace endpoint and its recommendations."""
 
 from decimal import Decimal
 
+from django.test import SimpleTestCase
 from django.urls import reverse
 
 from apps.client_registry.models import Patient
@@ -232,3 +233,27 @@ class InterventionWorkspaceTests(CarePlanTestCase):
             )
         admission = {m["code"]: m for m in self.workspace()["modules"]}["admission"]
         self.assertEqual((admission["sha_code"], admission["preauth"]), ("CFG-1", True))
+
+
+class PsychotherapyModuleSplitTests(SimpleTestCase):
+    """Owner 2026-11-17: the care plan's "Psychological therapy" is delivered by
+    Individual Psychotherapy, "Family intervention" by Family Psychotherapy."""
+
+    def test_each_therapy_action_has_its_own_module(self):
+        from types import SimpleNamespace
+
+        from . import intervention_catalogue as cat
+
+        therapy = SimpleNamespace(action_key="therapy", module="THERAPY")
+        family = SimpleNamespace(action_key="family", module="THERAPY")
+        self.assertIn("psychotherapy", cat.modules_for_activity(therapy))
+        self.assertNotIn("family_psychotherapy", cat.modules_for_activity(therapy))
+        self.assertEqual(cat.modules_for_activity(family), ["family_psychotherapy"])
+        self.assertEqual(cat.BY_CODE["psychotherapy"]["display"], "Individual Psychotherapy")
+        self.assertEqual(cat.BY_CODE["family_psychotherapy"]["display"], "Family Psychotherapy")
+        self.assertEqual(cat.psychotherapy_module("FAMILY"), "family_psychotherapy")
+        self.assertEqual(cat.psychotherapy_module("INDIVIDUAL"), "psychotherapy")
+        # No price is invented: the family line only names the facility's tariff.
+        self.assertEqual(
+            cat.BY_CODE["family_psychotherapy"]["billing_service"], "Family Psychotherapy"
+        )

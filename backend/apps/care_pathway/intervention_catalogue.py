@@ -166,8 +166,8 @@ MODULES = [
         ],
     },
     # Not a card of its own: group sessions are documented once in the Group
-    # programme and each attendee's record lands here; the Psychotherapy card
-    # counts and lists them (`history_modules`).
+    # programme and each attendee's record lands here; the Individual
+    # Psychotherapy module counts and lists them (`history_modules`).
     {
         "code": "group_psychotherapy",
         "display": "Group Psychotherapy",
@@ -178,8 +178,10 @@ MODULES = [
         "options": ["Group therapy"],
     },
     {
+        # The code stays "psychotherapy" so past individual deliveries, care-plan
+        # links and the "Psychotherapy" tariff keep working unchanged.
         "code": "psychotherapy",
-        "display": "Psychotherapy",
+        "display": "Individual Psychotherapy",
         "group": "Treat",
         "billing_service": "Psychotherapy",
         "unit": "session",
@@ -187,10 +189,20 @@ MODULES = [
         "options": [
             "Individual",
             "Group",
-            "Family therapy",
             "Morning Meeting Observations (inpatient)",
             "General Observations",
         ],
+    },
+    {
+        # Delivers the care plan's "Family intervention". Each family member who
+        # is a client has their own note and delivery (guide.md §4). Its own
+        # tariff line, priced by the Org Admin (no rate is invented).
+        "code": "family_psychotherapy",
+        "display": "Family Psychotherapy",
+        "group": "Treat",
+        "billing_service": "Family Psychotherapy",
+        "unit": "session",
+        "options": ["Family therapy"],
     },
     {
         "code": "psychosocial_support",
@@ -262,7 +274,7 @@ ACTION_MODULES = {
     "therapy": ["psychotherapy", "group_psychotherapy"],
     "admission": ["admission", "psychiatric_nursing"],
     "outpatient": ["appointments", "discharge", "follow_up_aftercare"],
-    "family": ["psychotherapy"],
+    "family": ["family_psychotherapy"],
     "social": ["psychosocial_support"],
     "nutrition": ["nutrition_fitness"],
     "referral": ["emergency_care"],
@@ -273,7 +285,7 @@ CARE_MODULE_MODULES = {
     "PSYCHIATRY": ["psychiatry"],
     "NURSING": ["psychiatric_nursing"],
     "MEDICATION": ["psychiatric_nursing"],
-    "THERAPY": ["psychotherapy", "group_psychotherapy"],
+    "THERAPY": ["psychotherapy", "family_psychotherapy", "group_psychotherapy"],
     "ASSESSMENT": ["medical_review"],
 }
 # care_plan.recommended_modules keys → module. Restrictive practice is never
@@ -306,6 +318,7 @@ REASONS = {
         "diagnosis is documented"
     ),
     "psychotherapy": "Psychological therapy is in the care plan or a relevant diagnosis is recorded",
+    "family_psychotherapy": "A family intervention is in the care plan or a family session is recorded",
     "discharge": "The client record indicates inpatient care",
     "follow_up_aftercare": "Follow-up is in the care plan or an appointment is recorded",
 }
@@ -372,6 +385,9 @@ def _facts(patient, actions, register, diagnoses, medicines):
             patient=patient, module="group_psychotherapy", voided_at__isnull=True
         ).exists(),
         "action_keys": {a.action_key for a in actions},
+        "family": PsychotherapySession.objects.filter(
+            patient=patient, session_type="FAMILY"
+        ).exists(),
     }
 
 
@@ -422,6 +438,8 @@ def _signal(code, f):
             or not f["inpatient"]
             or bool(re.search(r"depress|anxiety|panic|bipolar", dx))
         )
+    if code == "family_psychotherapy":
+        return "family" in f["action_keys"] or f["family"]
     if code == "follow_up_aftercare":
         return "outpatient" in f["action_keys"] or f["next_appointment"]
     return False
@@ -667,3 +685,12 @@ def correct_record(user, record, reason):
     if record.voided_at:
         raise ValidationError({"detail": "This record has already been corrected."})
     return services.void_intervention(user, record, reason)
+
+
+# The modules whose sessions are written as a psychotherapy session note.
+PSYCHOTHERAPY_MODULES = ("psychotherapy", "family_psychotherapy")
+
+
+def psychotherapy_module(session_type):
+    """The Interventions module a signed session note is delivered on."""
+    return "family_psychotherapy" if session_type == "FAMILY" else "psychotherapy"
