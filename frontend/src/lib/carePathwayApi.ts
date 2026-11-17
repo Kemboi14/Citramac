@@ -3015,6 +3015,12 @@ export const getTherapy = (t: string, id: string) =>
   apiRequest<TherapyState>(`/care/clients/${id}/therapy/`, { accessToken: t });
 export const startTherapy = (t: string, id: string, body: Record<string, unknown>) =>
   post(t, `/care/clients/${id}/therapy/`, body);
+export const setPlannedSessions = (t: string, episodeId: string, planned: number | null) =>
+  apiRequest<{ planned_sessions: number | null }>(`/care/therapy/${episodeId}/plan/`, {
+    method: "PATCH",
+    body: { planned_sessions: planned },
+    accessToken: t,
+  });
 export const agreeConfidentiality = (t: string, episodeId: string) =>
   post(t, `/care/therapy/${episodeId}/confidentiality/`);
 export const recordTherapySession = (t: string, id: string, body: Record<string, unknown>) =>

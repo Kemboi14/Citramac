@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../../auth/useAuth";
-import { getTherapy, type TherapyState } from "../../../../lib/carePathwayApi";
+import {
+  agreeConfidentiality,
+  getTherapy,
+  setPlannedSessions,
+  startTherapy,
+  type TherapyState,
+} from "../../../../lib/carePathwayApi";
 import { listPsyNotes, type PsyNoteSummary } from "../../../../lib/psychotherapyNoteApi";
 import { errorText } from "../../triage/helpers";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../../shared/styles";
@@ -9,8 +15,8 @@ import { ErrorNote } from "../../shared/ui";
 import { PsychotherapyWorkspace } from "../modules/psychotherapy/Workspace";
 import { PsychotherapyPlanCard } from "../modules/psychotherapy/NotePanel";
 import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
-import { TherapyModule } from "../modules/TherapyModule";
 import { useModule } from "../modules/useModule";
+import { useValueSets } from "../../shared/useValueSets";
 import { formatDateTime } from "../../shared/format";
 import type { PsychotherapyKind } from "../../shared/recordRoutes";
 
@@ -45,22 +51,19 @@ export function PsychotherapyRecord({
   patientId,
   kind,
   initialEpisodeId,
-  returnTo,
   onClose,
   backLabel,
 }: {
   patientId: string;
   kind: PsychotherapyKind;
   initialEpisodeId?: string;
-  /** Where the page's Back goes; passed on to session starts made here. */
-  returnTo: string;
   onClose: () => void;
   /** Label of the workspace's back crumb. */
   backLabel: string;
 }) {
   const copy = kind === "family" ? COPY.family : COPY.individual;
   const { accessToken } = useAuth();
-  const { data, error } = useModule<TherapyState>(patientId, getTherapy);
+  const { data, error, act } = useModule<TherapyState>(patientId, getTherapy);
   const ready = (data?.results ?? []).filter((e) => !e.ended && e.confidentiality_agreed);
   const [chosen, setChosen] = useState<string | null>(initialEpisodeId ?? null);
   const [launched, setLaunched] = useState(false);
@@ -73,6 +76,41 @@ export function PsychotherapyRecord({
   const [sessionObjective, setSessionObjective] = useState("");
   const [primaryGoal, setPrimaryGoal] = useState("");
   const episodeId = chosen ?? (ready.length === 1 ? ready[0].id : null);
+  // First session only: the course of therapy is set up here, in two answers.
+  // The approach is a coded, required field and no note may be written until
+  // the limits of confidentiality are agreed — both stay, nothing else is asked.
+  const vs = useValueSets();
+  const pending = (data?.results ?? []).find((e) => !e.ended && !e.confidentiality_agreed);
+  const needsSetup = !episodeId && ready.length === 0;
+  const [approach, setApproach] = useState(kind === "family" ? "FAMILY" : "");
+  const [agreed, setAgreed] = useState(false);
+  const [planned, setPlanned] = useState("");
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const canBegin = !needsSetup || (agreed && (Boolean(pending) || Boolean(approach)));
+  const begin = async () => {
+    if (!needsSetup) return setLaunched(true);
+    if (!accessToken || !canBegin) return;
+    setSetupBusy(true);
+    setSetupError(null);
+    try {
+      const id =
+        pending?.id ??
+        (
+          (await startTherapy(accessToken, patientId, {
+            modality: approach,
+            planned_sessions: planned ? Number(planned) : null,
+          })) as { id: string }
+        ).id;
+      await agreeConfidentiality(accessToken, id);
+      setChosen(id);
+      setLaunched(true);
+    } catch (e) {
+      setSetupError(errorText(e, "Couldn't start the course of therapy."));
+    } finally {
+      setSetupBusy(false);
+    }
+  };
   const episode = ready.find((e) => e.id === episodeId);
   const sessions = (notes ?? []).filter((note) => note.session_type === copy.type);
 
@@ -181,97 +219,158 @@ export function PsychotherapyRecord({
     </div>
   );
 
-  const startPanel = episodeId ? (
-    <div className="flex flex-col gap-5">
-      <header>
-        <h3 className="text-lg font-bold text-ink-900">Prepare session</h3>
-        <p className="mt-1 text-[13px] leading-5 text-ink-500">{copy.prepare}</p>
+  const startPanel =
+    episodeId || needsSetup ? (
+      <div className="flex flex-col gap-5">
+        <header>
+          <h3 className="text-lg font-bold text-ink-900">Prepare session</h3>
+          <p className="mt-1 text-[13px] leading-5 text-ink-500">{copy.prepare}</p>
+        </header>
         {episode && (
-          <p className="mt-1 text-xs text-ink-500">
-            Therapy: {episode.modality}
-            {episode.activity_title ? ` · ${episode.activity_title}` : ""}
-          </p>
+          <SessionsPlanned
+            key={`${episode.id}-${episode.planned_sessions ?? ""}`}
+            recorded={episode.sessions.length}
+            planned={episode.planned_sessions}
+            onSave={(value) => void act((t) => setPlannedSessions(t, episode.id, value))}
+          />
         )}
-      </header>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <label className="block text-[13px] font-medium text-ink-700">
-          Session objective
-          <AutoResizeTextarea
-            className={`${INPUT} mt-1.5 min-h-[112px]`}
-            rows={3}
-            value={sessionObjective}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-              setSessionObjective(e.target.value)
-            }
-            placeholder="What would you like this session to focus on?"
-          />
-        </label>
-        <label className="block text-[13px] font-medium text-ink-700">
-          Goals
-          <AutoResizeTextarea
-            className={`${INPUT} mt-1.5 min-h-[112px]`}
-            rows={3}
-            value={primaryGoal}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrimaryGoal(e.target.value)}
-            placeholder="What goals are you working toward?"
-          />
-        </label>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-surface-border pt-4">
-        <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => setLaunched(true)}>
-          {copy.start}
-        </button>
-        <button
-          type="button"
-          className={`${BTN_GHOST} ${BTN_SM}`}
-          onClick={() => setScheduleMode((v) => !v)}
-        >
-          {scheduleMode ? "Hide scheduling" : "Schedule instead"}
-        </button>
-        {ready.length > 1 && (
+        {needsSetup && (
+          <section className="rounded-lg border border-surface-border bg-surface-bg p-4">
+            <h4 className="text-[13px] font-semibold text-ink-900">
+              First session with this client
+            </h4>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {!pending && (
+                <label className="block text-[13px] font-medium text-ink-700">
+                  Therapy approach *
+                  <select
+                    className={`${INPUT} mt-1.5`}
+                    value={approach}
+                    onChange={(e) => setApproach(e.target.value)}
+                  >
+                    <option value="">Choose…</option>
+                    {vs.options("therapy-modality").map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.display}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!pending && (
+                <label className="block text-[13px] font-medium text-ink-700">
+                  Number of sessions
+                  <input
+                    className={`${INPUT} mt-1.5`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    placeholder="e.g. 8 (optional)"
+                    value={planned}
+                    onChange={(e) => setPlanned(e.target.value)}
+                  />
+                </label>
+              )}
+              <label className="flex items-start gap-2 self-end text-[13px] text-ink-900 sm:col-span-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                />
+                <span>
+                  I have explained the limits of confidentiality and the client agrees: what stays
+                  private, what is shared with the care team, and when safety would mean sharing
+                  more.
+                </span>
+              </label>
+            </div>
+            <ErrorNote>{setupError}</ErrorNote>
+          </section>
+        )}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <label className="block text-[13px] font-medium text-ink-700">
+            Session objective
+            <AutoResizeTextarea
+              className={`${INPUT} mt-1.5 min-h-[112px]`}
+              rows={3}
+              value={sessionObjective}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setSessionObjective(e.target.value)
+              }
+              placeholder="What would you like this session to focus on?"
+            />
+          </label>
+          <label className="block text-[13px] font-medium text-ink-700">
+            Goals
+            <AutoResizeTextarea
+              className={`${INPUT} mt-1.5 min-h-[112px]`}
+              rows={3}
+              value={primaryGoal}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setPrimaryGoal(e.target.value)
+              }
+              placeholder="What goals are you working toward?"
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-surface-border pt-4">
+          <button
+            type="button"
+            className={`${BTN} ${BTN_SM}`}
+            disabled={!canBegin || setupBusy}
+            onClick={() => void begin()}
+          >
+            {setupBusy ? "Starting…" : copy.start}
+          </button>
           <button
             type="button"
             className={`${BTN_GHOST} ${BTN_SM}`}
-            onClick={() => setChosen(null)}
+            onClick={() => setScheduleMode((v) => !v)}
           >
-            Change therapy episode
+            {scheduleMode ? "Hide scheduling" : "Schedule instead"}
           </button>
+          {ready.length > 1 && (
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => setChosen(null)}
+            >
+              Change therapy episode
+            </button>
+          )}
+          <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+        {scheduleMode && (
+          <PsychotherapyPlanCard
+            patientId={patientId}
+            fixedAppointmentType={kind === "family" ? "Family psychotherapy" : undefined}
+          />
         )}
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onClose}>
-          Cancel
-        </button>
       </div>
-      {scheduleMode && (
-        <PsychotherapyPlanCard
-          patientId={patientId}
-          fixedAppointmentType={kind === "family" ? "Family psychotherapy" : undefined}
-        />
-      )}
-    </div>
-  ) : ready.length > 1 ? (
-    <div className="flex flex-col gap-2">
-      <p className="text-[13px] text-ink-700">
-        Choose the therapy episode this session belongs to.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {ready.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            className={`${BTN_GHOST} ${BTN_SM}`}
-            onClick={() => setChosen(e.id)}
-          >
-            {e.modality}
-            {e.activity_title ? ` · ${e.activity_title}` : ""}
-          </button>
-        ))}
+    ) : (
+      // More than one course of therapy is open: choose which this session belongs to.
+      <div className="flex flex-col gap-2">
+        <p className="text-[13px] text-ink-700">
+          Choose the therapy episode this session belongs to.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {ready.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => setChosen(e.id)}
+            >
+              {e.modality}
+              {e.activity_title ? ` · ${e.activity_title}` : ""}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  ) : (
-    // No episode with agreed confidentiality limits yet: set it up here. Its
-    // start button reopens this page on the episode.
-    <TherapyModule patientId={patientId} kinds={[kind]} returnTo={returnTo} />
-  );
+    );
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -301,6 +400,51 @@ export function PsychotherapyRecord({
           ; each attendee’s entry is listed on their record.
         </p>
       </div>
+    </div>
+  );
+}
+
+/** How many sessions this course of therapy plans, and how far along it is. */
+function SessionsPlanned({
+  recorded,
+  planned,
+  onSave,
+}: {
+  recorded: number;
+  planned: number | null;
+  onSave: (value: number | null) => void;
+}) {
+  const [value, setValue] = useState(planned ? String(planned) : "");
+  const next = value ? Number(value) : null;
+  const valid = next === null || (Number.isInteger(next) && next >= 1 && next <= 100);
+  const changed = next !== planned;
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-surface-border px-4 py-3">
+      <label className="block text-[13px] font-medium text-ink-700">
+        Number of sessions
+        <input
+          className={`${INPUT} mt-1.5 w-28`}
+          type="number"
+          min={1}
+          max={100}
+          placeholder="Not set"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <button
+        type="button"
+        className={`${BTN_GHOST} ${BTN_SM}`}
+        disabled={!changed || !valid}
+        onClick={() => onSave(next)}
+      >
+        Save
+      </button>
+      <p className="pb-1.5 text-xs text-ink-500">
+        {recorded} recorded{planned ? ` of ${planned} planned` : ""} · this session is{" "}
+        {recorded + 1}
+        {planned ? ` of ${planned}` : ""}
+      </p>
     </div>
   );
 }

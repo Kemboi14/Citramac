@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
 import { Callout, Card, ErrorNote } from "../shared/ui";
 import { formatDateTime } from "../shared/format";
@@ -8,6 +9,7 @@ import { ModuleList, ScopeToggle } from "./interventions/ModuleList";
 import { scopedModules, type ModuleScope } from "./interventions/scope";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
+import { clientRecordPath, psychotherapySessionPath } from "../shared/recordRoutes";
 
 const SECTION_HEAD = "mb-2 mt-5 flex flex-wrap items-center justify-between gap-2.5";
 const SECTION_LABEL = "text-[11px] font-bold uppercase tracking-[.4px] text-ink-700";
@@ -38,6 +40,21 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
   const [status, setStatus] = useState("");
 
   const data = workspace.data;
+  const navigate = useNavigate();
+  // Individual and Family Psychotherapy open straight on their session page.
+  const openModule_ = (code: string) => {
+    if (code === "psychotherapy" || code === "family_psychotherapy") {
+      navigate(
+        psychotherapySessionPath(
+          code === "family_psychotherapy" ? "family" : "individual",
+          patientId,
+        ),
+        { state: { from: clientRecordPath(patientId, "interventions") } },
+      );
+      return;
+    }
+    setOpenCode(code);
+  };
   const modules = data?.modules ?? [];
   const actions = data?.actions ?? [];
   const planModules = scopedModules(modules, "plan");
@@ -145,7 +162,7 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
             {data ? (
-              <ModuleList modules={shown} actions={actions} onOpen={setOpenCode} />
+              <ModuleList modules={shown} actions={actions} onOpen={openModule_} />
             ) : (
               <p className="p-4 text-xs text-ink-500">
                 {workspace.loading

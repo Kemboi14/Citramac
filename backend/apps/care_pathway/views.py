@@ -3087,6 +3087,19 @@ class TherapyConfidentialityView(APIView):
         return Response({"confidentiality_agreed": True})
 
 
+class TherapyPlanView(APIView):
+    """PATCH care/therapy/<id>/plan/ — sessions planned for the course of therapy."""
+
+    def patch(self, request, pk):
+        from . import therapy
+        from .models import TherapyEpisode
+
+        episode = therapy.set_planned_sessions(
+            get_object_or_404(TherapyEpisode, pk=pk), request.data.get("planned_sessions")
+        )
+        return Response({"planned_sessions": episode.planned_sessions})
+
+
 class ClientTherapySessionView(APIView):
     def post(self, request, patient_id):
         from . import therapy

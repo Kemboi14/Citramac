@@ -66,7 +66,6 @@ export function PsychotherapySessionPage({ kind = "individual" }: { kind?: Psych
             patientId={patientId}
             kind={kind}
             initialEpisodeId={episodeId}
-            returnTo={backTo}
             backLabel={backLabel}
             onClose={close}
           />

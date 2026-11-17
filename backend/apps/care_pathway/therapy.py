@@ -124,6 +124,26 @@ def start_therapy(patient, user, data):
     )
 
 
+def set_planned_sessions(episode, value):
+    """The number of sessions planned for a course of therapy; blank clears it."""
+    if value in (None, ""):
+        planned = None
+    else:
+        try:
+            planned = int(value)
+        except (TypeError, ValueError):
+            planned = 0
+        if not 1 <= planned <= 100:
+            raise ValidationError(
+                {"planned_sessions": "Sessions planned is a number from 1 to 100."}
+            )
+    if episode.ended_at:
+        raise ValidationError({"detail": "This course of therapy has ended."})
+    episode.planned_sessions = planned
+    episode.save(update_fields=["planned_sessions", "updated_at"])
+    return episode
+
+
 def agree_confidentiality(episode):
     episode.confidentiality_agreed_at = timezone.now()
     episode.save(update_fields=["confidentiality_agreed_at", "updated_at"])

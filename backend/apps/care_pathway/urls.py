@@ -443,6 +443,11 @@ urlpatterns = [
         name="care-therapy-confidentiality",
     ),
     path(
+        "care/therapy/<uuid:pk>/plan/",
+        views.TherapyPlanView.as_view(),
+        name="care-therapy-plan",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/therapy/sessions/",
         views.ClientTherapySessionView.as_view(),
         name="care-client-therapy-session",
