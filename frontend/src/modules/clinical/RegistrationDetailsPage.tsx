@@ -60,7 +60,7 @@ export function RegistrationDetailsPage() {
   const label = (set: string, code: string) => (code ? vs.label(set, code) : "");
 
   return (
-    <div className="mx-auto max-w-4xl animate-fade-in">
+    <div className="animate-fade-in">
       <Breadcrumbs
         items={[
           { label: "Clients", to: "/clinical/registry" },
