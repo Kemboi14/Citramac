@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getRegistration, type RegistrationRow } from "../../lib/carePathwayApi";
+import { Breadcrumbs } from "../care/shared/Breadcrumbs";
 import { clientReportPath } from "../care/shared/recordRoutes";
 import { BTN_GHOST } from "../care/shared/styles";
 import { ErrorNote, PageHeader } from "../care/shared/ui";
@@ -60,23 +61,22 @@ export function RegistrationDetailsPage() {
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in">
+      <Breadcrumbs
+        items={[
+          { label: "Clients", to: "/clinical/registry" },
+          { label: row ? row.name : "Client" },
+          { label: "Registration details" },
+        ]}
+      />
       <PageHeader
-        eyebrow="Clients"
-        title={row ? row.name : "Registration details"}
-        subtitle={
-          row ? `Registration details · ${row.citramac_number} · ${row.identity_label}` : undefined
-        }
+        title="Registration details"
+        subtitle={row ? `${row.name} · ${row.citramac_number} · ${row.identity_label}` : undefined}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Link to="/clinical/registry" className={BTN_GHOST}>
-              Back to clients
+          row && (
+            <Link to={clientReportPath(patientId)} className={BTN_GHOST}>
+              Client report
             </Link>
-            {row && (
-              <Link to={clientReportPath(patientId)} className={BTN_GHOST}>
-                Client report
-              </Link>
-            )}
-          </div>
+          )
         }
       />
       {failed ? (
