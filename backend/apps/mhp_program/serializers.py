@@ -308,9 +308,7 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
             cache[obj.pk] = (
                 PsychotherapyNote.objects.filter(
                     patient_id=obj.patient_id,
-                    session__extra__therapist_self_assessment__supervision__request_id=str(
-                        obj.pk
-                    ),
+                    session__extra__therapist_self_assessment__supervision__request_id=str(obj.pk),
                 )
                 .only("id", "author_id", "patient_id")
                 .first()
