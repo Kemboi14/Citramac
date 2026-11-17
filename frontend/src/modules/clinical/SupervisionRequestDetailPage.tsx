@@ -9,9 +9,17 @@ import {
   type SupervisionRequest,
 } from "../../lib/mhpExtrasApi";
 import { Breadcrumbs } from "../care/shared/Breadcrumbs";
-import { formatDateTime } from "../care/shared/format";
+import { formatDate, formatDateTime } from "../care/shared/format";
 import { PageHeader } from "../care/shared/ui";
 import DateInput from "../../components/DateInput";
+import {
+  getPsyConfig,
+  getPsyNote,
+  type PsyConfig,
+  type PsyNote,
+} from "../../lib/psychotherapyNoteApi";
+import { noteSections } from "../care/record/modules/psychotherapy/helpers";
+import { NoteText } from "../care/record/modules/psychotherapy/NotePanel";
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -232,6 +240,10 @@ export function SupervisionRequestDetailPage() {
             </section>
           )}
 
+          {request.psychotherapy_note && (
+            <SessionNoteCard noteId={request.psychotherapy_note} canRead={request.can_read_note} />
+          )}
+
           {request.notes.trim() && (
             <section className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
               <h2 className="mb-3 font-display text-base font-semibold text-ink-900">
@@ -316,5 +328,94 @@ export function SupervisionRequestDetailPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * The session note the request came from, read through the note's own
+ * endpoint: it checks that the reader is the note's author or on the client's
+ * care team, and audits the read. Anyone else sees that it is withheld.
+ */
+function SessionNoteCard({ noteId, canRead }: { noteId: string; canRead?: boolean }) {
+  const { accessToken } = useAuth();
+  const [loaded, setLoaded] = useState<{ id: string; note: PsyNote; config: PsyConfig } | null>(
+    null,
+  );
+  const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!accessToken || !canRead) return;
+    let active = true;
+    Promise.all([getPsyNote(accessToken, noteId), getPsyConfig(accessToken)])
+      .then(([note, config]) => {
+        if (active) setLoaded({ id: noteId, note, config });
+      })
+      .catch((err: unknown) => {
+        if (active)
+          setFailed({
+            id: noteId,
+            message: err instanceof ApiError ? err.message : "Couldn't load the session note.",
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, noteId, canRead]);
+
+  const note = loaded?.id === noteId ? loaded.note : null;
+  const config = loaded?.id === noteId ? loaded.config : null;
+  const error = failed?.id === noteId ? failed.message : null;
+  const sessionType = note?.session.session_type ?? "INDIVIDUAL";
+
+  return (
+    <section className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-surface-border px-6 py-4">
+        <h2 className="font-display text-base font-semibold text-ink-900">Session note</h2>
+        {note && (
+          <span className="text-xs text-ink-500">
+            {sessionType === "FAMILY" ? "Family" : "Individual"} psychotherapy ·{" "}
+            {formatDate(note.session.session_date)} ·{" "}
+            {note.status === "SIGNED" ? "Signed" : "Draft"}
+          </span>
+        )}
+      </header>
+      <div className="px-6 py-4 text-[13px] leading-[1.5]">
+        {!canRead ? (
+          <p className="text-ink-500">
+            Withheld. Psychotherapy notes are open to the treating clinician and the client’s care
+            team.
+          </p>
+        ) : error ? (
+          <p role="alert" className="text-status-red">
+            {error}
+          </p>
+        ) : !note || !config ? (
+          <p role="status" className="text-ink-500">
+            Loading the session note…
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {noteSections(config, sessionType).map((section, index) => {
+              const text = note.sections[section.key]?.trim() ?? "";
+              return (
+                <section
+                  key={section.key}
+                  className={`flex flex-col gap-1 py-3 ${index ? "border-t border-surface-border" : "pt-0"}`}
+                >
+                  <h3 className="text-[11px] font-semibold uppercase tracking-[.06em] text-ink-500">
+                    {section.title}
+                  </h3>
+                  {text ? (
+                    <NoteText text={text} />
+                  ) : (
+                    <p className="text-ink-400">Not documented this session.</p>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

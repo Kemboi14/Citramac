@@ -250,6 +250,11 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     requested_by_name = serializers.SerializerMethodField()
     supervisor_name = serializers.SerializerMethodField()
+    # The psychotherapy note whose self-assessment raised this request, and
+    # whether the reader may open it. Only the id travels here; the content is
+    # read through the note's own endpoint, which checks access and audits it.
+    psychotherapy_note = serializers.SerializerMethodField()
+    can_read_note = serializers.SerializerMethodField()
 
     class Meta:
         model = SupervisionRequest
@@ -267,6 +272,8 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
             "requested_at",
             "scheduled_for",
             "completed_at",
+            "psychotherapy_note",
+            "can_read_note",
         ]
         # The supervisor and scheduled time are set by `schedule`.
         read_only_fields = [
@@ -276,6 +283,8 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
             "requested_at",
             "scheduled_for",
             "completed_at",
+            "psychotherapy_note",
+            "can_read_note",
         ]
 
     def get_patient_name(self, obj):
@@ -290,6 +299,34 @@ class SupervisionRequestSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("patient", None)  # fixed once requested
         return super().update(instance, validated_data)
+
+    def _source_note(self, obj):
+        from apps.care_pathway.psychotherapy_models import PsychotherapyNote
+
+        cache = self.context.setdefault("_source_notes", {})
+        if obj.pk not in cache:
+            cache[obj.pk] = (
+                PsychotherapyNote.objects.filter(
+                    patient_id=obj.patient_id,
+                    session__extra__therapist_self_assessment__supervision__request_id=str(
+                        obj.pk
+                    ),
+                )
+                .only("id", "author_id", "patient_id")
+                .first()
+            )
+        return cache[obj.pk]
+
+    def get_psychotherapy_note(self, obj):
+        note = self._source_note(obj)
+        return str(note.pk) if note else None
+
+    def get_can_read_note(self, obj):
+        from apps.care_pathway import psychotherapy
+
+        note = self._source_note(obj)
+        request = self.context.get("request")
+        return bool(note and request and psychotherapy.can_read(request.user, note))
 
 
 class MhpTeamRosterSerializer(serializers.Serializer):

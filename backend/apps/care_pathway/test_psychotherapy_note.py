@@ -672,6 +672,14 @@ class TherapistSelfAssessmentTests(PsyNoteTestCase):
         self.assertIn("Supervision focus: How to respond", rows[0].notes)
         self.assertNotIn("{", rows[0].notes)  # readable text, never the stored JSON
         self.assertIn("self-assessment", rows[0].topic.lower())
+        # The request names the note it came from; its author may open it.
+        opened = self.client.get(
+            reverse("supervision-request-detail", args=[rows[0].pk]), **self.auth
+        )
+        self.assertEqual(opened.status_code, 200)
+        self.assertEqual(opened.data["psychotherapy_note"], str(nid))
+        self.assertTrue(opened.data["can_read_note"])
+        self.assertNotIn("sections", opened.data)  # the id only, never the content
         self.client.post(
             reverse("care-psy-note-self-assessment", args=[nid]),
             payload,

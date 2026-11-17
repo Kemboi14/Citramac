@@ -56,6 +56,10 @@ export interface SupervisionRequest {
   requested_at: string;
   scheduled_for: string | null;
   completed_at: string | null;
+  /** The psychotherapy note whose self-assessment raised this request. */
+  psychotherapy_note?: string | null;
+  /** Whether the reader may open that note (its author or the care team). */
+  can_read_note?: boolean;
 }
 
 export function getSupervisionRequest(accessToken: string, requestId: string) {

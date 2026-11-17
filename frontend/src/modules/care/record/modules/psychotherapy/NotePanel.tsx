@@ -644,7 +644,7 @@ function NoteBody({
 
 /** Section text as the mockup lays it out: "- " lines become a bullet list,
  * a line ending in ":" a small subheading, anything else a paragraph. */
-function NoteText({ text }: { text: string }) {
+export function NoteText({ text }: { text: string }) {
   const blocks: ReactNode[] = [];
   let items: string[] = [];
   const flush = () => {
