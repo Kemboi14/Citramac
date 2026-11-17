@@ -65,6 +65,9 @@ interface RegisteredNotice {
   queuedForTriage: boolean;
 }
 
+/** Pages opened from here lead back to the clients list. */
+const FROM_CLIENTS = [{ label: "Clients", to: "/clinical/registry" }];
+
 export function ClientRegistryPage() {
   const { accessToken } = useAuth();
   const { selectPatient } = usePatientContext();
@@ -141,7 +144,7 @@ export function ClientRegistryPage() {
     if (opening) return;
     setOpening(patient.id);
     selectPatient(patient.id, patient.name);
-    navigate(clientRecordPath(patient.id, "triage"));
+    navigate(clientRecordPath(patient.id, "triage"), { state: { trail: FROM_CLIENTS } });
   };
 
   const activeTab = category ?? "";
@@ -361,11 +364,15 @@ export function ClientRegistryPage() {
                         name={patient.name}
                         onDetails={() => {
                           selectPatient(patient.id, patient.name);
-                          navigate(clientRegistrationPath(patient.id));
+                          navigate(clientRegistrationPath(patient.id), {
+                            state: { trail: FROM_CLIENTS },
+                          });
                         }}
                         onReport={() => {
                           selectPatient(patient.id, patient.name);
-                          navigate(clientReportPath(patient.id));
+                          navigate(clientReportPath(patient.id), {
+                            state: { trail: FROM_CLIENTS },
+                          });
                         }}
                       />
                     </span>

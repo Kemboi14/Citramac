@@ -1,11 +1,43 @@
 import { ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export interface Crumb {
   label: string;
   /** Omit on the current page. */
   to?: string;
 }
+
+/**
+ * Breadcrumbs that follow the way the user came. A page that links onward
+ * passes `onward` as the link's router state (`{ trail: onward }`); the next
+ * page shows that trail, then itself. Opened directly (a bookmark, a reload in
+ * a new tab), a page shows its `fallback` instead. Only labels and paths are
+ * carried, in router state, never client data in storage.
+ */
+export function useTrail(fallback: Crumb[], current: string) {
+  const location = useLocation();
+  const before = carriedTrail(location.state) ?? fallback;
+  return {
+    items: [...before, { label: current }],
+    onward: [...before, { label: current, to: location.pathname + location.search }],
+  };
+}
+
+/** The trail a link passed in its router state, if any. */
+export function carriedTrail(state: unknown): Crumb[] | null {
+  const trail = (state as { trail?: unknown } | null)?.trail;
+  return isTrail(trail) ? trail : null;
+}
+
+const isTrail = (value: unknown): value is Crumb[] =>
+  Array.isArray(value) &&
+  value.every(
+    (c) =>
+      typeof c === "object" &&
+      c !== null &&
+      typeof (c as Crumb).label === "string" &&
+      (typeof (c as Crumb).to === "string" || (c as Crumb).to === undefined),
+  );
 
 /** Where you are, and a way back up: Home › Section › This page. */
 export function Breadcrumbs({ items }: { items: Crumb[] }) {

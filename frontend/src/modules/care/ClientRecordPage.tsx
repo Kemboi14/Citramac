@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
@@ -22,7 +22,7 @@ import { SnapshotView } from "./record/SnapshotView";
 import { TimelineView } from "./record/TimelineView";
 import { TriageStage } from "./record/TriageStage";
 import type { RecordViewProps } from "./record/types";
-import { Breadcrumbs } from "./shared/Breadcrumbs";
+import { Breadcrumbs, carriedTrail, type Crumb } from "./shared/Breadcrumbs";
 import { GroupRecordEntries } from "./groupProgramme/GroupRecordEntries";
 
 const VIEWS = new Set<string>([
@@ -82,6 +82,17 @@ export function ClientRecordPage() {
   // for the client on this page, and the user's other tabs (useClientBanner).
   const onRecordChanged = useCallback(() => notifyClientChanged(patientId), [patientId]);
   const [registryOpen, setRegistryOpen] = useState(false);
+  // The way the user came in (Clients, a client report, …). Switching tabs
+  // changes the URL without it, so it is kept for as long as this client is open.
+  const carried = carriedTrail(useLocation().state);
+  const [came, setCame] = useState<{ id: string; trail: Crumb[] } | null>(
+    carried ? { id: patientId, trail: carried } : null,
+  );
+  if (carried && (came?.id !== patientId || came.trail !== carried)) {
+    setCame({ id: patientId, trail: carried });
+  }
+  const trailBefore =
+    came?.id === patientId ? came.trail : [{ label: "My Caseload", to: "/clinical/caseload" }];
 
   // Keep the older clinical screens pointed at this client.
   const bannerId = banner?.patient_id;
@@ -129,7 +140,7 @@ export function ClientRecordPage() {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <Breadcrumbs
           items={[
-            { label: "My Caseload", to: "/clinical/caseload" },
+            ...trailBefore,
             {
               label: loadedBanner
                 ? loadedBanner.name.trim() || "Temporary client (unnamed)"

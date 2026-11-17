@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getRegistration, type RegistrationRow } from "../../lib/carePathwayApi";
-import { Breadcrumbs } from "../care/shared/Breadcrumbs";
+import { Breadcrumbs, useTrail } from "../care/shared/Breadcrumbs";
 import { clientReportPath } from "../care/shared/recordRoutes";
 import { BTN_GHOST } from "../care/shared/styles";
 import { ErrorNote, PageHeader } from "../care/shared/ui";
@@ -57,23 +57,25 @@ export function RegistrationDetailsPage() {
 
   const row = loaded && loaded.id === patientId ? loaded.row : null;
   const failed = error && error.id === patientId ? error.message : null;
+  const trail = useTrail(
+    [{ label: "Clients", to: "/clinical/registry" }],
+    row ? `Registration details — ${row.name}` : "Registration details",
+  );
   const label = (set: string, code: string) => (code ? vs.label(set, code) : "");
 
   return (
     <div className="animate-fade-in">
-      <Breadcrumbs
-        items={[
-          { label: "Clients", to: "/clinical/registry" },
-          { label: row ? row.name : "Client" },
-          { label: "Registration details" },
-        ]}
-      />
+      <Breadcrumbs items={trail.items} />
       <PageHeader
         title="Registration details"
         subtitle={row ? `${row.name} · ${row.citramac_number} · ${row.identity_label}` : undefined}
         actions={
           row && (
-            <Link to={clientReportPath(patientId)} className={BTN_GHOST}>
+            <Link
+              to={clientReportPath(patientId)}
+              state={{ trail: trail.onward }}
+              className={BTN_GHOST}
+            >
               Client report
             </Link>
           )

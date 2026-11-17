@@ -11,6 +11,7 @@ import {
   type ClientReportTriage,
   type ReportRow,
 } from "../../lib/carePathwayApi";
+import { Breadcrumbs, useTrail } from "./shared/Breadcrumbs";
 import { clientRecordPath, clientRegistrationPath } from "./shared/recordRoutes";
 import { BTN_GHOST } from "./shared/styles";
 import { ErrorNote, PageHeader, PriorityPill } from "./shared/ui";
@@ -108,6 +109,10 @@ const isFamily = (title: string) => /family|couple/i.test(title);
  * with the actions on the right. */
 function ClientFiles({ report }: { report: ClientReport }) {
   const c = report.client;
+  const trail = useTrail(
+    [{ label: "Clients", to: "/clinical/registry" }],
+    `Client report — ${c.name}`,
+  );
   const [tab, setTab] = useState<TabKey>("overview");
   const [filter, setFilter] = useState<InterventionFilter>("psychotherapy");
 
@@ -157,13 +162,7 @@ function ClientFiles({ report }: { report: ClientReport }) {
       {/* Title and breadcrumb */}
       <div className="mb-4">
         <h1 className="font-display text-[22px] font-bold text-ink-900">Client report</h1>
-        <nav aria-label="Breadcrumb" className="mt-0.5 text-[13px] text-ink-500">
-          <Link to="/clinical/registry" className="hover:text-ink-900">
-            Clients
-          </Link>
-          <span className="mx-2">›</span>
-          <span className="font-semibold text-brand-green-dark">{c.name}</span>
-        </nav>
+        <Breadcrumbs items={trail.items} />
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -475,12 +474,14 @@ function ClientFiles({ report }: { report: ClientReport }) {
             <ActionTile
               icon={<ClipboardList className="h-5 w-5" />}
               to={clientRegistrationPath(c.id)}
+              state={{ trail: trail.onward }}
             >
               Registration details
             </ActionTile>
             <ActionTile
               icon={<FolderOpen className="h-5 w-5" />}
               to={clientRecordPath(c.id, "snapshot")}
+              state={{ trail: trail.onward }}
             >
               Open client record
             </ActionTile>
@@ -1116,11 +1117,13 @@ function ActionTile({
   children,
   onClick,
   to,
+  state,
 }: {
   icon: ReactNode;
   children: ReactNode;
   onClick?: () => void;
   to?: string;
+  state?: unknown;
 }) {
   const cls =
     "flex flex-col items-center gap-2 rounded-lg border border-surface-border bg-surface-card px-2 py-3.5 text-center text-[12.5px] font-semibold text-ink-900 transition-colors hover:border-brand-green";
@@ -1133,7 +1136,7 @@ function ActionTile({
     </>
   );
   return to ? (
-    <Link to={to} className={cls}>
+    <Link to={to} state={state} className={cls}>
       {inner}
     </Link>
   ) : (
