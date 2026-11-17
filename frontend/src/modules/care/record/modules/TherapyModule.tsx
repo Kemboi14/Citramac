@@ -199,7 +199,9 @@ function TherapyEpisode({
   // workflow (five questions, mandatory safety question, review and sign),
   // opened as the routed session page so the client banner stays visible.
   // A module for one kind of session lists only that kind (Individual / Family).
-  const sessionTypes = new Set(kinds.map((k) => (k === "family" ? "FAMILY" : "INDIVIDUAL")));
+  const sessionTypes = new Set<string>(
+    kinds.map((k) => (k === "family" ? "FAMILY" : "INDIVIDUAL")),
+  );
   const sessions = e.sessions.filter((s) => !s.session_type || sessionTypes.has(s.session_type));
   const n = e.sessions.length + 1;
   const linkTitle = (id: string) => state.link_options.find((l) => l.id === id)?.title ?? "";
