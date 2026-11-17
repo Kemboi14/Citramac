@@ -1108,6 +1108,7 @@ export function PsychotherapyPlanCard({
   const [duration, setDuration] = useState(30);
   const [sessionNote, setSessionNote] = useState("");
   const [scheduling, setScheduling] = useState(false);
+  const [booking, setBooking] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
   // One stable id per booking: a retry of the same booking reuses it, and a new one is
   // issued once a booking succeeds so the next session is not taken for a retry.
@@ -1162,6 +1163,7 @@ export function PsychotherapyPlanCard({
       setRequestId(crypto.randomUUID());
       setScheduledFor("");
       setSessionNote("");
+      setBooking(false);
       setScheduleMessage(
         fixedAppointmentType
           ? "Family psychotherapy session scheduled."
@@ -1174,149 +1176,154 @@ export function PsychotherapyPlanCard({
     }
   };
 
+  const label = "text-[11px] font-medium text-ink-500";
   return (
-    <section className="mt-4 rounded-xl border border-surface-border bg-surface-card p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-ink-900">
-            {fixedAppointmentType
-              ? "Family psychotherapy schedule"
-              : "Upcoming psychotherapy sessions"}
-          </h3>
-          <p className="mt-1 text-xs text-ink-500">
-            {fixedAppointmentType
-              ? "Review and book this client’s next family session."
-              : "Review and book the client’s next psychotherapy session."}
-          </p>
-        </div>
-        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={load}>
-          Refresh schedule
-        </button>
-      </div>
+    <section className="mt-4 rounded-xl border border-surface-border bg-surface-card">
+      <header className="flex items-center justify-between gap-3 border-b border-surface-border px-4 py-3">
+        <h3 className="text-sm font-semibold text-ink-900">
+          {fixedAppointmentType ? "Next family sessions" : "Next sessions"}
+          {scheduledSessions.length > 0 && (
+            <span className="ml-2 rounded-full bg-surface-bg px-2 py-0.5 text-[11px] font-semibold text-ink-500">
+              {scheduledSessions.length}
+            </span>
+          )}
+        </h3>
+        {!booking && (
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => {
+              setBooking(true);
+              setScheduleMessage(null);
+            }}
+          >
+            Book a session
+          </button>
+        )}
+      </header>
+
+      {scheduledSessions.length > 0 ? (
+        <ul className="divide-y divide-surface-border">
+          {scheduledSessions.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 px-4 py-2.5 text-xs">
+              <span className="font-semibold tabular-nums text-ink-900">
+                {formatDateTime(s.scheduled_for)}
+              </span>
+              <span className="text-ink-500">
+                {s.duration_minutes} min · {s.mode.replace("_", " ").toLowerCase()}
+                {s.provider_name ? ` · ${s.provider_name}` : ""}
+              </span>
+              {s.notes && <span className="w-full truncate text-ink-500">{s.notes}</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-3 text-xs text-ink-500">No upcoming sessions booked.</p>
+      )}
+
       {schedule?.plan && (
-        <div className="mt-4 rounded-lg bg-surface-bg p-3">
-          <h4 className="text-xs font-semibold text-ink-700">Care plan goals</h4>
-          <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+        <details className="border-t border-surface-border px-4 py-2.5 text-xs">
+          <summary className="cursor-pointer font-medium text-ink-700">Care plan goals</summary>
+          <p className="mt-1.5 whitespace-pre-wrap text-ink-700">
             {schedule.plan.goals || "No plan goals recorded."}
           </p>
-        </div>
+        </details>
       )}
-      {schedule && scheduledSessions.length > 0 ? (
-        <div className="mt-4">
-          <h4 className="text-xs font-semibold text-ink-700">Upcoming appointments</h4>
-          <ul className="mt-2 flex flex-col gap-2">
-            {scheduledSessions.map((s) => (
-              <li
-                key={s.id}
-                className="rounded-lg border border-surface-border px-3 py-2 text-xs text-ink-700"
-              >
-                <p className="font-semibold text-ink-900">{s.activity_title}</p>
-                <p className="mt-1 text-ink-500">
-                  {formatDateTime(s.scheduled_for)} · {s.duration_minutes} min ·{" "}
-                  {s.mode.replace("_", " ").toLowerCase()}
-                  {s.provider_name ? ` · ${s.provider_name}` : ""}
-                </p>
-                {s.notes && <p className="mt-1 whitespace-pre-wrap">{s.notes}</p>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="mt-4 rounded-lg bg-surface-bg px-3 py-2 text-xs text-ink-500">
-          No upcoming sessions are booked.
-        </p>
-      )}
-      <div className="mt-5 border-t border-surface-border pt-4">
-        <h4 className="text-xs font-bold text-ink-900">Schedule a session</h4>
-        {fixedAppointmentType && (
-          <p className="mt-1 text-xs text-ink-500">
-            Appointment type: <strong className="text-ink-700">{fixedAppointmentType}</strong>
-          </p>
-        )}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {!fixedAppointmentType && (
-            <label className="text-xs font-medium text-ink-700 sm:col-span-2">
-              Appointment type
+
+      {booking && (
+        <div className="border-t border-surface-border px-4 py-3">
+          <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px]">
+            {!fixedAppointmentType && typeOptions.length > 1 && (
+              <label className={`${label} sm:col-span-3`}>
+                Type
+                <select
+                  className={`${INPUT} mt-1`}
+                  value={appointmentType}
+                  onChange={(e) => setAppointmentType(e.target.value)}
+                >
+                  {typeOptions.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className={label}>
+              Date and time
+              <input
+                className={`${INPUT} mt-1`}
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={(e) => setScheduledFor(e.target.value)}
+              />
+            </label>
+            <label className={label}>
+              Format
               <select
                 className={`${INPUT} mt-1`}
-                value={appointmentType}
-                onChange={(e) => setAppointmentType(e.target.value)}
-                disabled={!typeOptions.length}
+                value={mode}
+                onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
               >
-                {typeOptions.map((o) => (
-                  <option key={o.code} value={o.code}>
-                    {o.display}
-                  </option>
-                ))}
+                <option value="IN_PERSON">In person</option>
+                <option value="PHONE">Phone</option>
+                <option value="VIDEO">Video</option>
               </select>
             </label>
-          )}
-          <label className="text-xs font-medium text-ink-700">
-            Date and time
-            <input
-              className={`${INPUT} mt-1`}
-              type="datetime-local"
-              value={scheduledFor}
-              onChange={(e) => setScheduledFor(e.target.value)}
-            />
-          </label>
-          <label className="text-xs font-medium text-ink-700">
-            Session format
-            <select
-              className={`${INPUT} mt-1`}
-              value={mode}
-              onChange={(e) => setMode(e.target.value as "IN_PERSON" | "PHONE" | "VIDEO")}
+            <label className={label}>
+              Minutes
+              <input
+                className={`${INPUT} mt-1`}
+                type="number"
+                min={5}
+                max={240}
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value) || 30)}
+              />
+            </label>
+            <label className={`${label} sm:col-span-3`}>
+              Note (optional)
+              <input
+                className={`${INPUT} mt-1`}
+                type="text"
+                maxLength={500}
+                placeholder="Logistics only"
+                value={sessionNote}
+                onChange={(e) => setSessionNote(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={scheduling || !scheduledFor || !typeOptions.length}
+              onClick={() => void scheduleSession()}
+              className={`${BTN} ${BTN_SM}`}
             >
-              <option value="IN_PERSON">In person</option>
-              <option value="PHONE">Phone</option>
-              <option value="VIDEO">Video</option>
-            </select>
-          </label>
-          <label className="text-xs font-medium text-ink-700">
-            Duration (minutes)
-            <input
-              className={`${INPUT} mt-1`}
-              type="number"
-              min={5}
-              max={240}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value) || 30)}
-            />
-          </label>
-          <label className="text-xs font-medium text-ink-700 sm:col-span-2">
-            Scheduling note (optional)
-            <AutoResizeTextarea
-              className={`${INPUT} mt-1`}
-              rows={2}
-              placeholder="Add a brief logistical note."
-              value={sessionNote}
-              onChange={(e) => setSessionNote(e.target.value)}
-            />
-          </label>
+              {scheduling ? "Booking…" : "Book session"}
+            </button>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              disabled={scheduling}
+              onClick={() => setBooking(false)}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      </div>
-      {scheduleMessage && (
-        <p className="mt-3 text-xs font-medium text-brand-green">{scheduleMessage}</p>
       )}
-      {(error || vs.error) && (
-        <p role="alert" className="mt-3 text-xs text-priority-red">
-          {error || vs.error}
+
+      {(scheduleMessage || error || vs.error) && (
+        <p
+          role={error || vs.error ? "alert" : "status"}
+          className={`border-t border-surface-border px-4 py-2.5 text-xs ${
+            error || vs.error ? "text-priority-red" : "font-medium text-brand-green"
+          }`}
+        >
+          {error || vs.error || scheduleMessage}
         </p>
       )}
-      <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 border-t border-surface-border bg-surface-card/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5">
-        <button
-          type="button"
-          disabled={scheduling || !scheduledFor || !typeOptions.length}
-          onClick={() => void scheduleSession()}
-          className={`${BTN} ${BTN_SM} w-full sm:w-auto`}
-        >
-          {scheduling
-            ? "Scheduling…"
-            : fixedAppointmentType
-              ? "Schedule family session"
-              : "Schedule psychotherapy session"}
-        </button>
-      </div>
     </section>
   );
 }
