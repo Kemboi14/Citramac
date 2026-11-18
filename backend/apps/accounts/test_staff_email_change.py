@@ -26,14 +26,14 @@ class StaffEmailChangeTests(APITestCase):
             admin_role = Role.objects.filter(name="Org Admin", organization__isnull=True).first()
             self.org_admin = User.objects.create_user(
                 email="admin@amani.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 is_active=True,
             )
             self.org_admin.roles.add(admin_role)
             self.nurse = User.objects.create_user(
                 email="nurse@amani.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 first_name="Cecilia",
                 last_name="Langat",
