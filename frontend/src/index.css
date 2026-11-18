@@ -166,3 +166,23 @@ body {
     border-bottom-color: var(--brand-amber);
   }
 }
+
+/* Sign-in screens: the background photo, softened, filling the screen. Replace src/assets/login-background.jpg with a higher-resolution
+   copy (1920px wide or more) for a sharp result on large screens. */
+@layer components {
+  .auth-background {
+    background-color: var(--bg);
+    /* A wash of the page colour over the photo leaves it at about 10%, so it
+       stays in the background and never competes with the sign-in card. */
+    background-image:
+      linear-gradient(
+        color-mix(in srgb, var(--bg) 90%, transparent),
+        color-mix(in srgb, var(--bg) 90%, transparent)
+      ),
+      url("./assets/login-background.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+}

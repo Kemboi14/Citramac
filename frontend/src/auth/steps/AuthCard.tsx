@@ -21,7 +21,7 @@ export function AuthCard({
   footer?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4">
+    <div className="flex min-h-screen items-center justify-center auth-background px-4">
       <div className="w-full max-w-sm rounded-lg border border-surface-border bg-surface-card p-8 shadow-sm">
         <h1 className="font-display text-xl font-bold text-ink-900">{title}</h1>
         {description && <p className="mt-1.5 text-sm text-ink-500">{description}</p>}

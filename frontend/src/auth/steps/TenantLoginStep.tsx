@@ -101,7 +101,7 @@ export function TenantLoginStep({
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8"
+      className="flex min-h-screen items-center justify-center auth-background px-4 py-8"
       style={
         {
           "--tenant-primary": branding.primary_color || "var(--green-dark)", // CITRAMAC green

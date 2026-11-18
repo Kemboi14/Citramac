@@ -82,7 +82,7 @@ export function TenantDiscoveryStep({
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center auth-background px-4 py-8">
       <div className="w-full max-w-md overflow-hidden rounded-lg border border-surface-border bg-surface-card px-11 pb-7 pt-11 shadow-md">
         {platformLogo && (
           <img

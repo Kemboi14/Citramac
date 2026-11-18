@@ -159,7 +159,7 @@ export function LoginMfaStep({
   const ss = String(cooldown % 60).padStart(2, "0");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8">
+    <div className="flex min-h-screen items-center justify-center auth-background px-4 py-8">
       <div className="w-full max-w-[475px] overflow-hidden rounded-lg border border-surface-border bg-surface-card px-11 pb-7 pt-10 shadow-md">
         <h1 className="text-center font-display text-2xl font-semibold text-ink-900">
           Verify Your Identity
