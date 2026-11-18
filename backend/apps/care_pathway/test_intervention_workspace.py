@@ -167,7 +167,11 @@ class InterventionWorkspaceTests(CarePlanTestCase):
             (action["id"], action["records"], action["status"]), (activity_id, 1, "ACTIVE")
         )
         self.assertTrue(action["latest_by"])
-        self.assertEqual(action["modules"], ["psychotherapy", "group_psychotherapy"])
+        # A clinician-added THERAPY activity (no catalogue key) can be delivered by any
+        # therapy module, Family Psychotherapy included (guide.md 2026-11-17).
+        self.assertEqual(
+            action["modules"], ["psychotherapy", "family_psychotherapy", "group_psychotherapy"]
+        )
         self.assertIn("Withdrawal risk", data["context"]["alerts"])
         self.assertEqual(data["context"]["goals"], ["Psychological therapy"])
         self.assertEqual(data["context"]["allergies"], "No known allergies")

@@ -74,7 +74,9 @@ const workspace: PsychiatryWorkspace = {
   review: null,
 };
 
-describe("PsychiatryAssessmentPage risk assessment", () => {
+// Each test drives the full page through several tabs; under the parallel suite run that
+// outlasts vitest's 5 s default, so the file gets a CI-safe limit.
+describe("PsychiatryAssessmentPage risk assessment", { timeout: 30_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.open.mockResolvedValue(workspace);
@@ -311,7 +313,7 @@ describe("PsychiatryAssessmentPage risk assessment", () => {
         }),
       }),
     );
-  }, 10_000);
+  });
 
   it("prefills a new assessment with the signed triage presenting concern", async () => {
     apiMocks.open.mockResolvedValue({

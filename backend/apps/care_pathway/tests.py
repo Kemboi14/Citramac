@@ -990,8 +990,9 @@ class NewOrganizationTariffTests(SimpleTestCase):
     def test_service_names_cover_the_mockup_list(self):
         from .valuesets import BILLING_SERVICE_NAMES
 
-        self.assertEqual(len(BILLING_SERVICE_NAMES), 14)
+        self.assertEqual(len(BILLING_SERVICE_NAMES), 15)
         self.assertIn("Follow-up & After-care", BILLING_SERVICE_NAMES)
+        self.assertIn("Family Psychotherapy", BILLING_SERVICE_NAMES)  # guide.md 2026-11-17
 
 
 class PatientNameTests(SimpleTestCase):
