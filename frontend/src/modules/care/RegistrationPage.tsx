@@ -1072,6 +1072,40 @@ export function RegistrationPage() {
     />
   );
 
+  // "Not applicable" only clears and locks the field on screen. Nothing is
+  // stored for it: a saved "N/A" would become a false identifier on the record.
+  const [unhcrNotApplicable, setUnhcrNotApplicable] = useState(false);
+  const [shaNotApplicable, setShaNotApplicable] = useState(false);
+  const optionalIdInput = (id: string, key: "unhcrNumber" | "shaMemberNumber") => {
+    const value = key === "unhcrNumber" ? form.unhcrNumber : form.shaMemberNumber;
+    const setNa = key === "unhcrNumber" ? setUnhcrNotApplicable : setShaNotApplicable;
+    const na = (key === "unhcrNumber" ? unhcrNotApplicable : shaNotApplicable) && !value;
+    return (
+      <div className="flex flex-col gap-1.5">
+        <input
+          id={id}
+          type="text"
+          className={`${REG_INPUT} disabled:cursor-not-allowed disabled:opacity-60`}
+          value={na ? "" : value}
+          placeholder={na ? "Not applicable" : undefined}
+          disabled={na}
+          onChange={(e) => set(key)(e.target.value)}
+        />
+        <label className="flex w-fit items-center gap-2 text-[13px] text-ink-700">
+          <input
+            type="checkbox"
+            checked={na}
+            onChange={(e) => {
+              if (e.target.checked) set(key)("");
+              setNa(e.target.checked);
+            }}
+          />
+          Not applicable
+        </label>
+      </div>
+    );
+  };
+
   const phoneInput = (id: string, key: "phone" | "nokPhone" | "broughtByPhone") => (
     <PhoneInput
       id={id}
@@ -1552,10 +1586,10 @@ export function RegistrationPage() {
                   </RegField>
                 )}
                 <RegField id="reg-unhcr" label="UNHCR number (refugees / asylum-seekers)">
-                  {textInput("reg-unhcr", "unhcrNumber")}
+                  {optionalIdInput("reg-unhcr", "unhcrNumber")}
                 </RegField>
                 <RegField id="reg-sha-member" label="SHA member number (if known)">
-                  {textInput("reg-sha-member", "shaMemberNumber")}
+                  {optionalIdInput("reg-sha-member", "shaMemberNumber")}
                 </RegField>
                 <RegField id="reg-address" label="Address / location">
                   {textInput("reg-address", "address", {
