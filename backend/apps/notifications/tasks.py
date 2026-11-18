@@ -81,33 +81,21 @@ def send_otp_email(email, code, purpose, organization_id=None):
     (docs/12-DEVOPS-DEPLOYMENT.md §12.1). Never logs the code itself outside
     the email body.
     """
-    # Code first in the subject, as Google does: Gmail and phone notifications
-    # then offer their own one-tap "Copy code" (an email cannot run a copy button).
-    wording = {
-        "ACTIVATION": ("activation code", "Activate your account", "activate your account"),
-        "LOGIN_2FA": ("login code", "Confirm it's you", "finish signing in"),
-        "RESET": ("password reset code", "Reset your password", "reset your password"),
+    subject_by_purpose = {
+        "ACTIVATION": "Your CITRAMAC activation code",
+        "LOGIN_2FA": "Your CITRAMAC login code",
+        "RESET": "Your CITRAMAC password reset code",
     }
-    noun, heading, action = wording.get(
-        purpose, ("verification code", "Your verification code", "continue")
-    )
     connection, from_email = _resolve_connection(organization_id)
-    subject = f"{code} is your CITRAMAC {noun}"
-    from apps.notifications.email import platform_email_branding
-
-    colours, images = platform_email_branding()
+    subject = subject_by_purpose.get(purpose, "Your CITRAMAC verification code")
     send_html_email(
         subject=subject,
         template_name="notifications/emails/otp_email.html",
         context={
-            "heading": heading,
-            "action": action,
+            "intro": subject + ":",
             "code": code,
             "expires_minutes": 10,
-            "brand": colours,
-            "has_logo": "brand-logo" in images,
         },
-        inline_images=images,
         plain_message=(
             f"Your verification code is {code}. It expires in 10 minutes and can "
             "only be used once. If you didn't request this, you can ignore this email."
