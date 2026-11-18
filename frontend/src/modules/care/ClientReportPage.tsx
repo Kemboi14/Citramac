@@ -461,7 +461,7 @@ function ClientFiles({ report }: { report: ClientReport }) {
                 {report.clinical.alerts.map((a) => (
                   <li
                     key={a.code + a.raised_on}
-                    className="rounded-md border-l-[3px] border-status-amber bg-status-amber-tint px-2.5 py-1.5 text-[12.5px] text-ink-900"
+                    className="rounded-md bg-status-amber-tint px-2.5 py-1.5 text-[12.5px] text-ink-900"
                   >
                     {a.label}
                     <span className="block text-[11px] text-ink-500">Raised {a.raised_on}</span>
@@ -477,7 +477,7 @@ function ClientFiles({ report }: { report: ClientReport }) {
                 {report.clinical.allergies.map((a) => (
                   <li
                     key={a.substance}
-                    className="rounded-md border-l-[3px] border-status-red bg-status-red-tint px-2.5 py-1.5 text-[12.5px] text-ink-900"
+                    className="rounded-md bg-status-red-tint px-2.5 py-1.5 text-[12.5px] text-ink-900"
                   >
                     {a.substance}
                     {a.reaction && (

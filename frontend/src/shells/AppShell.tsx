@@ -354,7 +354,7 @@ export function AppShell({
           >
             <div className="font-display text-base font-bold">{brandName}</div>
             <div
-              className="mt-0.5 max-w-[160px] truncate text-[10.5px] font-semibold uppercase tracking-wide text-sidebar-muted"
+              className="mt-0.5 max-w-[160px] truncate text-[10.5px] font-semibold uppercase tracking-wide text-brand-amber"
               title={brandSub}
             >
               {brandSub}
@@ -382,7 +382,7 @@ export function AppShell({
               <div key={group.label || "unlabeled"} className="mb-[18px]">
                 {group.label && (
                   <div
-                    className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-sidebar-muted transition-[opacity,max-height] duration-200 ${
+                    className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-brand-amber transition-[opacity,max-height] duration-200 ${
                       collapsed ? "max-h-0 opacity-0" : "max-h-4 opacity-100"
                     }`}
                   >
@@ -396,7 +396,7 @@ export function AppShell({
                       <div
                         key={item.label}
                         title={collapsed ? item.label : undefined}
-                        className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-sidebar-text opacity-45 ${collapsed ? "justify-center" : ""}`}
+                        className={`mb-0.5 flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-sidebar-text-strong opacity-45 ${collapsed ? "justify-center" : ""}`}
                       >
                         <Icon className="h-[17px] w-[17px] flex-shrink-0" />
                         {!collapsed && (
@@ -423,7 +423,7 @@ export function AppShell({
                             collapsed ? openGroupFromRail(item.label) : toggleGroup(item.label)
                           }
                           aria-expanded={isOpen}
-                          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-text-strong ${holdsActive ? "font-semibold text-sidebar-text-strong" : "text-sidebar-text"} ${collapsed ? "justify-center" : ""}`}
+                          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-text-strong ${holdsActive ? "font-semibold text-sidebar-text-strong" : "text-sidebar-text-strong"} ${collapsed ? "justify-center" : ""}`}
                         >
                           <Icon className="h-[17px] w-[17px] flex-shrink-0" />
                           {!collapsed && (
@@ -734,7 +734,7 @@ function ClinicalNavLeaf({
         `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors duration-150 ${collapsed ? "justify-center" : ""} ${
           isActive || alsoActive
             ? "bg-sidebar-active-bg font-semibold text-sidebar-active-text"
-            : "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-strong"
+            : "text-sidebar-text-strong hover:bg-sidebar-hover"
         }`
       }
     >
