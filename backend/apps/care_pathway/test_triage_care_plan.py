@@ -128,5 +128,6 @@ class TriageCarePlanTests(CarePathwayApiTestCase):
         self.register_tasks("safeguarding_intervention")
         with platform_admin_context():
             activity = self.plan().activities.get(action_key="safeguarding")
+            linked = activity.triage_tasks.count()
         self.assertEqual(activity.decision, "ADDED")
-        self.assertEqual(activity.triage_tasks.count(), 1)
+        self.assertEqual(linked, 1)

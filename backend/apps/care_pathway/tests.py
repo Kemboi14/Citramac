@@ -403,7 +403,11 @@ class RegistrationTests(CarePathwayApiTestCase):
         self.assertEqual(titles, ["2 triage tasks assigned to you", "Triage task assigned to you"])
         self.assertIn("Safety Plan", told(colleague)[1][1])
         self.assertIn("Assigned by Jane Njoroge", told(colleague)[1][1])
-        self.assertEqual(told(colleague)[1][2], f"/clinical/triage/{te_id}")
+        # A Safety Plan task opens the work itself, not the triage (triage_care_plan.py).
+        self.assertTrue(
+            told(colleague)[1][2].endswith("/interventions?module=observation_safety"),
+            told(colleague)[1][2],
+        )
         # Whoever registers the tasks is not told about their own action.
         self.assertEqual(told(self.nurse), [])
         # Marking a task done records when and by whom; reopening clears it.
