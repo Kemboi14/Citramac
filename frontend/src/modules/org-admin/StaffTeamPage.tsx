@@ -10,6 +10,7 @@ import {
   IdCard,
   KeyRound,
   LockOpen,
+  Pencil,
   Send,
   ShieldCheck,
   UserCheck,
@@ -567,6 +568,14 @@ export function StaffTeamPage() {
         <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
+            onClick={() => openEditDetails(s)}
+            className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-surface-border bg-surface-card px-3 text-[13px] font-semibold text-ink-900 transition-colors hover:border-brand-green hover:text-brand-green"
+          >
+            <Pencil aria-hidden className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
+            type="button"
             onClick={() => openAccessDrawer(s)}
             className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-surface-border bg-surface-card px-3 text-[13px] font-semibold text-ink-900 transition-colors hover:border-brand-green hover:text-brand-green"
           >
@@ -586,7 +595,6 @@ export function StaffTeamPage() {
   function staffMenuActions(s: Staff): RowAction[] {
     const icon = (Icon: typeof UserCog) => <Icon aria-hidden className="h-4 w-4" />;
     const actions: RowAction[] = [
-      { label: "Edit details", icon: icon(UserCog), onSelect: () => openEditDetails(s) },
       {
         label: "Professional profile",
         icon: icon(IdCard),
@@ -690,6 +698,13 @@ export function StaffTeamPage() {
             {unlockingId === s.id ? "Unlocking…" : "Unlock"}
           </button>
         )}
+        <button
+          type="button"
+          className={`${itemClass} text-ink-700 hover:underline`}
+          onClick={() => openEditDetails(s)}
+        >
+          Edit details…
+        </button>
         <button
           type="button"
           className={`${itemClass} text-ink-700 hover:underline`}
