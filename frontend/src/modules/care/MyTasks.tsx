@@ -94,7 +94,11 @@ export function MyTasks() {
                 <Tag tone={t.overdue ? "risk" : "neutral"}>{t.category}</Tag>
                 {t.why && <span className="text-[11.5px] font-semibold text-ink-500">{t.why}</span>}
                 <Link
-                  to={clientRecordPath(t.patient_id, "snapshot")}
+                  to={
+                    t.kind === "admission_decision"
+                      ? `/clinical/inpatient?patient=${encodeURIComponent(t.patient_id)}`
+                      : clientRecordPath(t.patient_id, "snapshot")
+                  }
                   className="font-semibold text-brand-green hover:underline"
                 >
                   {t.patient}

@@ -1,6 +1,6 @@
 import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getClientBanner, type PriorityOrBlank } from "../../lib/carePathwayApi";
@@ -18,10 +18,11 @@ import {
   type Ward,
 } from "../../lib/ipdApi";
 import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
+import { AdmissionSummary } from "./AdmissionSummary";
 import { LegalAdmissionStatus } from "./record/legal/LegalAdmissionStatus";
-import { formatDate, formatDateTime } from "./shared/format";
+import { formatDate } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
-import { BTN, BTN_GHOST, GROUP_LABEL, INPUT, TABLE, TD, TH } from "./shared/styles";
+import { BTN, BTN_GHOST, INPUT, TABLE, TD, TH } from "./shared/styles";
 import {
   Callout,
   Card,
@@ -39,11 +40,12 @@ import DateInput from "../../components/DateInput";
 // The admission is an Encounter (class IMP) inside the client's EpisodeOfCare;
 // the server opens/links both on create (guide.md §4).
 //
-// Legal status first (owner decision 2026-10-22): the legal basis is the
-// client's legal admission status — one store, worked here inline. Voluntary:
-// the signed application and the admitting officer's decision; involuntary:
-// the application, the signed medical recommendation(s) and the decision.
-// The admission is saved only once that status is Active, and takes its type
+// One guided path (owner decision 2026-11-18): 1 client & reason → 2 voluntary or
+// involuntary, then that type's legal steps (voluntary: capacity, the client's or
+// guardian's application, the admitting officer's decision; involuntary: the
+// related person's application, the medical recommendation(s), the decision) →
+// 3 bed & admit. This page is the only place an admission is started. The
+// admission is saved only once the legal status is Active and takes its type
 // from it; there is no free-text legal basis.
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -75,9 +77,9 @@ function bedLabel(bed: Bed | undefined, wardsById: Map<string, Ward>) {
   return `${wardsById.get(bed.ward)?.name ?? "Ward"} — Bed ${bed.bed_number}`;
 }
 
-// Capacity and next-of-kin options come from the served value sets
-// capacity-assessed and nok-notification.
-type Capacity = "NOT_ASSESSED" | "YES" | "NO";
+// Next-of-kin options come from the served value set nok-notification. Capacity
+// is not asked here: it is the formal capacity assessment the voluntary
+// application requires (recorded once).
 
 type LegalState = LegalWorkspace["legal_status"];
 
@@ -93,8 +95,6 @@ const SHOWN_FIELDS = new Set([
   "consultant",
   "primary_care_team",
   "bed",
-  "capacity_assessed",
-  "consent_notes",
   "next_of_kin_notification",
   "next_of_kin_notes",
 ]);
@@ -158,8 +158,6 @@ interface FormState {
   consultant: string;
   teamName: string;
   bed: string;
-  capacity: Capacity;
-  consentNotes: string;
   nokNotification: NokNotification;
   nokNotes: string;
 }
@@ -174,8 +172,6 @@ const emptyForm = (): FormState => ({
   consultant: "",
   teamName: "",
   bed: "",
-  capacity: "NOT_ASSESSED",
-  consentNotes: "",
   nokNotification: "NOT_NOTIFIED",
   nokNotes: "",
 });
@@ -187,7 +183,7 @@ function validate(form: FormState, legal: LegalState): FieldErrors {
   if (!form.patientId) errors.patient = "Choose a client from the list.";
   else if (!legalActive(legal)) {
     errors.legal_status_record =
-      "Complete the legal admission status below — the admission is saved once it is Active.";
+      "Complete step 2 — the admission is saved once the legal status is approved.";
   }
   if (!form.admissionDate) errors.admitted_at = "Enter the admission date.";
   else if (form.admissionDate > todayIso())
@@ -199,16 +195,42 @@ function validate(form: FormState, legal: LegalState): FieldErrors {
 /** What the admission itself records beside the legal status. */
 function admissionExtras(form: FormState): Partial<Admission> {
   return {
-    capacity_assessed: form.capacity === "NOT_ASSESSED" ? null : form.capacity === "YES",
-    consent_notes: form.consentNotes.trim(),
     next_of_kin_notification: form.nokNotification,
     next_of_kin_notes: form.nokNotes.trim(),
   };
 }
 
+/** The admission's progress: each step done, current or still to come. */
+function AdmissionSteps({ steps }: { steps: { label: string; done: boolean }[] }) {
+  const current = steps.findIndex((st) => !st.done);
+  return (
+    <ol aria-label="Admission progress" className="flex flex-wrap items-center gap-x-2 gap-y-2">
+      {steps.map((st, i) => (
+        <li key={st.label} className="flex items-center gap-2">
+          <span
+            aria-current={i === current ? "step" : undefined}
+            className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-[12.5px] font-medium ${st.done ? "bg-brand-green-tint text-brand-green" : i === current ? "bg-ink-900 text-surface-card" : "bg-surface-bg text-ink-500"}`}
+          >
+            <span aria-hidden="true">{st.done ? "✓" : i + 1}</span>
+            {st.label}
+          </span>
+          {i < steps.length - 1 && (
+            <span aria-hidden="true" className="text-ink-300">
+              →
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function InpatientAdmissionsPage() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opened from a client's Interventions → Admission: offer the way back.
+  const backTo = (location.state as { from?: string } | null)?.from;
   const valueSets = useValueSets();
 
   const [eligible, setEligible] = useState<EligiblePatient[]>([]);
@@ -242,6 +264,8 @@ export function InpatientAdmissionsPage() {
 
   // Bumped after an admission so the lists, beds and eligible clients refresh.
   const [reloadKey, setReloadKey] = useState(0);
+  // The current admission shown as a summary (a client opened who is already admitted).
+  const [summaryFor, setSummaryFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -262,9 +286,8 @@ export function InpatientAdmissionsPage() {
         const requested = eligibleRows.find((p) => p.id === requestedPatient.current);
         const admitted = admissionRows.find((a) => a.patient === requestedPatient.current);
         requestedPatient.current = null;
-        if (!requested && admitted) {
-          setSuccess(`${admitted.patient_name} is already admitted — ${admitted.bed_label}.`);
-        }
+        // Already admitted: show what was captured instead of a new admission.
+        if (!requested && admitted) setSummaryFor(admitted.id);
         if (requested) {
           setForm((prev) => ({
             ...prev,
@@ -327,6 +350,7 @@ export function InpatientAdmissionsPage() {
   const legal = loadedLegal?.patientId === form.patientId ? loadedLegal.legal : null;
 
   const wardsById = new Map(wards.map((w) => [w.id, w]));
+  const summaryAdmission = admissions.find((a) => a.id === summaryFor) ?? null;
   const bedsById = new Map(beds.map((b) => [b.id, b]));
   const availableBeds = beds.filter((b) => b.status === "AVAILABLE");
   const labelToPatient = new Map(eligible.map((p) => [patientLabel(p), p]));
@@ -367,6 +391,7 @@ export function InpatientAdmissionsPage() {
   };
 
   const startNewAdmission = () => {
+    setSummaryFor(null);
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     clientInputRef.current?.focus({ preventScroll: true });
   };
@@ -433,6 +458,11 @@ export function InpatientAdmissionsPage() {
         subtitle="Manage inpatient admissions and bed allocation"
         actions={
           <>
+            {backTo && (
+              <Link to={backTo} className={BTN_GHOST}>
+                ← Back to client record
+              </Link>
+            )}
             <button
               type="button"
               className={BTN_GHOST}
@@ -441,7 +471,7 @@ export function InpatientAdmissionsPage() {
               Bed Management
             </button>
             <button type="button" className={BTN} onClick={startNewAdmission}>
-              + New Admission
+              + New admission
             </button>
           </>
         }
@@ -450,9 +480,32 @@ export function InpatientAdmissionsPage() {
       <ErrorNote>{loadError}</ErrorNote>
       <ErrorNote>{valueSets.error}</ErrorNote>
 
-      <section ref={formRef} className="scroll-mt-4" aria-label="New Admission Record">
-        <Card title="New Admission Record">
-          <form onSubmit={submit} noValidate>
+      {summaryAdmission && (
+        <AdmissionSummary
+          admission={summaryAdmission}
+          bedLabel={bedLabel(bedsById.get(summaryAdmission.bed), wardsById)}
+          label={valueSets.label}
+          onClose={() => setSummaryFor(null)}
+        />
+      )}
+
+      <section
+        ref={formRef}
+        hidden={Boolean(summaryAdmission)}
+        className="scroll-mt-4"
+        aria-label="New admission"
+      >
+        <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+          <AdmissionSteps
+            steps={[
+              { label: "Client & reason", done: Boolean(form.patientId) },
+              { label: "Admission type", done: Boolean(legal) && legal?.status !== "NOT_ADMITTED" },
+              { label: "Legal steps", done: legalActive(legal) },
+              { label: "Bed & admit", done: false },
+            ]}
+          />
+
+          <Card title="1 · Client & reason">
             <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
               <Field label="Client" htmlFor="adm-client">
                 <input
@@ -474,91 +527,7 @@ export function InpatientAdmissionsPage() {
                 </datalist>
                 {errorFor("patient", "adm-client")}
               </Field>
-              {form.patientId && (
-                <fieldset className="rounded-lg border border-surface-border p-3.5 sm:col-span-2">
-                  <legend className={`${GROUP_LABEL} !my-0 px-1`}>Legal basis</legend>
-                  {legalActive(legal) ? (
-                    <Callout tone="success" role="status">
-                      {legal?.category === "INVOLUNTARY" ? "Involuntary" : "Voluntary"} legal status
-                      active
-                      {legal?.decision_by ? ` — decided by ${legal.decision_by}` : ""}
-                      {legal?.decision_at ? ` on ${formatDateTime(legal.decision_at)}` : ""}. The
-                      admission takes its type from it.
-                    </Callout>
-                  ) : (
-                    <p className="mb-2 text-[13px] text-ink-700">
-                      Complete the legal admission status here. Voluntary: the client’s signed
-                      application and the admitting officer’s decision. Involuntary: the
-                      application, the signed medical recommendation(s) and the decision. The
-                      admission can be approved once the status is Active.
-                    </p>
-                  )}
-                  {errorFor("legal_status_record", "adm-legal")}
-                  <div className="mt-3">
-                    <LegalAdmissionStatus
-                      patientId={form.patientId}
-                      onChanged={() => setLegalVersion((v) => v + 1)}
-                    />
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                    <Field label="Capacity assessed" htmlFor="adm-capacity">
-                      <select
-                        id="adm-capacity"
-                        className={INPUT}
-                        value={form.capacity}
-                        {...invalid("capacity_assessed", "adm-capacity")}
-                        onChange={(e) => update({ capacity: e.target.value as Capacity })}
-                      >
-                        {valueSets.options("capacity-assessed").map((o) => (
-                          <option key={o.code} value={o.code}>
-                            {o.display}
-                          </option>
-                        ))}
-                      </select>
-                      {errorFor("capacity_assessed", "adm-capacity")}
-                    </Field>
-                    <Field label="Consent / capacity notes" htmlFor="adm-consent-notes">
-                      <AutoResizeTextarea
-                        id="adm-consent-notes"
-                        rows={2}
-                        value={form.consentNotes}
-                        {...invalid("consent_notes", "adm-consent-notes")}
-                        onChange={(e) => update({ consentNotes: e.target.value })}
-                      />
-                      {errorFor("consent_notes", "adm-consent-notes")}
-                    </Field>
-                    <Field label="Next-of-kin notification" htmlFor="adm-nok">
-                      <select
-                        id="adm-nok"
-                        className={INPUT}
-                        value={form.nokNotification}
-                        {...invalid("next_of_kin_notification", "adm-nok")}
-                        onChange={(e) =>
-                          update({ nokNotification: e.target.value as NokNotification })
-                        }
-                      >
-                        {valueSets.options("nok-notification").map((o) => (
-                          <option key={o.code} value={o.code}>
-                            {o.display}
-                          </option>
-                        ))}
-                      </select>
-                      {errorFor("next_of_kin_notification", "adm-nok")}
-                    </Field>
-                    <Field label="NOK notes" htmlFor="adm-nok-notes">
-                      <AutoResizeTextarea
-                        id="adm-nok-notes"
-                        rows={2}
-                        value={form.nokNotes}
-                        {...invalid("next_of_kin_notes", "adm-nok-notes")}
-                        onChange={(e) => update({ nokNotes: e.target.value })}
-                      />
-                      {errorFor("next_of_kin_notes", "adm-nok-notes")}
-                    </Field>
-                  </div>
-                </fieldset>
-              )}
-              <Field label="Admission Date" htmlFor="adm-date">
+              <Field label="Admission date" htmlFor="adm-date">
                 <DateInput
                   id="adm-date"
                   className={INPUT}
@@ -570,7 +539,17 @@ export function InpatientAdmissionsPage() {
                 />
                 {errorFor("admitted_at", "adm-date")}
               </Field>
-              <Field label="Clinical Priority" htmlFor="adm-priority">
+              <Field label="Reason for admission" htmlFor="adm-reason">
+                <AutoResizeTextarea
+                  id="adm-reason"
+                  rows={2}
+                  value={form.reason}
+                  {...invalid("reason_for_admission", "adm-reason")}
+                  onChange={(e) => update({ reason: e.target.value })}
+                />
+                {errorFor("reason_for_admission", "adm-reason")}
+              </Field>
+              <Field label="Clinical priority" htmlFor="adm-priority">
                 <SelectChoices
                   id="adm-priority"
                   options={valueSets.options("triage-priority")}
@@ -582,17 +561,7 @@ export function InpatientAdmissionsPage() {
                 />
                 {errorFor("clinical_priority", "adm-priority")}
               </Field>
-              <Field label="Reason" htmlFor="adm-reason">
-                <AutoResizeTextarea
-                  id="adm-reason"
-                  rows={2}
-                  value={form.reason}
-                  {...invalid("reason_for_admission", "adm-reason")}
-                  onChange={(e) => update({ reason: e.target.value })}
-                />
-                {errorFor("reason_for_admission", "adm-reason")}
-              </Field>
-              <Field label="Responsible Team" htmlFor="adm-consultant">
+              <Field label="Responsible clinician & team" htmlFor="adm-consultant">
                 <select
                   id="adm-consultant"
                   className={INPUT}
@@ -620,7 +589,35 @@ export function InpatientAdmissionsPage() {
                 {errorFor("primary_care_team", "adm-team")}
                 {rosterError && <span className="text-xs text-status-red">{rosterError}</span>}
               </Field>
-              <Field label="Bed Assignment" htmlFor="adm-bed">
+            </div>
+          </Card>
+
+          <Card title="2 · Admission type & legal steps">
+            {form.patientId ? (
+              <>
+                {errorFor("legal_status_record", "adm-legal")}
+                <LegalAdmissionStatus
+                  mode="admission"
+                  patientId={form.patientId}
+                  onChanged={() => setLegalVersion((v) => v + 1)}
+                />
+              </>
+            ) : (
+              <p className="text-[13px] text-ink-500">Choose the client first.</p>
+            )}
+          </Card>
+
+          <Card title="3 · Bed & admit">
+            {!legalActive(legal) && (
+              <p className="mb-3 text-[13px] text-ink-500">
+                Available once the admission is approved in step 2.
+              </p>
+            )}
+            <fieldset
+              disabled={!legalActive(legal)}
+              className="grid grid-cols-1 gap-x-4 gap-y-3 disabled:opacity-60 sm:grid-cols-2"
+            >
+              <Field label="Bed" htmlFor="adm-bed">
                 <select
                   id="adm-bed"
                   className={INPUT}
@@ -636,13 +633,39 @@ export function InpatientAdmissionsPage() {
                   </option>
                   {availableBeds.map((bed) => (
                     <option key={bed.id} value={bed.id}>
-                      {bedLabel(bed, wardsById)} (Available)
+                      {bedLabel(bed, wardsById)}
                     </option>
                   ))}
                 </select>
                 {errorFor("bed", "adm-bed")}
               </Field>
-            </div>
+              <Field label="Next of kin notified" htmlFor="adm-nok">
+                <select
+                  id="adm-nok"
+                  className={INPUT}
+                  value={form.nokNotification}
+                  {...invalid("next_of_kin_notification", "adm-nok")}
+                  onChange={(e) => update({ nokNotification: e.target.value as NokNotification })}
+                >
+                  {valueSets.options("nok-notification").map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+                {errorFor("next_of_kin_notification", "adm-nok")}
+              </Field>
+              <Field label="Next-of-kin notes" htmlFor="adm-nok-notes">
+                <AutoResizeTextarea
+                  id="adm-nok-notes"
+                  rows={2}
+                  value={form.nokNotes}
+                  {...invalid("next_of_kin_notes", "adm-nok-notes")}
+                  onChange={(e) => update({ nokNotes: e.target.value })}
+                />
+                {errorFor("next_of_kin_notes", "adm-nok-notes")}
+              </Field>
+            </fieldset>
             <div className="mt-4 flex flex-col gap-3">
               <ErrorNote>{saveError}</ErrorNote>
               {success && (
@@ -654,17 +677,13 @@ export function InpatientAdmissionsPage() {
                 <button type="button" className={BTN_GHOST} onClick={resetForm}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className={BTN}
-                  disabled={isSaving || (Boolean(form.patientId) && !legalActive(legal))}
-                >
-                  {isSaving ? "Approving…" : "Approve Admission"}
+                <button type="submit" className={BTN} disabled={isSaving || !legalActive(legal)}>
+                  {isSaving ? "Admitting…" : "Admit client"}
                 </button>
               </div>
             </div>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </section>
 
       <Card title={`Current Inpatients (${admissions.length})`} bodyClassName="p-0">

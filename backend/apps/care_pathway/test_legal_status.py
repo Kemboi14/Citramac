@@ -3,6 +3,7 @@
 import uuid
 from datetime import timedelta
 
+from django.test import SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -285,6 +286,45 @@ class VoluntaryTests(LegalStatusTestCase):
             },
         )
         self.assertEqual(self.sign_doc(doc).status_code, 200)
+
+
+class DecideIsAtomicTests(SimpleTestCase):
+    """decide() locks the status row (select_for_update), so it must open its own
+    transaction: the admission decision returned 500 when the decorator was lost."""
+
+    def test_decide_runs_in_its_own_transaction(self):
+        from django.db.transaction import Atomic
+
+        closure = legal_status.decide.__closure__ or ()
+        self.assertTrue(any(isinstance(c.cell_contents, Atomic) for c in closure))
+
+
+class AdmissionDecisionWorklistTests(LegalStatusTestCase):
+    """A signed application waits in the admitting officer's My tasks (2026-11-18)."""
+
+    def decisions(self, auth):
+        rows = self.client.get(reverse("care-my-tasks"), **auth).data["results"]
+        return [r for r in rows if r.get("kind") == "admission_decision"]
+
+    def test_a_signed_voluntary_application_waits_for_the_admitting_officer_only(self):
+        doc = self.start("VOLUNTARY")
+        self.assertEqual(self.decisions(self.officer_auth), [])  # still a draft
+        self.save(doc, {"notice_acknowledged": True})
+        self.assertEqual(self.sign_doc(doc).status_code, 200)
+        waiting = self.decisions(self.officer_auth)
+        self.assertEqual([w["patient_id"] for w in waiting], [str(self.pid)])
+        self.assertIn("voluntary", waiting[0]["text"])
+        self.assertEqual(self.decisions(self.auth), [])  # not an admitting officer
+        self.assertEqual(self.decide("ADMITTED").status_code, 200)
+        self.assertEqual(self.decisions(self.officer_auth), [])
+
+    def test_an_involuntary_application_waits_until_its_recommendations_are_signed(self):
+        doc, _ = self.signed_involuntary_application()
+        self.assertEqual(self.decisions(self.officer_auth), [])
+        required = self.ws()["legal_status"]["required_recommendations"]
+        for _ in range(required):
+            self.signed_recommendation(doc)
+        self.assertEqual(len(self.decisions(self.officer_auth)), 1)
 
 
 class InvoluntaryTests(LegalStatusTestCase):

@@ -350,6 +350,23 @@ def my_tasks(user):
                 "why": "Decision for you",
             }
         )
+    from . import legal_status
+
+    for ls in legal_status.awaiting_decision(user):
+        category = legal_status.TEMPLATE_CATEGORY[ls.pending_application.template_id].lower()
+        out.append(
+            {
+                "key": f"legal-decision:{ls.pk}",
+                "category": "Decisions",
+                "text": f"Admission decision — {category} application",
+                "due_at": ls.pending_application.signed_at,
+                "overdue": False,
+                "patient_id": str(ls.patient_id),
+                "patient": ls.patient.get_full_name(),
+                "kind": "admission_decision",
+                "why": "Decision for you",
+            }
+        )
     out.sort(key=lambda i: (not i["overdue"], i["due_at"] or now))
     return out
 

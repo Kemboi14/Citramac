@@ -47,8 +47,16 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
 
   const data = workspace.data;
   const navigate = useNavigate();
-  // Individual and Family Psychotherapy open straight on their session page.
+  // Individual and Family Psychotherapy open straight on their session page, and
+  // Admission on Inpatient Admissions for this client — the one admission path
+  // (guide.md 2026-11-18).
   const openModule_ = (code: string) => {
+    if (code === "admission") {
+      navigate(`/clinical/inpatient?patient=${encodeURIComponent(patientId)}`, {
+        state: { from: clientRecordPath(patientId, "interventions") },
+      });
+      return;
+    }
     if (code === "psychotherapy" || code === "family_psychotherapy") {
       navigate(
         psychotherapySessionPath(

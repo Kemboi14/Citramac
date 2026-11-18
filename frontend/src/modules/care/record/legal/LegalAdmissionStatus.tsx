@@ -1,6 +1,6 @@
 import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../../auth/useAuth";
 import {
   amendLegalDocument,
@@ -155,12 +155,23 @@ function SignatureFields({
 }
 
 /** Legal admission status (master prompt §7A) — one LegalStatus per episode. */
+/**
+ * The client's legal admission status — one store, two views:
+ * - `admission` (Inpatient Admissions only): choose Voluntary or Involuntary,
+ *   then the steps that type needs — application, recommendation(s), the
+ *   admitting officer's decision — as a checklist.
+ * - `record` (Legal & consent, Interventions): the status and what happens after
+ *   admission — notice to leave, conversion, ending, rights, tasks, documents.
+ *   A new admission is never started here; it links to Inpatient Admissions.
+ */
 export function LegalAdmissionStatus({
   patientId,
   onChanged,
+  mode = "record",
 }: {
   patientId: string;
   onChanged: () => void;
+  mode?: "admission" | "record";
 }) {
   const { accessToken } = useAuth();
   const [version, setVersion] = useState(0);
@@ -201,6 +212,62 @@ export function LegalAdmissionStatus({
     (d) => d.template_id === REC && d.application === pending?.id && !d.superseded,
   );
   const canStart = !ls?.pending_application && data.episode_id;
+  const admission = mode === "admission";
+  // Only a status already in force can be converted from the record; a first
+  // application is started from Inpatient Admissions.
+  const canConvert = canStart && ls?.status === "ACTIVE";
+  const notStarted = !ls || ls.status === "NOT_ADMITTED";
+  // A conversion (voluntary <-> involuntary) is worked here, after admission.
+  const converting = Boolean(pending) && ls?.status === "ACTIVE";
+
+  if (admission) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ErrorNote>{error}</ErrorNote>
+        {!data.episode_id && (
+          <Callout tone="warning">
+            This client has no open episode of care; open one before an admission application.
+          </Callout>
+        )}
+        {ls?.status === "ACTIVE" && !pending ? (
+          <Callout tone="success" role="status">
+            {ls.category === "VOLUNTARY" ? "Voluntary" : "Involuntary"} admission approved
+            {ls.decision_by ? ` by ${ls.decision_by}` : ""}
+            {ls.decision_at ? `, ${formatDateTime(ls.decision_at)}` : ""}.
+          </Callout>
+        ) : canStart && notStarted ? (
+          <TypeChoice
+            busy={busy}
+            rejected={ls?.status === "NOT_ADMITTED" ? ls.decision_reason : ""}
+            onChoose={(c) =>
+              run((t) => startLegalApplication(t, patientId, c), "Couldn't start the application.")
+            }
+          />
+        ) : null}
+        {pending && ls && (
+          <>
+            <LegalSteps data={data} pending={pending} recs={recs} />
+            {pending.template_id === VOL && (
+              <VoluntaryForm key={pending.id} doc={pending} data={data} busy={busy} run={run} />
+            )}
+            {pending.template_id === INV && (
+              <InvoluntaryForm key={pending.id} doc={pending} data={data} busy={busy} run={run} />
+            )}
+            {pending.template_id === INV && pending.status === "SIGNED" && (
+              <RecommendationsSection
+                data={data}
+                pending={pending}
+                recs={recs}
+                busy={busy}
+                run={run}
+              />
+            )}
+            {pending.status === "SIGNED" && <OfficialUse data={data} busy={busy} run={run} />}
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card
@@ -220,10 +287,10 @@ export function LegalAdmissionStatus({
         {ls?.status === "ACTIVE" && ls.category === "VOLUNTARY" && !data.notice && (
           <GiveNotice data={data} busy={busy} run={run} />
         )}
-        {canStart && (
+        {canConvert && (
           <div className="flex flex-wrap gap-2">
             {(["VOLUNTARY", "INVOLUNTARY"] as LegalCategory[])
-              .filter((c) => !(ls?.status === "ACTIVE" && ls.category === c))
+              .filter((c) => ls?.category !== c)
               .map((c) => (
                 <button
                   key={c}
@@ -237,55 +304,48 @@ export function LegalAdmissionStatus({
                     )
                   }
                 >
-                  {ls?.status === "ACTIVE"
-                    ? `Start ${c.toLowerCase()} application (conversion)`
-                    : `Start ${c.toLowerCase()} application`}
+                  Convert to {c.toLowerCase()}
                 </button>
               ))}
           </div>
+        )}
+        {canStart && notStarted && (
+          <Callout>
+            An admission — voluntary or involuntary — is started from Inpatient Admissions.{" "}
+            <Link
+              to={`/clinical/inpatient?patient=${encodeURIComponent(patientId)}`}
+              className="font-semibold text-brand-green hover:underline"
+            >
+              Start an admission
+            </Link>
+          </Callout>
+        )}
+        {pending && !converting && (
+          <Callout tone="warning">
+            An admission application is in progress.{" "}
+            <Link
+              to={`/clinical/inpatient?patient=${encodeURIComponent(patientId)}`}
+              className="font-semibold text-brand-green hover:underline"
+            >
+              Continue admission
+            </Link>
+          </Callout>
         )}
         {!data.episode_id && (
           <Callout tone="warning">
             This client has no open episode of care; open one before an admission application.
           </Callout>
         )}
-        {pending && pending.template_id === VOL && (
+        {pending && converting && pending.template_id === VOL && (
           <VoluntaryForm key={pending.id} doc={pending} data={data} busy={busy} run={run} />
         )}
-        {pending && pending.template_id === INV && (
+        {pending && converting && pending.template_id === INV && (
           <InvoluntaryForm key={pending.id} doc={pending} data={data} busy={busy} run={run} />
         )}
-        {pending && pending.template_id === INV && pending.status === "SIGNED" && (
-          <Section title="Recommendation for involuntary treatment">
-            <p className="text-[12.5px] text-ink-700">
-              {recs.filter((r) => r.status === "SIGNED").length} of {ls?.required_recommendations}{" "}
-              required signed recommendation(s).
-            </p>
-            {data.me.credential.can_sign ? (
-              !recs.some((r) => r.status === "DRAFT") && (
-                <button
-                  type="button"
-                  className={`${BTN_GHOST} ${BTN_SM} w-fit`}
-                  disabled={busy}
-                  onClick={() =>
-                    run(
-                      (t) => startRecommendation(t, pending.id),
-                      "Couldn't open the recommendation.",
-                    )
-                  }
-                >
-                  Start my recommendation
-                </button>
-              )
-            ) : (
-              <Callout tone="warning">Signing unavailable: {data.me.credential.reason}</Callout>
-            )}
-            {recs.map((r) => (
-              <RecommendationForm key={r.id} doc={r} data={data} busy={busy} run={run} />
-            ))}
-          </Section>
+        {pending && converting && pending.template_id === INV && pending.status === "SIGNED" && (
+          <RecommendationsSection data={data} pending={pending} recs={recs} busy={busy} run={run} />
         )}
-        {pending && pending.status === "SIGNED" && (
+        {pending && converting && pending.status === "SIGNED" && (
           <OfficialUse data={data} busy={busy} run={run} />
         )}
         {ls?.status === "ACTIVE" || ls?.status === "EXPIRED"
@@ -301,6 +361,173 @@ export function LegalAdmissionStatus({
         </p>
       </div>
     </Card>
+  );
+}
+
+/** Step 2 of an admission: the two paths, each saying what it will need. */
+function TypeChoice({
+  busy,
+  rejected,
+  onChoose,
+}: {
+  busy: boolean;
+  rejected: string;
+  onChoose: (category: LegalCategory) => void;
+}) {
+  const paths: { category: LegalCategory; title: string; when: string; steps: string[] }[] = [
+    {
+      category: "VOLUNTARY",
+      title: "Voluntary admission",
+      when: "The client agrees to admission and has capacity to decide (or a guardian applies for a minor).",
+      steps: [
+        "Capacity assessment for admission",
+        "Application signed by the client or guardian",
+        "Admitting officer’s decision",
+      ],
+    },
+    {
+      category: "INVOLUNTARY",
+      title: "Involuntary admission",
+      when: "Admission is needed without the client’s consent, on the statutory grounds.",
+      steps: [
+        "Application by a related person",
+        "Signed medical recommendation(s)",
+        "Admitting officer’s decision",
+      ],
+    },
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      {rejected && (
+        <Callout tone="warning">
+          The previous application was not admitted — “{rejected}”. Start a new one if admission is
+          still indicated.
+        </Callout>
+      )}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {paths.map((p) => (
+          <div
+            key={p.category}
+            className="flex flex-col gap-3 rounded-xl border border-surface-border bg-surface-card p-4"
+          >
+            <div>
+              <h4 className="text-[14px] font-semibold text-ink-900">{p.title}</h4>
+              <p className="mt-1 text-[12.5px] text-ink-500">{p.when}</p>
+            </div>
+            <ol className="flex flex-col gap-1 text-[12.5px] text-ink-700">
+              {p.steps.map((step, i) => (
+                <li key={step} className="flex gap-2">
+                  <span className="font-semibold text-ink-500">{i + 1}.</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              className={`${p.category === "INVOLUNTARY" ? BTN_GHOST : BTN} mt-auto w-fit`}
+              disabled={busy}
+              onClick={() => onChoose(p.category)}
+            >
+              Start {p.category.toLowerCase()} admission
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Where an application stands: each legal step, who does it, done or waiting. */
+function LegalSteps({
+  data,
+  pending,
+  recs,
+}: {
+  data: LegalWorkspace;
+  pending: LegalDocumentRow;
+  recs: LegalDocumentRow[];
+}) {
+  const voluntary = pending.template_id === VOL;
+  const signed = pending.status === "SIGNED";
+  const required = data.legal_status?.required_recommendations ?? 0;
+  const recsSigned = recs.filter((r) => r.status === "SIGNED").length;
+  const steps: { label: string; who: string; done: boolean }[] = voluntary
+    ? [
+        {
+          label: "Capacity assessment",
+          who: "Clinician",
+          done: !data.capacity.required || Boolean(data.capacity.confirmation) || signed,
+        },
+        { label: "Application signed", who: "Client or guardian", done: signed },
+        { label: "Admission decision", who: "Admitting officer", done: false },
+      ]
+    : [
+        { label: "Application signed", who: "Related person", done: signed },
+        {
+          label: `Medical recommendation${required === 1 ? "" : "s"} (${recsSigned} of ${required})`,
+          who: "Medical practitioner",
+          done: signed && recsSigned >= required,
+        },
+        { label: "Admission decision", who: "Admitting officer", done: false },
+      ];
+  const current = steps.findIndex((st) => !st.done);
+  return (
+    <ol className="flex flex-col gap-0 overflow-hidden rounded-xl border border-surface-border bg-surface-card">
+      {steps.map((st, i) => (
+        <li
+          key={st.label}
+          className={`flex items-center gap-3 border-b border-surface-border px-4 py-2.5 last:border-b-0 ${i === current ? "bg-brand-green-tint" : ""}`}
+        >
+          <span
+            aria-hidden="true"
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${st.done ? "bg-brand-green text-on-primary" : i === current ? "border-2 border-brand-green text-brand-green" : "border border-surface-border text-ink-500"}`}
+          >
+            {st.done ? "✓" : i + 1}
+          </span>
+          <span className="flex-1 text-[13px] font-medium text-ink-900">{st.label}</span>
+          <span className="text-[12px] text-ink-500">
+            {st.done ? "Done" : i === current ? `Now · ${st.who}` : st.who}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function RecommendationsSection({
+  data,
+  pending,
+  recs,
+  busy,
+  run,
+}: PanelProps & { pending: LegalDocumentRow; recs: LegalDocumentRow[] }) {
+  const ls = data.legal_status;
+  return (
+    <Section title="Recommendation for involuntary treatment">
+      <p className="text-[12.5px] text-ink-700">
+        {recs.filter((r) => r.status === "SIGNED").length} of {ls?.required_recommendations}{" "}
+        required signed recommendation(s).
+      </p>
+      {data.me.credential.can_sign ? (
+        !recs.some((r) => r.status === "DRAFT") && (
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM} w-fit`}
+            disabled={busy}
+            onClick={() =>
+              run((t) => startRecommendation(t, pending.id), "Couldn't open the recommendation.")
+            }
+          >
+            Start my recommendation
+          </button>
+        )
+      ) : (
+        <Callout tone="warning">Signing unavailable: {data.me.credential.reason}</Callout>
+      )}
+      {recs.map((r) => (
+        <RecommendationForm key={r.id} doc={r} data={data} busy={busy} run={run} />
+      ))}
+    </Section>
   );
 }
 

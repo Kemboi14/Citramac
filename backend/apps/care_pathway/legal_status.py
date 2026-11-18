@@ -1152,6 +1152,24 @@ def _link_admission(ls, user):
         admission.save(update_fields=["legal_status_record", "admission_type", "updated_at"])
 
 
+def awaiting_decision(user):
+    """Applications an admitting officer can decide now: a signed application and,
+    for involuntary, the required signed recommendations. Empty for anyone else."""
+    if not is_admitting_officer(user):
+        return []
+    ready = []
+    for ls in LegalStatus.objects.filter(pending_application__status="SIGNED").select_related(
+        "patient", "pending_application"
+    ):
+        application = ls.pending_application
+        if TEMPLATE_CATEGORY[application.template_id] == "INVOLUNTARY":
+            required = legal_config.operational(ls.config_version)["requiredRecommendations"]
+            if _recommendations(application).count() < required:
+                continue
+        ready.append(ls)
+    return ready
+
+
 @transaction.atomic
 def decide(ls, user, decision, reason=""):
     ls = LegalStatus.objects.select_for_update().get(pk=ls.pk)

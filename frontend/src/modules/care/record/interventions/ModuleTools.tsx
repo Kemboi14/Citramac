@@ -5,7 +5,6 @@ import { getClientFollowUps } from "../../../../lib/carePlanOutcomesApi";
 import { clientRecordPath, psychiatryAssessmentPath } from "../../shared/recordRoutes";
 import { BTN_GHOST, BTN_SM } from "../../shared/styles";
 import { Card, ErrorNote } from "../../shared/ui";
-import { LegalAdmissionStatus } from "../legal/LegalAdmissionStatus";
 import { OatModule } from "../modules/ClinicalExtras";
 import { LabsModule } from "../modules/LabsModule";
 import { MarModule } from "../modules/MarModule";
@@ -70,7 +69,8 @@ function ClientFollowUps({ patientId, clientName }: Target) {
  * admissions page takes `?patient=`. Modules with no dedicated module yet
  * (medical review, psychosocial support, nutrition & fitness) record through
  * the delivery form only. Psychotherapy is a launcher (TherapyModule) drawn
- * by the drawer instead of a tool here; its sessions open on their own page. */
+ * by the drawer instead of a tool here; its sessions open on their own page.
+ * Admission opens Inpatient Admissions for the client (InterventionsStage). */
 const MODULES = new Map<string, ModuleDef>(
   Object.entries({
     emergency_care: {
@@ -124,22 +124,6 @@ const MODULES = new Map<string, ModuleDef>(
       page: {
         label: "Open psychiatric assessment & diagnosis",
         to: (patientId: string) => psychiatryAssessmentPath(patientId),
-      },
-    },
-    admission: {
-      tools: [
-        {
-          title: "Legal admission status",
-          note: "The single legal basis for admission — application, recommendation(s), decision, rights",
-          render: ({ patientId }: Target) => (
-            <LegalAdmissionStatus patientId={patientId} onChanged={() => undefined} />
-          ),
-          bare: true,
-        },
-      ],
-      page: {
-        label: "Bed allocation — admit or view admission",
-        to: (patientId: string) => `/clinical/inpatient?patient=${encodeURIComponent(patientId)}`,
       },
     },
     withdrawal_management: {

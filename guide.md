@@ -1068,3 +1068,30 @@ Interventions"; client agreement removed):
 
 FHIR: unchanged. Same stores, no new resource or code. Reversibility: cheap. No signed care plan,
 safety plan or record changes; only plans signed from today are signed under the new rule.
+
+### 2026-11-18 — admission: one guided path, voluntary or involuntary
+
+On the owner's decision of 2026-11-18 (flow and mapping confirmed before building, §7):
+
+1. **One place to start.** Inpatient Admissions is the only place an admission is started:
+   1 client & reason → 2 Voluntary or Involuntary, then that type's legal steps as a checklist →
+   3 bed & admit. Voluntary: capacity assessment, the client's or guardian's application, the
+   admitting officer's decision. Involuntary: the related person's application, the signed medical
+   recommendation(s), the decision. Bed & admit unlocks only once the legal status is Active.
+2. **Legal & consent and Interventions → Admission** show the status and what happens after
+   admission (notice to leave, conversion, ending, rights, tasks, documents). They no longer start
+   a first application. They link to "Start an admission" or "Continue admission" instead.
+3. **The admitting officer may decide in the same flow.** Someone holding
+   `clinical.admitting_officer` who is admitting records the decision there. Otherwise the signed
+   application waits in the admitting officer's My tasks ("Admission decision", `kind`
+   `admission_decision`, `legal_status.awaiting_decision`). An involuntary one waits only once its
+   required recommendations are signed, and opens on the admission page.
+4. **Capacity is recorded once.** New admissions no longer ask the free-text "Capacity assessed"
+   and consent notes. The formal capacity assessment the voluntary application requires is the
+   record. Admissions made earlier keep their values.
+
+FHIR: unchanged. The admission is an `Encounter` (class IMP) in its `EpisodeOfCare`. Guardian
+consent is the existing `Consent`. The legal status stays local, with no verified R4 home (VERIFY,
+unchanged), and is never sent to the SHR. Reversibility: cheap. Same stores, forms, signatures and
+statutory checks; no signed legal form or admission changes. Still open: renewal of involuntary
+status, the rights text, and the seven legacy free-text legal fields on earlier admissions.
