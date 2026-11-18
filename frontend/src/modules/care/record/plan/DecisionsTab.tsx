@@ -61,6 +61,12 @@ export function PriorityBadge({ priority }: { priority: PlanPriority }) {
 /** The plan's actions: recommendations still to decide, then what is in the plan,
  * then what was declined. Each recommendation carries its provenance; lowering a
  * recommended priority, or declining, needs a written reason. */
+function triageTaskStatus(status: string) {
+  if (status === "COMPLETED") return "Done";
+  if (status === "PENDING") return "In progress";
+  return "Not started";
+}
+
 export function DecisionsTab({
   patientId,
   ws,
@@ -342,8 +348,12 @@ export function DecisionsTab({
                   changed from {PRIORITY_LABEL[row.recommended]}
                 </span>
               )}
-              {act?.decision === "ADDED" && (
-                <span className="text-[12px] text-ink-500">added by clinician</span>
+              {act?.triage_tasks?.length ? (
+                <span className="text-[12px] text-ink-500">started at triage</span>
+              ) : (
+                act?.decision === "ADDED" && (
+                  <span className="text-[12px] text-ink-500">added by clinician</span>
+                )
               )}
               {act?.bulk_accepted && (
                 <span className="text-[12px] text-ink-500">accepted in bulk</span>
@@ -353,6 +363,16 @@ export function DecisionsTab({
               <ul className="mt-1 flex flex-col gap-0.5 text-[12.5px] text-ink-500">
                 {row.why.map((w) => (
                   <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
+            {state === "plan" && act?.triage_tasks && act.triage_tasks.length > 0 && (
+              <ul className="mt-1 flex flex-col gap-0.5 text-[12.5px] text-ink-700">
+                {act.triage_tasks.map((t) => (
+                  <li key={t.id}>
+                    {t.label} · assigned to {t.assignee} ·{" "}
+                    <span className="text-ink-500">{triageTaskStatus(t.status)}</span>
+                  </li>
                 ))}
               </ul>
             )}

@@ -95,9 +95,10 @@ export function MyTasks() {
                 {t.why && <span className="text-[11.5px] font-semibold text-ink-500">{t.why}</span>}
                 <Link
                   to={
-                    t.kind === "admission_decision"
+                    t.link ??
+                    (t.kind === "admission_decision"
                       ? `/clinical/inpatient?patient=${encodeURIComponent(t.patient_id)}`
-                      : clientRecordPath(t.patient_id, "snapshot")
+                      : clientRecordPath(t.patient_id, "snapshot"))
                   }
                   className="font-semibold text-brand-green hover:underline"
                 >

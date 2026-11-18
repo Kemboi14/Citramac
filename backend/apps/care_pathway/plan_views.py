@@ -77,11 +77,23 @@ def _activity_row(a, note=None):
                 "id": str(t.id),
                 "label": t.label,
                 "owner_role": t.owner_role,
+                "assignee": _user_name(t.assignee),
                 "due_at": t.due_at,
                 "done_at": t.done_at,
                 "done_by": _user_name(t.done_by),
             }
             for t in a.tasks.all()
+        ],
+        # Section N tasks this action carries out (triage_care_plan.py).
+        "triage_tasks": [
+            {
+                "id": str(t.id),
+                "label": t.action_label,
+                "assignee": t.owner,
+                "status": t.status,
+                "completed_at": t.completed_at,
+            }
+            for t in a.triage_tasks.all()
         ],
     }
 

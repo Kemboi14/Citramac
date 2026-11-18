@@ -1396,6 +1396,9 @@ def record_intervention(user, patient, data, activity=None):
         if activity.status != "COMPLETED" and activity.status != new_status:
             activity.status = new_status
             activity.save(update_fields=["status", "updated_at"])
+        from .triage_care_plan import work_recorded
+
+        work_recorded(activity, user, record.completes_activity)
     if record.billable and record.billing_service:
         ChargeItem.objects.create(
             organization_id=record.organization_id,

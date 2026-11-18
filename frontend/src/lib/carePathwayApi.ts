@@ -2099,9 +2099,20 @@ export interface PlanTask {
   id: string;
   label: string;
   owner_role: string;
+  /** Named person, when the action was started at triage. */
+  assignee?: string;
   due_at: string | null;
   done_at: string | null;
   done_by: string;
+}
+
+/** A Section N task this care-plan action carries out (triage_care_plan.py). */
+export interface PlanTriageTask {
+  id: string;
+  label: string;
+  assignee: string;
+  status: "INITIATED" | "PENDING" | "COMPLETED";
+  completed_at: string | null;
 }
 
 export interface PlanAction {
@@ -2119,6 +2130,7 @@ export interface PlanAction {
   bulk_accepted: boolean;
   note: CarePlanNote | null;
   tasks: PlanTask[];
+  triage_tasks?: PlanTriageTask[];
 }
 
 /** A goal in the client's own words (FHIR Goal), linked to an action and a 5P heading. */
@@ -2740,6 +2752,8 @@ export interface AttentionItem {
 }
 export interface MyTask extends AttentionItem {
   patient_id: string;
+  /** Where opening the task goes: the screen the work is done on. */
+  link?: string;
   patient: string;
   kind?: string;
   /** Why it is this clinician's: "Your client", "Assigned to you", "Your team · <role>", "Decision for you". */

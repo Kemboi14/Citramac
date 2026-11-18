@@ -246,6 +246,13 @@ def build_triage_bundle(triage_encounter):
                     encounter=Reference(reference=encounter_ref),
                     authoredOn=task.created_at.isoformat(),
                     owner=Reference(display=task.owner),
+                    # The care-plan action it carries out (triage_care_plan.py). The
+                    # CarePlan is not in this bundle, so it is named, not referenced.
+                    basedOn=(
+                        [Reference(display=f"Care plan: {task.care_plan_activity.title}")]
+                        if task.care_plan_activity_id
+                        else None
+                    ),
                     priority=task.priority or None,
                     lastModified=(task.completed_at or task.updated_at).isoformat(),
                     # A psychiatric review's outcome (psychiatric_review.py).

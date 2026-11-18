@@ -1128,3 +1128,36 @@ are the CITRAMAC brand: Green `#2E705F` and Deep Amber `#d07428`. The defaults l
 
 Not clinical data, so no FHIR change. Reversibility: cheap. These are presentation defaults and
 additive fields; no record changes.
+
+### 2026-11-18 — Section N, the care plan and Interventions as one piece of work
+
+On the owner's decisions of 2026-11-18 (mapping confirmed before building, §7): a ticked Section N
+action, registered as a named person's task, is added to the episode's care plan as an accepted
+action, marked "Started at triage by …" (`apps/care_pathway/triage_care_plan.py`). That opens its
+Interventions module, and the triage task is the action's task (`CareTask.care_plan_activity`,
+migration `care_pathway 0064`). It is not a second store.
+
+1. **Mapping.** Safety Plan and Enhanced observation → Safety plan / enhanced observation;
+   psychiatric review → Psychiatric review; urgent medical review → Medical review; withdrawal
+   monitoring, detox assessment, PAWSS, CIWA-Ar and COWS → Detox / withdrawal management; admission
+   assessment → Inpatient admission; outpatient appointment → Outpatient care; emergency transfer and
+   referral out → Referral / emergency transfer; safeguarding intervention → the new care-plan action
+   **Safeguarding**, delivered under Psychosocial support. Several ticks for one action become one
+   action carrying every task. Suicide Risk Assessment, Comprehensive Intake, Immediate emergency
+   intervention and Other stay named tasks only.
+2. **Decisions.** A recommended action is accepted at its recommended priority; one with no
+   recommendation is added at the triage's final priority. An action the plan had declined is
+   accepted again, and the decline stays in the signed version. A signed plan is never changed: the
+   action is an accepted addition that the care-plan clinician signs into the next version. Its
+   checklist steps go to the person the triage task was assigned to.
+3. **Opening and closing.** The notification and My tasks open the screen where the work is done
+   (the Interventions module, Inpatient Admissions, the intake, or the triage). A delivery recorded
+   against the action puts its tasks in progress, and one that completes the action completes them.
+   Signing the safety plan completes the client's open Safety Plan tasks. A psychiatric review is
+   only ever completed with its coded outcome.
+4. **FHIR.** The task stays an R4 `Task`, with `basedOn` naming the care-plan action (display only;
+   the CarePlan is not in the triage bundle). The action is a `CarePlan.activity` on the episode's
+   `CarePlan`. No new code system.
+
+Reversibility: cheap. A link and new actions on draft plans are added. Signed triages and signed
+care-plan versions do not change; reversing `0064` removes only the link.

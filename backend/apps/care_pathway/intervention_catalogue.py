@@ -276,6 +276,7 @@ ACTION_MODULES = {
     "outpatient": ["appointments", "discharge", "follow_up_aftercare"],
     "family": ["family_psychotherapy"],
     "social": ["psychosocial_support"],
+    "safeguarding": ["psychosocial_support"],
     "nutrition": ["nutrition_fitness"],
     "referral": ["emergency_care"],
 }

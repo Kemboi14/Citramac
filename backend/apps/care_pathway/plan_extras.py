@@ -70,6 +70,9 @@ def sign_safety_plan(plan, user):
     plan.signed_at = timezone.now()
     plan.signed_by = user
     plan.save(update_fields=["signed_at", "signed_by", "updated_at"])
+    from .triage_care_plan import safety_plan_signed
+
+    safety_plan_signed(plan.patient, user)
     return plan
 
 

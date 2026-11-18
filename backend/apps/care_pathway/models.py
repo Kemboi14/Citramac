@@ -463,6 +463,15 @@ class CareTask(TenantScopedModel):
     )
     focus_type = models.CharField(max_length=40, blank=True)
     focus_id = models.CharField(max_length=64, blank=True)
+    # The care-plan action this Section N task carries out (triage_care_plan.py):
+    # one task, seen from triage, the care plan and Interventions alike.
+    care_plan_activity = models.ForeignKey(
+        "CarePlanActivity",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="triage_tasks",
+    )
     completed_at = models.DateTimeField(null=True, blank=True)
     completed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

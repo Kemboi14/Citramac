@@ -27,6 +27,7 @@ from .models import (
     RestrictiveCheck,
     RestrictivePracticeEpisode,
 )
+from .triage_care_plan import task_link
 
 SEVERITY = {"high": 0, "medium": 1, "info": 2}
 
@@ -328,6 +329,7 @@ def my_tasks(user):
                 "key": f"caretask:{task.pk}",
                 "category": "Task",
                 "text": task.action_label,
+                "link": task_link(task),
                 "due_at": task.due_at,
                 "overdue": bool(task.due_at and task.due_at < now),
                 "patient_id": str(task.patient_id),

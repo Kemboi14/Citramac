@@ -13,6 +13,8 @@ from apps.accounts.access import users_with_permission, visible_branch_ids
 from apps.notifications.dispatch import notify
 from apps.notifications.models import Notification
 
+from .triage_care_plan import task_link
+
 CODENAME = "clinical.care.record"
 
 
@@ -54,5 +56,5 @@ def tasks_assigned(te, tasks, by, *, assignee_id=None, team=""):
         body=f"{te.patient.get_full_name()}: {actions}. Assigned by {user_display(by)}.",
         dedupe_key=f"care-task:{tasks[0].pk}",
         organization_id=te.organization_id,
-        link=f"/clinical/triage/{te.pk}",
+        link=task_link(tasks[0]),
     )

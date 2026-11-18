@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tooltip } from "../../../components/Tooltip";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
 import { Callout, Card, ErrorNote } from "../shared/ui";
 import { formatDateTime } from "../shared/format";
@@ -42,7 +42,9 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
     "Couldn't load the intervention record.",
   );
   const [scope, setScope] = useState<ModuleScope>("plan");
-  const [openCode, setOpenCode] = useState<string | null>(null);
+  // A task link (`?module=<code>`) opens the module the task asks for.
+  const [searchParams] = useSearchParams();
+  const [openCode, setOpenCode] = useState<string | null>(() => searchParams.get("module"));
   const [status, setStatus] = useState("");
 
   const data = workspace.data;

@@ -155,6 +155,14 @@ CATALOGUE = [
         "tasks": ["Housing / income / basic-needs review", "Link to community supports"],
     },
     {
+        "key": "safeguarding",
+        "name": "Safeguarding",
+        "low": False,
+        "module": "THERAPY",
+        "roles": ["clinician", "therapist", "nurse"],
+        "tasks": ["Safeguarding concern reviewed", "Safeguarding action recorded"],
+    },
+    {
         "key": "nutrition",
         "name": "Nutrition / fitness",
         "low": True,
@@ -541,12 +549,17 @@ def sync_tasks(activity, base_time):
         return
     spec = BY_KEY[activity.action_key]
     due = base_time + timedelta(minutes=DUE_MINUTES.get(activity.priority, DUE_MINUTES["GREEN"]))
+    # Started at triage: the steps go to the person the triage task was assigned to.
+    triage_task = (
+        activity.triage_tasks.exclude(assignee__isnull=True).order_by("created_at").first()
+    )
     for label in spec["tasks"]:
         CarePlanTask.objects.create(
             organization_id=activity.organization_id,
             activity=activity,
             label=label,
             owner_role=spec["roles"][0],
+            assignee_id=triage_task.assignee_id if triage_task else None,
             due_at=due,
         )
 

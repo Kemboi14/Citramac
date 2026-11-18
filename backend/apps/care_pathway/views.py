@@ -659,7 +659,7 @@ class TriageTasksView(APIView):
     to a named member of the clinical staff picked from the drop-down."""
 
     def post(self, request, pk):
-        from . import task_assignees, task_notify, triage_psychiatric_review
+        from . import task_assignees, task_notify, triage_care_plan, triage_psychiatric_review
 
         te = _triage(pk)
         rows = request.data.get("tasks")
@@ -734,6 +734,7 @@ class TriageTasksView(APIView):
                             created_by=request.user,
                         )
                     )
+            triage_care_plan.link_registered_tasks(te, created, request.user)
         by_person = {}
         for task in created:
             by_person.setdefault(str(task.assignee_id), []).append(task)
