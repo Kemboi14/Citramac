@@ -13,6 +13,8 @@ SMTP with the platform's From: address, and the failure is logged so the org
 can fix its settings — see OrganizationEmailBackend.
 """
 
+from email.mime.image import MIMEImage
+
 import structlog
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
@@ -71,6 +73,7 @@ def send_html_email(
     recipient_list,
     connection,
     reply_to=None,
+    inline_images=None,
 ):
     """Shared HTML+plaintext sender — every notification task in the project builds
     its message with this so the multipart/alternative structure and the
@@ -86,7 +89,45 @@ def send_html_email(
     email.attach_alternative(
         render_to_string(template_name, {**context, "subject": subject}), "text/html"
     )
+    if inline_images:
+        # Shown in the body via src="cid:<id>"; Gmail blocks data: URLs.
+        email.mixed_subtype = "related"
+        for content_id, (data, subtype) in inline_images.items():
+            image = MIMEImage(data, _subtype=subtype)
+            image.add_header("Content-ID", f"<{content_id}>")
+            image.add_header("Content-Disposition", "inline", filename=f"{content_id}.{subtype}")
+            email.attach(image)
     email.send()
+
+
+_EMAIL_LOGO_TYPES = {".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif"}
+_EMAIL_LOGO_MAX_BYTES = 500_000
+
+
+def platform_email_branding():
+    """The Super Admin's platform logo (as an inline image) and theme colours
+    for system emails. SVG and oversized logos are skipped (mail clients don't
+    show SVG), leaving the name in text. Never raises: an email must still go."""
+    import os
+
+    from apps.documents.printing import brand_colours
+
+    try:
+        colours = brand_colours(None)
+    except Exception:  # noqa: BLE001
+        colours = {"accent": "#2e705f", "text": "#2e705f", "tint": "#eaf1ef"}
+    images = {}
+    try:
+        from apps.tenancy.models import PlatformBranding
+
+        logo = PlatformBranding.get_solo().logo
+        subtype = _EMAIL_LOGO_TYPES.get(os.path.splitext(logo.name or "")[1].lower())
+        if logo and subtype and logo.size <= _EMAIL_LOGO_MAX_BYTES:
+            with logo.open("rb") as handle:
+                images["brand-logo"] = (handle.read(), subtype)
+    except Exception:  # noqa: BLE001 — branding must never stop an email
+        images = {}
+    return colours, images
 
 
 def _smtp_kwargs(host, port, username, password_encrypted, use_tls, use_ssl):

@@ -12,10 +12,10 @@
       <tr>
         <td align="center">
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border:1px solid #e3e8e6; border-radius:12px; overflow:hidden;">
-            <tr><td style="height:4px; line-height:4px; font-size:0; background-color:#2e705f;">&nbsp;</td></tr>
+            <tr><td style="height:4px; line-height:4px; font-size:0; background-color:{{ brand.accent }};">&nbsp;</td></tr>
             <tr>
               <td align="center" style="padding:36px 40px 8px;">
-                <span style="color:#2e705f; font-size:18px; font-weight:700; letter-spacing:2px;">CITRAMAC</span>
+                {% if has_logo %}<img src="cid:brand-logo" alt="CITRAMAC" height="44" style="display:block; height:44px; width:auto; max-width:200px; border:0;" />{% else %}<span style="color:{{ brand.text }}; font-size:18px; font-weight:700; letter-spacing:2px;">CITRAMAC</span>{% endif %}
               </td>
             </tr>
             <tr>
@@ -28,8 +28,8 @@
               <td align="center" style="padding:28px 40px 8px;">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td align="center" style="padding:18px 36px; background-color:#f1f6f4; border:1px solid #d5e3de; border-radius:10px;">
-                      <span style="font-family:'Roboto Mono',Menlo,Consolas,monospace; font-size:34px; font-weight:700; letter-spacing:10px; color:#1b2a26; -webkit-user-select:all; user-select:all;">{{ code }}</span>
+                    <td align="center" style="padding:18px 36px; background-color:{{ brand.tint }}; border:1px solid {{ brand.accent }}; border-radius:10px;">
+                      <span style="font-family:'Roboto Mono',Menlo,Consolas,monospace; font-size:34px; font-weight:700; letter-spacing:10px; color:{{ brand.text }}; -webkit-user-select:all; user-select:all;">{{ code }}</span>
                     </td>
                   </tr>
                 </table>
