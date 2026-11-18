@@ -354,7 +354,7 @@ export function AppShell({
           >
             <div className="font-display text-base font-bold">{brandName}</div>
             <div
-              className="mt-0.5 max-w-[160px] truncate text-[10.5px] font-semibold uppercase tracking-wide text-brand-amber"
+              className="mt-0.5 max-w-[160px] truncate text-[10.5px] font-semibold uppercase tracking-wide text-white"
               title={brandSub}
             >
               {brandSub}
@@ -382,7 +382,7 @@ export function AppShell({
               <div key={group.label || "unlabeled"} className="mb-[18px]">
                 {group.label && (
                   <div
-                    className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-brand-amber transition-[opacity,max-height] duration-200 ${
+                    className={`mb-1.5 overflow-hidden whitespace-nowrap px-2.5 text-[10.5px] font-bold uppercase tracking-wide text-white transition-[opacity,max-height] duration-200 ${
                       collapsed ? "max-h-0 opacity-0" : "max-h-4 opacity-100"
                     }`}
                   >
