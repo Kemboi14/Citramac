@@ -215,7 +215,7 @@ export function LimsPage() {
               <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-brand-green">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-brand-green-dark">
                       Order workflow
                     </div>
                     <h2 className="mt-1 font-display text-base font-semibold text-ink-900">
@@ -277,7 +277,7 @@ export function LimsPage() {
                 <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-brand-green">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-brand-green-dark">
                         Order {order.id.slice(0, 8)}
                       </div>
                       <h2 className="mt-1 font-display text-base font-semibold text-ink-900">
@@ -319,7 +319,7 @@ export function LimsPage() {
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-brand-green">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-brand-green-dark">
                         Specimen {specimen.barcode}
                       </div>
                       <h2 className="mt-1 font-display text-base font-semibold text-ink-900">

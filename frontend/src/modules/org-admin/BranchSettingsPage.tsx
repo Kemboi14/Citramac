@@ -48,6 +48,7 @@ import {
   testOrganizationSmsSettings,
   updateOrganizationEmailSettings,
   updateOrganizationSmsSettings,
+  uploadOrganizationIcon,
   uploadOrganizationLogo,
   type OrganizationEmailSettings,
   type OrganizationSmsSettings,
@@ -354,6 +355,9 @@ export function BranchSettingsPage() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [iconUploading, setIconUploading] = useState(false);
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     if (!accessToken) return;
@@ -473,11 +477,12 @@ export function BranchSettingsPage() {
   useEffect(() => {
     if (!accessToken || !claims?.organization_id) return;
     getOrganizationTheme(accessToken, claims.organization_id)
-      .then(({ theme_overrides, logo_url }: OrganizationTheme) => {
+      .then(({ theme_overrides, logo_url, icon_url }: OrganizationTheme) => {
         const overrides = sanitizeOverrides(theme_overrides, false);
         setSavedTheme(overrides);
         setThemeDraft(overrides);
         setLogoUrl(logo_url || null);
+        setIconUrl(icon_url || null);
       })
       .catch((err) =>
         setThemeLoadError(err instanceof ApiError ? err.message : "Couldn't load theme colors."),
@@ -524,6 +529,24 @@ export function BranchSettingsPage() {
       setLogoError(err instanceof ApiError ? err.message : "Couldn't upload the logo.");
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  const handleIconUpload = async (file: File) => {
+    if (!accessToken || !claims?.organization_id) return;
+    if (file.size > LOGO_MAX_SIZE_BYTES) {
+      setLogoError("Icon must be 30MB or smaller.");
+      return;
+    }
+    setLogoError(null);
+    setIconUploading(true);
+    try {
+      const updated = await uploadOrganizationIcon(accessToken, claims.organization_id, file);
+      setIconUrl(updated.icon_url || null);
+    } catch (err) {
+      setLogoError(err instanceof ApiError ? err.message : "Couldn't upload the icon.");
+    } finally {
+      setIconUploading(false);
     }
   };
 
@@ -647,7 +670,7 @@ export function BranchSettingsPage() {
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
           Organization Administration
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Branch Settings</h1>
@@ -1390,6 +1413,50 @@ export function BranchSettingsPage() {
                   <span className="text-[11px] text-ink-400">
                     PNG, JPG, WEBP, or SVG, up to 30MB
                   </span>
+                </div>
+              </div>
+              <div className="mt-5 flex items-center gap-4 border-t border-surface-border pt-5">
+                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-md bg-brand-green-dark">
+                  {iconUrl ? (
+                    <img
+                      src={iconUrl}
+                      alt="Organization icon"
+                      className="h-full w-full object-contain p-2 brightness-0 invert"
+                    />
+                  ) : (
+                    <span className="text-[9px] font-semibold text-on-primary">No icon</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-semibold text-ink-900">Icon</span>
+                  <span className="text-[11px] text-ink-500">
+                    Shown only in the sidebar inside CITRAMAC, in white on green. Use a square image
+                    with a transparent background.
+                  </span>
+                  <input
+                    ref={iconInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      if (file) void handleIconUpload(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={iconUploading}
+                    onClick={() => iconInputRef.current?.click()}
+                    className="flex w-fit items-center gap-1.5 rounded-md border border-surface-border px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors duration-150 hover:bg-surface-bg disabled:opacity-60"
+                  >
+                    {iconUploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    {iconUploading ? "Uploading…" : iconUrl ? "Replace Icon" : "Upload Icon"}
+                  </button>
                 </div>
               </div>
               {logoError && (

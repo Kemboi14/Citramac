@@ -143,6 +143,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "branch_count",
             "created_at",
             "logo_url",
+            "icon_url",
             "tagline",
             "primary_color",
             "support_email",
@@ -682,20 +683,27 @@ class PlatformBrandingSerializer(serializers.ModelSerializer):
     """
 
     logo = serializers.SerializerMethodField()
+    # Square icon for the platform console's sidebar only (Super Admin).
+    icon = serializers.SerializerMethodField()
 
     class Meta:
         model = PlatformBranding
-        fields = ["logo", "theme_overrides", "updated_at"]
+        fields = ["logo", "icon", "theme_overrides", "updated_at"]
 
     def validate_theme_overrides(self, value):
         return validate_theme_overrides_shape(value, allow_status=True)
 
-    def get_logo(self, obj):
-        if not obj.logo:
+    def _url(self, file):
+        if not file:
             return None
         request = self.context.get("request")
-        url = obj.logo.url
-        return request.build_absolute_uri(url) if request else url
+        return request.build_absolute_uri(file.url) if request else file.url
+
+    def get_logo(self, obj):
+        return self._url(obj.logo)
+
+    def get_icon(self, obj):
+        return self._url(obj.icon)
 
 
 class PlatformEmailSettingsSerializer(serializers.ModelSerializer):
@@ -808,8 +816,8 @@ class OrganizationThemeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["theme_overrides", "logo_url"]
-        read_only_fields = ["logo_url"]
+        fields = ["theme_overrides", "logo_url", "icon_url"]
+        read_only_fields = ["logo_url", "icon_url"]
 
     def validate_theme_overrides(self, value):
         return validate_theme_overrides_shape(value)

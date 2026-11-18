@@ -73,6 +73,7 @@ export function AppShell({
   searchPlaceholder,
   profilePath,
   variant = "default",
+  usePlatformIcon = false,
   pageTitles,
   workspaceTitle,
   searchSlot,
@@ -92,6 +93,9 @@ export function AppShell({
   /** "brand" — the clinical workspace's topbar: light like the other shells, but
    * carrying the workspace name, a working search slot and a light/dark toggle. */
   variant?: "default" | "brand";
+  /** Platform console only: show the platform icon (Super Admin → Platform
+   * Branding) in the sidebar instead of the full logo. */
+  usePlatformIcon?: boolean;
   /** Page names for routes with no menu entry, used as the last breadcrumb. */
   pageTitles?: Record<string, string>;
   /** The brand topbar names the workspace, never the page: each page carries
@@ -206,13 +210,14 @@ export function AppShell({
     // it at boot, this refreshes it alongside the sidebar logo.
     getPlatformBranding()
       .then((b) => {
-        setLogoUrl((current) => current ?? b.logo);
+        // The platform console shows the platform icon when one is set.
+        setLogoUrl((current) => current ?? ((usePlatformIcon && b.icon) || b.logo));
         setPlatformTheme(b.theme_overrides);
       })
       .catch(() => {
         // Best-effort only — keep the default mark and cached palette.
       });
-  }, []);
+  }, [usePlatformIcon]);
 
   useEffect(() => {
     // An org's own theme layers over the platform one (runtimeTheme.ts
@@ -222,11 +227,11 @@ export function AppShell({
     if (!accessToken || !organizationId) return;
     applyCachedOrganizationTheme(organizationId);
     getOrganizationTheme(accessToken, organizationId)
-      .then(({ theme_overrides, logo_url }) => {
+      .then(({ theme_overrides, logo_url, icon_url }) => {
         setOrganizationTheme(organizationId, theme_overrides);
-        // Org's own logo overrides the platform one in the sidebar, same
-        // "org wins over the platform baseline" rule as the colors.
-        if (logo_url) setLogoUrl(logo_url);
+        // Org's own icon (else its logo) overrides the platform one in the
+        // sidebar, same "org wins over the platform baseline" rule as the colors.
+        if (icon_url || logo_url) setLogoUrl(icon_url || logo_url);
       })
       .catch(() => {
         // Best-effort only — the cached/platform palette stays in place.
@@ -315,7 +320,7 @@ export function AppShell({
         aria-modal={drawerOpen || undefined}
         // Off-canvas on mobile: keep its links out of the tab order until opened.
         inert={!isDesktop && !mobileOpen}
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-shrink-0 flex-col overflow-hidden text-sidebar-active-bg transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-shrink-0 flex-col overflow-hidden text-sidebar-text-strong transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:transition-[width] lg:duration-300 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -327,14 +332,18 @@ export function AppShell({
         <div
           className={`flex items-center gap-2.5 border-b border-sidebar-divider py-5 ${collapsed ? "justify-center px-2" : "px-[18px]"}`}
         >
+          {/* The logo sits on a green tile and is shown in white (any uploaded
+              logo), so it reads the same whatever colours the file has. */}
           {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={brandName}
-              className="h-8 w-8 flex-shrink-0 rounded-md bg-sidebar-active-bg object-contain p-0.5"
-            />
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-brand-green-dark">
+              <img
+                src={logoUrl}
+                alt={brandName}
+                className="h-full w-full object-contain brightness-0 invert"
+              />
+            </span>
           ) : (
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-sidebar-active-bg text-xs font-bold text-sidebar-active-text">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-brand-green-dark text-xs font-bold text-on-primary">
               CT
             </div>
           )}

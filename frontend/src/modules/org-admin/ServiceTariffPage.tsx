@@ -198,7 +198,7 @@ export function ServiceTariffPage() {
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
           Organization · Billing
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Service Tariff</h1>

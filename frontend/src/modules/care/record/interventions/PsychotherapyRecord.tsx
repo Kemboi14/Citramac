@@ -376,7 +376,7 @@ export function PsychotherapyRecord({
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="flex w-full flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] font-bold uppercase tracking-[.1em] text-brand-green">
+          <p className="text-[11px] font-bold uppercase tracking-[.1em] text-brand-green-dark">
             {copy.label}
           </p>
           <div

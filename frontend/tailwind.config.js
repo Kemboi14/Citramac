@@ -12,12 +12,22 @@ export default {
   darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
+      // Green as a foreground (text, icons, focus rings, outlines) follows
+      // --brand-green-text, lifted in dark mode so it stays readable. Fills and
+      // borders keep the exact brand green (colors.brand below).
+      textColor: {
+        brand: { green: "var(--brand-green-text)", "green-dark": "var(--brand-green-dark-text)" },
+      },
+      ringColor: { brand: { green: "var(--brand-green-text)" } },
+      outlineColor: { brand: { green: "var(--brand-green-text)" } },
       colors: {
         brand: {
           green: "var(--green)",
           "green-dark": "var(--green-dark)",
           "green-tint": "var(--green-tint)",
           "green-tint-2": "var(--green-tint-2)",
+          // Deep Amber: the active tab underline (index.css) and accents.
+          amber: "var(--brand-amber)",
         },
         // Foreground for a solid brand/status fill — never `text-white`,
         // which breaks the moment a theme picks a light primary.

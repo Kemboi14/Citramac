@@ -121,7 +121,7 @@ def validate_theme_overrides_shape(value, *, allow_status=False):
         for key, color in palette.items():
             if not isinstance(color, str) or not HEX_COLOR_RE.match(color):
                 raise serializers.ValidationError(
-                    f"'{mode}.{key}' must be a hex color like #006e51, got {color!r}."
+                    f"'{mode}.{key}' must be a hex color like #2e705f, got {color!r}."
                 )
             clean[key] = color.lower()
         if clean:

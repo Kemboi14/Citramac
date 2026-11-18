@@ -348,7 +348,7 @@ export function PatientWorkspacePage() {
             onClick={() => setTab(t)}
             className={`whitespace-nowrap border-b-2 px-3 py-2 text-[11px] font-bold transition-colors duration-150 ${
               tab === t
-                ? "border-brand-green text-brand-green-dark"
+                ? "border-brand-amber text-brand-green-dark"
                 : "border-transparent text-ink-500 hover:text-brand-green-dark"
             }`}
           >

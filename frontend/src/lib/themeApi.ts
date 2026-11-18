@@ -9,6 +9,7 @@ export interface OrganizationTheme {
    * never status colors, which are platform-wide only. */
   theme_overrides: ThemeOverrides;
   logo_url: string;
+  icon_url: string;
 }
 
 export function getOrganizationTheme(accessToken: string, organizationId: string) {

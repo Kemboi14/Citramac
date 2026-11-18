@@ -40,7 +40,7 @@ class DocumentPrintTests(DocumentFixture):
         self.assertIn("HR Manager", html)
         self.assertNotIn("CONSENT</p>", html)  # internal legal-basis code isn't printed
         self.assertEqual(body_colours(html), "#111")  # body text stays black
-        self.assertIn("--brand: #006e51;", html)  # no theme set: the product default
+        self.assertIn("--brand: #2e705f;", html)  # no theme set: the product default
 
     def test_download_is_a_pdf_and_is_audited(self):
         doc = self.letter()
@@ -88,7 +88,7 @@ class DocumentPrintTests(DocumentFixture):
         self.assertGreaterEqual(printing._contrast_on_white(colours["text"]), 4.5)
         # Anything that isn't a #rrggbb never reaches the stylesheet.
         Org.theme_overrides = {"light": {"primary": "red;}</style><script>"}}
-        Org.primary_color = "#006e51"
+        Org.primary_color = "#2e705f"
         self.assertRegex(printing.brand_colours(Org())["accent"], r"^#[0-9a-f]{6}$")
 
     def test_filenames_are_safe(self):

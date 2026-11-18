@@ -29,19 +29,27 @@
      element's own background/text color. */
   color-scheme: light;
 
-  /* Brand (primary) */
-  --green: #006e51;
-  --green-dark: #00503a;
-  --on-green: #ffffff; /* text/icons on a solid --green or --green-dark fill */
+  /* Brand — CITRAMAC light-mode defaults (owner, 2026-11-18), used until an
+     organisation sets its own colours. The token names are historical.
+     Primary (buttons, links, focus rings, active states): Deep Amber #d07428.
+     Secondary (button hover, heading accents, KPI numbers): Green #2E705F. */
+  --green: #d07428;
+  --green-dark: #2e705f;
+  --on-green: #ffffff; /* text and icons on primary buttons */
+  --brand-amber: #d07428; /* active tab underline, second chart series */
+  /* Primary and secondary as text colours. Dark mode lifts them (below) so they
+     read on the dark background; fills keep the exact colours. */
+  --brand-green-text: var(--green);
+  --brand-green-dark-text: var(--green-dark);
 
   /* Sidebar */
-  --sidebar-top: #00503a;
-  --sidebar-bottom: #003f2e;
+  --sidebar-top: #2e705f;
+  --sidebar-bottom: #2e705f;
   --sidebar-text: #d6ede4;
   --sidebar-text-strong: #ffffff;
   --sidebar-muted: #8fc9b3;
-  --sidebar-active-bg: #eafaf4;
-  --sidebar-active-text: var(--green-dark);
+  --sidebar-active-bg: #d07428; /* the current page's link */
+  --sidebar-active-text: #ffffff;
 
   /* Semantic status colors — editable only platform-wide (Super Admin),
      never per organization, so "danger" reads the same in every tenant. */
@@ -69,7 +77,7 @@
 
   /* Data visualization series */
   --chart-1: var(--green);
-  --chart-2: #34a884;
+  --chart-2: #d07428; /* Deep Amber */
   --chart-3: #9bcdb9;
   --chart-4: #b8790a;
   --chart-5: #fe0000;
@@ -102,12 +110,18 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --green: #2bd39e;
-    --green-dark: #1a9b74;
-    --on-green: #04261c;
+    --green: #2e705f;
+    --green-dark: #2e705f;
+    --on-green: #ffffff;
+    --brand-green-text: color-mix(
+      in srgb,
+      var(--green) 55%,
+      #ffffff
+    ); /* #2E705F → ≈#8cb0a7, 7:1 on the dark card */
+    --brand-green-dark-text: var(--brand-green-text);
 
-    --sidebar-top: #00503a;
-    --sidebar-bottom: #003f2e;
+    --sidebar-top: #2e705f;
+    --sidebar-bottom: #2e705f;
     --sidebar-text: #d6ede4;
     --sidebar-text-strong: #ffffff;
     --sidebar-muted: #8fc9b3;
@@ -134,7 +148,7 @@
     --violet: #b394f0;
 
     --chart-1: var(--green);
-    --chart-2: #5fb89a;
+    --chart-2: #d07428;
     --chart-3: #9bcdb9;
     --chart-4: #ffb84d;
     --chart-5: #ff6b6a;
@@ -155,12 +169,18 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --green: #2bd39e;
-  --green-dark: #1a9b74;
-  --on-green: #04261c;
+  --green: #2e705f;
+  --green-dark: #2e705f;
+  --on-green: #ffffff;
+  --brand-green-text: color-mix(
+    in srgb,
+    var(--green) 55%,
+    #ffffff
+  ); /* #2E705F → ≈#8cb0a7, 7:1 on the dark card */
+  --brand-green-dark-text: var(--brand-green-text);
 
-  --sidebar-top: #00503a;
-  --sidebar-bottom: #003f2e;
+  --sidebar-top: #2e705f;
+  --sidebar-bottom: #2e705f;
   --sidebar-text: #d6ede4;
   --sidebar-text-strong: #ffffff;
   --sidebar-muted: #8fc9b3;
@@ -187,7 +207,7 @@
   --violet: #b394f0;
 
   --chart-1: var(--green);
-  --chart-2: #5fb89a;
+  --chart-2: #d07428;
   --chart-3: #9bcdb9;
   --chart-4: #ffb84d;
   --chart-5: #ff6b6a;

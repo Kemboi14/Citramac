@@ -22,7 +22,7 @@ export function DashboardWelcome({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-brand-green/15 bg-gradient-to-r from-brand-green/10 via-surface-card to-surface-card px-5 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-6">
       <div>
-        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-brand-green">
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
           {eyebrow}
         </div>
         <h1 className="font-display text-2xl font-bold text-ink-900 sm:text-[28px]">

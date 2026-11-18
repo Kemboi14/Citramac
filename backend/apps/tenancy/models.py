@@ -184,15 +184,18 @@ class Organization(TimestampedModel):
         help_text="Email domains (e.g. 'cafric.org') that route to this tenant at login.",
     )
     logo_url = models.URLField(blank=True)
+    # A square icon used only inside the app — this organisation's sidebar (Org
+    # Admin and clinical workspace). The logo stays for its branded login screen.
+    icon_url = models.URLField(blank=True)
     login_image_url = models.URLField(
         blank=True, help_text="Optional background image for the tenant login panel."
     )
     tagline = models.CharField(max_length=255, blank=True)
     primary_color = models.CharField(
         max_length=7,
-        default="#006e51",
+        default="#2e705f",
         help_text=(
-            "Hex color, e.g. #006e51 — overrides the default brand green "
+            "Hex color, e.g. #2e705f — overrides the default brand green "
             "on this tenant's login page only."
         ),
     )
@@ -349,6 +352,9 @@ class PlatformBranding(models.Model):
     """
 
     logo = models.FileField(upload_to="platform/branding/", blank=True)
+    # A square icon used only in the platform console's sidebar (Super Admin),
+    # where the full logo is too small to read. Organisations never see it.
+    icon = models.FileField(upload_to="platform/branding/", blank=True)
     # Platform-wide default primary/secondary accent (docs/03-DESIGN-SYSTEM.md
     # §3.6) — the baseline every user sees (including Super Admin, who has
     # no Organization to theme). An org's own theme_overrides

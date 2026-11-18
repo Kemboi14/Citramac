@@ -1095,3 +1095,36 @@ consent is the existing `Consent`. The legal status stays local, with no verifie
 unchanged), and is never sent to the SHR. Reversibility: cheap. Same stores, forms, signatures and
 statutory checks; no signed legal form or admission changes. Still open: renewal of involuntary
 status, the rights text, and the seven legacy free-text legal fields on earlier admissions.
+
+### 2026-11-18 — CITRAMAC brand colours; platform and organisation icons
+
+On the owner's instruction, the product defaults (used until an organisation sets its own theme)
+are the CITRAMAC brand: Green `#2E705F` and Deep Amber `#d07428`. The defaults live in
+`frontend/src/theme/tokens.css`. The token names (`--green`, `--green-dark`) are historical.
+
+- **Light mode.**
+  - Primary (buttons, links, focus rings, active states, active tab underline) is `#d07428`.
+  - Secondary (button hover, heading accents, KPI numbers) is `#2e705f`.
+  - The sidebar is `#2e705f`, and the current page's link is `#d07428` with white text.
+  - Sign-in screens reverse this: green buttons that turn amber on hover. A branded sign-in page
+    falls back to green when the organisation has no login colour.
+- **Dark mode.**
+  - Fills (buttons, sidebar) are `#2e705f`.
+  - Green used as text, links, icons and focus outlines is lifted (`--brand-green-text`, 55%
+    mixed with white) so it reads on the dark background.
+- **Status colours** (danger, warning, triage priorities) are unchanged and never take a brand
+  colour.
+- **Readability:** white on `#d07428` is 3.4:1, below 4.5:1 for normal-size text. This was
+  accepted by the owner.
+- **Printed documents and system emails** default to `#2e705f`. Migration `tenancy 0024` moves
+  organisations still on the old default login colour (`#006e51`) to it, and leaves any chosen
+  colour as it is.
+- **Icons** are shown white on a green 44 px tile in the sidebar.
+  - The platform has an icon (Super Admin → Platform Branding, `PlatformBranding.icon`,
+    `tenancy 0025`), used only in the platform console.
+  - Each organisation has an icon (Org Admin → Branch Settings, `Organization.icon_url`,
+    `tenancy 0026`), used only in its own sidebar.
+  - The logos stay for the sign-in screens.
+
+Not clinical data, so no FHIR change. Reversibility: cheap. These are presentation defaults and
+additive fields; no record changes.

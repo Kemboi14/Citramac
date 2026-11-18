@@ -334,7 +334,7 @@ function AutoTriggers({ section }: { section: string }) {
       <ul className="min-w-0 space-y-1">
         {mine.map((t) => (
           <li key={t.code} className="text-[13px] leading-snug text-ink-900">
-            <span className="mr-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-brand-green">
+            <span className="mr-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-brand-green-dark">
               Auto-trigger
             </span>
             <strong className="font-semibold">{t.alert}</strong>

@@ -35,6 +35,8 @@ export interface Organization {
   branch_count: number;
   created_at: string;
   logo_url: string;
+  /** Square icon for this organisation's sidebar inside the app only. */
+  icon_url: string;
   tagline: string;
   primary_color: string;
   support_email: string;
@@ -120,6 +122,17 @@ export function setOrganizationStatus(accessToken: string, id: string, status: O
   return apiRequest<Organization>(`/platform/organizations/${id}/status/`, {
     method: "POST",
     body: { status },
+    accessToken,
+  });
+}
+
+/** The organisation's sidebar icon (inside the app only); its logo is untouched. */
+export function uploadOrganizationIcon(accessToken: string, id: string, file: File) {
+  const body = new FormData();
+  body.append("icon", file);
+  return apiRequest<Organization>(`/platform/organizations/${id}/logo/`, {
+    method: "POST",
+    body,
     accessToken,
   });
 }

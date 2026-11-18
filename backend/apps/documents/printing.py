@@ -42,7 +42,7 @@ PREVIEW_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; fra
 # ── letterhead ──────────────────────────────────────────────────────────────
 
 
-DEFAULT_BRAND = "#006e51"  # the product's default primary (frontend themeTokens)
+DEFAULT_BRAND = "#2e705f"  # the product's default primary (frontend themeTokens)
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 

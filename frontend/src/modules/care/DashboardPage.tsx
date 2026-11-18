@@ -119,7 +119,7 @@ function StatCard({
       className="group block rounded-lg border border-surface-border bg-surface-card p-[18px] shadow-sm transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green motion-reduce:transform-none"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="font-display text-[28px] font-extrabold text-ink-900">{value}</div>
+        <div className="font-display text-[28px] font-extrabold text-brand-green-dark">{value}</div>
         <span
           aria-hidden
           className="mt-2 text-ink-500 transition-colors group-hover:text-brand-green"

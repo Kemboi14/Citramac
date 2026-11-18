@@ -132,7 +132,7 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
                 status=Organization.STATUS_PENDING,
                 logo_url=data.get("logo_url", ""),
                 tagline=data.get("tagline", ""),
-                primary_color=data.get("primary_color") or "#006e51",
+                primary_color=data.get("primary_color") or "#2e705f",
                 support_email=data.get("support_email", ""),
                 support_phone=data.get("support_phone", ""),
                 website=data.get("website", ""),
@@ -258,7 +258,7 @@ LOGO_ALLOWED_EXTENSIONS = (".png", ".jpg", ".jpeg", ".svg", ".webp")
 LOGO_MAX_SIZE_BYTES = 30 * 1024 * 1024
 
 
-def _validate_logo_upload(request):
+def _validate_logo_upload(request, field="logo"):
     """
     Shared validation for both the platform-wide logo (PlatformBrandingView)
     and a specific organization's logo (OrganizationLogoUploadView) — same
@@ -268,7 +268,8 @@ def _validate_logo_upload(request):
 
     Returns (file, None) on success, or (None, error_response) on failure.
     """
-    logo = request.FILES.get("logo")
+    logo = request.FILES.get(field)
+    label = "Icon" if field == "icon" else "Logo"
     if not logo:
         return None, Response(
             {"error": {"code": "NO_FILE", "message": "No file uploaded."}},
@@ -279,14 +280,14 @@ def _validate_logo_upload(request):
             {
                 "error": {
                     "code": "UNSUPPORTED_FILE_TYPE",
-                    "message": "Logo must be a PNG, JPG, WEBP, or SVG image.",
+                    "message": f"{label} must be a PNG, JPG, WEBP, or SVG image.",
                 }
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
     if logo.size > LOGO_MAX_SIZE_BYTES:
         return None, Response(
-            {"error": {"code": "FILE_TOO_LARGE", "message": "Logo must be 30MB or smaller."}},
+            {"error": {"code": "FILE_TOO_LARGE", "message": f"{label} must be 30MB or smaller."}},
             status=status.HTTP_400_BAD_REQUEST,
         )
     return logo, None
@@ -321,7 +322,9 @@ class OrganizationLogoUploadView(APIView):
     def post(self, request, pk):
         from django.core.files.storage import default_storage
 
-        logo, error_response = _validate_logo_upload(request)
+        # `icon` (this organisation's sidebar only) or `logo` (its login screen).
+        field = "icon" if "icon" in request.FILES else "logo"
+        logo, error_response = _validate_logo_upload(request, field)
         if error_response:
             return error_response
 
@@ -332,10 +335,15 @@ class OrganizationLogoUploadView(APIView):
         with platform_admin_context():
             extension = logo.name.rsplit(".", 1)[-1].lower()
             stored_path = default_storage.save(
-                f"organizations/logos/{organization.slug}.{extension}", logo
+                f"organizations/{field}s/{organization.slug}.{extension}", logo
             )
-            organization.logo_url = request.build_absolute_uri(default_storage.url(stored_path))
-            organization.save(update_fields=["logo_url"])
+            url_field = f"{field}_url"
+            setattr(
+                organization,
+                url_field,
+                request.build_absolute_uri(default_storage.url(stored_path)),
+            )
+            organization.save(update_fields=[url_field])
         return Response(OrganizationSerializer(organization).data)
 
 
@@ -358,12 +366,14 @@ class PlatformBrandingView(APIView):
         return Response(PlatformBrandingSerializer(branding, context={"request": request}).data)
 
     def post(self, request):
-        logo, error_response = _validate_logo_upload(request)
+        # `icon` (platform console sidebar only) or `logo` (everywhere else).
+        field = "icon" if "icon" in request.FILES else "logo"
+        upload, error_response = _validate_logo_upload(request, field)
         if error_response:
             return error_response
 
         branding = PlatformBranding.get_solo()
-        branding.logo = logo
+        setattr(branding, field, upload)
         branding.updated_by = request.user
         branding.save()
         return Response(PlatformBrandingSerializer(branding, context={"request": request}).data)

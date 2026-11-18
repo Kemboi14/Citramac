@@ -53,17 +53,17 @@ body {
   /* Keyboard focus: a visible ring on every control. Many inputs are
      `outline-none` and only changed border colour, which is nearly invisible. */
   :where(a, button, summary, [role="button"], [tabindex]):focus-visible {
-    outline: 2px solid var(--green);
+    outline: 2px solid var(--brand-green-text);
     outline-offset: 2px;
   }
 
   :where(input, select, textarea):not([type="checkbox"], [type="radio"]):focus {
-    border-color: var(--green);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
+    border-color: var(--brand-green-text);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-green-text) 20%, transparent);
   }
 
   :where(input[type="checkbox"], input[type="radio"]):focus-visible {
-    outline: 2px solid var(--green);
+    outline: 2px solid var(--brand-green-text);
     outline-offset: 2px;
   }
 
@@ -155,5 +155,14 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* The active tab's underline is Deep Amber across every underline-style tab bar
+   ([role="tab"] with a bottom border), so "where am I" looks the same everywhere. */
+@layer utilities {
+  [role="tab"][aria-selected="true"].border-b-2,
+  [aria-current="page"].border-b-2 {
+    border-bottom-color: var(--brand-amber);
   }
 }

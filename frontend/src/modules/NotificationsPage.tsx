@@ -112,7 +112,7 @@ export function NotificationsPage({ showDecisionInbox = false }: { showDecisionI
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
             Inbox
           </div>
           <h1 className="font-display text-2xl font-bold text-ink-900">Notifications</h1>

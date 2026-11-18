@@ -23,7 +23,7 @@ function StatCard({ icon, label, value, children }: StatCardProps) {
         {icon}
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
       </div>
-      <div className="mt-2 font-display text-3xl font-bold text-ink-900">{value}</div>
+      <div className="mt-2 font-display text-3xl font-bold text-brand-green-dark">{value}</div>
       {children}
     </div>
   );

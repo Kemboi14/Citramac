@@ -14,6 +14,7 @@ export function SuperAdminShell() {
     <AppShell
       brandName="CITRAMAC"
       brandSub="Platform Console"
+      usePlatformIcon
       navGroups={SUPER_ADMIN_NAV}
       userInitials={initials}
       userName={name}

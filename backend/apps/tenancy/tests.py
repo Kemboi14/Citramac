@@ -310,6 +310,35 @@ class PlatformBrandingApiTests(APITestCase):
         get_response = self.client.get(reverse("platform-branding"))
         self.assertEqual(get_response.data["logo"], response.data["logo"])
 
+    def test_super_admin_can_upload_a_platform_icon_separately_from_the_logo(self):
+        logo = SimpleUploadedFile("logo.png", b"fake-png-bytes", content_type="image/png")
+        self.client.post(
+            reverse("platform-branding"),
+            {"logo": logo},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        icon = SimpleUploadedFile("icon.png", b"fake-icon-bytes", content_type="image/png")
+        response = self.client.post(
+            reverse("platform-branding"),
+            {"icon": icon},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("platform/branding/", response.data["icon"])
+        self.assertIsNotNone(response.data["logo"])  # the logo is left as it was
+        self.assertNotEqual(response.data["icon"], response.data["logo"])
+        bad = SimpleUploadedFile("icon.exe", b"x", content_type="application/exe")
+        refused = self.client.post(
+            reverse("platform-branding"),
+            {"icon": bad},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_access}",
+        )
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("Icon", refused.data["error"]["message"])
+
     def test_non_super_admin_cannot_upload_logo(self):
         logo = SimpleUploadedFile("logo.png", b"fake-png-bytes", content_type="image/png")
         response = self.client.post(
@@ -584,6 +613,27 @@ class OrganizationConsoleApiTests(APITestCase):
         with platform_admin_context():
             org.refresh_from_db()
             self.assertIn("organizations/logos/logo-org", org.logo_url)
+
+    def test_an_organization_icon_is_stored_beside_its_logo_and_served_with_its_theme(self):
+        with platform_admin_context():
+            org = Organization.objects.create(
+                name="Icon Org",
+                slug="icon-org",
+                facility_type="CLINIC",
+                logo_url="https://x.test/l.png",
+            )
+        icon = SimpleUploadedFile("icon.png", b"fake-icon-bytes", content_type="image/png")
+        response = self.client.post(
+            reverse("platform-organization-logo", args=[org.id]),
+            {"icon": icon},
+            format="multipart",
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("organizations/icons/icon-org", response.data["icon_url"])
+        self.assertEqual(response.data["logo_url"], "https://x.test/l.png")  # logo untouched
+        theme = self.client.get(reverse("platform-organization-theme", args=[org.id]), **self.auth)
+        self.assertEqual(theme.data["icon_url"], response.data["icon_url"])
 
     def test_org_admin_can_upload_their_own_organization_logo(self):
         from apps.accounts.models import Role

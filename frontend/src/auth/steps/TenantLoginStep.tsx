@@ -104,7 +104,7 @@ export function TenantLoginStep({
       className="flex min-h-screen items-center justify-center bg-surface-bg px-4 py-8"
       style={
         {
-          "--tenant-primary": branding.primary_color || "var(--green)",
+          "--tenant-primary": branding.primary_color || "var(--green-dark)", // CITRAMAC green
           // Text on the tenant's panel/button — picked for contrast so a
           // light tenant color doesn't end up with white-on-yellow.
           ...(isHexColor(branding.primary_color)
@@ -122,7 +122,7 @@ export function TenantLoginStep({
             <img
               src={branding.logo_url}
               alt={`${branding.name} logo`}
-              className="h-[160px] w-[160px] rounded-3xl bg-white object-contain p-4 md:h-[190px] md:w-[190px]"
+              className="h-[180px] w-[180px] rounded-3xl bg-white object-contain p-2 md:h-[220px] md:w-[220px]"
             />
           ) : (
             <>
@@ -208,7 +208,7 @@ export function TenantLoginStep({
 
             <AuthButton
               disabled={isSubmitting}
-              className="bg-[var(--tenant-primary)] hover:opacity-90"
+              className="bg-[var(--tenant-primary)] hover:bg-[var(--brand-amber)]"
             >
               {isSubmitting ? "Signing in..." : "Sign In"}
               {!isSubmitting && <ArrowRightIcon className="h-[18px] w-[18px]" />}

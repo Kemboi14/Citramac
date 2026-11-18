@@ -341,7 +341,7 @@ const EMPTY_FORM: OrgFormState = {
   billing_cycle: "ANNUAL",
   logo_url: "",
   tagline: "",
-  primary_color: "#006e51",
+  primary_color: "#2e705f",
   support_email: "",
   support_phone: "",
   website: "",
@@ -364,7 +364,7 @@ function organizationToFormState(org: Organization): OrgFormState {
     billing_cycle: "ANNUAL",
     logo_url: org.logo_url ?? "",
     tagline: org.tagline ?? "",
-    primary_color: org.primary_color || "#006e51",
+    primary_color: org.primary_color || "#2e705f",
     support_email: org.support_email ?? "",
     support_phone: org.support_phone ?? "",
     website: org.website ?? "",
@@ -1838,7 +1838,7 @@ export function OrganizationsPage() {
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green">
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
             Platform Console
           </div>
           <h1 className="font-display text-2xl font-bold text-ink-900">Organizations</h1>

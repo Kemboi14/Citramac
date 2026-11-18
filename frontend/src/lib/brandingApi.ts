@@ -8,6 +8,8 @@ import type { ThemeOverrides } from "../theme/themeTokens";
 
 export interface PlatformBranding {
   logo: string | null;
+  /** Square icon for the platform console's sidebar only (Super Admin). */
+  icon: string | null;
   theme_overrides: ThemeOverrides;
   updated_at: string;
 }
@@ -19,6 +21,17 @@ export function getPlatformBranding() {
 export function uploadPlatformLogo(accessToken: string, file: File) {
   const body = new FormData();
   body.append("logo", file);
+  return apiRequest<PlatformBranding>("/platform/branding/", {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
+/** The platform console's sidebar icon (Super Admin only); the logo is untouched. */
+export function uploadPlatformIcon(accessToken: string, file: File) {
+  const body = new FormData();
+  body.append("icon", file);
   return apiRequest<PlatformBranding>("/platform/branding/", {
     method: "POST",
     body,
