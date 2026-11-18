@@ -126,6 +126,11 @@ def _embedded_logo(path, modified):
     with default_storage.open(path, "rb") as handle:
         raw = handle.read()
     mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    if mime != "image/svg+xml":
+        # Logos uploaded before trimming existed still carry their empty border.
+        from apps.tenancy.images import trim_margins
+
+        raw = trim_margins(raw, path)[0]
     if mime == "image/svg+xml":
         return f"data:{mime};base64,{base64.b64encode(raw).decode()}"
     from PIL import Image

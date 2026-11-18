@@ -293,6 +293,20 @@ def _validate_logo_upload(request, field="logo"):
     return logo, None
 
 
+def _trimmed(upload):
+    """The upload with its empty border trimmed (apps.tenancy.images), as a file
+    Django storage can save, plus its extension."""
+    from django.core.files.base import ContentFile
+
+    from .images import trim_margins
+
+    raw = upload.read()
+    data, extension = trim_margins(raw, upload.name)
+    stem, _, original = upload.name.rpartition(".")
+    extension = extension or original.lower()
+    return ContentFile(data, name=f"{stem or upload.name}.{extension}"), extension
+
+
 class OrganizationLogoUploadView(APIView):
     """
     Attach/replace a specific organization's own logo (Add/Edit Organization
@@ -332,8 +346,8 @@ class OrganizationLogoUploadView(APIView):
             organization = generics.get_object_or_404(Organization, pk=pk)
         self.check_object_permissions(request, organization)
 
+        logo, extension = _trimmed(logo)
         with platform_admin_context():
-            extension = logo.name.rsplit(".", 1)[-1].lower()
             stored_path = default_storage.save(
                 f"organizations/{field}s/{organization.slug}.{extension}", logo
             )
@@ -373,7 +387,7 @@ class PlatformBrandingView(APIView):
             return error_response
 
         branding = PlatformBranding.get_solo()
-        setattr(branding, field, upload)
+        setattr(branding, field, _trimmed(upload)[0])
         branding.updated_by = request.user
         branding.save()
         return Response(PlatformBrandingSerializer(branding, context={"request": request}).data)
