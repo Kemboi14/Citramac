@@ -89,6 +89,8 @@ export interface Staff {
   department_name: string | null;
   branch_access: string[];
   is_active: boolean;
+  /** Inactive until they accept an invitation (new account, or email changed). */
+  awaiting_activation?: boolean;
   /** A Super Admin account (platform console), whatever roles it holds. */
   is_superuser: boolean;
   is_on_duty: boolean;

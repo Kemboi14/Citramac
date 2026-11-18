@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import PhoneInput, { phoneProblem } from "../../components/PhoneInput";
 import { DocumentActions } from "../../components/DocumentActions";
 import { RowActionsMenu, type RowAction } from "../../components/RowActionsMenu";
 import {
@@ -165,6 +166,9 @@ export function StaffTeamPage() {
     staff: Staff;
   } | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [editStaff, setEditStaff] = useState<Staff | null>(null);
+  const [editForm, setEditForm] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+  const [editError, setEditError] = useState<string | null>(null);
   const closeProfileDrawer = () => {
     setProfileUserId(null);
     if (searchParams.has("credential")) {
@@ -263,6 +267,60 @@ export function StaffTeamPage() {
     } catch (err) {
       setAccessError(
         err instanceof ApiError ? err.message : "Couldn't update this staff member's assignment.",
+      );
+      throw err;
+    }
+  };
+
+  const openEditDetails = (s: Staff) => {
+    setEditError(null);
+    setEditForm({
+      first_name: s.first_name,
+      last_name: s.last_name,
+      email: s.email,
+      phone: s.phone ?? "",
+    });
+    setEditStaff(s);
+  };
+
+  const editEmailChanged =
+    !!editStaff && editForm.email.trim().toLowerCase() !== editStaff.email.trim().toLowerCase();
+
+  const saveEditDetails = async () => {
+    if (!accessToken || !editStaff) return;
+    setEditError(null);
+    const phoneError = editForm.phone ? phoneProblem(editForm.phone) : null;
+    if (!editForm.first_name.trim() || !editForm.last_name.trim() || !editForm.email.trim()) {
+      setEditError("First name, last name and email are required.");
+      throw new Error("invalid");
+    }
+    if (phoneError) {
+      setEditError(phoneError);
+      throw new Error("invalid");
+    }
+    try {
+      const updated = await updateStaff(accessToken, editStaff.id, {
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone,
+      });
+      setStaff((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      if (editEmailChanged) {
+        setNotice(
+          `${updated.first_name} ${updated.last_name} has been signed out. An invitation was sent to ${updated.email}.`,
+        );
+      }
+      setEditStaff(null);
+    } catch (err) {
+      const fieldMessage =
+        err instanceof ApiError
+          ? Object.values(err.fields ?? {})
+              .flat()
+              .find((m): m is string => typeof m === "string")
+          : undefined;
+      setEditError(
+        fieldMessage ?? (err instanceof ApiError ? err.message : "Couldn't save these details."),
       );
       throw err;
     }
@@ -528,6 +586,7 @@ export function StaffTeamPage() {
   function staffMenuActions(s: Staff): RowAction[] {
     const icon = (Icon: typeof UserCog) => <Icon aria-hidden className="h-4 w-4" />;
     const actions: RowAction[] = [
+      { label: "Edit details", icon: icon(UserCog), onSelect: () => openEditDetails(s) },
       {
         label: "Professional profile",
         icon: icon(IdCard),
@@ -559,7 +618,7 @@ export function StaffTeamPage() {
         disabledReason: busy ? "Working…" : undefined,
         onSelect: () => setPendingAction({ kind: "deactivate", staff: s }),
       });
-    } else if (s.last_login) {
+    } else if (s.last_login && !s.awaiting_activation) {
       actions.push({
         label: "Activate",
         icon: icon(UserCheck),
@@ -592,7 +651,7 @@ export function StaffTeamPage() {
           >
             Deactivate
           </button>
-        ) : s.last_login ? (
+        ) : s.last_login && !s.awaiting_activation ? (
           <button
             type="button"
             disabled={activatingId === s.id}
@@ -1061,6 +1120,75 @@ export function StaffTeamPage() {
         </div>
       </Drawer>
 
+      <Drawer
+        open={!!editStaff}
+        title="Edit details"
+        subtitle={editStaff ? `${editStaff.first_name} ${editStaff.last_name}` : undefined}
+        onClose={() => setEditStaff(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              className="rounded-md border border-surface-border px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-surface-bg"
+              onClick={() => setEditStaff(null)}
+            >
+              Cancel
+            </button>
+            <SaveButton onSave={saveEditDetails} className="flex-1">
+              {editEmailChanged ? "Save and send invitation" : "Save changes"}
+            </SaveButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <label className={LABEL_CLASS}>
+              First name
+              <input
+                className={FIELD_CLASS}
+                value={editForm.first_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, first_name: e.target.value }))}
+              />
+            </label>
+            <label className={LABEL_CLASS}>
+              Last name
+              <input
+                className={FIELD_CLASS}
+                value={editForm.last_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, last_name: e.target.value }))}
+              />
+            </label>
+          </div>
+          <label className={LABEL_CLASS}>
+            Email
+            <input
+              type="email"
+              className={FIELD_CLASS}
+              value={editForm.email}
+              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+            />
+          </label>
+          {editEmailChanged && editStaff && (
+            <p className="rounded-md bg-status-amber-tint px-3 py-2 text-sm text-ink-900">
+              {editStaff.first_name} will be signed out and must accept an invitation sent to the
+              new email before signing in again.
+            </p>
+          )}
+          <label className={LABEL_CLASS}>
+            Phone
+            <PhoneInput
+              className={FIELD_CLASS}
+              value={editForm.phone}
+              onChange={(phone) => setEditForm((f) => ({ ...f, phone }))}
+            />
+          </label>
+          {editError && (
+            <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {editError}
+            </p>
+          )}
+        </div>
+      </Drawer>
       <ConfirmDialog
         open={!!pendingAction}
         compact

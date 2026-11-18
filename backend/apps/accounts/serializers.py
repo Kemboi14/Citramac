@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -7,7 +8,7 @@ from apps.security.models import SecurityPolicy
 from apps.tenancy.models import Branch, Department, Organization
 
 from .access import branches_for, is_org_admin_role, set_assignments, visible_branch_ids
-from .models import Permission, Role, User
+from .models import ActivationInvite, Permission, Role, User
 
 
 class IdentifySerializer(serializers.Serializer):
@@ -289,6 +290,7 @@ class StaffSerializer(serializers.ModelSerializer):
     nacada_status = serializers.SerializerMethodField()
     invite_email = serializers.SerializerMethodField()
     professional_profile = serializers.SerializerMethodField()
+    awaiting_activation = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -321,6 +323,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "nacada_status",
             "invite_email",
             "professional_profile",
+            "awaiting_activation",
         ]
         # `avatar` is read-only here — it's self-service only (MyProfileView),
         # never set by an Org/Platform Admin on someone else's behalf; this
@@ -341,6 +344,12 @@ class StaffSerializer(serializers.ModelSerializer):
         max_attempts = SecurityPolicy.get_solo().max_failed_login_attempts
         return cache.get(lockout_key, 0) >= max_attempts
 
+    def get_awaiting_activation(self, obj):
+        """Inactive with an invitation not yet accepted — a new account, or one
+        whose email was changed. Only accepting it (which proves the address)
+        makes the account active; an admin cannot simply switch it back on."""
+        return _awaiting_activation(obj)
+
     def get_invite_email(self, obj):
         """
         For someone who has never signed in: what happened to their latest
@@ -349,7 +358,7 @@ class StaffSerializer(serializers.ModelSerializer):
         it did not. None once they have signed in, or for an invite queued
         before invites went through the outbox.
         """
-        if obj.is_active or obj.last_login is not None:
+        if obj.is_active or (obj.last_login is not None and not _awaiting_activation(obj)):
             return None
         from apps.notifications.dispatch import latest_invite_delivery
 
@@ -374,7 +383,41 @@ class StaffSerializer(serializers.ModelSerializer):
             return "expired"
         return "active"
 
+    def validate_email(self, value):
+        value = value.strip()
+        others = User.all_objects.filter(email__iexact=value)
+        if self.instance is not None:
+            others = others.exclude(pk=self.instance.pk)
+        if others.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def _email_changes(self, attrs):
+        return (
+            self.instance is not None
+            and "email" in attrs
+            and attrs["email"].casefold() != self.instance.email.casefold()
+        )
+
     def validate(self, attrs):
+        request = self.context.get("request")
+        if self._email_changes(attrs):
+            if request is not None and request.user.pk == self.instance.pk:
+                raise serializers.ValidationError(
+                    {"email": "You can't change your own email here. Ask another administrator."}
+                )
+            # The new address must be proved by accepting the invitation.
+            attrs.pop("is_active", None)
+        elif attrs.get("is_active") and self.instance is not None:
+            if not self.instance.is_active and _awaiting_activation(self.instance):
+                raise serializers.ValidationError(
+                    {
+                        "is_active": (
+                            "This person must accept the invitation sent to their email "
+                            "before the account can be used."
+                        )
+                    }
+                )
         organization = self.instance.organization if self.instance else None
         if organization is not None:
             for field_name in ("primary_branch", "department"):
@@ -431,12 +474,66 @@ class StaffSerializer(serializers.ModelSerializer):
         return summary(obj)
 
     def update(self, instance, validated_data):
+        email_changed = self._email_changes(validated_data)
         pairs = validated_data.pop("role_assignments", None)
-        instance = super().update(instance, validated_data)
-        if pairs is not None:
-            request = self.context.get("request")
-            set_assignments(instance, pairs, created_by=getattr(request, "user", None))
+        request = self.context.get("request")
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if pairs is not None:
+                set_assignments(instance, pairs, created_by=getattr(request, "user", None))
+            if email_changed:
+                _require_activation_at_new_email(instance, getattr(request, "user", None))
         return instance
+
+
+def _awaiting_activation(user):
+    if user.is_active:
+        return False
+    from apps.tenancy.context import platform_admin_context
+
+    with platform_admin_context():
+        return ActivationInvite.objects.filter(user=user, used_at__isnull=True).exists()
+
+
+def _require_activation_at_new_email(user, changed_by):
+    """
+    After an admin changes someone's email: sign them out everywhere and send
+    an invitation to the new address. The account stays inactive until they
+    accept it, which confirms the address with a code and sets a new password
+    (auth_views activation flow). An inactive account is refused on every
+    request, so open sessions end at once; outstanding refresh tokens are
+    blacklisted as well.
+    """
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+    from apps.notifications.dispatch import queue_activation_invite
+    from apps.sysadmin_audit.audit import write_entry
+    from apps.sysadmin_audit.models import AuditLogEntry
+    from apps.tenancy.context import platform_admin_context
+
+    from .views import INVITE_TTL_DAYS
+
+    user.is_active = False
+    user.is_on_duty = False
+    user.save(update_fields=["is_active", "is_on_duty"])
+    with platform_admin_context():
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+        ActivationInvite.objects.filter(user=user, used_at__isnull=True).update(
+            used_at=timezone.now()
+        )
+        invite = ActivationInvite.objects.create(
+            organization=user.organization,
+            user=user,
+            created_by=changed_by,
+            expires_at=timezone.now() + timezone.timedelta(days=INVITE_TTL_DAYS),
+        )
+        queue_activation_invite(invite)
+    write_entry(
+        user,
+        AuditLogEntry.ACTION_UPDATE,
+        {"email": "changed", "signed_out": True, "activation_invite": "sent to new email"},
+    )
 
 
 class MyProfileSerializer(serializers.ModelSerializer):
