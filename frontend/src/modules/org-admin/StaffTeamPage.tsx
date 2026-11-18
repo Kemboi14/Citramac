@@ -2,7 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
 import { DocumentActions } from "../../components/DocumentActions";
-import { UserPlus } from "lucide-react";
+import { RowActionsMenu, type RowAction } from "../../components/RowActionsMenu";
+import {
+  BadgeCheck,
+  IdCard,
+  KeyRound,
+  LockOpen,
+  Send,
+  ShieldCheck,
+  UserCheck,
+  UserCog,
+  UserPlus,
+  UserX,
+} from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -487,9 +499,77 @@ export function StaffTeamPage() {
       key: "actions",
       header: "Actions",
       hideInCard: true,
-      cell: (s) => <div className="flex flex-wrap items-center gap-3">{staffRowActions(s)}</div>,
+      cell: (s) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => openAccessDrawer(s)}
+            className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-surface-border bg-surface-card px-3 text-[13px] font-semibold text-ink-900 transition-colors hover:border-brand-green hover:text-brand-green"
+          >
+            <ShieldCheck aria-hidden className="h-3.5 w-3.5" />
+            Roles & access
+          </button>
+          <RowActionsMenu
+            label={`More actions for ${s.first_name} ${s.last_name}`}
+            title={`${s.first_name} ${s.last_name}`}
+            actions={staffMenuActions(s)}
+          />
+        </div>
+      ),
     },
   ];
+
+  function staffMenuActions(s: Staff): RowAction[] {
+    const icon = (Icon: typeof UserCog) => <Icon aria-hidden className="h-4 w-4" />;
+    const actions: RowAction[] = [
+      {
+        label: "Professional profile",
+        icon: icon(IdCard),
+        onSelect: () => setProfileUserId(s.id),
+      },
+      { label: "Credential", icon: icon(BadgeCheck), onSelect: () => setCredentialStaff(s) },
+    ];
+    if (s.is_active) {
+      actions.push({
+        label: "Reset credentials",
+        icon: icon(KeyRound),
+        disabledReason: resettingId === s.id ? "Sending…" : undefined,
+        onSelect: () => handleResetCredentials(s),
+      });
+    }
+    if (s.is_locked) {
+      actions.push({
+        label: "Unlock account",
+        icon: icon(LockOpen),
+        disabledReason: unlockingId === s.id ? "Unlocking…" : undefined,
+        onSelect: () => handleUnlock(s),
+      });
+    }
+    if (s.is_active) {
+      actions.push({
+        label: "Deactivate",
+        icon: icon(UserX),
+        tone: "danger",
+        disabledReason: busy ? "Working…" : undefined,
+        onSelect: () => handleDeactivate(s.id),
+      });
+    } else if (s.last_login) {
+      actions.push({
+        label: "Activate",
+        icon: icon(UserCheck),
+        disabledReason: activatingId === s.id ? "Activating…" : undefined,
+        onSelect: () => handleActivate(s),
+      });
+    } else {
+      actions.push({
+        label: "Resend invite",
+        icon: icon(Send),
+        disabledReason: resendingId === s.id ? "Sending…" : undefined,
+        onSelect: () => handleResendInvite(s),
+      });
+    }
+    return actions;
+  }
 
   function staffRowActions(s: Staff, cardLayout = false) {
     const itemClass = cardLayout
