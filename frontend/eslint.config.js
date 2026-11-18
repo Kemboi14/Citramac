@@ -25,5 +25,12 @@ export default tseslint.config(
       "react/react-in-jsx-scope": "off",
     },
   },
+  {
+    // Node scripts run by CI (the dependency audit gate).
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
   prettierConfig,
 );

@@ -150,8 +150,10 @@ jobs:
       - name: Lint (eslint)
         run: npm run lint
 
+      # Fails on any high/critical advisory not listed, with a reason and a
+      # review date, in frontend/audit-exceptions.json (an expired one fails too).
       - name: Dependency vulnerability scan
-        run: npm audit --audit-level=high
+        run: npm audit --json | node scripts/audit-gate.mjs
 
       - name: Type-check + build
         run: npm run build

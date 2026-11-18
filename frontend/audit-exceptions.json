@@ -1,0 +1,10 @@
+[
+  {
+    "advisory": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "Every picomatch version (<= 4.0.7) is affected and no fix is published. It is reached only through build and lint tooling (tailwindcss, chokidar, fast-glob, tinyglobby, typescript-eslint) on our own source globs, never in the shipped app or on user input. npm's suggested fix downgrades vite to 6.2.7 and does not remove picomatch.",
+    "accepted_on": "2026-11-18",
+    "accepted_by": "project owner",
+    "review_by": "2026-12-18"
+  }
+]
