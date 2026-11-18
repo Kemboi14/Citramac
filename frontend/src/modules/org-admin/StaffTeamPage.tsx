@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InviteEmailPill } from "../../components/InviteEmailPill";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { DocumentActions } from "../../components/DocumentActions";
 import { RowActionsMenu, type RowAction } from "../../components/RowActionsMenu";
 import {
@@ -159,6 +160,11 @@ export function StaffTeamPage() {
   });
   const [accessError, setAccessError] = useState<string | null>(null);
   const [credentialStaff, setCredentialStaff] = useState<Staff | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    kind: "reset" | "deactivate" | "activate" | "unlock" | "resend";
+    staff: Staff;
+  } | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const closeProfileDrawer = () => {
     setProfileUserId(null);
     if (searchParams.has("credential")) {
@@ -534,7 +540,7 @@ export function StaffTeamPage() {
         label: "Reset credentials",
         icon: icon(KeyRound),
         disabledReason: resettingId === s.id ? "Sending…" : undefined,
-        onSelect: () => handleResetCredentials(s),
+        onSelect: () => setPendingAction({ kind: "reset", staff: s }),
       });
     }
     if (s.is_locked) {
@@ -542,7 +548,7 @@ export function StaffTeamPage() {
         label: "Unlock account",
         icon: icon(LockOpen),
         disabledReason: unlockingId === s.id ? "Unlocking…" : undefined,
-        onSelect: () => handleUnlock(s),
+        onSelect: () => setPendingAction({ kind: "unlock", staff: s }),
       });
     }
     if (s.is_active) {
@@ -551,21 +557,21 @@ export function StaffTeamPage() {
         icon: icon(UserX),
         tone: "danger",
         disabledReason: busy ? "Working…" : undefined,
-        onSelect: () => handleDeactivate(s.id),
+        onSelect: () => setPendingAction({ kind: "deactivate", staff: s }),
       });
     } else if (s.last_login) {
       actions.push({
         label: "Activate",
         icon: icon(UserCheck),
         disabledReason: activatingId === s.id ? "Activating…" : undefined,
-        onSelect: () => handleActivate(s),
+        onSelect: () => setPendingAction({ kind: "activate", staff: s }),
       });
     } else {
       actions.push({
         label: "Resend invite",
         icon: icon(Send),
         disabledReason: resendingId === s.id ? "Sending…" : undefined,
-        onSelect: () => handleResendInvite(s),
+        onSelect: () => setPendingAction({ kind: "resend", staff: s }),
       });
     }
     return actions;
@@ -582,7 +588,7 @@ export function StaffTeamPage() {
             type="button"
             disabled={busy}
             className={`${itemClass} text-status-red hover:underline`}
-            onClick={() => handleDeactivate(s.id)}
+            onClick={() => setPendingAction({ kind: "deactivate", staff: s })}
           >
             Deactivate
           </button>
@@ -591,7 +597,7 @@ export function StaffTeamPage() {
             type="button"
             disabled={activatingId === s.id}
             className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
-            onClick={() => handleActivate(s)}
+            onClick={() => setPendingAction({ kind: "activate", staff: s })}
           >
             {activatingId === s.id ? "Activating…" : "Activate"}
           </button>
@@ -600,7 +606,7 @@ export function StaffTeamPage() {
             type="button"
             disabled={resendingId === s.id}
             className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
-            onClick={() => handleResendInvite(s)}
+            onClick={() => setPendingAction({ kind: "resend", staff: s })}
           >
             {resendingId === s.id ? "Sending…" : "Resend Invite"}
           </button>
@@ -610,7 +616,7 @@ export function StaffTeamPage() {
             type="button"
             disabled={resettingId === s.id}
             className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
-            onClick={() => handleResetCredentials(s)}
+            onClick={() => setPendingAction({ kind: "reset", staff: s })}
           >
             {resettingId === s.id ? "Sending…" : "Reset Credentials"}
           </button>
@@ -620,7 +626,7 @@ export function StaffTeamPage() {
             type="button"
             disabled={unlockingId === s.id}
             className={`${itemClass} text-brand-green hover:underline disabled:opacity-60`}
-            onClick={() => handleUnlock(s)}
+            onClick={() => setPendingAction({ kind: "unlock", staff: s })}
           >
             {unlockingId === s.id ? "Unlocking…" : "Unlock"}
           </button>
@@ -649,6 +655,60 @@ export function StaffTeamPage() {
       </>
     );
   }
+
+  const confirmCopy = pendingAction
+    ? (() => {
+        const name = `${pendingAction.staff.first_name} ${pendingAction.staff.last_name}`;
+        return {
+          reset: {
+            title: "Reset credentials?",
+            body: `${name} will be emailed a code to set a new password. Their current password keeps working until they do.`,
+            label: "Reset credentials",
+            tone: "primary" as const,
+          },
+          deactivate: {
+            title: "Deactivate this account?",
+            body: `${name} won't be able to sign in until the account is activated again. Their records are kept.`,
+            label: "Deactivate",
+            tone: "danger" as const,
+          },
+          activate: {
+            title: "Activate this account?",
+            body: `${name} will be able to sign in again with the roles and branches they had.`,
+            label: "Activate",
+            tone: "primary" as const,
+          },
+          unlock: {
+            title: "Unlock this account?",
+            body: `${name} was locked out after failed sign-in attempts. Unlocking lets them try again straight away.`,
+            label: "Unlock",
+            tone: "primary" as const,
+          },
+          resend: {
+            title: "Resend the invitation?",
+            body: `The invitation email will be sent again to ${pendingAction.staff.email}.`,
+            label: "Resend invite",
+            tone: "primary" as const,
+          },
+        }[pendingAction.kind];
+      })()
+    : null;
+
+  const runPendingAction = async () => {
+    if (!pendingAction) return;
+    const { kind, staff } = pendingAction;
+    setConfirming(true);
+    try {
+      if (kind === "reset") await handleResetCredentials(staff);
+      else if (kind === "deactivate") await handleDeactivate(staff.id);
+      else if (kind === "activate") await handleActivate(staff);
+      else if (kind === "unlock") await handleUnlock(staff);
+      else await handleResendInvite(staff);
+    } finally {
+      setConfirming(false);
+      setPendingAction(null);
+    }
+  };
 
   const staffCardActions = (s: Staff) => <>{staffRowActions(s, true)}</>;
 
@@ -1001,6 +1061,19 @@ export function StaffTeamPage() {
         </div>
       </Drawer>
 
+      <ConfirmDialog
+        open={!!pendingAction}
+        compact
+        title={confirmCopy?.title ?? ""}
+        confirmLabel={confirmCopy?.label ?? "Confirm"}
+        tone={confirmCopy?.tone ?? "primary"}
+        busy={confirming}
+        onConfirm={runPendingAction}
+        onCancel={() => setPendingAction(null)}
+      >
+        <p className="text-[15px] font-semibold text-ink-900">{confirmCopy?.title}</p>
+        <p className="mt-1.5 text-sm text-ink-700">{confirmCopy?.body}</p>
+      </ConfirmDialog>
       <PractitionerCredentialDrawer
         userId={credentialStaff?.id ?? null}
         staffName={
