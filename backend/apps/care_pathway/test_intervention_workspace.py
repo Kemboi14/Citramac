@@ -177,8 +177,9 @@ class InterventionWorkspaceTests(CarePlanTestCase):
         self.assertEqual(data["context"]["allergies"], "No known allergies")
 
         modules = {m["code"]: m for m in data["modules"]}
-        # v4 CARE_MENU: 17 cards. Group sessions count inside the Psychotherapy card.
-        self.assertEqual(len(modules), 17)
+        # v4 CARE_MENU: 17 cards plus Family Psychotherapy (2026-11-17). Group sessions
+        # count inside the Individual Psychotherapy card.
+        self.assertEqual(len(modules), 18)
         self.assertNotIn("group_psychotherapy", modules)
         self.assertEqual(
             modules["psychotherapy"]["history_modules"], ["psychotherapy", "group_psychotherapy"]

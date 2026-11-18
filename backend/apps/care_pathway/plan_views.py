@@ -279,6 +279,9 @@ class CarePlanDetailsView(APIView):
                 plan.senior_reviewer = None
         plan.updated_by = request.user
         plan.save()
+        if "contact_72h_at" in data:
+            # The field was set from the request text; read it back as a datetime.
+            plan.refresh_from_db(fields=["contact_72h_at"])
         if "contact_72h_at" in data and plan.contact_72h_at:
             # Booked as soon as it is agreed, so the contact is on the follow-up
             # worklist whether or not the care plan has been signed yet.

@@ -87,9 +87,12 @@ class AddedActionTests(V4TestCase):
         self.assertEqual(self.client.delete(url, **self.auth).status_code, 200)
         with platform_admin_context():
             self.assertFalse(CarePlanActivity.objects.filter(action_key="nutrition").exists())
+        # An accepted recommendation can also be taken back before signing (2026-11-18);
+        # it returns to the recommendations still to decide.
         self.decide("outpatient", "ACCEPTED")
         outpatient = reverse("care-plan-action-decide", args=[self.pid, "outpatient"])
-        self.assertEqual(self.client.delete(outpatient, **self.auth).status_code, 400)
+        ws = self.client.delete(outpatient, **self.auth).data
+        self.assertFalse({r["key"]: r for r in ws["recommendations"]}["outpatient"]["decided"])
 
     def test_a_documented_activity_without_a_catalogue_key_does_not_break_signing(self):
         self.decide("outpatient", "ACCEPTED")
