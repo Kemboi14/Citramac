@@ -662,31 +662,31 @@ export function StaffTeamPage() {
         return {
           reset: {
             title: "Reset credentials?",
-            body: `${name} will be emailed a code to set a new password. Their current password keeps working until they do.`,
+            body: `${name} will be emailed a code to set a new password.`,
             label: "Reset credentials",
             tone: "primary" as const,
           },
           deactivate: {
             title: "Deactivate this account?",
-            body: `${name} won't be able to sign in until the account is activated again. Their records are kept.`,
+            body: `${name} won't be able to sign in.`,
             label: "Deactivate",
             tone: "danger" as const,
           },
           activate: {
             title: "Activate this account?",
-            body: `${name} will be able to sign in again with the roles and branches they had.`,
+            body: `${name} will be able to sign in again.`,
             label: "Activate",
             tone: "primary" as const,
           },
           unlock: {
             title: "Unlock this account?",
-            body: `${name} was locked out after failed sign-in attempts. Unlocking lets them try again straight away.`,
+            body: `${name} can try signing in again straight away.`,
             label: "Unlock",
             tone: "primary" as const,
           },
           resend: {
             title: "Resend the invitation?",
-            body: `The invitation email will be sent again to ${pendingAction.staff.email}.`,
+            body: `The invitation will be emailed to ${pendingAction.staff.email} again.`,
             label: "Resend invite",
             tone: "primary" as const,
           },
@@ -1071,8 +1071,7 @@ export function StaffTeamPage() {
         onConfirm={runPendingAction}
         onCancel={() => setPendingAction(null)}
       >
-        <p className="text-[15px] font-semibold text-ink-900">{confirmCopy?.title}</p>
-        <p className="mt-1.5 text-sm text-ink-700">{confirmCopy?.body}</p>
+        <p className="text-sm text-ink-700">{confirmCopy?.body}</p>
       </ConfirmDialog>
       <PractitionerCredentialDrawer
         userId={credentialStaff?.id ?? null}
