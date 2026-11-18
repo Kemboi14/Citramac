@@ -252,23 +252,8 @@ export function DecisionsTab({
     );
   }
 
-  function rowActions(row: Row, state: "decide" | "plan" | "declined"): RowAction[] {
+  function rowActions(row: Row, state: "plan" | "declined"): RowAction[] {
     const act = row.act;
-    if (state === "decide") {
-      return [
-        {
-          label: "Accept with changes…",
-          icon: <Pencil aria-hidden className="h-4 w-4 text-ink-500" />,
-          onSelect: () => openEditor({ key: row.key, mode: "modify" }, row.recommended!),
-        },
-        {
-          label: "Decline…",
-          icon: <X aria-hidden className="h-4 w-4" />,
-          tone: "danger",
-          onSelect: () => openEditor({ key: row.key, mode: "decline" }, row.recommended!),
-        },
-      ];
-    }
     if (state === "declined") {
       return [
         {
@@ -398,7 +383,33 @@ export function DecisionsTab({
                   Accept
                 </button>
               )}
-              <RowActionsMenu label={`Actions for ${row.name}`} actions={rowActions(row, state)} />
+              {state === "decide" ? (
+                <>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-1 text-[12px] font-semibold text-ink-900 hover:border-brand-green hover:text-brand-green disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => openEditor({ key: row.key, mode: "modify" }, row.recommended!)}
+                  >
+                    <Pencil aria-hidden className="h-3.5 w-3.5" />
+                    Accept with changes
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-3 py-1 text-[12px] font-semibold text-priority-red hover:border-priority-red hover:bg-priority-red-tint disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => openEditor({ key: row.key, mode: "decline" }, row.recommended!)}
+                  >
+                    <X aria-hidden className="h-3.5 w-3.5" />
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <RowActionsMenu
+                  label={`Actions for ${row.name}`}
+                  actions={rowActions(row, state)}
+                />
+              )}
             </div>
           )}
         </div>
