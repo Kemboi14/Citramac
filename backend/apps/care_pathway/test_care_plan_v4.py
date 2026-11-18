@@ -13,7 +13,7 @@ from apps.client_registry.consent import capture_consent
 from apps.client_registry.models import Appointment, Patient
 from apps.tenancy.context import platform_admin_context
 
-from .models import CarePlanActivity, CarePlanVersion, ProgressNote
+from .models import CarePlan, CarePlanActivity, CarePlanVersion, ProgressNote
 from .test_care_plan import CarePlanTestCase
 
 
@@ -53,19 +53,6 @@ class BulkAcceptTests(V4TestCase):
         self.assertEqual(set(accepted), {"psych_review", "safety"})
         self.assertTrue(all(a["bulk_accepted"] for a in accepted.values()))
         self.assertEqual(accepted["safety"]["priority"], "YELLOW")
-        self.details(client_agreement="AGREES")
-        self.client.get(reverse("care-safety-plan", args=[self.pid]), **self.auth)
-        self.client.put(
-            reverse("care-safety-plan", args=[self.pid]),
-            {"people_to_ask": "My sister"},
-            format="json",
-            **self.auth,
-        )
-        self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth)
-        self.details(
-            contact_72h_at=(timezone.now() + timedelta(days=2)).isoformat(),
-            follow_up_clinician="J. Njoroge",
-        )
 
         blocked = self.confirm()
         self.assertEqual(blocked.status_code, 400)
@@ -104,10 +91,31 @@ class AddedActionTests(V4TestCase):
         outpatient = reverse("care-plan-action-decide", args=[self.pid, "outpatient"])
         self.assertEqual(self.client.delete(outpatient, **self.auth).status_code, 400)
 
+    def test_a_documented_activity_without_a_catalogue_key_does_not_break_signing(self):
+        self.decide("outpatient", "ACCEPTED")
+        with platform_admin_context():
+            plan = CarePlan.objects.get(patient_id=self.pid)
+            CarePlanActivity.objects.create(
+                organization_id=plan.organization_id,
+                care_plan=plan,
+                title="Weekly check-in",
+                status="PLANNED",
+            )
+        self.assertEqual(self.confirm().status_code, 200)
+
+    def test_an_accepted_recommendation_can_be_taken_back_before_signing(self):
+        self.risk(suicide=["Thoughts"])
+        self.decide("safety", "ACCEPTED")
+        url = reverse("care-plan-action-decide", args=[self.pid, "safety"])
+        ws = self.client.delete(url, **self.auth).data
+        self.assertNotIn("safety", {a["key"] for a in ws["actions"]})
+        rec = {r["key"]: r for r in ws["recommendations"]}["safety"]
+        self.assertFalse(rec["decided"])
+        self.assertTrue(any("Accept or decline the recommendation" in o for o in ws["outstanding"]))
+
     def test_an_added_action_in_a_signed_plan_cannot_be_removed(self):
         self.decide("outpatient", "ACCEPTED")
         self.decide("social", "ADDED", priority="GREEN")
-        self.details(client_agreement="AGREES")
         self.assertEqual(self.confirm().status_code, 200)
         url = reverse("care-plan-action-decide", args=[self.pid, "social"])
         self.assertEqual(self.client.delete(url, **self.auth).status_code, 400)
@@ -132,22 +140,6 @@ class CarriedContextTests(V4TestCase):
 
 
 class ClientDetailsTests(V4TestCase):
-    def test_agreement_is_a_served_code_and_declining_needs_the_clients_reasons(self):
-        self.decide("outpatient", "ACCEPTED")
-        self.assertEqual(self.details(client_agreement="DISAGREES").status_code, 400)  # retired
-        self.assertEqual(self.details(client_agreement="DECLINED").status_code, 200)
-        self.assertIn(
-            "Where the client disagrees — record each point in their words",
-            self.ws().data["outstanding"],
-        )
-        bad = self.details(disagreements=[{"part": "NOPE", "words": "x"}])
-        self.assertEqual(bad.status_code, 400)
-        ok = self.details(disagreements=[{"part": "MEDICATION", "words": "I do not want tablets"}])
-        self.assertNotIn(
-            "Where the client disagrees — record each point in their words", ok.data["outstanding"]
-        )
-        self.assertEqual(self.confirm().status_code, 200)
-
     def test_goals_are_validated_and_signed_into_the_version(self):
         self.decide("outpatient", "ACCEPTED")
         goal = {
@@ -167,7 +159,6 @@ class ClientDetailsTests(V4TestCase):
             crisis_plan="Call my sister",
             advance_statement="No depot injections",
             family_involvement="Sister attends reviews",
-            client_agreement="AGREES",
         )
         self.assertEqual(saved.data["details"]["goal_items"][0]["formulation"], "PERPETUATING")
         self.assertEqual(self.confirm().status_code, 200)
@@ -176,12 +167,6 @@ class ClientDetailsTests(V4TestCase):
         self.assertEqual(snapshot["goals"][0]["goal"], "Sleep through the night")
         self.assertEqual(snapshot["crisis_plan"], "Call my sister")
         self.assertEqual(snapshot["advance_statement"], "No depot injections")
-
-    def test_client_acknowledgement_is_recorded_and_sets_agreement(self):
-        self.assertEqual(self.post("care-plan-client-ack", {"language": "fr"}).status_code, 400)
-        ws = self.post("care-plan-client-ack", {"language": "sw"}).data
-        self.assertEqual(ws["client_ack"]["language"], "sw")
-        self.assertEqual(ws["details"]["client_agreement"], "AGREES")
 
     def test_oat_offer_is_a_served_code(self):
         self.assertEqual(self.details(oat_offer="MAYBE").status_code, 400)
@@ -195,7 +180,8 @@ class ConflictTests(V4TestCase):
         self.intake(subs={"kind": "OPIOIDS"})
         self.decide("detox", "ADDED", priority="YELLOW")
         conflict = (
-            "Opioid withdrawal plan with no naloxone or opioid-agonist-therapy discussion recorded."
+            "Opioid withdrawal plan with no naloxone or opioid agonist therapy recorded "
+            "(Interventions → Opioid Agonist Therapy)."
         )
         self.assertIn(conflict, self.ws().data["conflicts"])
         self.assertTrue(self.ws().data["is_opioid"])
@@ -260,14 +246,19 @@ class ConflictTests(V4TestCase):
 
 
 class SeventyTwoHourContactTests(V4TestCase):
-    def test_the_72h_contact_becomes_one_follow_up_appointment(self):
+    def test_the_72h_contact_becomes_one_follow_up_appointment_naming_the_coordinator(self):
         self.decide("outpatient", "ACCEPTED")
+        with platform_admin_context():
+            episode = CarePlan.objects.get(patient_id=self.pid).episode
+            episode.care_manager = self.psych
+            episode.save(update_fields=["care_manager"])
         first = (timezone.now() + timedelta(days=3)).replace(microsecond=0)
-        self.details(
-            client_agreement="AGREES",
-            contact_72h_at=first.isoformat(),
-            follow_up_clinician="J. Njoroge",
-        )
+        self.details(contact_72h_at=first.isoformat())
+        with platform_admin_context():
+            # Booked when agreed, before the care plan is signed.
+            self.assertEqual(
+                Appointment.objects.filter(patient_id=self.pid, reason="CONTACT_72H").count(), 1
+            )
         self.assertEqual(self.confirm().status_code, 200)
         self.assertEqual(self.confirm().status_code, 200)  # a re-sign does not duplicate it
         with platform_admin_context():
@@ -276,7 +267,7 @@ class SeventyTwoHourContactTests(V4TestCase):
             )
             self.assertEqual(booked.count(), 1)
             self.assertEqual(booked.get().scheduled_for, first)
-            self.assertIn("J. Njoroge", booked.get().notes)
+            self.assertIn("Dr Senior", booked.get().notes)
         moved = first + timedelta(hours=6)
         self.details(contact_72h_at=moved.isoformat())
         self.confirm()

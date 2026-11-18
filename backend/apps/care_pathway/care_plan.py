@@ -30,14 +30,12 @@ from .models import (
     CarePlanTask,
     CarePlanVersion,
     OutcomeScore,
-    SafetyPlan,
 )
 from .tools import _active_risk, _record_view
 
 RULES_VERSION = "mockup-2026-10-illustrative"
 # Agreement codes (served `care-plan-agreement`) that need the client's reasons
 # recorded as structured disagreement points before the plan can be signed.
-REASONS_NEEDED = ("PARTIAL", "DECLINED")
 RANK = {"RED": 0, "ORANGE": 1, "YELLOW": 2, "GREEN": 3}
 LABEL = {"RED": "Emergency", "ORANGE": "Urgent", "YELLOW": "Priority", "GREEN": "Routine"}
 # Minutes after the plan is signed until an action is due, by priority (mockup TASK_DUE).
@@ -517,11 +515,12 @@ def accept_remaining(plan, user):
 
 
 def remove_added(plan, key):
-    """Take back an action the clinician added (not recommended) before it was
-    signed into a version — once signed it has tasks and stays in the record."""
+    """Take back an action — accepted, modified or added — before it is signed
+    into a version. A recommended one returns to "to decide", so it must be
+    decided again before signing. Once signed it has tasks and stays in the record."""
     activity = plan.activities.filter(action_key=key).first()
-    if activity is None or activity.decision != "ADDED":
-        raise ValidationError({"action_key": "Only an action you added can be removed."})
+    if activity is None or activity.decision == "DECLINED":
+        raise ValidationError({"action_key": "This action is not in the plan."})
     if activity.tasks.exists() or activity.due_at or activity.notes.exists():
         raise ValidationError(
             {"action_key": "This action is part of a signed plan — mark it completed instead."}
@@ -531,8 +530,14 @@ def remove_added(plan, key):
 
 @transaction.atomic
 def sync_tasks(activity, base_time):
-    """Open the catalogue's checklist under an accepted action (once)."""
-    if activity.decision == "DECLINED" or activity.tasks.exists():
+    """Open the catalogue's checklist under an accepted action (once). An activity
+    with no catalogue key (a documented activity from the earlier care-plan screen)
+    has no checklist, so it is signed without tasks."""
+    if (
+        activity.decision == "DECLINED"
+        or activity.action_key not in BY_KEY
+        or activity.tasks.exists()
+    ):
         return
     spec = BY_KEY[activity.action_key]
     due = base_time + timedelta(minutes=DUE_MINUTES.get(activity.priority, DUE_MINUTES["GREEN"]))
@@ -575,7 +580,8 @@ def conflicts(plan):
         out.append("Legal status is involuntary but no admission or transfer is planned.")
     if "detox" in keys and is_opioid(patient) and not opioid_safety_recorded(plan):
         out.append(
-            "Opioid withdrawal plan with no naloxone or opioid-agonist-therapy discussion recorded."
+            "Opioid withdrawal plan with no naloxone or opioid agonist therapy recorded "
+            "(Interventions → Opioid Agonist Therapy)."
         )
     if "family" in keys and family_consent(patient) == "NO":
         out.append("Family intervention is planned but the client declined family involvement.")
@@ -637,11 +643,6 @@ def needs_safety_plan(plan):
     )
 
 
-def safety_plan_complete(patient):
-    plan = SafetyPlan.objects.filter(patient=patient, signed_at__isnull=False).first()
-    return bool(plan and (plan.warning_signs.strip() or plan.people_to_ask.strip()))
-
-
 def outstanding(plan):
     """Items still needed before the plan can be signed."""
     items = []
@@ -659,19 +660,6 @@ def outstanding(plan):
             items.append("Clinical rationale for the conflicting plan")
         if not plan.senior_reviewer_id:
             items.append("Senior review")
-    if not plan.client_agreement:
-        items.append("Client agreement status")
-    elif plan.client_agreement in REASONS_NEEDED and not any(
-        str(d.get("words", "")).strip() for d in plan.disagreements or []
-    ):
-        items.append("Where the client disagrees — record each point in their words")
-    if needs_safety_plan(plan):
-        if not safety_plan_complete(plan.patient):
-            items.append("Safety plan — signed, with warning signs or people to contact")
-        if not plan.contact_72h_at:
-            items.append("Contact within 72 hours")
-        if not plan.follow_up_clinician.strip():
-            items.append("Named follow-up clinician")
     return items, found
 
 
@@ -781,7 +769,8 @@ def book_72h_contact(plan, user):
 
         appointment_messages.rescheduled(open_booking)
         return open_booking
-    notes = f"With {plan.follow_up_clinician}" if plan.follow_up_clinician else ""
+    coordinator = plan.episode.care_manager if plan.episode_id else None
+    notes = f"With {coordinator.get_full_name() or coordinator}" if coordinator else ""
     return services.book_follow_up(
         user,
         plan.patient,

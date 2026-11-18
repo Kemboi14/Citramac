@@ -19,6 +19,8 @@ import {
   type PsychiatricReviewRequest,
 } from "../../lib/ipdApi";
 import { PageHeader } from "../care/shared/ui";
+import { getPlanWorkspace, type PlanWorkspace } from "../../lib/carePathwayApi";
+import { NursingCarePlan } from "../care/record/plan/NursingCarePlan";
 import { formErrorSummary } from "../../lib/formErrors";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
@@ -43,6 +45,7 @@ const MAR_TINT: Record<MarStatus, string> = {
  * frontend before this.
  */
 export function NursingCarePage() {
+  const [planWs, setPlanWs] = useState<{ patientId: string; ws: PlanWorkspace } | null>(null);
   const { accessToken } = useAuth();
   const { selected } = usePatientContext();
 
@@ -52,6 +55,17 @@ export function NursingCarePage() {
   const [reviewRequest, setReviewRequest] = useState<PsychiatricReviewRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken || !selected) return;
+    let cancelled = false;
+    getPlanWorkspace(accessToken, selected.patientId)
+      .then((w) => !cancelled && setPlanWs({ patientId: selected.patientId, ws: w }))
+      .catch(() => !cancelled && setError("Couldn't load the nursing care plan."));
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selected]);
 
   const [scheduledTime, setScheduledTime] = useState("");
   const [shift, setShift] = useState<"DAY" | "NIGHT">("DAY");
@@ -334,6 +348,10 @@ export function NursingCarePage() {
           </div>
         ))}
       </div>
+
+      {planWs?.patientId === selected.patientId && (
+        <NursingCarePlan patientId={selected.patientId} ws={planWs.ws} />
+      )}
 
       {error && (
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>

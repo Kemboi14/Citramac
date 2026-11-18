@@ -2158,14 +2158,9 @@ export interface PlanWorkspace {
   }[];
   actions: PlanAction[];
   details: {
-    /** A code of the served `care-plan-agreement` value set. */
-    client_agreement: string;
-    disagreements: { part: string; words: string }[];
-    what_matters: string;
     rationale: string;
     senior_reviewer: string;
     contact_72h_at: string | null;
-    follow_up_clinician: string;
     means_counselling_done: boolean;
     goal_items: PlanGoal[];
     crisis_plan: string;
@@ -2174,7 +2169,6 @@ export interface PlanWorkspace {
     naloxone_teaching: boolean;
     oat_offer: string;
   };
-  client_ack: { at: string; language: "en" | "sw"; recorded_by: string } | null;
   other_actions: { key: string; name: string }[];
   carried_scores: CarriedScore[];
   intake: {
@@ -2277,6 +2271,14 @@ export interface SafetyPlanDoc {
   language: "en" | "sw";
 }
 
+/** The latest safety plan, read only — creates nothing (null when there is none). */
+export function peekSafetyPlan(accessToken: string, patientId: string) {
+  return apiRequest<SafetyPlanDoc | null>(`/care/clients/${patientId}/safety-plan/?peek=1`, {
+    accessToken,
+  });
+}
+
+/** Opens the editable plan: the draft, else a new revision of the signed one, else v1. */
 export function openSafetyPlan(accessToken: string, patientId: string) {
   return apiRequest<SafetyPlanDoc>(`/care/clients/${patientId}/safety-plan/`, { accessToken });
 }

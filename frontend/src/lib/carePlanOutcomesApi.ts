@@ -27,14 +27,6 @@ export function confirmPlanReviewed(accessToken: string, patientId: string, bulk
   });
 }
 
-export function acknowledgePlan(accessToken: string, patientId: string, language: "en" | "sw") {
-  return apiRequest<PlanWorkspace>(`/care/clients/${patientId}/care-plan/client-acknowledge/`, {
-    method: "POST",
-    body: { language },
-    accessToken,
-  });
-}
-
 export interface NursingProblem {
   id: string;
   problem: string;

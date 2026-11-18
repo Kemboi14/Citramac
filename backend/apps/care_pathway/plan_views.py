@@ -121,13 +121,9 @@ def _workspace(patient, plan):
             _activity_row(a, notes.get(a.pk)) for a in plan.activities.exclude(action_key="")
         ],
         "details": {
-            "client_agreement": plan.client_agreement,
-            "disagreements": plan.disagreements,
-            "what_matters": plan.what_matters,
             "rationale": plan.rationale,
             "senior_reviewer": str(plan.senior_reviewer_id) if plan.senior_reviewer_id else "",
             "contact_72h_at": plan.contact_72h_at,
-            "follow_up_clinician": plan.follow_up_clinician,
             "means_counselling_done": plan.means_counselling_done,
             "goal_items": plan.goal_items,
             "crisis_plan": plan.crisis_plan,
@@ -136,15 +132,6 @@ def _workspace(patient, plan):
             "naloxone_teaching": plan.naloxone_teaching,
             "oat_offer": plan.oat_offer,
         },
-        "client_ack": (
-            {
-                "at": plan.client_ack_at,
-                "language": plan.client_ack_language,
-                "recorded_by": _user_name(plan.client_ack_recorded_by),
-            }
-            if plan.client_ack_at
-            else None
-        ),
         "other_actions": [
             {"key": a["key"], "name": a["name"]}
             for a in care_plan.CATALOGUE
@@ -196,7 +183,7 @@ class CarePlanActionDecisionView(APIView):
         return Response(_workspace(patient, plan))
 
     def delete(self, request, patient_id, key):
-        """Take back an action the clinician added, before it is signed."""
+        """Take back an action from the plan, before it is signed."""
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
         care_plan.remove_added(plan, key)
@@ -215,24 +202,6 @@ def _coded(valueset_id, value, field, message):
     if value and value not in services._valid_codes(valueset_id):
         raise ValidationError({field: message})
     return value or ""
-
-
-def _clean_disagreements(rows):
-    if not isinstance(rows, list):
-        raise ValidationError({"disagreements": "Send a list of disagreement points."})
-    return [
-        {
-            "part": _coded(
-                "care-plan-disagreement-part",
-                str(r.get("part") or ""),
-                "disagreements",
-                "Choose which part of the plan the client disagrees with.",
-            ),
-            "words": str(r.get("words") or "")[:1000],
-        }
-        for r in rows
-        if isinstance(r, dict)
-    ]
 
 
 def _clean_goals(rows):
@@ -273,10 +242,8 @@ def _clean_goals(rows):
 
 class CarePlanDetailsView(APIView):
     FIELDS = [
-        "what_matters",
         "rationale",
         "contact_72h_at",
-        "follow_up_clinician",
         "means_counselling_done",
         "crisis_plan",
         "family_involvement",
@@ -284,19 +251,11 @@ class CarePlanDetailsView(APIView):
         "naloxone_teaching",
     ]
 
+    @clinical_only()
     def patch(self, request, patient_id):
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
         data = request.data
-        if "client_agreement" in data:
-            plan.client_agreement = _coded(
-                "care-plan-agreement",
-                data["client_agreement"],
-                "client_agreement",
-                "Unknown agreement status.",
-            )
-        if "disagreements" in data:
-            plan.disagreements = _clean_disagreements(data["disagreements"])
         if "goal_items" in data:
             plan.goal_items = _clean_goals(data["goal_items"])
         if "oat_offer" in data:
@@ -320,6 +279,10 @@ class CarePlanDetailsView(APIView):
                 plan.senior_reviewer = None
         plan.updated_by = request.user
         plan.save()
+        if "contact_72h_at" in data and plan.contact_72h_at:
+            # Booked as soon as it is agreed, so the contact is on the follow-up
+            # worklist whether or not the care plan has been signed yet.
+            care_plan.book_72h_contact(plan, request.user)
         return Response(_workspace(patient, plan))
 
 
@@ -341,25 +304,6 @@ class CarePlanConfirmView(APIView):
                 "CarePlan",
                 plan.pk,
             )
-        return Response(_workspace(patient, plan))
-
-
-class CarePlanClientAckView(APIView):
-    """The client read the plan in the co-production view and acknowledged it."""
-
-    def post(self, request, patient_id):
-        patient = _patient(patient_id)
-        plan = services.get_or_create_care_plan(patient, request.user)
-        language = request.data.get("language") or "en"
-        if language not in ("en", "sw"):
-            raise ValidationError({"language": "Use en or sw."})
-        plan.client_ack_at = timezone.now()
-        plan.client_ack_language = language
-        plan.client_ack_recorded_by = request.user
-        if not plan.client_agreement:
-            plan.client_agreement = "AGREES"
-        plan.updated_by = request.user
-        plan.save()
         return Response(_workspace(patient, plan))
 
 
@@ -401,7 +345,13 @@ def _safety_row(plan):
 
 class SafetyPlanView(APIView):
     def get(self, request, patient_id):
+        """Opens the editable plan (creating a draft or a revision). With
+        ?peek=1 it only reads the latest version and creates nothing — null when
+        the client has none — so viewing never starts a revision."""
         patient = _patient(patient_id)
+        if request.query_params.get("peek") == "1":
+            latest = SafetyPlan.objects.filter(patient=patient).first()
+            return Response(_safety_row(latest) if latest else None)
         plan = plan_extras.open_safety_plan(patient, request.user)
         return Response(_safety_row(plan))
 

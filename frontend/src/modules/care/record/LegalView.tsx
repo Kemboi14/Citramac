@@ -1,4 +1,5 @@
 import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
+import { FamilyAdvanceWishesCard } from "./legal/FamilyAdvanceWishesCard";
 import { useId, useState, type ReactNode } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import { ApiError } from "../../../lib/apiClient";
@@ -84,6 +85,7 @@ export function LegalView({ patientId, banner, onRecordChanged }: RecordViewProp
         <AiConsentCard patientId={patientId} consent={data.ai_consent} onSaved={refresh} />
       )}
       <CapacityConsentCard patientId={patientId} />
+      <FamilyAdvanceWishesCard patientId={patientId} />
       <SubjectRequestsCard patientId={patientId} />
       <Card title="Admission legal status">
         {data.admissions.length > 0 ? (

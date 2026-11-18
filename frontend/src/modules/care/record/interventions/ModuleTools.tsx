@@ -12,6 +12,7 @@ import { MarModule } from "../modules/MarModule";
 import { ObservationModule } from "../modules/ObservationModule";
 import { PrescribingModule } from "../modules/PrescribingModule";
 import { RestrictiveModule } from "../modules/RestrictiveModule";
+import { SafetyPlanModule } from "../modules/SafetyPlanModule";
 import { SbarModule } from "../modules/SmallModules";
 import { WithdrawalModule } from "../modules/WithdrawalModule";
 import { FollowUpPanel } from "../outcomes/FollowUpPanel";
@@ -87,6 +88,11 @@ const MODULES = new Map<string, ModuleDef>(
           title: "Observation & safety",
           note: "Level, signed entries, observation sets + early warning score",
           render: ({ patientId }: Target) => <ObservationModule patientId={patientId} />,
+        },
+        {
+          title: "Safety planning",
+          note: "Client-held safety plan, crisis & relapse plan, lethal-means counselling, 72-hour contact",
+          render: ({ patientId }: Target) => <SafetyPlanModule patientId={patientId} />,
         },
       ],
     },

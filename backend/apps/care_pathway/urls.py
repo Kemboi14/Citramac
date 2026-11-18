@@ -287,11 +287,6 @@ urlpatterns = [
         name="care-plan-accept-remaining",
     ),
     path(
-        "care/clients/<uuid:patient_id>/care-plan/client-acknowledge/",
-        plan_views.CarePlanClientAckView.as_view(),
-        name="care-plan-client-ack",
-    ),
-    path(
         "care/clients/<uuid:patient_id>/care-plan/nursing/",
         plan_views.NursingCarePlanView.as_view(),
         name="care-plan-nursing",

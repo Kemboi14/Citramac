@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, X } from "lucide-react";
+import { CircleHelp, Loader2, Trash2, X } from "lucide-react";
 import { useDialogA11y } from "./useDialogA11y";
 
 /**
@@ -26,6 +26,7 @@ export function ConfirmDialog({
   error = null,
   onConfirm,
   onCancel,
+  compact = false,
 }: {
   open: boolean;
   title: string;
@@ -37,6 +38,8 @@ export function ConfirmDialog({
   error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
+  /** A small dialog with no header bar: the title is kept for screen readers only. */
+  compact?: boolean;
 }) {
   const dialogRef = useDialogA11y(open, busy ? undefined : onCancel);
   if (!open) return null;
@@ -57,23 +60,49 @@ export function ConfirmDialog({
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"
-          className="flex w-full max-w-[480px] animate-scale-in flex-col overflow-hidden rounded-[14px] bg-surface-card shadow-md"
+          className={`flex w-full ${compact ? "max-w-[360px]" : "max-w-[480px]"} animate-scale-in flex-col overflow-hidden rounded-[14px] bg-surface-card shadow-md`}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-surface-border px-6 py-5">
-            <div id="confirm-dialog-title" className="font-display text-lg font-bold text-ink-900">
-              {title}
+          {compact ? (
+            <div className="flex flex-col items-center px-6 pt-6 text-center">
+              <span
+                aria-hidden="true"
+                className={`flex h-11 w-11 items-center justify-center rounded-full ${tone === "danger" ? "bg-status-red-tint text-status-red" : "bg-brand-green-tint text-brand-green"}`}
+              >
+                {tone === "danger" ? (
+                  <Trash2 className="h-5 w-5" />
+                ) : (
+                  <CircleHelp className="h-5 w-5" />
+                )}
+              </span>
+              <h2
+                id="confirm-dialog-title"
+                className="mt-3 font-display text-[16px] font-semibold text-ink-900"
+              >
+                {title}
+              </h2>
             </div>
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={busy}
-              aria-label="Close"
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors hover:bg-surface-bg disabled:opacity-60"
-            >
-              <X className="h-[15px] w-[15px]" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-3 px-6 py-6 text-sm leading-relaxed text-ink-700">
+          ) : (
+            <div className="flex items-start justify-between gap-4 border-b border-surface-border px-6 py-5">
+              <div
+                id="confirm-dialog-title"
+                className="font-display text-lg font-bold text-ink-900"
+              >
+                {title}
+              </div>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={busy}
+                aria-label="Close"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] border border-surface-border bg-surface-card text-ink-700 transition-colors hover:bg-surface-bg disabled:opacity-60"
+              >
+                <X className="h-[15px] w-[15px]" />
+              </button>
+            </div>
+          )}
+          <div
+            className={`flex flex-col gap-3 text-sm leading-relaxed text-ink-700 ${compact ? "items-center px-6 pb-5 pt-1.5 text-center text-[13px]" : "px-6 py-6"}`}
+          >
             {children}
             {error && (
               <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
@@ -81,7 +110,9 @@ export function ConfirmDialog({
               </p>
             )}
           </div>
-          <div className="flex justify-end gap-3 border-t border-surface-border px-6 py-4">
+          <div
+            className={`flex justify-end gap-2 ${compact ? "px-6 pb-6 [&>button]:flex-1 [&>button]:justify-center" : "gap-3 border-t border-surface-border px-6 py-4"}`}
+          >
             <button
               type="button"
               onClick={onCancel}

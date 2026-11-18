@@ -1031,3 +1031,40 @@ FHIR: unchanged — the note, its Encounter and Provenance, and the Intervention
 are as before; only the local module code of a family delivery differs. Reversibility: cheap. No signed
 record changes. Reversing `0063` moves the deliveries back, restores the value set and removes the
 tariff line while it is unpriced and unused.
+
+### 2026-11-18 — care plan: decide actions only; safety planning delivered in Interventions
+
+On the owner's decision of 2026-11-18 ("the care plan is the suggested actions to be worked on in
+Interventions"; client agreement removed):
+
+1. **Care Plan is one screen.** Accept, modify or decline each recommended action. When the plan conflicts with the client's risk (`care_plan.conflicts`), it also asks
+   for the rationale and a senior reviewer. The "With the client", "Tasks & reviews" and
+   "Documented actions" tabs are gone. Interventions tracks delivery. The nursing care plan moved to
+   Psychiatric Nursing → Nursing care.
+2. **Signing no longer needs** client agreement or disagreements, a signed safety plan, the
+   72-hour contact or a named follow-up clinician (`care_plan.outstanding`). The safety control is
+   the decision. A suicide-risk finding recommends "Safety plan / enhanced observation", which must
+   be accepted, or declined with a written reason. A recorded plan or intent with no safety action
+   is still a conflict that needs a rationale and a senior co-signature. "What matters", client
+   agreement and disagreements and the client-acknowledgement view are no longer captured (the API
+   ignores them, and the acknowledge endpoint is removed). Signed plan versions keep what they
+   recorded.
+3. **Safety planning** (Interventions → Observation & safety, `SafetyPlanModule`): the client-held
+   safety plan (same `SafetyPlan` store and versioning), the crisis & relapse plan, lethal-means
+   counselling and the 72-hour contact. The contact is booked as a follow-up appointment when it is
+   saved, not at plan signing. The follow-up clinician is the episode's care coordinator
+   (`EpisodeOfCare.careManager`), never a typed name. `GET …/safety-plan/?peek=1` reads the latest
+   version without creating a draft, so viewing never starts a revision. Saving plan details now
+   needs the clinical permission signing uses.
+4. **Family involvement and advance statement** are recorded in Legal & consent, beside the consents
+   they depend on (same care-plan fields). Naloxone and OAT are recorded only in Interventions →
+   Opioid Agonist Therapy. The opioid conflict points there.
+
+5. **Goals are no longer captured on the care plan** (owner, same day: a goal linked to an action
+   was shown nowhere but psychotherapy). Goals already saved stay on the plan and in signed
+   versions, and psychotherapy sessions still show them. New plans have none, so new sessions have
+   no plan goals to record progress against (psychotherapy guidance §8) until goals are given a home
+   that the delivering module reads.
+
+FHIR: unchanged. Same stores, no new resource or code. Reversibility: cheap. No signed care plan,
+safety plan or record changes; only plans signed from today are signed under the new rule.

@@ -11,7 +11,7 @@ from apps.accounts.tokens import issue_tokens
 from apps.tenancy.context import platform_admin_context
 
 from . import care_plan
-from .models import CarePlanTask, CarePlanVersion, ProgressNote
+from .models import CarePlanTask, CarePlanVersion, ProgressNote, SafetyPlan
 from .test_intake import IntakeTestCase
 
 
@@ -176,14 +176,13 @@ class DecisionTests(CarePlanTestCase):
 class SignPlanTests(CarePlanTestCase):
     def ready(self):
         self.decide("outpatient", "ACCEPTED")
-        self.details(client_agreement="AGREES")
 
-    def test_cannot_sign_until_every_recommendation_is_decided_and_agreement_is_recorded(self):
+    def test_cannot_sign_until_every_recommendation_is_decided(self):
         blocked = self.confirm()
         self.assertEqual(blocked.status_code, 400)
         items = blocked.data["outstanding"]
         self.assertIn("At least one action", items)
-        self.assertIn("Client agreement status", items)
+        self.assertFalse(any("agreement" in i.lower() for i in items))
         self.assertTrue(any("Accept or decline the recommendation: Outpatient" in i for i in items))
 
     def test_signing_creates_an_immutable_version_opens_tasks_and_due_times(self):
@@ -224,7 +223,6 @@ class SignPlanTests(CarePlanTestCase):
     def test_a_plan_of_only_lower_intensity_actions_for_an_urgent_client_must_be_explained(self):
         self.sign_triage()  # ORANGE
         self.decide("outpatient", "ACCEPTED")
-        self.details(client_agreement="AGREES")
         data = self.ws().data
         self.assertTrue(any("lower-intensity" in c for c in data["conflicts"]))
         items = self.confirm().data["outstanding"]
@@ -237,7 +235,6 @@ class SignPlanTests(CarePlanTestCase):
         seniors = self.client.get(reverse("care-seniors"), **self.auth).data["results"]
         self.assertEqual([s["name"] for s in seniors], ["Dr Senior"])
         self.details(
-            client_agreement="AGREES",
             rationale="Client declines escalation and has strong supports at home",
             senior_reviewer=seniors[0]["id"],
         )
@@ -252,37 +249,29 @@ class SignPlanTests(CarePlanTestCase):
         bad = self.details(senior_reviewer=str(self.nurse.pk))
         self.assertEqual(bad.status_code, 400)
 
-    def test_suicide_risk_requires_a_signed_safety_plan_72h_contact_and_a_named_clinician(self):
+    def test_suicide_risk_must_be_answered_by_a_safety_decision_not_the_safety_plan_itself(self):
+        """The safety plan is written in Interventions; signing the care plan needs
+        only the clinician's decision on the recommended safety action."""
         self.risk(suicide=["Thoughts"])
         self.decide("psych_review", "ACCEPTED")
-        self.decide("safety", "ACCEPTED")
-        self.details(client_agreement="AGREES")
         items = self.confirm().data["outstanding"]
-        self.assertTrue(any("Safety plan" in i for i in items))
-        self.assertIn("Contact within 72 hours", items)
-        self.assertIn("Named follow-up clinician", items)
-        sp = reverse("care-safety-plan", args=[self.pid])
-        self.client.get(sp, **self.auth)
-        self.client.put(
-            sp,
-            {"warning_signs": "Not sleeping", "people_to_ask": "My sister"},
-            format="json",
-            **self.auth,
-        )
-        self.assertEqual(
-            self.client.post(
-                reverse("care-safety-plan-sign", args=[self.pid]), **self.auth
-            ).status_code,
-            200,
-        )
-        self.details(
-            contact_72h_at=(timezone.now() + timedelta(days=3)).isoformat(),
-            follow_up_clinician="J. Njoroge",
-        )
+        self.assertTrue(any("Accept or decline the recommendation" in i for i in items), items)
+        self.decide("safety", "ACCEPTED")
         self.assertEqual(self.confirm().status_code, 200)
 
 
 class SafetyPlanTests(CarePlanTestCase):
+    def test_peeking_reads_the_latest_version_and_never_starts_a_revision(self):
+        url = reverse("care-safety-plan", args=[self.pid])
+        self.assertIsNone(self.client.get(url, {"peek": "1"}, **self.auth).data)
+        self.client.get(url, **self.auth)
+        self.client.put(url, {"people_to_ask": "My sister"}, format="json", **self.auth)
+        self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth)
+        peeked = self.client.get(url, {"peek": "1"}, **self.auth).data
+        self.assertEqual((peeked["version"], bool(peeked["signed_at"])), (1, True))
+        with platform_admin_context():
+            self.assertEqual(SafetyPlan.objects.filter(patient_id=self.pid).count(), 1)
+
     def test_signed_plan_is_never_edited_a_revision_is_a_new_version(self):
         url = reverse("care-safety-plan", args=[self.pid])
         self.assertEqual(self.client.get(url, **self.auth).data["version"], 1)
