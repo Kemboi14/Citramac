@@ -1439,6 +1439,7 @@ function DocumentsPanel({ data, busy, run }: PanelProps) {
                 <span className="text-[11.5px] text-ink-500">Amendment: {d.amendment_reason}</span>
               )}
               <DocumentActions
+                viewOnly
                 path={`/care/legal/documents/${d.id}/print/`}
                 filename={`${d.document_number}-v${d.version}`.replace(/[^A-Za-z0-9._-]+/g, "-")}
                 label={`${d.title} (${d.document_number} v${d.version})`}
@@ -1453,7 +1454,7 @@ function DocumentsPanel({ data, busy, run }: PanelProps) {
                 </button>
               )}
             </div>
-            {!d.superseded && d.status !== "VOID" && <SignedCopies doc={d} busy={busy} run={run} />}
+            {d.copies.length > 0 && <SignedCopies doc={d} busy={busy} run={run} viewOnly />}
             {amending === d.id && (
               <div className="flex flex-wrap gap-2">
                 <input

@@ -1189,3 +1189,28 @@ FHIR: the scan is a `DocumentReference` (the file as content) on the admission `
 `EpisodeOfCare`, R + PSY, with a `Provenance` for the signature; never sent to the SHR; not emitted
 yet. VERIFY: a LOINC document type for a statutory admission form. Reversibility: cheap. Migrations
 `client_registry 0027` and `care_pathway 0065` add a link and withdrawal fields; no signed form changes.
+
+### 2026-11-19 — client attachments: preview in the record; copies by Org Admin approval
+
+On the owner's decisions of 2026-11-19 (stated before building, §7):
+
+1. **Attachments is a tab of the client record** (Snapshot · Timeline · Charts · Legal & consent · MSE ·
+   Attachments · Journey): file-type icons (PDF / image), the document's name, category, who uploaded
+   it and when, and a preview of the file in the page.
+2. **Files are never opened by their storage address.** The API no longer returns the file URL;
+   `attachments/<id>/preview/` serves it inline (audited VIEW).
+3. **A copy needs an Org Admin's approval** — for every client attachment. Staff request a download /
+   print with a reason; an Org Admin (never for their own request) approves — one download within 24
+   hours — or declines with a reason (Org Admin → Download Requests). Org Admins download directly.
+   `client_registry.AttachmentDownloadRequest`, append-only, RLS, classified administrative; every
+   request, decision and download is audited (`attachment_access.py`). Access control, not clinical
+   data: no FHIR resource.
+4. **Statutory forms are filed with their names.** A form signed in the system (the recommendation, or
+   an application signed electronically) is filed in the client's attachments as its signed PDF, as part
+   of signing; an uploaded paper copy is renamed for the form ("… — DOC-… v1 — signed copy.pdf").
+5. **Legal & consent is view-only** for statutory documents: Preview and filed copies open; no
+   download, upload or removal there. Printing for signature and uploading stay in the admission flow.
+
+A preview shown in the browser can still be saved or screenshotted by the viewer; the control is on
+copies the system hands out, and every view is audited. Reversibility: cheap. Migration
+`client_registry 0028` adds the request table; no record changes.

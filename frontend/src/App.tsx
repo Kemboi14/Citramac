@@ -128,6 +128,10 @@ const PlatformCompliancePage = lazyNamed(
   () => import("./modules/super-admin/PlatformCompliancePage"),
   "PlatformCompliancePage",
 );
+const DownloadRequestsPage = lazyNamed(
+  () => import("./modules/org-admin/DownloadRequestsPage"),
+  "DownloadRequestsPage",
+);
 const OrgAuditLogPage = lazyNamed(
   () => import("./modules/org-admin/AuditLogPage"),
   "OrgAuditLogPage",
@@ -346,6 +350,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={["Org Admin", "Auditor"]} />}>
           <Route path="/org-admin" element={<OrgAdminShell />}>
             <Route path="audit-log" element={<OrgAuditLogPage />} />
+            <Route path="download-requests" element={<DownloadRequestsPage />} />
             <Route element={<ProtectedRoute allowedRoles={["Org Admin"]} />}>
               <Route index element={<OrgDashboardPage />} />
               <Route path="wards" element={<WardBedManagementPage />} />

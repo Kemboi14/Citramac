@@ -379,11 +379,15 @@ class PatientViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet)
         if request.method == "POST":
             data = request.data.copy()
             data["patient"] = str(patient.id)
-            serializer = AttachmentSerializer(data=data)
+            serializer = AttachmentSerializer(data=data, context={"request": request})
             serializer.is_valid(raise_exception=True)
             serializer.save(organization=patient.organization, uploaded_by=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(AttachmentSerializer(patient.attachments.all(), many=True).data)
+        return Response(
+            AttachmentSerializer(
+                patient.attachments.all(), many=True, context={"request": request}
+            ).data
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="allergy-records")
     def allergy_records(self, request, pk=None):
@@ -529,6 +533,31 @@ class AttachmentViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewS
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization, uploaded_by=self.request.user)
+
+    @action(detail=True, methods=["get"])
+    def preview(self, request, pk=None):
+        """The file in the page (inline). Audited."""
+        from . import attachment_access
+
+        return attachment_access.preview(self.get_object())
+
+    @action(detail=True, methods=["get"])
+    def download(self, request, pk=None):
+        """A copy: Org Admin directly, anyone else once per approval. Audited."""
+        from . import attachment_access
+
+        return attachment_access.download(self.get_object(), request.user)
+
+    @action(detail=True, methods=["post"], url_path="download-requests")
+    def request_download(self, request, pk=None):
+        from . import attachment_access
+
+        attachment = self.get_object()
+        attachment_access.request_download(attachment, request.user, request.data.get("reason"))
+        return Response(
+            AttachmentSerializer(attachment, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=False, methods=["get"])
     def insights(self, request):
@@ -894,3 +923,67 @@ class CaseloadView(APIView):
                 }
             )
         return Response({"results": rows})
+
+
+class AttachmentDownloadRequestListView(APIView):
+    """GET attachment-download-requests/?status=PENDING — the Org Admin's queue."""
+
+    def get(self, request):
+        from apps.accounts.access import is_org_admin
+
+        from .models import AttachmentDownloadRequest
+
+        if not is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin reviews download requests.")
+        rows = AttachmentDownloadRequest.objects.select_related(
+            "attachment__patient", "requested_by", "decided_by"
+        )
+        wanted = request.query_params.get("status")
+        if wanted:
+            rows = rows.filter(status=wanted)
+        from .attachment_access import display_name
+
+        return Response(
+            {
+                "results": [
+                    {
+                        "id": str(r.pk),
+                        "attachment": str(r.attachment_id),
+                        "document": display_name(r.attachment),
+                        "patient_id": str(r.attachment.patient_id),
+                        "patient_name": r.attachment.patient.get_full_name(),
+                        "requested_by": r.requested_by.get_full_name() or r.requested_by.email,
+                        "requested_by_id": str(r.requested_by_id),
+                        "requested_at": r.requested_at.isoformat(),
+                        "reason": r.reason,
+                        "status": r.status,
+                        "decided_by": (
+                            (r.decided_by.get_full_name() or r.decided_by.email)
+                            if r.decided_by_id
+                            else ""
+                        ),
+                        "decided_at": r.decided_at.isoformat() if r.decided_at else None,
+                        "decision_reason": r.decision_reason,
+                        "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                        "used_at": r.used_at.isoformat() if r.used_at else None,
+                    }
+                    for r in rows[:200]
+                ]
+            }
+        )
+
+
+class AttachmentDownloadDecisionView(APIView):
+    """POST attachment-download-requests/<id>/decide/ {decision, reason} — Org Admin."""
+
+    def post(self, request, pk):
+        from django.shortcuts import get_object_or_404
+
+        from . import attachment_access
+        from .models import AttachmentDownloadRequest
+
+        req = get_object_or_404(AttachmentDownloadRequest, pk=pk)
+        attachment_access.decide(
+            req, request.user, request.data.get("decision"), request.data.get("reason", "")
+        )
+        return Response({"id": str(req.pk), "status": "ok"})

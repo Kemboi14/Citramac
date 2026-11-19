@@ -1,4 +1,4 @@
-import { apiRequest, ApiError } from "./apiClient";
+import { apiDownload, apiRequest, ApiError } from "./apiClient";
 
 // Mirrors apps/client_registry's Attachment — global document manager +
 // Document Insights, from mockups/citramac_clinical_workspace.html.
@@ -30,7 +30,13 @@ export interface Attachment {
   patient: string;
   patient_name: string;
   admission: string | null;
-  file: string;
+  /** The name shown and used for a copy (never the storage path). */
+  name: string;
+  content_type: string;
+  /** Set when the file is a copy of a statutory admission form. */
+  legal_document: string | null;
+  /** What this user can do with a copy (Org Admin approval, owner 2026-11-19). */
+  access: AttachmentAccess | null;
   file_size: number | null;
   classification: "HISTORICAL" | "CURRENT";
   category: AttachmentCategory;
@@ -93,6 +99,70 @@ export function uploadAttachment(
   if (payload.document_date) body.set("document_date", payload.document_date);
   if (payload.description) body.set("description", payload.description);
   return apiRequest<Attachment>("/attachments/", { method: "POST", body, accessToken });
+}
+
+export type AttachmentAccess =
+  | { download: "direct" }
+  | { download: "request" }
+  | { download: "pending"; requested_at: string }
+  | { download: "approved"; expires_at: string }
+  | { download: "declined"; reason: string };
+
+/** The file to show in the page (inline). Audited. */
+export function previewAttachment(accessToken: string, id: string) {
+  return apiDownload(`/attachments/${id}/preview/`, accessToken);
+}
+
+/** A copy to download or print: Org Admin directly, anyone else once per approval. */
+export function downloadAttachment(accessToken: string, id: string) {
+  return apiDownload(`/attachments/${id}/download/`, accessToken);
+}
+
+export function requestAttachmentDownload(accessToken: string, id: string, reason: string) {
+  return apiRequest<Attachment>(`/attachments/${id}/download-requests/`, {
+    method: "POST",
+    body: { reason },
+    accessToken,
+  });
+}
+
+export interface AttachmentDownloadRequest {
+  id: string;
+  attachment: string;
+  document: string;
+  patient_id: string;
+  patient_name: string;
+  requested_by: string;
+  requested_by_id: string;
+  requested_at: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "DECLINED" | "USED";
+  decided_by: string;
+  decided_at: string | null;
+  decision_reason: string;
+  expires_at: string | null;
+  used_at: string | null;
+}
+
+export function listAttachmentDownloadRequests(accessToken: string, status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<{ results: AttachmentDownloadRequest[] }>(
+    `/attachment-download-requests/${query}`,
+    { accessToken },
+  );
+}
+
+export function decideAttachmentDownload(
+  accessToken: string,
+  requestId: string,
+  decision: "APPROVED" | "DECLINED",
+  reason: string,
+) {
+  return apiRequest<{ id: string }>(`/attachment-download-requests/${requestId}/decide/`, {
+    method: "POST",
+    body: { decision, reason },
+    accessToken,
+  });
 }
 
 export function updateAttachment(accessToken: string, id: string, payload: Partial<Attachment>) {

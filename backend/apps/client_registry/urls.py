@@ -3,6 +3,8 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AppointmentViewSet,
+    AttachmentDownloadDecisionView,
+    AttachmentDownloadRequestListView,
     AttachmentViewSet,
     CaseloadView,
     ClinicalDashboardSummaryView,
@@ -23,4 +25,14 @@ urlpatterns = router.urls + [
         name="clinical-dashboard-summary",
     ),
     path("clinical/caseload/", CaseloadView.as_view(), name="clinical-caseload"),
+    path(
+        "attachment-download-requests/",
+        AttachmentDownloadRequestListView.as_view(),
+        name="attachment-download-requests",
+    ),
+    path(
+        "attachment-download-requests/<uuid:pk>/decide/",
+        AttachmentDownloadDecisionView.as_view(),
+        name="attachment-download-decide",
+    ),
 ]

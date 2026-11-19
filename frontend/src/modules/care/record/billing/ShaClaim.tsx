@@ -195,9 +195,9 @@ export function ShaClaimCard({
 }
 
 function fileLabel(a: Attachment) {
-  const name = a.file.split("?")[0].split("/").pop() || "Document";
+  const name = a.name || "Document";
   const kind = a.document_type || a.category;
-  return `${kind} · ${decodeURIComponent(name)}${a.document_date ? ` · ${formatDate(a.document_date)}` : ""}`;
+  return `${kind} · ${name}${a.document_date ? ` · ${formatDate(a.document_date)}` : ""}`;
 }
 
 export function ShaAttachments({

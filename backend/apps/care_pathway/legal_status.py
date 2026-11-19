@@ -1106,6 +1106,10 @@ def sign(doc, user, data):
         required = legal_config.operational(ls.config_version)["requiredRecommendations"]
         if _recommendations(doc.application).count() >= required and ls.status != "ACTIVE":
             _transition(ls, "RECOMMENDATION_SIGNED", user, document=str(doc.pk))
+    if doc.signature_method == "ELECTRONIC":
+        # Signed in the system: file the signed PDF in the client's attachments
+        # (a form signed on paper is filed as its uploaded copy instead).
+        legal_copies.file_signed_pdf(doc, user)
     return doc
 
 

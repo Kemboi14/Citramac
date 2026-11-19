@@ -40,6 +40,60 @@ def _sha256(upload):
     return digest.hexdigest()
 
 
+def document_name(doc, kind, extension):
+    """The name a filed copy carries, e.g. "Involuntary Admission Form —
+    DOC-LEG-STAT-INV-APP-KE-F18BA460 v1 — signed copy.pdf"."""
+    number = doc.document_number.replace("/", "-")
+    return f"{doc.get_template_id_display()} — {number} v{doc.version} — {kind}{extension}"[:255]
+
+
+def _extension(name):
+    name = (name or "").lower()
+    return next((ext for ext in (".pdf", ".png", ".jpeg", ".jpg") if name.endswith(ext)), "")
+
+
+def file_signed_pdf(doc, user):
+    """File the PDF of a form signed in the system in the client's attachments,
+    as it prints (legal_print), named for the form. Part of the signing
+    transaction: if the PDF cannot be made, the form is not signed."""
+    from django.core.files.base import ContentFile
+
+    from apps.documents import printing
+
+    from . import legal_print
+
+    content = printing.pdf(legal_print.render(doc, user))
+    name = document_name(doc, "signed", ".pdf")
+    admission = _admission_for(doc)
+    copy = Attachment.objects.create(
+        organization_id=doc.organization_id,
+        patient=doc.patient,
+        admission=admission,
+        legal_document=doc,
+        file=ContentFile(content, name=printing.safe_filename(name) + ".pdf"),
+        classification="CURRENT",
+        category="CLINICAL",
+        document_type=f"Signed — {doc.get_template_id_display()}"[:100],
+        description=name,
+        uploaded_by=user,
+    )
+    write_event(
+        doc.organization_id,
+        AuditLogEntry.ACTION_CREATE,
+        AUDIT_MODEL,
+        doc.pk,
+        {
+            "event": "signed_pdf_filed",
+            "copy": str(copy.pk),
+            "document_number": doc.document_number,
+            "version": doc.version,
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "bytes": len(content),
+        },
+    )
+    return copy
+
+
 def _admission_for(doc):
     """The admission this form's legal status admitted, if one exists yet."""
     from apps.ipd_ward.models import Admission
@@ -98,7 +152,7 @@ def upload(doc, user, file, sign_as=None):
         classification="CURRENT",
         category="CLINICAL",
         document_type=f"Signed copy — {doc.get_template_id_display()}"[:100],
-        description=(file.name or "")[:255],
+        description=document_name(doc, "signed copy", _extension(file.name)),
         uploaded_by=user,
     )
     write_event(

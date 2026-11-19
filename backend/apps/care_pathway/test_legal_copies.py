@@ -35,7 +35,11 @@ class LegalDocumentCopyTests(LegalStatusTestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["status"], "DRAFT")  # a copy never signs the form
         [copy] = response.data["copies"]
-        self.assertEqual(copy["name"], "signed-application.pdf")
+        self.assertEqual(
+            copy["name"],
+            "Application for Voluntary Admission — "
+            f"{response.data['document_number'].replace('/', '-')} v1 — signed copy.pdf",
+        )
         with platform_admin_context():
             stored = Attachment.objects.get(pk=copy["id"])
             self.assertEqual(str(stored.legal_document_id), doc_id)
@@ -221,3 +225,19 @@ class OfficialUseBlockTests(LegalStatusTestCase):
         after = self.printed(doc_id)
         self.assertIn("FOR OFFICIAL USE ONLY", after)
         self.assertIn("Admitting Officer", after)
+
+
+class SignedFormsAreFiledTests(LegalStatusTestCase):
+    def test_a_recommendation_signed_in_the_system_is_filed_as_a_named_pdf(self):
+        application, _ = self.signed_involuntary_application()
+        rec = self.signed_recommendation(application)
+        with platform_admin_context():
+            doc = LegalDocument.objects.get(pk=rec)
+            [filed] = Attachment.objects.filter(legal_document=doc)
+            self.assertEqual(
+                filed.description,
+                "Recommendation for Involuntary Treatment — "
+                f"{doc.document_number.replace('/', '-')} v1 — signed.pdf",
+            )
+            self.assertTrue(filed.file.read(5).startswith(b"%PDF-"))
+            self.assertEqual(str(filed.patient_id), self.pid)

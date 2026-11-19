@@ -119,6 +119,13 @@ class AttachmentSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     uploaded_by_name = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
+    # The file is never exposed by its storage URL: it is opened through
+    # attachments/<id>/preview/ and copied through …/download/ (attachment_access).
+    file = serializers.FileField(write_only=True)
+    name = serializers.SerializerMethodField()
+    content_type = serializers.SerializerMethodField()
+    legal_document = serializers.SerializerMethodField()
+    access = serializers.SerializerMethodField()
 
     class Meta:
         model = Attachment
@@ -140,8 +147,31 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "uploaded_by",
             "uploaded_by_name",
             "uploaded_at",
+            "name",
+            "content_type",
+            "legal_document",
+            "access",
         ]
         read_only_fields = ["uploaded_by", "uploaded_at"]
+
+    def get_name(self, obj):
+        from .attachment_access import display_name
+
+        return display_name(obj)
+
+    def get_content_type(self, obj):
+        from .attachment_access import content_type
+
+        return content_type(obj)
+
+    def get_legal_document(self, obj):
+        return str(obj.legal_document_id) if obj.legal_document_id else None
+
+    def get_access(self, obj):
+        from .attachment_access import state
+
+        request = self.context.get("request")
+        return state(obj, request.user) if request else None
 
     def validate(self, attrs):
         # `admission` is an optional convenience link (Admission's

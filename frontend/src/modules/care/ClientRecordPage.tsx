@@ -15,6 +15,7 @@ import { ChartsView } from "./record/ChartsView";
 import { FollowUpStage } from "./record/FollowUpStage";
 import { IntakeStage } from "./record/IntakeStage";
 import { InterventionsStage } from "./record/InterventionsStage";
+import { DocumentLibrary } from "../../components/DocumentLibrary";
 import { LegalView } from "./record/LegalView";
 import { MseView } from "./record/MseView";
 import { OutcomesStage } from "./record/OutcomesStage";
@@ -30,6 +31,7 @@ const VIEWS = new Set<string>([
   "charts",
   "mse",
   "legal",
+  "attachments",
   "triage",
   "intake",
   "care-plan",
@@ -51,6 +53,8 @@ function renderView(view: RecordView, props: RecordViewProps) {
       return <MseView {...props} />;
     case "legal":
       return <LegalView {...props} />;
+    case "attachments":
+      return <DocumentLibrary patientId={props.patientId} />;
     case "triage":
       return <TriageStage {...props} />;
     case "intake":

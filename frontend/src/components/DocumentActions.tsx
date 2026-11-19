@@ -31,6 +31,7 @@ export function DocumentActions({
   label,
   disabled = false,
   onDownloaded,
+  viewOnly = false,
 }: {
   path: string;
   /** Download name without extension, e.g. "DOC-WRK-01-ABC-v1". */
@@ -40,6 +41,8 @@ export function DocumentActions({
   disabled?: boolean;
   /** Called after the PDF downloaded — e.g. to refresh a record the download changed. */
   onDownloaded?: () => void;
+  /** Preview only: no Download PDF or Print (e.g. the client record's legal panel). */
+  viewOnly?: boolean;
 }) {
   const { accessToken } = useAuth();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -100,16 +103,18 @@ export function DocumentActions({
           <Eye size={14} aria-hidden="true" />
           {busy === "preview" ? "Opening…" : "Preview"}
         </button>
-        <button
-          type="button"
-          className={PRIMARY}
-          onClick={() => void download()}
-          disabled={disabled || busy !== null}
-          aria-label={`Download ${label} as PDF`}
-        >
-          <Download size={14} aria-hidden="true" />
-          {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}
-        </button>
+        {!viewOnly && (
+          <button
+            type="button"
+            className={PRIMARY}
+            onClick={() => void download()}
+            disabled={disabled || busy !== null}
+            aria-label={`Download ${label} as PDF`}
+          >
+            <Download size={14} aria-hidden="true" />
+            {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}
+          </button>
+        )}
       </span>
       {error && (
         <span role="alert" className="text-[12px] text-status-red">
@@ -121,7 +126,7 @@ export function DocumentActions({
           url={previewUrl}
           label={label}
           downloading={busy === "pdf"}
-          onDownload={() => void download()}
+          onDownload={viewOnly ? undefined : () => void download()}
           onClose={() => setPreviewUrl(null)}
         />
       )}
@@ -139,7 +144,8 @@ function PreviewDialog({
   url: string;
   label: string;
   downloading: boolean;
-  onDownload: () => void;
+  /** Absent in view-only mode: no Print or Download PDF. */
+  onDownload?: () => void;
   onClose: () => void;
 }) {
   const ref = useDialogA11y<HTMLDivElement>(true, onClose);
@@ -156,17 +162,26 @@ function PreviewDialog({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border px-4 py-2.5">
           <div className="min-w-0 truncate text-[13.5px] font-bold text-ink-900">{label}</div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={BUTTON}
-              onClick={() => frame.current?.contentWindow?.print()}
-            >
-              <Printer size={14} aria-hidden="true" /> Print
-            </button>
-            <button type="button" className={PRIMARY} onClick={onDownload} disabled={downloading}>
-              <Download size={14} aria-hidden="true" />
-              {downloading ? "Preparing PDF…" : "Download PDF"}
-            </button>
+            {onDownload && (
+              <>
+                <button
+                  type="button"
+                  className={BUTTON}
+                  onClick={() => frame.current?.contentWindow?.print()}
+                >
+                  <Printer size={14} aria-hidden="true" /> Print
+                </button>
+                <button
+                  type="button"
+                  className={PRIMARY}
+                  onClick={onDownload}
+                  disabled={downloading}
+                >
+                  <Download size={14} aria-hidden="true" />
+                  {downloading ? "Preparing PDF…" : "Download PDF"}
+                </button>
+              </>
+            )}
             <button type="button" className={BUTTON} onClick={onClose} aria-label="Close preview">
               <X size={14} aria-hidden="true" /> Close
             </button>

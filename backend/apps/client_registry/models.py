@@ -700,6 +700,45 @@ class Attachment(TenantScopedModel):
         return self.file.name
 
 
+class AttachmentDownloadRequest(TenantScopedModel):
+    """
+    A request to download / print one client attachment. Anyone who may see a
+    client's attachments can preview them; a copy that leaves the system needs an
+    Org Admin's approval (owner decision 2026-11-19): one download, within 24 hours
+    of approval. Org Admins download directly. Never deleted; every step audited
+    (client_registry.attachment_access).
+    """
+
+    STATUS_PENDING = "PENDING"
+    STATUS_APPROVED = "APPROVED"
+    STATUS_DECLINED = "DECLINED"
+    STATUS_USED = "USED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Waiting for approval"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_USED, "Downloaded"),
+    ]
+
+    attachment = models.ForeignKey(
+        Attachment, on_delete=models.PROTECT, related_name="download_requests"
+    )
+    requested_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="+")
+    requested_at = models.DateTimeField(default=timezone.now)
+    reason = models.CharField(max_length=255)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    decided_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=255, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-requested_at"]
+
+
 class ConsentRecord(TenantScopedModel):
     """
     Append-only consent history — docs/09-SECURITY-COMPLIANCE.md §9.5:

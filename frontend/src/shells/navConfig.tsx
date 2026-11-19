@@ -7,6 +7,7 @@ import {
   Building2,
   ClipboardCheck,
   ClipboardList,
+  Download,
   CreditCard,
   FileBarChart,
   FileClock,
@@ -123,6 +124,7 @@ export const ORG_ADMIN_NAV: NavGroup[] = [
     label: "Governance",
     items: [
       { label: "Audit Log", to: "/org-admin/audit-log", icon: ClipboardList },
+      { label: "Download Requests", to: "/org-admin/download-requests", icon: Download },
       { label: "Data Requests", to: "/org-admin/data-requests", icon: Trash2 },
       { label: "Data Protection", to: "/org-admin/data-protection", icon: ClipboardCheck },
       { label: "Breach Incidents", to: "/org-admin/breach-incidents", icon: ShieldAlert },

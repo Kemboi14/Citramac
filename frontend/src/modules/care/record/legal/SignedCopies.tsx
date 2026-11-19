@@ -22,10 +22,13 @@ export function SignedCopies({
   doc,
   busy,
   run,
+  viewOnly = false,
 }: {
   doc: LegalDocumentRow;
   busy: boolean;
   run: Runner;
+  /** The client record: open (view) only — no upload or removal. */
+  viewOnly?: boolean;
 }) {
   const { accessToken, claims } = useAuth();
   const input = useRef<HTMLInputElement>(null);
@@ -57,7 +60,7 @@ export function SignedCopies({
       {doc.copies.map((c) => (
         <div key={c.id} className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span className="text-ink-500">Signed copy:</span>
+            <span className="text-ink-500">{viewOnly ? "Filed copy:" : "Signed copy:"}</span>
             <button
               type="button"
               className="font-semibold text-brand-green underline-offset-2 hover:underline"
@@ -68,7 +71,7 @@ export function SignedCopies({
             <span className="text-[11.5px] text-ink-500">
               {[c.uploaded_by, formatDateTime(c.uploaded_at)].filter(Boolean).join(" · ")}
             </span>
-            {c.uploaded_by_id === claims?.user_id && (
+            {!viewOnly && c.uploaded_by_id === claims?.user_id && (
               <button
                 type="button"
                 className={`${BTN_GHOST} ${BTN_SM}`}
@@ -111,27 +114,29 @@ export function SignedCopies({
           )}
         </div>
       ))}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          ref={input}
-          type="file"
-          accept={ACCEPT}
-          className="hidden"
-          aria-label={`Upload a signed copy of ${doc.title}`}
-          onChange={(e) => void upload(e.target.files?.[0])}
-        />
-        <button
-          type="button"
-          className={`${BTN_GHOST} ${BTN_SM}`}
-          disabled={busy}
-          onClick={() => input.current?.click()}
-        >
-          Upload signed copy
-        </button>
-        <span className="text-[11.5px] text-ink-500">
-          PDF, PNG or JPEG, up to 10 MB. Kept as evidence beside the form; it does not sign it.
-        </span>
-      </div>
+      {!viewOnly && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={input}
+            type="file"
+            accept={ACCEPT}
+            className="hidden"
+            aria-label={`Upload a signed copy of ${doc.title}`}
+            onChange={(e) => void upload(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            disabled={busy}
+            onClick={() => input.current?.click()}
+          >
+            Upload signed copy
+          </button>
+          <span className="text-[11.5px] text-ink-500">
+            PDF, PNG or JPEG, up to 10 MB. Kept as evidence beside the form; it does not sign it.
+          </span>
+        </div>
+      )}
       <ErrorNote>{error}</ErrorNote>
     </div>
   );
