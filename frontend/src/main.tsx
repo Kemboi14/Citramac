@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { AuthProvider } from "./auth/AuthContext.tsx";
 import { PatientProvider } from "./clinical/PatientContext.tsx";
 import { ThemeProvider } from "./theme/useTheme.ts";
+import { ThemeUserSync } from "./theme/ThemeUserSync.tsx";
 import { applyCachedPlatformTheme, setPlatformTheme } from "./theme/runtimeTheme.ts";
 import { GlobalTooltips } from "./components/Tooltip";
 import { getPlatformBranding } from "./lib/brandingApi.ts";
@@ -44,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
       <ErrorBoundary>
         <BrowserRouter>
           <AuthProvider>
+            <ThemeUserSync />
             <PatientProvider>
               <App />
               <GlobalTooltips />

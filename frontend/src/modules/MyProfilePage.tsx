@@ -8,9 +8,9 @@ import { useTheme } from "../theme/useTheme";
 import { ProfessionalProfileSection } from "./profile/ProfessionalProfileSection";
 
 const THEME_OPTIONS: { value: "system" | "light" | "dark"; label: string }[] = [
-  { value: "system", label: "Match device" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
+  { value: "system", label: "Match device" },
 ];
 
 /**
@@ -173,7 +173,9 @@ export function MyProfilePage() {
       <div className="rounded-lg border border-surface-border bg-surface-card p-6 shadow-sm">
         <h2 className="font-display text-base font-semibold text-ink-900">Appearance</h2>
         <p className="mt-1 text-[13px] text-ink-500">
-          &ldquo;Match device&rdquo; follows your system&rsquo;s light/dark setting automatically.
+          Light is the default. Your choice applies only to your own account on this browser &mdash;
+          it never changes anyone else&rsquo;s. &ldquo;Match device&rdquo; follows your
+          system&rsquo;s light/dark setting.
         </p>
         <div className="mt-4">
           <PillRadio value={preference} options={THEME_OPTIONS} onChange={setPreference} />
