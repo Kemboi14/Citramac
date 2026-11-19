@@ -577,6 +577,11 @@ urlpatterns = [
         name="care-legal-application",
     ),
     path(
+        "care/clients/<uuid:patient_id>/legal-status/change-type/",
+        lview.LegalChangeTypeView.as_view(),
+        name="care-legal-change-type",
+    ),
+    path(
         "care/legal/documents/<uuid:pk>/",
         lview.LegalDocumentView.as_view(),
         name="care-legal-document",
@@ -600,6 +605,16 @@ urlpatterns = [
         "care/legal/documents/<uuid:pk>/print/",
         lview.LegalDocumentPrintView.as_view(),
         name="care-legal-document-print",
+    ),
+    path(
+        "care/legal/documents/<uuid:pk>/copies/",
+        lview.LegalDocumentCopiesView.as_view(),
+        name="care-legal-document-copies",
+    ),
+    path(
+        "care/legal/documents/<uuid:pk>/copies/<uuid:copy_id>/",
+        lview.LegalDocumentCopyView.as_view(),
+        name="care-legal-document-copy",
     ),
     path(
         "care/legal/<uuid:pk>/decision/",

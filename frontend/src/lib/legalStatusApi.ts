@@ -28,7 +28,7 @@ export interface LegalDocumentRow {
   template_id: string;
   title: string;
   version: number;
-  status: "DRAFT" | "SIGNED";
+  status: "DRAFT" | "SIGNED" | "VOID";
   supersedes: string | null;
   superseded: boolean;
   amendment_reason: string;
@@ -42,6 +42,20 @@ export interface LegalDocumentRow {
   created_by: string;
   created_at: string;
   examination_encounter_id: string | null;
+  /** Set when the application was withdrawn (wrong admission type chosen). */
+  withdrawn_at: string | null;
+  withdrawn_by: string;
+  withdrawn_reason: string;
+  /** Scanned, hand-signed copies uploaded beside the form — evidence only. */
+  copies: LegalDocumentCopy[];
+}
+
+export interface LegalDocumentCopy {
+  id: string;
+  name: string;
+  uploaded_by: string;
+  uploaded_by_id: string | null;
+  uploaded_at: string;
 }
 
 export interface EvidenceItem {
@@ -305,6 +319,62 @@ export function amendLegalDocument(accessToken: string, docId: string, reason: s
     method: "POST",
     accessToken,
     body: { reason },
+  });
+}
+
+/** Upload a scanned copy. With `signAs`, an unsigned voluntary / involuntary
+ * application is recorded as signed by the applicant, this copy being the wet
+ * signature — in one step on the server. */
+export function uploadLegalDocumentCopy(
+  accessToken: string,
+  docId: string,
+  file: File,
+  signAs?: { signer_kind?: string; related_person_id?: string; adult_confirmed?: boolean },
+) {
+  const body = new FormData();
+  body.append("file", file);
+  if (signAs) {
+    body.append("sign", "true");
+    if (signAs.signer_kind) body.append("signer_kind", signAs.signer_kind);
+    if (signAs.related_person_id) body.append("related_person_id", signAs.related_person_id);
+    if (signAs.adult_confirmed) body.append("adult_confirmed", "true");
+  }
+  return apiRequest<LegalDocumentRow>(`/care/legal/documents/${docId}/copies/`, {
+    method: "POST",
+    body,
+    accessToken,
+  });
+}
+
+export function downloadLegalDocumentCopy(accessToken: string, docId: string, copyId: string) {
+  return apiDownload(`/care/legal/documents/${docId}/copies/${copyId}/`, accessToken);
+}
+
+export function removeLegalDocumentCopy(
+  accessToken: string,
+  docId: string,
+  copyId: string,
+  reason: string,
+) {
+  return apiRequest<LegalDocumentRow>(`/care/legal/documents/${docId}/copies/${copyId}/`, {
+    method: "POST",
+    accessToken,
+    body: { reason },
+  });
+}
+
+/** Correct a wrong Voluntary / Involuntary choice before the decision: the
+ * pending application is withdrawn (kept) and one of the other type started. */
+export function changeApplicationType(
+  accessToken: string,
+  patientId: string,
+  category: LegalCategory,
+  reason: string,
+) {
+  return apiRequest<LegalDocumentRow>(`/care/clients/${patientId}/legal-status/change-type/`, {
+    method: "POST",
+    accessToken,
+    body: { category, reason },
   });
 }
 

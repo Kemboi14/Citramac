@@ -29,6 +29,8 @@ import { useValueSets } from "../../shared/useValueSets";
 import { errorText } from "../../triage/helpers";
 import { useRecordData } from "../useRecordData";
 import { countdownText, useNow } from "./countdown";
+import { ApplicationSignature, ChangeApplicationType } from "./ApplicationSignature";
+import { SignedCopies } from "./SignedCopies";
 import { DocumentActions } from "../../../../components/DocumentActions";
 import DateInput from "../../../../components/DateInput";
 
@@ -246,6 +248,15 @@ export function LegalAdmissionStatus({
         ) : null}
         {pending && ls && (
           <>
+            {ls.status !== "ACTIVE" && (
+              <ChangeApplicationType
+                doc={pending}
+                current={pending.template_id === VOL ? "VOLUNTARY" : "INVOLUNTARY"}
+                patientId={patientId}
+                busy={busy}
+                run={run}
+              />
+            )}
             <LegalSteps data={data} pending={pending} recs={recs} />
             {pending.template_id === VOL && (
               <VoluntaryForm key={pending.id} doc={pending} data={data} busy={busy} run={run} />
@@ -589,19 +600,31 @@ function DocActions({
   onSave,
   onSign,
   signBody,
+  signArea,
   busy,
 }: {
   doc: LegalDocumentRow;
   onSave?: () => void;
-  onSign: () => void;
+  onSign?: () => void;
   signBody?: ReactNode;
+  /** Replaces the Sign button (applications: print → upload signed copy). */
+  signArea?: ReactNode;
   busy: boolean;
 }) {
+  if (doc.status === "VOID")
+    return (
+      <p className="text-[12.5px] text-ink-700">
+        Withdrawn{doc.withdrawn_by ? ` by ${doc.withdrawn_by}` : ""}
+        {doc.withdrawn_at ? `, ${formatDateTime(doc.withdrawn_at)}` : ""}
+        {doc.withdrawn_reason ? ` — ${doc.withdrawn_reason}` : ""}
+      </p>
+    );
   if (doc.status !== "DRAFT")
     return (
       <p className="text-[12.5px] text-ink-700">
         Signed by {doc.signer_name} ({doc.signer_kind.toLowerCase().replace("_", " ")}) —{" "}
         {formatDateTime(doc.signed_at)}
+        {doc.signature_method === "WET_SCAN" ? " · signed paper copy on file" : ""}
       </p>
     );
   return (
@@ -618,10 +641,13 @@ function DocActions({
             Save draft
           </button>
         )}
-        <button type="button" className={`${BTN} ${BTN_SM}`} disabled={busy} onClick={onSign}>
-          Sign
-        </button>
+        {!signArea && onSign && (
+          <button type="button" className={`${BTN} ${BTN_SM}`} disabled={busy} onClick={onSign}>
+            Sign
+          </button>
+        )}
       </div>
+      {signArea}
     </div>
   );
 }
@@ -700,9 +726,7 @@ function VoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocume
       <DocActions
         doc={doc}
         busy={busy}
-        onSign={() =>
-          run((t) => signLegalDocument(t, doc.id, sig), "Couldn't sign the application.")
-        }
+        signArea={<ApplicationSignature doc={doc} signer={sig} busy={busy} run={run} />}
         signBody={
           <>
             <div className="flex flex-wrap gap-4 text-[13px]">
@@ -749,7 +773,6 @@ function VoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocume
                 Age not recorded — I confirm the client is an adult
               </label>
             )}
-            <SignatureFields value={sig} onChange={setSig} />
           </>
         }
       />
@@ -817,7 +840,6 @@ function InvoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocu
     applicant_id_number: "",
   });
   const [clientId, setClientId] = useState({ client_id_number: "", client_id_kind: "NATIONAL_ID" });
-  const [sig, setSig] = useState<Record<string, unknown>>({ method: "ELECTRONIC" });
   const choosePerson = (id: string) => {
     const p = data.related_persons.find((r) => r.id === id);
     setApplicant({
@@ -998,11 +1020,9 @@ function InvoluntaryForm({ doc, data, busy, run }: PanelProps & { doc: LegalDocu
         doc={doc}
         busy={busy}
         onSave={save}
-        onSign={async () => {
-          if (await save())
-            await run((t) => signLegalDocument(t, doc.id, sig), "Couldn't sign the application.");
-        }}
-        signBody={<SignatureFields value={sig} onChange={setSig} />}
+        signArea={
+          <ApplicationSignature doc={doc} signer={{}} busy={busy} run={run} beforeSign={save} />
+        }
       />
     </Section>
   );
@@ -1409,8 +1429,10 @@ function DocumentsPanel({ data, busy, run }: PanelProps) {
               <span className="font-mono text-[11.5px] text-ink-500">
                 {d.document_number} v{d.version}
               </span>
-              <Tag tone={d.status === "SIGNED" ? "brand" : "warn"}>
-                {d.status === "SIGNED" ? "Signed" : "Draft"}
+              <Tag
+                tone={d.status === "SIGNED" ? "brand" : d.status === "VOID" ? undefined : "warn"}
+              >
+                {d.status === "SIGNED" ? "Signed" : d.status === "VOID" ? "Withdrawn" : "Draft"}
               </Tag>
               {d.superseded && <Tag>Superseded</Tag>}
               {d.amendment_reason && (
@@ -1431,6 +1453,7 @@ function DocumentsPanel({ data, busy, run }: PanelProps) {
                 </button>
               )}
             </div>
+            {!d.superseded && d.status !== "VOID" && <SignedCopies doc={d} busy={busy} run={run} />}
             {amending === d.id && (
               <div className="flex flex-wrap gap-2">
                 <input

@@ -1,6 +1,7 @@
 """Legal admission status endpoints (master prompt §7A). Logic is in legal_status.py."""
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -9,7 +10,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import legal_config, legal_print, legal_status
+from . import legal_config, legal_copies, legal_print, legal_status
 from .access import clinical_only
 from .legal_models import DischargeNotice, LegalDocument, LegalStatus
 from .models import CareTask
@@ -73,6 +74,64 @@ class LegalDocumentPrintView(APIView):
             legal_print.render(doc, request.user),
             printing.safe_filename(doc.document_number, f"v{doc.version}"),
         )
+
+
+class LegalDocumentCopiesView(APIView):
+    """POST care/legal/documents/<id>/copies/ {file} — upload a scanned, hand-signed
+    copy of a statutory form in the admission flow. Evidence only (legal_copies)."""
+
+    parser_classes = [MultiPartParser]
+
+    @clinical_only()
+    def post(self, request, pk):
+        doc = get_object_or_404(LegalDocument, pk=pk)
+        sign_as = None
+        if str(request.data.get("sign", "")).lower() in ("1", "true", "yes"):
+            # Upload = the applicant's wet signature (voluntary / involuntary only).
+            sign_as = {
+                "signer_kind": request.data.get("signer_kind") or None,
+                "related_person_id": request.data.get("related_person_id") or None,
+                "adult_confirmed": str(request.data.get("adult_confirmed", "")).lower()
+                in ("1", "true", "yes"),
+            }
+        with transaction.atomic():
+            legal_copies.upload(doc, request.user, request.FILES.get("file"), sign_as)
+        doc.refresh_from_db()
+        return Response(legal_status.document_row(doc), status=status.HTTP_201_CREATED)
+
+
+class LegalChangeTypeView(APIView):
+    """POST care/clients/<id>/legal/change-type/ {category, reason} — correct a wrong
+    Voluntary / Involuntary choice before the decision. The pending application is
+    withdrawn (kept, VOID) and one of the other type started; a signed one needs a
+    reason."""
+
+    @clinical_only()
+    def post(self, request, patient_id):
+        doc = legal_status.change_application_type(
+            _patient(patient_id),
+            request.user,
+            request.data.get("category"),
+            request.data.get("reason", ""),
+        )
+        return Response(legal_status.document_row(doc), status=status.HTTP_201_CREATED)
+
+
+class LegalDocumentCopyView(APIView):
+    """GET care/legal/documents/<id>/copies/<copy_id>/ — download one copy (audited).
+    POST …/remove/ {reason} — take a wrong upload off the form (kept, archived)."""
+
+    @clinical_only()
+    def get(self, request, pk, copy_id):
+        return legal_copies.download(get_object_or_404(LegalDocument, pk=pk), copy_id)
+
+    @clinical_only()
+    def post(self, request, pk, copy_id):
+        doc = get_object_or_404(LegalDocument, pk=pk)
+        legal_copies.remove(
+            doc, copy_id, request.user, request.data.get("reason", ""), _is_org_admin(request.user)
+        )
+        return Response(legal_status.document_row(doc))
 
 
 class LegalDecisionView(APIView):

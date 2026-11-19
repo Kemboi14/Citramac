@@ -1161,3 +1161,31 @@ migration `care_pathway 0064`). It is not a second store.
 
 Reversibility: cheap. A link and new actions on draft plans are added. Signed triages and signed
 care-plan versions do not change; reversing `0064` removes only the link.
+
+### 2026-11-19 — admission: print, sign on paper, upload; change of admission type
+
+On the owner's decisions of 2026-11-19 (mapping stated before building, §7), in Inpatient Admissions
+step 2:
+
+1. **Print → sign → upload.** A voluntary or involuntary application is printed for the applicant to
+   sign. Uploading the signed copy (PDF, PNG or JPEG, ≤ 10 MB, content checked) records it as signed
+   by the applicant (method `WET_SCAN`, the uploader as the person who captured it), in one
+   transaction: an incomplete form is not signed and the upload is not kept. The witnessed electronic
+   signature stays available. The medical recommendation is still signed in the system by the doctor.
+2. **Signed copies of any statutory form** can be uploaded beside it (evidence only; a copy never signs
+   a form) by clinical staff. They are stored in the one attachment store (`Attachment.legal_document`,
+   and the admission when there is one), opened through the app, and removed only by the uploader or an
+   Org Admin with a reason (archived, never deleted). Uploads, downloads and removals are audited with
+   the file's SHA-256 and size, never its content (`legal_copies.py`).
+3. **Change of type.** Until a status is in force, the application can be switched between voluntary
+   and involuntary: an unsigned draft in one click, a signed one with a reason. The application and its
+   recommendations are marked Withdrawn (`VOID`, with who, when and why); a signed form's content and
+   signature never change. Once admitted, conversion applies instead.
+4. **Print.** "For official use only" is printed only once the admitting officer has decided, so the
+   copy the applicant signs carries no blank Admitted / Rejected boxes. A withdrawn form prints marked
+   Withdrawn, as signed.
+
+FHIR: the scan is a `DocumentReference` (the file as content) on the admission `Encounter` in its
+`EpisodeOfCare`, R + PSY, with a `Provenance` for the signature; never sent to the SHR; not emitted
+yet. VERIFY: a LOINC document type for a statutory admission form. Reversibility: cheap. Migrations
+`client_registry 0027` and `care_pathway 0065` add a link and withdrawal fields; no signed form changes.

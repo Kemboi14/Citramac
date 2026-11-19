@@ -42,7 +42,7 @@ from apps.accounts.access import active_roles
 from apps.client_registry.models import Attachment, EmergencyContact, PatientIdentifier
 from apps.clinical_encounter.models import DiagnosisCode, Encounter
 
-from . import facility_time, legal_config
+from . import facility_time, legal_config, legal_copies
 from .legal_config import LEGAL_ALERT_LABELS
 from .legal_models import (
     INVOLUNTARY_APPLICATION_TEMPLATE,
@@ -817,6 +817,62 @@ def save_draft(doc, user, data):
     return doc
 
 
+@transaction.atomic
+def change_application_type(patient, user, category, reason=""):
+    """Correct a wrong choice of Voluntary / Involuntary before the admitting
+    officer decides. The pending application (and any recommendation made for
+    it) is withdrawn — kept as VOID, never deleted — and an application of the
+    other type is started. A signed application needs a reason; an unsigned
+    draft does not. Once a status is in force this is a conversion instead."""
+    if category not in APPLICATION_TEMPLATES:
+        raise ValidationError({"category": "Choose VOLUNTARY or INVOLUNTARY."})
+    episode = _open_episode(patient, user)
+    ls = LegalStatus.objects.select_for_update().filter(episode=episode).first()
+    pending = ls.pending_application if ls else None
+    if pending is None:
+        raise ValidationError({"detail_message": "There is no application to change."})
+    if ls.status == "ACTIVE":
+        raise ValidationError(
+            {
+                "detail_message": "The client is already admitted under a legal status; "
+                "use conversion instead of changing the application type."
+            }
+        )
+    if pending.template_id == APPLICATION_TEMPLATES[category]:
+        raise ValidationError({"category": "The application is already of that type."})
+    reason = (reason or "").strip()
+    if pending.status == "SIGNED" and len(reason) < 5:
+        raise ValidationError(
+            {"reason": "The application is signed: say why the type is being changed."}
+        )
+    now = timezone.now()
+    was_signed = pending.status == "SIGNED"
+    withdrawn = [pending, *LegalDocument.objects.filter(application=pending).exclude(status="VOID")]
+    for doc in withdrawn:
+        # Content and any signature are left exactly as they were.
+        doc.status = "VOID"
+        doc.withdrawn_at, doc.withdrawn_by = now, user
+        doc.withdrawn_reason = reason or "Wrong admission type chosen (unsigned draft)."
+        doc.save(update_fields=[*LegalDocument.WITHDRAW_FIELDS, "updated_at"])
+    from_category = ls.category
+    ls.pending_application = None
+    ls.save()
+    _event(
+        ls,
+        "APPLICATION_WITHDRAWN",
+        user,
+        ls.workflow_state,
+        ls.workflow_state,
+        document=str(pending.pk),
+        was_signed=was_signed,
+        from_category=from_category,
+        to_category=category,
+        withdrawn=[str(d.pk) for d in withdrawn],
+        reason=reason,
+    )
+    return start_application(patient, user, category)
+
+
 def _attachment(doc, data):
     att = (
         Attachment.objects.filter(pk=data.get("attachment_id"), patient=doc.patient).first()
@@ -1228,8 +1284,9 @@ def decide(ls, user, decision, reason=""):
             )
     converting = ls.status == "ACTIVE" and ls.category != category
     previous_category = ls.category
-    ls.category, ls.statutory_basis = category, legal_config.statutory_basis(
-        category, ls.config_version
+    ls.category, ls.statutory_basis = (
+        category,
+        legal_config.statutory_basis(category, ls.config_version),
     )
     ls.application_document, ls.pending_application = application, None
     ls.decision, ls.decision_by, ls.decision_role, ls.decision_at, ls.decision_reason = (
@@ -1741,6 +1798,11 @@ def document_row(doc):
         "examination_encounter_id": (
             str(doc.examination_encounter_id) if doc.examination_encounter_id else None
         ),
+        "withdrawn_at": _iso(doc.withdrawn_at),
+        "withdrawn_by": _name(doc.withdrawn_by),
+        "withdrawn_reason": doc.withdrawn_reason,
+        # Scanned paper copies uploaded beside the form (legal_copies) — evidence only.
+        "copies": legal_copies.rows(doc),
     }
 
 

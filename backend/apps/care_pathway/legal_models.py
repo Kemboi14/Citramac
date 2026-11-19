@@ -150,7 +150,9 @@ class LegalDocument(TenantScopedModel):
         (RECOMMENDATION_TEMPLATE, "Recommendation for Involuntary Treatment"),
         (NOTICE_TEMPLATE, "Written notice of intention to leave"),
     ]
-    STATUS_CHOICES = [("DRAFT", "Draft"), ("SIGNED", "Signed")]
+    # VOID: an application withdrawn because the wrong type (voluntary /
+    # involuntary) was chosen, with its recommendations. Kept, never deleted.
+    STATUS_CHOICES = [("DRAFT", "Draft"), ("SIGNED", "Signed"), ("VOID", "Withdrawn")]
     SIGNER_CHOICES = [
         ("CLIENT", "Client"),
         ("GUARDIAN", "Parent / guardian"),
@@ -215,6 +217,16 @@ class LegalDocument(TenantScopedModel):
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # Withdrawn (status VOID) because the wrong admission type was chosen —
+    # legal_status.change_application_type. A signed form's content and
+    # signature stay exactly as signed; only these fields and the status change.
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    withdrawn_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    withdrawn_reason = models.TextField(blank=True)
+
+    WITHDRAW_FIELDS = frozenset({"status", "withdrawn_at", "withdrawn_by", "withdrawn_reason"})
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["created_at"]
@@ -222,10 +234,20 @@ class LegalDocument(TenantScopedModel):
     def save(self, *args, **kwargs):
         if self.pk and not self._state.adding:
             stored = type(self).all_objects.filter(pk=self.pk).values_list("status", flat=True)
-            if stored and stored[0] == "SIGNED":
-                raise PermissionError(
-                    "This form is signed and cannot be changed. Amend it instead."
+            if stored and stored[0] in ("SIGNED", "VOID"):
+                update_fields = set(kwargs.get("update_fields") or ())
+                withdrawing = (
+                    stored[0] == "SIGNED"
+                    and self.status == "VOID"
+                    and update_fields
+                    and update_fields <= self.WITHDRAW_FIELDS | {"updated_at"}
                 )
+                if not withdrawing:
+                    raise PermissionError(
+                        "This form is signed and cannot be changed. Amend it instead."
+                        if stored[0] == "SIGNED"
+                        else "This form was withdrawn and cannot be changed."
+                    )
         super().save(*args, **kwargs)
 
     @property

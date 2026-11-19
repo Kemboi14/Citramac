@@ -49,22 +49,27 @@ def _official(ls, r, labels, document_template):
             "ADMITTED",
             "REJECTED",
         )
-    decision = ls.decision if decided else ""
+    if not decided:
+        # Before the admitting officer decides, the block is left off: empty
+        # Admitted / Rejected boxes on the copy the applicant signs could be read
+        # as a decision. It prints, filled in, once the decision is recorded.
+        return ""
+    decision = ls.decision
     parts = [
         '<div class="official"><div class="official-title">FOR OFFICIAL USE ONLY</div>',
-        f'<p>{_box(decision == "ADMITTED")}{escape(labels.get("admitted", "Admitted"))} &nbsp; '
-        f'{_box(decision == "REJECTED")}{escape(labels.get("rejected", "Rejected"))}</p>',
+        f"<p>{_box(decision == 'ADMITTED')}{escape(labels.get('admitted', 'Admitted'))} &nbsp; "
+        f"{_box(decision == 'REJECTED')}{escape(labels.get('rejected', 'Rejected'))}</p>",
     ]
     if document_template == RECOMMENDATION_TEMPLATE:
-        parts.append(f'<p><em>{escape(labels.get("decisionMirror", ""))}</em></p>')
+        parts.append(f"<p><em>{escape(labels.get('decisionMirror', ''))}</em></p>")
     else:
         if decision == "REJECTED":
             parts.append(f"<p>Reason: {_dots(ls.decision_reason)}</p>")
         parts.append(
-            f'<p>{escape(labels.get("admittingOfficerName", ""))}: {_dots(legal_status._name(ls.decision_by) if decided else "")}</p>'
+            f"<p>{escape(labels.get('admittingOfficerName', ''))}: {_dots(legal_status._name(ls.decision_by) if decided else '')}</p>"
         )
         parts.append(
-            f'<p>{escape(labels.get("admittingOfficerSignature", ""))}: {_dots("Signed electronically" if decided else "")}</p>'
+            f"<p>{escape(labels.get('admittingOfficerSignature', ''))}: {_dots('Signed electronically' if decided else '')}</p>"
         )
         date_label = labels.get("decisionDateTime") or labels.get("date", "Date")
         parts.append(
@@ -75,7 +80,7 @@ def _official(ls, r, labels, document_template):
 
 
 def _signature_line(doc, label):
-    if doc.status != "SIGNED":
+    if not doc.signed_at:  # a withdrawn form keeps the signature it had
         return f"<p>{escape(label)}: {_dots('')}</p>"
     how = (
         "e-signature, witnessed by " + legal_status._name(doc.captured_by)
@@ -87,11 +92,7 @@ def _signature_line(doc, label):
 
 def render(doc, user):
     ls = doc.legal_status
-    r = (
-        dict(doc.rendered)
-        if doc.status == "SIGNED" and doc.rendered
-        else legal_status.render_snapshot(doc)
-    )
+    r = dict(doc.rendered) if doc.signed_at and doc.rendered else legal_status.render_snapshot(doc)
     r["_doc_id"], r["_application_id"] = doc.pk, doc.application_id
     facility, labels, client = r["facility"], r.get("labels", {}), r["client"]
     body = []
@@ -101,19 +102,24 @@ def render(doc, user):
         body.append(
             f"<p><strong>Amended version {doc.version}.</strong> Reason: {escape(doc.amendment_reason)}</p>"
         )
+    if doc.status == "VOID":
+        body.append(
+            "<p><strong>WITHDRAWN — not valid for signature.</strong> "
+            f"{escape(doc.withdrawn_reason)}</p>"
+        )
 
     if doc.template_id == VOLUNTARY_TEMPLATE:
         body.append(f"<p>{escape(r['explanatoryText'])}</p>")
         body.append(
             f'<div class="notice"><strong>{escape(r["noticeHeading"])}</strong><p>“{escape(r["noticeText"])}”</p>'
-            f'<p><em>({escape(r["noticePurpose"])})</em></p>'
-            f'<p>{_box(bool(doc.content.get("notice_acknowledged_at")))}{escape(r["noticeAcknowledgement"])} '
-            f'{escape(_when(doc.content.get("notice_acknowledged_at")))}</p></div>'
+            f"<p><em>({escape(r['noticePurpose'])})</em></p>"
+            f"<p>{_box(bool(doc.content.get('notice_acknowledged_at')))}{escape(r['noticeAcknowledgement'])} "
+            f"{escape(_when(doc.content.get('notice_acknowledged_at')))}</p></div>"
         )
         body.append(f"<p>{escape(r['declaration'])}</p>")
         body.append(_signature_line(doc, labels.get("applicantSignature", "")))
         body.append(
-            f'<p>{escape(labels.get("applicantSignatureDate", "Date"))}: {_dots(facility_time.local_format(doc.signed_at, "%d/%m/%Y %H:%M"))}</p>'
+            f"<p>{escape(labels.get('applicantSignatureDate', 'Date'))}: {_dots(facility_time.local_format(doc.signed_at, '%d/%m/%Y %H:%M'))}</p>"
         )
         body.append(_official(ls, r, labels, doc.template_id))
     elif doc.template_id == INVOLUNTARY_APPLICATION_TEMPLATE:
@@ -201,6 +207,7 @@ def render(doc, user):
     from apps.documents import printing
 
     signed = doc.status == "SIGNED"
+    withdrawn = doc.status == "VOID"
     episode = ls.episode if ls and ls.episode_id else None
     branch = episode.branch if episode and episode.branch_id else None
     organization = doc.patient.organization
@@ -212,9 +219,12 @@ def render(doc, user):
         "meta": [
             ("Document no.", f"{doc.document_number} v{doc.version}"),
             ("Date", facility_time.local_format(doc.signed_at or timezone.now(), "%d %b %Y")),
-            ("Status", "Signed" if signed else "Draft — not signed"),
+            (
+                "Status",
+                "Withdrawn" if withdrawn else ("Signed" if signed else "Draft — not signed"),
+            ),
         ],
-        "watermark": "" if signed else "Draft — not signed",
+        "watermark": ("Withdrawn" if withdrawn else ("" if signed else "Draft — not signed")),
         "watermark_short": "DRAFT",
         # Every value in `body` went through escape() above; the parts are fixed markup.
         "form_body": mark_safe("".join(body)),  # nosec B308 B703 — escaped above

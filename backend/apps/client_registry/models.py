@@ -668,6 +668,17 @@ class Attachment(TenantScopedModel):
         blank=True,
         related_name="attachments",
     )
+    # A paper copy of a statutory admission form (signed by hand, then
+    # scanned), uploaded beside that form in the admission flow. Evidence
+    # only: the form's own status and signature stay the record
+    # (care_pathway.legal_copies).
+    legal_document = models.ForeignKey(
+        "care_pathway.LegalDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="copies",
+    )
     file = models.FileField(upload_to="attachments/%Y/%m/")
     classification = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="OTHER")
