@@ -95,7 +95,7 @@ class LegalDocumentCopyTests(LegalStatusTestCase):
         with platform_admin_context():
             clerk = User.objects.create_user(
                 email=f"clerk-{uuid.uuid4().hex[:6]}@org.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 is_active=True,
             )
