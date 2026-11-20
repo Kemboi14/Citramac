@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InterventionsStage } from "./InterventionsStage";
@@ -98,8 +98,13 @@ describe("InterventionsStage", () => {
       </MemoryRouter>,
     );
 
+    // The note is in the action's details, opened from its row.
+    const row = await screen.findByRole("button", { name: "Show details" });
+    fireEvent.click(row);
     expect(
-      await screen.findByText("Client agrees to weekly review; prefers mornings."),
+      await screen.findByText("Client agrees to weekly review; prefers mornings.", {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Care-plan note/)).toBeInTheDocument();
   });

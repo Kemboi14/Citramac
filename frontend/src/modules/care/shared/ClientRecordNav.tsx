@@ -173,13 +173,24 @@ export function ClientRecordNav({
         // amber in progress, hollow not started), the current stage in bold and
         // underlined, and each stage's status named on hover and to screen readers.
         <nav aria-label="Client care journey" className="mb-3 flex items-center overflow-x-auto">
-          {JOURNEY_STAGES.filter((stage) => stage.key !== "snapshot").map((stage, index) => {
+          {JOURNEY_STAGES.filter((stage) => stage.key !== "snapshot").map((stage, index, all) => {
             const active = stage.key === view;
             const status = stageStatus(stage.key);
+            // The line into this stage turns green once both stages it joins are
+            // complete, so the finished part of the journey reads as one path.
+            const joined =
+              index > 0 && status === "complete" && stageStatus(all[index - 1].key) === "complete";
             const { label } = statusPresentation(status);
             return (
               <span key={stage.key} className="flex flex-none items-center">
-                {index > 0 && <span aria-hidden className="mx-1 h-px w-4 bg-surface-border" />}
+                {index > 0 && (
+                  <span
+                    aria-hidden
+                    className={`mx-1 h-0.5 w-8 rounded-full ${
+                      joined ? "bg-priority-green-solid" : "bg-surface-border"
+                    }`}
+                  />
+                )}
                 <NavLink
                   to={clientRecordPath(patientId, stage.key)}
                   aria-current={active ? "step" : undefined}

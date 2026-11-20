@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, Trash2, X } from "lucide-react";
 import { ConfirmDialog } from "../../../../components/ConfirmDialog";
 import { RowActionsMenu, type RowAction } from "../../../../components/RowActionsMenu";
 import { useAuth } from "../../../../auth/useAuth";
@@ -24,6 +24,12 @@ const PRIORITY_LABEL: Record<PlanPriority, string> = {
   ORANGE: "Urgent",
   YELLOW: "Priority",
   GREEN: "Routine",
+};
+const PRIORITY_TAG: Record<PlanPriority, string> = {
+  RED: "bg-priority-red-tint text-priority-red",
+  ORANGE: "bg-priority-orange-tint text-priority-orange",
+  YELLOW: "bg-priority-yellow-tint text-priority-yellow",
+  GREEN: "bg-priority-green-tint text-priority-green",
 };
 const DOT: Record<PlanPriority, string> = {
   RED: "bg-priority-red",
@@ -81,6 +87,15 @@ export function DecisionsTab({
   const { accessToken } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
+  // Rows in the plan show their details (why, tasks, instructions) on demand.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const [reason, setReason] = useState("");
   const [instructions, setInstructions] = useState("");
   const [priority, setPriority] = useState<PlanPriority>("GREEN");
@@ -305,7 +320,9 @@ export function DecisionsTab({
     }
   }
 
-  function renderRow(row: Row, state: "decide" | "plan" | "declined") {
+  function renderRow(row: Row, mode: "decide" | "plan" | "declined") {
+    if (mode !== "decide") return renderCompactRow(row, mode);
+    const state = mode as "decide" | "plan" | "declined";
     const act = row.act;
     const shown = (act?.priority || row.recommended) as PlanPriority | null;
     const modified = act?.decision === "MODIFIED";
@@ -413,6 +430,100 @@ export function DecisionsTab({
             </div>
           )}
         </div>
+        {renderEditor(row)}
+      </li>
+    );
+  }
+
+  /** In the plan / declined: at a glance the title, a clear priority tag and a
+   * short status; why it is there, its tasks and instructions open on demand. */
+  function renderCompactRow(row: Row, state: "plan" | "declined") {
+    const act = row.act;
+    const shown = (act?.priority || row.recommended) as PlanPriority | null;
+    const open = expanded.has(row.key);
+    const status =
+      state === "declined"
+        ? "Declined"
+        : act?.triage_tasks?.length
+          ? "Started at triage"
+          : act?.decision === "ADDED"
+            ? "Added by clinician"
+            : act?.decision === "MODIFIED" && row.recommended
+              ? `Changed from ${PRIORITY_LABEL[row.recommended]}`
+              : "Recommended";
+    const hasDetails =
+      row.why.length > 0 ||
+      Boolean(act?.triage_tasks?.length) ||
+      Boolean(act?.instructions) ||
+      (state === "declined" && Boolean(act?.reason));
+    return (
+      <li key={row.key} data-action-key={row.key}>
+        <div className="flex items-center gap-3 px-4 py-2.5">
+          <button
+            type="button"
+            aria-expanded={open}
+            disabled={!hasDetails}
+            onClick={() => toggle(row.key)}
+            className={`min-w-0 flex-1 truncate text-left text-[13.5px] font-semibold ${
+              state === "declined"
+                ? "text-ink-500 line-through decoration-ink-300"
+                : "text-ink-900 enabled:hover:text-accent-info enabled:hover:underline"
+            }`}
+          >
+            {row.name}
+          </button>
+          <span className="hidden w-40 sm:block">
+            {shown && state !== "declined" && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${PRIORITY_TAG[shown]}`}
+              >
+                <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${DOT[shown]}`} />
+                {shown.charAt(0) + shown.slice(1).toLowerCase()} · {PRIORITY_LABEL[shown]}
+              </span>
+            )}
+          </span>
+          <span className="hidden w-36 truncate text-[12.5px] text-ink-500 md:block">{status}</span>
+          {!disabled && editor?.key !== row.key ? (
+            <RowActionsMenu label={`Actions for ${row.name}`} actions={rowActions(row, state)} />
+          ) : (
+            <span className="w-8" />
+          )}
+          <button
+            type="button"
+            aria-label={open ? "Hide details" : "Show details"}
+            aria-expanded={open}
+            disabled={!hasDetails}
+            onClick={() => toggle(row.key)}
+            className="grid h-8 w-8 flex-none place-items-center rounded-md text-ink-400 hover:bg-surface-bg hover:text-ink-900 disabled:invisible"
+          >
+            <ChevronDown
+              aria-hidden
+              className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+        {open && (
+          <div className="flex flex-col gap-1 bg-surface-bg px-4 pb-3 pt-2 text-[12.5px]">
+            {row.why.map((w) => (
+              <p key={w} className="text-ink-700">
+                {w}
+              </p>
+            ))}
+            {act?.triage_tasks?.map((t) => (
+              <p key={t.id} className="text-ink-700">
+                {t.label} · {t.assignee} ·{" "}
+                <span className="text-ink-500">{triageTaskStatus(t.status)}</span>
+              </p>
+            ))}
+            {act?.instructions && (
+              <p className="text-ink-700">
+                <span className="text-ink-500">Instructions: </span>
+                {act.instructions}
+              </p>
+            )}
+            {state === "declined" && act?.reason && <p className="text-ink-500">“{act.reason}”</p>}
+          </div>
+        )}
         {renderEditor(row)}
       </li>
     );

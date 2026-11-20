@@ -117,9 +117,6 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
 
   return (
     <section aria-labelledby="interventions-title">
-      <div className="text-[11px] font-bold tracking-[.35px] text-brand-green">
-        What did the team actually do?
-      </div>
       <h2
         id="interventions-title"
         className="mb-[18px] flex items-center gap-2 font-display text-xl font-semibold text-ink-900"
@@ -163,6 +160,7 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
             loading={workspace.loading && !data}
             moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
             patientId={patientId}
+            onOpen={openModule_}
           />
           {actions.some((action) => action.status === "COMPLETED") && (
             <details className="mt-2">
@@ -175,6 +173,7 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
                   loading={false}
                   moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
                   patientId={patientId}
+                  onOpen={openModule_}
                 />
               </div>
             </details>

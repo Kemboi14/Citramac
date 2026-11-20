@@ -90,9 +90,9 @@ export function SafetyBanner({
       "border-priority-orange bg-[repeating-linear-gradient(135deg,var(--pri-orange-tint)_0_10px,var(--card)_10px_20px)]",
   }[allergy.state];
   const allergyTitle = {
-    known: "ALLERGIES",
+    known: "Known allergies",
     none: "No known allergies",
-    unknown: "ALLERGIES UNKNOWN",
+    unknown: "Allergies unknown",
   }[allergy.state];
   const allergyTone = {
     known: "text-priority-red",
@@ -170,7 +170,7 @@ export function SafetyBanner({
       data-safety-banner
       className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-3 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
-      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.2fr)_minmax(200px,.9fr)_minmax(220px,1.1fr)_minmax(240px,1.3fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
+      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.05fr)_minmax(150px,.55fr)_minmax(230px,1.15fr)_minmax(300px,1.75fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
         <div className={`${cell} flex items-center gap-3.5`} aria-label="Patient identity">
           <div
             aria-hidden="true"
@@ -212,16 +212,17 @@ export function SafetyBanner({
           </div>
         </div>
 
-        <div className={`${cell} flex items-center`} aria-label="Allergy information">
+        {/* Same shape as the other columns: a label, then the status in its
+            colour with an icon, and the detail beneath — no box. */}
+        <div className={`${cell} flex flex-col justify-center`} aria-label="Allergy information">
+          <div className={label}>Allergies</div>
           <div
             id="banner-allergy"
             aria-live="polite"
             data-state={allergy.state}
-            className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-1.5 ${allergyBox}`}
+            className="flex w-full flex-col gap-0.5"
           >
-            <div
-              className={`flex items-center gap-2 text-xs font-extrabold tracking-[.3px] ${allergyTone}`}
-            >
+            <div className={`flex items-center gap-1.5 text-[13px] font-bold ${allergyTone}`}>
               {allergy.state === "none" ? (
                 <Check className="h-[15px] w-[15px]" />
               ) : (
@@ -256,7 +257,7 @@ export function SafetyBanner({
                   }))}
                 />
               ) : (
-                <span className={`text-xs font-semibold ${allergyTone}`}>
+                <span className="text-[12px] font-semibold text-ink-500">
                   {allergy.state === "none"
                     ? "Confirmed at triage"
                     : allergy.state === "known"
