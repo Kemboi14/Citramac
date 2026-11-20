@@ -725,6 +725,11 @@ urlpatterns = [
         name="care-client-interventions",
     ),
     path(
+        "care/clients/<uuid:patient_id>/medical-review/summary/",
+        iview.MedicalReviewSummaryView.as_view(),
+        name="care-medical-review-summary",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/interventions/workspace/",
         iview.InterventionWorkspaceView.as_view(),
         name="care-client-interventions-workspace",

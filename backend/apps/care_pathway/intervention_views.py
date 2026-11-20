@@ -14,7 +14,13 @@ from apps.ipd_ward.models import MedicationAdministration
 from . import intervention_catalogue
 from . import interventions as iv
 from .access import clinical_only
-from .models import CosignRequest, InterventionRecord, RestrictiveCheck, RestrictivePracticeEpisode
+from .models import (
+    CosignRequest,
+    InterventionRecord,
+    MedicationHistoryEntry,
+    RestrictiveCheck,
+    RestrictivePracticeEpisode,
+)
 from .serializers import InterventionRecordSerializer
 from .views import _is_org_admin, _patient, _vital_row
 
@@ -25,6 +31,57 @@ class InterventionWorkspaceView(APIView):
 
     def get(self, request, patient_id):
         return Response(intervention_catalogue.workspace(_patient(patient_id)))
+
+
+class MedicalReviewSummaryView(APIView):
+    """GET care/clients/<id>/medical-review/summary/ — what the record already
+    holds for a medical review, read-only: the latest vital signs and early-warning
+    score, active allergies, recent prescriptions, and the latest signed intake's
+    Medical & Neurological History. Nothing is copied or stored."""
+
+    @clinical_only()
+    def get(self, request, patient_id):
+        from apps.triage.models import VitalSigns
+
+        from . import client_report, intake, intake_schema, services
+
+        patient = _patient(patient_id)
+        vital = (
+            VitalSigns.objects.filter(encounter__patient=patient).order_by("-recorded_at").first()
+        )
+        signed = intake.latest_signed(patient)
+        history = []
+        if signed:
+            # The section is found by its key; its title is only how it is shown.
+            title = next(s["title"] for s in intake_schema.SECTIONS if s["key"] == "medical")
+            sections = client_report._intake_sections(signed, services.concept_labels())
+            history = next((s["rows"] for s in sections if s["title"] == title), [])
+        return Response(
+            {
+                "vitals": _vital_row(vital) if vital else None,
+                "allergies": client_report._allergies(patient),
+                "medicines": client_report._medicines(patient)[:10],
+                # What the client reported taking at intake (current entries only).
+                "reported_medicines": [
+                    {
+                        "name": m.name,
+                        "dose": m.dose,
+                        "frequency": m.frequency,
+                        "route": m.route,
+                        "status": m.get_status_display(),
+                    }
+                    for m in MedicationHistoryEntry.objects.filter(
+                        patient=patient, superseded_at__isnull=True
+                    ).order_by("name")
+                ],
+                "intake": {
+                    "signed_at": (
+                        signed.signed_at.isoformat() if signed and signed.signed_at else None
+                    ),
+                    "history": history,
+                },
+            }
+        )
 
 
 class InterventionVoidView(APIView):
@@ -165,7 +222,6 @@ class MarOrderAdministerView(APIView):
     a dose against an order at one of today's dose times, or unscheduled."""
 
     def post(self, request, patient_id, item_id):
-
         from . import services
 
         patient = _patient(patient_id)

@@ -8,6 +8,7 @@ import { Card, ErrorNote } from "../../shared/ui";
 import { OatModule } from "../modules/ClinicalExtras";
 import { LabsModule } from "../modules/LabsModule";
 import { MarModule } from "../modules/MarModule";
+import { MedicalReviewSummary } from "../modules/MedicalReviewSummary";
 import { ObservationModule } from "../modules/ObservationModule";
 import { PrescribingModule } from "../modules/PrescribingModule";
 import { RestrictiveModule } from "../modules/RestrictiveModule";
@@ -66,9 +67,10 @@ function ClientFollowUps({ patientId, clientName }: Target) {
  * the same components and pages the record and sidebar use, so each concept
  * keeps one store (guide.md §4). Pages outside the record open scoped to the
  * client: the record selects it in the shared patient context, and the
- * admissions page takes `?patient=`. Modules with no dedicated module yet
- * (medical review, psychosocial support, nutrition & fitness) record through
- * the delivery form only. Psychotherapy is a launcher (TherapyModule) drawn
+ * admissions page takes `?patient=`. Medical review shows what the record
+ * already holds (read-only) above its delivery form. Modules with no dedicated
+ * module yet (psychosocial support, nutrition & fitness) record through the
+ * delivery form only. Psychotherapy is a launcher (TherapyModule) drawn
  * by the drawer instead of a tool here; its sessions open on their own page.
  * Admission opens Inpatient Admissions for the client (InterventionsStage). */
 const MODULES = new Map<string, ModuleDef>(
@@ -93,6 +95,15 @@ const MODULES = new Map<string, ModuleDef>(
           title: "Safety planning",
           note: "Client-held safety plan, crisis & relapse plan, lethal-means counselling, 72-hour contact",
           render: ({ patientId }: Target) => <SafetyPlanModule patientId={patientId} />,
+        },
+      ],
+    },
+    medical_review: {
+      tools: [
+        {
+          title: "Medical review summary",
+          note: "Latest observations and EWS, allergies, medicines, medical history — read-only",
+          render: ({ patientId }: Target) => <MedicalReviewSummary patientId={patientId} />,
         },
       ],
     },
