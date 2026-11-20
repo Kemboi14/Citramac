@@ -48,7 +48,7 @@ export function ProfileCompletionBanner() {
   return (
     <div
       role={blocking ? "alert" : "status"}
-      className="mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-surface-border bg-surface-card px-3.5 py-2.5 text-[13px] text-ink-900 shadow-sm"
+      className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-surface-border bg-surface-card px-3 py-1 text-[12.5px] text-ink-900 shadow-sm"
     >
       <IdCard aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-ink-500" />
       <span className="min-w-0 flex-1">

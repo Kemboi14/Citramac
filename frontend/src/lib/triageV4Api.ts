@@ -46,6 +46,8 @@ export interface SigningTask {
 export interface TriageV4Evaluation extends TriageEvaluation {
   schema?: "v4" | "v5";
   signing_tasks?: SigningTask[];
+  /** Answers signing will ask for that are still missing, with the field key. */
+  required_missing?: { key: string; message: string }[];
   ruleset_label?: string;
   reason_list?: V4Reason[];
   finding_items?: V4FindingItem[];

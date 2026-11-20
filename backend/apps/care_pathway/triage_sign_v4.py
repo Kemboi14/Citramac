@@ -119,6 +119,8 @@ def sign_triage_v4(triage_encounter, user, payload, rules=v4):
     assessment.decision = answers["m_decision"]
     assessment.override_reason = answers["m_override_reason"]
     assessment.rules_version = rules.RULES_VERSION
+    if assessment.version > 1:
+        assessment.retriage_reason = triage_encounter.retriage_reason
     assessment.tasks_snapshot = [
         {**t, "created_at": t["created_at"].isoformat()}
         for t in triage_encounter.tasks.values("action_label", "owner", "status", "created_at")

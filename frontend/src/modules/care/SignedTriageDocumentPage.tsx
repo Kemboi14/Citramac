@@ -8,6 +8,7 @@ import { formatDateTime } from "./shared/format";
 import { clientRecordPath } from "./shared/recordRoutes";
 import { BTN, FIELD_LABEL, TABLE, TD, TH } from "./shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, PriorityPill, Tag } from "./shared/ui";
+import { AnswerList } from "./shared/AnswerList";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 // Read-only rendering of one signed triage assessment (doc 15 §1.6 "The signed
@@ -15,7 +16,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 // the served labels the API returns with the record (`payload.labels`, keyed
 // "valuesetId:code"); nothing here hard-codes a display for a code.
 
-type SignedAssessment = TriageAssessmentRecord & {
+export type SignedAssessment = TriageAssessmentRecord & {
   patient_id: string;
   name: string;
   labels: Record<string, string>;
@@ -253,10 +254,6 @@ export function SignedTriageDocumentPage() {
     return <p className="text-sm text-ink-500">Loading signed triage assessment…</p>;
   }
 
-  const labels = new Map(Object.entries(record.labels ?? {}));
-  const sections = groupAnswers(record);
-  const taskStatus = (code: string) => labels.get(`task-status:${code}`) ?? code;
-
   return (
     <div className="animate-fade-in">
       <Breadcrumbs
@@ -292,143 +289,150 @@ export function SignedTriageDocumentPage() {
         }
       />
 
-      <div className="grid gap-4">
-        <Card title="Recommendation">
-          <div className="grid gap-3">
-            <div>
-              <div className={FIELD_LABEL}>System recommendation</div>
-              <div className="mt-1 text-[13px] font-semibold text-ink-900">
-                {record.recommendation || "Not recorded"}
-              </div>
-              {record.recommendation_reasons && (
-                <div className="mt-0.5 text-[12.5px] text-ink-700">
-                  {record.recommendation_reasons}
-                </div>
-              )}
+      <SignedTriageSections record={record} />
+    </div>
+  );
+}
+
+/** A signed triage, question by question: the recommendation and decision, the
+ * automatic summary, the tasks it registered and each answered section (A–N).
+ * Shared by the Documents view and the triage screen's summary. */
+export function SignedTriageSections({ record }: { record: SignedAssessment }) {
+  const labels = new Map(Object.entries(record.labels ?? {}));
+  const sections = groupAnswers(record);
+  const taskStatus = (code: string) => labels.get(`task-status:${code}`) ?? code;
+  return (
+    <div className="grid gap-4">
+      <Card title="Recommendation">
+        <div className="grid gap-3">
+          <div>
+            <div className={FIELD_LABEL}>System recommendation</div>
+            <div className="mt-1 text-[13px] font-semibold text-ink-900">
+              {record.recommendation || "Not recorded"}
             </div>
-            {record.alerts.length > 0 && (
-              <div>
-                <div className={FIELD_LABEL}>Alerts</div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {record.alerts.map((alert) => (
-                    <Tag key={alert.code} tone="risk">
-                      {alert.label}
-                    </Tag>
-                  ))}
-                </div>
+            {record.recommendation_reasons && (
+              <div className="mt-0.5 text-[12.5px] text-ink-700">
+                {record.recommendation_reasons}
               </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <div className={FIELD_LABEL}>Clinician decision</div>
-                <div className="mt-1 text-[13px] text-ink-900">
-                  {record.decision === "OVERRIDE"
-                    ? "Override"
-                    : record.decision === "CONFIRM"
-                      ? "Confirm recommendation"
-                      : "Not recorded"}
-                </div>
-              </div>
-              <div>
-                <div className={FIELD_LABEL}>Final selected priority</div>
-                <div className="mt-1">
-                  <PriorityPill priority={record.final_priority} long />
-                </div>
-              </div>
-            </div>
-            {record.decision === "OVERRIDE" && (
-              <Callout tone="warning">
-                <strong>Reason for override:</strong>{" "}
-                {record.override_reason || "No reason recorded"}
-              </Callout>
             )}
           </div>
-        </Card>
+          {record.alerts.length > 0 && (
+            <div>
+              <div className={FIELD_LABEL}>Alerts</div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {record.alerts.map((alert) => (
+                  <Tag key={alert.code} tone="risk">
+                    {alert.label}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className={FIELD_LABEL}>Clinician decision</div>
+              <div className="mt-1 text-[13px] text-ink-900">
+                {record.decision === "OVERRIDE"
+                  ? "Override"
+                  : record.decision === "CONFIRM"
+                    ? "Confirm recommendation"
+                    : "Not recorded"}
+              </div>
+            </div>
+            <div>
+              <div className={FIELD_LABEL}>Final selected priority</div>
+              <div className="mt-1">
+                <PriorityPill priority={record.final_priority} long />
+              </div>
+            </div>
+          </div>
+          {record.decision === "OVERRIDE" && (
+            <Callout tone="warning">
+              <strong>Reason for override:</strong> {record.override_reason || "No reason recorded"}
+            </Callout>
+          )}
+        </div>
+      </Card>
 
-        <Card title="L — Automatic Triage Summary" bodyClassName="p-0 overflow-x-auto">
-          <table className={`${TABLE} min-w-[560px]`}>
-            <thead>
-              <tr>
-                <th className={TH}>Finding / Alert</th>
-                <th className={TH}>Current status</th>
-                <th className={TH}>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {record.findings.length > 0 ? (
-                record.findings.map(([finding, status, source, at, by], index) => (
-                  <tr key={`${finding}-${index}`}>
-                    <td className={TD}>{finding}</td>
-                    <td className={TD}>{status}</td>
-                    <td className={TD}>
-                      {source}
-                      {/* v4 rows carry time and recorder (AT-20). */}
-                      {at && (
-                        <span className="block text-[11px] text-ink-500">
-                          {formatDateTime(at)}
-                          {by ? ` · ${by}` : ""}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className={`${TD} !p-6 text-center !text-ink-500`}>
-                    No structured findings were recorded.
+      <Card title="L — Automatic Triage Summary" bodyClassName="p-0 overflow-x-auto">
+        <table className={`${TABLE} min-w-[560px]`}>
+          <thead>
+            <tr>
+              <th className={TH}>Finding / Alert</th>
+              <th className={TH}>Current status</th>
+              <th className={TH}>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {record.findings.length > 0 ? (
+              record.findings.map(([finding, status, source, at, by], index) => (
+                <tr key={`${finding}-${index}`}>
+                  <td className={TD}>{finding}</td>
+                  <td className={TD}>{status}</td>
+                  <td className={TD}>
+                    {source}
+                    {/* v4 rows carry time and recorder (AT-20). */}
+                    {at && (
+                      <span className="block text-[11px] text-ink-500">
+                        {formatDateTime(at)}
+                        {by ? ` · ${by}` : ""}
+                      </span>
+                    )}
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-
-        <Card title="Registered tasks" bodyClassName="p-0 overflow-x-auto">
-          <table className={`${TABLE} min-w-[560px]`}>
-            <thead>
+              ))
+            ) : (
               <tr>
-                <th className={TH}>Action</th>
-                <th className={TH}>Owner</th>
-                <th className={TH}>Status</th>
-                <th className={TH}>Date / time</th>
+                <td colSpan={3} className={`${TD} !p-6 text-center !text-ink-500`}>
+                  No structured findings were recorded.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {record.tasks.length > 0 ? (
-                record.tasks.map((task, index) => (
-                  <tr key={`${task.action_label}-${index}`}>
-                    <td className={TD}>{task.action_label}</td>
-                    <td className={TD}>{task.owner}</td>
-                    <td className={TD}>{taskStatus(task.status)}</td>
-                    <td className={`${TD} whitespace-nowrap`}>{formatDateTime(task.created_at)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className={`${TD} !p-6 text-center !text-ink-500`}>
-                    No tasks were registered with this triage.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
+            )}
+          </tbody>
+        </table>
+      </Card>
 
-        {SECTION_TITLES.filter(([letter]) => sections.has(letter)).map(([letter, title]) => (
-          <Card key={letter} title={title}>
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              {(sections.get(letter) ?? []).map((line) => (
-                <div key={line.key} className="min-w-0">
-                  <dt className={FIELD_LABEL}>{line.label}</dt>
-                  <dd className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-ink-900">
-                    {line.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </Card>
-        ))}
-      </div>
+      <Card title="Registered tasks" bodyClassName="p-0 overflow-x-auto">
+        <table className={`${TABLE} min-w-[560px]`}>
+          <thead>
+            <tr>
+              <th className={TH}>Action</th>
+              <th className={TH}>Owner</th>
+              <th className={TH}>Status</th>
+              <th className={TH}>Date / time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {record.tasks.length > 0 ? (
+              record.tasks.map((task, index) => (
+                <tr key={`${task.action_label}-${index}`}>
+                  <td className={TD}>{task.action_label}</td>
+                  <td className={TD}>{task.owner}</td>
+                  <td className={TD}>{taskStatus(task.status)}</td>
+                  <td className={`${TD} whitespace-nowrap`}>{formatDateTime(task.created_at)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} className={`${TD} !p-6 text-center !text-ink-500`}>
+                  No tasks were registered with this triage.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      {SECTION_TITLES.filter(([letter]) => sections.has(letter)).map(([letter, title]) => (
+        <Card key={letter} title={title}>
+          <AnswerList
+            rows={(sections.get(letter) ?? []).map((line) => ({
+              label: line.label,
+              value: line.value,
+            }))}
+          />
+        </Card>
+      ))}
     </div>
   );
 }

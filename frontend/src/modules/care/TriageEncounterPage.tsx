@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { X } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
   getTriageEncounter,
@@ -14,8 +15,10 @@ import { QuickRecheck } from "./triage/QuickRecheck";
 import { TriageForm } from "./triage/TriageForm";
 import { TriageFormV4 } from "./triage/TriageFormV4";
 import { TriageFormV5 } from "./triage/TriageFormV5";
+import { TriageSummaryView } from "./triage/TriageSummaryView";
 import { errorText } from "./triage/helpers";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
+import { BTN_GHOST, BTN_SM } from "./shared/styles";
 
 // docs/15-CLINICAL-WORKSPACE-V3.md §1.6 / §1.7 — /clinical/triage/:triageId.
 // A "Re-check due" encounter opens the quick re-check; anything else opens the
@@ -23,7 +26,27 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 
 export function TriageEncounterPage() {
   const { triageId } = useParams();
-  return <TriageEncounterScreen triageId={triageId} />;
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Close returns where the triage was opened from (queue, dashboard, client
+  // record); opened directly, to the triage queue.
+  const close = () => (location.key !== "default" ? navigate(-1) : navigate("/clinical/triage"));
+  return (
+    <>
+      <div className="mx-auto mb-2 flex max-w-[1600px] justify-end">
+        <button
+          type="button"
+          className={`${BTN_GHOST} ${BTN_SM}`}
+          aria-label="Close triage"
+          onClick={close}
+        >
+          <X aria-hidden className="h-4 w-4" />
+          Close
+        </button>
+      </div>
+      <TriageEncounterScreen triageId={triageId} />
+    </>
+  );
 }
 
 /**
@@ -127,6 +150,39 @@ export function TriageEncounterScreen({
           key={detail.id}
           detail={detail}
           onFullRetriage={() => {
+            setFormKey((k) => k + 1);
+            setReloadKey((k) => k + 1);
+            onChanged?.();
+          }}
+        />
+      </div>
+    );
+  }
+
+  // A signed triage opens as its summary; Re-triage opens the form again as a
+  // new version filled from it.
+  if (detail.status !== "AWAITING" && detail.status !== "IN_TRIAGE" && detail.versions?.length) {
+    return (
+      <div className="clinical-readable mx-auto max-w-[1600px]">
+        {stale}
+        {!inClientRecord && (
+          <>
+            <Breadcrumbs
+              items={[
+                { label: "Triage", to: "/clinical/triage" },
+                {
+                  label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Encounter",
+                },
+              ]}
+            />
+            <SafetyBanner banner={banner} error={bannerError} />
+          </>
+        )}
+        <EncounterContext detail={detail} banner={banner} />
+        <TriageSummaryView
+          key={`${detail.id}:${detail.versions[0]?.id}`}
+          detail={detail}
+          onRetriage={() => {
             setFormKey((k) => k + 1);
             setReloadKey((k) => k + 1);
             onChanged?.();

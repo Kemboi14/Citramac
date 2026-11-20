@@ -632,6 +632,11 @@ def workspace(patient):
         reason = REASONS.get(code, "") if signalled else ""
         if not signalled and code in plan_reasons:
             reason = f"Recommended by the plan: {'; '.join(dict.fromkeys(plan_reasons[code]))}"
+        # Done: every care-plan action this module delivers is completed, so it
+        # is no longer recommended (it stays listed for further deliveries).
+        delivers = [a for a in actions if code in modules_for_activity(a)]
+        if delivers and all(a.status == "COMPLETED" for a in delivers):
+            reason = ""
         service = services_by_name.get(spec["billing_service"]) if spec["billing_service"] else None
         action = linked.get(code)
         history = spec.get("history_modules", [code])

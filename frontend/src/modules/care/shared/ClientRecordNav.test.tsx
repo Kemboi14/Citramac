@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { ClientRecordNav } from "./ClientRecordNav";
@@ -33,9 +33,11 @@ describe("ClientRecordNav", () => {
       "step",
     );
     expect(screen.getByRole("link", { name: "Interventions — Incomplete" })).toBeInTheDocument();
-    // The status key is hidden until asked for.
-    expect(screen.queryByLabelText("Journey stage status")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Status key" }));
-    expect(screen.getByLabelText("Journey stage status")).toBeInTheDocument();
+    // No separate status key: each stage names its status on hover.
+    expect(screen.getByRole("link", { name: "Care Plan — In progress" })).toHaveAttribute(
+      "title",
+      "Care Plan — in progress",
+    );
+    expect(screen.queryByRole("button", { name: "Status key" })).not.toBeInTheDocument();
   });
 });

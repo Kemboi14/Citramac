@@ -15,6 +15,7 @@ from .models import (
     CarePlan,
     CarePlanActivity,
     CarePlanVersion,
+    CareTask,
     IntakeAssessment,
     ProgressNote,
     TriageEncounter,
@@ -95,8 +96,16 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             "client_request_id": request_id or str(uuid.uuid4()),
         }
 
-    def test_client_list_includes_signed_triage_and_marks_review_needed(self):
-        response = self.client.get(reverse("care-psych-module-clients"), **self.auth)
+    def test_client_list_shows_clients_psychiatry_was_asked_to_see(self):
+        url = reverse("care-psych-module-clients")
+        with platform_admin_context():
+            CareTask.objects.filter(patient_id=self.pid).update(status="COMPLETED")
+        # A signed triage alone does not put the client on the list…
+        listed = self.client.get(url, **self.auth)
+        self.assertNotIn(self.pid, [r["patient_id"] for r in listed.data["results"]])
+        # …an open "Psychiatric review" action in the care plan does.
+        self.create_schedule_plan()
+        response = self.client.get(url, **self.auth)
         self.assertEqual(response.status_code, 200, response.data)
         row = next(r for r in response.data["results"] if r["patient_id"] == self.pid)
         self.assertTrue(row["suggested"])
@@ -340,10 +349,10 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(signed.data["assessment"]["status"], "SIGNED")
         self.assertIsNotNone(signed.data["assessment"]["signed_at"])
 
+        # Reviewed, nothing waiting and no session booked: off the list until a
+        # later triage, intake or booked review brings the client back.
         listed = self.client.get(reverse("care-psych-module-clients"), **self.auth)
-        row = next(r for r in listed.data["results"] if r["patient_id"] == self.pid)
-        self.assertEqual(row["assessment_status"], "SIGNED")
-        self.assertFalse(row["suggested"])
+        self.assertNotIn(self.pid, [r["patient_id"] for r in listed.data["results"]])
 
     def test_formulation_and_differential_are_saved_in_psychiatry_note(self):
         body = dict(self.body)
@@ -491,6 +500,26 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
             original = ProgressNote.objects.get(pk=original_id)
             self.assertEqual(original.status, "SIGNED")
             self.assertEqual(original.text, original_text)
+
+    def test_signing_completes_the_psychiatric_review_action_once(self):
+        from .models import CarePlanActivity, InterventionRecord
+
+        self.create_schedule_plan()
+        signed = self.client.post(self.open_url + "sign/", self.body, format="json", **self.auth)
+        self.assertEqual(signed.status_code, 200, signed.data)
+        with platform_admin_context():
+            activity = CarePlanActivity.objects.get(action_key="psych_review")
+            self.assertEqual(activity.status, "COMPLETED")
+            records = InterventionRecord.objects.filter(activity=activity)
+            self.assertEqual(records.count(), 1)
+            self.assertEqual(records.get().intervention, "Initial consultation")
+        # An amendment corrects the same review: nothing more is recorded.
+        amended = dict(self.body, amends=signed.data["completed"]["id"], amend_reason="Typo fixed")
+        self.client.put(self.open_url, amended, format="json", **self.auth)
+        again = self.client.post(self.open_url + "sign/", amended, format="json", **self.auth)
+        self.assertEqual(again.status_code, 200, again.data)
+        with platform_admin_context():
+            self.assertEqual(InterventionRecord.objects.filter(module="psychiatry").count(), 1)
 
     def test_opening_the_workspace_audits_a_view_on_the_client(self):
         from apps.sysadmin_audit.models import AuditLogEntry

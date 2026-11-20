@@ -464,7 +464,14 @@ def _evaluate(answers, labels):
         from . import approved_assessments
 
         result = triage_v5.evaluate(answers, labels, approved_assessments.names())
-        result["signing_tasks"] = signing_tasks(triage_v5.clean_answers(answers), labels, triage_v5)
+        cleaned = triage_v5.clean_answers(answers)
+        result["signing_tasks"] = signing_tasks(cleaned, labels, triage_v5)
+        # The answers signing will ask for, as they stand now, so the form can stop
+        # a step from being left with one unanswered and point at it.
+        result["required_missing"] = [
+            {"key": key, "message": message}
+            for message, key in triage_v5.required_problems(cleaned)
+        ]
         return result
     if triage_v4.is_v4(answers):
         result = triage_v4.evaluate(answers, labels)
@@ -499,6 +506,7 @@ def _assessment_payload(assessment):
         "final_priority": assessment.final_priority,
         "decision": assessment.decision,
         "override_reason": assessment.override_reason,
+        "retriage_reason": assessment.retriage_reason,
         "rules_version": assessment.rules_version,
         "tasks": assessment.tasks_snapshot,
         "draft_saved_at": _iso(assessment.draft_saved_at),
@@ -579,6 +587,20 @@ class TriageEncounterView(APIView):
                 "tasks": CareTaskSerializer(te.tasks.all(), many=True).data,
                 "recheck_draft": _recheck_payload(services.current_recheck_draft(te)),
                 "rechecks": [_recheck_payload(r) for r in te.rechecks.filter(status="COMPLETED")],
+                # Every signed version of this triage, newest first (a re-triage is a
+                # new version; the earlier one is kept exactly as signed).
+                "versions": [
+                    {
+                        "id": str(a.id),
+                        "version": a.version,
+                        "final_priority": a.final_priority,
+                        "signed_at": _iso(a.signed_at),
+                        "signed_by": user_display(a.signed_by),
+                        "retriage_reason": a.retriage_reason,
+                    }
+                    for a in te.assessments.filter(status="COMPLETED").select_related("signed_by")
+                ],
+                "retriage_reason": te.retriage_reason,
             }
         )
 
@@ -843,7 +865,7 @@ class TriageRecheckSignView(APIView):
 class TriageFullRetriageView(APIView):
     @clinical_only()
     def post(self, request, pk):
-        te = services.request_full_retriage(_triage(pk))
+        te = services.request_full_retriage(_triage(pk), request.data.get("reason", ""))
         return Response({"status": te.effective_status})
 
 
@@ -1450,6 +1472,54 @@ class SignedAssessmentView(APIView):
 # ── Client record (doc 15 §1.2, §1.9, §1.17) ──
 
 
+class ClientTriagesView(APIView):
+    """Every triage for the client, newest arrival first: one entry per arrival,
+    with its current signed version, how many versions and re-checks it has,
+    and whether a triage is in progress. Read-only; the triage itself opens
+    at care/triage/<id>/ (audited there). This list read is audited by the
+    client-record middleware like any care/clients/<id>/ read."""
+
+    def get(self, request, patient_id):
+        patient = _patient(patient_id)
+        rows = []
+        encounters = (
+            TriageEncounter.objects.filter(patient=patient)
+            .prefetch_related("assessments", "rechecks")
+            .order_by("-arrival_at")
+        )
+        for te in encounters:
+            signed = [a for a in te.assessments.all() if a.status == "COMPLETED"]
+            signed.sort(key=lambda a: a.version, reverse=True)
+            current = signed[0] if signed else None
+            draft = next((a for a in te.assessments.all() if a.status == "IN_PROGRESS"), None)
+            rows.append(
+                {
+                    "id": str(te.id),
+                    "arrival_at": _iso(te.arrival_at),
+                    "status": te.effective_status,
+                    "status_label": EFFECTIVE_STATUS_LABELS[te.effective_status],
+                    "presenting_concern": te.presenting_concern,
+                    "priority": current.final_priority if current else te.priority,
+                    "signed_at": _iso(current.signed_at) if current else None,
+                    "signed_by": user_display(current.signed_by) if current else "",
+                    "versions": len(signed),
+                    "rechecks": sum(1 for r in te.rechecks.all() if r.status == "COMPLETED"),
+                    "in_progress": draft is not None
+                    or te.status
+                    in (TriageEncounter.STATUS_AWAITING, TriageEncounter.STATUS_IN_TRIAGE),
+                }
+            )
+        return Response({"results": rows})
+
+    @clinical_only()
+    def post(self, request, patient_id):
+        """New triage for this client (a new arrival), without re-registering."""
+        te = services.start_new_triage(
+            request.user, _patient(patient_id), request.data.get("client_request_id")
+        )
+        return Response({"id": str(te.id)}, status=status.HTTP_201_CREATED)
+
+
 class ClientBannerView(APIView):
     def get(self, request, patient_id):
         patient = _patient(patient_id)
@@ -1835,6 +1905,28 @@ class ClientLegalView(APIView):
         )
 
 
+class ClientIntakeSummariesView(APIView):
+    """Every signed intake for the client, newest first, each as titled sections of
+    label / answer (the client report's rendering, restricted fields withheld
+    unless the reader may see them). Read-only; audited as a client-record read."""
+
+    def get(self, request, patient_id):
+        from . import client_report
+        from . import intake as intake_module
+
+        patient = _patient(patient_id)
+        labels = services.concept_labels()
+        restricted = intake_module.can_view_restricted(request.user)
+        intakes = (
+            IntakeAssessment.objects.filter(patient=patient, status=IntakeAssessment.STATUS_SIGNED)
+            .select_related("author", "signed_by")
+            .order_by("-signed_at")
+        )
+        return Response(
+            {"results": [client_report._intake_one(i, labels, restricted) for i in intakes]}
+        )
+
+
 class ClientIntakeView(APIView):
     def get(self, request, patient_id):
         patient = _patient(patient_id)
@@ -1866,6 +1958,16 @@ def _draft_payload(draft, request):
     data = IntakeAssessmentSerializer(draft, context={"request": request}).data
     data["section_overview"] = intake_service.section_overview(draft)
     data["outstanding_now"] = intake_service.outstanding_items(draft)
+    data["edit_reason"] = draft.edit_reason
+    # A draft cloned from the signed version on opening (autosave may touch it)
+    # counts as edited only once its content differs from what was signed; until
+    # then the screen shows the signed summary.
+    signed = intake_service.latest_signed(draft.patient)
+    data["edited"] = draft.status == IntakeAssessment.STATUS_DRAFT and (
+        signed is None
+        or (draft.sections or {}) != (signed.sections or {})
+        or (draft.section_state or {}) != (signed.section_state or {})
+    )
     return data
 
 
@@ -1895,6 +1997,15 @@ class ClientIntakeSignView(APIView):
         if draft is None:
             raise ValidationError({"detail": "There is no draft to sign."})
         draft = intake_service.sign_intake(draft, request.user, request.data.get("completeness"))
+        return Response(_draft_payload(draft, request))
+
+
+class ClientIntakeEditReasonView(APIView):
+    """POST {reason}: why the signed intake is being edited (the next version)."""
+
+    @clinical_only()
+    def post(self, request, patient_id):
+        draft = intake_service.set_edit_reason(_patient(patient_id), request.data.get("reason"))
         return Response(_draft_payload(draft, request))
 
 

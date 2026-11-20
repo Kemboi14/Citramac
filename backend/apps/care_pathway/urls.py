@@ -144,6 +144,11 @@ urlpatterns = [
         "care/assessments/<uuid:pk>/", views.SignedAssessmentView.as_view(), name="care-assessment"
     ),
     path(
+        "care/clients/<uuid:patient_id>/triages/",
+        views.ClientTriagesView.as_view(),
+        name="care-client-triages",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/banner/",
         views.ClientBannerView.as_view(),
         name="care-client-banner",
@@ -693,6 +698,16 @@ urlpatterns = [
         "care/medication-history/<uuid:pk>/",
         views.MedicationHistoryEntryView.as_view(),
         name="care-medication-history-entry",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/intake/edit-reason/",
+        views.ClientIntakeEditReasonView.as_view(),
+        name="care-client-intake-edit-reason",
+    ),
+    path(
+        "care/clients/<uuid:patient_id>/intake/summaries/",
+        views.ClientIntakeSummariesView.as_view(),
+        name="care-client-intake-summaries",
     ),
     path(
         "care/clients/<uuid:patient_id>/intake/",

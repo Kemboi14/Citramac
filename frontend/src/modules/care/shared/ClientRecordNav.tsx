@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { MoreVertical } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import type { ClientBanner, JourneyStageStatus } from "../../../lib/carePathwayApi";
-import { SectionCompletionIcon } from "./SectionCompletionIcon";
 import {
   clientRecordPath,
   JOURNEY_KEYS,
@@ -11,8 +11,6 @@ import {
 } from "./recordRoutes";
 
 type JourneyNavKey = (typeof JOURNEY_STAGES)[number]["key"];
-
-const JOURNEY_STATUS_OPTIONS: JourneyStageStatus[] = ["complete", "in_progress", "incomplete"];
 
 function statusPresentation(status: JourneyStageStatus) {
   switch (status) {
@@ -50,15 +48,78 @@ function persistedStatus(
   }
 }
 
-function StageStatusIcon({
-  status,
-  active = false,
-}: {
-  status: JourneyStageStatus;
-  active?: boolean;
-}) {
+// The record's main views, in the order clinicians use them; the rest are one
+// click away in the ⋮ menu (an open one also shows as a tab).
+const PRIMARY_KEYS = ["journey", "mse", "legal"];
+const PRIMARY_VIEWS = PRIMARY_KEYS.map((key) => RECORD_VIEWS.find((item) => item.key === key)!);
+const MORE_VIEWS = RECORD_VIEWS.filter((item) => !PRIMARY_KEYS.includes(item.key));
+const MORE_HINTS: Record<string, string> = {
+  snapshot: "Overview of the client now",
+  timeline: "Everything recorded, by date",
+  charts: "Vitals and scores over time",
+  attachments: "Uploaded documents and files",
+};
+
+function MoreViews({ patientId, activeTop }: { patientId: string; activeTop: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (event: MouseEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   return (
-    <SectionCompletionIcon status={status} active={active} className="h-[18px] w-[18px] shrink-0" />
+    <div ref={box} className="relative ml-auto">
+      <button
+        type="button"
+        aria-label="More record views"
+        title="More views: snapshot, timeline, charts, attachments"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="grid h-8 w-8 place-items-center rounded-md text-ink-500 hover:bg-surface-bg hover:text-ink-900 aria-expanded:bg-surface-bg"
+      >
+        <MoreVertical aria-hidden className="h-4 w-4" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="More record views"
+          className="absolute right-0 top-full z-30 mt-1 w-52 rounded-lg border border-surface-border bg-surface-card p-1 shadow-[0_12px_32px_rgba(16,34,29,.16)]"
+        >
+          {MORE_VIEWS.map((item) => (
+            <NavLink
+              key={item.key}
+              role="menuitem"
+              to={clientRecordPath(patientId, item.key as RecordView)}
+              onClick={() => setOpen(false)}
+              className={`block rounded-md px-3 py-2 text-[13px] font-medium ${
+                item.key === activeTop
+                  ? "bg-surface-bg text-ink-900"
+                  : "text-ink-700 hover:bg-surface-bg hover:text-ink-900"
+              }`}
+            >
+              <span className="block">{item.label}</span>
+              {MORE_HINTS[item.key] && (
+                <span className="block text-[11.5px] font-normal text-ink-500">
+                  {MORE_HINTS[item.key]}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -71,8 +132,8 @@ export function ClientRecordNav({
   view: RecordView;
   banner?: Pick<ClientBanner, "journey_status" | "latest_signed_triage_encounter_id"> | null;
 }) {
-  const [showStatusKey, setShowStatusKey] = useState(false);
   const activeTop = JOURNEY_KEYS.has(view) ? "journey" : view;
+  const moreActive = MORE_VIEWS.find((item) => item.key === activeTop);
   const stageStatus = (key: JourneyNavKey): JourneyStageStatus => {
     if (key !== "snapshot") {
       const persisted = persistedStatus(banner?.journey_status, key);
@@ -85,17 +146,17 @@ export function ClientRecordNav({
     <>
       <nav
         aria-label="Client record views"
-        className="mb-3 flex gap-1.5 overflow-x-auto border-b border-surface-border pb-[9px]"
+        className="mb-2 flex items-center gap-1.5 border-b border-surface-border pb-1"
       >
-        {RECORD_VIEWS.map((item) => {
+        {[...PRIMARY_VIEWS, ...(moreActive ? [moreActive] : [])].map((item) => {
           const active = item.key === activeTop;
           const target = item.key === "journey" ? "intake" : item.key;
           return (
             <NavLink
               key={item.key}
-              to={clientRecordPath(patientId, target)}
+              to={clientRecordPath(patientId, target as RecordView)}
               aria-current={active ? "page" : undefined}
-              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-[9px] text-[13px] font-semibold transition-colors duration-150 ${
+              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-1.5 text-[13px] font-semibold transition-colors duration-150 ${
                 active
                   ? "border-brand-green text-ink-900"
                   : "border-transparent text-ink-500 hover:text-ink-900"
@@ -105,60 +166,47 @@ export function ClientRecordNav({
             </NavLink>
           );
         })}
+        <MoreViews patientId={patientId} activeTop={activeTop} />
       </nav>
       {activeTop === "journey" && (
-        <>
-          <nav
-            aria-label="Client care journey"
-            className="mb-1 flex items-center gap-1 overflow-x-auto rounded-xl border border-surface-border bg-surface-card p-1.5 shadow-[0_2px_8px_rgba(16,48,42,.04)]"
-          >
-            {JOURNEY_STAGES.filter((stage) => stage.key !== "snapshot").map((stage) => {
-              const active = stage.key === view;
-              const status = stageStatus(stage.key);
-              const { label } = statusPresentation(status);
-              return (
+        // The care journey as one quiet line: a dot per stage (green complete,
+        // amber in progress, hollow not started), the current stage in bold and
+        // underlined, and each stage's status named on hover and to screen readers.
+        <nav aria-label="Client care journey" className="mb-3 flex items-center overflow-x-auto">
+          {JOURNEY_STAGES.filter((stage) => stage.key !== "snapshot").map((stage, index) => {
+            const active = stage.key === view;
+            const status = stageStatus(stage.key);
+            const { label } = statusPresentation(status);
+            return (
+              <span key={stage.key} className="flex flex-none items-center">
+                {index > 0 && <span aria-hidden className="mx-1 h-px w-4 bg-surface-border" />}
                 <NavLink
-                  key={stage.key}
                   to={clientRecordPath(patientId, stage.key)}
                   aria-current={active ? "step" : undefined}
                   aria-label={`${stage.label} — ${label}`}
-                  className={`flex min-h-10 flex-none items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-semibold transition-colors duration-150 ${
+                  title={`${stage.label} — ${label.toLowerCase()}`}
+                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] transition-colors duration-150 ${
                     active
-                      ? "border-brand-green/30 bg-brand-green-tint text-brand-green-dark shadow-sm"
-                      : "border-transparent text-ink-700 hover:border-surface-border hover:bg-surface-bg hover:text-ink-900"
+                      ? "font-bold text-ink-900 underline decoration-brand-green decoration-2 underline-offset-[6px]"
+                      : "font-medium text-ink-500 hover:text-ink-900"
                   }`}
                 >
-                  <StageStatusIcon status={status} active={active} />
+                  <span
+                    aria-hidden
+                    className={`h-2 w-2 flex-none rounded-full ${
+                      status === "complete"
+                        ? "bg-priority-green-solid"
+                        : status === "in_progress"
+                          ? "bg-priority-yellow-solid"
+                          : "border border-ink-400"
+                    }`}
+                  />
                   {stage.label}
                 </NavLink>
-              );
-            })}
-            <button
-              type="button"
-              aria-expanded={showStatusKey}
-              aria-controls="journey-status-key"
-              onClick={() => setShowStatusKey((visible) => !visible)}
-              className="ml-auto flex min-h-9 flex-none items-center rounded-md px-2.5 text-xs font-semibold text-ink-500 hover:bg-surface-bg hover:text-ink-900"
-            >
-              {showStatusKey ? "Hide status key" : "Status key"}
-            </button>
-          </nav>
-          {showStatusKey && (
-            <div
-              id="journey-status-key"
-              role="group"
-              aria-label="Journey stage status"
-              className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-500"
-            >
-              {JOURNEY_STATUS_OPTIONS.map((status) => (
-                <span key={status} className="inline-flex items-center gap-1">
-                  <StageStatusIcon status={status} />
-                  {statusPresentation(status).label}
-                </span>
-              ))}
-            </div>
-          )}
-        </>
+              </span>
+            );
+          })}
+        </nav>
       )}
     </>
   );

@@ -1,5 +1,13 @@
 import { AutoResizeTextarea } from "../shared/AutoResizeTextarea";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
@@ -349,6 +357,38 @@ function AutoTriggers({ section }: { section: string }) {
   );
 }
 
+/** Where a pinned side panel starts: just below the sticky client banner (or
+ * the app bar when there is none), kept current as the banner resizes. */
+function useStickyTop() {
+  const [top, setTop] = useState(72);
+  useEffect(() => {
+    const banner = document.querySelector<HTMLElement>("[data-safety-banner]");
+    if (!banner) return;
+    const measure = () => {
+      const offset = parseFloat(getComputedStyle(banner).top) || 56;
+      setTop(Math.round(offset + banner.getBoundingClientRect().height + 12));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(banner);
+    return () => observer.disconnect();
+  }, []);
+  return top;
+}
+
+/** The form is shown one step (a group of sections) at a time, so it is never
+ * one long scroll. Hidden steps stay mounted: every answer is kept and saved. */
+const StepCtx = createContext<string>("start");
+
+function Step({ id, children }: { id: string; children: ReactNode }) {
+  const active = useContext(StepCtx);
+  return (
+    <div data-step={id} className={active === id ? "" : "hidden"}>
+      {children}
+    </div>
+  );
+}
+
 function Section({
   title,
   section,
@@ -445,7 +485,9 @@ export function TriageFormV5({
   const { accessToken } = useAuth();
   const vs = useValueSets();
   const editable = detail.status === "AWAITING" || detail.status === "IN_TRIAGE";
-  const stored = editable ? detail.draft : detail.signed;
+  // A re-triage starts from what was last signed (the clinician updates it);
+  // Section N actions are not carried, so tasks are never registered twice.
+  const stored = editable ? (detail.draft ?? retriageBase(detail.signed)) : detail.signed;
 
   const [config, setConfig] = useState<TriageV4Config | null>(null);
   const [answers, setAnswers] = useState<TriageAnswers>(() => {
@@ -465,6 +507,10 @@ export function TriageFormV5({
     return base;
   });
   const answersRef = useRef(answers);
+  const [activeStep, setActiveStep] = useState("start");
+  const [stepProblems, setStepProblems] = useState<string[]>([]);
+  const stickyTop = useStickyTop();
+  const formTopRef = useRef<HTMLDivElement>(null);
   const [evaluatedEws, setEvaluatedEws] = useState(() => ewsInput(answers));
   const [evaluation, setEvaluation] = useState<TriageV4Evaluation>(() =>
     !editable && detail.signed
@@ -587,6 +633,66 @@ export function TriageFormV5({
 
   const a = (key: string) => str(answers, key);
   const present = a("b_present");
+  const steps = [
+    { id: "start", label: "On record & encounter" },
+    ...(present === "yes"
+      ? [
+          { id: "safety", label: "Safety & risk" },
+          { id: "mental", label: "Mental state & substances" },
+          { id: "medical", label: "Medical screen" },
+          { id: "safeguarding", label: "Safeguarding & function" },
+        ]
+      : present === "no"
+        ? [{ id: "phone", label: "Telephone screen" }]
+        : []),
+    { id: "summary", label: "Summary & action" },
+  ];
+  const stepIndex = Math.max(
+    0,
+    steps.findIndex((item) => item.id === activeStep),
+  );
+  const currentStep = steps[stepIndex].id;
+  const goToStep = (index: number) => {
+    setStepProblems([]);
+    setActiveStep(steps[Math.min(Math.max(index, 0), steps.length - 1)].id);
+    formTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+  // Moving forward needs this step complete: the answers signing will ask for
+  // (served by the rules, freshly evaluated) that sit on this step. If any is
+  // missing the step stays open, they are marked, and the first is focused.
+  const [checkingStep, setCheckingStep] = useState(false);
+  const goForward = async (index: number) => {
+    if (index <= stepIndex || readOnly) return goToStep(index);
+    let missing = evaluation.required_missing ?? [];
+    if (accessToken) {
+      setCheckingStep(true);
+      window.clearTimeout(timer.current);
+      pending.current = false;
+      try {
+        const result = await saveTriageDraft(accessToken, detail.id, answersRef.current);
+        setEvaluation(result.evaluation);
+        missing = (result.evaluation as TriageV4Evaluation).required_missing ?? [];
+      } catch {
+        pending.current = true; // checked against the last evaluation; saved later
+      } finally {
+        setCheckingStep(false);
+      }
+    }
+    const here = missing.filter(
+      (item) =>
+        document.getElementById(fid(item.key))?.closest<HTMLElement>("[data-step]")?.dataset
+          .step === currentStep,
+    );
+    if (here.length) {
+      setInvalid(new Set(here.map((item) => item.key)));
+      setStepProblems(here.map((item) => item.message));
+      const first = document.getElementById(fid(here[0].key));
+      first?.scrollIntoView({ block: "center" });
+      first?.focus();
+      return;
+    }
+    goToStep(index);
+  };
   const recommended: Priority = evaluation.priority;
   const chosen: Priority = asPriority(a("m_final_priority")) || recommended;
   const override = chosen !== recommended;
@@ -706,8 +812,13 @@ export function TriageFormV5({
         setProblems(msgs);
         setInvalid(new Set(keys));
         const first = keys.length ? document.getElementById(fid(keys[0])) : null;
-        first?.scrollIntoView({ block: "center" });
-        first?.focus();
+        // The first missing answer may be on another step: open that step first.
+        const holder = first?.closest<HTMLElement>("[data-step]")?.dataset.step;
+        if (holder) setActiveStep(holder);
+        window.setTimeout(() => {
+          first?.scrollIntoView({ block: "center" });
+          first?.focus();
+        }, 0);
       } else {
         setSignError(
           errorText(
@@ -786,8 +897,14 @@ export function TriageFormV5({
       {vs.error && <ErrorNote>{vs.error}</ErrorNote>}
       {detail.triage_version > 0 && !readOnly && (
         <Callout className="mb-3">
-          Re-triage — version {detail.triage_version} stays in the record; signing creates version{" "}
-          {detail.triage_version + 1}.
+          Editing — version {detail.triage_version} stays in the record unchanged; signing saves
+          version {detail.triage_version + 1}. The form is filled from version{" "}
+          {detail.triage_version}; update what has changed.
+          {detail.retriage_reason && (
+            <span className="mt-1 block">
+              <strong>Reason for edit:</strong> {detail.retriage_reason}
+            </span>
+          )}
         </Callout>
       )}
 
@@ -796,812 +913,935 @@ export function TriageFormV5({
           {/* No browser autofill or form history: a remembered value is another
               client's clinical data, and an autofilled one may never reach the form. */}
           <form onSubmit={(e) => e.preventDefault()} aria-label="Triage" autoComplete="off">
-            <fieldset disabled={readOnly} className="min-w-0">
-              <Section title="A — On record">
-                <p className="text-[13px] text-ink-900">
-                  {banner?.name || "Temporary client"} · {banner?.citramac_number || "no number"} ·{" "}
-                  {banner?.age ?? "age unknown"} yrs · {sexLabel || "sex not recorded"}
-                  {banner?.referral_source ? ` · referred by ${banner.referral_source}` : ""}
-                </p>
-                <p className="mt-1 text-[12.5px] text-ink-500">
-                  Alerts:{" "}
-                  {banner && banner.alerts.length
-                    ? banner.alerts.map((x) => x.label).join(" · ")
-                    : "none"}
-                  {detail.priority ? ` · previous priority ${detail.priority}` : ""}
-                </p>
-                {known.length > 0 && (
-                  <ul className="mt-1 text-[12.5px] text-ink-700">
-                    {known.map((f) => (
-                      <li key={f.key}>
-                        <strong>{f.title}</strong> — {f.summary || f.status_label} ·{" "}
-                        {f.source_label} · {formatDateTime(f.recorded_at)} ({f.stage.toLowerCase()})
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
-                  <span>
-                    <strong>Allergies:</strong> {allergyText}
-                  </span>
-                  {a("a_allergy_confirmed") === "yes" && !allergyEdit ? (
-                    <Tag tone="brand">Confirmed</Tag>
-                  ) : (
-                    !readOnly && (
-                      <>
-                        <button
-                          type="button"
-                          className={`${BTN_GHOST} ${BTN_SM}`}
-                          onClick={() => {
-                            setAllergyEdit(false);
-                            setMany({
-                              a_allergy_confirmed: "yes",
-                              a_allergy_status: allergy?.state ?? "unknown",
-                              a_allergy_detail: "",
-                            });
-                          }}
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          className={`${BTN_GHOST} ${BTN_SM}`}
-                          aria-expanded={allergyEdit}
-                          onClick={() => {
-                            setAllergyEdit(true);
-                            setMany({ a_allergy_confirmed: "" });
-                          }}
-                        >
-                          Update
-                        </button>
-                      </>
-                    )
-                  )}
-                </div>
-                {allergyEdit && (
-                  <div className={`${FIELDGRID} mt-2`}>
-                    <Sel k="a_allergy_status" label="Allergy status" set="triage-allergy-status" />
-                    {a("a_allergy_status") === "known" && (
-                      <Txt
-                        k="a_allergy_detail"
-                        label="Allergy and reaction"
-                        placeholder="e.g. Penicillin — rash"
-                      />
-                    )}
-                  </div>
-                )}
-                {banner && banner.identity_status !== "IDENTIFIED" && (
-                  <Link
-                    to={`/clinical/registration?resolve=${detail.patient_id}`}
-                    className={`${BTN_GHOST} ${BTN_SM} mt-3`}
+            <div ref={formTopRef} className="scroll-mt-24" />
+            <nav
+              aria-label="Triage steps"
+              className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-surface-border bg-surface-card p-1 shadow-sm"
+            >
+              {steps.map((item, index) => {
+                const current = item.id === currentStep;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-current={current ? "step" : undefined}
+                    onClick={() => void goForward(index)}
+                    className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium ${
+                      current
+                        ? "bg-[var(--green)] text-white"
+                        : index < stepIndex
+                          ? "text-ink-900 hover:bg-surface-bg"
+                          : "text-ink-500 hover:bg-surface-bg"
+                    }`}
                   >
-                    Resolve identity
-                  </Link>
-                )}
-              </Section>
-
-              <Section title="B / C — Encounter and what is happening now">
-                <div className={FIELDGRID}>
-                  <Sel
-                    k="b_informant"
-                    label="Who is giving the information?"
-                    set="triage-informant"
-                  />
-                  {a("b_informant") && a("b_informant") !== "client" && (
-                    <Txt
-                      k="b_third_party"
-                      label="Name / relationship"
-                      placeholder="e.g. Sister — Jane"
-                    />
-                  )}
-                  <Sel k="b_encounter_type" label="Encounter type" set="triage-encounter-type" />
-                  {a("b_encounter_type") === "other" && (
-                    <Txt k="b_encounter_type_other" label="Encounter type — other" />
-                  )}
-                </div>
-                <Ask k="b_present" q="Is the client physically present?" set="yes-no" />
-                <div className="mt-2">
-                  <Txt
-                    k="c_concern"
-                    label="Main concern, in the client's / informant's own words"
-                    rows={2}
-                  />
-                </div>
-                <div className={`${FIELDGRID} mt-3`}>
-                  <Sel
-                    k="c_onset"
-                    label="When did this begin or become worse?"
-                    set="triage-onset"
-                  />
-                </div>
-                <div className="mt-3">
-                  <Txt k="c_description" label="Brief description" rows={3} grow />
-                </div>
-              </Section>
-
-              {present === "yes" && (
-                <>
-                  <Section title="D — Immediate safety: suicide / self-harm" section="d">
-                    <Ask
-                      k="d_suicidal"
-                      q="Are you currently having thoughts of killing yourself or seriously harming yourself?"
-                      set="no-yes-unable"
-                    />
-                    {a("d_suicidal") === "yes" && (
-                      <Detail>
-                        <Ask
-                          k="d_act_now"
-                          q="Are you thinking about acting on these thoughts now?"
-                          set="no-yes-unsure"
-                        />
-                      </Detail>
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ${
+                        current ? "bg-white/25" : "bg-surface-bg"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+            <StepCtx.Provider value={currentStep}>
+              <fieldset disabled={readOnly} className="min-w-0">
+                <Step id="start">
+                  <Section title="A — On record">
+                    <p className="text-[13px] text-ink-900">
+                      {banner?.name || "Temporary client"} ·{" "}
+                      {banner?.citramac_number || "no number"} · {banner?.age ?? "age unknown"} yrs
+                      · {sexLabel || "sex not recorded"}
+                      {banner?.referral_source ? ` · referred by ${banner.referral_source}` : ""}
+                    </p>
+                    <p className="mt-1 text-[12.5px] text-ink-500">
+                      Alerts:{" "}
+                      {banner && banner.alerts.length
+                        ? banner.alerts.map((x) => x.label).join(" · ")
+                        : "none"}
+                      {detail.priority ? ` · previous priority ${detail.priority}` : ""}
+                    </p>
+                    {known.length > 0 && (
+                      <ul className="mt-1 text-[12.5px] text-ink-700">
+                        {known.map((f) => (
+                          <li key={f.key}>
+                            <strong>{f.title}</strong> — {f.summary || f.status_label} ·{" "}
+                            {f.source_label} · {formatDateTime(f.recorded_at)} (
+                            {f.stage.toLowerCase()})
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                    <Ask
-                      k="d_attempt"
-                      q="Have you done anything recently to try to kill or seriously harm yourself?"
-                      set="no-yes"
-                    />
-                    {a("d_attempt") === "yes" && (
-                      <Detail>
-                        <Txt k="d_what_happened" label="What happened and when?" />
-                      </Detail>
-                    )}
-                    <Ask
-                      k="d_means"
-                      q="Known access to something that could be used for serious self-harm?"
-                      set="no-yes-unknown"
-                    />
-                    <Ask
-                      k="d_safety"
-                      q="Can the client currently maintain their own safety?"
-                      set="yes-no-uncertain"
-                    />
-                  </Section>
-
-                  <Section title="E — Risk of harm to others" section="e">
-                    <Ask
-                      k="e_thoughts"
-                      q="Current thoughts of seriously harming someone else?"
-                      set="no-yes-unable"
-                    />
-                    {a("e_thoughts") === "yes" && (
-                      <Detail>
-                        <Ask
-                          k="e_named"
-                          q="Is a specific, identifiable person at risk?"
-                          set="no-yes"
-                        />
-                        {a("e_named") === "yes" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
+                      <span>
+                        <strong>Allergies:</strong> {allergyText}
+                      </span>
+                      {a("a_allergy_confirmed") === "yes" && !allergyEdit ? (
+                        <Tag tone="brand">Confirmed</Tag>
+                      ) : (
+                        !readOnly && (
                           <>
-                            <Callout tone="danger" className="my-2">
-                              <strong>Duty to protect</strong> — a senior decision on informing the
-                              person and/or police is requested when you sign.
-                            </Callout>
-                            <div className={FIELDGRID}>
-                              <Txt k="duty_victim" label="Person at risk (relationship, where)" />
-                              <Txt k="duty_informed" label="Who in the team has been informed" />
-                              <Sel
-                                k="duty_police"
-                                label="Police informed?"
-                                set="triage-v4-duty-police"
-                              />
-                              <Sel
-                                k="duty_warned"
-                                label="Person warned?"
-                                set="triage-v4-duty-warned"
-                              />
-                            </div>
+                            <button
+                              type="button"
+                              className={`${BTN_GHOST} ${BTN_SM}`}
+                              onClick={() => {
+                                setAllergyEdit(false);
+                                setMany({
+                                  a_allergy_confirmed: "yes",
+                                  a_allergy_status: allergy?.state ?? "unknown",
+                                  a_allergy_detail: "",
+                                });
+                              }}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              className={`${BTN_GHOST} ${BTN_SM}`}
+                              aria-expanded={allergyEdit}
+                              onClick={() => {
+                                setAllergyEdit(true);
+                                setMany({ a_allergy_confirmed: "" });
+                              }}
+                            >
+                              Update
+                            </button>
                           </>
-                        )}
-                      </Detail>
-                    )}
-                    <Ask
-                      k="e_behaviour"
-                      q="Recent threatening, aggressive or violent behaviour?"
-                      set="no-yes-unknown"
-                    />
-                    {(a("e_thoughts") === "yes" || a("e_behaviour") === "yes") && (
-                      <Detail>
-                        <Txt k="e_concern" label="Who / what is the concern?" />
-                      </Detail>
-                    )}
-                    <Ask k="e_act" q="Recent violent act?" set="no-yes" />
-                    <Ask
-                      k="e_means"
-                      q="Known access to means capable of serious harm?"
-                      set="no-yes-unknown"
-                    />
-                    <Ask
-                      k="e_danger"
-                      q="Current behaviour suggests immediate danger?"
-                      set="no-yes-uncertain"
-                    />
-                  </Section>
-
-                  <Section title="F — Acute mental state" section="f">
-                    <Ask k="f_change" q="Major change in mental state now?" set="no-yes-unable" />
-                    {a("f_change") === "yes" && (
-                      <Detail>
-                        <Checks k="f_features" set="triage-mental-state-feature" />
-                      </Detail>
-                    )}
-                    <div className={`${FIELDGRID} mt-2`}>
-                      <Field label="Level of consciousness">
-                        <p className="py-2 text-[13px] text-ink-700">
-                          {a("acvpu")
-                            ? vs.label("triage-v4-acvpu", a("acvpu"))
-                            : "Record ACVPU in H"}
-                        </p>
-                      </Field>
-                      <Sel k="f_orientation" label="Orientation" set="triage-orientation" />
-                      <Sel k="f_behaviour" label="Behaviour" set="triage-behaviour" />
-                      {a("f_behaviour") === "other" && (
-                        <Txt k="f_behaviour_other" label="Behaviour — other" />
+                        )
                       )}
                     </div>
+                    {allergyEdit && (
+                      <div className={`${FIELDGRID} mt-2`}>
+                        <Sel
+                          k="a_allergy_status"
+                          label="Allergy status"
+                          set="triage-allergy-status"
+                        />
+                        {a("a_allergy_status") === "known" && (
+                          <Txt
+                            k="a_allergy_detail"
+                            label="Allergy and reaction"
+                            placeholder="e.g. Penicillin — rash"
+                          />
+                        )}
+                      </div>
+                    )}
+                    {banner && banner.identity_status !== "IDENTIFIED" && (
+                      <Link
+                        to={`/clinical/registration?resolve=${detail.patient_id}`}
+                        className={`${BTN_GHOST} ${BTN_SM} mt-3`}
+                      >
+                        Resolve identity
+                      </Link>
+                    )}
                   </Section>
 
-                  <Section title="G — Alcohol & other substances" section="g">
-                    <Ask
-                      k="g_use"
-                      q="Recent alcohol or other substance use?"
-                      set="no-yes-unknown"
-                    />
-                    {a("g_use") === "yes" && (
-                      <div className="-mx-[18px] my-2 overflow-x-auto">
-                        <table className={TABLE} id={fid("g_alcohol_last")} tabIndex={-1}>
-                          <thead>
-                            <tr>
-                              <th className={TH}>Substance</th>
-                              <th className={TH}>Last use</th>
-                              <th className={TH}>Amount / pattern</th>
-                              <th className={TH}>Current concern</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {SUBSTANCE_ROWS.map((code) => {
-                              const label = vs.label("triage-v4-substance", code);
+                  <Section title="B / C — Encounter and what is happening now">
+                    <div className={FIELDGRID}>
+                      <Sel
+                        k="b_informant"
+                        label="Who is giving the information?"
+                        set="triage-informant"
+                      />
+                      {a("b_informant") && a("b_informant") !== "client" && (
+                        <Txt
+                          k="b_third_party"
+                          label="Name / relationship"
+                          placeholder="e.g. Sister — Jane"
+                        />
+                      )}
+                      <Sel
+                        k="b_encounter_type"
+                        label="Encounter type"
+                        set="triage-encounter-type"
+                      />
+                      {a("b_encounter_type") === "other" && (
+                        <Txt k="b_encounter_type_other" label="Encounter type — other" />
+                      )}
+                    </div>
+                    <Ask k="b_present" q="Is the client physically present?" set="yes-no" />
+                    <div className="mt-2">
+                      <Txt
+                        k="c_concern"
+                        label="Main concern, in the client's / informant's own words"
+                        rows={2}
+                      />
+                    </div>
+                    <div className={`${FIELDGRID} mt-3`}>
+                      <Sel
+                        k="c_onset"
+                        label="When did this begin or become worse?"
+                        set="triage-onset"
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <Txt k="c_description" label="Brief description" rows={3} grow />
+                    </div>
+                  </Section>
+                </Step>
+
+                {present === "yes" && (
+                  <>
+                    <Step id="safety">
+                      <Section title="D — Immediate safety: suicide / self-harm" section="d">
+                        <Ask
+                          k="d_suicidal"
+                          q="Are you currently having thoughts of killing yourself or seriously harming yourself?"
+                          set="no-yes-unable"
+                        />
+                        {a("d_suicidal") === "yes" && (
+                          <Detail>
+                            <Ask
+                              k="d_act_now"
+                              q="Are you thinking about acting on these thoughts now?"
+                              set="no-yes-unsure"
+                            />
+                          </Detail>
+                        )}
+                        <Ask
+                          k="d_attempt"
+                          q="Have you done anything recently to try to kill or seriously harm yourself?"
+                          set="no-yes"
+                        />
+                        {a("d_attempt") === "yes" && (
+                          <Detail>
+                            <Txt k="d_what_happened" label="What happened and when?" />
+                          </Detail>
+                        )}
+                        <Ask
+                          k="d_means"
+                          q="Known access to something that could be used for serious self-harm?"
+                          set="no-yes-unknown"
+                        />
+                        <Ask
+                          k="d_safety"
+                          q="Can the client currently maintain their own safety?"
+                          set="yes-no-uncertain"
+                        />
+                      </Section>
+
+                      <Section title="E — Risk of harm to others" section="e">
+                        <Ask
+                          k="e_thoughts"
+                          q="Current thoughts of seriously harming someone else?"
+                          set="no-yes-unable"
+                        />
+                        {a("e_thoughts") === "yes" && (
+                          <Detail>
+                            <Ask
+                              k="e_named"
+                              q="Is a specific, identifiable person at risk?"
+                              set="no-yes"
+                            />
+                            {a("e_named") === "yes" && (
+                              <>
+                                <Callout tone="danger" className="my-2">
+                                  <strong>Duty to protect</strong> — a senior decision on informing
+                                  the person and/or police is requested when you sign.
+                                </Callout>
+                                <div className={FIELDGRID}>
+                                  <Txt
+                                    k="duty_victim"
+                                    label="Person at risk (relationship, where)"
+                                  />
+                                  <Txt
+                                    k="duty_informed"
+                                    label="Who in the team has been informed"
+                                  />
+                                  <Sel
+                                    k="duty_police"
+                                    label="Police informed?"
+                                    set="triage-v4-duty-police"
+                                  />
+                                  <Sel
+                                    k="duty_warned"
+                                    label="Person warned?"
+                                    set="triage-v4-duty-warned"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </Detail>
+                        )}
+                        <Ask
+                          k="e_behaviour"
+                          q="Recent threatening, aggressive or violent behaviour?"
+                          set="no-yes-unknown"
+                        />
+                        {(a("e_thoughts") === "yes" || a("e_behaviour") === "yes") && (
+                          <Detail>
+                            <Txt k="e_concern" label="Who / what is the concern?" />
+                          </Detail>
+                        )}
+                        <Ask k="e_act" q="Recent violent act?" set="no-yes" />
+                        <Ask
+                          k="e_means"
+                          q="Known access to means capable of serious harm?"
+                          set="no-yes-unknown"
+                        />
+                        <Ask
+                          k="e_danger"
+                          q="Current behaviour suggests immediate danger?"
+                          set="no-yes-uncertain"
+                        />
+                      </Section>
+                    </Step>
+                    <Step id="mental">
+                      <Section title="F — Acute mental state" section="f">
+                        <Ask
+                          k="f_change"
+                          q="Major change in mental state now?"
+                          set="no-yes-unable"
+                        />
+                        {a("f_change") === "yes" && (
+                          <Detail>
+                            <Checks k="f_features" set="triage-mental-state-feature" />
+                          </Detail>
+                        )}
+                        <div className={`${FIELDGRID} mt-2`}>
+                          <Field label="Level of consciousness">
+                            <p className="py-2 text-[13px] text-ink-700">
+                              {a("acvpu")
+                                ? vs.label("triage-v4-acvpu", a("acvpu"))
+                                : "Record ACVPU in H"}
+                            </p>
+                          </Field>
+                          <Sel k="f_orientation" label="Orientation" set="triage-orientation" />
+                          <Sel k="f_behaviour" label="Behaviour" set="triage-behaviour" />
+                          {a("f_behaviour") === "other" && (
+                            <Txt k="f_behaviour_other" label="Behaviour — other" />
+                          )}
+                        </div>
+                      </Section>
+
+                      <Section title="G — Alcohol & other substances" section="g">
+                        <Ask
+                          k="g_use"
+                          q="Recent alcohol or other substance use?"
+                          set="no-yes-unknown"
+                        />
+                        {a("g_use") === "yes" && (
+                          <div className="-mx-[18px] my-2 overflow-x-auto">
+                            <table className={TABLE} id={fid("g_alcohol_last")} tabIndex={-1}>
+                              <thead>
+                                <tr>
+                                  <th className={TH}>Substance</th>
+                                  <th className={TH}>Last use</th>
+                                  <th className={TH}>Amount / pattern</th>
+                                  <th className={TH}>Current concern</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {SUBSTANCE_ROWS.map((code) => {
+                                  const label = vs.label("triage-v4-substance", code);
+                                  return (
+                                    <tr key={code}>
+                                      <td className={TD}>
+                                        {code === "other" ? (
+                                          <input
+                                            id={fid("g_other_name")}
+                                            aria-label="Other substance — name"
+                                            placeholder="Other — name"
+                                            className={`${INPUT} min-w-[120px]`}
+                                            value={a("g_other_name")}
+                                            onChange={(e) => set("g_other_name", e.target.value)}
+                                          />
+                                        ) : (
+                                          label
+                                        )}
+                                      </td>
+                                      <td className={TD}>
+                                        <input
+                                          aria-label={`${label} — last use`}
+                                          className={`${INPUT} min-w-[120px]`}
+                                          value={a(`g_${code}_last`)}
+                                          onChange={(e) => set(`g_${code}_last`, e.target.value)}
+                                        />
+                                      </td>
+                                      <td className={TD}>
+                                        <input
+                                          aria-label={`${label} — amount / pattern`}
+                                          className={`${INPUT} min-w-[140px]`}
+                                          value={a(`g_${code}_amount`)}
+                                          onChange={(e) => set(`g_${code}_amount`, e.target.value)}
+                                        />
+                                      </td>
+                                      <td className={TD}>
+                                        <SelectChoices
+                                          options={vs.options("triage-substance-concern")}
+                                          value={a(`g_${code}_concern`)}
+                                          placeholder="—"
+                                          onChange={(value) => set(`g_${code}_concern`, value)}
+                                        />
+                                        {a(`g_${code}_concern`) === "other" && (
+                                          <input
+                                            id={fid(`g_${code}_concern_other`)}
+                                            aria-label={`${label} — describe the concern`}
+                                            placeholder="Describe the concern"
+                                            className={`${INPUT} mt-1.5 min-w-[140px]`}
+                                            value={a(`g_${code}_concern_other`)}
+                                            onChange={(e) =>
+                                              set(`g_${code}_concern_other`, e.target.value)
+                                            }
+                                          />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        {(a("g_use") === "yes" || a("g_use") === "unknown") && (
+                          <div className={`${FIELDGRID} mt-2`}>
+                            <Sel
+                              k="g_intoxication"
+                              label="Current intoxication"
+                              set="triage-intoxication"
+                            />
+                          </div>
+                        )}
+                        {a("g_use") && (
+                          <>
+                            <Ask
+                              k="g_stopped"
+                              q="Recently stopped / significantly reduced heavy or frequent use?"
+                              set="no-yes-unknown"
+                            />
+                            <Checks
+                              k="g_withdrawal"
+                              legend="Current withdrawal"
+                              set="triage-withdrawal-symptom"
+                            />
+                            <Ask
+                              k="g_seizure_hx"
+                              q="Previous withdrawal seizure?"
+                              set="no-yes-unknown"
+                            />
+                            <Ask
+                              k="g_dts_hx"
+                              q="Previous severe withdrawal / DTs?"
+                              set="no-yes-unknown"
+                            />
+                          </>
+                        )}
+                      </Section>
+                    </Step>
+                    <Step id="medical">
+                      <Section title="H — Urgent medical screen" section="h">
+                        <Ask
+                          k="h_concern"
+                          q="Immediate physical / medical concern?"
+                          set="no-yes-unknown"
+                        />
+                        {a("h_concern") === "yes" && (
+                          <Detail>
+                            <Checks k="h_flags" set="triage-medical-concern" />
+                            {list(answers, "h_flags").includes("suspected_overdose") && (
+                              <>
+                                <Callout tone="danger" className="my-2">
+                                  <strong>Medical emergency first.</strong> Record what, how much,
+                                  when, with what and why.
+                                </Callout>
+                                <div className={FIELDGRID}>
+                                  <Txt k="od_substance" label="Substance(s)" />
+                                  <Txt k="od_amount" label="Amount" placeholder="or ‘unknown’" />
+                                  <Txt
+                                    k="od_time"
+                                    label="Time of ingestion"
+                                    type="datetime-local"
+                                  />
+                                  <Txt
+                                    k="od_coingest"
+                                    label="Co-ingestants (incl. alcohol)"
+                                    placeholder="or ‘none known’"
+                                  />
+                                  <Sel k="od_intent" label="Intent" set="triage-v4-od-intent" />
+                                </div>
+                              </>
+                            )}
+                          </Detail>
+                        )}
+                        <div className={`${FIELDGRID} mt-3`}>
+                          <Sel
+                            k="consent_obs"
+                            label="Consent to vital signs"
+                            set="triage-v4-consent-obs"
+                          />
+                          <Sel k="chaperone" label="Chaperone" set="triage-v4-chaperone" />
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <Field
+                            label="BP (mmHg)"
+                            htmlFor={fid("v_sbp")}
+                            error={vitalCheck("v_sbp").error ?? vitalCheck("v_dbp").error}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                id={fid("v_sbp")}
+                                aria-label="Systolic blood pressure, mmHg"
+                                placeholder="sys"
+                                inputMode="numeric"
+                                className={INPUT}
+                                value={a("v_sbp")}
+                                onChange={(e) =>
+                                  setVital({
+                                    v_sbp: e.target.value,
+                                    vconf: vconf.filter((x) => x !== "v_sbp"),
+                                  })
+                                }
+                              />
+                              <span>/</span>
+                              <input
+                                aria-label="Diastolic blood pressure, mmHg"
+                                placeholder="dia"
+                                inputMode="numeric"
+                                className={INPUT}
+                                value={a("v_dbp")}
+                                onChange={(e) =>
+                                  setVital({
+                                    v_dbp: e.target.value,
+                                    vconf: vconf.filter((x) => x !== "v_dbp"),
+                                  })
+                                }
+                              />
+                            </div>
+                            {confirmBox("v_sbp")}
+                            {confirmBox("v_dbp")}
+                            {!a("v_sbp") && (
+                              <NotMeasured
+                                label="Blood pressure"
+                                value={a("nm_sbp")}
+                                vs={vs}
+                                onChange={(r) => markNotMeasured(["nm_sbp", "nm_dbp"], r)}
+                              />
+                            )}
+                          </Field>
+                          {VITALS.map((v) => vitalInput(v.key, v.label))}
+                          <Sel k="v_o2" label="Oxygen" set="triage-v4-oxygen" />
+                          <Sel k="acvpu" label="Consciousness (ACVPU)" set="triage-v4-acvpu" />
+                        </div>
+                        {ews && !ewsCurrent && (
+                          <p
+                            className="mt-3 rounded-lg border border-priority-orange px-3 py-2 text-[13px]"
+                            role="status"
+                          >
+                            <strong>EWS not yet updated</strong>
+                            {draftStatus === DRAFT_FAILED
+                              ? " — the latest vital signs have not saved; check your connection"
+                              : " — saving the latest vital signs…"}
+                          </p>
+                        )}
+                        {ews && ewsCurrent && (
+                          <p
+                            className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${ews.complete ? "border-surface-border" : "border-priority-orange"}`}
+                            role="status"
+                          >
+                            <strong>{ews.label}</strong>
+                            {ews.complete ? ` — ${ews.response.text}` : " — partial score"}
+                          </p>
+                        )}
+                        {vitalsEntered && (
+                          <div className={`${FIELDGRID} mt-3`}>
+                            <Txt k="v_measured_at" label="Time measured" type="datetime-local" />
+                            <Sel
+                              k="v_source"
+                              label="Source of the measurements"
+                              set="triage-vitals-source"
+                            />
+                          </div>
+                        )}
+                        {(evaluation.medical_escalation || evaluation.referral_in_asked) && (
+                          <div className="mt-3 rounded-lg border border-surface-border px-3.5 py-3">
+                            <div className={`${GROUP_LABEL} !mt-0`}>Medical escalation</div>
+                            {evaluation.medical_escalation && (
+                              <>
+                                <div className={FIELDGRID}>
+                                  <Sel
+                                    k="h_next"
+                                    label="Next step for this medical concern"
+                                    set="triage-medical-escalation"
+                                  />
+                                </div>
+                                {a("h_next") === "refer_out" && (
+                                  <Detail>
+                                    <FacilityFields prefix="h_refer" label="Facility referred to" />
+                                    <div className="mt-2">
+                                      <Txt
+                                        k="h_refer_reason"
+                                        label="Reason for referral"
+                                        rows={2}
+                                        grow
+                                      />
+                                    </div>
+                                  </Detail>
+                                )}
+                              </>
+                            )}
+                            {evaluation.referral_in_asked && (
+                              <>
+                                <Ask
+                                  k="h_referred_in"
+                                  q="Did the client arrive with a referral from another facility?"
+                                  set="no-yes"
+                                />
+                                {a("h_referred_in") === "yes" && (
+                                  <Detail>
+                                    <FacilityFields prefix="h_ref" label="Referring facility" />
+                                    <div className="mt-2">
+                                      <Txt
+                                        k="h_ref_note"
+                                        label="Referral note from the referring facility"
+                                        rows={4}
+                                        grow
+                                      />
+                                    </div>
+                                  </Detail>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </Section>
+                    </Step>
+                    <Step id="safeguarding">
+                      <Section title="I — Safeguarding & vulnerability" section="i">
+                        <Ask
+                          k="i_safe"
+                          q="Do you feel safe where you currently live / stay?"
+                          set="triage-feels-safe"
+                        />
+                        <Checks
+                          k="i_flags"
+                          legend="Concerns for"
+                          set="triage-safeguarding-concern"
+                        />
+                        {list(answers, "i_flags").includes("sexual_violence") && (
+                          <Detail>
+                            <Ask
+                              k="i_sv_recent"
+                              q="Sexual violence in the last 72 hours?"
+                              set="no-yes-unknown"
+                            />
+                            {a("i_sv_recent") === "yes" && (
+                              <>
+                                <Callout tone="danger" className="my-2">
+                                  PEP and emergency contraception are time-critical (
+                                  {config?.pep_window_hours ?? 72} h). Offer a same-gender clinician
+                                  and a chaperone.
+                                </Callout>
+                                <Txt
+                                  k="gbv_incident_at"
+                                  label="Time of incident (best estimate)"
+                                  type="datetime-local"
+                                />
+                              </>
+                            )}
+                          </Detail>
+                        )}
+                        <Ask
+                          k="i_return"
+                          q="Safe to return to current environment?"
+                          set="yes-no-uncertain"
+                        />
+                      </Section>
+
+                      <Section title="J — Immediate functional safety">
+                        <Ask
+                          k="j_concern"
+                          q="Immediate concern that the person cannot safely care for basic needs?"
+                          set="no-yes-uncertain"
+                        />
+                        {a("j_concern") === "yes" && (
+                          <Detail>
+                            <Checks k="j_flags" set="triage-functional-area" />
+                          </Detail>
+                        )}
+                      </Section>
+
+                      <Section
+                        title={`Waiting-area safety${safetyRequired ? ` — required for ${chosen}` : ""}`}
+                      >
+                        <div className={FIELDGRID}>
+                          <Sel
+                            k="safety_obs"
+                            label="Observation level"
+                            set="triage-v4-observation-level"
+                          />
+                          <Sel
+                            k="safety_location"
+                            label="Where the person waits"
+                            set="triage-v4-location"
+                          />
+                          <Txt k="safety_observer" label="Named observer" />
+                          <Sel
+                            k="safety_observer_gender"
+                            label="Observer gender (if the client has a preference)"
+                            set="triage-v4-observer-gender"
+                          />
+                        </div>
+                        <label className="mt-2 flex cursor-pointer items-center gap-2 py-1 text-[13px] text-ink-900">
+                          <input
+                            type="checkbox"
+                            checked={a("safety_items_checked") === "yes"}
+                            onChange={(e) =>
+                              set("safety_items_checked", e.target.checked ? "yes" : "")
+                            }
+                          />
+                          Belongings checked for items that could cause harm
+                        </label>
+                        {a("safety_items_checked") === "yes" && (
+                          <div className={FIELDGRID}>
+                            <Txt k="safety_removed" label="What was removed" />
+                            <Txt k="safety_stored" label="Where it is stored" />
+                          </div>
+                        )}
+                      </Section>
+
+                      <details className="mb-2.5 rounded-lg border border-surface-border bg-surface-card px-[18px] py-3">
+                        <summary className="cursor-pointer text-[13px] font-bold text-ink-900">
+                          Preferences (optional)
+                        </summary>
+                        <div className={`${FIELDGRID} mt-3`}>
+                          <Sel
+                            k="pref_clinician_gender"
+                            label="Preferred clinician gender"
+                            set="triage-v4-clinician-gender"
+                          />
+                          <Txt k="pref_support_person" label="Support person present / wanted" />
+                          <Txt k="pref_triggers" label="Known triggers" />
+                          <Txt k="pref_feel_safe" label="What helps you feel safe here?" />
+                        </div>
+                      </details>
+                    </Step>
+                  </>
+                )}
+
+                {present === "no" && (
+                  <Step id="phone">
+                    <Section title="K — Telephone / third-party safety screen" section="k">
+                      <div className={FIELDGRID}>
+                        <Txt k="k_where" label="Where is the client now?" />
+                        <Txt k="k_with" label="Who is physically with them?" />
+                        <Txt
+                          k="k_last_seen"
+                          label="When did the caller last see / speak with them?"
+                        />
+                      </div>
+                      <Ask k="k_alone" q="Are they alone?" set="yes-no-unknown" />
+                      <div className="mt-2">
+                        <Txt
+                          k="k_cause"
+                          label="What exactly has the client said or done that is causing concern?"
+                          rows={2}
+                        />
+                      </div>
+                      <Checks k="k_flags" legend="Reported" set="triage-telephone-concern" />
+                      <Ask
+                        k="k_bring"
+                        q="Can the person be brought safely for assessment?"
+                        set="yes-no-uncertain"
+                      />
+                      <Ask k="k_emergency" q="Is emergency assistance required?" set="no-yes" />
+                      {nextStepNeeded && (
+                        <Detail>
+                          <Ask
+                            k="r_disposition"
+                            q="Next step"
+                            set="triage-v4-disposition"
+                            only={["callback", "home_visit"]}
+                          />
+                          {a("r_disposition") === "callback" && (
+                            <div className={FIELDGRID}>
+                              <Txt k="r_callback_at" label="Call-back time" type="datetime-local" />
+                              <Sel
+                                k="r_callback_owner"
+                                label="Who will call back"
+                                set="triage-v4-callback-owner"
+                              />
+                            </div>
+                          )}
+                        </Detail>
+                      )}
+                      <div className="mt-2">
+                        <Txt k="r_advice" label="Safety advice given to the caller" rows={2} />
+                      </div>
+                    </Section>
+                  </Step>
+                )}
+
+                <Step id="summary">
+                  <Section title="L — Triage summary">
+                    <div className="-mx-[18px] overflow-x-auto">
+                      <table className={TABLE}>
+                        <thead>
+                          <tr>
+                            <th className={TH}>Finding / alert</th>
+                            <th className={TH}>Current status</th>
+                            <th className={TH}>Source</th>
+                            <th className={TH}>Date / time · recorded by</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {findings.length ? (
+                            findings.map((row, i) => {
+                              const cells = row as string[];
                               return (
-                                <tr key={code}>
+                                <tr key={`${cells[0]}-${i}`}>
                                   <td className={TD}>
-                                    {code === "other" ? (
-                                      <input
-                                        id={fid("g_other_name")}
-                                        aria-label="Other substance — name"
-                                        placeholder="Other — name"
-                                        className={`${INPUT} min-w-[120px]`}
-                                        value={a("g_other_name")}
-                                        onChange={(e) => set("g_other_name", e.target.value)}
-                                      />
-                                    ) : (
-                                      label
-                                    )}
+                                    <strong>{cells[0]}</strong>
                                   </td>
+                                  <td className={TD}>{cells[1]}</td>
+                                  <td className={TD}>{cells[2]}</td>
                                   <td className={TD}>
-                                    <input
-                                      aria-label={`${label} — last use`}
-                                      className={`${INPUT} min-w-[120px]`}
-                                      value={a(`g_${code}_last`)}
-                                      onChange={(e) => set(`g_${code}_last`, e.target.value)}
-                                    />
-                                  </td>
-                                  <td className={TD}>
-                                    <input
-                                      aria-label={`${label} — amount / pattern`}
-                                      className={`${INPUT} min-w-[140px]`}
-                                      value={a(`g_${code}_amount`)}
-                                      onChange={(e) => set(`g_${code}_amount`, e.target.value)}
-                                    />
-                                  </td>
-                                  <td className={TD}>
-                                    <SelectChoices
-                                      options={vs.options("triage-substance-concern")}
-                                      value={a(`g_${code}_concern`)}
-                                      placeholder="—"
-                                      onChange={(value) => set(`g_${code}_concern`, value)}
-                                    />
-                                    {a(`g_${code}_concern`) === "other" && (
-                                      <input
-                                        id={fid(`g_${code}_concern_other`)}
-                                        aria-label={`${label} — describe the concern`}
-                                        placeholder="Describe the concern"
-                                        className={`${INPUT} mt-1.5 min-w-[140px]`}
-                                        value={a(`g_${code}_concern_other`)}
-                                        onChange={(e) =>
-                                          set(`g_${code}_concern_other`, e.target.value)
-                                        }
-                                      />
-                                    )}
+                                    {cells[3]
+                                      ? `${formatDateTime(cells[3])} · ${cells[4] ?? ""}`
+                                      : "On signing"}
                                   </td>
                                 </tr>
                               );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    {(a("g_use") === "yes" || a("g_use") === "unknown") && (
-                      <div className={`${FIELDGRID} mt-2`}>
-                        <Sel
-                          k="g_intoxication"
-                          label="Current intoxication"
-                          set="triage-intoxication"
-                        />
-                      </div>
-                    )}
-                    {a("g_use") && (
-                      <>
-                        <Ask
-                          k="g_stopped"
-                          q="Recently stopped / significantly reduced heavy or frequent use?"
-                          set="no-yes-unknown"
-                        />
-                        <Checks
-                          k="g_withdrawal"
-                          legend="Current withdrawal"
-                          set="triage-withdrawal-symptom"
-                        />
-                        <Ask
-                          k="g_seizure_hx"
-                          q="Previous withdrawal seizure?"
-                          set="no-yes-unknown"
-                        />
-                        <Ask
-                          k="g_dts_hx"
-                          q="Previous severe withdrawal / DTs?"
-                          set="no-yes-unknown"
-                        />
-                      </>
-                    )}
-                  </Section>
-
-                  <Section title="H — Urgent medical screen" section="h">
-                    <Ask
-                      k="h_concern"
-                      q="Immediate physical / medical concern?"
-                      set="no-yes-unknown"
-                    />
-                    {a("h_concern") === "yes" && (
-                      <Detail>
-                        <Checks k="h_flags" set="triage-medical-concern" />
-                        {list(answers, "h_flags").includes("suspected_overdose") && (
-                          <>
-                            <Callout tone="danger" className="my-2">
-                              <strong>Medical emergency first.</strong> Record what, how much, when,
-                              with what and why.
-                            </Callout>
-                            <div className={FIELDGRID}>
-                              <Txt k="od_substance" label="Substance(s)" />
-                              <Txt k="od_amount" label="Amount" placeholder="or ‘unknown’" />
-                              <Txt k="od_time" label="Time of ingestion" type="datetime-local" />
-                              <Txt
-                                k="od_coingest"
-                                label="Co-ingestants (incl. alcohol)"
-                                placeholder="or ‘none known’"
-                              />
-                              <Sel k="od_intent" label="Intent" set="triage-v4-od-intent" />
-                            </div>
-                          </>
-                        )}
-                      </Detail>
-                    )}
-                    <div className={`${FIELDGRID} mt-3`}>
-                      <Sel
-                        k="consent_obs"
-                        label="Consent to vital signs"
-                        set="triage-v4-consent-obs"
-                      />
-                      <Sel k="chaperone" label="Chaperone" set="triage-v4-chaperone" />
-                    </div>
-                    <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <Field
-                        label="BP (mmHg)"
-                        htmlFor={fid("v_sbp")}
-                        error={vitalCheck("v_sbp").error ?? vitalCheck("v_dbp").error}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            id={fid("v_sbp")}
-                            aria-label="Systolic blood pressure, mmHg"
-                            placeholder="sys"
-                            inputMode="numeric"
-                            className={INPUT}
-                            value={a("v_sbp")}
-                            onChange={(e) =>
-                              setVital({
-                                v_sbp: e.target.value,
-                                vconf: vconf.filter((x) => x !== "v_sbp"),
-                              })
-                            }
-                          />
-                          <span>/</span>
-                          <input
-                            aria-label="Diastolic blood pressure, mmHg"
-                            placeholder="dia"
-                            inputMode="numeric"
-                            className={INPUT}
-                            value={a("v_dbp")}
-                            onChange={(e) =>
-                              setVital({
-                                v_dbp: e.target.value,
-                                vconf: vconf.filter((x) => x !== "v_dbp"),
-                              })
-                            }
-                          />
-                        </div>
-                        {confirmBox("v_sbp")}
-                        {confirmBox("v_dbp")}
-                        {!a("v_sbp") && (
-                          <NotMeasured
-                            label="Blood pressure"
-                            value={a("nm_sbp")}
-                            vs={vs}
-                            onChange={(r) => markNotMeasured(["nm_sbp", "nm_dbp"], r)}
-                          />
-                        )}
-                      </Field>
-                      {VITALS.map((v) => vitalInput(v.key, v.label))}
-                      <Sel k="v_o2" label="Oxygen" set="triage-v4-oxygen" />
-                      <Sel k="acvpu" label="Consciousness (ACVPU)" set="triage-v4-acvpu" />
-                    </div>
-                    {ews && !ewsCurrent && (
-                      <p
-                        className="mt-3 rounded-lg border border-priority-orange px-3 py-2 text-[13px]"
-                        role="status"
-                      >
-                        <strong>EWS not yet updated</strong>
-                        {draftStatus === DRAFT_FAILED
-                          ? " — the latest vital signs have not saved; check your connection"
-                          : " — saving the latest vital signs…"}
-                      </p>
-                    )}
-                    {ews && ewsCurrent && (
-                      <p
-                        className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${ews.complete ? "border-surface-border" : "border-priority-orange"}`}
-                        role="status"
-                      >
-                        <strong>{ews.label}</strong>
-                        {ews.complete ? ` — ${ews.response.text}` : " — partial score"}
-                      </p>
-                    )}
-                    {vitalsEntered && (
-                      <div className={`${FIELDGRID} mt-3`}>
-                        <Txt k="v_measured_at" label="Time measured" type="datetime-local" />
-                        <Sel
-                          k="v_source"
-                          label="Source of the measurements"
-                          set="triage-vitals-source"
-                        />
-                      </div>
-                    )}
-                    {(evaluation.medical_escalation || evaluation.referral_in_asked) && (
-                      <div className="mt-3 rounded-lg border border-surface-border px-3.5 py-3">
-                        <div className={`${GROUP_LABEL} !mt-0`}>Medical escalation</div>
-                        {evaluation.medical_escalation && (
-                          <>
-                            <div className={FIELDGRID}>
-                              <Sel
-                                k="h_next"
-                                label="Next step for this medical concern"
-                                set="triage-medical-escalation"
-                              />
-                            </div>
-                            {a("h_next") === "refer_out" && (
-                              <Detail>
-                                <FacilityFields prefix="h_refer" label="Facility referred to" />
-                                <div className="mt-2">
-                                  <Txt
-                                    k="h_refer_reason"
-                                    label="Reason for referral"
-                                    rows={2}
-                                    grow
-                                  />
-                                </div>
-                              </Detail>
-                            )}
-                          </>
-                        )}
-                        {evaluation.referral_in_asked && (
-                          <>
-                            <Ask
-                              k="h_referred_in"
-                              q="Did the client arrive with a referral from another facility?"
-                              set="no-yes"
-                            />
-                            {a("h_referred_in") === "yes" && (
-                              <Detail>
-                                <FacilityFields prefix="h_ref" label="Referring facility" />
-                                <div className="mt-2">
-                                  <Txt
-                                    k="h_ref_note"
-                                    label="Referral note from the referring facility"
-                                    rows={4}
-                                    grow
-                                  />
-                                </div>
-                              </Detail>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </Section>
-
-                  <Section title="I — Safeguarding & vulnerability" section="i">
-                    <Ask
-                      k="i_safe"
-                      q="Do you feel safe where you currently live / stay?"
-                      set="triage-feels-safe"
-                    />
-                    <Checks k="i_flags" legend="Concerns for" set="triage-safeguarding-concern" />
-                    {list(answers, "i_flags").includes("sexual_violence") && (
-                      <Detail>
-                        <Ask
-                          k="i_sv_recent"
-                          q="Sexual violence in the last 72 hours?"
-                          set="no-yes-unknown"
-                        />
-                        {a("i_sv_recent") === "yes" && (
-                          <>
-                            <Callout tone="danger" className="my-2">
-                              PEP and emergency contraception are time-critical (
-                              {config?.pep_window_hours ?? 72} h). Offer a same-gender clinician and
-                              a chaperone.
-                            </Callout>
-                            <Txt
-                              k="gbv_incident_at"
-                              label="Time of incident (best estimate)"
-                              type="datetime-local"
-                            />
-                          </>
-                        )}
-                      </Detail>
-                    )}
-                    <Ask
-                      k="i_return"
-                      q="Safe to return to current environment?"
-                      set="yes-no-uncertain"
-                    />
-                  </Section>
-
-                  <Section title="J — Immediate functional safety">
-                    <Ask
-                      k="j_concern"
-                      q="Immediate concern that the person cannot safely care for basic needs?"
-                      set="no-yes-uncertain"
-                    />
-                    {a("j_concern") === "yes" && (
-                      <Detail>
-                        <Checks k="j_flags" set="triage-functional-area" />
-                      </Detail>
-                    )}
-                  </Section>
-
-                  <Section
-                    title={`Waiting-area safety${safetyRequired ? ` — required for ${chosen}` : ""}`}
-                  >
-                    <div className={FIELDGRID}>
-                      <Sel
-                        k="safety_obs"
-                        label="Observation level"
-                        set="triage-v4-observation-level"
-                      />
-                      <Sel
-                        k="safety_location"
-                        label="Where the person waits"
-                        set="triage-v4-location"
-                      />
-                      <Txt k="safety_observer" label="Named observer" />
-                      <Sel
-                        k="safety_observer_gender"
-                        label="Observer gender (if the client has a preference)"
-                        set="triage-v4-observer-gender"
-                      />
-                    </div>
-                    <label className="mt-2 flex cursor-pointer items-center gap-2 py-1 text-[13px] text-ink-900">
-                      <input
-                        type="checkbox"
-                        checked={a("safety_items_checked") === "yes"}
-                        onChange={(e) => set("safety_items_checked", e.target.checked ? "yes" : "")}
-                      />
-                      Belongings checked for items that could cause harm
-                    </label>
-                    {a("safety_items_checked") === "yes" && (
-                      <div className={FIELDGRID}>
-                        <Txt k="safety_removed" label="What was removed" />
-                        <Txt k="safety_stored" label="Where it is stored" />
-                      </div>
-                    )}
-                  </Section>
-
-                  <details className="mb-2.5 rounded-lg border border-surface-border bg-surface-card px-[18px] py-3">
-                    <summary className="cursor-pointer text-[13px] font-bold text-ink-900">
-                      Preferences (optional)
-                    </summary>
-                    <div className={`${FIELDGRID} mt-3`}>
-                      <Sel
-                        k="pref_clinician_gender"
-                        label="Preferred clinician gender"
-                        set="triage-v4-clinician-gender"
-                      />
-                      <Txt k="pref_support_person" label="Support person present / wanted" />
-                      <Txt k="pref_triggers" label="Known triggers" />
-                      <Txt k="pref_feel_safe" label="What helps you feel safe here?" />
-                    </div>
-                  </details>
-                </>
-              )}
-
-              {present === "no" && (
-                <Section title="K — Telephone / third-party safety screen" section="k">
-                  <div className={FIELDGRID}>
-                    <Txt k="k_where" label="Where is the client now?" />
-                    <Txt k="k_with" label="Who is physically with them?" />
-                    <Txt k="k_last_seen" label="When did the caller last see / speak with them?" />
-                  </div>
-                  <Ask k="k_alone" q="Are they alone?" set="yes-no-unknown" />
-                  <div className="mt-2">
-                    <Txt
-                      k="k_cause"
-                      label="What exactly has the client said or done that is causing concern?"
-                      rows={2}
-                    />
-                  </div>
-                  <Checks k="k_flags" legend="Reported" set="triage-telephone-concern" />
-                  <Ask
-                    k="k_bring"
-                    q="Can the person be brought safely for assessment?"
-                    set="yes-no-uncertain"
-                  />
-                  <Ask k="k_emergency" q="Is emergency assistance required?" set="no-yes" />
-                  {nextStepNeeded && (
-                    <Detail>
-                      <Ask
-                        k="r_disposition"
-                        q="Next step"
-                        set="triage-v4-disposition"
-                        only={["callback", "home_visit"]}
-                      />
-                      {a("r_disposition") === "callback" && (
-                        <div className={FIELDGRID}>
-                          <Txt k="r_callback_at" label="Call-back time" type="datetime-local" />
-                          <Sel
-                            k="r_callback_owner"
-                            label="Who will call back"
-                            set="triage-v4-callback-owner"
-                          />
-                        </div>
-                      )}
-                    </Detail>
-                  )}
-                  <div className="mt-2">
-                    <Txt k="r_advice" label="Safety advice given to the caller" rows={2} />
-                  </div>
-                </Section>
-              )}
-
-              <Section title="L — Triage summary">
-                <div className="-mx-[18px] overflow-x-auto">
-                  <table className={TABLE}>
-                    <thead>
-                      <tr>
-                        <th className={TH}>Finding / alert</th>
-                        <th className={TH}>Current status</th>
-                        <th className={TH}>Source</th>
-                        <th className={TH}>Date / time · recorded by</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {findings.length ? (
-                        findings.map((row, i) => {
-                          const cells = row as string[];
-                          return (
-                            <tr key={`${cells[0]}-${i}`}>
-                              <td className={TD}>
-                                <strong>{cells[0]}</strong>
-                              </td>
-                              <td className={TD}>{cells[1]}</td>
-                              <td className={TD}>{cells[2]}</td>
-                              <td className={TD}>
-                                {cells[3]
-                                  ? `${formatDateTime(cells[3])} · ${cells[4] ?? ""}`
-                                  : "On signing"}
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className={`${TD} !text-ink-500`}>
+                                No findings yet.
                               </td>
                             </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className={`${TD} !text-ink-500`}>
-                            No findings yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </Section>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Section>
 
-              <Section title="N — Immediate action / disposition">
-                <fieldset>
-                  <legend className="sr-only">Immediate actions</legend>
-                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    {sectionNOptions.map((o) => (
-                      <label key={o.code} className="flex items-center gap-2 py-1 text-[13px]">
-                        <input
-                          type="checkbox"
-                          checked={list(answers, "n_actions").includes(o.code)}
-                          onChange={(e) => {
-                            const next = e.target.checked
-                              ? [...list(answers, "n_actions"), o.code]
-                              : list(answers, "n_actions").filter((c) => c !== o.code);
-                            setMany({
-                              n_actions: next,
-                              ...(next.includes("other") ? {} : { n_actions_other: "" }),
-                            });
-                          }}
+                  <Section title="N — Immediate action / disposition">
+                    <fieldset>
+                      <legend className="sr-only">Immediate actions</legend>
+                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                        {sectionNOptions.map((o) => (
+                          <label key={o.code} className="flex items-center gap-2 py-1 text-[13px]">
+                            <input
+                              type="checkbox"
+                              checked={list(answers, "n_actions").includes(o.code)}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...list(answers, "n_actions"), o.code]
+                                  : list(answers, "n_actions").filter((c) => c !== o.code);
+                                setMany({
+                                  n_actions: next,
+                                  ...(next.includes("other") ? {} : { n_actions_other: "" }),
+                                });
+                              }}
+                            />
+                            {o.display}
+                            {recActions.has(o.code) && <Tag tone="brand">recommended</Tag>}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {list(answers, "n_actions").includes("other") && (
+                      <div className="mt-2 max-w-md">
+                        <Txt
+                          k="n_actions_other"
+                          label="Other — describe the action"
+                          rows={3}
+                          disabled={readOnly}
                         />
-                        {o.display}
-                        {recActions.has(o.code) && <Tag tone="brand">recommended</Tag>}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                {list(answers, "n_actions").includes("other") && (
-                  <div className="mt-2 max-w-md">
-                    <Txt
-                      k="n_actions_other"
-                      label="Other — describe the action"
-                      rows={3}
-                      disabled={readOnly}
+                      </div>
+                    )}
+                    <SectionNTaskRegister
+                      triageId={detail.id}
+                      actions={list(answers, "n_actions")}
+                      actionDetails={{ other: str(answers, "n_actions_other") }}
+                      requiredDetailCodes={["other"]}
+                      schema="v5"
+                      actionLabel={(code) => vs.label("triage-action", code)}
+                      readOnly={readOnly}
+                      idPrefix={fid("n")}
+                      onRegistered={(next) => {
+                        setTasks(next);
+                        setMany({ n_actions: [], n_actions_other: "" });
+                      }}
                     />
-                  </div>
-                )}
-                <SectionNTaskRegister
-                  triageId={detail.id}
-                  actions={list(answers, "n_actions")}
-                  actionDetails={{ other: str(answers, "n_actions_other") }}
-                  requiredDetailCodes={["other"]}
-                  schema="v5"
-                  actionLabel={(code) => vs.label("triage-action", code)}
-                  readOnly={readOnly}
-                  idPrefix={fid("n")}
-                  onRegistered={(next) => {
-                    setTasks(next);
-                    setMany({ n_actions: [], n_actions_other: "" });
-                  }}
-                />
-                {tasks.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[12px] text-ink-500">
-                      Tasks requested — each is done later by the person it was assigned to.
-                    </p>
-                    <ul className="mt-1 space-y-1 text-[13px]">
-                      {tasks.map((t) => (
-                        <li key={t.id}>
-                          <strong>{t.action_label}</strong> · assigned to {t.owner} ·{" "}
-                          {taskStatusText(t)}
-                          {t.action_detail ? ` · ${t.action_detail}` : ""}
-                          {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <SigningTaskAssignees
-                  triageId={detail.id}
-                  tasks={evaluation.signing_tasks ?? []}
-                  value={signingAssignees}
-                  onChange={setSigningAssignees}
-                  readOnly={readOnly}
-                  invalid={invalid}
-                  fieldId={fid}
-                />
-              </Section>
-            </fieldset>
+                    {tasks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[12px] text-ink-500">
+                          Tasks requested — each is done later by the person it was assigned to.
+                        </p>
+                        <ul className="mt-1 space-y-1 text-[13px]">
+                          {tasks.map((t) => (
+                            <li key={t.id}>
+                              <strong>{t.action_label}</strong> · assigned to {t.owner} ·{" "}
+                              {taskStatusText(t)}
+                              {t.action_detail ? ` · ${t.action_detail}` : ""}
+                              {t.due_at ? ` · due ${formatDateTime(t.due_at)}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <SigningTaskAssignees
+                      triageId={detail.id}
+                      tasks={evaluation.signing_tasks ?? []}
+                      value={signingAssignees}
+                      onChange={setSigningAssignees}
+                      readOnly={readOnly}
+                      invalid={invalid}
+                      fieldId={fid}
+                    />
+                  </Section>
+                </Step>
+              </fieldset>
+            </StepCtx.Provider>
+            {stepProblems.length > 0 && (
+              <div className="mt-3" role="alert">
+                <Callout tone="danger">
+                  <strong>Answer before moving on:</strong>
+                  <ul className="ml-4 list-disc">
+                    {stepProblems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                </Callout>
+              </div>
+            )}
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM}`}
+                disabled={stepIndex === 0}
+                onClick={() => goToStep(stepIndex - 1)}
+              >
+                ← Back
+              </button>
+              <span className="text-[12.5px] text-ink-500">
+                Step {stepIndex + 1} of {steps.length}
+              </span>
+              {stepIndex < steps.length - 1 ? (
+                <button
+                  type="button"
+                  className={`${BTN} ${BTN_SM}`}
+                  disabled={checkingStep}
+                  onClick={() => void goForward(stepIndex + 1)}
+                >
+                  {checkingStep ? "Checking…" : `Next: ${steps[stepIndex + 1].label} →`}
+                </button>
+              ) : (
+                <span className="text-[12.5px] text-ink-500">Sign from the priority panel</span>
+              )}
+            </div>
           </form>
 
-          <aside aria-label="Priority" className="xl:sticky xl:top-4 xl:self-start">
+          {/* Pinned below the sticky client banner and app bar: it stays put while
+              the form scrolls, and scrolls on its own only when it is taller than
+              the space left. */}
+          <aside
+            aria-label="Priority"
+            className="xl:sticky xl:top-[var(--panel-top)] xl:max-h-[calc(100vh-var(--panel-top)-12px)] xl:self-start xl:overflow-y-auto xl:overscroll-contain"
+            style={{ "--panel-top": `${stickyTop}px` } as CSSProperties}
+          >
             <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
               <div className="flex items-center justify-between gap-2 border-b border-surface-border px-4 py-3">
                 <span className="text-[13px] font-bold">
@@ -1747,4 +1987,20 @@ export function TriageFormV5({
       </FormCtx.Provider>
     </div>
   );
+}
+
+/** The last signed answers as the start of a re-triage, without its Section N
+ * actions and signing decision (made again for the new version). */
+function retriageBase(signed: TriageEncounterDetail["signed"]) {
+  if (!signed) return null;
+  const answers = { ...signed.answers };
+  for (const key of [
+    "n_actions",
+    "m_decision",
+    "m_final_priority",
+    "m_override_reason",
+    "m_cosign",
+  ])
+    delete answers[key];
+  return { ...signed, answers };
 }

@@ -10,7 +10,11 @@ import { ModuleList, ScopeToggle } from "./interventions/ModuleList";
 import { scopedModules, type ModuleScope } from "./interventions/scope";
 import type { RecordViewProps } from "./types";
 import { useRecordData } from "./useRecordData";
-import { clientRecordPath, psychotherapySessionPath } from "../shared/recordRoutes";
+import {
+  clientRecordPath,
+  psychiatryAssessmentPath,
+  psychotherapySessionPath,
+} from "../shared/recordRoutes";
 
 const INTRO =
   "Record what was delivered in response to the care plan. Each record links to a care-plan " +
@@ -57,6 +61,14 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
   const openModule_ = (code: string) => {
     if (code === "admission") {
       navigate(`/clinical/inpatient?patient=${encodeURIComponent(patientId)}`, {
+        state: { from: clientRecordPath(patientId, "interventions") },
+      });
+      return;
+    }
+    // Psychiatry is done in the psychiatry module: its assessments, MSE,
+    // diagnosis, medication and plan, listed per client.
+    if (code === "psychiatry") {
+      navigate(psychiatryAssessmentPath(patientId), {
         state: { from: clientRecordPath(patientId, "interventions") },
       });
       return;
@@ -127,12 +139,29 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
               </span>
             </div>
           </div>
+          {/* Open work first; completed actions fold away below, still one click
+              from their records. */}
           <CarePlanActionsTable
-            actions={actions}
+            actions={actions.filter((action) => action.status !== "COMPLETED")}
             loading={workspace.loading && !data}
             moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
             patientId={patientId}
           />
+          {actions.some((action) => action.status === "COMPLETED") && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[13px] font-semibold text-ink-700 hover:text-ink-900">
+                Completed ({actions.filter((action) => action.status === "COMPLETED").length})
+              </summary>
+              <div className="mt-2">
+                <CarePlanActionsTable
+                  actions={actions.filter((action) => action.status === "COMPLETED")}
+                  loading={false}
+                  moduleNames={Object.fromEntries(modules.map((m) => [m.code, m.name]))}
+                  patientId={patientId}
+                />
+              </div>
+            </details>
+          )}
         </>
       )}
 

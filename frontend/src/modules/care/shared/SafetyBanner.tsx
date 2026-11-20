@@ -44,15 +44,19 @@ export function SafetyBanner({
   banner,
   error,
   overrides,
+  actions,
 }: {
   banner: ClientBanner | null;
   error?: string | null;
   overrides?: BannerOverrides;
+  /** Small links under the client's name (e.g. edit details), so they take no row of their own. */
+  actions?: ReactNode;
 }) {
+  const collapsed = useScrolledDown();
   if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!banner) {
     return (
-      <div className="mb-4 h-[104px] animate-pulse rounded-lg border border-surface-border bg-surface-card" />
+      <div className="mb-3 h-[72px] animate-pulse rounded-lg border border-surface-border bg-surface-card" />
     );
   }
   const name = banner.name.trim() || "Temporary client (unnamed)";
@@ -96,20 +100,81 @@ export function SafetyBanner({
     unknown: "text-priority-orange",
   }[allergy.state];
 
-  const label = "mb-[7px] text-[11.5px] font-semibold text-ink-400";
-  const cell = "min-w-0 px-5 py-3.5";
+  // Compact: the banner is read at a glance above every clinical screen, so it
+  // keeps every safety item but takes as little height as it can.
+  const label = "mb-0.5 text-[11px] font-semibold text-ink-400";
+  const cell = "min-w-0 px-4 py-2";
+
+  if (collapsed) {
+    // Scrolled into the page: one slim line that still carries every safety item.
+    return (
+      <section
+        aria-label="Patient safety banner"
+        data-safety-banner
+        data-collapsed
+        className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-3 border-b border-surface-border bg-surface-card font-system shadow-[0_12px_24px_-18px_rgba(15,27,45,.35)] sm:-mx-6 lg:-mx-8 [&_*]:font-system"
+      >
+        <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 text-[12.5px]">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[14px] font-extrabold text-ink-900">{name}</span>
+            <span className="whitespace-nowrap text-[11px] font-bold tabular-nums text-brand-green">
+              {banner.citramac_number || "No ID"}
+            </span>
+            {demographics.length > 0 && (
+              <span className="hidden whitespace-nowrap text-ink-500 md:inline">
+                {demographics.slice(0, 2).join(" · ")}
+              </span>
+            )}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-px text-[11.5px] font-extrabold ${allergyBox} ${allergyTone}`}
+            title={allergy.items.map((item) => item.substance).join(", ") || allergyTitle}
+          >
+            {allergy.state === "none" ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            )}
+            {allergy.state === "known" && allergy.items.length > 0
+              ? `Allergies: ${allergy.items.map((item) => item.substance).join(", ")}`
+              : allergyTitle}
+          </span>
+          {priority ? (
+            <span
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-px text-[11.5px] font-extrabold text-on-status ${PRIORITY_SOLID[priority]}`}
+            >
+              {priority} · {PRIORITY_LABEL[priority]}
+            </span>
+          ) : null}
+          {banner.alerts.length > 0 && (
+            <span
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-priority-orange/40 bg-priority-orange-tint px-2 py-px text-[11.5px] font-bold text-priority-orange"
+              title={banner.alerts.map((alert) => alert.label).join("\n")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {banner.alerts.length} {banner.alerts.length === 1 ? "alert" : "alerts"}
+            </span>
+          )}
+          <span className="min-w-0 truncate font-semibold text-ink-700" title={setting}>
+            {setting}
+            {banner.legal_status ? ` · ${banner.legal_status.label}` : ""}
+          </span>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       aria-label="Patient safety banner"
       data-safety-banner
-      className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-4 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
+      className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-3 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
-      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(250px,1.1fr)_minmax(300px,1.8fr)_minmax(200px,.9fr)_minmax(210px,1fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
+      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.2fr)_minmax(200px,.9fr)_minmax(220px,1.1fr)_minmax(240px,1.3fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
         <div className={`${cell} flex items-center gap-3.5`} aria-label="Patient identity">
           <div
             aria-hidden="true"
-            className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-[15px] text-base font-extrabold ${
+            className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl text-[13px] font-extrabold ${
               temporary
                 ? "bg-surface-bg text-ink-500 ring-1 ring-surface-border"
                 : "bg-brand-green-tint text-brand-green-dark ring-1 ring-brand-green/30"
@@ -118,7 +183,7 @@ export function SafetyBanner({
             {initials}
           </div>
           <div className="min-w-0">
-            <div className="line-clamp-2 break-words text-xl font-extrabold leading-tight tracking-[-.4px] text-ink-900">
+            <div className="line-clamp-1 break-words text-[16px] font-extrabold leading-tight tracking-[-.2px] text-ink-900">
               {name}{" "}
               {banner.identity_label && (
                 <span className="ml-1 inline-block rounded-md border border-priority-orange/40 bg-priority-orange-tint px-[7px] py-px align-[3px] text-[10px] font-semibold text-priority-orange">
@@ -126,17 +191,22 @@ export function SafetyBanner({
                 </span>
               )}
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-[7px] gap-y-0.5 text-[11px] font-bold tabular-nums text-brand-green">
+            <div className="mt-0.5 flex flex-wrap gap-x-[7px] gap-y-0 text-[11px] font-bold tabular-nums text-brand-green">
               <span>CITRAMAC ID {banner.citramac_number || "Not recorded"}</span>
               <span className="text-ink-400">·</span>
               <span>MRN {banner.mrn || "Not recorded"}</span>
             </div>
             {demographics.length > 0 && (
               <div
-                className="mt-1.5 truncate text-[13px] text-ink-500"
+                className="mt-0.5 truncate text-[12px] text-ink-500"
                 title={demographics.join(" · ")}
               >
                 {demographics.join(" · ")}
+              </div>
+            )}
+            {actions && (
+              <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11.5px] font-semibold text-brand-green [&>*:hover]:underline">
+                {actions}
               </div>
             )}
           </div>
@@ -147,7 +217,7 @@ export function SafetyBanner({
             id="banner-allergy"
             aria-live="polite"
             data-state={allergy.state}
-            className={`flex w-full flex-col gap-2 rounded-[14px] border px-[15px] py-3 ${allergyBox}`}
+            className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-1.5 ${allergyBox}`}
           >
             <div
               className={`flex items-center gap-2 text-xs font-extrabold tracking-[.3px] ${allergyTone}`}
@@ -199,12 +269,12 @@ export function SafetyBanner({
         </div>
 
         <div
-          className={`${cell} flex flex-col gap-3.5`}
+          className={`${cell} flex flex-col gap-1.5`}
           aria-label="Current setting and triage priority"
         >
           <div>
             <div className={label}>Current setting</div>
-            <div className="flex items-start gap-2 break-words text-sm font-bold leading-snug text-ink-900">
+            <div className="flex items-start gap-2 break-words text-[13px] font-bold leading-snug text-ink-900">
               <span
                 aria-hidden="true"
                 className={`mt-[5px] h-2 w-2 flex-none rounded-full ${
@@ -223,7 +293,7 @@ export function SafetyBanner({
             <div className={label}>Triage / risk priority</div>
             {priority ? (
               <span
-                className={`inline-flex w-fit items-center gap-2 rounded-[11px] py-[5px] pl-[7px] pr-3 text-[13px] font-extrabold text-on-status ${PRIORITY_SOLID[priority]}`}
+                className={`inline-flex w-fit items-center gap-2 rounded-lg py-[3px] pl-[7px] pr-2.5 text-[12px] font-extrabold text-on-status ${PRIORITY_SOLID[priority]}`}
               >
                 <span className="h-2 w-2 flex-none rounded-full bg-white/90 shadow-[0_0_0_4px_rgba(255,255,255,.16)]" />
                 {priority} · {PRIORITY_LABEL[priority]}
@@ -236,7 +306,7 @@ export function SafetyBanner({
           </div>
         </div>
 
-        <div className={`${cell} flex flex-col gap-3.5`} aria-label="Clinical alerts and care team">
+        <div className={`${cell} flex flex-col gap-1.5`} aria-label="Clinical alerts and care team">
           <div>
             <div className={`${label} flex items-center gap-2`}>
               Critical clinical alerts
@@ -388,8 +458,8 @@ function ChipOverflow({ title, items }: { title: string; items: OverflowItem[] }
 function LegalBannerLine({ legal, inpatient }: { legal: LegalBanner; inpatient: boolean }) {
   const now = useNow();
   return (
-    <div aria-label="Legal admission status" className="mt-1.5 flex flex-col gap-0.5">
-      <span className="text-xs font-extrabold tracking-[.2px] text-ink-900">
+    <div aria-label="Legal admission status" className="mt-0.5 flex flex-col gap-0">
+      <span className="text-[11px] font-extrabold tracking-[.2px] text-ink-900">
         {inpatient ? "INPATIENT — " : ""}
         {legal.label}
       </span>
@@ -401,4 +471,23 @@ function LegalBannerLine({ legal, inpatient }: { legal: LegalBanner; inpatient: 
       )}
     </div>
   );
+}
+
+/** True once the page is scrolled well down, false again near the top. Two
+ * thresholds, so the banner's own change in height never makes it flicker. */
+function useScrolledDown() {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    const main = document.getElementById("main-content");
+    const offset = () => Math.max(window.scrollY, main?.scrollTop ?? 0);
+    const onScroll = () => setDown((was) => (was ? offset() > 16 : offset() > 120));
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    main?.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      main?.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+  return down;
 }

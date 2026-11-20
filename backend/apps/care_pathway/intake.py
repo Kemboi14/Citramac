@@ -570,6 +570,19 @@ def section_overview(draft):
 
 
 @transaction.atomic
+def set_edit_reason(patient, reason):
+    """Why the signed intake is being edited, on the next version (the draft)."""
+    draft = current_draft(patient)
+    if draft is None or draft.version < 2:
+        raise ValidationError({"detail": "There is no edit of a signed intake in progress."})
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise ValidationError({"reason": "Give the reason for the edit (at least 5 characters)."})
+    draft.edit_reason = reason
+    draft.save(update_fields=["edit_reason", "updated_at"])
+    return draft
+
+
 def sign_intake(draft, user, completeness, data=None):
     from apps.accounts.practitioner_profile import require_current_licence
 
@@ -578,6 +591,10 @@ def sign_intake(draft, user, completeness, data=None):
         raise ValidationError({"detail": "This intake is already signed."})
     if completeness not in dict(IntakeAssessment.COMPLETENESS_CHOICES):
         raise ValidationError({"completeness": "Choose the intake status."})
+    if draft.version > 1 and len(draft.edit_reason.strip()) < 5:
+        raise ValidationError(
+            {"edit_reason": "Give the reason for editing the signed intake before signing."}
+        )
     close = draft.sections.get("close", {})
     outstanding = outstanding_items(draft)
     if completeness == "COMPLETE" and outstanding:

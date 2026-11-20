@@ -153,12 +153,41 @@ def _start(tasks):
             task.save(update_fields=["status", "updated_at"])
 
 
+def _unlinked_tasks(activity):
+    """The client's open Section N tasks for this action that were registered
+    before tasks were linked to care-plan actions (2026-11-18): matched by
+    their triage action code, never a task that needs a coded outcome."""
+    codes = [code for code, key in TRIAGE_TO_PLAN.items() if key == activity.action_key]
+    if not codes:
+        return []
+    return list(
+        CareTask.objects.filter(
+            patient_id=activity.care_plan.patient_id,
+            action_code__in=codes,
+            care_plan_activity__isnull=True,
+            focus_type="",
+        ).exclude(status="COMPLETED")
+    )
+
+
+def close_unlinked_for_completed(patient, user):
+    """One-off for actions completed before unlinked tasks were closed with them."""
+    from .models import CarePlanActivity
+
+    done = 0
+    for activity in CarePlanActivity.objects.filter(
+        care_plan__patient=patient, status="COMPLETED"
+    ).select_related("care_plan"):
+        done += _complete(_unlinked_tasks(activity), user)
+    return done
+
+
 def work_recorded(activity, user, completes):
     """A delivery was recorded against a care-plan action: its triage tasks are
     in progress, or done when the delivery completes the action."""
     if activity is None:
         return
-    tasks = list(activity.triage_tasks.all())
+    tasks = list(activity.triage_tasks.all()) + _unlinked_tasks(activity)
     if completes:
         _complete(tasks, user)
     else:

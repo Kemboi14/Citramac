@@ -326,6 +326,8 @@ export interface TriageAssessmentRecord {
   final_priority: PriorityOrBlank;
   decision: "CONFIRM" | "OVERRIDE" | "";
   override_reason: string;
+  /** Version 2+: why the earlier signed version was re-done. */
+  retriage_reason?: string;
   rules_version: string;
   tasks: { action_label: string; owner: string; status: string; created_at: string }[];
   draft_saved_at: string | null;
@@ -402,6 +404,48 @@ export interface TriageEncounterDetail {
   tasks: CareTask[];
   recheck_draft: RecheckRecord | null;
   rechecks: RecheckRecord[];
+  /** Every signed version of this triage, newest first. */
+  versions: {
+    id: string;
+    version: number;
+    final_priority: PriorityOrBlank;
+    signed_at: string | null;
+    signed_by: string;
+    retriage_reason: string;
+  }[];
+  /** Why the signed triage is being re-done (while a re-triage is open). */
+  retriage_reason: string;
+}
+
+/** One arrival's triage, for the client's list of triages. */
+export interface ClientTriageRow {
+  id: string;
+  arrival_at: string;
+  status: TriageStatus;
+  status_label: string;
+  presenting_concern: string;
+  priority: PriorityOrBlank;
+  signed_at: string | null;
+  signed_by: string;
+  versions: number;
+  rechecks: number;
+  in_progress: boolean;
+}
+
+export function listClientTriages(accessToken: string, patientId: string) {
+  return apiRequest<{ results: ClientTriageRow[] }>(`/care/clients/${patientId}/triages/`, {
+    accessToken,
+  });
+}
+
+/** A new triage (new arrival) for a registered client, without re-registering.
+ * Returns the triage already open for them, if any. */
+export function startNewTriage(accessToken: string, patientId: string, clientRequestId: string) {
+  return apiRequest<{ id: string }>(`/care/clients/${patientId}/triages/`, {
+    method: "POST",
+    body: { client_request_id: clientRequestId },
+    accessToken,
+  });
 }
 
 export function getTriageEncounter(accessToken: string, id: string) {
@@ -522,8 +566,9 @@ export function signRecheck(accessToken: string, id: string, payload: RecheckPay
   });
 }
 
-export function requestFullRetriage(accessToken: string, id: string) {
+export function requestFullRetriage(accessToken: string, id: string, reason = "") {
   return apiRequest<{ status: TriageStatus }>(`/care/triage/${id}/full-retriage/`, {
+    body: { reason },
     method: "POST",
     accessToken,
   });
@@ -575,6 +620,8 @@ export interface WithdrawalReview {
   outcome_label: string;
   outcome_note: string;
   completed_at: string | null;
+  /** Completed only with a coded outcome (the withdrawal review). */
+  needs_outcome?: boolean;
 }
 
 export function getPsychiatryQueue(accessToken: string) {
@@ -1987,6 +2034,10 @@ export type IntakeSections = Record<string, Record<string, unknown>>;
 
 export interface IntakeDraft {
   id: string;
+  /** False for a draft just cloned from the signed version and not yet changed. */
+  edited?: boolean;
+  /** Version 2+: why the signed intake is being edited. */
+  edit_reason?: string;
   version: number;
   status: "DRAFT" | "SIGNED";
   completeness: "" | "COMPLETE" | "PARTIAL" | "UNABLE";
@@ -1999,6 +2050,43 @@ export interface IntakeDraft {
   signed_at: string | null;
   created_at: string;
   author_name: string;
+}
+
+/** A signed intake as titled sections of label / answer (restricted fields withheld). */
+export interface IntakeSummary {
+  id: string;
+  version: number;
+  status: string;
+  completeness: string;
+  signed_on: string;
+  signed_by: string;
+  presenting_concern: string;
+  risk_level: string;
+  risk_notes: string;
+  formulation: string;
+  clinical_decision: string;
+  gad7_score: number | null;
+  phq9_score: number | null;
+  outstanding: string[];
+  /** Version 2+: why the signed intake was edited. */
+  edit_reason: string;
+  author: string;
+  sections: { title: string; rows: { label: string; value: string }[] }[];
+}
+
+/** Why the signed intake is being edited — stored on the next version (the draft). */
+export function setIntakeEditReason(accessToken: string, patientId: string, reason: string) {
+  return apiRequest<IntakeDraft>(`/care/clients/${patientId}/intake/edit-reason/`, {
+    method: "POST",
+    body: { reason },
+    accessToken,
+  });
+}
+
+export function listIntakeSummaries(accessToken: string, patientId: string) {
+  return apiRequest<{ results: IntakeSummary[] }>(`/care/clients/${patientId}/intake/summaries/`, {
+    accessToken,
+  });
 }
 
 export function getIntakeSchema(accessToken: string) {

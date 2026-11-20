@@ -209,6 +209,31 @@ class IntakeLifecycleTests(IntakeTestCase):
         with platform_admin_context():
             self.assertEqual(IntakeAssessment.objects.filter(patient_id=self.pid).count(), 2)
 
+    def test_editing_a_signed_intake_needs_a_reason_and_keeps_the_original(self):
+        self.draft()
+        self.complete_required()
+        self.assertEqual(self.sign_intake().status_code, 200)
+        self.draft()  # opening after signing clones v1 into a v2 draft
+        refused = self.sign_intake()
+        self.assertEqual(refused.status_code, 400, refused.data)
+        reason_url = reverse("care-client-intake-edit-reason", args=[self.pid])
+        self.assertEqual(
+            self.client.post(reason_url, {"reason": "x"}, format="json", **self.auth).status_code,
+            400,
+        )
+        given = self.client.post(
+            reason_url, {"reason": "Corrected substance history"}, format="json", **self.auth
+        )
+        self.assertEqual(given.status_code, 200, given.data)
+        signed = self.sign_intake()
+        self.assertEqual(signed.status_code, 200, signed.data)
+        self.assertEqual(signed.data["version"], 2)
+        summaries = self.client.get(
+            reverse("care-client-intake-summaries", args=[self.pid]), **self.auth
+        ).data["results"]
+        self.assertEqual([i["version"] for i in summaries], [2, 1])
+        self.assertEqual(summaries[0]["edit_reason"], "Corrected substance history")
+
     def test_partial_sign_needs_a_reason_and_a_handover_message(self):
         self.draft()
         self.assertEqual(self.sign_intake("PARTIAL").status_code, 400)

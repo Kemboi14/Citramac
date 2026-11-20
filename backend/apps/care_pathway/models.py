@@ -207,6 +207,8 @@ class TriageEncounter(TenantScopedModel):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     full_retriage_requested_at = models.DateTimeField(null=True, blank=True)
+    # Why the signed triage is being re-done; carried onto the next signed version.
+    retriage_reason = models.TextField(blank=True)
     triage_version = models.PositiveIntegerField(default=0)
     last_triaged_at = models.DateTimeField(null=True, blank=True)
     last_triaged_by = models.ForeignKey(
@@ -283,6 +285,9 @@ class TriageAssessment(SignedRecordMixin, TenantScopedModel):
     final_priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, blank=True)
     decision = models.CharField(max_length=10, choices=DECISION_CHOICES, blank=True)
     override_reason = models.TextField(blank=True)
+    # A re-triage (version 2+): why the earlier signed version was re-done. That
+    # version is never changed; this one is signed in its own right.
+    retriage_reason = models.TextField(blank=True)
     rules_version = models.CharField(max_length=32, blank=True)
     author = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -568,6 +573,9 @@ class IntakeAssessment(TenantScopedModel):
     sections = models.JSONField(default=dict, blank=True)
     section_state = models.JSONField(default=dict, blank=True)
     current_section = models.CharField(max_length=16, blank=True)
+    # Version 2+: why the signed intake is being edited (required to sign it).
+    # The earlier signed version is never changed.
+    edit_reason = models.TextField(blank=True)
     signed_at = models.DateTimeField(null=True, blank=True)
     signed_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

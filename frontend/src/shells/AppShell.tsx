@@ -583,13 +583,13 @@ export function AppShell({
           className={
             focusLayout
               ? "w-full flex-1 outline-none lg:h-[calc(100vh-56px)] lg:overflow-y-auto"
-              : "w-full flex-1 px-4 py-5 pb-16 outline-none sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-16"
+              : "w-full flex-1 px-4 pb-16 pt-1.5 outline-none sm:px-6 lg:px-8 lg:pb-16 lg:pt-2"
           }
         >
           <div className={focusLayout ? "h-full w-full" : "mx-auto w-full max-w-[1920px]"}>
             <ErrorBoundary resetKey={location.pathname}>
               {!focusLayout && crumbs.length > 1 && (
-                <BreadcrumbTrail items={crumbs} className="mb-4" />
+                <BreadcrumbTrail items={crumbs} className="mb-1" />
               )}
               <SubscriptionBanner />
               <ProfileCompletionBanner />

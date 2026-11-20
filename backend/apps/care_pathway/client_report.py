@@ -119,6 +119,9 @@ def _display_value(value, valueset, labels):
         return "; ".join(parts)
     if isinstance(value, bool):
         return "Yes" if value else "No"
+    if valueset and isinstance(value, str):
+        # A single coded answer (a select) is shown by its served label.
+        return _concept(labels, valueset, value)
     return str(value)
 
 
@@ -402,6 +405,7 @@ def _intake_one(intake, labels, can_view_restricted):
         "gad7_score": intake.gad7_score,
         "phq9_score": intake.phq9_score,
         "outstanding": intake.outstanding or [],
+        "edit_reason": _text(intake.edit_reason),
         "author": _name(intake.author),
         "sections": _intake_sections(intake, labels, can_view_restricted),
     }

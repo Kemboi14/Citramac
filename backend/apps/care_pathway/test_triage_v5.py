@@ -494,6 +494,64 @@ class FindingStoreApiTests(CarePathwayApiTestCase):
                 ClinicalFinding.objects.filter(patient_id=self.pid, key="HARM_TO_OTHERS").count(), 3
             )
 
+    def test_a_retriage_is_a_new_version_with_its_reason_and_both_are_listed(self):
+        self.assertEqual(self.sign_v5(dict(BASE)).status_code, 201)
+        started = self.client.post(
+            reverse("care-full-retriage", args=[self.te_id]),
+            {"reason": "Client disclosed overdose after triage"},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(started.status_code, 200, started.data)
+        self.assertEqual(self.sign_v5(dict(BASE)).status_code, 201)
+
+        detail = self.client.get(reverse("care-triage", args=[self.te_id]), **self.auth).data
+        self.assertEqual([v["version"] for v in detail["versions"]], [2, 1])
+        self.assertEqual(
+            detail["versions"][0]["retriage_reason"], "Client disclosed overdose after triage"
+        )
+        self.assertEqual(detail["versions"][1]["retriage_reason"], "")
+
+        listed = self.client.get(reverse("care-client-triages", args=[self.pid]), **self.auth).data[
+            "results"
+        ]
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(listed[0]["id"], str(self.te_id))
+        self.assertEqual(listed[0]["versions"], 2)
+        self.assertFalse(listed[0]["in_progress"])
+
+    def test_new_triage_opens_a_new_arrival_without_registration(self):
+        url = reverse("care-client-triages", args=[self.pid])
+        # The registration arrival is still open: that one is returned, not a second.
+        same = self.client.post(url, {"client_request_id": "nt-1"}, format="json", **self.auth)
+        self.assertEqual(same.status_code, 201, same.data)
+        self.assertEqual(same.data["id"], str(self.te_id))
+
+        self.assertEqual(self.sign_v5(dict(BASE)).status_code, 201)
+        new = self.client.post(url, {"client_request_id": "nt-2"}, format="json", **self.auth)
+        self.assertEqual(new.status_code, 201, new.data)
+        self.assertNotEqual(new.data["id"], str(self.te_id))
+        again = self.client.post(url, {"client_request_id": "nt-2"}, format="json", **self.auth)
+        self.assertEqual(again.data["id"], new.data["id"])
+        with platform_admin_context():
+            te = TriageEncounter.objects.get(pk=new.data["id"])
+            self.assertEqual(te.status, TriageEncounter.STATUS_AWAITING)
+            self.assertEqual(te.visit_number, 2)
+            self.assertEqual(TriageEncounter.objects.filter(patient_id=self.pid).count(), 2)
+
+    def test_evaluation_lists_the_answers_signing_still_needs(self):
+        url = reverse("care-triage-evaluate", args=[self.te_id])
+        partial = self.client.post(
+            url,
+            {"answers": {**BASE, "d_suicidal": "yes", "d_act_now": ""}},
+            format="json",
+            **self.auth,
+        )
+        self.assertEqual(partial.status_code, 200, partial.data)
+        self.assertIn("d_act_now", [m["key"] for m in partial.data["required_missing"]])
+        complete = self.client.post(url, {"answers": dict(BASE)}, format="json", **self.auth)
+        self.assertNotIn("d_act_now", [m["key"] for m in complete.data["required_missing"]])
+
     def test_intake_confirms_the_same_finding_instead_of_reasking(self):
         self.assertEqual(
             self.sign_v5({**BASE, **SAFETY, "d_suicidal": "yes", "d_act_now": "no"}).status_code,

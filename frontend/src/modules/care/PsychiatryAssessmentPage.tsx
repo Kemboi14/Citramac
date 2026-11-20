@@ -4,6 +4,7 @@ import { CheckCircle2, FileText, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
+  completePsychiatricReview,
   decidePlanAction,
   getCarePlanCatalogue,
   getIntakeSchema,
@@ -32,7 +33,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "./shared/styles";
-import { Callout, Card, ErrorNote, Field, Tag } from "./shared/ui";
+import { Callout, Card, ErrorNote, Field, SelectChoices, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
 import { MseSection } from "./record/intake/MseSection";
@@ -546,11 +547,8 @@ export function PsychiatryAssessmentPage() {
         setAmend(null);
         setView({ mode: "detail", id: state.completed.id });
       }
-      setNotice(
-        action === "save"
-          ? "Saved. You can come back to this assessment later — sign it from Plan & Schedule when it is complete."
-          : "Assessment signed. The note is now read-only; a correction is a new assessment.",
-      );
+      // A save shows only "Saved <time>" in the save bar.
+      setNotice(action === "save" ? null : "Assessment signed.");
       return true;
     } catch (error) {
       setActionError(
@@ -758,6 +756,15 @@ export function PsychiatryAssessmentPage() {
           <strong>{workspace.review.label}</strong>
           {workspace.review.priority ? ` · ${workspace.review.priority}` : ""}
           {workspace.review.triage_priority ? ` · triage ${workspace.review.triage_priority}` : ""}
+          {workspace.review.needs_outcome && (
+            <ReviewOutcome
+              reviewId={workspace.review.id}
+              onSaved={() => {
+                setNotice("Review outcome recorded.");
+                setReloadKey((key) => key + 1);
+              }}
+            />
+          )}
         </Callout>
       )}
 
@@ -1913,6 +1920,60 @@ function CompletedAssessment({
           )}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/** The withdrawal review is completed only with its coded outcome (served
+ * `psychiatric-review-outcome`), recorded here where the review task opens. */
+function ReviewOutcome({ reviewId, onSaved }: { reviewId: string; onSaved: () => void }) {
+  const { accessToken } = useAuth();
+  const vs = useValueSets();
+  const [outcome, setOutcome] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    if (!accessToken || !outcome) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completePsychiatricReview(accessToken, reviewId, outcome, note.trim());
+      onSaved();
+    } catch (err) {
+      setError(errorText(err, "Couldn't record the outcome."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="text-[12.5px] font-semibold text-ink-700">Outcome of this review:</span>
+      <div className="min-w-[220px]">
+        <SelectChoices
+          id={`review-outcome-${reviewId}`}
+          options={vs.options("psychiatric-review-outcome")}
+          placeholder="— choose outcome —"
+          value={outcome}
+          onChange={setOutcome}
+        />
+      </div>
+      <input
+        className={`${INPUT} min-w-[200px] flex-1`}
+        aria-label="Outcome note (optional)"
+        placeholder="Note (optional)"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      <button
+        type="button"
+        className={`${BTN} ${BTN_SM}`}
+        disabled={!outcome || busy}
+        onClick={() => void save()}
+      >
+        {busy ? "Saving…" : "Record outcome"}
+      </button>
+      {error && <span className="basis-full text-[12.5px] text-priority-red">{error}</span>}
     </div>
   );
 }

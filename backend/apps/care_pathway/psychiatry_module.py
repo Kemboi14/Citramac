@@ -870,7 +870,86 @@ def sign_workspace(patient, user, data):
             {"detail": f"Record {' and '.join(missing)} before signing the assessment."}
         )
     note = records.sign_note(note, user)
+    _record_delivery(patient, note, user)
+    complete_triage_reviews(patient, user)
     return _workspace_state(patient, note.encounter, note, user)
+
+
+def complete_triage_reviews(patient, user, signed_at=None):
+    """The signed assessment is the review triage asked for: its open
+    "Psychiatric review" tasks are completed (they are completed by status;
+    the withdrawal review keeps its coded outcome)."""
+    from . import triage_psychiatric_review
+
+    done = 0
+    if signed_at is None:
+        last = _latest_note(patient, status="SIGNED")
+        signed_at = last.signed_at if last else None
+    if signed_at is None:
+        return 0
+    # Only requests raised before the assessment it answers; a later triage's
+    # request waits for the next assessment.
+    for task in CareTask.objects.filter(
+        patient=patient,
+        focus_type=triage_psychiatric_review.FOCUS,
+        status__in=OPEN_TASK_STATUSES,
+        created_at__lte=signed_at,
+    ):
+        triage_psychiatric_review.set_status(task, user, "COMPLETED")
+        done += 1
+    return done
+
+
+def _record_delivery(patient, note, user, charge=True):
+    """Signing the assessment is the psychiatric review: it is recorded once as
+    a Psychiatry delivery in Interventions, completes the client's open
+    "Psychiatric review" care-plan action and raises the facility's Psychiatry
+    charge when it is priced (as a signed psychotherapy note does). An amendment
+    corrects a review already delivered, so it records nothing. `charge=False`
+    (the backfill of assessments signed before this existed) records no charge.
+    A review task
+    that needs a coded outcome is left for that outcome
+    (triage_care_plan._complete skips them)."""
+    from .models import CarePlanActivity
+
+    if note.amends_id or (note.data or {}).get("intervention_record_id"):
+        return
+    from . import intervention_catalogue
+
+    activity = (
+        CarePlanActivity.objects.filter(care_plan__patient=patient, action_key="psych_review")
+        .exclude(status="COMPLETED")
+        .exclude(decision="DECLINED")
+        .order_by("-created_at")
+        .first()
+    )
+    earlier = ProgressNote.objects.filter(
+        patient=patient,
+        note_type=NOTE_TYPE,
+        status="SIGNED",
+        amends__isnull=True,
+        signed_at__lt=note.signed_at,
+    ).exists()
+    service = intervention_catalogue.billing_service_for("psychiatry") if charge else None
+    record = services.record_intervention(
+        user,
+        patient,
+        {
+            "module": "psychiatry",
+            "intervention": "Psychiatric review" if earlier else "Initial consultation",
+            "performed_at": note.signed_at,
+            "provider": note.author or user,
+            "note": "Psychiatric assessment — signed",
+            "completes_activity": activity is not None,
+            "billable": service is not None,
+            "billing_service": service,
+        },
+        activity=activity,
+    )
+    data = dict(note.data or {})
+    data["intervention_record_id"] = str(record.pk)
+    ProgressNote.objects.filter(pk=note.pk).update(data=data)
+    note.data = data
 
 
 DUE_ORDER = {"OVERDUE": 0, "TODAY": 1, "TOMORROW": 2, "UPCOMING": 3}
@@ -891,23 +970,9 @@ def _session_due(appointment):
     return "UPCOMING", (day - today).days
 
 
-def _candidate_reason(triage, intake, review, signed_note, source_at):
-    if review is not None:
-        return review.action_label
-    if signed_note and signed_note.signed_at and source_at:
-        if signed_note.signed_at >= source_at:
-            return "Psychiatric assessment signed"
-    if triage is not None:
-        if triage.priority in ("RED", "ORANGE"):
-            return "Triage recommended urgent psychiatric review"
-        return "Triage recommended psychiatric review"
-    if intake is not None:
-        return "Intake complete — psychiatric assessment pending"
-    return "No psychiatric assessment yet"
-
-
 def candidates():
-    """Clients the system suggests for review, plus everyone with a signed intake."""
+    """Clients psychiatry was asked to see (review task, open care-plan review,
+    booked session or draft assessment) — not every signed triage or intake."""
     latest_triage = {}
     for te in (
         TriageEncounter.objects.filter(
@@ -951,7 +1016,46 @@ def candidates():
         sessions.setdefault(appointment.patient_id, appointment)
         session_patients.setdefault(appointment.patient_id, appointment.patient)
 
-    patient_ids = set(latest_triage) | set(latest_intake) | set(sessions)
+    # Owner, 2026-11-20: a client is listed only when psychiatry was asked for
+    # or is under way — an open review task (Section N or a review request), an
+    # open "Psychiatric review" care-plan action, a booked session, or a draft
+    # assessment. A signed triage or intake alone does not list them.
+    from .models import CarePlanActivity
+    from .triage_care_plan import TRIAGE_TO_PLAN
+
+    asked = {}
+    asked_reason = {}
+    review_codes = [code for code, key in TRIAGE_TO_PLAN.items() if key == "psych_review"]
+    for task in (
+        CareTask.objects.filter(status__in=OPEN_TASK_STATUSES, patient__archived_at__isnull=True)
+        .filter(Q(focus_type__in=REVIEW_FOCUS_TYPES) | Q(action_code__in=review_codes))
+        .select_related("patient")
+    ):
+        asked.setdefault(task.patient_id, task.patient)
+        asked_reason.setdefault(
+            task.patient_id, task.action_label or "Psychiatric review requested"
+        )
+    for activity in (
+        CarePlanActivity.objects.filter(
+            action_key="psych_review",
+            care_plan__episode__status__in=EpisodeOfCare.OPEN_STATUSES,
+            care_plan__patient__archived_at__isnull=True,
+        )
+        .exclude(status="COMPLETED")
+        .exclude(decision="DECLINED")
+        .select_related("care_plan__patient")
+    ):
+        asked.setdefault(activity.care_plan.patient_id, activity.care_plan.patient)
+        asked_reason.setdefault(
+            activity.care_plan.patient_id, "Psychiatric review in the care plan"
+        )
+    for note in ProgressNote.objects.filter(
+        note_type=NOTE_TYPE, status="DRAFT", patient__archived_at__isnull=True
+    ).select_related("patient"):
+        asked.setdefault(note.patient_id, note.patient)
+        asked_reason.setdefault(note.patient_id, "Psychiatric assessment in progress")
+
+    patient_ids = set(asked) | set(sessions)
     if not patient_ids:
         return []
 
@@ -985,23 +1089,21 @@ def candidates():
         intake = latest_intake.get(patient_id)
         session = sessions.get(patient_id)
         patient = (
-            triage.patient if triage else intake.patient if intake else session_patients[patient_id]
+            triage.patient
+            if triage
+            else (
+                intake.patient if intake else asked.get(patient_id) or session_patients[patient_id]
+            )
         )
         note = latest_note.get(patient_id)
         signed = signed_note.get(patient_id)
         review = reviews.get(patient_id)
-        source_at = max(
-            (
-                value
-                for value in (triage and triage.last_triaged_at, intake and intake.signed_at)
-                if value
-            ),
-            default=None,
-        )
-        reviewed_after_source = bool(
-            signed and signed.signed_at and source_at and signed.signed_at >= source_at
-        )
-        suggested = bool(review or (source_at and not reviewed_after_source))
+        suggested = patient_id in asked and not (note and note.status == "DRAFT" and not review)
+        # Done with psychiatry for now: reviewed since what brought them in, no
+        # review task waiting for its outcome, no draft in progress and no session
+        # booked. A later triage or intake, or a booked review, brings them back.
+        if not (suggested or session or (note and note.status == "DRAFT")):
+            continue
         data = (note.data or {}) if note else {}
         due_state, days_until = _session_due(session) if session else ("", None)
         rows.append(
@@ -1030,9 +1132,9 @@ def candidates():
                 "intake_signed_at": _iso(intake.signed_at) if intake else None,
                 "suggested": suggested,
                 "suggested_reason": (
-                    "Psychiatry session booked"
-                    if not triage and not intake and session
-                    else _candidate_reason(triage, intake, review, signed, source_at)
+                    review.action_label
+                    if review is not None
+                    else asked_reason.get(patient_id) or "Psychiatry session booked"
                 ),
                 "review": psychiatric_review.row(review),
                 "assessment_id": str(note.pk) if note else None,

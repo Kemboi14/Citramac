@@ -144,4 +144,6 @@ def row(task):
         "outcome_label": OUTCOMES.get(task.outcome, ""),
         "outcome_note": task.outcome_note,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        # Only this kind is completed with a coded outcome (the others by status).
+        "needs_outcome": task.focus_type == FOCUS,
     }

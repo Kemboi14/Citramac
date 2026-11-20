@@ -1237,3 +1237,74 @@ On the owner's decisions of 2026-11-20 (amend design confirmed before building, 
    emitted yet). Never sent to the SHR.
 
 Reversibility: cheap. Read-time views and additive notes; no signed record changes.
+
+### 2026-11-20 — triage: a summary once signed, re-triage as a new version, triages listed
+
+On the owner's decisions of 2026-11-20 (design stated before building, §7; no print or PDF on
+this screen):
+
+1. **Signed triage opens as its summary**, not as a disabled form: priority, who signed and when,
+   the recommendation and decision, alerts, the tasks it raised, the re-checks since, and every
+   answered section A–N (`triage/TriageSummaryView.tsx`, sections shared with the Documents view).
+2. **Edit is a new version, never an overwrite.** "Edit" (the re-triage) asks why (required, stored as
+   `TriageEncounter.retriage_reason` and copied to the next signed `TriageAssessment` as its
+   `retriage_reason`, migration `care_pathway 0066`) and opens the v5 form filled from the last
+   signed answers, without Section N actions or the signing decision, so tasks are never
+   registered twice. Signing creates the next version; earlier versions are listed under
+   Versions and open exactly as signed.
+3. **Triages listed; New triage.** The client record's Triage tab lists every triage newest
+   first as a table, with **New triage**, which opens a new arrival's triage straight away, without
+   re-registering (POST `care/clients/<id>/triages/`, `services.start_new_triage`: idempotent on
+   `client_request_id`; the client's details are untouched; an already open triage is returned
+   instead of a second; a signed one is never reopened)
+   (GET `care/clients/<id>/triages/`, read-only, audited as a client-record read): arrival time,
+   priority, presenting concern, signer, "Re-triaged", re-check count, "In progress".
+
+FHIR: unchanged — each version is its own QuestionnaireResponse with its Provenance; the summary
+and list are read-time. Reversibility: cheap. Additive fields; no signed triage changes.
+
+### 2026-11-20 — intake: listed, a summary once signed, Edit as the next version
+
+On the owner's instruction ("do the same for intake … like for triage"): the client record's Intake
+tab lists the intake (and an edit in progress, **Continue**); **Open** shows the signed intake as its
+summary (key findings, then every answered section as question → answer, restricted fields withheld
+by the client report's rules) with a Versions box and **Close**; **Edit** asks for the reason (required,
+as in triage) and opens the next version, which `intake.open_draft` already clones from the signed
+one. The reason is stored on that version (`IntakeAssessment.edit_reason`, migration
+`care_pathway 0067`, POST `care/clients/<id>/intake/edit-reason/`), shown in Versions and the
+summary, and signing a version 2+ without one is refused. The signed version is never changed.
+GET `care/clients/<id>/intake/summaries/` (read-only, audited as a client-record read) serves the
+summaries; the draft payload's `edited` is true only when the clone's content differs from what was
+signed. Single coded answers in summaries (and the full client report) now show their served label,
+not the raw code. FHIR: unchanged. Reversibility: cheap — read-time views; no signed record changes.
+
+### 2026-11-20 — a signed psychiatric assessment completes the Psychiatric review action
+
+On the owner's decisions of 2026-11-20 (billing and the review task decided before building, §7):
+signing a psychiatric assessment records it once as a Psychiatry delivery in Interventions
+(`psychiatry_module._record_delivery`; "Initial consultation", then "Psychiatric review"),
+completes the client's open "Psychiatric review" care-plan action, and raises the facility's
+Psychiatry charge when the Org Admin has priced it — as a signed psychotherapy note already does.
+An amendment records nothing (it corrects a review already delivered). A psychiatric review
+*task* that needs a coded outcome is not completed by this; the outcome is still recorded on the
+task. In Interventions, a module whose care-plan actions are all completed is no longer shown as
+recommended, and completed actions fold under "Completed (n)" below the open ones. Assessments signed before this
+change are backfilled once by `manage.py backfill_psychiatry_deliveries` (delivery and action
+completion, **no charges** — owner's decision: past visits may already be billed; `--dry-run`
+lists first; re-runnable). Run it on each server after deploying. Completing any care-plan
+action now also closes the client's open Section N tasks for it that were registered before tasks
+were linked to actions (matched through `triage_care_plan.TRIAGE_TO_PLAN`; never a task that needs
+a coded outcome); the same command closes them for actions already completed. FHIR: the
+delivery is the existing InterventionRecord (Procedure) mapping. Reversibility: cheap — a
+delivery and its charge can be voided with a reason; no signed record changes.
+
+### 2026-11-20 — the Psychiatry list: clients psychiatry was asked to see
+
+On the owner's decision of 2026-11-20: the psychiatrist's client list (`psychiatry_module.candidates`)
+no longer lists every client with a signed triage or intake. A client is listed only while there is
+psychiatry work: an open psychiatric review task (Section N routine / urgent / withdrawal, or a
+review request awaiting its coded outcome), an open "Psychiatric review" care-plan action in an open
+episode, a booked psychiatry session, or a draft assessment. "Why here" names that request. Once the
+assessment is signed and none remains, the client drops off; a new request or booked review brings
+them back. Signed assessments stay in the client record. Not clinical data capture — no FHIR change.
+Reversibility: cheap (a read-only list).

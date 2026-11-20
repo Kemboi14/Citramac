@@ -1,14 +1,16 @@
-import { AlertTriangle, Clock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { IntakeSummaryView } from "./intake/IntakeSummaryView";
+import { AlertTriangle, CheckCircle2, Clock, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../auth/useAuth";
 import {
   getClientTools,
   getIntakeSchema,
-  listIntakeAssessments,
+  listIntakeSummaries,
+  setIntakeEditReason,
+  type IntakeSummary,
   openIntakeDraft,
   saveIntakeDraft,
   signIntake,
-  type IntakeAssessment,
   type IntakeDraft,
   type IntakeSchema,
   type IntakeSectionSpec,
@@ -22,7 +24,7 @@ import {
   SectionCompletionIcon,
   type SectionCompletionStatus,
 } from "../shared/SectionCompletionIcon";
-import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL } from "../shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "../shared/styles";
 import { Callout, Card, ErrorNote, PageHeader, Tag } from "../shared/ui";
 import { useAutosaveDraft } from "../shared/useAutosaveDraft";
 import { useValueSets } from "../shared/useValueSets";
@@ -97,9 +99,12 @@ export function IntakeStage(props: RecordViewProps) {
   const { accessToken } = useAuth();
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
   const [draft, setDraft] = useState<IntakeDraft | null>(null);
-  const [previous, setPrevious] = useState<IntakeAssessment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [summaries, setSummaries] = useState<IntakeSummary[]>([]);
+  // Like triage: the tab lists the intake (and an edit in progress); Open shows
+  // the signed summary, Edit / Continue opens the next version's form.
+  const [mode, setMode] = useState<"list" | "summary" | "edit">("list");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -107,13 +112,15 @@ export function IntakeStage(props: RecordViewProps) {
     Promise.all([
       getIntakeSchema(accessToken),
       openIntakeDraft(accessToken, props.patientId),
-      listIntakeAssessments(accessToken, props.patientId),
+      listIntakeSummaries(accessToken, props.patientId),
     ])
-      .then(([s, d, p]) => {
+      .then(([s, d, summary]) => {
         if (cancelled) return;
         setSchema(s);
         setDraft(d);
-        setPrevious(p.results.filter((i) => i.status === "SIGNED"));
+        setSummaries(summary.results);
+        // Nothing signed yet: straight to the form.
+        setMode(summary.results.length ? "list" : "edit");
         setError(null);
       })
       .catch((e) => !cancelled && setError(errorText(e, "Couldn't load the intake.")));
@@ -134,14 +141,106 @@ export function IntakeStage(props: RecordViewProps) {
       </div>
     );
   }
+  const title = "Comprehensive Mental Health and Addiction Intake";
+  if (summaries.length > 0 && mode === "summary") {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            onClick={() => setMode("list")}
+          >
+            ← Intake
+          </button>
+          <button
+            type="button"
+            className={`${BTN_GHOST} ${BTN_SM}`}
+            aria-label="Close intake"
+            onClick={() => setMode("list")}
+          >
+            <X aria-hidden className="h-4 w-4" />
+            Close
+          </button>
+        </div>
+        <IntakeSummaryView
+          summaries={summaries}
+          editInProgress={Boolean(draft.edited)}
+          onEdit={async (reason) => {
+            if (reason && accessToken) {
+              setDraft(await setIntakeEditReason(accessToken, props.patientId, reason));
+            }
+            setMode("edit");
+          }}
+        />
+      </div>
+    );
+  }
+  if (summaries.length > 0 && mode === "list") {
+    const latest = summaries[0];
+    return (
+      <div className="animate-fade-in">
+        <PageHeader title={title} subtitle="The client's intake and its versions" />
+        <ol className="flex flex-col gap-3">
+          {draft.edited && (
+            <li className="flex flex-wrap items-center gap-3 rounded-xl border border-surface-border bg-surface-card p-4 shadow-sm">
+              <Clock aria-hidden className="h-6 w-6 shrink-0 text-amber-600" />
+              <div className="mr-auto min-w-0">
+                <p className="text-[15px] font-semibold text-ink-900">Intake edit in progress</p>
+                <p className="text-[12.5px] text-ink-500">
+                  Version {draft.version} — not signed yet
+                </p>
+              </div>
+              <button type="button" className={`${BTN} ${BTN_SM}`} onClick={() => setMode("edit")}>
+                Continue
+              </button>
+            </li>
+          )}
+          <li className="flex flex-wrap items-center gap-3 rounded-xl border border-surface-border bg-surface-card p-4 shadow-sm">
+            <CheckCircle2 aria-hidden className="h-6 w-6 shrink-0 text-[var(--green)]" />
+            <div className="mr-auto min-w-0">
+              <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink-900">
+                Intake completed
+                {latest.completeness && latest.completeness !== "Complete" && (
+                  <Tag tone="warn">{latest.completeness}</Tag>
+                )}
+              </p>
+              <p className="text-[12.5px] text-ink-500">
+                Signed {latest.signed_on}
+                {latest.signed_by ? ` by ${latest.signed_by}` : ""}
+                {latest.version > 1 ? ` · version ${latest.version} of ${latest.version}` : ""}
+              </p>
+              {latest.presenting_concern && (
+                <p
+                  className="mt-0.5 line-clamp-1 text-[13px] text-ink-700"
+                  title={latest.presenting_concern}
+                >
+                  {latest.presenting_concern}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              className={`${BTN_GHOST} ${BTN_SM}`}
+              onClick={() => setMode("summary")}
+            >
+              Open
+            </button>
+          </li>
+        </ol>
+      </div>
+    );
+  }
   return (
     <IntakeWorkspace
       key={draft.id}
       {...props}
       schema={schema}
       initial={draft}
-      previous={previous}
-      onNewVersion={() => setReload((n) => n + 1)}
+      onClose={summaries.length > 0 ? () => setMode("list") : undefined}
+      onNewVersion={() => {
+        setReload((n) => n + 1);
+      }}
     />
   );
 }
@@ -177,13 +276,14 @@ function IntakeWorkspace({
   onRecordChanged,
   schema,
   initial,
-  previous,
   onNewVersion,
+  onClose,
 }: RecordViewProps & {
   schema: IntakeSchema;
   initial: IntakeDraft;
-  previous: IntakeAssessment[];
   onNewVersion: () => void;
+  /** Back to the signed summary (changes are kept as the unsigned draft). */
+  onClose?: () => void;
 }) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
@@ -203,7 +303,6 @@ function IntakeWorkspace({
   const [checkingSection, setCheckingSection] = useState(false);
   const [blockedSection, setBlockedSection] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showPrevious, setShowPrevious] = useState(false);
   const [listVersion, setListVersion] = useState(0);
   // Mockup: the Information trail opens from a "Trail" button, so the section
   // form keeps the full width by default.
@@ -370,6 +469,8 @@ function IntakeWorkspace({
       autosave.markSaved(payload);
       const result = await signIntake(accessToken, patientId, completeness);
       setSigned(result);
+      // Signed: the tab shows the summary of what was signed.
+      onNewVersion();
       setListVersion((v) => v + 1);
       onRecordChanged();
     } catch (e) {
@@ -411,14 +512,12 @@ function IntakeWorkspace({
         title="Comprehensive Mental Health and Addiction Intake"
         actions={
           <>
-            <button
-              type="button"
-              className={BTN_GHOST}
-              aria-expanded={showPrevious}
-              onClick={() => setShowPrevious((v) => !v)}
-            >
-              Previous assessments
-            </button>
+            {onClose && (
+              <button type="button" className={BTN_GHOST} onClick={onClose}>
+                <X aria-hidden="true" className="h-4 w-4" />
+                Close
+              </button>
+            )}
             <button
               type="button"
               className={BTN_GHOST}
@@ -433,6 +532,9 @@ function IntakeWorkspace({
         }
       />
       <ErrorNote>{error ?? vs.error ?? toolsError}</ErrorNote>
+      {initial.version > 1 && !signed && (
+        <EditReasonBar patientId={patientId} initialReason={initial.edit_reason ?? ""} />
+      )}
       {signed && (
         <Callout tone="success" role="status" className="mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -448,26 +550,6 @@ function IntakeWorkspace({
             </button>
           </div>
         </Callout>
-      )}
-      {showPrevious && (
-        <Card title="Previous assessments" className="mb-4">
-          {previous.length === 0 ? (
-            <p className="text-[13px] text-ink-500">No signed assessments yet.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-surface-border" key={listVersion}>
-              {previous.map((i) => (
-                <li key={i.id} className="py-2 text-[13px]">
-                  <span className="font-semibold">v{i.version}</span> ·{" "}
-                  {i.signed_at ? formatDateTime(i.signed_at) : formatDateTime(i.created_at)} ·{" "}
-                  {i.author_name || "Author not recorded"}
-                  {i.presenting_concern && (
-                    <div className="text-ink-500">{i.presenting_concern}</div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
       )}
 
       <FindingsPanel
@@ -712,6 +794,59 @@ function IntakeWorkspace({
         )}
       </div>
     </div>
+  );
+}
+
+/** An edit of a signed intake (version 2+): its reason, or a field to give it.
+ * Signing an edited version needs one. */
+function EditReasonBar({ patientId, initialReason }: { patientId: string; initialReason: string }) {
+  const { accessToken } = useAuth();
+  const [saved, setSaved] = useState(initialReason);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = async () => {
+    if (!accessToken) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const result = await setIntakeEditReason(accessToken, patientId, text.trim());
+      setSaved(result.edit_reason ?? text.trim());
+    } catch (err) {
+      setProblem(errorText(err, "Couldn't save the reason."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (saved) {
+    return (
+      <Callout tone="info" className="mb-3">
+        <strong>Editing a signed intake.</strong> The signed version stays on record unchanged.
+        Reason for edit: {saved}
+      </Callout>
+    );
+  }
+  return (
+    <Callout tone="warning" className="mb-3">
+      <strong>Editing a signed intake — give the reason for the edit before signing.</strong>
+      <div className="mt-2 flex flex-wrap items-start gap-2">
+        <input
+          className={`${INPUT} min-w-[260px] flex-1`}
+          aria-label="Reason for the edit"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+        <button
+          type="button"
+          className={`${BTN} ${BTN_SM}`}
+          disabled={busy || text.trim().length < 5}
+          onClick={() => void save()}
+        >
+          Save reason
+        </button>
+      </div>
+      {problem && <p className="mt-1 text-[12.5px] text-priority-red">{problem}</p>}
+    </Callout>
   );
 }
 

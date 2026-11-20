@@ -590,6 +590,54 @@ def register_arrival(user, data):
 
 
 @transaction.atomic
+def start_new_triage(user, patient, request_id):
+    """A new arrival for a client already registered: opens a new triage
+    encounter straight away, without re-registering (their details are not
+    touched). Never reopens a signed triage. If one is already waiting or in
+    progress, that one is returned instead of opening a second. Idempotent on
+    `request_id`."""
+    request_id = (request_id or "").strip()
+    if not request_id:
+        raise ValidationError({"client_request_id": "Required."})
+    existing = TriageEncounter.objects.filter(client_request_id=request_id).first()
+    if existing:
+        return existing
+    open_one = (
+        TriageEncounter.objects.filter(
+            patient=patient,
+            status__in=(TriageEncounter.STATUS_AWAITING, TriageEncounter.STATUS_IN_TRIAGE),
+        )
+        .order_by("-arrival_at")
+        .first()
+    )
+    if open_one:
+        return open_one
+    now = timezone.now()
+    episode = get_or_open_episode(patient, user)
+    encounter = Encounter.objects.create(
+        organization_id=patient.organization_id,
+        patient=patient,
+        episode=episode,
+        opened_by=user,
+        encounter_type="TRIAGE",
+        status="OPEN",
+        opened_at=now,
+    )
+    return TriageEncounter.objects.create(
+        organization_id=patient.organization_id,
+        patient=patient,
+        episode=episode,
+        encounter=encounter,
+        client_request_id=request_id,
+        visit_number=TriageEncounter.objects.filter(patient=patient).count() + 1,
+        arrival_at=now,
+        due_at=triage_rules.triage_due_at(now),
+        referral_source=patient.referral_source or "Self-presented",
+        registered_by=user,
+    )
+
+
+@transaction.atomic
 def resolve_identity(user, patient, data):
     """Confirm a temporary record's identity (doc 15 §1.4). Unlike a
     registration submit, this does not open a new triage encounter.
@@ -862,10 +910,15 @@ def apply_triage_allergies(patient, answers, user):
         patient.save(update_fields=["allergy_status", "updated_at"])
 
 
-def request_full_retriage(triage_encounter):
+def request_full_retriage(triage_encounter, reason=""):
+    """Re-open a signed triage as a new version. The signed version is never
+    changed; the next one is filled from it and signed in its own right."""
     triage_encounter.status = TriageEncounter.STATUS_IN_TRIAGE
     triage_encounter.full_retriage_requested_at = timezone.now()
-    triage_encounter.save(update_fields=["status", "full_retriage_requested_at", "updated_at"])
+    triage_encounter.retriage_reason = (reason or "").strip()
+    triage_encounter.save(
+        update_fields=["status", "full_retriage_requested_at", "retriage_reason", "updated_at"]
+    )
     return triage_encounter
 
 

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { usePatientContext } from "../../clinical/usePatientContext";
-import { ClientRegistryLookupModal } from "../clinical/ClientRegistryLookup";
 import { ClientRecordNav } from "./shared/ClientRecordNav";
 import { MergeHistory } from "./shared/MergeHistory";
 import { clientRecordPath, JOURNEY_KEYS, type RecordView } from "./shared/recordRoutes";
 import { SafetyBanner } from "./shared/SafetyBanner";
-import { BTN_GHOST, BTN_SM } from "./shared/styles";
 import { Callout } from "./shared/ui";
 import { notifyClientChanged, useClientBanner } from "./shared/useClientBanner";
 import { BillingStage } from "./record/BillingStage";
@@ -84,7 +82,6 @@ export function ClientRecordPage() {
   // A save in any tab of the record reloads this banner, every other banner open
   // for the client on this page, and the user's other tabs (useClientBanner).
   const onRecordChanged = useCallback(() => notifyClientChanged(patientId), [patientId]);
-  const [registryOpen, setRegistryOpen] = useState(false);
   // The way the user came in (Clients, a client report, …). Switching tabs
   // changes the URL without it, so it is kept for as long as this client is open.
   const carried = carriedTrail(useLocation().state);
@@ -151,37 +148,21 @@ export function ClientRecordPage() {
             },
           ]}
         />
-        {loadedBanner && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {loadedBanner.identity_status === "IDENTIFIED" && (
-              <button
-                type="button"
-                className={`${BTN_GHOST} ${BTN_SM}`}
-                onClick={() => setRegistryOpen(true)}
-              >
-                Look up in Client Registry
-              </button>
-            )}
-            <Link
-              className={`${BTN_GHOST} ${BTN_SM}`}
-              to={`/clinical/registration?${
-                loadedBanner.identity_status === "IDENTIFIED" ? "edit" : "resolve"
-              }=${encodeURIComponent(patientId)}`}
-            >
-              {loadedBanner.identity_status === "IDENTIFIED"
-                ? "Edit client details"
-                : "Resolve identity"}
-            </Link>
-          </div>
-        )}
       </div>
-      <ClientRegistryLookupModal
-        open={registryOpen}
-        patientId={patientId}
-        onClose={() => setRegistryOpen(false)}
-        onConfirmed={onRecordChanged}
+      <SafetyBanner
+        banner={loadedBanner}
+        error={error}
+        actions={
+          // Only a temporary (unidentified) client needs a link here: confirming
+          // who they are. Editing details and registry lookups live in Clients.
+          loadedBanner &&
+          loadedBanner.identity_status !== "IDENTIFIED" && (
+            <Link to={`/clinical/registration?resolve=${encodeURIComponent(patientId)}`}>
+              Resolve identity
+            </Link>
+          )
+        }
       />
-      <SafetyBanner banner={loadedBanner} error={error} />
       <ClientRecordNav patientId={patientId} view={active} banner={loadedBanner} />
       {loadedBanner && <MergeHistory patientId={patientId} onChanged={onRecordChanged} />}
       {body}
