@@ -445,6 +445,53 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(signed.status_code, 200, signed.data)
         self.assertEqual(signed.data["assessment"]["status"], "SIGNED")
 
+    def test_reopening_after_signing_shows_the_completed_assessment_by_section(self):
+        draft = self.client.post(self.open_url, format="json", **self.auth)
+        self.assertIsNone(draft.data["completed"])
+        signed = self.client.post(self.open_url + "sign/", self.body, format="json", **self.auth)
+        self.assertEqual(signed.status_code, 200, signed.data)
+        self.assertEqual(signed.data["completed"]["id"], signed.data["assessment"]["id"])
+
+        reopened = self.client.post(self.open_url, format="json", **self.auth)
+        self.assertEqual(reopened.status_code, 200, reopened.data)
+        self.assertIsNone(reopened.data["assessment"])
+        completed = reopened.data["completed"]
+        self.assertTrue(completed["signed_at"])
+        keys = [section["key"] for section in completed["sections"]]
+        self.assertIn("assessment", keys)
+        assessment = next(s for s in completed["sections"] if s["key"] == "assessment")
+        self.assertIn("Clinical Risk Assessment", [item["label"] for item in assessment["items"]])
+        self.assertEqual(completed["diagnoses"], [])
+        self.assertEqual(completed["medications"], [])
+
+    def test_amending_a_signed_assessment_keeps_the_original_unchanged(self):
+        signed = self.client.post(self.open_url + "sign/", self.body, format="json", **self.auth)
+        self.assertEqual(signed.status_code, 200, signed.data)
+        original_id = signed.data["completed"]["id"]
+        original_text = signed.data["assessment"]["text"]
+
+        no_reason = dict(self.body, amends=original_id)
+        refused = self.client.put(self.open_url, no_reason, format="json", **self.auth)
+        self.assertEqual(refused.status_code, 400, refused.data)
+
+        amended = dict(self.body, amends=original_id, amend_reason="Risk wording corrected.")
+        saved = self.client.put(self.open_url, amended, format="json", **self.auth)
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["assessment"]["amends"]["id"], original_id)
+        resigned = self.client.post(self.open_url + "sign/", amended, format="json", **self.auth)
+        self.assertEqual(resigned.status_code, 200, resigned.data)
+
+        history = resigned.data["history"]
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["amends"]["id"], original_id)
+        self.assertEqual(history[0]["amends"]["reason"], "Risk wording corrected.")
+        self.assertEqual(history[1]["id"], original_id)
+        self.assertEqual(len(history[1]["amended_by"]), 1)
+        with platform_admin_context():
+            original = ProgressNote.objects.get(pk=original_id)
+            self.assertEqual(original.status, "SIGNED")
+            self.assertEqual(original.text, original_text)
+
     def test_opening_the_workspace_audits_a_view_on_the_client(self):
         from apps.sysadmin_audit.models import AuditLogEntry
 

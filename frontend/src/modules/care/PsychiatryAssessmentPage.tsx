@@ -17,13 +17,16 @@ import {
   type IntakeSchema,
   type PlanCatalogueItem,
   type PlanWorkspace,
+  type PsychiatryAmendsRef,
+  type PsychiatryAssessment,
+  type PsychiatryCompleted,
   type PsychiatryFormat,
   type PsychiatryMse,
   type PsychiatryPlanSchedule,
   type PsychiatrySaveBody,
   type PsychiatryWorkspace,
 } from "../../lib/carePathwayApi";
-import { EmptyState } from "../../components/EmptyState";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
@@ -165,7 +168,6 @@ const SECTIONS = [
   { id: "psych-formulation-diagnosis", label: "Formulation & diagnosis" },
   { id: "psych-medication", label: "Medication" },
   { id: "psych-plan-schedule", label: "Plan & Schedule" },
-  { id: "psych-previous", label: "Previous" },
 ];
 
 /** Tabs that edit the assessment and so end in the save bar. Plan &
@@ -275,6 +277,7 @@ export function PsychiatryAssessmentPage() {
   const [workspace, setWorkspace] = useState<PsychiatryWorkspace | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmingSign, setConfirmingSign] = useState(false);
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
   const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
   const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
@@ -304,6 +307,14 @@ export function PsychiatryAssessmentPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  // The module opens on the list of signed assessments (or the draft in progress);
+  // a signed one opens section by section; "edit" is the draft tabs.
+  const [view, setView] = useState<{ mode: "auto" | "list" | "edit" | "detail"; id?: string }>({
+    mode: "auto",
+  });
+  // Set while the draft amends a signed assessment (never edits it).
+  const [amend, setAmend] = useState<PsychiatryAmendsRef | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   // The draft as last loaded or saved, to tell the clinician what isn't saved.
   const [savedSnapshot, setSavedSnapshot] = useState("");
 
@@ -315,6 +326,7 @@ export function PsychiatryAssessmentPage() {
         if (cancelled) return;
         setWorkspace(state);
         const assessment = state.assessment;
+        setAmend(assessment?.status === "DRAFT" ? (assessment.amends ?? null) : null);
         setFormat(assessment?.format ?? "STRUCTURED");
         setFreeText(assessment?.free_text ?? "");
         const structuredAssessment = normalizedStructuredAssessment(assessment?.structured ?? {});
@@ -344,7 +356,7 @@ export function PsychiatryAssessmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, patientId]);
+  }, [accessToken, patientId, reloadKey]);
 
   useEffect(() => {
     if (!accessToken || !patientId) return;
@@ -426,8 +438,14 @@ export function PsychiatryAssessmentPage() {
   const readOnly = locked || !canEdit;
 
   const body = useMemo<PsychiatrySaveBody>(
-    () => ({ format, free_text: freeText, structured, mse }),
-    [format, freeText, structured, mse],
+    () => ({
+      format,
+      free_text: freeText,
+      structured,
+      mse,
+      ...(amend ? { amends: amend.id, amend_reason: amend.reason } : {}),
+    }),
+    [format, freeText, structured, mse, amend],
   );
   const dirty = Boolean(savedSnapshot) && snapshot(body) !== savedSnapshot;
   // Leaving with unsaved draft changes asks first.
@@ -524,9 +542,13 @@ export function PsychiatryAssessmentPage() {
       setMse(state.mse);
       setMseFormat(inferMseFormat(state.mse));
       setSavedSnapshot(snapshot(saved));
+      if (action === "sign" && state.completed) {
+        setAmend(null);
+        setView({ mode: "detail", id: state.completed.id });
+      }
       setNotice(
         action === "save"
-          ? "Saved. Sign the assessment when it is complete."
+          ? "Saved. You can come back to this assessment later — sign it from Plan & Schedule when it is complete."
           : "Assessment signed. The note is now read-only; a correction is a new assessment.",
       );
       return true;
@@ -567,6 +589,42 @@ export function PsychiatryAssessmentPage() {
 
   const assessment = workspace.assessment;
   const signed = assessment?.status === "SIGNED";
+  const draftInProgress = Boolean(assessment) && !signed;
+  const mode =
+    view.mode !== "auto"
+      ? view.mode
+      : draftInProgress || workspace.history.length === 0
+        ? "edit"
+        : "list";
+  const detail =
+    mode === "detail" ? (workspace.history.find((entry) => entry.id === view.id) ?? null) : null;
+  const detailChain = detail
+    ? (assessmentChains(workspace.history).find((chain) =>
+        chain.versions.some((entry) => entry.id === detail.id),
+      ) ?? null)
+    : null;
+  const startNewAssessment = () => {
+    setView({ mode: "edit" });
+    setAmend(null);
+    setActiveSection(SECTIONS[0].id);
+    setNotice(null);
+    // The signed note is still loaded after signing here; reopening gives a blank draft.
+    if (signed) setReloadKey((key) => key + 1);
+  };
+  const amendAssessment = (entry: PsychiatryCompleted) => {
+    // A new draft, filled from what was signed. The signed note itself never changes.
+    setWorkspace({ ...workspace, assessment: null });
+    setAmend({ id: entry.id, signed_at: entry.signed_at, author: entry.author, reason: "" });
+    setFormat(entry.format);
+    setFreeText(entry.free_text);
+    setStructured(normalizedStructuredAssessment(entry.structured));
+    setMse(entry.mse ?? {});
+    setMseFormat(inferMseFormat(entry.mse ?? {}));
+    setSavedSnapshot(snapshot({ format: "STRUCTURED", free_text: "", structured: {}, mse: {} }));
+    setNotice(null);
+    setActiveSection(SECTIONS[0].id);
+    setView({ mode: "edit" });
+  };
   const riskSpec = schema?.sections.find((section) => section.key === "risk");
   const scheduledActivityIds = new Set(
     (planSchedule?.scheduled_sessions ?? []).map((session) => session.care_plan_activity_id),
@@ -657,7 +715,28 @@ export function PsychiatryAssessmentPage() {
       <Breadcrumbs
         items={[
           { label: "Psychiatry", to: "/clinical/psychiatry" },
-          { label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Assessment" },
+          // The client's assessments, then the one open — so Back closes a
+          // summary or draft to the list, the way the user came.
+          {
+            label: banner ? banner.name.trim() || "Temporary client (unnamed)" : "Assessments",
+            onClick:
+              mode !== "list" && workspace.history.length > 0
+                ? () => setView({ mode: "list" })
+                : undefined,
+          },
+          ...(mode === "detail" && detail
+            ? [{ label: `Assessment signed ${formatDateTime(detail.signed_at)}` }]
+            : mode === "edit" && workspace.history.length > 0
+              ? [
+                  {
+                    label: amend
+                      ? "Amendment"
+                      : draftInProgress
+                        ? "Assessment in progress"
+                        : "New assessment",
+                  },
+                ]
+              : []),
         ]}
       />
       <SafetyBanner banner={banner} error={bannerError} />
@@ -682,616 +761,665 @@ export function PsychiatryAssessmentPage() {
         </Callout>
       )}
 
-      {locked && (
-        <Callout tone={signed ? "success" : "warning"}>
-          {signed
-            ? "This assessment is signed and cannot be edited. A correction or follow-up is a new assessment."
-            : "This unsigned assessment belongs to another clinician and is read-only for you."}
-        </Callout>
-      )}
+      {mode === "list" ? (
+        <AssessmentList
+          history={workspace.history}
+          draft={draftInProgress ? assessment : null}
+          onOpen={(id) => setView({ mode: "detail", id })}
+          onContinue={() => setView({ mode: "edit" })}
+          onStartNew={startNewAssessment}
+        />
+      ) : mode === "detail" && detail ? (
+        <CompletedAssessment
+          completed={detail}
+          history={workspace.history}
+          versions={detailChain?.versions ?? [detail]}
+          onOpenVersion={(id) => setView({ mode: "detail", id })}
+          patientId={patientId}
+          planSchedule={planSchedule}
+          canAmend={!draftInProgress}
+          onBack={() => setView({ mode: "list" })}
+          onAmend={() => amendAssessment(detailChain?.latest ?? detail)}
+        />
+      ) : (
+        <>
+          {workspace.history.length > 0 && (
+            <div>
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM}`}
+                onClick={() => setView({ mode: "list" })}
+              >
+                ← All assessments
+              </button>
+            </div>
+          )}
+          {amend && !readOnly && (
+            <Callout tone="info" label="Amendment">
+              <p>
+                Amending the assessment signed {formatDateTime(amend.signed_at)} by {amend.author}.
+                That signed assessment stays on record unchanged; this amendment is signed as a new
+                version.
+              </p>
+              <label className="mt-2 block">
+                <span className={FIELD_LABEL}>Reason for the amendment (required)</span>
+                <AutoResizeTextarea
+                  className={INPUT}
+                  value={amend.reason}
+                  onChange={(event) => setAmend({ ...amend, reason: event.target.value })}
+                />
+              </label>
+            </Callout>
+          )}
+          {locked && (
+            <Callout tone={signed ? "success" : "warning"}>
+              {signed
+                ? "This assessment is signed and cannot be edited. A correction or follow-up is a new assessment."
+                : "This unsigned assessment belongs to another clinician and is read-only for you."}
+            </Callout>
+          )}
 
-      <nav
-        role="tablist"
-        aria-label="Assessment sections"
-        className="sticky top-14 z-10 -mx-1 rounded-xl border border-surface-border bg-surface-card/95 p-1 shadow-sm backdrop-blur"
-      >
-        <div className="flex gap-1 overflow-x-auto">
-          {SECTIONS.map((section) => (
-            <button
-              key={section.id}
-              id={`${section.id}-tab`}
-              type="button"
-              role="tab"
-              aria-selected={activeSection === section.id}
-              aria-controls={section.id}
-              onClick={() => setActiveSection(section.id)}
-              className={`whitespace-nowrap rounded-[9px] px-3.5 py-2 text-[13px] font-semibold transition-colors ${
-                activeSection === section.id
-                  ? "bg-brand-green text-on-primary"
-                  : "text-ink-900 hover:bg-surface-bg"
-              }`}
-            >
-              {section.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <div
-        id="psych-assessment"
-        role="tabpanel"
-        aria-labelledby="psych-assessment-tab"
-        className={`min-w-0 ${activeSection === "psych-assessment" ? "" : "hidden"}`}
-      >
-        <Card
-          title="Assessment"
-          aside={
-            <div
-              role="group"
-              aria-label="Assessment format"
-              className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
-            >
-              {(
-                [
-                  ["STRUCTURED", "Structured"],
-                  ["FREE_TEXT", "Free text"],
-                ] as [PsychiatryFormat, string][]
-              ).map(([value, label]) => (
+          <nav
+            role="tablist"
+            aria-label="Assessment sections"
+            className="sticky top-14 z-10 -mx-1 rounded-xl border border-surface-border bg-surface-card/95 p-1 shadow-sm backdrop-blur"
+          >
+            <div className="flex gap-1 overflow-x-auto">
+              {SECTIONS.map((section) => (
                 <button
-                  key={value}
+                  key={section.id}
+                  id={`${section.id}-tab`}
                   type="button"
-                  aria-pressed={format === value}
-                  disabled={readOnly}
-                  onClick={() => switchFormat(value)}
-                  className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                    format === value
+                  role="tab"
+                  aria-selected={activeSection === section.id}
+                  aria-controls={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`whitespace-nowrap rounded-[9px] px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+                    activeSection === section.id
                       ? "bg-brand-green text-on-primary"
-                      : "text-ink-900 hover:bg-surface-card"
+                      : "text-ink-900 hover:bg-surface-bg"
                   }`}
                 >
-                  {label}
+                  {section.label}
                 </button>
               ))}
             </div>
-          }
-        >
-          <p className="mb-3 text-[12.5px] leading-5 text-ink-700">
-            {format === "STRUCTURED"
-              ? "Clinical risk assessment is required to sign."
-              : "Record the assessment as a narrative."}{" "}
-            {assessment && `Last saved ${formatDateTime(assessment.updated_at)}.`}
-          </p>
-          {format === "STRUCTURED" ? (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {STRUCTURED_FIELDS.map((field) => {
-                const carriedConcern =
-                  field.key === "presenting_concern" && !assessment
-                    ? workspace?.carried_forward_presenting_concern
-                    : null;
-                if (field.key === "risk") {
-                  return (
-                    <div key={field.key} className="lg:col-span-2" id="psych-risk-assessment">
-                      {!schema || !riskSpec ? (
-                        <ErrorNote>
-                          {schemaError ?? "Loading clinical risk assessment options…"}
-                        </ErrorNote>
-                      ) : (
+          </nav>
+
+          <div
+            id="psych-assessment"
+            role="tabpanel"
+            aria-labelledby="psych-assessment-tab"
+            className={`min-w-0 ${activeSection === "psych-assessment" ? "" : "hidden"}`}
+          >
+            <Card
+              title="Assessment"
+              aside={
+                <div
+                  role="group"
+                  aria-label="Assessment format"
+                  className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
+                >
+                  {(
+                    [
+                      ["STRUCTURED", "Structured"],
+                      ["FREE_TEXT", "Free text"],
+                    ] as [PsychiatryFormat, string][]
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={format === value}
+                      disabled={readOnly}
+                      onClick={() => switchFormat(value)}
+                      className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                        format === value
+                          ? "bg-brand-green text-on-primary"
+                          : "text-ink-900 hover:bg-surface-card"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              <p className="mb-3 text-[12.5px] leading-5 text-ink-700">
+                {format === "STRUCTURED"
+                  ? "Clinical risk assessment is required to sign."
+                  : "Record the assessment as a narrative."}{" "}
+                {assessment && `Last saved ${formatDateTime(assessment.updated_at)}.`}
+              </p>
+              {format === "STRUCTURED" ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {STRUCTURED_FIELDS.map((field) => {
+                    const carriedConcern =
+                      field.key === "presenting_concern" && !assessment
+                        ? workspace?.carried_forward_presenting_concern
+                        : null;
+                    if (field.key === "risk") {
+                      return (
+                        <div key={field.key} className="lg:col-span-2" id="psych-risk-assessment">
+                          {!schema || !riskSpec ? (
+                            <ErrorNote>
+                              {schemaError ?? "Loading clinical risk assessment options…"}
+                            </ErrorNote>
+                          ) : (
+                            <>
+                              <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-ink-700">
+                                {field.label}
+                              </h3>
+                              <RiskSection
+                                spec={riskSpec}
+                                riskRows={schema.riskRows}
+                                values={riskValue as SectionValues}
+                                vs={vs}
+                                onChange={(key, value) => setRiskField({ [key]: value })}
+                                onPatch={updateRisk}
+                                showFormulation={false}
+                              />
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Field
+                        key={field.key}
+                        label={
+                          field.required ? (
+                            <>
+                              {field.label}{" "}
+                              <span className="font-normal text-ink-500">(needed to sign)</span>
+                            </>
+                          ) : (
+                            field.label
+                          )
+                        }
+                        hint={
+                          carriedConcern
+                            ? `Carried forward from signed ${carriedConcern.source}. Review or update as needed.`
+                            : field.hint
+                        }
+                      >
+                        <AutoResizeTextarea
+                          className="min-h-[112px]"
+                          rows={4}
+                          value={String(structured[field.key] ?? "")}
+                          disabled={readOnly}
+                          onChange={(event) =>
+                            setStructured((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Field label="Free text" hint="Record the assessment in narrative form.">
+                  <AutoResizeTextarea
+                    className="min-h-[280px]"
+                    rows={12}
+                    value={freeText}
+                    disabled={readOnly}
+                    onChange={(event) => setFreeText(event.target.value)}
+                  />
+                </Field>
+              )}
+            </Card>
+          </div>
+
+          <div
+            id="psych-mse"
+            role="tabpanel"
+            aria-labelledby="psych-mse-tab"
+            className={`min-w-0 ${activeSection === "psych-mse" ? "" : "hidden"}`}
+          >
+            <Card
+              title="MSE"
+              aside={
+                <div
+                  role="group"
+                  aria-label="MSE format"
+                  className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
+                >
+                  {(
+                    [
+                      ["STRUCTURED", "Structured"],
+                      ["FREE_TEXT", "Free text"],
+                    ] as ["STRUCTURED" | "FREE_TEXT", string][]
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={mseFormat === value}
+                      disabled={readOnly}
+                      onClick={() => switchMseFormat(value)}
+                      className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                        mseFormat === value
+                          ? "bg-brand-green text-on-primary"
+                          : "text-ink-900 hover:bg-surface-card"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              {!schema ? (
+                schemaError ? (
+                  <ErrorNote>{schemaError}</ErrorNote>
+                ) : (
+                  <p className="text-[13px] text-ink-500">Loading MSE options…</p>
+                )
+              ) : mseFormat === "FREE_TEXT" ? (
+                <Field label="Free text" hint="Enter the MSE in narrative form.">
+                  <AutoResizeTextarea
+                    className="min-h-[180px]"
+                    rows={8}
+                    value={typeof mse.free_text === "string" ? mse.free_text : ""}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      setMse((current) => ({ ...current, free_text: event.target.value }))
+                    }
+                  />
+                </Field>
+              ) : (
+                <MseSection
+                  schema={schema}
+                  values={mse as Record<string, unknown>}
+                  vs={vs}
+                  onChange={(key, value) => setMse((current) => ({ ...current, [key]: value }))}
+                  onPatch={(patch) => setMse((current) => ({ ...current, ...patch }))}
+                />
+              )}
+            </Card>
+          </div>
+
+          <div
+            id="psych-formulation-diagnosis"
+            role="tabpanel"
+            aria-labelledby="psych-formulation-diagnosis-tab"
+            className={`min-w-0 ${activeSection === "psych-formulation-diagnosis" ? "" : "hidden"}`}
+          >
+            <Card title="Formulation & diagnosis">
+              <div className="grid gap-3">
+                <Field
+                  label="Integrated clinical summary / formulation"
+                  htmlFor="psychiatry-formulation-summary"
+                >
+                  <AutoResizeTextarea
+                    id="psychiatry-formulation-summary"
+                    className="min-h-[112px]"
+                    rows={5}
+                    value={String(
+                      (structured.form as Record<string, unknown> | undefined)?.summary ?? "",
+                    )}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      setStructured((current) => ({
+                        ...current,
+                        form: {
+                          ...((current.form as Record<string, unknown> | undefined) ?? {}),
+                          summary: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Differential diagnoses / conditions to rule out"
+                  htmlFor="psychiatry-formulation-differential"
+                >
+                  <AutoResizeTextarea
+                    id="psychiatry-formulation-differential"
+                    className="min-h-[72px]"
+                    rows={3}
+                    value={String(
+                      (structured.form as Record<string, unknown> | undefined)?.differential ?? "",
+                    )}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      setStructured((current) => ({
+                        ...current,
+                        form: {
+                          ...((current.form as Record<string, unknown> | undefined) ?? {}),
+                          differential: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
+            </Card>
+            <IntakeDiagnosisTab
+              patientId={patientId}
+              encounterId={workspace.encounter_id}
+              onChanged={() => undefined}
+            />
+          </div>
+
+          <div
+            id="psych-medication"
+            role="tabpanel"
+            aria-labelledby="psych-medication-tab"
+            className={`min-w-0 ${activeSection === "psych-medication" ? "" : "hidden"}`}
+          >
+            <PsychiatryMedicationPanel patientId={patientId} />
+          </div>
+
+          <div
+            id="psych-plan-schedule"
+            role="tabpanel"
+            aria-labelledby="psych-plan-schedule-tab"
+            className={`min-w-0 ${activeSection === "psych-plan-schedule" ? "" : "hidden"}`}
+          >
+            <ErrorNote>{planScheduleError ?? catalogueError ?? confirmError}</ErrorNote>
+            {(scheduleMessage ?? confirmMessage) && (
+              <Callout tone="success">{scheduleMessage ?? confirmMessage}</Callout>
+            )}
+            <Card title="Plan & Schedule">
+              <div className="flex flex-col gap-4">
+                <section aria-labelledby="psychiatry-select-plan-title">
+                  <h3 id="psychiatry-select-plan-title" className="text-sm font-bold text-ink-900">
+                    Care plans
+                  </h3>
+                  <p className="mt-1 text-xs text-ink-700">
+                    Select a care plan and confirm it for this client. A confirmed plan appears in
+                    Interventions. Confirm Psychiatric review to schedule the next session.
+                  </p>
+                  <label className={`${FIELD_LABEL} mt-3`}>
+                    Care plan
+                    <select
+                      className={INPUT}
+                      value={selectedCarePlan}
+                      onChange={(event) => {
+                        setSelectedCarePlan(event.target.value);
+                        setConfirmMessage(null);
+                        setConfirmError(null);
+                        setConfirmNote("");
+                      }}
+                    >
+                      <option value="">Select a care plan…</option>
+                      {catalogue.map((item) => (
+                        <option key={item.key} value={item.key}>
+                          {item.name} — {carePlanState(item.key)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {catalogueError && catalogue.length === 0 && (
+                    <p className="mt-2 text-xs text-ink-500">Care plans are unavailable.</p>
+                  )}
+                  {selectedCatalogueItem && (
+                    <div className="mt-3 rounded-md border border-surface-border bg-surface-bg px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-[13px] text-ink-900">
+                          {selectedCatalogueItem.name}
+                        </strong>
+                        <Tag tone={selectedCarePlanAccepted ? "brand" : "neutral"}>
+                          {selectedCarePlanAccepted
+                            ? "Confirmed for this client"
+                            : "Not yet confirmed"}
+                        </Tag>
+                      </div>
+                      {selectedCatalogueItem.tasks.length > 0 && (
+                        <ul className="mt-1.5 list-disc pl-5 text-xs text-ink-700">
+                          {selectedCatalogueItem.tasks.map((task) => (
+                            <li key={task}>{task}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {selectedCarePlanAccepted && selectedCarePlanNote && (
+                        <div className="mt-2 rounded border-l-2 border-brand-green bg-surface-card px-3 py-2">
+                          <p className="whitespace-pre-wrap text-xs text-ink-900">
+                            {selectedCarePlanNote.text}
+                          </p>
+                          <p className="mt-1 text-[11px] text-ink-500">
+                            {selectedCarePlanNote.author || "Clinician"} ·{" "}
+                            {formatDateTime(selectedCarePlanNote.at)}
+                          </p>
+                        </div>
+                      )}
+                      {!selectedCarePlanAccepted && (
                         <>
-                          <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-ink-700">
-                            {field.label}
-                          </h3>
-                          <RiskSection
-                            spec={riskSpec}
-                            riskRows={schema.riskRows}
-                            values={riskValue as SectionValues}
-                            vs={vs}
-                            onChange={(key, value) => setRiskField({ [key]: value })}
-                            onPatch={updateRisk}
-                            showFormulation={false}
-                          />
+                          <label className={`${FIELD_LABEL} mt-3`}>
+                            Note for the record (optional)
+                            <AutoResizeTextarea
+                              rows={3}
+                              aria-label="Note for the record"
+                              placeholder="Why this plan, what was agreed, the client's preference…"
+                              maxLength={4000}
+                              value={confirmNote}
+                              onChange={(event) => setConfirmNote(event.target.value)}
+                            />
+                          </label>
+                          <p className="mt-1 text-[11px] text-ink-500">
+                            Saved to the client&apos;s record and shown in Interventions.
+                          </p>
+                          <button
+                            type="button"
+                            className={`${BTN} ${BTN_SM} mt-2`}
+                            disabled={confirmingPlan}
+                            onClick={() => void confirmCarePlan()}
+                          >
+                            {confirmingPlan ? "Confirming…" : "Confirm for this client"}
+                          </button>
                         </>
                       )}
                     </div>
-                  );
-                }
+                  )}
+                </section>
 
-                return (
-                  <Field
-                    key={field.key}
-                    label={
-                      field.required ? (
-                        <>
-                          {field.label}{" "}
-                          <span className="font-normal text-ink-500">(needed to sign)</span>
-                        </>
-                      ) : (
-                        field.label
-                      )
-                    }
-                    hint={
-                      carriedConcern
-                        ? `Carried forward from signed ${carriedConcern.source}. Review or update as needed.`
-                        : field.hint
-                    }
+                {planSchedule?.plan ? (
+                  <section
+                    aria-labelledby="psychiatry-current-plan-title"
+                    className="border-t border-surface-border pt-4"
                   >
-                    <AutoResizeTextarea
-                      className="min-h-[112px]"
-                      rows={4}
-                      value={String(structured[field.key] ?? "")}
-                      disabled={readOnly}
-                      onChange={(event) =>
-                        setStructured((current) => ({
-                          ...current,
-                          [field.key]: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                );
-              })}
-            </div>
-          ) : (
-            <Field label="Free text" hint="Record the assessment in narrative form.">
-              <AutoResizeTextarea
-                className="min-h-[280px]"
-                rows={12}
-                value={freeText}
-                disabled={readOnly}
-                onChange={(event) => setFreeText(event.target.value)}
-              />
-            </Field>
-          )}
-        </Card>
-      </div>
-
-      <div
-        id="psych-mse"
-        role="tabpanel"
-        aria-labelledby="psych-mse-tab"
-        className={`min-w-0 ${activeSection === "psych-mse" ? "" : "hidden"}`}
-      >
-        <Card
-          title="MSE"
-          aside={
-            <div
-              role="group"
-              aria-label="MSE format"
-              className="flex rounded-xl border border-surface-border bg-surface-bg p-1"
-            >
-              {(
-                [
-                  ["STRUCTURED", "Structured"],
-                  ["FREE_TEXT", "Free text"],
-                ] as ["STRUCTURED" | "FREE_TEXT", string][]
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={mseFormat === value}
-                  disabled={readOnly}
-                  onClick={() => switchMseFormat(value)}
-                  className={`rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                    mseFormat === value
-                      ? "bg-brand-green text-on-primary"
-                      : "text-ink-900 hover:bg-surface-card"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          }
-        >
-          {!schema ? (
-            schemaError ? (
-              <ErrorNote>{schemaError}</ErrorNote>
-            ) : (
-              <p className="text-[13px] text-ink-500">Loading MSE options…</p>
-            )
-          ) : mseFormat === "FREE_TEXT" ? (
-            <Field label="Free text" hint="Enter the MSE in narrative form.">
-              <AutoResizeTextarea
-                className="min-h-[180px]"
-                rows={8}
-                value={typeof mse.free_text === "string" ? mse.free_text : ""}
-                disabled={readOnly}
-                onChange={(event) =>
-                  setMse((current) => ({ ...current, free_text: event.target.value }))
-                }
-              />
-            </Field>
-          ) : (
-            <MseSection
-              schema={schema}
-              values={mse as Record<string, unknown>}
-              vs={vs}
-              onChange={(key, value) => setMse((current) => ({ ...current, [key]: value }))}
-              onPatch={(patch) => setMse((current) => ({ ...current, ...patch }))}
-            />
-          )}
-        </Card>
-      </div>
-
-      <div
-        id="psych-formulation-diagnosis"
-        role="tabpanel"
-        aria-labelledby="psych-formulation-diagnosis-tab"
-        className={`min-w-0 ${activeSection === "psych-formulation-diagnosis" ? "" : "hidden"}`}
-      >
-        <Card title="Formulation & diagnosis">
-          <div className="grid gap-3">
-            <Field
-              label="Integrated clinical summary / formulation"
-              htmlFor="psychiatry-formulation-summary"
-            >
-              <AutoResizeTextarea
-                id="psychiatry-formulation-summary"
-                className="min-h-[112px]"
-                rows={5}
-                value={String(
-                  (structured.form as Record<string, unknown> | undefined)?.summary ?? "",
-                )}
-                disabled={readOnly}
-                onChange={(event) =>
-                  setStructured((current) => ({
-                    ...current,
-                    form: {
-                      ...((current.form as Record<string, unknown> | undefined) ?? {}),
-                      summary: event.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-            <Field
-              label="Differential diagnoses / conditions to rule out"
-              htmlFor="psychiatry-formulation-differential"
-            >
-              <AutoResizeTextarea
-                id="psychiatry-formulation-differential"
-                className="min-h-[72px]"
-                rows={3}
-                value={String(
-                  (structured.form as Record<string, unknown> | undefined)?.differential ?? "",
-                )}
-                disabled={readOnly}
-                onChange={(event) =>
-                  setStructured((current) => ({
-                    ...current,
-                    form: {
-                      ...((current.form as Record<string, unknown> | undefined) ?? {}),
-                      differential: event.target.value,
-                    },
-                  }))
-                }
-              />
-            </Field>
-          </div>
-        </Card>
-        <IntakeDiagnosisTab
-          patientId={patientId}
-          encounterId={workspace.encounter_id}
-          onChanged={() => undefined}
-        />
-      </div>
-
-      <div
-        id="psych-medication"
-        role="tabpanel"
-        aria-labelledby="psych-medication-tab"
-        className={`min-w-0 ${activeSection === "psych-medication" ? "" : "hidden"}`}
-      >
-        <PsychiatryMedicationPanel patientId={patientId} />
-      </div>
-
-      <div
-        id="psych-plan-schedule"
-        role="tabpanel"
-        aria-labelledby="psych-plan-schedule-tab"
-        className={`min-w-0 ${activeSection === "psych-plan-schedule" ? "" : "hidden"}`}
-      >
-        <ErrorNote>{planScheduleError ?? catalogueError ?? confirmError}</ErrorNote>
-        {(scheduleMessage ?? confirmMessage) && (
-          <Callout tone="success">{scheduleMessage ?? confirmMessage}</Callout>
-        )}
-        <Card title="Plan & Schedule">
-          <div className="flex flex-col gap-4">
-            <section aria-labelledby="psychiatry-select-plan-title">
-              <h3 id="psychiatry-select-plan-title" className="text-sm font-bold text-ink-900">
-                Care plans
-              </h3>
-              <p className="mt-1 text-xs text-ink-700">
-                Select a care plan and confirm it for this client. A confirmed plan appears in
-                Interventions. Confirm Psychiatric review to schedule the next session.
-              </p>
-              <label className={`${FIELD_LABEL} mt-3`}>
-                Care plan
-                <select
-                  className={INPUT}
-                  value={selectedCarePlan}
-                  onChange={(event) => {
-                    setSelectedCarePlan(event.target.value);
-                    setConfirmMessage(null);
-                    setConfirmError(null);
-                    setConfirmNote("");
-                  }}
-                >
-                  <option value="">Select a care plan…</option>
-                  {catalogue.map((item) => (
-                    <option key={item.key} value={item.key}>
-                      {item.name} — {carePlanState(item.key)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {catalogueError && catalogue.length === 0 && (
-                <p className="mt-2 text-xs text-ink-500">Care plans are unavailable.</p>
-              )}
-              {selectedCatalogueItem && (
-                <div className="mt-3 rounded-md border border-surface-border bg-surface-bg px-3 py-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[13px] text-ink-900">
-                      {selectedCatalogueItem.name}
-                    </strong>
-                    <Tag tone={selectedCarePlanAccepted ? "brand" : "neutral"}>
-                      {selectedCarePlanAccepted ? "Confirmed for this client" : "Not yet confirmed"}
-                    </Tag>
-                  </div>
-                  {selectedCatalogueItem.tasks.length > 0 && (
-                    <ul className="mt-1.5 list-disc pl-5 text-xs text-ink-700">
-                      {selectedCatalogueItem.tasks.map((task) => (
-                        <li key={task}>{task}</li>
+                    <h3
+                      id="psychiatry-current-plan-title"
+                      className="text-sm font-bold text-ink-900"
+                    >
+                      Current episode care plan
+                    </h3>
+                    <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-700">
+                      {planSchedule.plan.goals || "No plan goals recorded."}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      {planSchedule.plan.confirmed ? "Confirmed care plan" : "Not yet confirmed"}
+                    </p>
+                    <ul className="mt-3 divide-y divide-surface-border rounded-md border border-surface-border">
+                      {planSchedule.plan.activities.map((activity) => (
+                        <li
+                          key={activity.id}
+                          className="flex flex-wrap items-start justify-between gap-2 px-3 py-2"
+                        >
+                          <div>
+                            <span className="text-[13px] font-medium text-ink-900">
+                              {activity.title}
+                            </span>
+                            {activity.goal && (
+                              <span className="mt-0.5 block text-xs text-ink-700">
+                                {activity.goal}
+                              </span>
+                            )}
+                          </div>
+                          <Tag>{activity.status_display}</Tag>
+                        </li>
                       ))}
                     </ul>
-                  )}
-                  {selectedCarePlanAccepted && selectedCarePlanNote && (
-                    <div className="mt-2 rounded border-l-2 border-brand-green bg-surface-card px-3 py-2">
-                      <p className="whitespace-pre-wrap text-xs text-ink-900">
-                        {selectedCarePlanNote.text}
+                  </section>
+                ) : (
+                  <p className="border-t border-surface-border pt-4 text-xs text-ink-500">
+                    No care plan exists for this client&apos;s open episode yet. Confirming a plan
+                    above creates one.
+                  </p>
+                )}
+
+                {canScheduleCarePlan &&
+                  (psychReviewActivity ? (
+                    <section
+                      aria-labelledby="psychiatry-schedule-session-title"
+                      className="border-t border-surface-border pt-4"
+                    >
+                      <h3
+                        id="psychiatry-schedule-session-title"
+                        className="text-sm font-bold text-ink-900"
+                      >
+                        Schedule next psychiatry session
+                      </h3>
+                      <p className="mt-1 text-xs text-ink-700">
+                        Psychiatric review is confirmed for this client. Book the next session now;
+                        it will appear in the appointment and Interventions views.
                       </p>
-                      <p className="mt-1 text-[11px] text-ink-500">
-                        {selectedCarePlanNote.author || "Clinician"} ·{" "}
-                        {formatDateTime(selectedCarePlanNote.at)}
-                      </p>
-                    </div>
-                  )}
-                  {!selectedCarePlanAccepted && (
-                    <>
-                      <label className={`${FIELD_LABEL} mt-3`}>
-                        Note for the record (optional)
-                        <AutoResizeTextarea
-                          rows={3}
-                          aria-label="Note for the record"
-                          placeholder="Why this plan, what was agreed, the client's preference…"
-                          maxLength={4000}
-                          value={confirmNote}
-                          onChange={(event) => setConfirmNote(event.target.value)}
-                        />
-                      </label>
-                      <p className="mt-1 text-[11px] text-ink-500">
-                        Saved to the client&apos;s record and shown in Interventions.
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <label className={FIELD_LABEL}>
+                          Date and time
+                          <input
+                            className={INPUT}
+                            type="datetime-local"
+                            step={900}
+                            value={scheduledFor}
+                            onChange={(event) => setScheduledFor(event.target.value)}
+                          />
+                        </label>
+                        <label className={FIELD_LABEL}>
+                          Session mode
+                          <select
+                            className={INPUT}
+                            value={sessionMode}
+                            onChange={(event) =>
+                              setSessionMode(event.target.value as "IN_PERSON" | "PHONE" | "VIDEO")
+                            }
+                          >
+                            <option value="IN_PERSON">In person</option>
+                            <option value="PHONE">Phone</option>
+                            <option value="VIDEO">Video</option>
+                          </select>
+                        </label>
+                        <label className={FIELD_LABEL}>
+                          Duration (minutes)
+                          <input
+                            className={INPUT}
+                            type="number"
+                            min={5}
+                            max={240}
+                            step={5}
+                            value={sessionDuration}
+                            onChange={(event) =>
+                              setSessionDuration(Number(event.target.value) || 30)
+                            }
+                          />
+                        </label>
+                        <label className={`${FIELD_LABEL} md:col-span-2`}>
+                          Brief scheduling note (optional)
+                          <textarea
+                            className={`${INPUT} min-h-20`}
+                            maxLength={500}
+                            value={sessionNote}
+                            onChange={(event) => setSessionNote(event.target.value)}
+                            placeholder="Logistics only"
+                          />
+                        </label>
+                      </div>
+                      <p className="mt-2 text-xs text-ink-500">
+                        This note appears in the shared appointment and Interventions views. Do not
+                        include psychiatric details; record clinical content in the appropriate
+                        signed note.
                       </p>
                       <button
                         type="button"
-                        className={`${BTN} ${BTN_SM} mt-2`}
-                        disabled={confirmingPlan}
-                        onClick={() => void confirmCarePlan()}
+                        className={`${BTN} ${BTN_SM} mt-3`}
+                        disabled={
+                          scheduling ||
+                          !scheduledFor ||
+                          sessionDuration < 5 ||
+                          sessionDuration > 240
+                        }
+                        onClick={() => void scheduleNextSession()}
                       >
-                        {confirmingPlan ? "Confirming…" : "Confirm for this client"}
+                        {scheduling ? "Scheduling…" : "Schedule next session"}
                       </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </section>
+                    </section>
+                  ) : (
+                    <Callout tone="info">
+                      Psychiatric review is confirmed, but there is no planned, unscheduled
+                      psychiatry action to book. An action already in progress or already scheduled
+                      cannot be scheduled again.
+                    </Callout>
+                  ))}
+              </div>
+            </Card>
 
-            {planSchedule?.plan ? (
-              <section
-                aria-labelledby="psychiatry-current-plan-title"
-                className="border-t border-surface-border pt-4"
-              >
-                <h3 id="psychiatry-current-plan-title" className="text-sm font-bold text-ink-900">
-                  Current episode care plan
-                </h3>
-                <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-700">
-                  {planSchedule.plan.goals || "No plan goals recorded."}
-                </p>
-                <p className="mt-1 text-xs text-ink-500">
-                  {planSchedule.plan.confirmed ? "Confirmed care plan" : "Not yet confirmed"}
-                </p>
-                <ul className="mt-3 divide-y divide-surface-border rounded-md border border-surface-border">
-                  {planSchedule.plan.activities.map((activity) => (
-                    <li
-                      key={activity.id}
-                      className="flex flex-wrap items-start justify-between gap-2 px-3 py-2"
-                    >
-                      <div>
-                        <span className="text-[13px] font-medium text-ink-900">
-                          {activity.title}
-                        </span>
-                        {activity.goal && (
-                          <span className="mt-0.5 block text-xs text-ink-700">{activity.goal}</span>
-                        )}
-                      </div>
-                      <Tag>{activity.status_display}</Tag>
+            {planSchedule && planSchedule.scheduled_sessions.length > 0 && (
+              <Card title="Upcoming psychiatry sessions" className="mt-3">
+                <ul className="divide-y divide-surface-border">
+                  {planSchedule.scheduled_sessions.map((session) => (
+                    <li key={session.id} className="py-2 first:pt-0 last:pb-0">
+                      <strong className="block text-[13px] text-ink-900">
+                        {session.activity_title}
+                      </strong>
+                      <span className="text-xs text-ink-700">
+                        {formatDateTime(session.scheduled_for)}
+                        {session.provider_name ? ` · ${session.provider_name}` : ""}
+                      </span>
+                      {session.notes && (
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
+                          Scheduling note: {session.notes}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
-              </section>
-            ) : (
-              <p className="border-t border-surface-border pt-4 text-xs text-ink-500">
-                No care plan exists for this client&apos;s open episode yet. Confirming a plan above
-                creates one.
-              </p>
+              </Card>
             )}
-
-            {canScheduleCarePlan &&
-              (psychReviewActivity ? (
-                <section
-                  aria-labelledby="psychiatry-schedule-session-title"
-                  className="border-t border-surface-border pt-4"
-                >
-                  <h3
-                    id="psychiatry-schedule-session-title"
-                    className="text-sm font-bold text-ink-900"
-                  >
-                    Schedule next psychiatry session
-                  </h3>
-                  <p className="mt-1 text-xs text-ink-700">
-                    Psychiatric review is confirmed for this client. Book the next session now; it
-                    will appear in the appointment and Interventions views.
-                  </p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className={FIELD_LABEL}>
-                      Date and time
-                      <input
-                        className={INPUT}
-                        type="datetime-local"
-                        step={900}
-                        value={scheduledFor}
-                        onChange={(event) => setScheduledFor(event.target.value)}
-                      />
-                    </label>
-                    <label className={FIELD_LABEL}>
-                      Session mode
-                      <select
-                        className={INPUT}
-                        value={sessionMode}
-                        onChange={(event) =>
-                          setSessionMode(event.target.value as "IN_PERSON" | "PHONE" | "VIDEO")
-                        }
-                      >
-                        <option value="IN_PERSON">In person</option>
-                        <option value="PHONE">Phone</option>
-                        <option value="VIDEO">Video</option>
-                      </select>
-                    </label>
-                    <label className={FIELD_LABEL}>
-                      Duration (minutes)
-                      <input
-                        className={INPUT}
-                        type="number"
-                        min={5}
-                        max={240}
-                        step={5}
-                        value={sessionDuration}
-                        onChange={(event) => setSessionDuration(Number(event.target.value) || 30)}
-                      />
-                    </label>
-                    <label className={`${FIELD_LABEL} md:col-span-2`}>
-                      Brief scheduling note (optional)
-                      <textarea
-                        className={`${INPUT} min-h-20`}
-                        maxLength={500}
-                        value={sessionNote}
-                        onChange={(event) => setSessionNote(event.target.value)}
-                        placeholder="Logistics only"
-                      />
-                    </label>
-                  </div>
-                  <p className="mt-2 text-xs text-ink-500">
-                    This note appears in the shared appointment and Interventions views. Do not
-                    include psychiatric details; record clinical content in the appropriate signed
-                    note.
-                  </p>
-                  <button
-                    type="button"
-                    className={`${BTN} ${BTN_SM} mt-3`}
-                    disabled={
-                      scheduling || !scheduledFor || sessionDuration < 5 || sessionDuration > 240
-                    }
-                    onClick={() => void scheduleNextSession()}
-                  >
-                    {scheduling ? "Scheduling…" : "Schedule next session"}
-                  </button>
-                </section>
-              ) : (
-                <Callout tone="info">
-                  Psychiatric review is confirmed, but there is no planned, unscheduled psychiatry
-                  action to book. An action already in progress or already scheduled cannot be
-                  scheduled again.
-                </Callout>
-              ))}
           </div>
-        </Card>
 
-        {planSchedule && planSchedule.scheduled_sessions.length > 0 && (
-          <Card title="Upcoming psychiatry sessions" className="mt-3">
-            <ul className="divide-y divide-surface-border">
-              {planSchedule.scheduled_sessions.map((session) => (
-                <li key={session.id} className="py-2 first:pt-0 last:pb-0">
-                  <strong className="block text-[13px] text-ink-900">
-                    {session.activity_title}
-                  </strong>
-                  <span className="text-xs text-ink-700">
-                    {formatDateTime(session.scheduled_for)}
-                    {session.provider_name ? ` · ${session.provider_name}` : ""}
-                  </span>
-                  {session.notes && (
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-ink-700">
-                      Scheduling note: {session.notes}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-      </div>
-
-      <div
-        id="psych-previous"
-        role="tabpanel"
-        aria-labelledby="psych-previous-tab"
-        className={`min-w-0 ${activeSection === "psych-previous" ? "" : "hidden"}`}
-      >
-        <Card title="Previous psychiatric assessments">
-          {workspace.history.length === 0 ? (
-            <EmptyState title="No previous signed assessments">
-              Signed assessments for this client will appear here with their author and time.
-            </EmptyState>
-          ) : (
-            <ol className="flex flex-col gap-2">
-              {workspace.history.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="rounded-lg border border-surface-border bg-surface-bg"
-                >
-                  <details>
-                    <summary className="cursor-pointer px-3.5 py-2.5 text-[13px] font-semibold text-ink-900">
-                      {formatDateTime(entry.signed_at)} · {entry.author} ·{" "}
-                      {entry.format === "FREE_TEXT" ? "Free text" : "Structured"}
-                    </summary>
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap border-t border-surface-border px-3.5 py-3 font-system text-[12.5px] leading-5 text-ink-700">
-                      {entry.text}
-                    </pre>
-                  </details>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-      </div>
-
-      {EDIT_SECTIONS.has(activeSection) && !readOnly && (
-        <SaveBar
-          saving={saving}
-          dirty={dirty}
-          savedAt={assessment?.updated_at ?? null}
-          error={actionError}
-          notice={notice}
-          onSave={() => void run("save")}
-          onSign={() => void run("sign")}
-        />
+          {(EDIT_SECTIONS.has(activeSection) || activeSection === "psych-plan-schedule") &&
+            !readOnly && (
+              <SaveBar
+                signHere={activeSection === "psych-plan-schedule"}
+                saving={saving}
+                dirty={dirty}
+                savedAt={assessment?.updated_at ?? null}
+                error={actionError}
+                notice={notice}
+                onSave={() => void run("save")}
+                onSign={() => setConfirmingSign(true)}
+              />
+            )}
+        </>
       )}
+      <ConfirmDialog
+        open={confirmingSign}
+        title="Sign the psychiatric assessment?"
+        confirmLabel="Sign assessment"
+        busyLabel="Signing…"
+        busy={saving}
+        error={actionError}
+        onConfirm={async () => {
+          if (await run("sign")) setConfirmingSign(false);
+        }}
+        onCancel={() => setConfirmingSign(false)}
+      >
+        Check that the assessment, MSE, formulation &amp; diagnosis, medication and plan are
+        complete. Once signed, the assessment is read-only; a correction is a new assessment.
+      </ConfirmDialog>
     </div>
   );
 }
 
-/** The bottom of every editing tab: what is saved, Save and Sign. The
- * assessment is one record, so each tab saves (or signs) all of it; the clinician moves
- * between tabs in whatever order the visit takes — e.g. labs before medication. */
+/** The bottom of every editing tab: what is saved, and Save. The assessment is one
+ * draft record, so Save on any tab keeps all of it and the clinician can stop (e.g. send
+ * the client to the lab) and continue later in any order. Signing is offered only on
+ * Plan & Schedule, the last step, behind a confirmation. */
 function SaveBar({
+  signHere,
   saving,
   dirty,
   savedAt,
@@ -1300,6 +1428,7 @@ function SaveBar({
   onSave,
   onSign,
 }: {
+  signHere: boolean;
   saving: boolean;
   dirty: boolean;
   savedAt: string | null;
@@ -1323,20 +1452,467 @@ function SaveBar({
                   ? `Saved ${formatDateTime(savedAt)}`
                   : "Not saved yet"}
         </p>
-        <button
-          type="button"
-          className={`${BTN_GHOST} ${BTN_SM}`}
-          disabled={saving}
-          onClick={onSave}
-        >
-          <Save aria-hidden className="h-4 w-4" />
-          Save
-        </button>
-        <button type="button" className={`${BTN} ${BTN_SM}`} disabled={saving} onClick={onSign}>
-          <CheckCircle2 aria-hidden className="h-4 w-4" />
-          Sign assessment
+        {(!signHere || dirty) && (
+          <button
+            type="button"
+            className={`${signHere ? BTN_GHOST : BTN} ${BTN_SM}`}
+            disabled={saving}
+            onClick={onSave}
+          >
+            <Save aria-hidden className="h-4 w-4" />
+            Save
+          </button>
+        )}
+        {signHere && (
+          <button type="button" className={`${BTN} ${BTN_SM}`} disabled={saving} onClick={onSign}>
+            <CheckCircle2 aria-hidden className="h-4 w-4" />
+            Sign assessment
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One assessment as the clinician sees it: its signed versions, oldest first. An
+ * amendment is stored as its own signed note (the signed original is never
+ * overwritten, guide.md §3 item 7) but shown as a later version of the same
+ * assessment, not as another assessment. */
+type AssessmentChain = { versions: PsychiatryCompleted[]; latest: PsychiatryCompleted };
+
+function assessmentChains(history: PsychiatryCompleted[]): AssessmentChain[] {
+  const byId = new Map(history.map((entry) => [entry.id, entry]));
+  const rootOf = (entry: PsychiatryCompleted): string => {
+    let current = entry;
+    while (current.amends && byId.has(current.amends.id)) current = byId.get(current.amends.id)!;
+    return current.id;
+  };
+  const groups = new Map<string, PsychiatryCompleted[]>();
+  for (const entry of history) {
+    const root = rootOf(entry);
+    groups.set(root, [...(groups.get(root) ?? []), entry]);
+  }
+  return [...groups.values()]
+    .map((versions) => {
+      const sorted = [...versions].sort((a, b) =>
+        String(a.signed_at).localeCompare(String(b.signed_at)),
+      );
+      return { versions: sorted, latest: sorted[sorted.length - 1] };
+    })
+    .sort((a, b) => String(b.latest.signed_at).localeCompare(String(a.latest.signed_at)));
+}
+
+const ROW =
+  "rounded-lg border border-surface-border bg-surface-bg px-3 py-2 text-[13.5px] text-ink-900";
+
+/** Every psychiatric assessment for the client, newest first: the draft in
+ * progress (if any) and each signed one, with what kind it is and its headline
+ * diagnosis and medication. Opening one shows it section by section. */
+function AssessmentList({
+  history,
+  draft,
+  onOpen,
+  onContinue,
+  onStartNew,
+}: {
+  history: PsychiatryCompleted[];
+  draft: PsychiatryAssessment | null;
+  onOpen: (id: string) => void;
+  onContinue: () => void;
+  onStartNew: () => void;
+}) {
+  const chains = assessmentChains(history);
+  const oldest = [...chains].sort((a, b) =>
+    String(a.versions[0].signed_at).localeCompare(String(b.versions[0].signed_at)),
+  )[0]?.versions[0].id;
+  return (
+    <Card title="Psychiatric assessments">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="mr-auto text-[12.5px] text-ink-500">
+            {chains.length} {chains.length === 1 ? "assessment" : "assessments"}
+          </p>
+          {!draft && (
+            <button type="button" className={`${BTN} ${BTN_SM}`} onClick={onStartNew}>
+              Start a new assessment
+            </button>
+          )}
+        </div>
+        {draft && (
+          <button
+            type="button"
+            onClick={onContinue}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-[var(--green)] bg-surface-card px-3.5 py-3 text-left"
+          >
+            <span className="mr-auto">
+              <span className="block text-[14px] font-semibold text-ink-900">
+                {draft.amends ? "Amendment in progress" : "Assessment in progress"}
+              </span>
+              <span className="text-[12.5px] text-ink-500">
+                Last saved {formatDateTime(draft.updated_at)} by {draft.author}
+              </span>
+            </span>
+            <Tag tone="warn">Draft</Tag>
+            <span className="text-[13px] font-semibold text-[var(--green)]">Continue →</span>
+          </button>
+        )}
+        <ol className="flex flex-col gap-2">
+          {chains.map(({ versions, latest: entry }) => {
+            const first = versions[0];
+            const amended = versions.length > 1;
+            const primary = entry.diagnoses.find((dx) => dx.primary) ?? entry.diagnoses[0] ?? null;
+            const kind = first.id === oldest ? "Initial assessment" : "Follow-up assessment";
+            return (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(entry.id)}
+                  className="flex w-full flex-wrap items-center gap-3 rounded-lg border border-surface-border bg-surface-bg px-3.5 py-3 text-left hover:border-[var(--green)]"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-[14px] font-semibold text-ink-900">{kind}</span>
+                      {amended && <Tag tone="warn">Amended</Tag>}
+                    </span>
+                    <span className="block text-[12.5px] text-ink-500">
+                      Signed {formatDateTime(first.signed_at)} by {first.author}
+                      {amended
+                        ? ` · last amended ${formatDateTime(entry.signed_at)} by ${entry.author}`
+                        : ""}
+                    </span>
+                    <span className="mt-1 block text-[13px] text-ink-700">
+                      {primary
+                        ? `${primary.code ? `${primary.code} ` : ""}${primary.display}`
+                        : "No diagnosis recorded"}
+                      {" · "}
+                      {entry.medications.length === 0
+                        ? "no medication"
+                        : `${entry.medications.length} medication${entry.medications.length === 1 ? "" : "s"}`}
+                    </span>
+                  </span>
+                  <Tag tone="brand">Signed</Tag>
+                  <span className="text-[13px] font-semibold text-[var(--green)]">Open →</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </Card>
+  );
+}
+
+/** One signed psychiatric assessment, section by section. It is never edited:
+ * Amend starts a new version that points at it. */
+function CompletedAssessment({
+  completed,
+  history,
+  versions,
+  onOpenVersion,
+  patientId,
+  planSchedule,
+  canAmend,
+  onBack,
+  onAmend,
+}: {
+  completed: PsychiatryCompleted;
+  history: PsychiatryCompleted[];
+  versions: PsychiatryCompleted[];
+  onOpenVersion: (id: string) => void;
+  patientId: string;
+  planSchedule: PsychiatryPlanSchedule | null;
+  canAmend: boolean;
+  onBack: () => void;
+  onAmend: () => void;
+}) {
+  const activities = planSchedule?.plan?.activities ?? [];
+  const sessions = planSchedule?.scheduled_sessions ?? [];
+  const section = (key: string) => completed.sections.find((entry) => entry.key === key);
+  const has = (key: string) => (section(key)?.items.length ?? 0) > 0;
+  const items = (key: string) => (
+    <dl className="flex flex-col gap-3">
+      {(section(key)?.items ?? []).map((item, index) => (
+        <div key={`${item.label}-${index}`}>
+          {item.label && (
+            <dt className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-500">
+              {item.label}
+            </dt>
+          )}
+          <dd className="whitespace-pre-wrap text-[13.5px] leading-6 text-ink-900">{item.text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+  const nothing = (text: string) => <p className="text-[13px] italic text-ink-500">{text}</p>;
+  const chains = assessmentChains(history);
+  const interventionsLink = (module: string, record: string) =>
+    `${clientRecordPath(patientId, "interventions")}?${new URLSearchParams({ module, record }).toString()}`;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={onBack}>
+          ← All assessments
         </button>
       </div>
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-surface-border bg-surface-card p-4 shadow-sm">
+        <CheckCircle2 aria-hidden className="h-6 w-6 shrink-0 text-[var(--green)]" />
+        <div className="mr-auto min-w-0">
+          <p className="text-[15px] font-semibold text-ink-900">
+            Psychiatric assessment
+            {versions.length > 1
+              ? ` · version ${versions.findIndex((v) => v.id === completed.id) + 1} of ${versions.length}`
+              : ""}
+          </p>
+          <p className="text-[12.5px] text-ink-500">
+            Signed{completed.signed_at ? ` ${formatDateTime(completed.signed_at)}` : ""}
+            {completed.author ? ` by ${completed.author}` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          className={`${BTN} ${BTN_SM}`}
+          disabled={!canAmend}
+          title={canAmend ? undefined : "Finish the assessment in progress first."}
+          onClick={onAmend}
+        >
+          Amend
+        </button>
+      </div>
+      {versions.length > 1 && (
+        <Card title="Versions">
+          <ol className="flex flex-col gap-1.5">
+            {[...versions].reverse().map((version, index) => {
+              const current = version.id === completed.id;
+              const number = versions.length - index;
+              return (
+                <li key={version.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenVersion(version.id)}
+                    aria-current={current ? "true" : undefined}
+                    className={`flex w-full flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-left text-[13px] ${
+                      current
+                        ? "border-[var(--green)] bg-surface-card"
+                        : "border-surface-border bg-surface-bg"
+                    }`}
+                  >
+                    <span className="font-semibold text-ink-900">
+                      Version {number}
+                      {index === 0 ? " (current)" : ""}
+                    </span>
+                    <span className="text-ink-500">
+                      {formatDateTime(version.signed_at)} · {version.author}
+                    </span>
+                    {version.amends?.reason && (
+                      <span className="basis-full text-ink-700">
+                        Reason: {version.amends.reason}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </Card>
+      )}
+      {versions.length > 1 && completed.id !== versions[versions.length - 1].id && (
+        <Callout tone="warning" label="Earlier version">
+          You are viewing an earlier version, kept as it was signed. The current version is at the
+          top of Versions.
+        </Callout>
+      )}
+
+      <Card title="1 · Assessment">
+        {has("assessment") ? items("assessment") : nothing("Nothing recorded.")}
+      </Card>
+
+      <Card title="2 · Mental state examination">
+        {has("mse") ? items("mse") : nothing("No MSE recorded.")}
+      </Card>
+
+      <Card title="3 · Formulation & diagnosis">
+        <div className="flex flex-col gap-3">
+          {has("formulation") && items("formulation")}
+          {completed.diagnoses.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {completed.diagnoses.map((dx, index) => (
+                <li
+                  key={`${dx.code}-${index}`}
+                  className={`${ROW} flex flex-wrap items-center gap-2`}
+                >
+                  {dx.code && <span className="font-mono font-semibold">{dx.code}</span>}
+                  <span>{dx.display}</span>
+                  {dx.primary && <Tag tone="brand">Primary</Tag>}
+                  {dx.verification && <Tag>{dx.verification}</Tag>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            nothing("No diagnosis recorded.")
+          )}
+        </div>
+      </Card>
+
+      <Card title="4 · Medication">
+        {completed.medications.length > 0 ? (
+          <ul className="flex flex-col gap-1.5">
+            {completed.medications.map((med, index) => (
+              <li key={`${med.drug}-${index}`} className={ROW}>
+                <p className="font-semibold">
+                  {med.drug}
+                  {med.prn ? " · PRN" : ""}
+                </p>
+                <p className="text-ink-700">
+                  {[med.dose, med.route, med.frequency, med.duration].filter(Boolean).join(" · ")}
+                  {med.indication ? ` — for ${med.indication}` : ""}
+                </p>
+                <p className="text-[12px] text-ink-500">
+                  {med.prescribed_by}
+                  {med.prescribed_at ? ` · ${formatDateTime(med.prescribed_at)}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          nothing("No medication prescribed.")
+        )}
+      </Card>
+
+      <Card title="5 · Plan & schedule (current care plan)">
+        <div className="flex flex-col gap-3">
+          {activities.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {activities.map((activity) => {
+                // A psychiatric review is done by signing an assessment here; every other
+                // action by a delivery recorded in its Interventions module.
+                const reviews =
+                  activity.action_key === "psych_review"
+                    ? chains.filter(
+                        (chain) =>
+                          !activity.created_at ||
+                          String(chain.versions[0].signed_at) >= activity.created_at,
+                      )
+                    : [];
+                const done = reviews.length + activity.deliveries.length;
+                const last = [
+                  ...reviews.map((chain) => chain.latest.signed_at),
+                  ...activity.deliveries.map((record) => record.performed_at),
+                ]
+                  .filter(Boolean)
+                  .sort()
+                  .pop();
+                const heading = (
+                  <>
+                    <span className="mr-auto min-w-0">
+                      <span className="block font-medium text-ink-900">{activity.title}</span>
+                      <span className="block text-[12px] text-ink-500">
+                        Added {formatDateTime(activity.created_at)}
+                        {activity.created_by ? ` by ${activity.created_by}` : ""}
+                        {activity.due_at ? ` · due ${formatDateTime(activity.due_at)}` : ""}
+                        {last ? ` · last done ${formatDateTime(last)}` : " · nothing done yet"}
+                      </span>
+                    </span>
+                    {done > 0 && (
+                      <span className="text-[12px] text-ink-500">
+                        {done} {done === 1 ? "record" : "records"}
+                      </span>
+                    )}
+                    <Tag>{activity.status_display}</Tag>
+                  </>
+                );
+                if (done === 0) {
+                  return (
+                    <li
+                      key={activity.id}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-border bg-surface-bg px-3 py-2.5 text-[13.5px]"
+                    >
+                      {heading}
+                    </li>
+                  );
+                }
+                return (
+                  <li
+                    key={activity.id}
+                    className="rounded-lg border border-surface-border bg-surface-bg"
+                  >
+                    <details>
+                      <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2.5 text-[13.5px]">
+                        {heading}
+                      </summary>
+                      <ol className="flex flex-col gap-1.5 border-t border-surface-border px-3 py-2.5">
+                        {reviews.map((chain) => (
+                          <li key={chain.latest.id}>
+                            <button
+                              type="button"
+                              onClick={() => onOpenVersion(chain.latest.id)}
+                              className="flex w-full flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-ink-900 hover:bg-surface-card"
+                            >
+                              <span className="font-medium">
+                                {formatDateTime(chain.versions[0].signed_at)}
+                              </span>
+                              <span>Psychiatric assessment · {chain.versions[0].author}</span>
+                              {chain.versions.length > 1 && <Tag tone="warn">Amended</Tag>}
+                              <span className="ml-auto font-semibold text-[var(--green)]">
+                                Open summary →
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                        {activity.deliveries.map((record) => (
+                          <li key={record.id}>
+                            <Link
+                              to={interventionsLink(
+                                record.module || activity.open_module,
+                                record.id,
+                              )}
+                              className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-ink-900 hover:bg-surface-card"
+                            >
+                              <span className="font-medium">
+                                {formatDateTime(record.performed_at)}
+                              </span>
+                              <span>
+                                {record.intervention}
+                                {record.provider ? ` · ${record.provider}` : ""}
+                                {record.completes_activity ? " · completed the action" : ""}
+                              </span>
+                              <span className="ml-auto font-semibold text-[var(--green)]">
+                                Open record →
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            nothing("No care plan actions.")
+          )}
+          {sessions.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-500">
+                Scheduled sessions
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {sessions.map((session) => (
+                  <li key={session.id} className={ROW}>
+                    {formatDateTime(session.scheduled_for)} · {session.duration_minutes} min ·{" "}
+                    {session.mode === "IN_PERSON"
+                      ? "In person"
+                      : session.mode === "PHONE"
+                        ? "Phone"
+                        : "Video"}
+                    {session.provider_name ? ` · ${session.provider_name}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

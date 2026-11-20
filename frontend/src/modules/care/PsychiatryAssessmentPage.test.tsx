@@ -72,6 +72,7 @@ const workspace: PsychiatryWorkspace = {
   mse: {},
   history: [],
   review: null,
+  completed: null,
 };
 
 // Each test drives the full page through several tabs; under the parallel suite run that
@@ -419,7 +420,7 @@ describe("PsychiatryAssessmentPage risk assessment", { timeout: 30_000 }, () => 
     );
   });
 
-  it("ends every draft tab in one save bar with Save and Sign, in any order", async () => {
+  it("ends every draft tab in one save bar with Save; Sign only on Plan & Schedule", async () => {
     render(
       <MemoryRouter initialEntries={["/care/clients/patient-77/psychiatry"]}>
         <Routes>
@@ -435,7 +436,7 @@ describe("PsychiatryAssessmentPage risk assessment", { timeout: 30_000 }, () => 
     for (const tab of ["Assessment", "MSE", "Formulation & diagnosis", "Medication"]) {
       fireEvent.click(screen.getByRole("tab", { name: tab }));
       expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
-      expect(screen.getByRole("button", { name: "Sign assessment" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Sign assessment" })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
 
@@ -446,6 +447,7 @@ describe("PsychiatryAssessmentPage risk assessment", { timeout: 30_000 }, () => 
 
     fireEvent.click(screen.getByRole("tab", { name: "Plan & Schedule" }));
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign assessment" })).toBeInTheDocument();
   });
 
   it("confirms a care plan with a note and schedules the next psychiatric review session", async () => {

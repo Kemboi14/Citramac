@@ -988,6 +988,25 @@ def _psychiatry_plan_schedule(patient, plan):
                         "module": activity.module,
                         "status": activity.status,
                         "status_display": activity.get_status_display(),
+                        "created_at": _iso(activity.created_at),
+                        "created_by": services.user_display(activity.created_by),
+                        "due_at": _iso(activity.due_at),
+                        "open_module": next(
+                            iter(intervention_catalogue.modules_for_activity(activity)), ""
+                        ),
+                        "deliveries": [
+                            {
+                                "id": str(record.pk),
+                                "performed_at": _iso(record.performed_at),
+                                "provider": services.user_display(record.provider),
+                                "intervention": record.intervention,
+                                "module": record.module,
+                                "completes_activity": record.completes_activity,
+                            }
+                            for record in activity.interventions.filter(voided_at__isnull=True)
+                            .select_related("provider")
+                            .order_by("-performed_at")
+                        ],
                         "available_to_psychiatry": (
                             "psychiatry" in intervention_catalogue.modules_for_activity(activity)
                         ),

@@ -31,6 +31,7 @@ export function InterventionDrawer({
   patientId,
   clientName,
   module,
+  focusRecordId = null,
   actions,
   context,
   records,
@@ -41,6 +42,8 @@ export function InterventionDrawer({
   patientId: string;
   clientName: string;
   module: InterventionModule;
+  /** Open on History with this delivery record shown. */
+  focusRecordId?: string | null;
   actions: InterventionAction[];
   context: InterventionContext;
   records: InterventionRecord[];
@@ -68,7 +71,7 @@ export function InterventionDrawer({
   }, [bannerHeight]);
   const id = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [tab, setTab] = useState<Tab>("Record");
+  const [tab, setTab] = useState<Tab>(focusRecordId ? "History" : "Record");
   const showForm = Boolean(module.billing_service) && !OWN_DELIVERY.has(module.code);
   // Psychotherapy is a launcher: therapy episodes, a start button per session
   // type and the session history. Sessions are written on their own routed
@@ -195,7 +198,12 @@ export function InterventionDrawer({
               </>
             )}
             {tab === "History" && (
-              <ModuleHistory module={module} records={records} onCorrected={onCorrected} />
+              <ModuleHistory
+                module={module}
+                records={records}
+                focusRecordId={focusRecordId}
+                onCorrected={onCorrected}
+              />
             )}
             {tab === "Info" && <ModuleInfo module={module} />}
           </div>

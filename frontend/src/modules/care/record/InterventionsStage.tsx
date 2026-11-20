@@ -45,6 +45,8 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
   // A task link (`?module=<code>`) opens the module the task asks for.
   const [searchParams] = useSearchParams();
   const [openCode, setOpenCode] = useState<string | null>(() => searchParams.get("module"));
+  // `&record=<id>` opens that module's History on the one delivery record.
+  const [focusRecord] = useState<string | null>(() => searchParams.get("record"));
   const [status, setStatus] = useState("");
 
   const data = workspace.data;
@@ -162,6 +164,7 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
             patientId={patientId}
             clientName={clientName}
             module={openModule}
+            focusRecordId={openModule.code === searchParams.get("module") ? focusRecord : null}
             actions={actions}
             context={data.context}
             records={(records.data?.results ?? []).filter((r) =>

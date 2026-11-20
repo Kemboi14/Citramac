@@ -1214,3 +1214,26 @@ On the owner's decisions of 2026-11-19 (stated before building, §7):
 A preview shown in the browser can still be saved or screenshotted by the viewer; the control is on
 copies the system hands out, and every view is audited. Reversibility: cheap. Migration
 `client_registry 0028` adds the request table; no record changes.
+
+### 2026-11-20 — psychiatry: save and continue, sign last, assessments listed, amend never edit
+
+On the owner's decisions of 2026-11-20 (amend design confirmed before building, §7):
+
+1. **Save and come back.** Assessment, MSE, Formulation & diagnosis and Medication show only Save;
+   the draft is one record, so a client sent to the lab is continued later. **Sign assessment** is
+   only on Plan & Schedule, behind an in-page confirmation.
+2. **A list, then a record.** The module opens on the client's assessments, newest first (initial,
+   follow-up, amendment; headline diagnosis and medication count), with a draft in progress on top
+   ("Continue"). Opening one shows it section by section (assessment, MSE, formulation &
+   diagnosis, medication, the current plan & schedule) instead of disabled fields. Each plan action
+   shows when and by whom it was added, when it was last delivered, every delivery (date, what,
+   who) and a link to its Interventions module. The plain-text "Previous" tab is gone.
+3. **Amend, never edit.** "Amend" opens a new draft filled from the signed assessment, with a
+   required reason; signing it creates a new `ProgressNote` with `amends` → the original. The
+   signed original is never changed. The list shows one card per assessment (its current version,
+   tagged "Amended"); its versions are listed inside it, each openable as signed. Only its author or a holder of
+   `clinical.cosign` may amend. Diagnoses and medication keep their own correction routes (entered
+   in error; stop and re-prescribe). FHIR: DocumentReference `relatesTo` replaces + Provenance (not
+   emitted yet). Never sent to the SHR.
+
+Reversibility: cheap. Read-time views and additive notes; no signed record changes.

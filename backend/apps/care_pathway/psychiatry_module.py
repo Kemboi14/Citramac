@@ -165,17 +165,139 @@ def _assessment_state(note, user):
         "updated_at": _iso(note.updated_at),
         "signed_at": _iso(note.signed_at),
         "can_edit": note.status == "DRAFT" and note.author_id == user.id,
+        "amends": _amends_row(note),
     }
 
 
-def _history_row(note):
+def _amends_row(note):
+    if not note.amends_id:
+        return None
+    original = note.amends
+    return {
+        "id": str(original.pk),
+        "signed_at": _iso(original.signed_at),
+        "author": services.user_display(original.author),
+        "reason": str((note.data or {}).get("amend_reason") or ""),
+    }
+
+
+def _completed_summary(note):
+    """The latest signed assessment, section by section, for the read view a
+    clinician sees when the module is opened after signing: what was recorded
+    in the assessment, MSE, formulation & diagnosis and medication. Read-time
+    only — the signed note, its MSE and the encounter's own diagnosis and
+    prescription stores are the record; nothing is copied or re-rendered into
+    the note. A diagnosis entered in error is left out (never asserted)."""
+    if note is None:
+        return None
     data = note.data or {}
+    fmt = data.get("format") or STRUCTURED
+    structured = data.get("structured") or {}
+    sections = []
+    if fmt == FREE_TEXT:
+        if (data.get("free_text") or "").strip():
+            sections.append(
+                {
+                    "key": "assessment",
+                    "title": "Assessment",
+                    "items": [{"label": "", "text": data["free_text"].strip()}],
+                }
+            )
+    else:
+        items = []
+        for key, label in STRUCTURED_SECTIONS:
+            if key in ("form", "formulation"):
+                continue
+            value = structured.get(key)
+            text = (
+                _risk_to_text(value)
+                if key == "risk"
+                else (value.strip() if isinstance(value, str) else "")
+            )
+            if text:
+                items.append({"label": label, "text": text})
+        if items:
+            sections.append({"key": "assessment", "title": "Assessment", "items": items})
+    mse = data.get("mse") if isinstance(data.get("mse"), dict) else {}
+    mse_text = _mse_text(mse)
+    if mse_text:
+        sections.append(
+            {
+                "key": "mse",
+                "title": "Mental state examination",
+                "items": [{"label": "", "text": mse_text}],
+            }
+        )
+    form_items = []
+    form_text = _formulation_diagnosis_to_text(structured.get("form"))
+    if form_text:
+        form_items.append({"label": "Formulation", "text": form_text})
+    legacy = structured.get("formulation")
+    if isinstance(legacy, str) and legacy.strip():
+        form_items.append({"label": "Formulation", "text": legacy.strip()})
+    diagnoses = []
+    medications = []
+    if note.encounter_id:
+        from apps.clinical_encounter.models import DiagnosisCode, PrescriptionItem
+
+        for dx in (
+            DiagnosisCode.objects.filter(encounter_id=note.encounter_id)
+            .exclude(verification_status="ENTERED_IN_ERROR")
+            .order_by("-is_primary", "noted_at")
+        ):
+            diagnoses.append(
+                {
+                    "code": dx.shown_code,
+                    "display": dx.shown_label,
+                    "verification": dx.get_verification_status_display(),
+                    "primary": dx.is_primary,
+                }
+            )
+        for item in (
+            PrescriptionItem.objects.filter(prescription__encounter_id=note.encounter_id)
+            .select_related("drug", "prescription", "prescription__prescribed_by")
+            .order_by("prescription__prescribed_at")
+        ):
+            drug = item.drug
+            medications.append(
+                {
+                    "drug": " ".join(
+                        part for part in (drug.generic_name, drug.strength, drug.form) if part
+                    ),
+                    "dose": item.dose,
+                    "route": item.route,
+                    "frequency": item.frequency,
+                    "duration": item.duration,
+                    "prn": item.is_prn,
+                    "indication": item.indication,
+                    "prescribed_by": services.user_display(item.prescription.prescribed_by),
+                    "prescribed_at": _iso(item.prescription.prescribed_at),
+                }
+            )
+    sections.append({"key": "formulation", "title": "Formulation & diagnosis", "items": form_items})
     return {
         "id": str(note.pk),
-        "format": data.get("format") or STRUCTURED,
-        "text": note.text,
         "author": services.user_display(note.author),
         "signed_at": _iso(note.signed_at),
+        "amends": _amends_row(note),
+        "amended_by": [
+            {
+                "id": str(a.pk),
+                "signed_at": _iso(a.signed_at),
+                "author": services.user_display(a.author),
+            }
+            for a in note.addenda.filter(status="SIGNED")
+            .select_related("author")
+            .order_by("signed_at")
+        ],
+        "format": fmt,
+        # What was signed, so an amendment opens from it (never edits it).
+        "free_text": data.get("free_text") or "",
+        "structured": structured,
+        "mse": mse,
+        "sections": sections,
+        "diagnoses": diagnoses,
+        "medications": medications,
     }
 
 
@@ -222,13 +344,18 @@ def _workspace_state(patient, encounter, note, user):
         "assessment": _assessment_state(note, user),
         "carried_forward_presenting_concern": _carried_forward_presenting_concern(patient),
         "mse": mse,
+        # Every signed assessment, newest first, each section by section — the list
+        # the module opens on. An amendment is its own entry pointing at the original.
         "history": [
-            _history_row(n)
+            _completed_summary(n)
             for n in ProgressNote.objects.filter(
                 patient=patient, note_type=NOTE_TYPE, status="SIGNED"
-            ).order_by("-signed_at")[:10]
+            )
+            .select_related("author", "amends", "amends__author")
+            .order_by("-signed_at")[:20]
         ],
         "review": psychiatric_review.row(_open_review(patient)),
+        "completed": _completed_summary(_latest_note(patient, status="SIGNED")),
     }
 
 
@@ -367,8 +494,7 @@ def _clean_risk(value):
                     "structured": {
                         "risk": {
                             "rows": (
-                                f"Unknown selection(s) for {row_key}: "
-                                f"{', '.join(sorted(invalid))}."
+                                f"Unknown selection(s) for {row_key}: {', '.join(sorted(invalid))}."
                             )
                         }
                     }
@@ -384,8 +510,7 @@ def _clean_risk(value):
                     "structured": {
                         "risk": {
                             "rows": (
-                                f"A 'none' option cannot be combined with active "
-                                f"{row_key} risks."
+                                f"A 'none' option cannot be combined with active {row_key} risks."
                             )
                         }
                     }
@@ -615,20 +740,53 @@ def _save_mse(patient, encounter, user, mse, note=None):
 
 
 @transaction.atomic
+def _amendable(patient, user, note_id):
+    """The signed assessment a new amendment points at. The signed note itself is
+    never changed (guide.md §3 item 7): the amendment is a new note, signed in
+    its own right, with `amends` set. Only its author or a senior clinician
+    (`clinical.cosign`) may amend it."""
+    from apps.accounts.access import has_permission
+
+    original = ProgressNote.objects.filter(
+        pk=note_id, patient=patient, note_type=NOTE_TYPE, status="SIGNED"
+    ).first()
+    if original is None:
+        raise ValidationError({"amends": "Choose a signed psychiatric assessment to amend."})
+    if original.author_id != user.id and not has_permission(user, "clinical.cosign"):
+        raise PermissionDenied(
+            "Only the author or a senior clinician can amend a signed assessment."
+        )
+    return original
+
+
 def _save(patient, user, data):
     encounter = ensure_psychiatry_encounter(patient, user)
     note = _latest_note(patient, status="DRAFT")
     if note is not None and note.author_id != user.id:
         raise PermissionDenied("Only the author can edit this draft assessment.")
+    amends = None
+    amend_reason = str(data.get("amend_reason") or "").strip()
+    if data.get("amends"):
+        amends = _amendable(patient, user, data.get("amends"))
+        if note is not None and note.amends_id != amends.pk:
+            raise ValidationError(
+                {"detail": "Finish or sign the assessment already in progress before amending."}
+            )
+        if not amend_reason:
+            raise ValidationError({"amend_reason": "Say why the signed assessment is amended."})
     if note is None:
         note = ProgressNote.objects.create(
             organization_id=patient.organization_id,
             patient=patient,
-            episode=encounter.episode,
-            encounter=encounter,
+            # An amendment stays with the visit it corrects.
+            episode=amends.episode if amends else encounter.episode,
+            encounter=amends.encounter if amends and amends.encounter_id else encounter,
             note_type=NOTE_TYPE,
             author=user,
+            amends=amends,
         )
+    if note.amends_id:
+        encounter = note.encounter or encounter
 
     fmt = data.get("format") or STRUCTURED
     if fmt not in FORMATS:
@@ -670,6 +828,8 @@ def _save(patient, user, data):
 
     exam = _save_mse(patient, encounter, user, mse, note)
     payload = dict(note.data or {})
+    if note.amends_id and amend_reason:
+        payload["amend_reason"] = amend_reason
     payload.update(
         {
             "format": fmt,

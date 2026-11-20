@@ -1,4 +1,4 @@
-import { Fragment, useId, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
 import { ApiError } from "../../../../lib/apiClient";
 import {
@@ -17,10 +17,13 @@ import { Card, ErrorNote, Tag } from "../../shared/ui";
 export function ModuleHistory({
   module,
   records,
+  focusRecordId = null,
   onCorrected,
 }: {
   module: InterventionModule;
   records: InterventionRecord[];
+  /** The record a link asked for: scrolled to and highlighted. */
+  focusRecordId?: string | null;
   onCorrected: (message: string) => void;
 }) {
   if (records.length === 0) {
@@ -47,7 +50,12 @@ export function ModuleHistory({
         </thead>
         <tbody>
           {records.map((record) => (
-            <HistoryRow key={record.id} record={record} onCorrected={onCorrected} />
+            <HistoryRow
+              key={record.id}
+              record={record}
+              focused={record.id === focusRecordId}
+              onCorrected={onCorrected}
+            />
           ))}
         </tbody>
       </table>
@@ -57,11 +65,17 @@ export function ModuleHistory({
 
 function HistoryRow({
   record,
+  focused,
   onCorrected,
 }: {
   record: InterventionRecord;
+  focused: boolean;
   onCorrected: (message: string) => void;
 }) {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: "center" });
+  }, [focused]);
   const { accessToken } = useAuth();
   const id = useId();
   const [correcting, setCorrecting] = useState(false);
@@ -90,7 +104,18 @@ function HistoryRow({
 
   return (
     <Fragment>
-      <tr className={voided ? "opacity-60" : undefined}>
+      <tr
+        ref={rowRef}
+        aria-current={focused ? "true" : undefined}
+        className={
+          [
+            voided ? "opacity-60" : "",
+            focused ? "bg-[var(--green)]/10 outline outline-2 outline-[var(--green)]" : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
+      >
         <td className={`${TD} whitespace-nowrap`}>
           {formatDateTime(record.performed_at)}
           <div className="text-xs text-ink-500">

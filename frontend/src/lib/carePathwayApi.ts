@@ -637,6 +637,19 @@ export interface PsychiatryScheduleActivity {
   status: CarePlanActivity["status"];
   status_display: string;
   available_to_psychiatry: boolean;
+  created_at: string | null;
+  created_by: string;
+  due_at: string | null;
+  /** The Interventions module this action is delivered in. */
+  open_module: string;
+  deliveries: {
+    id: string;
+    performed_at: string | null;
+    provider: string;
+    intervention: string;
+    module: string;
+    completes_activity: boolean;
+  }[];
 }
 
 export interface PsychiatryScheduledSession {
@@ -774,6 +787,40 @@ export interface PsychiatryAssessment {
   updated_at: string;
   signed_at: string | null;
   can_edit: boolean;
+  /** Set when this draft amends a signed assessment. */
+  amends: PsychiatryAmendsRef | null;
+}
+
+export interface PsychiatryAmendsRef {
+  id: string;
+  signed_at: string | null;
+  author: string;
+  reason: string;
+}
+
+export interface PsychiatryCompleted {
+  id: string;
+  author: string;
+  signed_at: string | null;
+  amends: PsychiatryAmendsRef | null;
+  amended_by: { id: string; signed_at: string | null; author: string }[];
+  format: PsychiatryFormat;
+  free_text: string;
+  structured: Record<string, unknown>;
+  mse: PsychiatryMse;
+  sections: { key: string; title: string; items: { label: string; text: string }[] }[];
+  diagnoses: { code: string; display: string; verification: string; primary: boolean }[];
+  medications: {
+    drug: string;
+    dose: string;
+    route: string;
+    frequency: string;
+    duration: string;
+    prn: boolean;
+    indication: string;
+    prescribed_by: string;
+    prescribed_at: string | null;
+  }[];
 }
 
 export interface PsychiatryWorkspace {
@@ -783,14 +830,11 @@ export interface PsychiatryWorkspace {
   assessment: PsychiatryAssessment | null;
   carried_forward_presenting_concern: { text: string; source: "triage" | "intake" } | null;
   mse: PsychiatryMse;
-  history: {
-    id: string;
-    format: PsychiatryFormat;
-    text: string;
-    author: string;
-    signed_at: string | null;
-  }[];
+  /** Every signed assessment, newest first, section by section. */
+  history: PsychiatryCompleted[];
   review: WithdrawalReview | null;
+  /** The latest signed assessment, section by section, for the read view. */
+  completed: PsychiatryCompleted | null;
 }
 
 export interface PsychiatrySaveBody {
@@ -798,6 +842,9 @@ export interface PsychiatrySaveBody {
   free_text: string;
   structured: Record<string, unknown>;
   mse: PsychiatryMse;
+  /** A new draft that amends this signed assessment; the signed one never changes. */
+  amends?: string;
+  amend_reason?: string;
 }
 
 /** Opens or resumes the psychiatric assessment (idempotent). */
@@ -1673,6 +1720,42 @@ export interface InterventionWorkspace {
   scheduled_sessions: PsychiatryScheduledSession[];
   modules: InterventionModule[];
   context: InterventionContext;
+}
+
+/** What the record already holds for a medical review (read-only, nothing stored). */
+export interface MedicalReviewSummary {
+  vitals: VitalRow | null;
+  allergies: {
+    substance: string;
+    reaction: string;
+    severity: string;
+    type: string;
+    verified: string;
+  }[];
+  medicines: {
+    drug: string;
+    dose: string;
+    route: string;
+    frequency: string;
+    duration: string;
+    indication: string;
+    prescribed_by: string;
+    prescribed_on: string;
+  }[];
+  reported_medicines: {
+    name: string;
+    dose: string;
+    frequency: string;
+    route: string;
+    status: string;
+  }[];
+  intake: { signed_at: string | null; history: { label: string; value: string }[] };
+}
+
+export function getMedicalReviewSummary(accessToken: string, patientId: string) {
+  return apiRequest<MedicalReviewSummary>(`/care/clients/${patientId}/medical-review/summary/`, {
+    accessToken,
+  });
 }
 
 export function getInterventionWorkspace(accessToken: string, patientId: string) {
