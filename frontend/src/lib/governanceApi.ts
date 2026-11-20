@@ -224,8 +224,8 @@ export function resetStaffCredentials(accessToken: string, id: string) {
   });
 }
 
-export function listPlatformStaff(accessToken: string) {
-  return apiRequest<Paginated<Staff>>("/platform/staff/", { accessToken });
+export function listPlatformStaff(accessToken: string, page = 1) {
+  return apiRequest<Paginated<Staff>>(`/platform/staff/?page=${page}`, { accessToken });
 }
 
 export function invitePlatformStaff(accessToken: string, payload: StaffInvitePayload) {

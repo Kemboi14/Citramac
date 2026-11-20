@@ -1,3 +1,4 @@
+import { Pager } from "../../components/Pager";
 import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -47,6 +48,8 @@ const LINK_BUTTON_CLASS =
   "text-[11.5px] font-semibold text-brand-green hover:underline disabled:opacity-50";
 const BADGE_CLASS = "rounded-full px-2.5 py-1 text-xs font-semibold";
 const ERROR_CLASS = "rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red";
+/** DRF PageNumberPagination PAGE_SIZE for the paged retention lists. */
+const SERVER_PAGE_SIZE = 25;
 
 const TABS = [
   "Retention policy",
@@ -179,41 +182,26 @@ function Notice({
   );
 }
 
-function Pager<T>({
+/** The shared top-right pager over one server page (25 rows) of a list. */
+function ListPager<T>({
   page,
   data,
-  noun,
   onPage,
 }: {
   page: number;
   data: Paginated<T> | null;
-  noun: [string, string];
   onPage: (next: number) => void;
 }) {
   if (!data || data.count === 0) return null;
   return (
-    <div className="flex items-center justify-between text-sm text-ink-700">
-      <span>
-        Page {page} · {plural(data.count, noun[0], noun[1])}
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={!data.previous}
-          onClick={() => onPage(Math.max(1, page - 1))}
-          className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-40"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          disabled={!data.next}
-          onClick={() => onPage(page + 1)}
-          className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
+    <div className="flex justify-end">
+      <Pager
+        page={page}
+        pageSize={SERVER_PAGE_SIZE}
+        total={data.count}
+        shown={data.results.length}
+        onPage={onPage}
+      />
     </div>
   );
 }
@@ -489,17 +477,24 @@ function PolicySection({
 function ScansSection({ onReviewBatch }: { onReviewBatch: (batchId: string) => void }) {
   const { accessToken } = useAuth();
   const [scans, setScans] = useState<RetentionScanRun[]>([]);
+  const [scanPage, setScanPage] = useState(1);
+  const [scanData, setScanData] = useState<Paginated<RetentionScanRun> | null>(null);
+  const [latest, setLatest] = useState<RetentionScanRun | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
-    listRetentionScans(accessToken)
-      .then((data) => setScans(data.results))
+    listRetentionScans(accessToken, scanPage)
+      .then((data) => {
+        setScanData(data);
+        setScans(data.results);
+        if (scanPage === 1) setLatest(data.results[0] ?? null);
+      })
       .catch((err) => setError(errorMessage(err, "Couldn't load scan history.")))
       .finally(() => setIsLoading(false));
-  }, [accessToken]);
+  }, [accessToken, scanPage]);
 
   const runNow = async () => {
     if (!accessToken) return;
@@ -507,7 +502,12 @@ function ScansSection({ onReviewBatch }: { onReviewBatch: (batchId: string) => v
     setRunning(true);
     try {
       const run = await runRetentionScan(accessToken);
-      setScans((prev) => [run, ...prev.filter((s) => s.id !== run.id)]);
+      setLatest(run);
+      if (scanPage === 1) {
+        setScans((prev) => [run, ...prev.filter((s) => s.id !== run.id)]);
+      } else {
+        setScanPage(1);
+      }
     } catch (err) {
       setError(errorMessage(err, "Couldn't run the retention scan."));
     } finally {
@@ -515,7 +515,6 @@ function ScansSection({ onReviewBatch }: { onReviewBatch: (batchId: string) => v
     }
   };
 
-  const latest = scans[0] ?? null;
   const forecast = latest
     ? Object.entries(latest.forecast).sort(([a], [b]) => Number(a) - Number(b))
     : [];
@@ -643,9 +642,12 @@ function ScansSection({ onReviewBatch }: { onReviewBatch: (batchId: string) => v
         )}
       </section>
 
-      {scans.length > 1 && (
+      {(scans.length > 1 || scanPage > 1) && (
         <section>
-          <h2 className="mb-3 font-display text-base font-semibold text-ink-900">Scan history</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-base font-semibold text-ink-900">Scan history</h2>
+            <ListPager page={scanPage} data={scanData} onPage={setScanPage} />
+          </div>
           <ResponsiveTable columns={historyColumns} rows={scans} rowKey={(run) => run.id} />
         </section>
       )}
@@ -663,6 +665,8 @@ function BatchesSection({
   const { accessToken } = useAuth();
   const [statusFilter, setStatusFilter] = useState<ArchiveBatchStatus | "">("");
   const [batches, setBatches] = useState<ArchiveBatch[]>([]);
+  const [batchPage, setBatchPage] = useState(1);
+  const [batchData, setBatchData] = useState<Paginated<ArchiveBatch> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openBatchId, setOpenBatchId] = useState<string | null>(initialBatchId);
@@ -672,12 +676,15 @@ function BatchesSection({
     void Promise.resolve().then(() => {
       setIsLoading(true);
       setError(null);
-      return listArchiveBatches(accessToken, statusFilter || undefined)
-        .then((data) => setBatches(data.results))
+      return listArchiveBatches(accessToken, statusFilter || undefined, batchPage)
+        .then((data) => {
+          setBatchData(data);
+          setBatches(data.results);
+        })
         .catch((err) => setError(errorMessage(err, "Couldn't load archive batches.")))
         .finally(() => setIsLoading(false));
     });
-  }, [accessToken, statusFilter]);
+  }, [accessToken, statusFilter, batchPage]);
 
   const openBatch = batches.find((b) => b.id === openBatchId) ?? null;
 
@@ -746,7 +753,10 @@ function BatchesSection({
         <select
           className={FIELD_CLASS}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as ArchiveBatchStatus | "")}
+          onChange={(e) => {
+            setBatchPage(1);
+            setStatusFilter(e.target.value as ArchiveBatchStatus | "");
+          }}
           aria-label="Batch status"
         >
           <option value="">All batches</option>
@@ -769,6 +779,8 @@ function BatchesSection({
       )}
 
       {error && <p className={ERROR_CLASS}>{error}</p>}
+
+      <ListPager page={batchPage} data={batchData} onPage={setBatchPage} />
 
       {isLoading ? (
         <p className={`${CARD_CLASS} text-center text-sm text-ink-500`}>Loading…</p>
@@ -1028,6 +1040,7 @@ function BatchModal({
           </div>
         )}
         {itemsError && <p className={ERROR_CLASS}>{itemsError}</p>}
+        <ListPager page={page} data={items} onPage={setPage} />
         {itemsLoading && !items ? (
           <p className="text-center text-sm text-ink-500">Loading…</p>
         ) : (
@@ -1038,7 +1051,6 @@ function BatchModal({
             emptyMessage="This batch has no clients."
           />
         )}
-        <Pager page={page} data={items} noun={["client", "clients"]} onPage={setPage} />
       </div>
     </WideModal>
   );
@@ -1232,6 +1244,8 @@ function ArchivedSection() {
 
       {error && <p className={ERROR_CLASS}>{error}</p>}
 
+      <ListPager page={page} data={data} onPage={setPage} />
+
       {isLoading && !data ? (
         <p className={`${CARD_CLASS} text-center text-sm text-ink-500`}>Loading…</p>
       ) : (
@@ -1247,12 +1261,6 @@ function ArchivedSection() {
           }
         />
       )}
-      <Pager
-        page={page}
-        data={data}
-        noun={["archived record", "archived records"]}
-        onPage={setPage}
-      />
 
       {action && (
         <PatientActionDrawer
@@ -1399,6 +1407,7 @@ function LegalHoldsSection() {
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-base font-semibold text-ink-900">Clients on legal hold</h2>
         {heldError && <p className={ERROR_CLASS}>{heldError}</p>}
+        <ListPager page={heldPage} data={held} onPage={setHeldPage} />
         {heldLoading && !held ? (
           <p className={`${CARD_CLASS} text-center text-sm text-ink-500`}>Loading…</p>
         ) : (
@@ -1410,12 +1419,6 @@ function LegalHoldsSection() {
             emptyMessage="No clients are on legal hold."
           />
         )}
-        <Pager
-          page={heldPage}
-          data={held}
-          noun={["client on hold", "clients on hold"]}
-          onPage={setHeldPage}
-        />
       </section>
 
       <section className="flex flex-col gap-3">
@@ -1443,18 +1446,13 @@ function LegalHoldsSection() {
           <p className={`${CARD_CLASS} text-center text-sm text-ink-500`}>Searching…</p>
         ) : (
           <>
+            <ListPager page={resultsPage} data={results} onPage={setResultsPage} />
             <ResponsiveTable
               columns={columns}
               rows={results?.results ?? []}
               rowKey={(patient) => patient.id}
               renderCardActions={cardActions}
               emptyMessage="No clients match this search."
-            />
-            <Pager
-              page={resultsPage}
-              data={results}
-              noun={["client", "clients"]}
-              onPage={setResultsPage}
             />
           </>
         )}

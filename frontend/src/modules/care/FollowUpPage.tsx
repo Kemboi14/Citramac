@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -250,16 +251,26 @@ function AppointmentTable({
     sorts: APPOINTMENT_SORTS,
     searchText: appointmentSearch,
   });
+  const paged = usePaged(controls.rows);
   const valueSets = useValueSets();
   const { accessToken: token } = useAuth();
   const [recontacted, setRecontacted] = useState<Set<string>>(new Set());
   return (
     <>
-      <TableFilter
-        controls={controls}
-        label="Filter follow-ups"
-        placeholder="Filter by name or reason…"
-      />
+      <div className="flex flex-wrap items-center justify-between border-b border-surface-border">
+        <div className="min-w-0 flex-1 [&>div]:border-b-0">
+          <TableFilter
+            controls={controls}
+            label="Filter follow-ups"
+            placeholder="Filter by name or reason…"
+          />
+        </div>
+        {paged.pager.total > 0 && (
+          <div className="px-[18px] py-2">
+            <Pager {...paged.pager} />
+          </div>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className={`${TABLE} min-w-[820px]`} aria-label="Follow-up appointments">
           <thead>
@@ -283,7 +294,7 @@ function AppointmentTable({
           <tbody>
             {!rows && <TableSkeletonRows columns={6} />}
             {controls.rows.length
-              ? controls.rows.map((row) => (
+              ? paged.rows.map((row) => (
                   <tr key={row.id}>
                     <td className={TD}>
                       <Link
@@ -378,9 +389,19 @@ function UnbookedTable({
   onBook: (row: FollowUpUnbookedRow) => void;
 }) {
   const controls = useTableControls(rows, { sorts: UNBOOKED_SORTS, searchText: unbookedSearch });
+  const paged = usePaged(controls.rows);
   return (
     <>
-      <TableFilter controls={controls} label="Filter discharged clients" />
+      <div className="flex flex-wrap items-center justify-between border-b border-surface-border">
+        <div className="min-w-0 flex-1 [&>div]:border-b-0">
+          <TableFilter controls={controls} label="Filter discharged clients" />
+        </div>
+        {paged.pager.total > 0 && (
+          <div className="px-[18px] py-2">
+            <Pager {...paged.pager} />
+          </div>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className={`${TABLE} min-w-[620px]`} aria-label="Discharged without follow-up">
           <thead>
@@ -402,7 +423,7 @@ function UnbookedTable({
           <tbody>
             {!rows && <TableSkeletonRows columns={4} />}
             {controls.rows.length
-              ? controls.rows.map((row) => (
+              ? paged.rows.map((row) => (
                   <tr key={row.id}>
                     <td className={TD}>
                       <Link

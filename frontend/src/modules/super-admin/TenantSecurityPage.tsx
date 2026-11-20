@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { ScoreRing } from "../../components/charts/ScoreRing";
@@ -21,6 +22,7 @@ export function TenantSecurityPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const { rows: tenantRows, pager: tenantPager } = usePaged(dashboard?.tenants ?? []);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -56,6 +58,11 @@ export function TenantSecurityPage() {
 
       {dashboard && (
         <>
+          {dashboard.tenants.length > 0 && (
+            <div className="flex justify-end">
+              <Pager {...tenantPager} />
+            </div>
+          )}
           <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -68,7 +75,7 @@ export function TenantSecurityPage() {
                 </tr>
               </thead>
               <tbody>
-                {dashboard.tenants.map((t) => (
+                {tenantRows.map((t) => (
                   <tr
                     key={t.organization_id}
                     onClick={() => setSelectedOrgId(t.organization_id)}

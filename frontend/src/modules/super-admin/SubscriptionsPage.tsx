@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Clock, CreditCard, Lock, Plus, TrendingUp } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
+import { allPages } from "../org-admin/allPages";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -128,7 +130,7 @@ export function SubscriptionsPage() {
     try {
       const [planRes, subRes] = await Promise.all([
         listSubscriptionPlans(accessToken),
-        listSubscriptions(accessToken),
+        allPages((page) => listSubscriptions(accessToken, page)),
       ]);
       setPlans(planRes.results);
       setSubscriptions(subRes.results);
@@ -272,6 +274,7 @@ export function SubscriptionsPage() {
     if (statusFilter === "RENEWING_SOON") return sub.renewing_soon;
     return sub.status === statusFilter;
   });
+  const { rows: subscriptionRows, pager } = usePaged(filteredSubscriptions);
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -558,7 +561,7 @@ export function SubscriptionsPage() {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {STATUS_FILTERS.map((filter) => (
           <button
             key={filter.key}
@@ -573,6 +576,11 @@ export function SubscriptionsPage() {
             {filter.label}
           </button>
         ))}
+        {filteredSubscriptions.length > 0 && (
+          <div className="ml-auto">
+            <Pager {...pager} />
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
@@ -589,7 +597,7 @@ export function SubscriptionsPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredSubscriptions.map((sub) => (
+            {subscriptionRows.map((sub) => (
               <tr key={sub.id} className="border-b border-surface-border last:border-0">
                 <td className="px-4 py-3 font-medium text-ink-900">{sub.organization_name}</td>
                 <td className="px-4 py-3 text-ink-700">{sub.plan_name}</td>

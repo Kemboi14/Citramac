@@ -1,3 +1,4 @@
+import { Pager } from "../../../../components/Pager";
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../../../lib/apiClient";
 import {
@@ -374,6 +375,17 @@ function InterventionPicker({
 
       {result && (
         <div className="grid gap-2">
+          {result.page.count > 0 && (
+            <div className="flex justify-end">
+              <Pager
+                page={result.page.page}
+                pageSize={shaPageSize(result.page)}
+                total={result.page.count}
+                shown={result.page.results.length}
+                onPage={(page) => void load(result.query, page)}
+              />
+            </div>
+          )}
           {result.page.results.length === 0 ? (
             <p className="text-[12.5px] text-ink-500">
               SHA returned no interventions for that search.
@@ -445,31 +457,17 @@ function InterventionPicker({
               </table>
             </div>
           )}
-          {result.page.total_pages > 1 && (
-            <div className="flex items-center gap-2 text-[12px] text-ink-500">
-              <button
-                type="button"
-                className={`${BTN_GHOST} ${BTN_SM}`}
-                disabled={result.page.page <= 1}
-                onClick={() => void load(result.query, result.page.page - 1)}
-              >
-                Previous
-              </button>
-              Page {result.page.page} of {result.page.total_pages} · {result.page.count} found
-              <button
-                type="button"
-                className={`${BTN_GHOST} ${BTN_SM}`}
-                disabled={result.page.page >= result.page.total_pages}
-                onClick={() => void load(result.query, result.page.page + 1)}
-              >
-                Next
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
   );
+}
+
+/** SHA's page size, read back from the page it sent: a full page before the last,
+ * or what the earlier pages held when this is the last one. */
+function shaPageSize(page: ShaInterventionPage) {
+  if (page.page < page.total_pages || page.page <= 1) return Math.max(1, page.results.length);
+  return Math.max(1, Math.round((page.count - page.results.length) / (page.page - 1)));
 }
 
 /** Asks the HealthID hardware server on this PC for its workstation ID.

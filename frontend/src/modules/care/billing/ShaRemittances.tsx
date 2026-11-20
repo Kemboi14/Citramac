@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pager, usePaged } from "../../../components/Pager";
 import { ApiError } from "../../../lib/apiClient";
 import {
   fetchShaRemittance,
@@ -24,6 +25,7 @@ export function ShaRemittances({ accessToken }: { accessToken: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ branch: "", bankReference: "" });
+  const { rows: pageStatements, pager } = usePaged(statements ?? []);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,8 +132,13 @@ export function ShaRemittances({ accessToken }: { accessToken: string }) {
           <p className="text-[13px] text-ink-500">No remittance statement fetched yet.</p>
         )}
         {statements && statements.length > 0 && (
+          <div className="flex justify-end">
+            <Pager {...pager} />
+          </div>
+        )}
+        {statements && statements.length > 0 && (
           <ul className="grid gap-2">
-            {statements.map((s) => (
+            {pageStatements.map((s) => (
               <li key={s.id} className="rounded-lg border border-surface-border">
                 <details>
                   <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-[13px]">

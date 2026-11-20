@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
+import { allPages } from "../org-admin/allPages";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -50,7 +52,7 @@ export function SecurityAlertsPage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    listSecurityAlerts(accessToken)
+    allPages((page) => listSecurityAlerts(accessToken, page))
       .then((res) => setAlerts(res.results))
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : "Couldn't load security alerts."),
@@ -81,6 +83,7 @@ export function SecurityAlertsPage() {
   };
 
   const visible = filter === "All" ? alerts : alerts.filter((a) => a.status === filter);
+  const { rows: pageRows, pager } = usePaged(visible);
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -91,7 +94,7 @@ export function SecurityAlertsPage() {
         <h1 className="font-display text-2xl font-bold text-ink-900">Security Alerts</h1>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (
           <button
             key={f}
@@ -106,6 +109,11 @@ export function SecurityAlertsPage() {
             {f === "All" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
           </button>
         ))}
+        {visible.length > 0 && (
+          <div className="ml-auto">
+            <Pager {...pager} />
+          </div>
+        )}
       </div>
 
       {error && (
@@ -116,7 +124,7 @@ export function SecurityAlertsPage() {
 
       {!loading && (
         <div className="flex flex-col gap-3">
-          {visible.map((alert) => (
+          {pageRows.map((alert) => (
             <div
               key={alert.id}
               className="rounded-lg border border-surface-border bg-surface-card p-5 shadow-sm"

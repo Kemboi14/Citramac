@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Pager } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { getClientVitals, type VitalRow } from "../../lib/carePathwayApi";
@@ -211,23 +212,33 @@ function SelectedBedPanels({ bed, admission }: { bed: Bed; admission: Admission 
   const { accessToken } = useAuth();
   const [notes, setNotes] = useState<NursingNote[] | null>(null);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [notesPage, setNotesPage] = useState(1);
+  const [notesTotal, setNotesTotal] = useState(0);
   const [vitals, setVitals] = useState<VitalRow[] | null>(null);
   const [vitalsError, setVitalsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
-    listNursingNotes(accessToken, admission.id)
-      .then(
-        (res) =>
-          !cancelled &&
-          setNotes([...res.results].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at))),
-      )
+    listNursingNotes(accessToken, admission.id, notesPage)
+      .then((res) => {
+        if (cancelled) return;
+        setNotes([...res.results].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at)));
+        setNotesTotal(res.count);
+      })
       .catch(
         (err) =>
           !cancelled &&
           setNotesError(err instanceof ApiError ? err.message : "Couldn't load nursing notes."),
       );
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, admission.id, notesPage]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
     getClientVitals(accessToken, admission.patient)
       .then((res) => {
         if (cancelled) return;
@@ -258,7 +269,20 @@ function SelectedBedPanels({ bed, admission }: { bed: Bed; admission: Admission 
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card title={`Nursing Notes — Bed ${bed.bed_number} (${admission.patient_name})`}>
+      <Card
+        title={`Nursing Notes — Bed ${bed.bed_number} (${admission.patient_name})`}
+        aside={
+          notes && notesTotal > 0 ? (
+            <Pager
+              page={notesPage}
+              pageSize={25}
+              total={notesTotal}
+              shown={notes.length}
+              onPage={setNotesPage}
+            />
+          ) : undefined
+        }
+      >
         <ErrorNote>{notesError}</ErrorNote>
         {!notes && !notesError && <p className="text-[13px] text-ink-500">Loading…</p>}
         {notes && notes.length === 0 && (

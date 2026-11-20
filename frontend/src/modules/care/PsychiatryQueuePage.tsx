@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -97,6 +98,7 @@ export function PsychiatryQueuePage() {
   const shown = rows.filter((r) => inView(r, view) && (!needle || searchText(r).includes(needle)));
   // Most urgent first; within a priority the server's order (longest wait first).
   const sorted = PRIORITIES.flatMap((p) => shown.filter((r) => r.priority === p));
+  const { rows: pageRows, pager } = usePaged(sorted);
 
   const openReview = async (row: PsychiatryQueueRow) => {
     if (!accessToken) return;
@@ -184,9 +186,12 @@ export function PsychiatryQueuePage() {
 
       {sorted.length > 0 && (
         <section aria-label="Psychiatry queue">
-          <p className="mb-2.5 text-[13.5px] font-semibold text-ink-500">
-            {sorted.length} {sorted.length === 1 ? "client" : "clients"}
-          </p>
+          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13.5px] font-semibold text-ink-500">
+              {sorted.length} {sorted.length === 1 ? "client" : "clients"}
+            </p>
+            <Pager {...pager} />
+          </div>
           <div className="rounded-[14px] border border-surface-border bg-surface-card">
             <div
               aria-hidden
@@ -200,7 +205,7 @@ export function PsychiatryQueuePage() {
               <span className="sr-only">Action</span>
             </div>
             <ul className="divide-y divide-surface-border">
-              {sorted.map((row) => (
+              {pageRows.map((row) => (
                 <QueueRow
                   key={row.id}
                   row={row}

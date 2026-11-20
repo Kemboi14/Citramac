@@ -1,3 +1,4 @@
+import { Pager } from "../../components/Pager";
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -117,8 +118,6 @@ export function AuditLogPage() {
   const entries: AuditLogEntry[] = page?.results ?? [];
   const count = page?.count ?? 0;
   const pageSize = page?.page_size ?? 0;
-  const canGoPrevious = pageNumber > 1;
-  const canGoNext = pageSize > 0 && pageNumber * pageSize < count;
 
   const auditColumns: ResponsiveTableColumn<AuditLogEntry>[] = [
     {
@@ -227,38 +226,25 @@ export function AuditLogPage() {
 
       {isLoading && entries.length === 0 && <p className="text-sm text-ink-500">Loading…</p>}
 
+      {page && count > 0 && (
+        <div className="flex justify-end">
+          <Pager
+            page={pageNumber}
+            pageSize={pageSize || entries.length}
+            total={count}
+            shown={entries.length}
+            disabled={isLoading}
+            onPage={setPageNumber}
+          />
+        </div>
+      )}
+
       <ResponsiveTable
         columns={auditColumns}
         rows={entries}
         rowKey={(entry) => entry.id}
         emptyMessage="No audit log entries found."
       />
-
-      {page && count > 0 && (
-        <div className="flex items-center justify-between text-sm text-ink-700">
-          <span>
-            Page {pageNumber} · {count} {count === 1 ? "entry" : "entries"}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={!canGoPrevious}
-              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-              className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              disabled={!canGoNext}
-              onClick={() => setPageNumber((p) => p + 1)}
-              className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

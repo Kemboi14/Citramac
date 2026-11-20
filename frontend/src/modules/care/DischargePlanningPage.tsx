@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -94,6 +95,8 @@ function Worklist({ onOpen }: { onOpen: (admissionId: string) => void }) {
     sorts: RECENT_SORTS,
     searchText: recentSearch,
   });
+  const currentPaged = usePaged(current.rows);
+  const recentPaged = usePaged(recent.rows);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -125,7 +128,12 @@ function Worklist({ onOpen }: { onOpen: (admissionId: string) => void }) {
 
       <Card
         title="Current inpatients"
-        aside={<Tag>{`${data?.current.length ?? 0} in hospital`}</Tag>}
+        aside={
+          <span className="flex flex-wrap items-center gap-2">
+            {currentPaged.pager.total > 0 && <Pager {...currentPaged.pager} />}
+            <Tag>{`${data?.current.length ?? 0} in hospital`}</Tag>
+          </span>
+        }
         bodyClassName="p-0"
         className="mb-5"
       >
@@ -153,7 +161,7 @@ function Worklist({ onOpen }: { onOpen: (admissionId: string) => void }) {
             <tbody>
               {!data && <TableSkeletonRows columns={6} />}
               {current.rows.length
-                ? current.rows.map((row) => (
+                ? currentPaged.rows.map((row) => (
                     <tr key={row.admission_id}>
                       <td className={TD}>
                         <strong>{row.patient_name}</strong>
@@ -207,7 +215,12 @@ function Worklist({ onOpen }: { onOpen: (admissionId: string) => void }) {
 
       <Card
         title="Discharged in the last 30 days"
-        aside={<Tag>{`${data?.recent.length ?? 0} discharged`}</Tag>}
+        aside={
+          <span className="flex flex-wrap items-center gap-2">
+            {recentPaged.pager.total > 0 && <Pager {...recentPaged.pager} />}
+            <Tag>{`${data?.recent.length ?? 0} discharged`}</Tag>
+          </span>
+        }
         bodyClassName="p-0"
       >
         <TableFilter controls={recent} label="Filter recent discharges" />
@@ -232,7 +245,7 @@ function Worklist({ onOpen }: { onOpen: (admissionId: string) => void }) {
             <tbody>
               {!data && <TableSkeletonRows columns={6} />}
               {recent.rows.length
-                ? recent.rows.map((row) => (
+                ? recentPaged.rows.map((row) => (
                     <tr key={row.admission_id}>
                       <td className={TD}>
                         <strong>{row.patient_name}</strong>

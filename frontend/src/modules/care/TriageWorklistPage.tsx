@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock3, Info } from "lucide-react";
@@ -43,6 +44,7 @@ export function TriageWorklistPage() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   // Starts in the server's order (overdue first, then due time); headers re-sort.
   const controls = useTableControls(rows, { sorts: SORTS, searchText });
+  const paged = usePaged(controls.rows);
 
   const load = useCallback(
     (isCancelled: () => boolean) => {
@@ -127,11 +129,20 @@ export function TriageWorklistPage() {
         </div>
       )}
       <Card bodyClassName="overflow-x-auto" className="overflow-hidden">
-        <TableFilter
-          controls={controls}
-          label="Filter the triage list"
-          placeholder="Filter by name or number…"
-        />
+        <div className="flex flex-wrap items-center justify-between border-b border-surface-border">
+          <div className="min-w-0 flex-1 [&>div]:border-b-0">
+            <TableFilter
+              controls={controls}
+              label="Filter the triage list"
+              placeholder="Filter by name or number…"
+            />
+          </div>
+          {paged.pager.total > 0 && (
+            <div className="px-[18px] py-2">
+              <Pager {...paged.pager} />
+            </div>
+          )}
+        </div>
         <table className={`${TABLE} min-w-[780px]`} aria-label="Triage awaiting and re-checks due">
           <thead>
             <tr>
@@ -165,7 +176,7 @@ export function TriageWorklistPage() {
                 </td>
               </tr>
             )}
-            {controls.rows.map((row) => (
+            {paged.rows.map((row) => (
               <TriageWorklistRow
                 key={row.id}
                 row={row}

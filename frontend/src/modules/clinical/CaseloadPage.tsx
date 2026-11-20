@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { usePatientContext } from "../../clinical/usePatientContext";
 import { MetricTile } from "../../components/MetricTile";
+import { Pager, usePaged } from "../../components/Pager";
 import { ApiError } from "../../lib/apiClient";
 import { getCaseload, type CaseloadRow } from "../../lib/caseloadApi";
 import { initialsAndLabel } from "../../shells/userDisplay";
@@ -83,7 +84,7 @@ export function CaseloadPage() {
   }, [accessToken]);
 
   const controls = useTableControls(isLoading ? null : rows, { sorts: SORTS, searchText });
-  const visible = controls.rows;
+  const { rows: visible, pager } = usePaged(controls.rows);
   const inpatients = rows.filter((row) => row.care_setting === "INPATIENT").length;
   const redOrange = rows.filter(
     (row) => row.priority === "RED" || row.priority === "ORANGE",
@@ -122,8 +123,11 @@ export function CaseloadPage() {
       <section className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <div className="flex items-center justify-between gap-2.5 border-b border-surface-border px-[18px] py-3.5 text-[13px] font-bold text-ink-900">
           Assigned Clients
-          <span className={TAG}>
-            {rows.length} {rows.length === 1 ? "client" : "clients"}
+          <span className="flex flex-wrap items-center gap-2.5">
+            <span className={TAG}>
+              {rows.length} {rows.length === 1 ? "client" : "clients"}
+            </span>
+            <Pager {...pager} disabled={isLoading} />
           </span>
         </div>
         <div className="p-[18px]">

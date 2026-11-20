@@ -1,6 +1,7 @@
 import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -131,6 +132,7 @@ export function PlatformBreachIncidentsPage() {
   const [showReport, setShowReport] = useState(false);
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
   const now = useNow(30_000);
+  const { rows: incidentRows, pager } = usePaged(incidents ?? []);
 
   const loadList = useCallback(() => {
     if (!accessToken) return;
@@ -235,6 +237,12 @@ export function PlatformBreachIncidentsPage() {
         />
       )}
 
+      {incidents !== null && incidents.length > 0 && (
+        <div className="flex justify-end">
+          <Pager {...pager} />
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="border-b border-surface-border bg-surface-bg text-xs uppercase tracking-wide text-ink-500">
@@ -265,7 +273,7 @@ export function PlatformBreachIncidentsPage() {
                 </td>
               </tr>
             )}
-            {incidents?.map((incident) => (
+            {incidentRows.map((incident) => (
               <tr
                 key={incident.id}
                 onClick={() => selectIncident(incident.id)}

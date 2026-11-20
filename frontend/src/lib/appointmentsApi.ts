@@ -33,9 +33,16 @@ export interface Appointment {
 
 export function listAppointments(
   accessToken: string,
-  params?: { from?: string; to?: string; status?: AppointmentStatus; patient?: string },
+  params?: {
+    from?: string;
+    to?: string;
+    status?: AppointmentStatus;
+    patient?: string;
+    page?: number;
+  },
 ) {
   const query = new URLSearchParams();
+  if (params?.page && params.page > 1) query.set("page", String(params.page));
   if (params?.from) query.set("from", params.from);
   if (params?.to) query.set("to", params.to);
   if (params?.status) query.set("status", params.status);

@@ -24,8 +24,8 @@ export interface ErasureRequest {
   created_at: string;
 }
 
-export function listErasureRequests(accessToken: string) {
-  return apiRequest<Paginated<ErasureRequest>>("/erasure-requests/", { accessToken });
+export function listErasureRequests(accessToken: string, page = 1) {
+  return apiRequest<Paginated<ErasureRequest>>(`/erasure-requests/?page=${page}`, { accessToken });
 }
 
 export function createErasureRequest(accessToken: string, patientId: string, reason: string) {

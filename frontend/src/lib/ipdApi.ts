@@ -63,8 +63,12 @@ export interface Bed {
   occupant_name: string | null;
 }
 
-export function listBeds(accessToken: string, wardId?: string) {
-  return apiRequest<Paginated<Bed>>(`/ipd/beds/${wardId ? `?ward=${wardId}` : ""}`, {
+export function listBeds(accessToken: string, wardId?: string, page = 1) {
+  const params = new URLSearchParams();
+  if (wardId) params.set("ward", wardId);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return apiRequest<Paginated<Bed>>(`/ipd/beds/${query ? `?${query}` : ""}`, {
     accessToken,
   });
 }
@@ -277,10 +281,12 @@ export interface MedicationAdministration {
   notes: string;
 }
 
-export function listMarEntries(accessToken: string, admissionId: string) {
-  return apiRequest<Paginated<MedicationAdministration>>(`/ipd/mar/?admission=${admissionId}`, {
-    accessToken,
-  });
+export function listMarEntries(accessToken: string, admissionId: string, page = 1) {
+  const pageQuery = page > 1 ? `&page=${page}` : "";
+  return apiRequest<Paginated<MedicationAdministration>>(
+    `/ipd/mar/?admission=${admissionId}${pageQuery}`,
+    { accessToken },
+  );
 }
 
 export function scheduleMarEntry(
@@ -318,10 +324,12 @@ export interface NursingNote {
   recorded_at: string;
 }
 
-export function listNursingNotes(accessToken: string, admissionId: string) {
-  return apiRequest<Paginated<NursingNote>>(`/ipd/nursing-notes/?admission=${admissionId}`, {
-    accessToken,
-  });
+export function listNursingNotes(accessToken: string, admissionId: string, page = 1) {
+  const pageQuery = page > 1 ? `&page=${page}` : "";
+  return apiRequest<Paginated<NursingNote>>(
+    `/ipd/nursing-notes/?admission=${admissionId}${pageQuery}`,
+    { accessToken },
+  );
 }
 
 export function addNursingNote(

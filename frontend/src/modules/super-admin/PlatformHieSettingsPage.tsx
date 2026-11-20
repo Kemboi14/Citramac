@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Copy, History, Link2, PlugZap } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -106,6 +107,7 @@ export function PlatformHieSettingsPage() {
   const [registration, setRegistration] = useState<HieCallbackBranchResult[] | null>(null);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<HieTransaction[] | null>(null);
+  const { rows: transactionRows, pager: transactionPager } = usePaged(transactions ?? []);
   const [logError, setLogError] = useState<string | null>(null);
 
   const apply = (s: PlatformHieSettings) => {
@@ -683,6 +685,11 @@ export function PlatformHieSettingsPage() {
           <p className="text-sm text-ink-500">No HIE transactions yet.</p>
         )}
         {transactions && transactions.length > 0 && (
+          <div className="mb-2 flex justify-end">
+            <Pager {...transactionPager} />
+          </div>
+        )}
+        {transactions && transactions.length > 0 && (
           <div className="overflow-x-auto rounded-md border border-surface-border">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -698,7 +705,7 @@ export function PlatformHieSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((t) => (
+                {transactionRows.map((t) => (
                   <tr key={t.id} className="border-b border-surface-border last:border-0">
                     <td className={`${TD_CLASS} whitespace-nowrap`}>
                       {new Date(t.at).toLocaleString()}

@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 /**
  * The record pager at the top right of a list, as in Odoo: "1–25 / 230" with
@@ -54,4 +55,28 @@ export function Pager({
       </span>
     </div>
   );
+}
+
+/**
+ * Pages a list already held in memory (one that is not paged by the server), for
+ * the same <Pager>. Goes back to page 1 when the list's length changes (a new
+ * filter or search), and never points past the last page.
+ */
+export function usePaged<T>(items: readonly T[], pageSize = 25) {
+  const [state, setState] = useState({ page: 1, length: items.length });
+  const page =
+    state.length === items.length
+      ? Math.min(state.page, Math.max(1, Math.ceil(items.length / pageSize)))
+      : 1;
+  return {
+    page,
+    rows: items.slice((page - 1) * pageSize, page * pageSize),
+    pager: {
+      page,
+      pageSize,
+      total: items.length,
+      shown: Math.min(pageSize, Math.max(0, items.length - (page - 1) * pageSize)),
+      onPage: (next: number) => setState({ page: next, length: items.length }),
+    },
+  };
 }

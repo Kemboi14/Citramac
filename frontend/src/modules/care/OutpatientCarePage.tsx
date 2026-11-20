@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { AutoResizeTextarea } from "./shared/AutoResizeTextarea";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -87,6 +88,7 @@ export function OutpatientCarePage({ kind }: { kind: Kind }) {
 
   const list = rows ?? [];
   const selected = list.find((r) => r.patient_id === selectedId) ?? list[0];
+  const paged = usePaged(list);
 
   return (
     <div className="flex animate-fade-in flex-col gap-5">
@@ -119,7 +121,11 @@ export function OutpatientCarePage({ kind }: { kind: Kind }) {
       <ErrorNote>{error}</ErrorNote>
       <ErrorNote>{valueSets.error}</ErrorNote>
 
-      <Card title={`Active Outpatients (${list.length})`} bodyClassName="p-0">
+      <Card
+        title={`Active Outpatients (${list.length})`}
+        aside={paged.pager.total > 0 ? <Pager {...paged.pager} /> : undefined}
+        bodyClassName="p-0"
+      >
         <div className="overflow-x-auto">
           <table className={`${TABLE} min-w-[720px]`}>
             <thead>
@@ -148,7 +154,7 @@ export function OutpatientCarePage({ kind }: { kind: Kind }) {
                   </td>
                 </tr>
               )}
-              {list.map((row) => {
+              {paged.rows.map((row) => {
                 const isSelected = row.patient_id === selected?.patient_id;
                 return (
                   <tr
@@ -487,13 +493,23 @@ function ProgressNotesCard({
 }) {
   const { accessToken } = useAuth();
   const [sessions, setSessions] = useState<PsychotherapySession[] | null>(null);
+  const [total, setTotal] = useState(0);
+  // Back to the first page when another client or session type is shown.
+  const listKey = `${client.patient_id}:${sessionType}`;
+  const [paging, setPaging] = useState({ key: listKey, page: 1 });
+  const page = paging.key === listKey ? paging.page : 1;
+  const setPage = (next: number) => setPaging({ key: listKey, page: next });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
-    listPsychotherapySessions(accessToken, { patient: client.patient_id, sessionType })
-      .then((res) => !cancelled && setSessions(res.results))
+    listPsychotherapySessions(accessToken, { patient: client.patient_id, sessionType, page })
+      .then((res) => {
+        if (cancelled) return;
+        setSessions(res.results);
+        setTotal(res.count);
+      })
       .catch(
         (err) =>
           !cancelled &&
@@ -502,10 +518,17 @@ function ProgressNotesCard({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, client.patient_id, sessionType]);
+  }, [accessToken, client.patient_id, sessionType, page]);
 
   return (
-    <Card title="Progress Notes">
+    <Card
+      title="Progress Notes"
+      aside={
+        total > 0 && sessions ? (
+          <Pager page={page} pageSize={25} total={total} shown={sessions.length} onPage={setPage} />
+        ) : undefined
+      }
+    >
       <ErrorNote>{error}</ErrorNote>
       {!sessions && !error && <p className="text-[13px] text-ink-500">Loading…</p>}
       {sessions && sessions.length === 0 && (

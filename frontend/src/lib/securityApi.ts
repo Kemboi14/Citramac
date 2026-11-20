@@ -100,8 +100,13 @@ export interface SecurityAlert {
   resolved_at: string | null;
 }
 
-export function listSecurityAlerts(accessToken: string) {
-  return apiRequest<{ count: number; results: SecurityAlert[] }>("/security/alerts/", {
+export function listSecurityAlerts(accessToken: string, page = 1) {
+  return apiRequest<{
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: SecurityAlert[];
+  }>(`/security/alerts/?page=${page}`, {
     accessToken,
   });
 }

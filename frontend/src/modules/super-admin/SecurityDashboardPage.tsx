@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { StatCard } from "../../components/StatCard";
@@ -32,6 +33,7 @@ export function SecurityDashboardPage() {
   const [dashboard, setDashboard] = useState<SecurityDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { rows: tenantRows, pager: tenantPager } = usePaged(dashboard?.tenants ?? []);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -104,6 +106,11 @@ export function SecurityDashboardPage() {
             />
           </div>
 
+          {dashboard.tenants.length > 0 && (
+            <div className="flex justify-end">
+              <Pager {...tenantPager} />
+            </div>
+          )}
           <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -120,7 +127,7 @@ export function SecurityDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {dashboard.tenants.map((t: TenantSecurityRow) => (
+                {tenantRows.map((t: TenantSecurityRow) => (
                   <tr
                     key={t.organization_id}
                     className="border-b border-surface-border last:border-0"

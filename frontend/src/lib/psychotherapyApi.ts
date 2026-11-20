@@ -41,9 +41,10 @@ export function isFullSession(session: PsychotherapySession): session is Psychot
 
 export function listPsychotherapySessions(
   accessToken: string,
-  params?: { patient?: string; sessionType?: PsychotherapySessionType },
+  params?: { patient?: string; sessionType?: PsychotherapySessionType; page?: number },
 ) {
   const query = new URLSearchParams();
+  if (params?.page && params.page > 1) query.set("page", String(params.page));
   if (params?.patient) query.set("patient", params.patient);
   if (params?.sessionType) query.set("session_type", params.sessionType);
   const suffix = query.toString() ? `?${query.toString()}` : "";

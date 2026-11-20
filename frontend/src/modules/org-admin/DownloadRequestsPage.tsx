@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -37,6 +38,7 @@ export function DownloadRequestsPage() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { rows: pageRows, pager } = usePaged(rows);
 
   const load = useCallback(() => {
     if (!accessToken) return;
@@ -77,7 +79,7 @@ export function DownloadRequestsPage() {
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (
           <button
             key={f.label}
@@ -92,6 +94,11 @@ export function DownloadRequestsPage() {
             {f.label}
           </button>
         ))}
+        {rows.length > 0 && (
+          <div className="ml-auto">
+            <Pager {...pager} />
+          </div>
+        )}
       </div>
 
       {error && (
@@ -105,7 +112,7 @@ export function DownloadRequestsPage() {
           </p>
         )}
         <ul>
-          {rows.map((r) => {
+          {pageRows.map((r) => {
             const own = r.requested_by_id === claims?.user_id;
             return (
               <li

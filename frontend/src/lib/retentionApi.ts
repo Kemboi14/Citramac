@@ -160,17 +160,22 @@ export function updateRetentionPolicy(
   });
 }
 
-export function listRetentionScans(accessToken: string) {
-  return apiRequest<Paginated<RetentionScanRun>>("/retention/scans/", { accessToken });
+export function listRetentionScans(accessToken: string, page = 1) {
+  return apiRequest<Paginated<RetentionScanRun>>(`/retention/scans/?page=${page}`, {
+    accessToken,
+  });
 }
 
 export function runRetentionScan(accessToken: string) {
   return apiRequest<RetentionScanRun>("/retention/scans/run/", { method: "POST", accessToken });
 }
 
-export function listArchiveBatches(accessToken: string, status?: ArchiveBatchStatus) {
-  const query = status ? `?status=${status}` : "";
-  return apiRequest<Paginated<ArchiveBatch>>(`/retention/batches/${query}`, { accessToken });
+export function listArchiveBatches(accessToken: string, status?: ArchiveBatchStatus, page = 1) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (status) params.set("status", status);
+  return apiRequest<Paginated<ArchiveBatch>>(`/retention/batches/?${params.toString()}`, {
+    accessToken,
+  });
 }
 
 export function listArchiveBatchItems(accessToken: string, batchId: string, page = 1) {

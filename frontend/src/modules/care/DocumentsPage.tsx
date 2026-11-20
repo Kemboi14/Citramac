@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -51,6 +52,7 @@ export function DocumentsPage() {
 
   const count = rows?.length ?? 0;
   const controls = useTableControls(rows, { sorts: SORTS, searchText });
+  const paged = usePaged(controls.rows);
 
   return (
     <div className="animate-fade-in">
@@ -78,7 +80,12 @@ export function DocumentsPage() {
 
       <Card
         title="Signed triage assessments"
-        aside={<Tag>{`${count} ${count === 1 ? "document" : "documents"}`}</Tag>}
+        aside={
+          <span className="flex flex-wrap items-center gap-2">
+            {paged.pager.total > 0 && <Pager {...paged.pager} />}
+            <Tag>{`${count} ${count === 1 ? "document" : "documents"}`}</Tag>
+          </span>
+        }
         bodyClassName="p-0"
       >
         <TableFilter
@@ -109,7 +116,7 @@ export function DocumentsPage() {
             <tbody>
               {!rows && !error && <TableSkeletonRows columns={6} />}
               {controls.rows.length > 0
-                ? controls.rows.map((row) => (
+                ? paged.rows.map((row) => (
                     <tr key={row.id} className="hover:bg-surface-bg">
                       <td className={TD}>
                         <strong>{row.document || "Signed triage assessment"}</strong>

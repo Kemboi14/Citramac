@@ -1,5 +1,6 @@
 import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import {
   BreachAssessmentPanel,
@@ -867,6 +868,7 @@ export function BreachIncidentsPage() {
   );
   const refresh = () => setVersion((v) => v + 1);
   const incidents = list.data?.results ?? null;
+  const { rows: incidentRows, pager } = usePaged(incidents ?? []);
 
   return (
     <div className="flex flex-col gap-5 animate-fade-in">
@@ -928,7 +930,11 @@ export function BreachIncidentsPage() {
           )}
         </>
       ) : (
-        <Card title="Incidents" bodyClassName="p-0">
+        <Card
+          title="Incidents"
+          aside={incidents !== null && incidents.length > 0 ? <Pager {...pager} /> : undefined}
+          bodyClassName="p-0"
+        >
           <div className="p-[18px] pb-0">
             <ErrorNote>{list.error}</ErrorNote>
           </div>
@@ -953,7 +959,7 @@ export function BreachIncidentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {incidents.map((incident) => (
+                  {incidentRows.map((incident) => (
                     <tr
                       key={incident.id}
                       className="cursor-pointer hover:bg-surface-bg"

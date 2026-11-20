@@ -93,11 +93,15 @@ export interface ListBranchesParams {
   mhp_registration_status?: string;
   license_status?: LicenseStatus;
   missing_identifiers?: "true";
+  /** DRF page number (25 a page); omitted = the first page. */
+  page?: number;
 }
 
 export function listBranches(accessToken: string, params: ListBranchesParams = {}) {
   const query = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => Boolean(v)) as [string, string][],
+    Object.entries(params)
+      .filter(([, v]) => Boolean(v))
+      .map(([k, v]) => [k, String(v)]),
   ).toString();
   return apiRequest<Paginated<Branch>>(`/platform/branches/${query ? `?${query}` : ""}`, {
     accessToken,

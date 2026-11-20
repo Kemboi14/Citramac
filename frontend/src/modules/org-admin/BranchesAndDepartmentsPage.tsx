@@ -5,6 +5,8 @@ import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
+import { allPages } from "./allPages";
+import { Pager, usePaged } from "../../components/Pager";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 import { LocationFields } from "../../components/LocationFields";
 import {
@@ -138,8 +140,8 @@ export function BranchesAndDepartmentsPage() {
   const load = async () => {
     if (!accessToken) return;
     const [branchRes, deptRes] = await Promise.all([
-      listBranches(accessToken),
-      listDepartments(accessToken),
+      allPages((page) => listBranches(accessToken, { page })),
+      allPages((page) => listDepartments(accessToken, { page })),
     ]);
     setBranches(branchRes.results);
     setDepartments(deptRes.results);
@@ -277,6 +279,9 @@ export function BranchesAndDepartmentsPage() {
 
   const departmentCount = (branchId: string) =>
     departments.filter((d) => d.branch === branchId).length;
+
+  const { rows: branchRows, pager: branchPager } = usePaged(branches);
+  const { rows: departmentRows, pager: departmentPager } = usePaged(departments);
 
   const branchColumns: ResponsiveTableColumn<Branch>[] = [
     {
@@ -423,14 +428,17 @@ export function BranchesAndDepartmentsPage() {
                 <Building2 size={16} className="text-brand-green" />
                 Branches / Locations
               </h2>
-              <button type="button" className={BUTTON_CLASS} onClick={openNewBranch}>
-                <Plus size={14} />
-                Add Branch
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                {branches.length > 0 && <Pager {...branchPager} />}
+                <button type="button" className={BUTTON_CLASS} onClick={openNewBranch}>
+                  <Plus size={14} />
+                  Add Branch
+                </button>
+              </div>
             </div>
             <ResponsiveTable
               columns={branchColumns}
-              rows={branches}
+              rows={branchRows}
               rowKey={(b) => b.id}
               emptyMessage="No branches yet — add your first one."
             />
@@ -442,20 +450,23 @@ export function BranchesAndDepartmentsPage() {
                 <LayoutGrid size={16} className="text-brand-green" />
                 Departments
               </h2>
-              <button
-                type="button"
-                className={BUTTON_CLASS}
-                onClick={openNewDepartment}
-                disabled={branches.length === 0}
-                title={branches.length === 0 ? "Add a branch first" : undefined}
-              >
-                <Plus size={14} />
-                Add Department
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                {departments.length > 0 && <Pager {...departmentPager} />}
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  onClick={openNewDepartment}
+                  disabled={branches.length === 0}
+                  title={branches.length === 0 ? "Add a branch first" : undefined}
+                >
+                  <Plus size={14} />
+                  Add Department
+                </button>
+              </div>
             </div>
             <ResponsiveTable
               columns={departmentColumns}
-              rows={departments}
+              rows={departmentRows}
               rowKey={(d) => d.id}
               emptyMessage="No departments yet."
             />

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { BedDouble, Pencil, Plus } from "lucide-react";
+import { allPages } from "./allPages";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listBranches, type Branch } from "../../lib/branchesApi";
@@ -109,7 +111,7 @@ export function WardBedManagementPage() {
     if (!accessToken) return;
     setBedsLoading(true);
     try {
-      const res = await listBeds(accessToken, wardId);
+      const res = await allPages((page) => listBeds(accessToken, wardId, page));
       setBeds(res.results);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load beds.");
@@ -226,6 +228,7 @@ export function WardBedManagementPage() {
   };
 
   const selectedWard = summary?.wards.find((w) => w.id === selectedWardId) ?? null;
+  const { rows: bedRows, pager: bedPager } = usePaged(beds);
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -419,8 +422,14 @@ export function WardBedManagementPage() {
               )}
 
               {!bedsLoading && beds.length > 0 && (
+                <div className="flex justify-end">
+                  <Pager {...bedPager} />
+                </div>
+              )}
+
+              {!bedsLoading && beds.length > 0 && (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,1fr))] gap-3">
-                  {beds.map((bed) =>
+                  {bedRows.map((bed) =>
                     bedEdit?.id === bed.id ? (
                       <form
                         key={bed.id}

@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Search } from "lucide-react";
@@ -104,6 +105,7 @@ export function PsychiatryAssessmentsPage() {
   const shown = rows.filter(
     (row) => inView(row, view) && (!needle || searchText(row).includes(needle)),
   );
+  const paged = usePaged(shown);
   const dueToday = rows.filter((row) => row.next_scheduled_session?.due_state === "TODAY").length;
   const overdue = rows.filter((row) => row.next_scheduled_session?.due_state === "OVERDUE").length;
 
@@ -181,6 +183,7 @@ export function PsychiatryAssessmentsPage() {
       {shown.length > 0 && (
         <Card
           title={`${shown.length} ${shown.length === 1 ? "client" : "clients"}`}
+          aside={<Pager {...paged.pager} />}
           bodyClassName=""
         >
           <div className="overflow-x-auto">
@@ -199,7 +202,7 @@ export function PsychiatryAssessmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((row) => {
+                {paged.rows.map((row) => {
                   const details = [
                     row.age !== null ? `${row.age} yrs` : "",
                     row.sex ? row.sex.charAt(0) + row.sex.slice(1).toLowerCase() : "",

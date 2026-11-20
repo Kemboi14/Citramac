@@ -24,6 +24,10 @@ import { NursingCarePlan } from "../care/record/plan/NursingCarePlan";
 import { formErrorSummary } from "../../lib/formErrors";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
+import { Pager } from "../../components/Pager";
+
+// The server pages MAR entries and nursing notes (REST_FRAMEWORK PAGE_SIZE).
+const NURSING_PAGE_SIZE = 25;
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -52,9 +56,18 @@ export function NursingCarePage() {
   const [admission, setAdmission] = useState<Admission | null>(null);
   const [marEntries, setMarEntries] = useState<MedicationAdministration[]>([]);
   const [notes, setNotes] = useState<NursingNote[]>([]);
+  const [marCount, setMarCount] = useState(0);
+  const [notesCount, setNotesCount] = useState(0);
+  // Each list's page belongs to the admission it was chosen on, so another client starts at 1.
+  const [marPaging, setMarPaging] = useState({ admissionId: "", page: 1 });
+  const [notesPaging, setNotesPaging] = useState({ admissionId: "", page: 1 });
   const [reviewRequest, setReviewRequest] = useState<PsychiatricReviewRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const pageFor = (paging: { admissionId: string; page: number }, admissionId: string) =>
+    paging.admissionId === admissionId ? paging.page : 1;
+  const marPage = admission ? pageFor(marPaging, admission.id) : 1;
+  const notesPage = admission ? pageFor(notesPaging, admission.id) : 1;
 
   useEffect(() => {
     if (!accessToken || !selected) return;
@@ -80,12 +93,14 @@ export function NursingCarePage() {
     setAdmission(active ?? null);
     if (active) {
       const [mar, noteRes, review] = await Promise.all([
-        listMarEntries(accessToken, active.id),
-        listNursingNotes(accessToken, active.id),
+        listMarEntries(accessToken, active.id, pageFor(marPaging, active.id)),
+        listNursingNotes(accessToken, active.id, pageFor(notesPaging, active.id)),
         getPsychiatricReviewRequest(accessToken, active.id),
       ]);
       setMarEntries(mar.results);
+      setMarCount(mar.count);
       setNotes(noteRes.results);
+      setNotesCount(noteRes.count);
       setReviewRequest(review);
     } else {
       setMarEntries([]);
@@ -109,16 +124,18 @@ export function NursingCarePage() {
           return;
         }
         const [mar, noteRes, review] = await Promise.all([
-          listMarEntries(accessToken, active.id),
-          listNursingNotes(accessToken, active.id),
+          listMarEntries(accessToken, active.id, pageFor(marPaging, active.id)),
+          listNursingNotes(accessToken, active.id, pageFor(notesPaging, active.id)),
           getPsychiatricReviewRequest(accessToken, active.id),
         ]);
         setMarEntries(mar.results);
+        setMarCount(mar.count);
         setNotes(noteRes.results);
+        setNotesCount(noteRes.count);
         setReviewRequest(review);
       })
       .catch(() => setError("Couldn't load nursing records."));
-  }, [accessToken, selected]);
+  }, [accessToken, selected, marPaging, notesPaging]);
 
   if (!selected) {
     return <ClientPicker action="record medication administration for" />;
@@ -265,6 +282,17 @@ export function NursingCarePage() {
             Schedule
           </button>
         </div>
+        {marCount > 0 && (
+          <div className="flex justify-end">
+            <Pager
+              page={marPage}
+              pageSize={NURSING_PAGE_SIZE}
+              total={marCount}
+              shown={marEntries.length}
+              onPage={(page) => setMarPaging({ admissionId: admission.id, page })}
+            />
+          </div>
+        )}
         {marEntries.length === 0 && <p className="text-sm text-ink-500">No MAR entries yet.</p>}
         {marEntries.map((entry) => (
           <div
@@ -335,6 +363,17 @@ export function NursingCarePage() {
             Add note
           </button>
         </div>
+        {notesCount > 0 && (
+          <div className="flex justify-end">
+            <Pager
+              page={notesPage}
+              pageSize={NURSING_PAGE_SIZE}
+              total={notesCount}
+              shown={notes.length}
+              onPage={(page) => setNotesPaging({ admissionId: admission.id, page })}
+            />
+          </div>
+        )}
         {notes.length === 0 && <p className="text-sm text-ink-500">No nursing notes yet.</p>}
         {notes.map((note) => (
           <div

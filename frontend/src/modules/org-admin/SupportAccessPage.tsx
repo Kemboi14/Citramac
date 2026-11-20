@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -193,6 +194,7 @@ export function SupportAccessPage() {
   );
   const refresh = () => setVersion((v) => v + 1);
   const grants = data?.results ?? null;
+  const { rows: grantRows, pager } = usePaged(grants ?? []);
   const pending = grants?.filter((g) => g.status === "REQUESTED") ?? [];
   const active = grants?.filter((g) => g.is_active) ?? [];
 
@@ -239,7 +241,11 @@ export function SupportAccessPage() {
         </Card>
       )}
 
-      <Card title="All requests" bodyClassName="p-0">
+      <Card
+        title="All requests"
+        aside={grants !== null && grants.length > 0 ? <Pager {...pager} /> : undefined}
+        bodyClassName="p-0"
+      >
         {grants === null ? (
           !error && <p className="px-5 py-8 text-sm text-ink-500">Loading…</p>
         ) : grants.length === 0 ? (
@@ -264,7 +270,7 @@ export function SupportAccessPage() {
                 </tr>
               </thead>
               <tbody>
-                {grants.map((grant) => (
+                {grantRows.map((grant) => (
                   <tr
                     key={grant.id}
                     className={grant.status === "REQUESTED" ? "bg-priority-orange-tint" : ""}

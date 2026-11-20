@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pager } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
@@ -9,6 +10,9 @@ import {
   listErasureRequests,
   type ErasureRequest,
 } from "../../lib/erasureApi";
+
+/** DRF PageNumberPagination PAGE_SIZE for /erasure-requests/. */
+const ERASURE_PAGE_SIZE = 25;
 
 const FIELD_CLASS =
   "rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -34,6 +38,8 @@ export function ErasureRequestsPage() {
   const { accessToken } = useAuth();
   const [patients, setPatients] = useState<PatientListRow[]>([]);
   const [requests, setRequests] = useState<ErasureRequest[]>([]);
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestCount, setRequestCount] = useState(0);
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,21 +49,23 @@ export function ErasureRequestsPage() {
     if (!accessToken) return;
     const [patientRes, requestRes] = await Promise.all([
       listPatients(accessToken),
-      listErasureRequests(accessToken),
+      listErasureRequests(accessToken, requestPage),
     ]);
     setPatients(patientRes.results);
     setRequests(requestRes.results);
+    setRequestCount(requestRes.count);
   };
 
   useEffect(() => {
     if (!accessToken) return;
-    Promise.all([listPatients(accessToken), listErasureRequests(accessToken)])
+    Promise.all([listPatients(accessToken), listErasureRequests(accessToken, requestPage)])
       .then(([patientRes, requestRes]) => {
         setPatients(patientRes.results);
         setRequests(requestRes.results);
+        setRequestCount(requestRes.count);
       })
       .catch(() => setError("Couldn't load erasure requests."));
-  }, [accessToken]);
+  }, [accessToken, requestPage]);
 
   const patientName = (id: string) => {
     const patient = patients.find((p) => p.id === id);
@@ -153,6 +161,18 @@ export function ErasureRequestsPage() {
           </button>
         </div>
       </form>
+
+      {requestCount > 0 && (
+        <div className="flex justify-end">
+          <Pager
+            page={requestPage}
+            pageSize={ERASURE_PAGE_SIZE}
+            total={requestCount}
+            shown={requests.length}
+            onPage={setRequestPage}
+          />
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <table className="w-full text-left text-sm">

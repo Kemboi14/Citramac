@@ -11,6 +11,8 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import { allPages } from "../org-admin/allPages";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
@@ -175,7 +177,7 @@ function reportFormInvalid(formId: string): boolean {
  * shape, plus an Organization picker on create since Super Admin acts on
  * behalf of any tenant rather than an implicit one.
  *
- * Search + status chips filter the already-fetched page client-side, mirroring
+ * Search + status chips filter the fetched list (every page) client-side, mirroring
  * the mockup's own `filterBranchTable()` behaviour — the backend's `q` param
  * only matches name/MFL code (see BranchViewSet.get_queryset), not
  * organization name, and there's no `is_active` query param at all, so a
@@ -229,8 +231,10 @@ export function BranchesPage() {
       // Licence status is filtered server-side so a branch beyond the first
       // page still shows up when looking for expiring/expired licences.
       const [branchRes, deptRes, expiringRes, expiredRes] = await Promise.all([
-        listBranches(accessToken, { license_status: license || undefined }),
-        listDepartments(accessToken),
+        allPages((page) =>
+          listBranches(accessToken, { license_status: license || undefined, page }),
+        ),
+        allPages((page) => listDepartments(accessToken, { page })),
         listBranches(accessToken, { license_status: "EXPIRING" }),
         listBranches(accessToken, { license_status: "EXPIRED" }),
       ]);
@@ -423,6 +427,10 @@ export function BranchesPage() {
       setBusyId(null);
     }
   };
+
+  const { rows: branchRows, pager: branchPager } = usePaged(filteredBranches);
+  const { rows: departmentRows, pager: departmentPager } = usePaged(filteredDepartments);
+  const activePager = tab === "branches" ? branchPager : departmentPager;
 
   const branchesForNewDeptOrg = useMemo(
     () => branches.filter((b) => b.organization === newDept.organization),
@@ -650,6 +658,11 @@ export function BranchesPage() {
               </option>
             ))}
           </select>
+        )}
+        {activePager.total > 0 && (
+          <div className="ml-auto">
+            <Pager {...activePager} />
+          </div>
         )}
       </div>
 
@@ -980,14 +993,14 @@ export function BranchesPage() {
       {tab === "branches" ? (
         <ResponsiveTable
           columns={branchColumns}
-          rows={filteredBranches}
+          rows={branchRows}
           rowKey={(b) => b.id}
           emptyMessage={loading ? "Loading branches…" : "No branches found."}
         />
       ) : (
         <ResponsiveTable
           columns={departmentColumns}
-          rows={filteredDepartments}
+          rows={departmentRows}
           rowKey={(d) => d.id}
           emptyMessage={loading ? "Loading departments…" : "No departments found."}
         />

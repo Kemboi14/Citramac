@@ -1,6 +1,7 @@
 import { AuthenticatedDownloadButton } from "../../components/AuthenticatedDownloadButton";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Pencil, RefreshCw, X } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -61,6 +62,7 @@ export function TenantCompliancePage() {
     () => (rows ?? []).filter((row) => !onlyGaps || row.gaps.length > 0),
     [rows, onlyGaps],
   );
+  const { rows: pageRows, pager } = usePaged(visible);
   const gapCount = (rows ?? []).filter((row) => row.gaps.length > 0).length;
 
   const onSaved = (updated: ComplianceProfile) => {
@@ -112,6 +114,12 @@ export function TenantCompliancePage() {
         <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
       )}
 
+      {visible.length > 0 && (
+        <div className="flex justify-end">
+          <Pager {...pager} />
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
         <table className="w-full min-w-[1080px] text-left text-sm">
           <thead className="border-b border-surface-border bg-surface-bg text-xs uppercase tracking-wide text-ink-500">
@@ -140,7 +148,7 @@ export function TenantCompliancePage() {
                 </td>
               </tr>
             )}
-            {visible.map((row) => (
+            {pageRows.map((row) => (
               <Fragment key={row.organization_id}>
                 <tr className="border-b border-surface-border align-top last:border-0">
                   <td className="px-4 py-3 font-medium text-ink-900">{row.organization_name}</td>

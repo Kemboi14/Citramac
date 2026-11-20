@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../components/Pager";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
@@ -19,8 +20,6 @@ import { BTN, BTN_GHOST, TABLE, TD, TH } from "./shared/styles";
 
 const REFRESH_MS = 60_000;
 const ACTIVITY_PAGE = 10;
-const PAGER_BTN =
-  "rounded-md border border-surface-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg disabled:cursor-not-allowed disabled:opacity-50";
 
 const PATHWAY_STEPS = [
   "Registration",
@@ -211,7 +210,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [activityPage, setActivityPage] = useState(0);
+  const activity = usePaged(data?.recent_activity ?? [], ACTIVITY_PAGE);
 
   const load = useCallback(
     (isCancelled: () => boolean) => {
@@ -585,7 +584,10 @@ export function DashboardPage() {
         </Card>
 
         <div className="mt-4">
-          <Card title="Recent activity at the branch">
+          <Card
+            title="Recent activity at the branch"
+            aside={activity.pager.total > ACTIVITY_PAGE ? <Pager {...activity.pager} /> : undefined}
+          >
             {!data ? (
               error ? (
                 <p className="text-[13px] text-ink-500">—</p>
@@ -597,54 +599,14 @@ export function DashboardPage() {
                 Registrations, triage, admissions and discharges appear here as they happen.
               </EmptyState>
             ) : (
-              (() => {
-                const pages = Math.ceil(data.recent_activity.length / ACTIVITY_PAGE);
-                const page = Math.min(activityPage, pages - 1);
-                const shown = data.recent_activity.slice(
-                  page * ACTIVITY_PAGE,
-                  (page + 1) * ACTIVITY_PAGE,
-                );
-                return (
-                  <>
-                    <Timeline
-                      items={shown.map((item, index) => ({
-                        key: `${item.at}-${page}-${index}`,
-                        time: activityTime(item.at),
-                        title: item.title,
-                        detail: item.detail,
-                      }))}
-                    />
-                    {pages > 1 && (
-                      <nav
-                        aria-label="Recent activity pages"
-                        className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3"
-                      >
-                        <span className="text-[12.5px] text-ink-500">
-                          Page {page + 1} of {pages}
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            className={PAGER_BTN}
-                            disabled={page === 0}
-                            onClick={() => setActivityPage(page - 1)}
-                          >
-                            Previous
-                          </button>
-                          <button
-                            type="button"
-                            className={PAGER_BTN}
-                            disabled={page >= pages - 1}
-                            onClick={() => setActivityPage(page + 1)}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </nav>
-                    )}
-                  </>
-                );
-              })()
+              <Timeline
+                items={activity.rows.map((item, index) => ({
+                  key: `${item.at}-${activity.page}-${index}`,
+                  time: activityTime(item.at),
+                  title: item.title,
+                  detail: item.detail,
+                }))}
+              />
             )}
           </Card>
         </div>

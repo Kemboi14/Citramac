@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Pager, usePaged } from "../../../components/Pager";
 import type { BillingEvent, BillingOverview, BillingStatus } from "../../../lib/carePathwayApi";
 import { formatKsh } from "../shared/format";
 import { TABLE, TD, TH } from "../shared/styles";
@@ -168,6 +169,7 @@ export function BillingOverviewView({
   const unavailable = !overview && !!error;
   const events = overview?.events ?? [];
   const unpriced = overview?.unpriced_services ?? [];
+  const { rows: pageEvents, pager } = usePaged(events);
 
   return (
     <div className="grid gap-[18px]">
@@ -221,7 +223,10 @@ export function BillingOverviewView({
             <h2 className="text-[13px] font-bold text-ink-900">{title}</h2>
             <p className="mt-0.5 text-[11px] text-ink-500">{caption}</p>
           </div>
-          <Tag>{`${events.length} ${events.length === 1 ? "event" : "events"}`}</Tag>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Tag>{`${events.length} ${events.length === 1 ? "event" : "events"}`}</Tag>
+            <Pager {...pager} disabled={loading} />
+          </div>
         </header>
         <div className="overflow-x-auto">
           <table className={`${TABLE} min-w-[700px]`}>
@@ -237,7 +242,7 @@ export function BillingOverviewView({
             </thead>
             <tbody>
               {events.length > 0 ? (
-                events.map((event) => <EventRow key={event.id} event={event} />)
+                pageEvents.map((event) => <EventRow key={event.id} event={event} />)
               ) : (
                 <tr>
                   <td colSpan={6} className="border-b border-surface-border">

@@ -17,6 +17,10 @@ import { PageHeader } from "../care/shared/ui";
 import { ClientPicker } from "../../clinical/ClientPicker";
 import { ClientContext } from "../../clinical/ClientContext";
 import DateInput from "../../components/DateInput";
+import { Pager } from "../../components/Pager";
+
+// The server pages history records (REST_FRAMEWORK PAGE_SIZE).
+const HISTORY_PAGE_SIZE = 25;
 
 const FIELD_CLASS =
   "w-full rounded-sm border border-surface-border bg-surface-card px-3 py-2 text-sm text-ink-900 outline-none transition-colors duration-150 focus:border-brand-green";
@@ -127,6 +131,13 @@ export function ClientHistoryPage() {
   const { selected } = usePatientContext();
 
   const [records, setRecords] = useState<(ClientHistoryRecord | ClientHistoryRestricted)[]>([]);
+  const [count, setCount] = useState(0);
+  // The page belongs to the client it was chosen for, so choosing another client starts at 1.
+  const [paging, setPaging] = useState<{ patientId: string | null; page: number }>({
+    patientId: null,
+    page: 1,
+  });
+  const page = paging.patientId === (selected?.patientId ?? null) ? paging.page : 1;
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [fhirBundleId, setFhirBundleId] = useState<string | null>(null);
   const [fhirPreview, setFhirPreview] = useState<string | null>(null);
@@ -158,9 +169,10 @@ export function ClientHistoryPage() {
 
   const refresh = () => {
     if (!accessToken || !selected) return;
-    listClientHistory(accessToken, selected.patientId)
+    listClientHistory(accessToken, selected.patientId, page)
       .then((data) => {
         setRecords(data.results);
+        setCount(data.count);
         setSelectedRecordId((current) =>
           current && data.results.some((r) => r.id === current)
             ? current
@@ -183,7 +195,7 @@ export function ClientHistoryPage() {
     }
   };
 
-  useEffect(refresh, [accessToken, selected]);
+  useEffect(refresh, [accessToken, selected, page]);
 
   const set = <K extends keyof typeof INITIAL_FORM>(key: K, value: (typeof INITIAL_FORM)[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -611,7 +623,18 @@ export function ClientHistoryPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
         <section className={SECTION_CLASS}>
-          <h2 className={SECTION_TITLE}>History Timeline</h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={`${SECTION_TITLE} mb-0`}>History Timeline</h2>
+            {count > 0 && (
+              <Pager
+                page={page}
+                pageSize={HISTORY_PAGE_SIZE}
+                total={count}
+                shown={records.length}
+                onPage={(next) => setPaging({ patientId: selected?.patientId ?? null, page: next })}
+              />
+            )}
+          </div>
           {records.length === 0 && <p className="text-sm text-ink-500">No history captured yet.</p>}
           <div className="flex flex-col gap-1.5">
             {records.map((record) => (

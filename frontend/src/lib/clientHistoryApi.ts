@@ -79,9 +79,10 @@ export type ClientHistoryRestricted = Pick<ClientHistoryRecord, "id" | "patient"
   created_at: string;
 };
 
-export function listClientHistory(accessToken: string, patientId: string) {
+export function listClientHistory(accessToken: string, patientId: string, page = 1) {
+  const pageParam = page > 1 ? `&page=${page}` : "";
   return apiRequest<Paginated<ClientHistoryRecord | ClientHistoryRestricted>>(
-    `/mhp/biopsychosocial-assessments/?patient=${patientId}`,
+    `/mhp/biopsychosocial-assessments/?patient=${patientId}${pageParam}`,
     { accessToken },
   );
 }

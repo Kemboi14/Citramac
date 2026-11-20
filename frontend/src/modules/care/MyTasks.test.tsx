@@ -46,18 +46,18 @@ describe("MyTasks", () => {
     renderTasks();
     fireEvent.click(await screen.findByRole("button", { name: /show my tasks/i }));
 
-    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+    expect(screen.getByText("1–10 / 23")).toBeInTheDocument();
     expect(screen.getByText("Task number 10")).toBeInTheDocument();
     expect(screen.queryByText("Task number 11")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("11–20 / 23")).toBeInTheDocument();
     expect(screen.getByText("Task number 11")).toBeInTheDocument();
     expect(screen.queryByText("Task number 1")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("21–23 of 23")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("21–23 / 23")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
   });
 });

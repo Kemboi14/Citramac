@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { getWardBoardTable, type WardBoardRow } from "../../lib/carePathwayApi";
 import { clientRecordPath } from "./shared/recordRoutes";
@@ -19,8 +20,12 @@ export function WardBoardTable() {
       .then((r) => setRows(r.results))
       .catch((e) => setError(errorText(e, "Couldn't load the handover table.")));
   }, [accessToken]);
+  const paged = usePaged(rows ?? []);
   return (
-    <Card title="Inpatient handover">
+    <Card
+      title="Inpatient handover"
+      aside={paged.pager.total > 0 ? <Pager {...paged.pager} /> : undefined}
+    >
       <ErrorNote>{error}</ErrorNote>
       {rows && rows.length === 0 ? (
         <p className="text-[13px] text-ink-500">No current inpatients.</p>
@@ -47,7 +52,7 @@ export function WardBoardTable() {
               </tr>
             </thead>
             <tbody>
-              {(rows ?? []).map((r) => (
+              {paged.rows.map((r) => (
                 <tr key={r.patient_id}>
                   <td className={TD}>
                     <Link

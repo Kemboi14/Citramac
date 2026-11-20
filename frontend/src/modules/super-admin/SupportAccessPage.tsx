@@ -1,6 +1,7 @@
 import { AutoResizeTextarea } from "../care/shared/AutoResizeTextarea";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { SaveButton } from "../../components/SaveButton";
@@ -78,6 +79,7 @@ export function PlatformSupportAccessPage() {
   const [hours, setHours] = useState(String(DEFAULT_HOURS));
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const now = useNow(30_000);
+  const { rows: grantRows, pager } = usePaged(grants ?? []);
 
   const load = useCallback(() => {
     if (!accessToken) return;
@@ -271,8 +273,9 @@ export function PlatformSupportAccessPage() {
       </form>
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
-        <div className="border-b border-surface-border px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-5 py-4">
           <h2 className="font-display text-base font-semibold text-ink-900">My requests</h2>
+          {grants !== null && grants.length > 0 && <Pager {...pager} />}
         </div>
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-surface-border bg-surface-bg text-xs uppercase tracking-wide text-ink-500">
@@ -301,7 +304,7 @@ export function PlatformSupportAccessPage() {
                 </td>
               </tr>
             )}
-            {grants?.map((grant) => {
+            {grantRows.map((grant) => {
               const remaining = grant.expires_at
                 ? new Date(grant.expires_at).getTime() - now
                 : null;

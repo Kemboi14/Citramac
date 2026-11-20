@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { MetricTile } from "../../components/MetricTile";
+import { Pager } from "../../components/Pager";
 import { ApiError } from "../../lib/apiClient";
 import {
   createAppointment,
@@ -14,6 +15,9 @@ import { listPatients, type PatientListRow } from "../../lib/clinicalApi";
 import { getMhpTeamRoster, type MhpTeamRosterRow } from "../../lib/mhpExtrasApi";
 import { AppointmentMessages } from "../care/shared/AppointmentMessages";
 import DateInput from "../../components/DateInput";
+
+// The server pages appointments (REST_FRAMEWORK PAGE_SIZE).
+const APPOINTMENTS_PAGE_SIZE = 25;
 
 // Appointment types exactly as the approved mockup lists them
 // (docs/15-CLINICAL-WORKSPACE-V3.md §1.13). Stored as Appointment.appointment_type text, as
@@ -95,6 +99,8 @@ export function AppointmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
   const [roster, setRoster] = useState<MhpTeamRosterRow[]>([]);
 
   const [clientQuery, setClientQuery] = useState("");
@@ -111,9 +117,10 @@ export function AppointmentsPage() {
 
   const refresh = () => {
     if (!accessToken) return;
-    listAppointments(accessToken, { from: today })
+    listAppointments(accessToken, { from: today, page })
       .then((data) => {
         setAppointments(data.results);
+        setCount(data.count);
         setLoadError(null);
       })
       .catch((err) =>
@@ -122,8 +129,8 @@ export function AppointmentsPage() {
       .finally(() => setIsLoading(false));
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` only depends on accessToken/today.
-  useEffect(refresh, [accessToken]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` only depends on accessToken/today/page.
+  useEffect(refresh, [accessToken, page]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -241,7 +248,20 @@ export function AppointmentsPage() {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <section className={CARD}>
-          <div className={CARD_HEADER}>Upcoming Schedule</div>
+          <div className={`${CARD_HEADER} flex flex-wrap items-center justify-between gap-2`}>
+            <span>Upcoming Schedule</span>
+            <Pager
+              page={page}
+              pageSize={APPOINTMENTS_PAGE_SIZE}
+              total={count}
+              shown={appointments.length}
+              disabled={isLoading}
+              onPage={(next) => {
+                setIsLoading(true);
+                setPage(next);
+              }}
+            />
+          </div>
           <div className="p-[18px]">
             <label className={LABEL_CLASS}>
               Search appointments

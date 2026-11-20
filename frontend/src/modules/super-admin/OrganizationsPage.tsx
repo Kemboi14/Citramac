@@ -1,3 +1,4 @@
+import { Pager } from "../../components/Pager";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -5,8 +6,6 @@ import {
   Ban,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Circle,
   Layers,
   Loader2,
@@ -1649,83 +1648,6 @@ function RowActionsMenu({
   );
 }
 
-function getPageNumbers(current: number, total: number): (number | "...")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const keep = new Set<number>([1, total, current - 1, current, current + 1]);
-  const sorted = Array.from(keep)
-    .filter((p) => p >= 1 && p <= total)
-    .sort((a, b) => a - b);
-  const result: (number | "...")[] = [];
-  let prev = 0;
-  for (const p of sorted) {
-    if (prev && p - prev > 1) result.push("...");
-    result.push(p);
-    prev = p;
-  }
-  return result;
-}
-
-/** Real server-side pagination — the organizations endpoint already uses
- * DRF's PageNumberPagination (see config/settings/base.py). Dot-style pager
- * per the mockup. */
-function Pager({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-  const navButtonClass =
-    "flex h-7 w-7 items-center justify-center rounded-full border border-surface-border text-ink-500 hover:border-brand-green hover:text-brand-green disabled:cursor-not-allowed disabled:opacity-40";
-
-  return (
-    <div className="flex items-center justify-center gap-1.5 border-t border-surface-border py-3">
-      <button
-        type="button"
-        disabled={page === 1}
-        onClick={() => onChange(page - 1)}
-        aria-label="Previous page"
-        className={navButtonClass}
-      >
-        <ChevronLeft className="h-3.5 w-3.5" />
-      </button>
-      {getPageNumbers(page, totalPages).map((p, i) =>
-        p === "..." ? (
-          <span key={`ellipsis-${i}`} className="px-1 text-xs text-ink-400">
-            …
-          </span>
-        ) : (
-          <button
-            key={p}
-            type="button"
-            onClick={() => onChange(p)}
-            aria-current={p === page ? "page" : undefined}
-            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
-              p === page
-                ? "bg-brand-green text-on-primary"
-                : "border border-surface-border text-ink-700 hover:bg-surface-bg"
-            }`}
-          >
-            {p}
-          </button>
-        ),
-      )}
-      <button
-        type="button"
-        disabled={page === totalPages}
-        onClick={() => onChange(page + 1)}
-        aria-label="Next page"
-        className={navButtonClass}
-      >
-        <ChevronRight className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
 /**
  * Platform Super Admin organizations registry — citramac_SUPER-ADMIN.html
  * "Organizations" tab. CITRAMAC is multi-vertical: an "organization" may be
@@ -1832,8 +1754,6 @@ export function OrganizationsPage() {
     return order.map((label) => ({ label, orgs: map.get(label)! }));
   }, [organizations, groupBy]);
 
-  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
-
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1885,8 +1805,16 @@ export function OrganizationsPage() {
             </button>
           ))}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-3">
           <GroupByMenu value={groupBy} onChange={setGroupBy} />
+          <Pager
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={count}
+            shown={organizations.length}
+            disabled={isLoading}
+            onPage={setPage}
+          />
         </div>
       </div>
 
@@ -2055,12 +1983,6 @@ export function OrganizationsPage() {
           </p>
         )}
       </div>
-
-      {totalPages > 1 && (
-        <div className="rounded-lg border border-surface-border bg-surface-card shadow-sm">
-          <Pager page={page} totalPages={totalPages} onChange={setPage} />
-        </div>
-      )}
 
       <OrganizationDrawer
         open={drawer.open}

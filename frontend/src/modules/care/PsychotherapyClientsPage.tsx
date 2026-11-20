@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import {
   listPsyClients,
@@ -66,6 +67,9 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
     };
   }, [accessToken, activeTab, kind]);
 
+  const clientPage = usePaged(rows ?? []);
+  const sessionPage = usePaged(sessions ?? []);
+
   const selectTab = (tab: "clients" | "sessions") => {
     if (tab === "sessions") {
       setSessions(null);
@@ -77,8 +81,6 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
     setSearchParams(next);
   };
 
-  const openRecord = (row: PsyClientRow) =>
-    navigate(clientRecordPath(row.patient_id, "interventions"));
   const openSession = (session: PsySessionRow) =>
     navigate(psychotherapyNotePath(kind, session.patient_id, session.therapy_episode, session.id), {
       state: { from: psychotherapyListPath(kind, "sessions") },
@@ -118,6 +120,7 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
           <ErrorNote>{sessionsError}</ErrorNote>
           <Card
             title={`${kind === "family" ? "Family" : "Individual"} psychotherapy sessions (${sessions?.length ?? 0})`}
+            aside={sessionPage.pager.total > 0 ? <Pager {...sessionPage.pager} /> : undefined}
             bodyClassName="p-0"
           >
             <div className="overflow-x-auto">
@@ -146,7 +149,7 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
                       </td>
                     </tr>
                   )}
-                  {sessions?.map((session) => (
+                  {sessionPage.rows.map((session) => (
                     <tr key={session.id} className="hover:bg-surface-bg">
                       <td className={TD}>
                         <strong>{session.patient_name}</strong>
@@ -179,7 +182,11 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
       ) : (
         <>
           <ErrorNote>{error}</ErrorNote>
-          <Card title={`Psychotherapy clients (${rows?.length ?? 0})`} bodyClassName="p-0">
+          <Card
+            title={`Psychotherapy clients (${rows?.length ?? 0})`}
+            aside={clientPage.pager.total > 0 ? <Pager {...clientPage.pager} /> : undefined}
+            bodyClassName="p-0"
+          >
             <div className="overflow-x-auto">
               <table className={`${TABLE} min-w-[760px]`}>
                 <thead>
@@ -207,50 +214,53 @@ export function PsychotherapyClientsPage({ kind = "individual" }: { kind?: Psych
                       </td>
                     </tr>
                   )}
-                  {rows?.map((row) => (
+                  {clientPage.rows.map((row) => (
                     <tr key={row.patient_id} className="hover:bg-surface-bg">
                       <td className={TD}>
-                        <strong>{row.name}</strong>
-                        <br />
-                        <span className="font-mono text-[11px] text-ink-500">
+                        <Link
+                          to={clientRecordPath(row.patient_id, "interventions")}
+                          className="font-semibold text-brand-green hover:underline"
+                        >
+                          {row.name}
+                        </Link>
+                        <div className="whitespace-nowrap font-mono text-[11px] text-ink-500">
                           {row.number || "—"}
+                        </div>
+                      </td>
+                      <td className={`${TD} max-w-[260px]`}>
+                        <span className="line-clamp-1" title={row.diagnosis || "Not assessed"}>
+                          {row.diagnosis || "Not assessed"}
                         </span>
                       </td>
-                      <td className={TD}>{row.diagnosis || "Not assessed"}</td>
                       <td className={TD}>
                         {row.restricted ? (
-                          <span className="text-[12px] text-ink-500">Care team only</span>
+                          <span className="text-[11px] text-ink-500">Care team only</span>
                         ) : (
                           (row.sessions_recorded ?? 0)
                         )}
                       </td>
                       <td className={`${TD} whitespace-nowrap`}>
-                        {row.restricted
-                          ? "—"
-                          : row.last_session
-                            ? formatDate(row.last_session)
-                            : "—"}
+                        {!row.restricted && row.last_session ? (
+                          formatDate(row.last_session)
+                        ) : (
+                          <span className="text-ink-500">—</span>
+                        )}
                       </td>
                       <td className={`${TD} whitespace-nowrap`}>
-                        {row.next_appointment ? formatDateTime(row.next_appointment) : "—"}
+                        {row.next_appointment ? (
+                          formatDateTime(row.next_appointment)
+                        ) : (
+                          <span className="text-ink-500">—</span>
+                        )}
                       </td>
-                      <td className={TD}>
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            className={`${BTN_GHOST} ${BTN_SM}`}
-                            onClick={() => openRecord(row)}
-                          >
-                            Open client record
-                          </button>
-                          <button
-                            type="button"
-                            className={`${BTN} ${BTN_SM}`}
-                            onClick={() => startSession(row)}
-                          >
-                            {row.episode_id ? "Start session" : "Set up therapy"}
-                          </button>
-                        </div>
+                      <td className={`${TD} whitespace-nowrap`}>
+                        <button
+                          type="button"
+                          className={`${BTN} ${BTN_SM} whitespace-nowrap`}
+                          onClick={() => startSession(row)}
+                        >
+                          {row.episode_id ? "Start session" : "Set up therapy"}
+                        </button>
                       </td>
                     </tr>
                   ))}

@@ -102,8 +102,10 @@ export function createSubscriptionPlan(accessToken: string, payload: Omit<Subscr
   });
 }
 
-export function listSubscriptions(accessToken: string) {
-  return apiRequest<Paginated<Subscription>>("/platform/subscriptions/", { accessToken });
+export function listSubscriptions(accessToken: string, page = 1) {
+  return apiRequest<Paginated<Subscription>>(`/platform/subscriptions/?page=${page}`, {
+    accessToken,
+  });
 }
 
 export function createSubscription(

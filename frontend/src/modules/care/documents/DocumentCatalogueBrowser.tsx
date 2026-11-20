@@ -1,3 +1,4 @@
+import { Pager, usePaged } from "../../../components/Pager";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -55,6 +56,7 @@ export function DocumentCatalogueBrowser() {
     });
   };
   const showList = Boolean(category || query.trim());
+  const results = usePaged(data?.results ?? []);
   const categoryName = data?.categories.find((c) => c.code === category)?.name;
 
   return (
@@ -83,6 +85,7 @@ export function DocumentCatalogueBrowser() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        {showList && results.pager.total > 0 && <Pager {...results.pager} />}
         {showList && (
           <button type="button" className={`${BTN_GHOST} ${BTN_SM}`} onClick={() => choose("")}>
             All categories
@@ -110,7 +113,7 @@ export function DocumentCatalogueBrowser() {
       {showList && data && (
         <ul className="flex flex-col divide-y divide-surface-border">
           {data.results.length === 0 && <EmptyState title="No documents match that search" />}
-          {data.results.map((t) => (
+          {results.rows.map((t) => (
             <li
               key={t.documentId}
               className="flex flex-wrap items-center justify-between gap-2 py-2.5"
@@ -171,10 +174,17 @@ export function GeneratedDocumentsCard() {
     };
   }, [accessToken, patient]);
 
+  const paged = usePaged(rows ?? []);
+
   return (
     <Card
       title={patient ? "This client's generated documents" : "Generated documents"}
-      aside={<Tag>{`${rows?.length ?? 0}`}</Tag>}
+      aside={
+        <span className="flex flex-wrap items-center gap-2">
+          {paged.pager.total > 0 && <Pager {...paged.pager} />}
+          <Tag>{`${rows?.length ?? 0}`}</Tag>
+        </span>
+      }
       bodyClassName="p-0"
     >
       {error && (
@@ -205,7 +215,7 @@ export function GeneratedDocumentsCard() {
                 </td>
               </tr>
             )}
-            {(rows ?? []).map((row) => (
+            {paged.rows.map((row) => (
               <tr key={row.id} className="hover:bg-surface-bg">
                 <td className={TD}>
                   <strong>{row.name}</strong>

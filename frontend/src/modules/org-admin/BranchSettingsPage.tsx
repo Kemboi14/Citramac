@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
+import { allPages } from "./allPages";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { fieldErrorsFrom } from "../../lib/formErrors";
@@ -361,7 +362,7 @@ export function BranchSettingsPage() {
 
   const load = async () => {
     if (!accessToken) return;
-    const res = await listBranches(accessToken);
+    const res = await allPages((page) => listBranches(accessToken, { page }));
     const first = res.results[0] ?? null;
     setAllBranches(res.results);
     setBranch(first);

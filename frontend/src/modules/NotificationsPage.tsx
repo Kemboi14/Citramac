@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { NotificationIcon } from "../components/NotificationIcon";
+import { Pager } from "../components/Pager";
 import { ApiError } from "../lib/apiClient";
 import { timeAgo } from "../lib/notificationFormat";
 import {
@@ -106,8 +107,6 @@ export function NotificationsPage({ showDecisionInbox = false }: { showDecisionI
     }
   };
 
-  const pageCount = Math.max(1, Math.ceil(count / PAGE_SIZE));
-
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -163,6 +162,14 @@ export function NotificationsPage({ showDecisionInbox = false }: { showDecisionI
           />
           Unread only
         </label>
+        <Pager
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={count}
+          shown={items.length}
+          disabled={loading}
+          onPage={(next) => refetch(() => setPage(next))}
+        />
       </div>
 
       {error && (
@@ -212,30 +219,6 @@ export function NotificationsPage({ showDecisionInbox = false }: { showDecisionI
           </ul>
         )}
       </div>
-
-      {pageCount > 1 && (
-        <div className="flex items-center justify-end gap-3 text-sm text-ink-700">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => refetch(() => setPage((p) => p - 1))}
-            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 font-semibold disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span>
-            Page {page} of {pageCount}
-          </span>
-          <button
-            type="button"
-            disabled={page >= pageCount}
-            onClick={() => refetch(() => setPage((p) => p + 1))}
-            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 font-semibold disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
 }

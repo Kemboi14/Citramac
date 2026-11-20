@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pager } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -52,10 +53,15 @@ const EMPTY_INVITE: StaffInvitePayload = {
  * roles are theirs, in each organisation's own Roles & Permissions; staff are
  * added to an organisation from the Organizations screen.
  */
+/** DRF PageNumberPagination PAGE_SIZE for /platform/staff/. */
+const PLATFORM_STAFF_PAGE_SIZE = 25;
+
 export function GlobalRolesPage() {
   const { accessToken } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [staffPage, setStaffPage] = useState(1);
+  const [staffCount, setStaffCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
@@ -74,8 +80,9 @@ export function GlobalRolesPage() {
 
   const refreshStaff = async () => {
     if (!accessToken) return;
-    const res = await listPlatformStaff(accessToken);
+    const res = await listPlatformStaff(accessToken, staffPage);
     setStaff(res.results);
+    setStaffCount(res.count);
   };
 
   useEffect(() => {
@@ -86,7 +93,7 @@ export function GlobalRolesPage() {
       ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [accessToken, staffPage]);
 
   // The Super Admin role row is never assigned; Super Admin is an account,
   // offered separately in the invite form (SUPER_ADMIN_CHOICE).
@@ -359,6 +366,18 @@ export function GlobalRolesPage() {
               </p>
             )}
           </form>
+        )}
+
+        {staffCount > 0 && (
+          <div className="mt-4 flex justify-end">
+            <Pager
+              page={staffPage}
+              pageSize={PLATFORM_STAFF_PAGE_SIZE}
+              total={staffCount}
+              shown={staff.length}
+              onPage={setStaffPage}
+            />
+          </div>
         )}
 
         <table className="mt-4 w-full text-left text-sm">

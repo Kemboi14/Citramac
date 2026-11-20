@@ -18,11 +18,15 @@ export interface Department {
 export interface ListDepartmentsParams {
   q?: string;
   branch?: string;
+  /** DRF page number (25 a page); omitted = the first page. */
+  page?: number;
 }
 
 export function listDepartments(accessToken: string, params: ListDepartmentsParams = {}) {
   const query = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => Boolean(v)) as [string, string][],
+    Object.entries(params)
+      .filter(([, v]) => Boolean(v))
+      .map(([k, v]) => [k, String(v)]),
   ).toString();
   return apiRequest<Paginated<Department>>(`/platform/departments/${query ? `?${query}` : ""}`, {
     accessToken,

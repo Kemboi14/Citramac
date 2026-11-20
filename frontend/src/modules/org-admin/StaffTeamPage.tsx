@@ -37,6 +37,7 @@ import {
 } from "../../lib/governanceApi";
 import { Drawer } from "../../components/Drawer";
 import { SaveButton } from "../../components/SaveButton";
+import { Pager, usePaged } from "../../components/Pager";
 import { ResponsiveTable, type ResponsiveTableColumn } from "../../components/ResponsiveTable";
 import { PractitionerCredentialDrawer } from "./PractitionerCredentialDrawer";
 import { ProfessionalProfileReviewDrawer } from "./ProfessionalProfileReviewDrawer";
@@ -438,6 +439,7 @@ export function StaffTeamPage() {
       return true;
     });
   }, [staff, filters]);
+  const { rows: staffPageRows, pager: staffPager } = usePaged(visibleStaff);
 
   const filtersActive = Object.values(filters).some(Boolean);
   const setFilter = (patch: Partial<StaffFilters>) => setFilters((f) => ({ ...f, ...patch }));
@@ -895,15 +897,18 @@ export function StaffTeamPage() {
           <span>
             Showing {visibleStaff.length} of {staff.length} staff
           </span>
-          {filtersActive && (
-            <button
-              type="button"
-              className="font-semibold text-brand-green hover:underline"
-              onClick={() => setFilters(EMPTY_FILTERS)}
-            >
-              Clear filters
-            </button>
-          )}
+          <span className="flex flex-wrap items-center gap-3">
+            {filtersActive && (
+              <button
+                type="button"
+                className="font-semibold text-brand-green hover:underline"
+                onClick={() => setFilters(EMPTY_FILTERS)}
+              >
+                Clear filters
+              </button>
+            )}
+            {visibleStaff.length > 0 && <Pager {...staffPager} />}
+          </span>
         </div>
       </div>
 
@@ -1040,7 +1045,7 @@ export function StaffTeamPage() {
       {!loading && (
         <ResponsiveTable
           columns={staffColumns}
-          rows={visibleStaff}
+          rows={staffPageRows}
           rowKey={(s) => s.id}
           renderCardActions={staffCardActions}
           emptyMessage="No staff members found."

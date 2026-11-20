@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pager, usePaged } from "../../components/Pager";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
@@ -20,7 +21,6 @@ export function MyTasks() {
   const [tasks, setTasks] = useState<MyTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -39,10 +39,7 @@ export function MyTasks() {
 
   const total = tasks?.length ?? 0;
   const overdue = tasks?.filter((t) => t.overdue).length ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  // A refreshed list can be shorter than the page being viewed.
-  const current = Math.min(page, pages - 1);
-  const shown = tasks?.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE) ?? [];
+  const { rows: shown, pager } = usePaged(tasks ?? [], PAGE_SIZE);
 
   const toggle = (
     <button
@@ -73,7 +70,12 @@ export function MyTasks() {
           {overdue > 0 && <StatusPill tone="danger">{overdue} overdue</StatusPill>}
         </span>
       }
-      aside={toggle}
+      aside={
+        <span className="flex flex-wrap items-center gap-2">
+          {open && total > 0 && <Pager {...pager} />}
+          {toggle}
+        </span>
+      }
     >
       <ErrorNote>{error}</ErrorNote>
       {!tasks ? (
@@ -113,37 +115,6 @@ export function MyTasks() {
               </li>
             ))}
           </ul>
-          {pages > 1 && (
-            <nav
-              aria-label="My tasks pages"
-              className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-3"
-            >
-              <span className="text-[12.5px] text-ink-500">
-                {current * PAGE_SIZE + 1}–{Math.min((current + 1) * PAGE_SIZE, total)} of {total}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={BUTTON}
-                  onClick={() => setPage(current - 1)}
-                  disabled={current === 0}
-                >
-                  Previous
-                </button>
-                <span className="text-[12.5px] text-ink-700">
-                  Page {current + 1} of {pages}
-                </span>
-                <button
-                  type="button"
-                  className={BUTTON}
-                  onClick={() => setPage(current + 1)}
-                  disabled={current >= pages - 1}
-                >
-                  Next
-                </button>
-              </div>
-            </nav>
-          )}
         </div>
       )}
     </Card>

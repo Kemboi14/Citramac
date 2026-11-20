@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
+import { Pager } from "../../components/Pager";
 import { listSupervisionRequests, type SupervisionRequest } from "../../lib/mhpExtrasApi";
 import { formatDateTime } from "../care/shared/format";
 import { PageHeader } from "../care/shared/ui";
@@ -75,7 +76,6 @@ export function SupervisionRequestsPage() {
     navigate(`/clinical/mhp/supervision/${request.id}`);
   };
 
-  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const errorBlock = error ? (
     <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
   ) : null;
@@ -126,6 +126,14 @@ export function SupervisionRequestsPage() {
                 {count} {count === 1 ? "request" : "requests"}
               </span>
             )}
+            <Pager
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={count}
+              shown={requests.length}
+              disabled={!loaded}
+              onPage={setPage}
+            />
           </div>
         </div>
 
@@ -198,32 +206,6 @@ export function SupervisionRequestsPage() {
                 : "No supervision requests yet."}
             </p>
           )
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-surface-border px-5 py-3 text-xs text-ink-500">
-            <span>
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-50"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-surface-bg disabled:opacity-50"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
         )}
       </div>
 

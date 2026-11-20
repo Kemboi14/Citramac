@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock, Search } from "lucide-react";
+import { Pager } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import { listAuditLog, type AuditLogEntry, type AuditLogPage } from "../../lib/auditApi";
@@ -27,8 +28,6 @@ export function SecurityAuditLogsPage() {
       )
       .finally(() => setLoading(false));
   }, [accessToken, q, pageNum]);
-
-  const totalPages = page ? Math.max(1, Math.ceil(page.count / page.page_size)) : 1;
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
@@ -66,6 +65,15 @@ export function SecurityAuditLogsPage() {
 
       {page && (
         <>
+          <div className="flex justify-end">
+            <Pager
+              page={pageNum}
+              pageSize={page.page_size || page.results.length}
+              total={page.count}
+              shown={page.results.length}
+              onPage={setPageNum}
+            />
+          </div>
           <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-surface-border bg-surface-bg text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -112,30 +120,6 @@ export function SecurityAuditLogsPage() {
                 )}
               </tbody>
             </table>
-          </div>
-
-          <div className="flex items-center justify-between text-sm text-ink-500">
-            <span>
-              Page {page.page} of {totalPages} · {page.count} events
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={pageNum <= 1}
-                onClick={() => setPageNum((p) => Math.max(1, p - 1))}
-                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={pageNum >= totalPages}
-                onClick={() => setPageNum((p) => Math.min(totalPages, p + 1))}
-                className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-semibold text-ink-700 disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
           </div>
         </>
       )}
