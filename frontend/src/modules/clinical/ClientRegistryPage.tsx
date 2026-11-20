@@ -1,3 +1,4 @@
+import { Pager } from "../../components/Pager";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, ClipboardList, FileText, Loader2, MoreVertical, Plus } from "lucide-react";
@@ -17,13 +18,15 @@ import {
   clientReportPath,
 } from "../care/shared/recordRoutes";
 
+// The server pages the registry (REST_FRAMEWORK PAGE_SIZE).
+const REGISTRY_PAGE_SIZE = 25;
+
 const TABS: { label: string; category?: ClientRegistryCategory }[] = [
   { label: "All" },
   { label: "Awaiting triage", category: "awaiting-triage" },
   { label: "Emergency", category: "emergency" },
   { label: "Inpatient", category: "INPATIENT" },
   { label: "Outpatient", category: "OUTPATIENT" },
-  { label: "Residential", category: "RESIDENTIAL" },
 ];
 
 function sexLabel(sex: string) {
@@ -89,8 +92,6 @@ export function ClientRegistryPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "name">("recent");
   const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
@@ -105,8 +106,6 @@ export function ClientRegistryPage() {
         if (requestId !== requestSequence.current) return;
         setPatients(data.results);
         setCount(data.total_count);
-        setHasNext(data.next !== null);
-        setHasPrevious(data.previous !== null);
       })
       .catch((err: unknown) => {
         if (requestId === requestSequence.current) {
@@ -252,6 +251,14 @@ export function ClientRegistryPage() {
           <option value="recent">Newest registered first</option>
           <option value="name">By surname</option>
         </select>
+        <Pager
+          page={page}
+          pageSize={REGISTRY_PAGE_SIZE}
+          total={count}
+          shown={patients.length}
+          disabled={isLoading}
+          onPage={setPage}
+        />
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card shadow-sm">
@@ -382,32 +389,6 @@ export function ClientRegistryPage() {
           </tbody>
         </table>
       </div>
-
-      {(hasNext || hasPrevious) && (
-        <div className="mt-3 flex items-center justify-end gap-2 text-sm text-ink-700">
-          <button
-            type="button"
-            onClick={() => {
-              setPage((current) => Math.max(1, current - 1));
-            }}
-            disabled={!hasPrevious || isLoading}
-            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-ink-900 transition-colors hover:bg-surface-bg disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span>Page {page}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setPage((current) => current + 1);
-            }}
-            disabled={!hasNext || isLoading}
-            className="rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-ink-900 transition-colors hover:bg-surface-bg disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      )}
     </div>
   );
 }

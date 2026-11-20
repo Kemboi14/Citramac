@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ClipboardPlus, Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import {
   getPsychiatryCandidates,
@@ -215,52 +215,48 @@ export function PsychiatryAssessmentsPage() {
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
-                        {row.presenting_concern && (
-                          <span className="mt-1 block max-w-[320px] text-[12.5px] leading-5 text-ink-700">
-                            {row.presenting_concern}
-                          </span>
-                        )}
                       </td>
                       <td className={TD}>
                         {row.priority ? (
-                          <>
+                          <span title={PRIORITY_LABEL[row.priority]}>
                             <PriorityPill priority={row.priority} />
-                            <span className="mt-0.5 block text-[12px] text-ink-500">
-                              {PRIORITY_LABEL[row.priority]}
-                            </span>
-                          </>
+                          </span>
                         ) : (
-                          <Tag>No triage priority</Tag>
+                          <span className="text-[12px] text-ink-500">—</span>
                         )}
                       </td>
                       <td className={TD}>
-                        <span className="block max-w-[260px] text-[12.5px] leading-5 text-ink-700">
+                        <span
+                          className="line-clamp-2 block max-w-[300px] text-[13px] leading-5 text-ink-900"
+                          title={row.suggested_reason}
+                        >
                           {row.suggested_reason}
                         </span>
-                        {row.review && (
-                          <span className="mt-1 block">
-                            <Tag tone={row.review.status === "PENDING" ? "brand" : "warn"}>
-                              Psychiatric review {row.review.status.toLowerCase()}
-                            </Tag>
-                          </span>
-                        )}
-                        {row.alerts.length > 0 && (
-                          <span className="mt-1 block text-[12px] font-medium text-priority-red">
-                            {row.alerts.slice(0, 2).join(" · ")}
-                            {row.alerts.length > 2 ? ` · +${row.alerts.length - 2}` : ""}
+                        {(row.review || row.alerts.length > 0) && (
+                          <span className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-500">
+                            {row.review && <span>Review {row.review.status.toLowerCase()}</span>}
+                            {row.review && row.alerts.length > 0 && <span aria-hidden>·</span>}
+                            {row.alerts.length > 0 && (
+                              <span
+                                className="font-medium text-priority-red"
+                                title={row.alerts.join("\n")}
+                              >
+                                {row.alerts.length} active{" "}
+                                {row.alerts.length === 1 ? "alert" : "alerts"}
+                              </span>
+                            )}
                           </span>
                         )}
                       </td>
                       <td className={TD}>
                         {row.intake_complete ? (
-                          <>
-                            <Tag tone="brand">Signed</Tag>
-                            <span className="mt-0.5 block text-[12px] text-ink-500">
-                              {formatDate(row.intake_signed_at)}
-                            </span>
-                          </>
+                          <span className="whitespace-nowrap text-[12.5px] text-ink-900">
+                            Signed {formatDate(row.intake_signed_at)}
+                          </span>
                         ) : (
-                          <Tag>Not signed</Tag>
+                          <span className="whitespace-nowrap text-[12.5px] text-ink-500">
+                            Not signed
+                          </span>
                         )}
                       </td>
                       <td className={TD}>
@@ -275,11 +271,6 @@ export function PsychiatryAssessmentsPage() {
                         {row.assessment_status === "SIGNED" && (
                           <span className="mt-0.5 block text-[12px] text-ink-500">
                             Signed {formatDateTime(row.assessment_signed_at)}
-                          </span>
-                        )}
-                        {!row.assessment_status && row.intake_signed_at && (
-                          <span className="mt-0.5 block text-[12px] text-ink-500">
-                            Intake {formatDate(row.intake_signed_at)}
                           </span>
                         )}
                       </td>
@@ -297,17 +288,18 @@ export function PsychiatryAssessmentsPage() {
                             </span>
                           </>
                         ) : (
-                          <span className="text-[12px] text-ink-500">Not scheduled</span>
+                          <span className="whitespace-nowrap text-[12px] text-ink-500">
+                            Not scheduled
+                          </span>
                         )}
                       </td>
                       <td className={`${TD} text-right`}>
                         <button
                           type="button"
-                          className={`${row.assessment_status === "DRAFT" ? BTN : BTN_GHOST} ${BTN_SM}`}
+                          className={`${row.assessment_status === "DRAFT" ? BTN : BTN_GHOST} ${BTN_SM} whitespace-nowrap`}
                           onClick={() => navigate(psychiatryAssessmentPath(row.patient_id))}
                           disabled={!accessToken}
                         >
-                          <ClipboardPlus aria-hidden className="h-4 w-4" />
                           {actionLabel(row)}
                           <ArrowRight aria-hidden className="h-4 w-4" />
                         </button>
