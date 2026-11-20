@@ -880,6 +880,9 @@ export interface PsychiatryWorkspace {
   /** Every signed assessment, newest first, section by section. */
   history: PsychiatryCompleted[];
   review: WithdrawalReview | null;
+  /** An open withdrawal review: answered on signing with a coded outcome. */
+  withdrawal_review: WithdrawalReview | null;
+  review_outcomes: { code: string; label: string }[];
   /** The latest signed assessment, section by section, for the read view. */
   completed: PsychiatryCompleted | null;
 }
@@ -892,6 +895,9 @@ export interface PsychiatrySaveBody {
   /** A new draft that amends this signed assessment; the signed one never changes. */
   amends?: string;
   amend_reason?: string;
+  /** Signing only: the open withdrawal review's coded outcome. */
+  review_outcome?: string;
+  review_outcome_note?: string;
 }
 
 /** Opens or resumes the psychiatric assessment (idempotent). */
@@ -1528,7 +1534,18 @@ export function getWithdrawal(accessToken: string, patientId: string) {
     substance: string;
     /** Intake's main substance is benzodiazepines (only an approved scale is suggested). */
     benzodiazepine: boolean;
+    /** The care plan's "Detox / withdrawal management" action. */
+    management: "open" | "completed" | "none";
   }>(`/care/clients/${patientId}/withdrawal/`, { accessToken });
+}
+
+/** Withdrawal management finished: completes the care-plan action (and its tasks). */
+export function completeWithdrawalManagement(accessToken: string, patientId: string, note = "") {
+  return apiRequest<{ id: string }>(`/care/clients/${patientId}/withdrawal/complete/`, {
+    method: "POST",
+    body: { note },
+    accessToken,
+  });
 }
 
 export function recordUnableToScore(

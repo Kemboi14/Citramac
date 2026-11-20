@@ -377,6 +377,11 @@ urlpatterns = [
         name="care-client-assessments",
     ),
     path(
+        "care/clients/<uuid:patient_id>/withdrawal/complete/",
+        views.ClientWithdrawalCompleteView.as_view(),
+        name="care-client-withdrawal-complete",
+    ),
+    path(
         "care/clients/<uuid:patient_id>/withdrawal/",
         views.ClientWithdrawalView.as_view(),
         name="care-client-withdrawal",

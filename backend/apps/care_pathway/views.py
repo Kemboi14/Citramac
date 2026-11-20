@@ -2204,7 +2204,24 @@ class ClientAssessmentsView(APIView):
             timepoint=data.get("timepoint") or "",
             assessed_at=data.get("assessed_at") or None,
         )
+        if (data.get("context") or "") == "WITHDRAWAL":
+            from . import withdrawal
+
+            withdrawal.score_recorded(patient, request.user, score.instrument)
         return Response(OutcomeScoreSerializer(score).data, status=status.HTTP_201_CREATED)
+
+
+class ClientWithdrawalCompleteView(APIView):
+    """POST {note?}: withdrawal management for this client is complete."""
+
+    @clinical_only()
+    def post(self, request, patient_id):
+        from . import withdrawal
+
+        record = withdrawal.complete_management(
+            _patient(patient_id), request.user, request.data.get("note") or ""
+        )
+        return Response({"id": str(record.pk)}, status=status.HTTP_201_CREATED)
 
 
 class ClientWithdrawalView(APIView):
@@ -2220,6 +2237,7 @@ class ClientWithdrawalView(APIView):
                 "recommended": withdrawal.recommended_scale(patient),
                 "substance": withdrawal.substance_display(patient),
                 "benzodiazepine": withdrawal.is_benzodiazepine(patient),
+                "management": withdrawal.management_state(patient),
             }
         )
 

@@ -4,7 +4,6 @@ import { CheckCircle2, FileText, Save } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
 import {
-  completePsychiatricReview,
   decidePlanAction,
   getCarePlanCatalogue,
   getIntakeSchema,
@@ -33,7 +32,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { formatDateTime } from "./shared/format";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { BTN, BTN_GHOST, BTN_SM, FIELD_LABEL, INPUT } from "./shared/styles";
-import { Callout, Card, ErrorNote, Field, SelectChoices, Tag } from "./shared/ui";
+import { Callout, Card, ErrorNote, Field, Tag } from "./shared/ui";
 import { useClientBanner } from "./shared/useClientBanner";
 import { useValueSets } from "./shared/useValueSets";
 import { MseSection } from "./record/intake/MseSection";
@@ -279,6 +278,9 @@ export function PsychiatryAssessmentPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmingSign, setConfirmingSign] = useState(false);
+  // The open withdrawal review's coded outcome, chosen in the Sign dialog.
+  const [reviewOutcome, setReviewOutcome] = useState("");
+  const [reviewOutcomeNote, setReviewOutcomeNote] = useState("");
   const [schema, setSchema] = useState<IntakeSchema | null>(null);
   const [planSchedule, setPlanSchedule] = useState<PsychiatryPlanSchedule | null>(null);
   const [planScheduleError, setPlanScheduleError] = useState<string | null>(null);
@@ -757,13 +759,9 @@ export function PsychiatryAssessmentPage() {
           {workspace.review.priority ? ` · ${workspace.review.priority}` : ""}
           {workspace.review.triage_priority ? ` · triage ${workspace.review.triage_priority}` : ""}
           {workspace.review.needs_outcome && (
-            <ReviewOutcome
-              reviewId={workspace.review.id}
-              onSaved={() => {
-                setNotice("Review outcome recorded.");
-                setReloadKey((key) => key + 1);
-              }}
-            />
+            <span className="mt-1 block text-[12.5px]">
+              You record what was decided when you sign the assessment.
+            </span>
           )}
         </Callout>
       )}
@@ -1410,12 +1408,68 @@ export function PsychiatryAssessmentPage() {
         busy={saving}
         error={actionError}
         onConfirm={async () => {
-          if (await run("sign")) setConfirmingSign(false);
+          const withdrawal = workspace.withdrawal_review;
+          if (withdrawal && !reviewOutcome) {
+            setActionError("Choose the outcome of the withdrawal review to sign.");
+            return;
+          }
+          const payload = withdrawal
+            ? { ...body, review_outcome: reviewOutcome, review_outcome_note: reviewOutcomeNote }
+            : body;
+          if (await run("sign", payload)) {
+            setConfirmingSign(false);
+            setReviewOutcome("");
+            setReviewOutcomeNote("");
+          }
         }}
         onCancel={() => setConfirmingSign(false)}
       >
-        Check that the assessment, MSE, formulation &amp; diagnosis, medication and plan are
-        complete. Once signed, the assessment is read-only; a correction is a new assessment.
+        <p>
+          Check that the assessment, MSE, formulation &amp; diagnosis, medication and plan are
+          complete. Once signed, the assessment can only be changed by an amendment.
+        </p>
+        {workspace.withdrawal_review && (
+          <fieldset className="mt-4 rounded-lg border border-surface-border bg-surface-bg p-3">
+            <legend className="px-1 text-[13px] font-semibold text-ink-900">
+              Withdrawal review — what was decided?
+            </legend>
+            <p className="mb-2 text-[12.5px] text-ink-700">
+              Triage asked for this review: <strong>{workspace.withdrawal_review.label}</strong>.
+              Signing this assessment completes it with the outcome you choose.
+            </p>
+            <div className="flex flex-col gap-1">
+              {workspace.review_outcomes.map((option) => (
+                <label
+                  key={option.code}
+                  className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px] ${
+                    reviewOutcome === option.code
+                      ? "border-[var(--green)] bg-surface-card font-semibold text-ink-900"
+                      : "border-transparent text-ink-700 hover:bg-surface-card"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="withdrawal-review-outcome"
+                    value={option.code}
+                    checked={reviewOutcome === option.code}
+                    onChange={() => {
+                      setReviewOutcome(option.code);
+                      setActionError(null);
+                    }}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <input
+              className={`${INPUT} mt-2 w-full`}
+              aria-label="Note on the outcome (optional)"
+              placeholder="Note on the outcome (optional)"
+              value={reviewOutcomeNote}
+              onChange={(event) => setReviewOutcomeNote(event.target.value)}
+            />
+          </fieldset>
+        )}
       </ConfirmDialog>
     </div>
   );
@@ -1920,60 +1974,6 @@ function CompletedAssessment({
           )}
         </div>
       </Card>
-    </div>
-  );
-}
-
-/** The withdrawal review is completed only with its coded outcome (served
- * `psychiatric-review-outcome`), recorded here where the review task opens. */
-function ReviewOutcome({ reviewId, onSaved }: { reviewId: string; onSaved: () => void }) {
-  const { accessToken } = useAuth();
-  const vs = useValueSets();
-  const [outcome, setOutcome] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const save = async () => {
-    if (!accessToken || !outcome) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await completePsychiatricReview(accessToken, reviewId, outcome, note.trim());
-      onSaved();
-    } catch (err) {
-      setError(errorText(err, "Couldn't record the outcome."));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <span className="text-[12.5px] font-semibold text-ink-700">Outcome of this review:</span>
-      <div className="min-w-[220px]">
-        <SelectChoices
-          id={`review-outcome-${reviewId}`}
-          options={vs.options("psychiatric-review-outcome")}
-          placeholder="— choose outcome —"
-          value={outcome}
-          onChange={setOutcome}
-        />
-      </div>
-      <input
-        className={`${INPUT} min-w-[200px] flex-1`}
-        aria-label="Outcome note (optional)"
-        placeholder="Note (optional)"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-      />
-      <button
-        type="button"
-        className={`${BTN} ${BTN_SM}`}
-        disabled={!outcome || busy}
-        onClick={() => void save()}
-      >
-        {busy ? "Saving…" : "Record outcome"}
-      </button>
-      {error && <span className="basis-full text-[12.5px] text-priority-red">{error}</span>}
     </div>
   );
 }

@@ -49,6 +49,7 @@ const PsychiatryAssessmentsPage = lazyNamed(
   () => import("./modules/care/PsychiatryAssessmentsPage"),
   "PsychiatryAssessmentsPage",
 );
+const WithdrawalPage = lazyNamed(() => import("./modules/care/WithdrawalPage"), "WithdrawalPage");
 const PsychiatryAssessmentPage = lazyNamed(
   () => import("./modules/care/PsychiatryAssessmentPage"),
   "PsychiatryAssessmentPage",
@@ -387,6 +388,7 @@ function App() {
               path="psychiatry/assessments/:patientId"
               element={<PsychiatryAssessmentPage />}
             />
+            <Route path="withdrawal/:patientId" element={<WithdrawalPage />} />
             <Route path="clients/:patientId" element={<Navigate to="triage" replace />} />
             <Route path="clients/:patientId/report" element={<ClientReportPage />} />
             <Route path="clients/:patientId/registration" element={<RegistrationDetailsPage />} />

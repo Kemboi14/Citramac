@@ -192,3 +192,82 @@ def recommended_scale(patient):
     if is_benzodiazepine(patient):
         return approved_assessments.instrument_for("BENZO_WITHDRAWAL") or None
     return {_code("Alcohol"): "CIWA", _code("Opioids"): "COWS"}.get(main_substance(patient))
+
+
+# A withdrawal score is the work its triage task asked for.
+SCALE_TASKS = {"CIWA": "ciwa_ar", "COWS": "cows", "PAWSS": "pawss"}
+
+
+def score_recorded(patient, user, instrument):
+    """After a withdrawal score: the client's open task for that scale is done,
+    and withdrawal monitoring is under way (in progress). Tasks that need a
+    coded outcome are never touched."""
+    from .models import CareTask
+    from .triage_care_plan import _complete, _start
+
+    code = SCALE_TASKS.get(instrument)
+    if code:
+        _complete(
+            list(
+                CareTask.objects.filter(patient=patient, action_code=code, focus_type="").exclude(
+                    status="COMPLETED"
+                )
+            ),
+            user,
+        )
+    _start(
+        list(
+            CareTask.objects.filter(
+                patient=patient, action_code="withdrawal_monitoring", focus_type=""
+            ).exclude(status="COMPLETED")
+        )
+    )
+
+
+def complete_management(patient, user, note=""):
+    """Withdrawal management finished: recorded once as a delivery that completes
+    the client's open "Detox / withdrawal management" action (closing its tasks)
+    and raises the facility's charge when it is priced (owner, 2026-11-20)."""
+    from rest_framework.exceptions import ValidationError
+
+    from . import intervention_catalogue, services
+    from .models import CarePlanActivity
+
+    activity = (
+        CarePlanActivity.objects.filter(care_plan__patient=patient, action_key="detox")
+        .exclude(status="COMPLETED")
+        .exclude(decision="DECLINED")
+        .order_by("-created_at")
+        .first()
+    )
+    if activity is None:
+        raise ValidationError(
+            {"detail": "There is no open withdrawal-management action in this client's care plan."}
+        )
+    service = intervention_catalogue.billing_service_for("withdrawal_management")
+    return services.record_intervention(
+        user,
+        patient,
+        {
+            "module": "withdrawal_management",
+            "intervention": "Withdrawal management completed",
+            "provider": user,
+            "note": (note or "").strip()[:2000],
+            "completes_activity": True,
+            "billable": service is not None,
+            "billing_service": service,
+        },
+        activity=activity,
+    )
+
+
+def management_state(patient):
+    """The care plan's "Detox / withdrawal management" action: open, completed, or none."""
+    from .models import CarePlanActivity
+
+    activities = CarePlanActivity.objects.filter(
+        care_plan__patient=patient, action_key="detox"
+    ).exclude(decision="DECLINED")
+    if activities.exclude(status="COMPLETED").exists():
+        return "open"
+    return "completed" if activities.exists() else "none"

@@ -521,6 +521,102 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         with platform_admin_context():
             self.assertEqual(InterventionRecord.objects.filter(module="psychiatry").count(), 1)
 
+    def test_signing_asks_for_and_records_the_withdrawal_review_outcome(self):
+        with platform_admin_context():
+            triage = TriageEncounter.objects.get(pk=self.te_id)
+            review = CareTask.objects.create(
+                organization=self.org,
+                patient=triage.patient,
+                triage_encounter=triage,
+                episode=triage.episode,
+                action_code="psychiatric_review_withdrawal",
+                action_label="Psychiatric review — withdrawal",
+                focus_type="PSYCHIATRIC_REVIEW_WITHDRAWAL",
+                owner="Psychiatry",
+                status="INITIATED",
+            )
+        opened = self.client.post(self.open_url, format="json", **self.auth)
+        self.assertEqual(opened.data["withdrawal_review"]["id"], str(review.pk))
+        self.assertTrue(opened.data["review_outcomes"])
+
+        refused = self.client.post(self.open_url + "sign/", self.body, format="json", **self.auth)
+        self.assertEqual(refused.status_code, 400, refused.data)
+        with platform_admin_context():
+            self.assertFalse(
+                ProgressNote.objects.filter(patient_id=self.pid, status="SIGNED").exists()
+            )
+
+        body = dict(self.body, review_outcome="managed_here", review_outcome_note="Low CIWA")
+        signed = self.client.post(self.open_url + "sign/", body, format="json", **self.auth)
+        self.assertEqual(signed.status_code, 200, signed.data)
+        self.assertIsNone(signed.data["withdrawal_review"])
+        with platform_admin_context():
+            review.refresh_from_db()
+            self.assertEqual((review.status, review.outcome), ("COMPLETED", "managed_here"))
+            self.assertEqual(review.outcome_note, "Low CIWA")
+
+    def _task(self, code):
+        with platform_admin_context():
+            triage = TriageEncounter.objects.get(pk=self.te_id)
+            return CareTask.objects.create(
+                organization=self.org,
+                patient=triage.patient,
+                triage_encounter=triage,
+                episode=triage.episode,
+                action_code=code,
+                action_label=code,
+                owner="Nurse",
+                status="INITIATED",
+            )
+
+    def test_a_withdrawal_score_closes_its_task_and_completion_closes_the_action(self):
+        from . import withdrawal
+        from .models import InterventionRecord
+
+        ciwa = self._task("ciwa_ar")
+        cows = self._task("cows")
+        monitoring = self._task("withdrawal_monitoring")
+        with platform_admin_context():
+            patient = Patient.objects.get(pk=self.pid)
+            withdrawal.score_recorded(patient, self.nurse, "CIWA")
+            ciwa.refresh_from_db()
+            cows.refresh_from_db()
+            monitoring.refresh_from_db()
+        self.assertEqual(ciwa.status, "COMPLETED")
+        self.assertEqual(cows.status, "INITIATED")  # another scale's task stays
+        self.assertEqual(monitoring.status, "PENDING")  # monitoring is under way
+
+        url = reverse("care-client-withdrawal-complete", args=[self.pid])
+        none = self.client.post(url, {}, format="json", **self.auth)
+        self.assertEqual(none.status_code, 400)  # no withdrawal action in the plan
+        with platform_admin_context():
+            triage = TriageEncounter.objects.get(pk=self.te_id)
+            plan = CarePlan.objects.create(
+                organization=self.org, patient=triage.patient, episode=triage.episode
+            )
+            activity = CarePlanActivity.objects.create(
+                organization=self.org,
+                care_plan=plan,
+                title="Detox / withdrawal management",
+                action_key="detox",
+                decision="ACCEPTED",
+            )
+        state = self.client.get(reverse("care-client-withdrawal", args=[self.pid]), **self.auth)
+        self.assertEqual(state.data["management"], "open")
+        done = self.client.post(url, {"note": "Scores settled"}, format="json", **self.auth)
+        self.assertEqual(done.status_code, 201, done.data)
+        with platform_admin_context():
+            activity.refresh_from_db()
+            monitoring.refresh_from_db()
+            cows.refresh_from_db()
+            self.assertEqual(activity.status, "COMPLETED")
+            self.assertEqual((monitoring.status, cows.status), ("COMPLETED", "COMPLETED"))
+            self.assertEqual(
+                InterventionRecord.objects.filter(module="withdrawal_management").count(), 1
+            )
+        state = self.client.get(reverse("care-client-withdrawal", args=[self.pid]), **self.auth)
+        self.assertEqual(state.data["management"], "completed")
+
     def test_opening_the_workspace_audits_a_view_on_the_client(self):
         from apps.sysadmin_audit.models import AuditLogEntry
 

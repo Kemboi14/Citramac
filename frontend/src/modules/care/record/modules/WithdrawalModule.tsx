@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../../../auth/useAuth";
 import {
+  completeWithdrawalManagement,
   getInstruments,
   getWithdrawal,
   recordUnableToScore,
@@ -8,7 +9,7 @@ import {
   type WithdrawalScale,
 } from "../../../../lib/carePathwayApi";
 import { formatDateTime } from "../../shared/format";
-import { BTN_GHOST, BTN_SM, INPUT } from "../../shared/styles";
+import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../../shared/styles";
 import { Callout, ErrorNote, Tag } from "../../shared/ui";
 import { errorText } from "../../triage/helpers";
 import { AssessmentForm } from "../intake/AssessmentForm";
@@ -38,6 +39,10 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
   const [unable, setUnable] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [management, setManagement] = useState<"open" | "completed" | "none">("none");
+  const [finishing, setFinishing] = useState(false);
+  const [finishNote, setFinishNote] = useState("");
+  const [finishBusy, setFinishBusy] = useState(false);
 
   const load = useCallback(() => {
     if (!accessToken) return;
@@ -47,6 +52,7 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
         setRecommended(r.recommended);
         setSubstance(r.substance);
         setBenzodiazepine(r.benzodiazepine);
+        setManagement(r.management);
       })
       .catch((e) => setError(errorText(e, "Couldn't load the withdrawal chart.")));
   }, [accessToken, patientId]);
@@ -70,30 +76,76 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
     }
   }
 
+  async function finish() {
+    if (!accessToken) return;
+    setFinishBusy(true);
+    setError(null);
+    try {
+      await completeWithdrawalManagement(accessToken, patientId, finishNote);
+      setFinishing(false);
+      load();
+    } catch (e) {
+      setError(errorText(e, "Couldn't complete withdrawal management."));
+    } finally {
+      setFinishBusy(false);
+    }
+  }
+
   const shown = recommended && !showAll ? defs.filter((d) => d.code === recommended) : defs;
+  const lead = scales.find((s) => s.instrument === (recommended ?? shown[0]?.code));
+  const leadDef = defs.find((d) => d.code === lead?.instrument);
   return (
     <div className="flex flex-col gap-3">
       <ErrorNote>{error}</ErrorNote>
+      {/* At a glance: what is being withdrawn from, which scale, where it stands. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-surface-border bg-surface-card px-4 py-2.5 text-[13px] shadow-sm">
+        <span>
+          <span className="text-ink-500">Substance </span>
+          <strong className="text-ink-900">{substance || "Not recorded"}</strong>
+        </span>
+        <span>
+          <span className="text-ink-500">Scale </span>
+          <strong className="text-ink-900">
+            {defs.find((d) => d.code === recommended)?.name ?? "Choose below"}
+          </strong>
+        </span>
+        <span>
+          <span className="text-ink-500">Last score </span>
+          <strong className="text-ink-900">
+            {lead?.latest && leadDef
+              ? `${lead.latest.score}/${leadDef.max} · ${lead.latest.band} · ${formatDateTime(lead.latest.at)}`
+              : "None yet"}
+          </strong>
+        </span>
+        {lead?.nextDueAt && (
+          <span className={lead.overdue ? "font-semibold text-priority-red" : ""}>
+            <span className={lead.overdue ? "" : "text-ink-500"}>
+              {lead.overdue ? "Overdue since " : "Next due "}
+            </span>
+            <strong>{formatDateTime(lead.nextDueAt)}</strong>
+          </span>
+        )}
+        <span className="ml-auto">
+          {management === "completed" ? (
+            <Tag tone="brand">Withdrawal management completed</Tag>
+          ) : management === "open" ? (
+            <Tag tone="warn">In care plan · in progress</Tag>
+          ) : null}
+        </span>
+      </div>
       {benzodiazepine && (
         <Callout tone="warning">
           {recommended
-            ? "Benzodiazepine withdrawal: the scale shown is the one your organisation has approved for benzodiazepines. A psychiatric review is flagged on the psychiatry queue."
-            : "Benzodiazepine withdrawal: no withdrawal assessment is approved for benzodiazepines in your organisation (an Org Admin approves one under Clinical Assessments). Use clinical review — a psychiatric review is flagged on the psychiatry queue. CIWA-Ar is an alcohol scale and is not suggested by default."}
+            ? "Benzodiazepine withdrawal: the scale shown is the one your organisation approved for benzodiazepines. A psychiatric review is flagged."
+            : "Benzodiazepine withdrawal: no withdrawal scale is approved for benzodiazepines in your organisation (an Org Admin approves one under Clinical Assessments). Use clinical review — a psychiatric review is flagged."}
         </Callout>
       )}
       {!recommended && !benzodiazepine && (
-        <Callout>
-          {substance
-            ? `Main substance recorded as “${substance}”.`
-            : "No main substance is recorded yet."}{" "}
-          Set alcohol or opioids in Intake → Substance use to open the matching scale; you can still
-          choose a scale below.
-        </Callout>
+        <p className="text-[12.5px] text-ink-500">
+          Set alcohol or opioids as the main substance in Intake → Substance use to open the
+          matching scale, or choose a scale below.
+        </p>
       )}
-      <Callout tone="warning">
-        Scoring only. Item wording is from the owner’s mockup and is not yet clinically approved.
-        Medicines and doses follow the facility’s withdrawal protocol, not this screen.
-      </Callout>
       {shown.map((def) => {
         const scale = scales.find((s) => s.instrument === def.code);
         return (
@@ -180,7 +232,7 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  className={`${BTN_GHOST} ${BTN_SM}`}
+                  className={`${BTN} ${BTN_SM}`}
                   onClick={() => setScoring(def.code)}
                 >
                   Score now
@@ -194,7 +246,14 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
                 </button>
               </div>
             )}
-            {scale && <WithdrawalHistory scale={scale} />}
+            {scale && scale.history.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-700 hover:text-ink-900">
+                  History ({scale.history.length})
+                </summary>
+                <WithdrawalHistory scale={scale} />
+              </details>
+            )}
           </div>
         );
       })}
@@ -207,6 +266,54 @@ export function WithdrawalModule({ patientId }: { patientId: string }) {
           {showAll ? "Show only the suggested scale" : "Score a different scale"}
         </button>
       )}
+      {management === "open" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-border bg-surface-card px-4 py-3">
+          {finishing ? (
+            <>
+              <input
+                className={`${INPUT} min-w-[240px] flex-1`}
+                aria-label="Closing note (optional)"
+                placeholder="Closing note (optional) — e.g. scores settled, no further monitoring"
+                value={finishNote}
+                onChange={(event) => setFinishNote(event.target.value)}
+              />
+              <button
+                type="button"
+                className={`${BTN} ${BTN_SM}`}
+                disabled={finishBusy}
+                onClick={() => void finish()}
+              >
+                {finishBusy ? "Saving…" : "Confirm complete"}
+              </button>
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM}`}
+                onClick={() => setFinishing(false)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="mr-auto text-[13px] text-ink-700">
+                When withdrawal has settled and no more scoring is needed, close it: the care-plan
+                action and its tasks are completed.
+              </span>
+              <button
+                type="button"
+                className={`${BTN_GHOST} ${BTN_SM}`}
+                onClick={() => setFinishing(true)}
+              >
+                Withdrawal management complete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      <p className="text-[11.5px] text-ink-500">
+        Scoring only — item wording is not yet clinically approved. Medicines and doses follow the
+        facility’s withdrawal protocol, not this screen.
+      </p>
     </div>
   );
 }

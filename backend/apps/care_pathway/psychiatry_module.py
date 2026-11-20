@@ -355,6 +355,11 @@ def _workspace_state(patient, encounter, note, user):
             .order_by("-signed_at")[:20]
         ],
         "review": psychiatric_review.row(_open_review(patient)),
+        # Answered on signing: its coded outcome is chosen in the Sign dialog.
+        "withdrawal_review": psychiatric_review.row(_open_withdrawal_review(patient)),
+        "review_outcomes": [
+            {"code": code, "label": label} for code, label in psychiatric_review.OUTCOMES.items()
+        ],
         "completed": _completed_summary(_latest_note(patient, status="SIGNED")),
     }
 
@@ -856,8 +861,31 @@ def save_workspace(patient, user, data):
     return _workspace_state(patient, note.encounter, note, user)
 
 
+def _open_withdrawal_review(patient):
+    return (
+        CareTask.objects.filter(
+            patient=patient,
+            focus_type=psychiatric_review.FOCUS,
+            status__in=OPEN_TASK_STATUSES,
+        )
+        .order_by("created_at")
+        .first()
+    )
+
+
 @transaction.atomic
 def sign_workspace(patient, user, data):
+    # An open withdrawal review is answered by this assessment: its coded
+    # outcome is chosen on signing, and both are saved together or not at all.
+    withdrawal = _open_withdrawal_review(patient)
+    outcome = str(data.get("review_outcome") or "")
+    if withdrawal is not None and outcome not in psychiatric_review.OUTCOMES:
+        raise ValidationError(
+            {
+                "review_outcome": "Choose the outcome of the withdrawal review before signing.",
+                "detail": "Choose the outcome of the withdrawal review before signing.",
+            }
+        )
     note = _save(patient, user, data)
     payload = note.data or {}
     missing = _missing_to_sign(
@@ -872,6 +900,10 @@ def sign_workspace(patient, user, data):
     note = records.sign_note(note, user)
     _record_delivery(patient, note, user)
     complete_triage_reviews(patient, user)
+    if withdrawal is not None:
+        psychiatric_review.complete(
+            withdrawal, user, outcome, str(data.get("review_outcome_note") or "")
+        )
     return _workspace_state(patient, note.encounter, note, user)
 
 
@@ -1134,7 +1166,11 @@ def candidates():
                 "suggested_reason": (
                     review.action_label
                     if review is not None
-                    else asked_reason.get(patient_id) or "Psychiatry session booked"
+                    else (
+                        "Psychiatry session booked"
+                        if session
+                        else asked_reason.get(patient_id) or "Psychiatric review requested"
+                    )
                 ),
                 "review": psychiatric_review.row(review),
                 "assessment_id": str(note.pk) if note else None,

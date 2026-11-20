@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Tooltip } from "../../../components/Tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getInterventionWorkspace, listInterventions } from "../../../lib/carePathwayApi";
@@ -67,6 +67,12 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
     }
     // Psychiatry is done in the psychiatry module: its assessments, MSE,
     // diagnosis, medication and plan, listed per client.
+    if (code === "withdrawal_management") {
+      navigate(`/clinical/withdrawal/${encodeURIComponent(patientId)}`, {
+        state: { from: clientRecordPath(patientId, "interventions") },
+      });
+      return;
+    }
     if (code === "psychiatry") {
       navigate(psychiatryAssessmentPath(patientId), {
         state: { from: clientRecordPath(patientId, "interventions") },
@@ -85,6 +91,17 @@ export function InterventionsStage({ patientId, banner, onRecordChanged }: Recor
     }
     setOpenCode(code);
   };
+  // A task link (`?module=`) to a module with its own page opens that page.
+  useEffect(() => {
+    if (focusRecord) return;
+    const from = { state: { from: clientRecordPath(patientId, "interventions") } };
+    if (openCode === "withdrawal_management")
+      navigate(`/clinical/withdrawal/${encodeURIComponent(patientId)}`, { ...from, replace: true });
+    if (openCode === "psychiatry")
+      navigate(psychiatryAssessmentPath(patientId), { ...from, replace: true });
+    // Once, for the module the link asked for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const modules = data?.modules ?? [];
   const actions = data?.actions ?? [];
   const planModules = scopedModules(modules, "plan");

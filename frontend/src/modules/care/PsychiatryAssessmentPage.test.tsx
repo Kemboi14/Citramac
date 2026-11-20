@@ -73,6 +73,8 @@ const workspace: PsychiatryWorkspace = {
   history: [],
   review: null,
   completed: null,
+  withdrawal_review: null,
+  review_outcomes: [],
 };
 
 // Each test drives the full page through several tabs; under the parallel suite run that

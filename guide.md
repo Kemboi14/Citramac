@@ -1308,3 +1308,29 @@ episode, a booked psychiatry session, or a draft assessment. "Why here" names th
 assessment is signed and none remains, the client drops off; a new request or booked review brings
 them back. Signed assessments stay in the client record. Not clinical data capture — no FHIR change.
 Reversibility: cheap (a read-only list).
+
+### 2026-11-20 — the withdrawal review's outcome is chosen when the assessment is signed
+
+On the owner's decision of 2026-11-20: when a client has an open psychiatric review for withdrawal
+(triage spec item 10, coded outcome per 2026-10-29), the "Sign the psychiatric assessment?" card
+asks "Withdrawal review — what was decided?" with the served `psychiatric-review-outcome` options
+and an optional note. Signing needs a choice; the assessment is signed and the review completed with
+that outcome in one transaction (`psychiatry_module.sign_workspace`), or neither. The review banner
+says the outcome is recorded on signing; there is no separate step. The triage "Psychiatric review"
+task (completed by status) is closed by signing, for requests raised before the assessment. FHIR:
+unchanged — `Task.output` carries the outcome with its Provenance. Reversibility: cheap.
+
+### 2026-11-20 — Withdrawal management on its own page; scores and completion update the record
+
+On the owner's decisions of 2026-11-20 (billing decided before building, §7): Interventions →
+Withdrawal Management (and any task link to it) opens `/clinical/withdrawal/<client>`, a page of its
+own with Close. It shows one status line (substance, suggested scale, last score and band, next due
+or overdue, care-plan state), the suggested scale with **Score now** and the trend, history folded
+away, the benzodiazepine notice only when it applies, and one short line that scoring is not dosing
+guidance. Saving a withdrawal score (context `WITHDRAWAL`) completes the client's open task for that
+scale (CIWA → `ciwa_ar`, COWS → `cows`, PAWSS → `pawss`) and puts withdrawal monitoring in progress
+(`withdrawal.score_recorded`). **Withdrawal management complete** (POST
+`care/clients/<id>/withdrawal/complete/`) records one delivery that completes the "Detox / withdrawal
+management" action and its tasks and raises the facility's charge when priced. Tasks that need a
+coded outcome are never touched. FHIR: scores are the existing Observations, the delivery the
+existing Procedure mapping. Reversibility: cheap — a delivery and its charge can be voided.
