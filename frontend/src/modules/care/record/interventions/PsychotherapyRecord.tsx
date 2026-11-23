@@ -1,5 +1,6 @@
+import { Check, CircleDot } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../../auth/useAuth";
 import {
   agreeConfidentiality,
@@ -9,6 +10,8 @@ import {
   type TherapyState,
 } from "../../../../lib/carePathwayApi";
 import { listPsyNotes, type PsyNoteSummary } from "../../../../lib/psychotherapyNoteApi";
+import { PsySessionSummary } from "./PsySessionSummary";
+import { psychotherapyNotePath } from "../../shared/recordRoutes";
 import { errorText } from "../../triage/helpers";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../../shared/styles";
 import { ErrorNote } from "../../shared/ui";
@@ -63,6 +66,7 @@ export function PsychotherapyRecord({
 }) {
   const copy = kind === "family" ? COPY.family : COPY.individual;
   const { accessToken } = useAuth();
+  const navigate = useNavigate();
   const { data, error, act } = useModule<TherapyState>(patientId, getTherapy);
   const ready = (data?.results ?? []).filter((e) => !e.ended && e.confidentiality_agreed);
   const [chosen, setChosen] = useState<string | null>(initialEpisodeId ?? null);
@@ -73,6 +77,10 @@ export function PsychotherapyRecord({
   const [notesError, setNotesError] = useState<string | null>(null);
   const [notesVersion, setNotesVersion] = useState(0);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  // A signed session opens as its summary (number, note id).
+  const [summary, setSummary] = useState<{ id: string; number: number } | null>(null);
+  // Opens on the session list once the client has sessions; otherwise on New session.
+  const [panelChosen, setPanelChosen] = useState(false);
   const [sessionObjective, setSessionObjective] = useState("");
   const [primaryGoal, setPrimaryGoal] = useState("");
   const episodeId = chosen ?? (ready.length === 1 ? ready[0].id : null);
@@ -115,11 +123,18 @@ export function PsychotherapyRecord({
   const sessions = (notes ?? []).filter((note) => note.session_type === copy.type);
 
   useEffect(() => {
-    if (!accessToken || panel !== "sessions") return;
+    if (!accessToken) return;
     let active = true;
     listPsyNotes(accessToken, patientId)
       .then((response) => {
-        if (active) setNotes(response.results);
+        if (!active) return;
+        setNotes(response.results);
+        if (!panelChosen) {
+          setPanelChosen(true);
+          if (response.results.some((note) => note.session_type === copy.type)) {
+            setPanel("sessions");
+          }
+        }
       })
       .catch((e) => {
         if (active) setNotesError(errorText(e, "Couldn't load the sessions."));
@@ -127,11 +142,28 @@ export function PsychotherapyRecord({
     return () => {
       active = false;
     };
-  }, [accessToken, panel, patientId, notesVersion]);
+    // panelChosen / copy.type are read once, when the list first loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, patientId, notesVersion]);
 
   if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!data) return <p className="p-6 text-[13px] text-ink-500">Loading…</p>;
 
+  if (summary) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <PsySessionSummary
+          noteId={summary.id}
+          sessionNumber={summary.number}
+          onBack={() => setSummary(null)}
+          onOpenNote={() => {
+            setOpenNoteId(summary.id);
+            setSummary(null);
+          }}
+        />
+      </div>
+    );
+  }
   if (openNoteId) {
     return (
       <PsychotherapyWorkspace
@@ -174,8 +206,8 @@ export function PsychotherapyRecord({
       }`}
       onClick={() => {
         if (value === "sessions") {
-          setNotes(null);
           setNotesError(null);
+          setNotesVersion((v) => v + 1);
         }
         setPanel(value);
       }}
@@ -184,38 +216,90 @@ export function PsychotherapyRecord({
     </button>
   );
 
+  // Sessions 1…n in order, then the next planned ones not yet held.
+  const ordered = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date));
+  const plannedCount = episode?.planned_sessions ?? 0;
+  const upcoming = Math.max(plannedCount - ordered.length, ordered.length === 0 ? 1 : 0);
+  const draftIndex = ordered.findIndex((note) => note.status !== "SIGNED");
+  const draft = draftIndex >= 0 ? ordered[draftIndex] : null;
+  const hasDraft = draft !== null;
   const sessionList = (
     <div className="flex flex-col gap-3">
       <ErrorNote>{notesError}</ErrorNote>
       {!notes && !notesError && <p className="text-xs text-ink-500">Loading sessions…</p>}
-      {notes && sessions.length === 0 && (
-        <p className="text-xs text-ink-500">
-          No {copy.label.toLowerCase()} sessions are recorded for this client.
-        </p>
+      {notes && (
+        <ol className="divide-y divide-surface-border overflow-hidden rounded-xl border border-surface-border bg-surface-card">
+          {ordered.map((note, index) => {
+            const signed = note.status === "SIGNED";
+            return (
+              <li key={note.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                {signed ? (
+                  <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-priority-green-solid text-white">
+                    <Check aria-hidden className="h-3.5 w-3.5" />
+                  </span>
+                ) : (
+                  <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-priority-orange-tint text-priority-orange">
+                    <CircleDot aria-hidden className="h-3.5 w-3.5" />
+                  </span>
+                )}
+                <div className="mr-auto min-w-0">
+                  <p className="text-[14px] font-semibold text-ink-900">
+                    Session {index + 1}
+                    {planned ? (
+                      <span className="font-normal text-ink-500"> of {plannedCount}</span>
+                    ) : null}
+                  </p>
+                  <p className="text-[12.5px] text-ink-500">
+                    {formatDateTime(note.session_date)} ·{" "}
+                    {signed ? "Signed" : "Draft — not signed yet"}
+                    {note.restricted ? " · care team only" : note.author ? ` · ${note.author}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={`${signed ? BTN_GHOST : BTN} ${BTN_SM}`}
+                  disabled={note.restricted}
+                  // Its own address, so the breadcrumb leads back to these sessions.
+                  onClick={() =>
+                    navigate(psychotherapyNotePath(kind, patientId, note.therapy_episode, note.id))
+                  }
+                >
+                  {signed ? "View" : "Continue"}
+                </button>
+              </li>
+            );
+          })}
+          {Array.from({ length: upcoming }, (_, k) => {
+            const number = ordered.length + k + 1;
+            const next = k === 0 && !hasDraft;
+            return (
+              <li key={`next-${number}`} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="h-6 w-6 flex-none rounded-full border-2 border-surface-border" />
+                <div className="mr-auto min-w-0">
+                  <p
+                    className={`text-[14px] font-semibold ${next ? "text-ink-900" : "text-ink-500"}`}
+                  >
+                    Session {number}
+                    {planned ? (
+                      <span className="font-normal text-ink-500"> of {plannedCount}</span>
+                    ) : null}
+                  </p>
+                  <p className="text-[12.5px] text-ink-500">Not done yet</p>
+                </div>
+                {next && (
+                  <button
+                    type="button"
+                    className={`${BTN} ${BTN_SM}`}
+                    onClick={() => setPanel("start")}
+                  >
+                    Start session {number}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       )}
-      {sessions.map((note) => (
-        <div
-          key={note.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-surface-border p-3"
-        >
-          <div>
-            <p className="text-[13px] font-semibold text-ink-900">
-              {formatDateTime(note.session_date)} · {note.status === "SIGNED" ? "Signed" : "Draft"}
-            </p>
-            <p className="text-xs text-ink-500">
-              {note.restricted ? "Visible to the care team only" : note.author}
-            </p>
-          </div>
-          <button
-            type="button"
-            className={`${BTN_GHOST} ${BTN_SM}`}
-            disabled={note.restricted}
-            onClick={() => setOpenNoteId(note.id)}
-          >
-            Open
-          </button>
-        </div>
-      ))}
     </div>
   );
 
@@ -315,14 +399,33 @@ export function PsychotherapyRecord({
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-surface-border pt-4">
-          <button
-            type="button"
-            className={`${BTN} ${BTN_SM}`}
-            disabled={!canBegin || setupBusy}
-            onClick={() => void begin()}
-          >
-            {setupBusy ? "Starting…" : copy.start}
-          </button>
+          {draft ? (
+            // One session at a time: the unsigned one is finished first.
+            <>
+              <button
+                type="button"
+                className={`${BTN} ${BTN_SM}`}
+                disabled={draft.restricted}
+                onClick={() =>
+                  navigate(psychotherapyNotePath(kind, patientId, draft.therapy_episode, draft.id))
+                }
+              >
+                Continue session {draftIndex + 1}
+              </button>
+              <span className="text-[12.5px] text-ink-700">
+                Session {draftIndex + 1} is not signed yet — finish it before starting another.
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={`${BTN} ${BTN_SM}`}
+              disabled={!canBegin || setupBusy}
+              onClick={() => void begin()}
+            >
+              {setupBusy ? "Starting…" : copy.start}
+            </button>
+          )}
           <button
             type="button"
             className={`${BTN_GHOST} ${BTN_SM}`}

@@ -170,7 +170,7 @@ export function SafetyBanner({
       data-safety-banner
       className="sticky top-[var(--app-header-h,0px)] z-[15] -mx-4 mb-3 border-b font-system [&_*]:font-system border-surface-border bg-surface-card shadow-[0_20px_40px_-24px_rgba(15,27,45,.28)] sm:-mx-6 lg:-mx-8"
     >
-      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.05fr)_minmax(150px,.55fr)_minmax(230px,1.15fr)_minmax(300px,1.75fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
+      <div className="mx-auto grid max-w-[1360px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.2fr)_minmax(200px,.9fr)_minmax(220px,1.1fr)_minmax(240px,1.3fr)] [&>*+*]:border-t [&>*+*]:border-surface-border sm:[&>*+*]:border-t-0 xl:[&>*+*]:border-l">
         <div className={`${cell} flex items-center gap-3.5`} aria-label="Patient identity">
           <div
             aria-hidden="true"

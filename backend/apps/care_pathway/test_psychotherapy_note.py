@@ -124,6 +124,17 @@ class DraftAndResumeTests(PsyNoteTestCase):
         ctx = self.start().data["context"]
         self.assertEqual(set(ctx), {"goals", "previous_note", "risk", "safety_plan", "diagnoses"})
 
+    def test_a_new_session_waits_until_the_unsigned_one_is_finished(self):
+        first = self.start()
+        self.assertEqual(first.status_code, 201, first.data)
+        # The same clinician resumes their unsigned session rather than opening a second.
+        again = self.start()
+        self.assertEqual(again.data["id"], first.data["id"])
+        # Another clinician cannot start a new one while it is unsigned.
+        other = self.start(auth=self.psych_auth)
+        self.assertEqual(other.status_code, 400, other.data)
+        self.assertIn("not signed yet", str(other.data))
+
     def test_other_staff_without_care_team_access_cannot_read_or_change_the_note(self):
         nid = self.start().data["id"]
         self.assertEqual(

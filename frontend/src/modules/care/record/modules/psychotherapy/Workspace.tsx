@@ -4,11 +4,11 @@ import {
   ArrowUp,
   ChevronDown,
   Clock,
-  Ellipsis,
   FileText,
   Keyboard,
   Layers,
   Maximize2,
+  MoreVertical,
   MessageSquare,
   Mic,
   Minimize2,
@@ -16,7 +16,6 @@ import {
   PanelRightOpen,
   Plus,
   User,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -278,12 +277,10 @@ const TAB_VIEWS: { label: string; views: View[]; to: View }[] = [
 function ActionsMenu({
   view,
   setView,
-  onNew,
   onApproaches,
 }: {
   view: View;
   setView: (v: View) => void;
-  onNew: () => void;
   onApproaches: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -319,13 +316,12 @@ function ActionsMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Session actions"
+        aria-label="More: therapy approaches, audit trail"
+        title="Therapy approaches · audit trail"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border border-surface-border bg-surface-card px-2.5 text-[12.5px] font-semibold text-ink-700 hover:bg-surface-bg hover:text-ink-900"
+        className="grid h-8 w-8 place-items-center rounded-md text-ink-500 hover:bg-surface-bg hover:text-ink-900 aria-expanded:bg-surface-bg"
       >
-        <Ellipsis className="h-4 w-4" />
-        <span className="hidden sm:inline">Actions</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        <MoreVertical className="h-4 w-4" />
       </button>
       {open && (
         <div
@@ -333,7 +329,12 @@ function ActionsMenu({
           aria-label="Session actions"
           className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-surface-border bg-surface-card p-1 shadow-md"
         >
-          {TAB_VIEWS.map((t) => {
+          {TAB_VIEWS.filter(
+            // Sessions, history and the client file are reached from the page
+            // (breadcrumb, Sessions list, Full client record); here only the way
+            // back to the open session and the audit trail.
+            (t) => (t.to === "chat" && view !== "chat") || t.to === "audit",
+          ).map((t) => {
             const current = t.views.includes(view);
             const Icon =
               t.to === "chat"
@@ -357,18 +358,6 @@ function ActionsMenu({
               </button>
             );
           })}
-          <div className="my-1 h-px bg-surface-border" />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onNew();
-            }}
-            className={item}
-          >
-            <Plus className="h-4 w-4 text-ink-500" aria-hidden /> New session
-          </button>
           <button
             type="button"
             role="menuitem"
@@ -1302,122 +1291,155 @@ function WorkspaceBody({
     "inline-flex items-center gap-1.5 rounded-[7px] px-1.5 py-1 hover:bg-surface-bg hover:text-ink-900";
   const header = (
     <header className="flex min-h-[56px] flex-wrap items-center gap-x-3.5 gap-y-1.5 px-4 py-2.5 sm:flex-nowrap sm:px-5">
-      <nav
-        aria-label="Breadcrumb"
-        className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto"
-      >
-        <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
-          {/* On its own page the page's breadcrumbs lead back; only the overlay needs this. */}
-          {!inline && (
+      {/* On its own page the page's breadcrumbs and the side rail (history, new
+          session, back) do this; only the overlay needs its own trail. */}
+      {inline ? (
+        // What is open, said plainly: the session and where it stands.
+        <p className="min-w-0 flex-1 truncate text-[13.5px] text-ink-500">
+          <span className="font-semibold text-ink-900">
+            {view === "history"
+              ? "Session history"
+              : view === "past"
+                ? "Earlier session"
+                : note?.session_number
+                  ? `Session ${note.session_number}`
+                  : "New session"}
+          </span>
+          {view === "chat" && (
             <>
-              <li>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={crumb}
-                  title={`Back to ${backLabel}`}
-                >
-                  <ArrowLeft className="h-[15px] w-[15px]" />
-                  <span className="hidden sm:inline">{backLabel}</span>
-                </button>
-              </li>
-              {sep}
+              {" · "}
+              {signed
+                ? "Signed"
+                : !begun
+                  ? "Not started"
+                  : step < count
+                    ? `Question ${step + 1} of ${count}`
+                    : stepLabel(config, step)}
             </>
           )}
-          <li>
-            <button
-              type="button"
-              onClick={() => setView("history")}
-              aria-current={view === "history" ? "page" : undefined}
-              className={`${crumb} ${view === "history" ? "font-semibold text-ink-900" : ""}`}
-            >
-              Psychotherapy
-            </button>
-          </li>
-          {view !== "history" && sep}
-          {view === "past" && (
-            <li>
-              <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
-                Earlier session
-              </span>
-            </li>
-          )}
-          {view !== "history" && view !== "past" && (
+        </p>
+      ) : (
+        <nav
+          aria-label="Breadcrumb"
+          className="min-w-0 flex-1 basis-full overflow-x-auto sm:basis-auto"
+        >
+          <ol className="flex items-center whitespace-nowrap text-[13.5px] text-ink-500">
+            {/* On its own page the page's breadcrumbs lead back; only the overlay needs this. */}
+            {!inline && (
+              <>
+                <li>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className={crumb}
+                    title={`Back to ${backLabel}`}
+                  >
+                    <ArrowLeft className="h-[15px] w-[15px]" />
+                    <span className="hidden sm:inline">{backLabel}</span>
+                  </button>
+                </li>
+                {sep}
+              </>
+            )}
             <li>
               <button
                 type="button"
-                onClick={() => setView("chat")}
-                aria-current={view === "chat" && !begun ? "page" : undefined}
-                className={crumb}
+                onClick={() => setView("history")}
+                aria-current={view === "history" ? "page" : undefined}
+                className={`${crumb} ${view === "history" ? "font-semibold text-ink-900" : ""}`}
               >
-                {sessionCrumb}
+                Psychotherapy
               </button>
             </li>
-          )}
-          {view === "chat" && begun && !example && (
-            <>
-              {sep}
-              <StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} />
-            </>
-          )}
-          {view === "chat" && example && (
-            <>
-              {sep}
-              <li>
-                <span aria-current="page" className="px-1.5 font-semibold text-priority-orange">
-                  Example
-                </span>
-              </li>
-            </>
-          )}
-          {view === "client" && (
-            <>
-              {sep}
+            {view !== "history" && sep}
+            {view === "past" && (
               <li>
                 <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
-                  Client file
+                  Earlier session
                 </span>
               </li>
-            </>
-          )}
-          {view === "audit" && (
-            <>
-              {sep}
+            )}
+            {view !== "history" && view !== "past" && (
               <li>
-                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
-                  Audit trail
-                </span>
-              </li>
-            </>
-          )}
-          {view === "self-assessment" && (
-            <>
-              {sep}
-              <li>
-                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
-                  Self-assessment
-                </span>
-              </li>
-            </>
-          )}
-          {view === "supervision" && (
-            <>
-              {sep}
-              <li>
-                <button type="button" onClick={() => setView("self-assessment")} className={crumb}>
-                  Self-assessment
+                <button
+                  type="button"
+                  onClick={() => setView("chat")}
+                  aria-current={view === "chat" && !begun ? "page" : undefined}
+                  className={crumb}
+                >
+                  {sessionCrumb}
                 </button>
               </li>
-              {sep}
-              <li>
-                <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
-                  Supervision
-                </span>
-              </li>
-            </>
-          )}
-        </ol>
-      </nav>
+            )}
+            {view === "chat" && begun && !example && (
+              <>
+                {sep}
+                <StepMenu config={config} note={note} step={step} signed={signed} onJump={jump} />
+              </>
+            )}
+            {view === "chat" && example && (
+              <>
+                {sep}
+                <li>
+                  <span aria-current="page" className="px-1.5 font-semibold text-priority-orange">
+                    Example
+                  </span>
+                </li>
+              </>
+            )}
+            {view === "client" && (
+              <>
+                {sep}
+                <li>
+                  <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                    Client file
+                  </span>
+                </li>
+              </>
+            )}
+            {view === "audit" && (
+              <>
+                {sep}
+                <li>
+                  <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                    Audit trail
+                  </span>
+                </li>
+              </>
+            )}
+            {view === "self-assessment" && (
+              <>
+                {sep}
+                <li>
+                  <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                    Self-assessment
+                  </span>
+                </li>
+              </>
+            )}
+            {view === "supervision" && (
+              <>
+                {sep}
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setView("self-assessment")}
+                    className={crumb}
+                  >
+                    Self-assessment
+                  </button>
+                </li>
+                {sep}
+                <li>
+                  <span aria-current="page" className="px-1.5 font-semibold text-ink-900">
+                    Supervision
+                  </span>
+                </li>
+              </>
+            )}
+          </ol>
+        </nav>
+      )}
       {view === "chat" && !example && (
         <div
           className="flex gap-[3px]"
@@ -1428,12 +1450,7 @@ function WorkspaceBody({
         </div>
       )}
       {inline && (
-        <ActionsMenu
-          view={view}
-          setView={setView}
-          onNew={() => void newSession()}
-          onApproaches={() => setLibraryOpen(true)}
-        />
+        <ActionsMenu view={view} setView={setView} onApproaches={() => setLibraryOpen(true)} />
       )}
       {noteToggle}
     </header>
@@ -1790,20 +1807,11 @@ function WorkspaceBody({
       <button
         type="button"
         className={ICON}
-        aria-label="Minimise"
-        title="Minimise"
-        onClick={() => setPanel("min")}
-      >
-        <PanelRightClose className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        className={ICON}
-        aria-label="Close note"
-        title="Close"
+        aria-label="Hide note"
+        title="Hide note"
         onClick={() => setPanel("closed")}
       >
-        <X className="h-[18px] w-[18px]" />
+        <PanelRightClose className="h-4 w-4" />
       </button>
     </>
   ) : (
@@ -1820,11 +1828,11 @@ function WorkspaceBody({
       <button
         type="button"
         className={ICON}
-        aria-label="Close note"
-        title="Close"
+        aria-label="Hide note"
+        title="Hide note"
         onClick={() => setNotesOpen(false)}
       >
-        <X className="h-[18px] w-[18px]" />
+        <PanelRightClose className="h-4 w-4" />
       </button>
     </>
   );

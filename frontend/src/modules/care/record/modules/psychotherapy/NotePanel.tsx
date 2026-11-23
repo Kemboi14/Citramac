@@ -1,5 +1,5 @@
 import { AutoResizeTextarea } from "../../../shared/AutoResizeTextarea";
-import { ChevronDown, ClipboardCheck, Copy, Download, Pencil, Share2 } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Copy, Pencil } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../../../../auth/useAuth";
 import type { PsyConfig, PsyNote } from "../../../../../lib/psychotherapyNoteApi";
@@ -16,13 +16,11 @@ import { exampleAnswers, exampleSections } from "./exampleSession";
 import {
   copyText,
   ddmmyyyy,
-  downloadText,
   familyDraftDisplayText,
   hhmm,
   modeLabel,
   noteSections,
   toLocalInput,
-  transcriptText,
 } from "./helpers";
 
 type Save = (body: Record<string, unknown>) => Promise<boolean>;
@@ -30,7 +28,7 @@ type Save = (body: Record<string, unknown>) => Promise<boolean>;
 const STATUS =
   "whitespace-nowrap rounded-[5px] px-[7px] py-[3px] font-mono text-[10.5px] font-medium uppercase tracking-[.06em]";
 /** Section heading: small, quiet capitals; the content carries the weight. */
-const SEC_H = "text-[11px] font-semibold uppercase tracking-[.06em] text-ink-500";
+const SEC_H = "text-[13.5px] font-semibold text-ink-900";
 const LINK = "text-[12px] text-ink-500 underline underline-offset-2 hover:text-ink-900";
 
 function StatusPill({
@@ -116,10 +114,7 @@ export function NotePanel({
             example={example}
             family={note.session.session_type === "FAMILY"}
           />
-          <div className="ml-auto flex items-center gap-0.5">
-            {!example && <ShareMenu note={note} />}
-            {controls}
-          </div>
+          <div className="ml-auto flex items-center gap-0.5">{controls}</div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
@@ -255,88 +250,6 @@ function ExampleTranscript({ config, note }: { config: PsyConfig; note: PsyNote 
   );
 }
 
-function ShareMenu({ note }: { note: PsyNote }) {
-  const [open, setOpen] = useState(false);
-  const [done, setDone] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const onClick = (e: MouseEvent) =>
-      ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onClick);
-    };
-  }, [open]);
-  const date = ddmmyyyy(note.session.session_date).split("/").reverse().join("-");
-  const rendered = familyDraftDisplayText(note, note.rendered);
-  async function act(label: string, work: () => Promise<boolean> | void) {
-    const ok = await work();
-    setDone(ok === false ? "Couldn't copy — select the text instead." : label);
-    setOpen(false);
-    window.setTimeout(() => setDone(""), 2500);
-  }
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        className="mr-1 inline-flex items-center gap-1.5 rounded-[9px] border border-surface-border bg-surface-card px-[11px] py-[5px] text-[13px] font-semibold text-ink-900 hover:border-brand-green"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <Share2 className="h-[15px] w-[15px]" /> Share
-      </button>
-      <span role="status" className="sr-only">
-        {done}
-      </span>
-      {done && (
-        <span className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-ink-900 px-2 py-1 text-[11px] text-surface-card">
-          {done}
-        </span>
-      )}
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-surface-border bg-surface-card p-1 shadow-md"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg"
-            onClick={() => void act("Note copied", () => copyText(rendered))}
-          >
-            <Copy className="h-3.5 w-3.5" /> Copy note
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg"
-            onClick={() => void act("Transcript copied", () => copyText(transcriptText(note)))}
-          >
-            <Copy className="h-3.5 w-3.5" /> Copy transcript
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-surface-bg"
-            onClick={() =>
-              void act("Note downloaded", () =>
-                downloadText(`psychotherapy-note-${date}.txt`, rendered),
-              )
-            }
-          >
-            <Download className="h-3.5 w-3.5" /> Download note (.txt)
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ProcessingLine({ note }: { note: PsyNote }) {
   const p = note.processing;
   if (p.status === "pending") {
@@ -347,12 +260,11 @@ function ProcessingLine({ note }: { note: PsyNote }) {
       </p>
     );
   }
+  // Only said when something is happening or went wrong; a normal note says nothing.
+  if (p.status !== "error") return null;
   return (
     <p className="flex items-center gap-1.5 text-[12px] text-ink-500">
-      <span
-        aria-hidden
-        className={`h-[7px] w-[7px] flex-shrink-0 rounded-full ${p.status === "done" ? "bg-brand-green" : "bg-ink-500"}`}
-      />
+      <span aria-hidden className="h-[7px] w-[7px] flex-shrink-0 rounded-full bg-ink-500" />
       {p.label}
       {p.status === "error" && (
         <span className="text-priority-orange">
@@ -403,10 +315,8 @@ function SessionInfo({ config, note, save }: { config: PsyConfig; note: PsyNote;
           <span>
             {ddmmyyyy(s.session_date)} · {hhmm(s.session_date)}
           </span>
-          <span>
-            · {s.duration_minutes ? `${s.duration_minutes} min` : "duration not recorded"}
-          </span>
-          <span>· {mode ?? "format not recorded"}</span>
+          {s.duration_minutes ? <span>· {s.duration_minutes} min</span> : null}
+          {mode ? <span>· {mode}</span> : null}
           <span>· {type}</span>
           <span>· {note.author}</span>
           {s.location && <span>· {s.location}</span>}
@@ -597,7 +507,7 @@ function NoteBody({
   const hasSections = Object.values(note.sections).some((v) => v);
   const hasAnswers = Object.values(note.answers).some((a) => a?.text?.trim());
   return (
-    <div className="flex flex-col gap-3 text-[13px] leading-[1.5]">
+    <div className="flex flex-col gap-2.5 text-[13px] leading-[1.5]">
       <SessionInfo config={config} note={note} save={save} />
       {!signed && !note.generated_at && hasAnswers && (
         <Callout tone="warning">
@@ -651,8 +561,20 @@ export function NoteText({ text }: { text: string }) {
     if (!items.length) return;
     const list = items;
     items = [];
+    // A single point reads as a sentence, not a one-item list.
+    if (list.length === 1) {
+      blocks.push(
+        <p key={`p-${blocks.length}`} className="whitespace-pre-wrap">
+          {list[0]}
+        </p>,
+      );
+      return;
+    }
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="flex list-disc flex-col gap-0.5 pl-4">
+      <ul
+        key={`ul-${blocks.length}`}
+        className="flex list-disc flex-col gap-0.5 pl-4 marker:text-ink-400"
+      >
         {list.map((item, i) => (
           <li key={i}>{item}</li>
         ))}
@@ -669,8 +591,8 @@ export function NoteText({ text }: { text: string }) {
     if (!line.trim()) continue;
     blocks.push(
       /:$/.test(line.trim()) ? (
-        <div key={blocks.length} className="text-[12px] font-semibold text-ink-700">
-          {line}
+        <div key={blocks.length} className="mt-1.5 text-[12px] leading-5 text-ink-500 first:mt-0">
+          {line.trim().replace(/:$/, "")}
         </div>
       ) : (
         <p key={blocks.length} className="whitespace-pre-wrap">
@@ -680,7 +602,9 @@ export function NoteText({ text }: { text: string }) {
     );
   }
   flush();
-  return <div className="flex flex-col gap-1 text-ink-900">{blocks}</div>;
+  return (
+    <div className="flex flex-col gap-0 text-[13.5px] leading-[1.45rem] text-ink-900">{blocks}</div>
+  );
 }
 
 function Section({
@@ -714,7 +638,7 @@ function Section({
   return (
     <section
       aria-labelledby={`psy-sec-${sectionKey}`}
-      className="flex flex-col gap-1 border-t border-surface-border pt-3"
+      className="flex flex-col gap-0.5 border-t border-surface-border pt-2.5"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">

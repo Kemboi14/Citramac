@@ -510,6 +510,27 @@ def start_or_resume(patient, user, data):
                 "session_type": "Individual or family — group sessions are recorded in the group programme."
             }
         )
+    # One session at a time: another clinician's unsigned session must be
+    # finished (signed) before a new one starts.
+    others = (
+        PsychotherapyNote.objects.filter(
+            patient=patient,
+            therapy_episode=ep,
+            session__session_type=session_type,
+            status="DRAFT",
+        )
+        .exclude(author=user)
+        .select_related("author")
+        .first()
+    )
+    if others is not None:
+        raise ValidationError(
+            {
+                "detail": "The previous session is not signed yet "
+                f"({others.author.get_full_name() if others.author else 'another clinician'}). "
+                "It must be completed before a new session starts."
+            }
+        )
     existing = PsychotherapyNote.objects.filter(
         patient=patient,
         author=user,
