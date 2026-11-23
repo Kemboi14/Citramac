@@ -120,6 +120,7 @@ export function OutcomesStage({ patientId, banner, onRecordChanged }: RecordView
               patientId={patientId}
               overview={overview}
               checklist={checklist}
+              admissionId={banner.setting.admission_id ?? null}
               onChanged={refresh}
             />
           )}

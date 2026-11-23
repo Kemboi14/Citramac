@@ -146,6 +146,13 @@ export interface DischargeChecklist {
   source: "episode" | "inpatient";
   answers: DischargeAnswers;
   items: { key: string; label: string; ok: boolean }[];
+  /** The signed inpatient discharge summary the answers come from, if any. */
+  summary?: {
+    admission_id: string;
+    disposition: string;
+    suggested_outcome: string;
+    suggested_destination: string;
+  } | null;
 }
 
 export function getDischargeChecklist(accessToken: string, patientId: string) {

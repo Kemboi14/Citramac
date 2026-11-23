@@ -250,6 +250,23 @@ class DischargeWorkflowTests(DischargeFixture):
         accepted = self.sign(legal_status_at_discharge="Order lapsed; reviewed by consultant.")
         self.assertEqual(accepted.status_code, 200, accepted.data)
 
+    def test_episode_outcome_starts_from_the_signed_summarys_disposition(self):
+        response = self.sign(disposition="TRANSFER", destination="Referral hospital")
+        self.assertEqual(response.status_code, 200, response.data)
+        checklist = self.client.get(
+            reverse("care-client-discharge-checklist", args=[self.patient.pk]), **self.auth
+        ).data
+        self.assertEqual(checklist["source"], "inpatient")
+        self.assertEqual(
+            checklist["summary"],
+            {
+                "admission_id": str(self.admission.pk),
+                "disposition": "TRANSFER",
+                "suggested_outcome": "TRANSFERRED",
+                "suggested_destination": "OTHER_FACILITY",
+            },
+        )
+
     def test_left_against_medical_advice_is_a_valid_disposition(self):
         response = self.sign(disposition="AMA", destination="Left with family")
         self.assertEqual(response.status_code, 200, response.data)

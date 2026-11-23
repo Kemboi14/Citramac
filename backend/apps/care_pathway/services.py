@@ -1167,6 +1167,7 @@ def setting_for(patient, admission=None, triage_encounter=None):
     if admission:
         return {
             "type": "INPATIENT",
+            "admission_id": str(admission.pk),
             "ward": admission.bed.ward.name,
             "bed": admission.bed.bed_number,
             "status": admission.get_status_display(),
@@ -1177,7 +1178,13 @@ def setting_for(patient, admission=None, triage_encounter=None):
     else:
         episode = current_or_latest_episode(patient)
         status = episode.get_status_display() if episode else "Active"
-    return {"type": "OUTPATIENT", "ward": None, "bed": None, "status": status}
+    return {
+        "type": "OUTPATIENT",
+        "admission_id": None,
+        "ward": None,
+        "bed": None,
+        "status": status,
+    }
 
 
 def allergy_banner(patient):

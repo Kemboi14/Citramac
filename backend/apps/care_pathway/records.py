@@ -315,7 +315,31 @@ def episode_discharge_checklist(patient, episode=None):
         "source": "inpatient" if signed else "episode",
         "answers": answers or {},
         "items": items,
+        # What the signed summary already decided, so the episode outcome starts
+        # from it (the clinician still chooses), and where to amend it.
+        "summary": (
+            {
+                "admission_id": str(signed.admission_id),
+                "disposition": signed.disposition,
+                "suggested_outcome": DISPOSITION_TO_OUTCOME.get(signed.disposition, ""),
+                "suggested_destination": (
+                    "OTHER_FACILITY" if signed.disposition == "TRANSFER" else ""
+                ),
+            }
+            if signed
+            else None
+        ),
     }
+
+
+# Served `discharge-disposition` → served `episode-outcome` (both local value sets).
+DISPOSITION_TO_OUTCOME = {
+    "HOME": "PLANNED",
+    "TRANSFER": "TRANSFERRED",
+    "AMA": "LEFT_EARLY",
+    "ABSCONDED": "LEFT_EARLY",
+    "DECEASED": "DECEASED",
+}
 
 
 def save_discharge_answers(patient, user, data):

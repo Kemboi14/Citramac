@@ -983,6 +983,8 @@ export interface ClientBanner {
   };
   setting: {
     type: "INPATIENT" | "OUTPATIENT";
+    /** The current admission, for links to its discharge; null for an outpatient. */
+    admission_id?: string | null;
     ward: string | null;
     bed: string | null;
     status: string;

@@ -24,17 +24,25 @@ export function DischargePanel({
   patientId,
   overview,
   checklist,
+  admissionId,
   onChanged,
 }: {
   patientId: string;
+  /** The current admission: its discharge summary is opened from here. */
+  admissionId: string | null;
   overview: OutcomesOverview;
   checklist: DischargeChecklist | null;
   onChanged: () => void;
 }) {
   const { accessToken } = useAuth();
   const vs = useValueSets();
-  const [outcome, setOutcome] = useState("PLANNED");
-  const [destination, setDestination] = useState("");
+  const [picked, setOutcome] = useState<string | null>(null);
+  const [pickedDestination, setDestination] = useState<string | null>(null);
+  // The signed discharge summary already says how the stay ended: the episode
+  // outcome starts from it until the clinician chooses otherwise.
+  const suggested = checklist?.summary ?? null;
+  const outcome = picked ?? (suggested?.suggested_outcome || "PLANNED");
+  const destination = pickedDestination ?? (suggested?.suggested_destination || "");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -221,13 +229,31 @@ export function DischargePanel({
                 </Link>
               )}
               {!item.ok && item.key === "inpatient" && (
-                <span className="text-[12px] text-ink-500">
-                  Discharge the inpatient stay from Discharge planning first.
-                </span>
+                <Link
+                  to={
+                    admissionId
+                      ? `/clinical/discharge?admission=${encodeURIComponent(admissionId)}`
+                      : "/clinical/discharge"
+                  }
+                  className={`${BTN_GHOST} ${BTN_SM}`}
+                >
+                  Open discharge summary
+                </Link>
               )}
             </li>
           ))}
         </ul>
+        {suggested && !complete && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-500">
+            These answers are part of the signed discharge summary and cannot be ticked here.
+            <Link
+              to={`/clinical/discharge?admission=${encodeURIComponent(suggested.admission_id)}`}
+              className={`${BTN_GHOST} ${BTN_SM}`}
+            >
+              Amend the discharge summary
+            </Link>
+          </p>
+        )}
       </div>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
@@ -252,10 +278,18 @@ export function DischargePanel({
           <input className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} />
         </label>
       </div>
+      {suggested?.suggested_outcome && (
+        <p className="mt-2 text-[12px] text-ink-500">
+          The signed discharge summary records “
+          {vs.label("discharge-disposition", suggested.disposition)}”, so the outcome starts as “
+          {vs.label("episode-outcome", suggested.suggested_outcome)}”.
+        </p>
+      )}
       {planned && !complete && (
         <p className="mt-2 text-[12px] text-priority-orange">
-          Complete the discharge checklist before recording a planned discharge — or choose another
-          outcome.
+          {suggested
+            ? "A planned discharge needs every checklist item. The missing ones come from the signed discharge summary — amend it to record them, or choose the outcome that matches how the stay ended."
+            : "Complete the discharge checklist before recording a planned discharge — or choose another outcome."}
         </p>
       )}
       <button
