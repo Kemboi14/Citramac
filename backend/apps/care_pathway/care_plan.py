@@ -589,7 +589,11 @@ def conflicts(plan):
         out.append(
             "Alcohol / sedative withdrawal risk is active but no withdrawal-management action is planned."
         )
-    if live and _involuntary_admission(patient) and not keys & {"admission", "referral"}:
+    if (
+        live
+        and _involuntary_status_without_admission(patient)
+        and not keys & {"admission", "referral"}
+    ):
         out.append("Legal status is involuntary but no admission or transfer is planned.")
     if "detox" in keys and is_opioid(patient) and not opioid_safety_recorded(plan):
         out.append(
@@ -601,14 +605,16 @@ def conflicts(plan):
     return out
 
 
-def _involuntary_admission(patient):
-    """The current legal status the record holds: an open involuntary admission.
-    (Emergency detention outside an admission is not recorded anywhere yet.)"""
-    from apps.ipd_ward.models import Admission
+def _involuntary_status_without_admission(patient):
+    """Involuntary legal status with no admission to carry it out.
 
-    return Admission.objects.filter(
-        patient=patient, status="ADMITTED", admission_type="INVOLUNTARY"
-    ).exists()
+    An open involuntary admission *is* the admission the rule asks for: since
+    2026-11-18 admissions start only in Inpatient Admissions, so the plan need not
+    carry an "Inpatient admission" action for one. Involuntary status held outside
+    an admission (emergency detention) is not recorded anywhere yet, so for now
+    this is never true; it is kept so the rule fires once such a status exists.
+    """
+    return False
 
 
 def is_opioid(patient):
@@ -656,7 +662,7 @@ def needs_safety_plan(plan):
     )
 
 
-def outstanding(plan):
+def outstanding(plan, signer=None):
     """Items still needed before the plan can be signed."""
     items = []
     recs = recommend(plan.patient)
@@ -673,6 +679,8 @@ def outstanding(plan):
             items.append("Clinical rationale for the conflicting plan")
         if not plan.senior_reviewer_id:
             items.append("Senior review")
+        elif signer is not None and plan.senior_reviewer_id == signer.pk:
+            items.append("Senior review by someone other than the person signing")
     return items, found
 
 
@@ -681,7 +689,7 @@ def confirm_plan(plan, user, bulk_reviewed=False):
     from apps.accounts.practitioner_profile import require_current_licence
 
     require_current_licence(user)
-    items, found = outstanding(plan)
+    items, found = outstanding(plan, signer=user)
     if items:
         raise ValidationError(
             {"outstanding": items, "plan": f"Cannot sign yet — {len(items)} item(s) to complete."}

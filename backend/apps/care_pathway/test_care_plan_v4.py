@@ -208,7 +208,9 @@ class ConflictTests(V4TestCase):
             ws["conflicts"],
         )
 
-    def test_involuntary_admission_without_admission_or_transfer_action_is_a_conflict(self):
+    def test_an_involuntary_admission_is_itself_the_admission_the_plan_needs(self):
+        """Admissions start in Inpatient Admissions, so an admitted involuntary client
+        is not a conflict for lacking an 'Inpatient admission' plan action."""
         from apps.clinical_encounter.models import Encounter
         from apps.ipd_ward.models import Admission, Bed, Ward
 

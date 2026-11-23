@@ -245,6 +245,49 @@ class SignPlanTests(CarePlanTestCase):
         self.assertEqual(requests[0]["kind"], "CARE_PLAN_CONFLICT")
         self.assertEqual(requests[0]["status"], "REQUESTED")
 
+    def test_nobody_is_their_own_senior_reviewer(self):
+        seniors = self.client.get(reverse("care-seniors"), **self.psych_auth).data["results"]
+        self.assertNotIn(str(self.psych.pk), [s["id"] for s in seniors])
+        own = self.client.patch(
+            reverse("care-plan-details", args=[self.pid]),
+            {"senior_reviewer": str(self.psych.pk)},
+            format="json",
+            **self.psych_auth,
+        )
+        self.assertEqual(own.status_code, 400)
+        self.assertIn("senior_reviewer", own.data)
+
+    def test_the_signer_cannot_be_the_chosen_senior_reviewer(self):
+        self.sign_triage()
+        self.decide("outpatient", "ACCEPTED")
+        self.details(
+            rationale="Client declines escalation and has strong supports at home",
+            senior_reviewer=str(self.psych.pk),
+        )
+        res = self.client.post(
+            reverse("care-plan-confirm", args=[self.pid]), format="json", **self.psych_auth
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn(
+            "Senior review by someone other than the person signing", res.data["outstanding"]
+        )
+
+    def test_an_open_cosign_request_names_the_latest_signed_version(self):
+        self.sign_triage()
+        self.decide("outpatient", "ACCEPTED")
+        self.details(
+            rationale="Client declines escalation and has strong supports at home",
+            senior_reviewer=str(self.psych.pk),
+        )
+        self.assertEqual(self.confirm().status_code, 200)
+        self.assertEqual(self.confirm().status_code, 200)
+        requests = self.client.get(
+            reverse("care-client-cosign", args=[self.pid]), **self.auth
+        ).data["results"]
+        open_ = [r for r in requests if r["status"] == "REQUESTED"]
+        self.assertEqual(len(open_), 1)
+        self.assertIn(f"v{self.ws().data['version']}", open_[0]["what"])
+
     def test_only_a_cosign_capable_user_can_be_chosen_as_senior(self):
         bad = self.details(senior_reviewer=str(self.nurse.pk))
         self.assertEqual(bad.status_code, 400)

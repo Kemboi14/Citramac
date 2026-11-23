@@ -286,6 +286,10 @@ class CarePlanDetailsView(APIView):
                 senior = get_object_or_404(User, pk=data["senior_reviewer"])
                 if not plan_extras.can_cosign(senior):
                     raise ValidationError({"senior_reviewer": "That person cannot co-sign."})
+                if senior.pk == request.user.pk:
+                    raise ValidationError(
+                        {"senior_reviewer": "Choose someone other than yourself to co-sign."}
+                    )
                 plan.senior_reviewer = senior
             else:
                 plan.senior_reviewer = None
@@ -306,19 +310,22 @@ class CarePlanConfirmView(APIView):
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
-        had_conflict = bool(care_plan.outstanding(plan)[1])
+        had_conflict = bool(care_plan.outstanding(plan, signer=request.user)[1])
         care_plan.confirm_plan(
             plan, request.user, bulk_reviewed=request.data.get("bulk_reviewed") is True
         )
         if had_conflict and plan.senior_reviewer_id:
-            plan_extras.request_cosign(
-                patient,
-                request.user,
-                "CARE_PLAN_CONFLICT",
-                f"Care plan v{plan.version} for a client whose plan conflicts with their priority",
-                "CarePlan",
-                plan.pk,
+            what = (
+                f"Care plan v{plan.version} for a client whose plan conflicts with their priority"
             )
+            req = plan_extras.request_cosign(
+                patient, request.user, "CARE_PLAN_CONFLICT", what, "CarePlan", plan.pk
+            )
+            # One open request per plan: a later signed version is what the senior
+            # now reviews, so the open request names it rather than an older one.
+            if req.what != what:
+                req.what = what
+                req.save(update_fields=["what"])
         return Response(_workspace(patient, plan))
 
 
@@ -327,7 +334,16 @@ class SeniorsView(APIView):
 
     def get(self, request):
         users = users_with_permission(["clinical.cosign"], request.user.organization_id)
-        return Response({"results": [{"id": str(u.pk), "name": _user_name(u)} for u in users]})
+        # Nobody co-signs their own decision.
+        return Response(
+            {
+                "results": [
+                    {"id": str(u.pk), "name": _user_name(u)}
+                    for u in users
+                    if u.pk != request.user.pk
+                ]
+            }
+        )
 
 
 class PlanTaskView(APIView):
