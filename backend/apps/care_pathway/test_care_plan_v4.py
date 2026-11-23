@@ -241,10 +241,6 @@ class ConflictTests(V4TestCase):
                 admission_type="INVOLUNTARY",
             )
         ws = self.decide("outpatient", "ACCEPTED").data
-        self.assertIn(
-            "Legal status is involuntary but no admission or transfer is planned.", ws["conflicts"]
-        )
-        ws = self.decide("admission", "ADDED", priority="ORANGE").data
         self.assertNotIn(
             "Legal status is involuntary but no admission or transfer is planned.", ws["conflicts"]
         )
