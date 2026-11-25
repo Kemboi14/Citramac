@@ -61,7 +61,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterModelOptions(
             name="billingservice",
-            options={"ordering": ["category", "name"]},
+            options={
+                "ordering": ["category", "name"],
+                "abstract": False,
+                "base_manager_name": "all_objects",
+            },
         ),
         migrations.AddConstraint(
             model_name="billingservice",
