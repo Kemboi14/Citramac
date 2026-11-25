@@ -1326,13 +1326,10 @@ class PsychotherapyPlanScheduleView(APIView):
         activity = None
         requested_activity = request.data.get("care_plan_activity")
         if requested_activity:
-<<<<<<< Updated upstream
-=======
             if plan is None:
                 raise ValidationError(
                     {"care_plan_activity": "The client has no current care plan."}
                 )
->>>>>>> Stashed changes
             activity = get_object_or_404(
                 CarePlanActivity.objects.select_for_update(),
                 pk=requested_activity,
@@ -1385,12 +1382,7 @@ class PsychotherapyPlanScheduleView(APIView):
             patient,
             {
                 "reason": "CARE_PLAN_REVIEW",
-<<<<<<< Updated upstream
                 "appointment_type": appointment_type,
-=======
-                "appointment_type": request.data.get("appointment_type")
-                or "Individual psychotherapy",
->>>>>>> Stashed changes
                 "scheduled_for": scheduled_at.isoformat(),
                 "provider": str(request.user.pk),
                 "mode": request.data.get("mode") or "IN_PERSON",
@@ -1411,7 +1403,6 @@ class PsychotherapyPlanScheduleView(APIView):
             appointment,
             AuditLogEntry.ACTION_CREATE,
             {
-<<<<<<< Updated upstream
                 "care_plan_activity": str(activity.pk) if activity is not None else "",
                 "appointment_type": appointment.appointment_type,
                 "reason": appointment.reason,
@@ -1419,11 +1410,6 @@ class PsychotherapyPlanScheduleView(APIView):
         )
         return Response(
             _psychotherapy_plan_schedule(patient, plan, episode), status=status.HTTP_201_CREATED
-=======
-                "care_plan_activity": str(activity.pk) if activity else "",
-                "reason": appointment.reason,
-            },
->>>>>>> Stashed changes
         )
 
 
