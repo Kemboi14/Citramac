@@ -676,6 +676,7 @@ class AccommodationTests(APITestCase):
                 organization=self.org, patient=self.patient, encounter=None, created_by=self.nurse
             )
             InvoiceLine.objects.create(
+                organization=self.org,
                 invoice=invoice,
                 charge_item=nights[0].charge,
                 description="Bed-day — Shared room",
