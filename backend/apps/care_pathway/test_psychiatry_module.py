@@ -112,6 +112,27 @@ class PsychiatryModuleTests(CarePathwayApiTestCase):
         self.assertEqual(row["assessment_status"], "")
         self.assertIn("psychiatric review", row["suggested_reason"].lower())
 
+    def test_client_list_handles_a_review_task_without_triage_or_session(self):
+        with platform_admin_context():
+            triage = TriageEncounter.objects.get(pk=self.te_id)
+            CareTask.objects.filter(patient_id=self.pid).update(status="COMPLETED")
+            triage.triage_version = 0
+            triage.save(update_fields=["triage_version"])
+            CareTask.objects.create(
+                organization=self.org,
+                patient_id=self.pid,
+                episode=triage.episode,
+                action_code="psychiatric_review",
+                action_label="Psychiatric review",
+                owner="Psychiatry",
+            )
+
+        response = self.client.get(reverse("care-psych-module-clients"), **self.auth)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        row = next(item for item in response.data["results"] if item["patient_id"] == self.pid)
+        self.assertEqual(row["episode_id"], str(triage.episode_id))
+
     def test_schedule_read_does_not_create_a_care_plan(self):
         response = self.client.get(self.schedule_url, **self.auth)
 

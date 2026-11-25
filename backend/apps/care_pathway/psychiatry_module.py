@@ -1057,16 +1057,22 @@ def candidates():
 
     asked = {}
     asked_reason = {}
+    asked_episode_ids = {}
     review_codes = [code for code, key in TRIAGE_TO_PLAN.items() if key == "psych_review"]
     for task in (
         CareTask.objects.filter(status__in=OPEN_TASK_STATUSES, patient__archived_at__isnull=True)
         .filter(Q(focus_type__in=REVIEW_FOCUS_TYPES) | Q(action_code__in=review_codes))
-        .select_related("patient")
+        .select_related("patient", "triage_encounter")
     ):
         asked.setdefault(task.patient_id, task.patient)
         asked_reason.setdefault(
             task.patient_id, task.action_label or "Psychiatric review requested"
         )
+        task_episode_id = task.episode_id or (
+            task.triage_encounter.episode_id if task.triage_encounter_id else None
+        )
+        if task_episode_id:
+            asked_episode_ids.setdefault(task.patient_id, task_episode_id)
     for activity in (
         CarePlanActivity.objects.filter(
             action_key="psych_review",
@@ -1081,11 +1087,16 @@ def candidates():
         asked_reason.setdefault(
             activity.care_plan.patient_id, "Psychiatric review in the care plan"
         )
+        asked_episode_ids.setdefault(
+            activity.care_plan.patient_id, activity.care_plan.episode_id
+        )
     for note in ProgressNote.objects.filter(
         note_type=NOTE_TYPE, status="DRAFT", patient__archived_at__isnull=True
     ).select_related("patient"):
         asked.setdefault(note.patient_id, note.patient)
         asked_reason.setdefault(note.patient_id, "Psychiatric assessment in progress")
+        if note.episode_id:
+            asked_episode_ids.setdefault(note.patient_id, note.episode_id)
 
     patient_ids = set(asked) | set(sessions)
     if not patient_ids:
@@ -1130,6 +1141,15 @@ def candidates():
         note = latest_note.get(patient_id)
         signed = signed_note.get(patient_id)
         review = reviews.get(patient_id)
+        episode_id = (
+            triage.episode_id
+            if triage
+            else (
+                intake.episode_id
+                if intake
+                else (session.episode_id if session else asked_episode_ids.get(patient_id))
+            )
+        )
         suggested = patient_id in asked and not (note and note.status == "DRAFT" and not review)
         # Done with psychiatry for now: reviewed since what brought them in, no
         # review task waiting for its outcome, no draft in progress and no session
@@ -1147,14 +1167,7 @@ def candidates():
                 "age": patient.age_years,
                 "sex": patient.gender,
                 "priority": triage.priority if triage else "",
-                "episode_id": str(
-                    (
-                        triage.episode_id
-                        if triage
-                        else intake.episode_id if intake else session.episode_id
-                    )
-                    or ""
-                ),
+                "episode_id": str(episode_id or ""),
                 "presenting_concern": (
                     (triage.presenting_concern if triage else "")
                     or (intake.presenting_concern if intake else "")
