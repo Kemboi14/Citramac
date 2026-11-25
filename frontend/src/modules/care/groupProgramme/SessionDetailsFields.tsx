@@ -5,6 +5,11 @@ import { INPUT } from "../shared/styles";
 import { Field } from "../shared/ui";
 import { OTHER_FACILITATOR, type SessionForm } from "./model";
 import DateInput from "../../../components/DateInput";
+import { useAuth } from "../../../auth/useAuth";
+
+/** The one category that is psychotherapy; recording it needs this permission (server-checked). */
+const PSYCHOTHERAPY_CATEGORY = "group_psychotherapy";
+const DELIVER_PSYCHOTHERAPY = "clinical.psychotherapy.deliver";
 
 /** Session detail inputs — shared by the editor and the "Correct session details" dialog. */
 export function SessionDetailsFields({
@@ -28,6 +33,8 @@ export function SessionDetailsFields({
   variant?: "editor" | "correction";
 }) {
   const id = (name: string) => `${idPrefix}-${name}`;
+  const { profile } = useAuth();
+  const canDeliver = profile?.permissions?.includes(DELIVER_PSYCHOTHERAPY) ?? false;
   const isOther = categories.find((c) => c.code === form.category)?.is_other ?? false;
   const correction = variant === "correction";
   const dateField = (
@@ -54,6 +61,9 @@ export function SessionDetailsFields({
           <option value="">Select a category</option>
           {categories
             .filter((c) => c.active || c.code === form.category)
+            .filter(
+              (c) => canDeliver || c.code !== PSYCHOTHERAPY_CATEGORY || c.code === form.category,
+            )
             .map((c) => (
               <option key={c.code} value={c.code}>
                 {c.display}

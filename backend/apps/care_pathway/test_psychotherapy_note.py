@@ -26,6 +26,7 @@ FORBIDDEN_DENIALS = (
 class PsyNoteTestCase(RecordsTestCase):
     def setUp(self):
         super().setUp()
+        self.make_therapist()
         eid = self.post("care-client-therapy", {"modality": "CBT", "planned_sessions": 8}).data[
             "id"
         ]
@@ -76,6 +77,17 @@ class PsyNoteTestCase(RecordsTestCase):
 
 
 class DraftAndResumeTests(PsyNoteTestCase):
+    def test_only_holders_of_deliver_psychotherapy_can_start_or_write(self):
+        nid = self.start().data["id"]
+        with platform_admin_context():
+            self.nurse.roles.remove(
+                Role.objects.get(name="Clinical Psychologist/Therapist", organization=None)
+            )
+            self.nurse.roles.add(Role.objects.get(name="Nurse", organization=None))
+        self.assertEqual(self.post("care-client-therapy", {"modality": "CBT"}).status_code, 403)
+        self.assertEqual(self.start().status_code, 403)
+        self.assertEqual(self.patch(nid, self.answers(q1="x")).status_code, 403)
+
     def test_resuming_a_draft_keeps_the_session_details_just_entered(self):
         first = self.start()
         self.assertEqual(first.status_code, 201)
@@ -130,7 +142,9 @@ class DraftAndResumeTests(PsyNoteTestCase):
         # The same clinician resumes their unsigned session rather than opening a second.
         again = self.start()
         self.assertEqual(again.data["id"], first.data["id"])
-        # Another clinician cannot start a new one while it is unsigned.
+        # Another clinician who delivers psychotherapy cannot start a new one while it
+        # is unsigned.
+        self.make_therapist(self.psych)
         other = self.start(auth=self.psych_auth)
         self.assertEqual(other.status_code, 400, other.data)
         self.assertIn("not signed yet", str(other.data))

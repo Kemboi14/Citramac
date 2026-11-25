@@ -512,6 +512,10 @@ class RestrictivePracticeV4Tests(ModulesTestCase):
 
 
 class TherapyV4Tests(ModulesTestCase):
+    def setUp(self):
+        super().setUp()
+        self.make_therapist()
+
     def start(self, auth=None, **over):
         return self.as_(
             auth or self.auth,

@@ -741,6 +741,76 @@ def issue_invoice(user, patient):
     return invoice, True
 
 
+def invoice_lines(invoice):
+    """The invoice's lines for display. Bed-days are one charge per night, so
+    consecutive nights at the same accommodation type and rate show as one line
+    ("Bed-day — Private room", 24 Nov – 28 Nov, 5 nights); every other line is
+    shown as billed. The invoice's own lines are unchanged."""
+    from datetime import timedelta
+
+    from apps.ipd_ward.models import BedNight
+
+    lines = list(invoice.lines.select_related("charge_item").order_by("id"))
+    nights = {
+        n.charge_id: n.night
+        for n in BedNight.objects.filter(charge_id__in=[ln.charge_item_id for ln in lines])
+    }
+    rows, groups = [], {}
+    def when(line):
+        if line.charge_item_id in nights:
+            return facility_time.combine_local(nights[line.charge_item_id])
+        return line.charge_item.delivered_at if line.charge_item_id else line.created_at
+
+    for line in sorted(lines, key=when):
+        night = nights.get(line.charge_item_id)
+        if night is None:
+            rows.append(
+                {
+                    "service": line.description,
+                    "detail": "",
+                    "quantity": line.quantity,
+                    "unit_price": _money(line.unit_price),
+                    "amount": _money(line.line_total),
+                }
+            )
+            continue
+        key = (line.description, line.unit_price)
+        group = groups.get(key)
+        if group is None or group["last"] + timedelta(days=1) != night:
+            group = {
+                "service": line.description,
+                "first": night,
+                "last": night,
+                "quantity": 0,
+                "unit_price": line.unit_price,
+                "amount": ZERO,
+            }
+            groups[key] = group
+            rows.append(group)
+        group["last"] = night
+        group["quantity"] += line.quantity
+        group["amount"] += line.line_total
+    out = []
+    for row in rows:
+        if "first" not in row:
+            out.append(row)
+            continue
+        span = row["first"].strftime("%d %b %Y")
+        if row["last"] != row["first"]:
+            span = f"{row['first'].strftime('%d %b')} – {row['last'].strftime('%d %b %Y')}"
+        count = row["quantity"]
+        out.append(
+            {
+                "service": row["service"],
+                "detail": f"Nights of {span} ({count} night{'s' if count != 1 else ''})",
+                "quantity": count,
+                "unit_price": _money(row["unit_price"]),
+                "amount": _money(row["amount"]),
+            }
+        )
+    return out
+
+
 def _outstanding(patient):
     from apps.care_pathway.services import billing_overview
 
@@ -920,14 +990,7 @@ def workspace(user, patient):
             "version": invoice.version,
             "created_at": invoice.created_at.isoformat(),
             "total": _money(invoice.total_amount),
-            "lines": [
-                {
-                    "service": line.description,
-                    "quantity": line.quantity,
-                    "amount": _money(line.line_total),
-                }
-                for line in invoice.lines.all()
-            ],
+            "lines": invoice_lines(invoice),
             "stale": billed != {str(c.id) for c in charges},
         }
     return {

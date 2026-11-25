@@ -2331,7 +2331,8 @@ class BillingOverviewView(APIView):
 
 class BillingServicesView(APIView):
     def get(self, request):
-        return Response(BillingServiceSerializer(BillingService.objects.all(), many=True).data)
+        services = BillingService.objects.all().prefetch_related("payer_codes")
+        return Response(BillingServiceSerializer(services, many=True).data)
 
 
 class BillingServiceView(APIView):
@@ -2339,10 +2340,49 @@ class BillingServiceView(APIView):
         if not _is_org_admin(request.user):
             raise PermissionDenied("Only an Org Admin can change the facility tariff.")
         service = get_object_or_404(BillingService, pk=pk)
-        serializer = BillingServiceSerializer(service, data=request.data, partial=True)
+        data = request.data.copy()
+        payer_rates = data.pop("payer_rates", None)
+        serializer = BillingServiceSerializer(service, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        if payer_rates is not None:
+            from decimal import Decimal, InvalidOperation
+
+            from apps.insurance_claims.models import ServicePayerCode
+
+            allowed = {code for code, _ in ServicePayerCode.PAYER_CHOICES}
+            if not isinstance(payer_rates, list):
+                raise ValidationError({"payer_rates": "Provide a list of payer rates."})
+            for row in payer_rates:
+                if not isinstance(row, dict):
+                    raise ValidationError({"payer_rates": "Each payer rate must be an object."})
+                payer = str(row.get("payer") or "").strip().upper()
+                if payer not in allowed:
+                    raise ValidationError({"payer_rates": f"Unknown payer '{payer}'."})
+                rate = row.get("rate", None)
+                if rate in ("", None):
+                    parsed_rate = None
+                else:
+                    try:
+                        parsed_rate = Decimal(str(rate))
+                    except (InvalidOperation, ValueError):
+                        raise ValidationError({"payer_rates": f"Invalid rate for {payer}."})
+                    if parsed_rate < 0:
+                        raise ValidationError({"payer_rates": f"Rate for {payer} cannot be negative."})
+                defaults = {
+                    "payer_code": str(row.get("payer_code") or "").strip(),
+                    "rate": parsed_rate,
+                    "requires_preauth": bool(row.get("requires_preauth", False)),
+                    "active": bool(row.get("active", True)),
+                }
+                ServicePayerCode.objects.update_or_create(
+                    organization=service.organization,
+                    service=service,
+                    payer=payer,
+                    defaults=defaults,
+                )
+        service.refresh_from_db()
+        return Response(BillingServiceSerializer(service).data)
 
 
 # ── Dashboard, outpatients, reports (doc 15 §1.3, §1.11, §1.16) ──
@@ -3232,6 +3272,7 @@ class TherapyConfidentialityView(APIView):
         from . import therapy
         from .models import TherapyEpisode
 
+        therapy.require_deliver(request.user)
         therapy.agree_confidentiality(get_object_or_404(TherapyEpisode, pk=pk))
         return Response({"confidentiality_agreed": True})
 
@@ -3243,6 +3284,7 @@ class TherapyPlanView(APIView):
         from . import therapy
         from .models import TherapyEpisode
 
+        therapy.require_deliver(request.user)
         episode = therapy.set_planned_sessions(
             get_object_or_404(TherapyEpisode, pk=pk), request.data.get("planned_sessions")
         )

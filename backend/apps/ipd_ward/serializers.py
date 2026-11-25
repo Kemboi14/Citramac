@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
+from .models import Admission, Bed, MedicationAdministration, NursingNote, Room, Ward
 
 
 class WardSerializer(serializers.ModelSerializer):
@@ -38,12 +38,85 @@ class WardSerializer(serializers.ModelSerializer):
         return attrs
 
 
+def _accommodation(kind):
+    """The type a bed or room is charged at, with its nightly rate (None when
+    the Org Admin hasn't priced it yet)."""
+    if kind is None:
+        return None
+    rate = kind.billing_service.rate
+    return {
+        "id": str(kind.id),
+        "name": kind.name,
+        "active": kind.active,
+        "rate": None if rate is None else str(rate),
+    }
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    accommodation = serializers.SerializerMethodField()
+    bed_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Room
+        fields = ["id", "ward", "name", "accommodation_type", "accommodation", "bed_count"]
+        validators = []
+
+    def get_accommodation(self, obj):
+        return _accommodation(obj.accommodation_type)
+
+    def get_bed_count(self, obj):
+        return obj.beds.count()
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Enter a room name.")
+        return value
+
+    def validate_accommodation_type(self, value):
+        from .accommodation import check_assignable
+
+        if value is not None and (not self.instance or value != self.instance.accommodation_type):
+            check_assignable(value)
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        ward = attrs.get("ward", instance.ward if instance else None)
+        name = attrs.get("name", instance.name if instance else "")
+        if instance and "ward" in attrs and attrs["ward"].pk != instance.ward_id:
+            raise serializers.ValidationError(
+                {"ward": ["A room can't move to another ward. Add a new room there instead."]}
+            )
+        clash = Room.objects.filter(ward=ward, name__iexact=name)
+        if instance:
+            clash = clash.exclude(pk=instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError(
+                {"name": [f'{ward.name} already has a room "{name}".']}
+            )
+        return attrs
+
+
 class BedSerializer(serializers.ModelSerializer):
     occupant_name = serializers.SerializerMethodField()
+    room_name = serializers.CharField(source="room.name", read_only=True, default=None)
+    # What the bed is charged at: its own type, else its room's.
+    accommodation = serializers.SerializerMethodField()
 
     class Meta:
         model = Bed
-        fields = ["id", "ward", "bed_number", "status", "occupant_name"]
+        fields = [
+            "id",
+            "ward",
+            "bed_number",
+            "status",
+            "occupant_name",
+            "room",
+            "room_name",
+            "accommodation_type",
+            "accommodation",
+        ]
         # The ward + bed number uniqueness is checked in validate() with a
         # message staff can read; the database constraint still backs it.
         validators = []
@@ -54,10 +127,23 @@ class BedSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Enter a bed number.")
         return value
 
+    def get_accommodation(self, obj):
+        return _accommodation(obj.effective_type)
+
+    def validate_accommodation_type(self, value):
+        from .accommodation import check_assignable
+
+        if value is not None and (not self.instance or value != self.instance.accommodation_type):
+            check_assignable(value)
+        return value
+
     def validate(self, attrs):
         instance = self.instance
         ward = attrs.get("ward", instance.ward if instance else None)
         bed_number = attrs.get("bed_number", instance.bed_number if instance else "")
+        room = attrs.get("room", instance.room if instance else None)
+        if room is not None and ward is not None and room.ward_id != ward.pk:
+            raise serializers.ValidationError({"room": [f"{room.name} is not in {ward.name}."]})
 
         # Admissions show their ward and bed through this row, so moving a bed
         # that has ever held an admission would relocate those past stays to
@@ -98,6 +184,10 @@ class BedSerializer(serializers.ModelSerializer):
 class AdmissionSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     bed_label = serializers.SerializerMethodField()
+    # The bed's accommodation type and nightly rate, and the nights counted so
+    # far by type (apps.ipd_ward.accommodation).
+    accommodation = serializers.SerializerMethodField()
+    bed_nights = serializers.SerializerMethodField()
 
     class Meta:
         model = Admission
@@ -151,6 +241,8 @@ class AdmissionSerializer(serializers.ModelSerializer):
             "consultant_name",
             "patient_citramac_number",
             "legal_status_record",
+            "accommodation",
+            "bed_nights",
         ]
         # admitted_at is writable: the admission form records the admission date
         # (docs/15-CLINICAL-WORKSPACE-V3.md §1.10); it defaults to now.
@@ -168,6 +260,15 @@ class AdmissionSerializer(serializers.ModelSerializer):
         ]
 
     consultant_name = serializers.SerializerMethodField()
+
+    def get_accommodation(self, obj):
+        return _accommodation(obj.bed.effective_type) if obj.bed_id else None
+
+    def get_bed_nights(self, obj):
+        from .accommodation import stay_summary
+
+        return stay_summary(obj)
+
     patient_citramac_number = serializers.CharField(
         source="patient.citramac_number", read_only=True
     )

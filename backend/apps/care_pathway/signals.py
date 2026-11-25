@@ -15,3 +15,6 @@ def seed_organization_billing_services(sender, instance, created, **kwargs):
     if created:
         with platform_admin_context():
             seed_billing_services(BillingService, instance.id)
+            from apps.ipd_ward.accommodation import seed_types
+
+            seed_types(instance.id)

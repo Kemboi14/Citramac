@@ -547,6 +547,9 @@ class MyProfileSerializer(serializers.ModelSerializer):
     """
 
     role_names = serializers.SerializerMethodField()
+    # Permission codenames held at the working branch — the clinical sidebar hides
+    # menus a person can't use (the server checks every action regardless).
+    permissions = serializers.SerializerMethodField()
     organization_name = serializers.CharField(source="organization.name", read_only=True)
     # Read-only "where am I" context for the topbar organisation · branch
     # pill (frontend/src/shells/OrgBranchPill.tsx). Served here rather than
@@ -571,6 +574,7 @@ class MyProfileSerializer(serializers.ModelSerializer):
             "avatar",
             "professional_profile",
             "role_names",
+            "permissions",
             "organization_id",
             "organization_name",
             "primary_branch",
@@ -586,6 +590,18 @@ class MyProfileSerializer(serializers.ModelSerializer):
         if not obj.organization_id or obj.is_superuser:
             return None
         return summary(obj)
+
+    def get_permissions(self, obj):
+        from apps.tenancy.context import platform_admin_context
+
+        from .access import active_roles
+
+        if not obj.organization_id or obj.is_superuser:
+            return []
+        with platform_admin_context():
+            return sorted(
+                set(active_roles(obj).values_list("permissions__codename", flat=True)) - {None}
+            )
 
     def get_role_names(self, obj):
         return [role.name for role in obj.roles.all()]

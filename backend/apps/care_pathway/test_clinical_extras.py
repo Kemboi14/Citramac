@@ -13,6 +13,10 @@ from .test_records import RecordsTestCase
 
 
 class TherapyTests(RecordsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.make_therapist()
+
     def start(self, **over):
         return self.post("care-client-therapy", {"modality": "CBT", "planned_sessions": 8, **over})
 

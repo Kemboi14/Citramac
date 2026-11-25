@@ -1334,3 +1334,60 @@ scale (CIWA → `ciwa_ar`, COWS → `cows`, PAWSS → `pawss`) and puts withdraw
 management" action and its tasks and raises the facility's charge when priced. Tasks that need a
 coded outcome are never touched. FHIR: scores are the existing Observations, the delivery the
 existing Procedure mapping. Reversibility: cheap — a delivery and its charge can be voided.
+
+### 2026-11-24 — "Deliver psychotherapy" permission
+
+Until now any signed-in user could start a course of therapy, write and sign a psychotherapy session
+note, or record a group psychotherapy session; only reading a note was restricted. A new organisation permission,
+`clinical.psychotherapy.deliver` (`therapy.DELIVER`), is now required to start therapy, set its
+confidentiality agreement or planned sessions, start, write, sign or amend an individual or family
+session note, and confirm or correct a session in the **Group psychotherapy** category (moving a
+session into or out of that category included). The other group categories (psychoeducation,
+spiritual wellbeing, physical fitness, …) are run by any clinical staff (`clinical.care.record`), as
+before; the category list offers Group psychotherapy only to holders. It is given to Clinical Psychologist/Therapist,
+Therapist, Counsellor, Clinical Supervisor and Supervisor (migration `accounts 0029`, the starting
+definitions and every organisation's copy). An Org Admin can give it to any other role; Org Admin
+itself does not hold it. Reading a note is unchanged (`psychotherapy.can_read`: author and care team);
+the permission opens no content by itself.
+
+The clinical sidebar shows Individual and Family Psychotherapy only to holders; Group Psychotherapy
+stays for all clinical staff. `my-profile` now returns the
+permission codenames held at the working branch for that purpose; hiding a menu is convenience, the
+server refuses the action regardless. Not clinical data capture, so no FHIR change.
+
+Reversibility: cheap. No record changes; signed notes and their authors are untouched. Staff in other
+roles who were writing session notes lose that until an Org Admin grants the permission to their role.
+
+### 2026-11-24 — accommodation types, rooms, bed stays and nightly bed-day charges
+
+On the owner's decision of 2026-11-24 (mapping stated before building, §7): each inpatient bed
+carries an accommodation type (shared bed, shared room, private room, or an organisation-defined
+type) so a night in it is priced at that type's rate.
+
+1. **Types and tariff.** An `AccommodationType` is the organisation's own, named by the Org Admin
+   and retired (never deleted). Each has its own tariff line "Bed-day — <name>" on the Service
+   Tariff page; the Org Admin sets its rate. No price is invented — an unpriced type raises an
+   unpriced charge, shown as "No rate configured" like any other service.
+2. **Where a bed sits.** A `Room` belongs to a ward and may set a default accommodation type. A bed
+   may sit in a room; its effective type is its own, else its room's. A bed with no effective type
+   records the night but raises no charge, so it can be shown as missing.
+3. **Stays and nights.** Admission opens a `BedStay`; transfer closes it and opens the next;
+   discharge closes the last. Every facility midnight a client spent in a bed is one `BedNight`
+   (unique per admission and night, idempotent, caught up by the hourly `charge-bed-nights` beat
+   job) and raises one bed-day charge at that moment's rate and the bed's then-effective type. A
+   discharge recorded earlier than nights already counted voids those nights' charges unless the
+   charge is already invoiced. Current admissions at migration time get an open stay starting at
+   migration time — no back-charges.
+4. **Billing.** Consecutive bed-nights at the same type and rate are shown as one invoice line with
+   the night span; the underlying ChargeItems remain one per night.
+5. **FHIR (not emitted yet).** Ward / room / bed → R4 `Location` (`physicalType` wa / ro / bd). A
+   stay → `Encounter.location` with its period on the admission Encounter (class IMP, in its
+   `EpisodeOfCare`). A bed-day → `ChargeItem`. The accommodation type is a local code. Never sent
+   to the SHR.
+6. **VERIFY:** a published code set for accommodation / bed type; `Location.physicalType` codes as
+   used for ward/room/bed in the target IG; `ChargeItem` profile/binding for a bed-day in Kenya
+   Core / DHA if any. Until confirmed, the type stays a local display code and nothing is emitted.
+
+Reversibility: cheap. Additive models, RLS-scoped and branch-scoped through the admission. No
+signed record changes; no back-charges. Reversing removes only stays/nights/charges that have not
+been invoiced or referenced.

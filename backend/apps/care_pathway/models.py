@@ -988,22 +988,54 @@ class CosignRequest(TenantScopedModel):
 
 class BillingService(TenantScopedModel):
     """Facility tariff line. Rates are never invented (doc 15 C3): a service
-    with no rate is excluded from billing with a visible notice."""
+    with no rate is excluded from billing with a visible notice.
+
+    Medication rows keep medicine_name and mass separate so they can be edited
+    independently (guide.md 2026-11-24). `rate` is the out-of-pocket sales
+    price per unit; cost/markup/tax are the workbook reference values."""
 
     name = models.CharField(max_length=150)
+    code = models.CharField(max_length=40, blank=True, db_index=True)
+    category = models.CharField(max_length=120, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    medicine_name = models.CharField(max_length=150, blank=True)
+    mass = models.CharField(max_length=80, blank=True)
+    cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    markup_percent = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    tax_percent = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    remarks = models.TextField(blank=True)
     active = models.BooleanField(default=True)
 
     class Meta(TenantScopedModel.Meta):
-        ordering = ["name"]
+        ordering = ["category", "name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["organization", "name"], name="unique_billing_service_per_org"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "code"],
+                condition=models.Q(code__gt=""),
+                name="unique_billing_service_code_per_org",
+            ),
         ]
 
-    def __str__(self):
+    @property
+    def is_medication(self):
+        return (self.category or "").strip().lower() == "medication"
+
+    @property
+    def display_name(self):
+        if self.medicine_name:
+            return " ".join(part for part in [self.medicine_name.strip(), self.mass.strip()] if part)
         return self.name
+
+    def sync_medication_name(self):
+        if self.is_medication and self.medicine_name:
+            self.name = self.display_name
+
+    def __str__(self):
+        return self.display_name
 
 
 class InterventionRecord(TenantScopedModel):

@@ -2697,6 +2697,9 @@ def sign_discharge(admission, user, data=None):
             admission.save(update_fields=["status", "discharged_at", "updated_at"])
             admission.bed.status = "AVAILABLE"
             admission.bed.save(update_fields=["status"])
+            from apps.ipd_ward import accommodation
+
+            accommodation.close_stay(admission, discharged_at)
             if admission.encounter_id:
                 Encounter.objects.filter(pk=admission.encounter_id).update(
                     status="CLOSED", closed_at=discharged_at

@@ -12,6 +12,8 @@ export interface MyProfile {
   phone: string;
   avatar: string | null;
   role_names: string[];
+  /** Permission codenames the person holds at the working branch (apps/accounts/catalogue.py). */
+  permissions: string[];
   organization_id: string | null;
   organization_name: string | null;
   /** Null when unassigned, or when the assigned branch has been deactivated. */

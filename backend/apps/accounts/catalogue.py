@@ -99,6 +99,24 @@ PERMISSIONS = [
         ],
     ),
     (
+        "clinical.psychotherapy.deliver",
+        "clinical",
+        "Deliver psychotherapy",
+        "Start a course of therapy, write, sign and amend individual and family "
+        "psychotherapy session notes, and record or correct group psychotherapy "
+        "sessions; the Psychotherapy menu is shown only to holders. Reading a session "
+        "note stays with its author and the client's care team. Nobody else, Org "
+        "Admin included, can write a session note.",
+        SCOPE_ORG,
+        [
+            "Clinical Psychologist/Therapist",
+            "Therapist",
+            "Counsellor",
+            "Clinical Supervisor",
+            "Supervisor",
+        ],
+    ),
+    (
         "clinical.admitting_officer",
         "legal",
         "Admitting officer",

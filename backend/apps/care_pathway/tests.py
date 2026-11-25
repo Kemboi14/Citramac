@@ -141,6 +141,10 @@ class CarePathwayApiTestCase(APITestCase):
             )
             user.roles.add(role)
 
+    def make_therapist(self, user=None):
+        """Psychotherapy writes need clinical.psychotherapy.deliver as well."""
+        self.make_clinical(user, role_name="Clinical Psychologist/Therapist")
+
     def register(self, **data):
         payload = {
             "client_request_id": str(uuid.uuid4()),

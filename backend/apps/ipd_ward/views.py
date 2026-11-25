@@ -10,12 +10,14 @@ from apps.retention.mixins import NoHardDeleteMixin
 from apps.sysadmin_audit.audit import log_view
 from apps.sysadmin_audit.mixins import AuditedReadMixin
 
-from .models import Admission, Bed, MedicationAdministration, NursingNote, Ward
+from . import accommodation
+from .models import AccommodationType, Admission, Bed, MedicationAdministration, NursingNote, Room, Ward
 from .serializers import (
     AdmissionSerializer,
     BedSerializer,
     MedicationAdministrationSerializer,
     NursingNoteSerializer,
+    RoomSerializer,
     WardSerializer,
 )
 
@@ -83,15 +85,23 @@ class BedViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         # Status (vacant / reserved / maintenance) stays with ward staff, as
-        # before; the bed's number and ward are Org Admin changes.
+        # before; the bed's number, ward, room and accommodation type (its
+        # price) are Org Admin changes.
         _require_org_admin_for_layout_change(
-            self.request, set(serializer.validated_data) & {"bed_number", "ward"}, "bed"
+            self.request,
+            set(serializer.validated_data) & {"bed_number", "ward", "room", "accommodation_type"},
+            "bed",
         )
         serializer.save()
 
     def get_queryset(self):
         queryset = (
-            Bed.objects.select_related("ward")
+            Bed.objects.select_related(
+                "ward",
+                "room",
+                "accommodation_type__billing_service",
+                "room__accommodation_type__billing_service",
+            )
             .prefetch_related("admissions__patient")
             .order_by("ward__name", "bed_number")
         )
@@ -101,7 +111,57 @@ class BedViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        if set(serializer.validated_data) & {"room", "accommodation_type"}:
+            _require_org_admin_for_layout_change(self.request, {"room"}, "bed")
         serializer.save(organization=self.request.user.organization)
+
+
+class RoomViewSet(viewsets.ModelViewSet):
+    """Rooms in a ward (Org Admin layout). Never deleted: a room with beds keeps
+    them; an empty one can simply be left unused."""
+
+    serializer_class = RoomSerializer
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        queryset = Room.objects.select_related(
+            "ward", "accommodation_type__billing_service"
+        ).order_by("ward__name", "name")
+        ward = self.request.query_params.get("ward")
+        if ward:
+            queryset = queryset.filter(ward_id=ward)
+        return queryset
+
+    def perform_create(self, serializer):
+        _require_org_admin_for_layout_change(self.request, {"room"}, "room")
+        serializer.save(organization=self.request.user.organization)
+
+    def perform_update(self, serializer):
+        _require_org_admin_for_layout_change(self.request, set(serializer.validated_data), "room")
+        serializer.save()
+
+
+class AccommodationTypeViewSet(viewsets.ViewSet):
+    """GET / POST ipd/accommodation-types/, PATCH …/<id>/ {name?, active?}.
+    Listing is open to staff (the admission screen shows each bed's price);
+    changes are Org Admin only and audited by the write-audit signals."""
+
+    def list(self, request):
+        accommodation.seed_types(request.user.organization_id)
+        return Response({"results": [accommodation.type_row(k) for k in accommodation.types()]})
+
+    def create(self, request):
+        kind = accommodation.add_type(request.user, request.data.get("name"))
+        return Response(accommodation.type_row(kind), status=201)
+
+    def partial_update(self, request, pk=None):
+        kind = AccommodationType.objects.filter(pk=pk).first() if _is_uuid(pk) else None
+        if kind is None:
+            from django.http import Http404
+
+            raise Http404
+        kind = accommodation.change_type(request.user, kind, request.data)
+        return Response(accommodation.type_row(kind))
 
 
 class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
@@ -160,6 +220,8 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
         )
         admission.bed.status = "OCCUPIED"
         admission.bed.save(update_fields=["status"])
+        # Bed-days are counted from here (accommodation.charge_nights).
+        accommodation.open_stay(admission, admission.bed, admission.admitted_at)
         if episode.status in ("planned", "waitlist"):
             episode.transition("active", user=user, at=admitted_at)
         # The admission is a documented delivered service; priced from the
@@ -286,6 +348,9 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
         if new_bed.pk == admission.bed_id:
             raise ValidationError({"bed": "The client is already in this bed."})
         _take_bed(new_bed)
+        now = timezone.now()
+        accommodation.close_stay(admission, now)
+        accommodation.open_stay(admission, new_bed, now)
         old_bed = admission.bed
         admission.bed = new_bed
         admission.status = "TRANSFERRED"

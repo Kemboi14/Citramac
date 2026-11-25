@@ -47,6 +47,8 @@ PATIENT_PATHS = {
     "ipd_ward.Admission": "patient",
     "ipd_ward.MedicationAdministration": "admission__patient",
     "ipd_ward.NursingNote": "admission__patient",
+    "ipd_ward.BedStay": "admission__patient",
+    "ipd_ward.BedNight": "admission__patient",
     "billing.Invoice": "patient",
     "billing.InvoiceLine": "invoice__patient",
     "billing.Payment": "invoice__patient",
@@ -138,6 +140,7 @@ MENTAL_HEALTH_MODELS = {label for label in PATIENT_PATHS if label.startswith("mh
     "ipd_ward.Admission",
     "ipd_ward.MedicationAdministration",
     "ipd_ward.NursingNote",
+    "ipd_ward.BedStay",
     "care_pathway.EpisodeOfCare",
     "care_pathway.EpisodeStatusHistory",
     "care_pathway.TriageEncounter",
@@ -204,6 +207,7 @@ FINANCIAL_MODELS = {
     "insurance_claims.ShaVisit",
     "insurance_claims.ShaEligibilityCheck",
     "care_pathway.ChargeItem",
+    "ipd_ward.BedNight",
 }
 
 

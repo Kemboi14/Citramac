@@ -473,3 +473,206 @@ class WardBedEditTests(APITestCase):
             "ipd-bed-detail", self.bed_2.id, {"ward": str(self.other_ward.id)}, self.admin_auth
         )
         self.assertEqual(response.status_code, 200, response.data)
+
+class AccommodationTests(APITestCase):
+    """Accommodation types, rooms, bed stays and nightly bed-day charges
+    (guide.md 2026-11-24)."""
+
+    def setUp(self):
+        self.addCleanup(clear_tenant_context)
+        with platform_admin_context():
+            self.org = Organization.objects.create(
+                name="Org", slug="org-accom", facility_type="MENTAL_HEALTH_MHP"
+            )
+            self.admin = User.objects.create_user(
+                email="admin@org.test", password="Password123!", organization=self.org, is_active=True
+            )
+            self.nurse = User.objects.create_user(
+                email="nurse@org.test", password="Password123!", organization=self.org, is_active=True
+            )
+            from apps.accounts.models import Role
+
+            self.admin.roles.add(Role.objects.get(name="Org Admin", organization__isnull=True))
+            self.patient = Patient.objects.create(
+                organization=self.org,
+                first_name="Faith",
+                last_name="Mwangi",
+                gender="FEMALE",
+                date_of_birth="1997-03-14",
+            )
+            self.ward = Ward.objects.create(organization=self.org, name="Stabilization Ward")
+            self.bed_a = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="A1")
+            self.bed_b = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="A2")
+        self.admin_access, _ = issue_tokens(self.admin)
+        self.nurse_access, _ = issue_tokens(self.nurse)
+        self.admin_auth = {"HTTP_AUTHORIZATION": f"Bearer {self.admin_access}"}
+        self.nurse_auth = {"HTTP_AUTHORIZATION": f"Bearer {self.nurse_access}"}
+
+    def admit(self, **body):
+        active_legal_status(self.patient, self.nurse)
+        return self.client.post(
+            reverse("ipd-admission-list"),
+            {"patient": str(self.patient.id), "bed": str(self.bed_a.id), **body},
+            format="json",
+            **self.nurse_auth,
+        )
+
+    def test_seed_types_creates_unpriced_defaults(self):
+        from . import accommodation
+        from .models import AccommodationType
+
+        with platform_admin_context():
+            accommodation.seed_types(self.org.id)
+            kinds = list(AccommodationType.objects.filter(organization=self.org).order_by("order"))
+        self.assertEqual([k.name for k in kinds], ["Shared bed", "Shared room", "Private room"])
+        self.assertTrue(all(k.billing_service.rate is None for k in kinds))
+        self.assertTrue(all(k.billing_service.name == f"Bed-day — {k.name}" for k in kinds))
+
+    def test_accommodation_type_list_seeds_and_exposes_rate(self):
+        response = self.client.get(reverse("ipd-accommodation-type-list"), **self.nurse_auth)
+        self.assertEqual(response.status_code, 200, response.data)
+        names = [row["name"] for row in response.data["results"]]
+        self.assertEqual(names, ["Shared bed", "Shared room", "Private room"])
+        self.assertIsNone(response.data["results"][0]["rate"])
+
+    def test_only_org_admin_can_change_accommodation_type(self):
+        with platform_admin_context():
+            from . import accommodation
+
+            accommodation.seed_types(self.org.id)
+            kind = accommodation.types().get(name="Private room")
+        url = reverse("ipd-accommodation-type-detail", args=[kind.id])
+        refused = self.client.patch(url, {"name": "VIP room"}, format="json", **self.nurse_auth)
+        self.assertEqual(refused.status_code, 403)
+        ok = self.client.patch(url, {"name": "VIP room"}, format="json", **self.admin_auth)
+        self.assertEqual(ok.status_code, 200, ok.data)
+        self.assertEqual(ok.data["name"], "VIP room")
+
+    def test_admission_opens_stay_and_transfer_moves_it(self):
+        response = self.admit()
+        self.assertEqual(response.status_code, 201, response.data)
+        admission_id = response.data["id"]
+        with platform_admin_context():
+            admission = Admission.objects.get(pk=admission_id)
+            stays = list(admission.bed_stays.order_by("started_at"))
+        self.assertEqual(len(stays), 1)
+        self.assertEqual(stays[0].bed_id, self.bed_a.id)
+        self.assertIsNone(stays[0].ended_at)
+
+        transfer = self.client.post(
+            reverse("ipd-admission-transfer", args=[admission_id]),
+            {"bed": str(self.bed_b.id)},
+            format="json",
+            **self.nurse_auth,
+        )
+        self.assertEqual(transfer.status_code, 200, transfer.data)
+        with platform_admin_context():
+            stays = list(Admission.objects.get(pk=admission_id).bed_stays.order_by("started_at"))
+        self.assertEqual(len(stays), 2)
+        self.assertIsNotNone(stays[0].ended_at)
+        self.assertEqual(stays[1].bed_id, self.bed_b.id)
+        self.assertIsNone(stays[1].ended_at)
+
+    def test_charge_nights_is_idempotent_and_prices_by_type(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from apps.care_pathway import facility_time
+        from apps.care_pathway.models import BillingService
+        from . import accommodation
+        from .models import AccommodationType, BedNight
+
+        with platform_admin_context():
+            accommodation.seed_types(self.org.id)
+            private = AccommodationType.objects.get(organization=self.org, name="Private room")
+            private.billing_service.rate = Decimal("5000.00")
+            private.billing_service.save(update_fields=["rate"])
+            self.bed_a.accommodation_type = private
+            self.bed_a.save(update_fields=["accommodation_type"])
+            admission = Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed_a, admitted_by=self.nurse
+            )
+            self.bed_a.status = "OCCUPIED"
+            self.bed_a.save(update_fields=["status"])
+            start = facility_time.combine_local(facility_time.local_date() - timedelta(days=3))
+            accommodation.open_stay(admission, self.bed_a, start)
+
+            now = facility_time.combine_local(facility_time.local_date()) + timedelta(hours=8)
+            raised = accommodation.charge_nights(now=now)
+            raised_again = accommodation.charge_nights(now=now)
+            nights = list(BedNight.objects.filter(admission=admission).order_by("night"))
+
+        self.assertEqual(raised, 3)
+        self.assertEqual(raised_again, 0)
+        self.assertEqual(len(nights), 3)
+        self.assertTrue(all(n.charge_id is not None for n in nights))
+        self.assertTrue(all(n.accommodation_type_id == private.id for n in nights))
+        self.assertTrue(all(str(n.charge.unit_price) == "5000.00" for n in nights))
+
+    def test_unpriced_or_typeless_bed_records_night_without_charge(self):
+        from datetime import timedelta
+
+        from apps.care_pathway import facility_time
+        from . import accommodation
+        from .models import BedNight
+
+        with platform_admin_context():
+            admission = Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed_a, admitted_by=self.nurse
+            )
+            self.bed_a.status = "OCCUPIED"
+            self.bed_a.save(update_fields=["status"])
+            start = facility_time.combine_local(facility_time.local_date() - timedelta(days=1))
+            accommodation.open_stay(admission, self.bed_a, start)
+            now = facility_time.combine_local(facility_time.local_date()) + timedelta(hours=8)
+            accommodation.charge_nights(now=now)
+            night = BedNight.objects.get(admission=admission)
+        self.assertIsNone(night.charge_id)
+        self.assertIsNone(night.accommodation_type_id)
+
+    def test_close_stay_voids_uncharged_invoice_nights_after_discharge(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from apps.billing.models import Invoice, InvoiceLine
+        from apps.care_pathway import facility_time
+        from apps.care_pathway.models import BillingService
+        from . import accommodation
+        from .models import AccommodationType, BedNight
+
+        with platform_admin_context():
+            accommodation.seed_types(self.org.id)
+            kind = AccommodationType.objects.get(organization=self.org, name="Shared room")
+            kind.billing_service.rate = Decimal("2000.00")
+            kind.billing_service.save(update_fields=["rate"])
+            self.bed_a.accommodation_type = kind
+            self.bed_a.save(update_fields=["accommodation_type"])
+            admission = Admission.objects.create(
+                organization=self.org, patient=self.patient, bed=self.bed_a, admitted_by=self.nurse
+            )
+            start = facility_time.combine_local(facility_time.local_date() - timedelta(days=3))
+            accommodation.open_stay(admission, self.bed_a, start)
+            now = facility_time.combine_local(facility_time.local_date()) + timedelta(hours=8)
+            accommodation.charge_nights(now=now)
+            nights = list(BedNight.objects.filter(admission=admission).order_by("night"))
+            # Invoice the first night only.
+            invoice = Invoice.objects.create(
+                organization=self.org, patient=self.patient, encounter=None, created_by=self.nurse
+            )
+            InvoiceLine.objects.create(
+                invoice=invoice,
+                charge_item=nights[0].charge,
+                description="Bed-day — Shared room",
+                quantity=1,
+                unit_price=nights[0].charge.unit_price,
+                line_total=nights[0].charge.unit_price,
+            )
+            # Discharge after the first night was counted but before the
+            # second midnight was due — nights 2 and 3 were never spent.
+            early = facility_time.combine_local(nights[1].night + timedelta(days=1)) - timedelta(hours=1)
+            accommodation.close_stay(admission, early)
+            nights = list(BedNight.objects.filter(admission=admission).select_related("charge").order_by("night"))
+
+        self.assertIsNone(nights[0].charge.voided_at)  # invoiced, kept
+        self.assertIsNotNone(nights[1].charge.voided_at)
+        self.assertIsNotNone(nights[2].charge.voided_at)

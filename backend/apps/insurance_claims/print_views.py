@@ -99,7 +99,13 @@ class InvoicePrintView(APIView):
                 ],
                 "rows": [
                     [
-                        {"value": line["service"]},
+                        {
+                            "value": (
+                                f"{line['service']} — {line['detail']}"
+                                if line.get("detail")
+                                else line["service"]
+                            )
+                        },
                         {"value": line["quantity"], "numeric": True},
                         {"value": _money(line["amount"], currency), "numeric": True},
                     ]

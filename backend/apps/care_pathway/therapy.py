@@ -19,6 +19,25 @@ from apps.mhp_program.models import PsychotherapySession
 from . import instruments, intake, tools
 from .models import CarePlanActivity, LocalConcept, OutcomeScore, TherapyEpisode
 
+# Who may deliver psychotherapy (2026-11-24): start a course of therapy, write,
+# sign and amend individual and family session notes, and record or correct a
+# group session. Reading a note stays with its author and the client's care team
+# (psychotherapy.can_read); this permission opens no content by itself.
+DELIVER = "clinical.psychotherapy.deliver"
+
+
+def can_deliver(user):
+    from apps.accounts.access import has_permission
+
+    return has_permission(user, DELIVER)
+
+
+def require_deliver(user):
+    if not can_deliver(user):
+        raise PermissionDenied(
+            "Delivering psychotherapy needs the 'Deliver psychotherapy' permission."
+        )
+
 
 def _activity(patient, activity_id):
     """A care-plan action on this client's own plan, or None when not linked."""
@@ -103,6 +122,7 @@ def overview(patient, user):
 
 
 def start_therapy(patient, user, data):
+    require_deliver(user)
     modality = data.get("modality")
     if not LocalConcept.objects.filter(valueset_id="therapy-modality", code=modality).exists():
         raise ValidationError({"modality": "Choose the therapy modality."})
@@ -196,6 +216,7 @@ def _measure(score):
 
 @transaction.atomic
 def record_session(patient, user, episode_id, data):
+    require_deliver(user)
     ep = _open_episode(patient, episode_id)
     if not str(data.get("session_notes", "")).strip():
         raise ValidationError({"session_notes": "Write the session note."})

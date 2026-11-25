@@ -17,6 +17,52 @@ class Ward(TenantScopedModel):
         return self.name
 
 
+class AccommodationType(TenantScopedModel):
+    """A kind of bed the facility prices separately (shared bed, shared room,
+    private room, …; guide.md 2026-11-24). The Org Admin names them; each has
+    its own tariff line (`billing_service`, "Bed-day — <name>") whose rate is
+    set on the Service Tariff page and never invented. Retired, never deleted.
+    FHIR: a local code on the bed's Location.type (not emitted yet)."""
+
+    name = models.CharField(max_length=100)
+    billing_service = models.OneToOneField(
+        "care_pathway.BillingService", on_delete=models.PROTECT, related_name="accommodation_type"
+    )
+    active = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"], name="unique_accommodation_type_per_org"
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Room(TenantScopedModel):
+    """A room in a ward (FHIR Location physicalType `ro`). Optional: a bed may
+    sit directly in its ward. Its accommodation type is the default for its beds."""
+
+    ward = models.ForeignKey(Ward, on_delete=models.PROTECT, related_name="rooms")
+    name = models.CharField(max_length=100)
+    accommodation_type = models.ForeignKey(
+        AccommodationType, on_delete=models.PROTECT, null=True, blank=True, related_name="rooms"
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["ward", "name"], name="unique_room_name_per_ward")
+        ]
+
+    def __str__(self):
+        return f"{self.ward.name} / {self.name}"
+
+
 class Bed(TenantScopedModel):
     STATUS_CHOICES = [
         ("AVAILABLE", "Available"),
@@ -28,6 +74,13 @@ class Bed(TenantScopedModel):
     ward = models.ForeignKey(Ward, on_delete=models.PROTECT, related_name="beds")
     bed_number = models.CharField(max_length=50)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="AVAILABLE")
+    room = models.ForeignKey(
+        Room, on_delete=models.PROTECT, null=True, blank=True, related_name="beds"
+    )
+    # Set on the bed, or taken from its room when blank (`effective_type`).
+    accommodation_type = models.ForeignKey(
+        AccommodationType, on_delete=models.PROTECT, null=True, blank=True, related_name="beds"
+    )
 
     class Meta(TenantScopedModel.Meta):
         constraints = [
@@ -35,6 +88,12 @@ class Bed(TenantScopedModel):
                 fields=["ward", "bed_number"], name="unique_bed_number_per_ward"
             )
         ]
+
+    @property
+    def effective_type(self):
+        if self.accommodation_type_id:
+            return self.accommodation_type
+        return self.room.accommodation_type if self.room_id else None
 
     def __str__(self):
         return f"{self.ward.name} / Bed {self.bed_number}"
@@ -242,3 +301,64 @@ class NursingNote(TenantScopedModel):
 
     def __str__(self):
         return f"Nursing note for {self.admission} ({self.get_shift_display()})"
+
+
+class BedStay(TenantScopedModel):
+    """Where an admitted client slept, and from when to when (FHIR
+    Encounter.location with its period). Admission opens the first stay; a
+    transfer closes it and opens the next; discharge closes the last. At most
+    one open stay per admission and per bed — one client per bed, held by the
+    database. Each night is priced by the bed's type at that night's midnight."""
+
+    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="bed_stays")
+    bed = models.ForeignKey(Bed, on_delete=models.PROTECT, related_name="stays")
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["started_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission"],
+                condition=models.Q(ended_at__isnull=True),
+                name="one_open_bed_stay_per_admission",
+            ),
+            models.UniqueConstraint(
+                fields=["bed"],
+                condition=models.Q(ended_at__isnull=True),
+                name="one_open_bed_stay_per_bed",
+            ),
+        ]
+
+
+class BedNight(TenantScopedModel):
+    """One night of an inpatient stay, counted at the facility's midnight: the
+    client was in `stay`'s bed at the start of the day after `night`. Its
+    bed-day charge is priced from the bed's accommodation type (recorded here)
+    and that type's tariff line at that
+    moment (`charge`; unpriced, like any charge, when the type has no rate).
+    A bed with no accommodation type has nothing to charge: the night is kept
+    with no charge, so it can be shown as missing. Never counted twice
+    (unique admission + night)."""
+
+    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="bed_nights")
+    stay = models.ForeignKey(BedStay, on_delete=models.PROTECT, related_name="nights")
+    night = models.DateField()
+    accommodation_type = models.ForeignKey(
+        AccommodationType, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    charge = models.OneToOneField(
+        "care_pathway.ChargeItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bed_night",
+    )
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["night"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admission", "night"], name="one_bed_night_per_admission_night"
+            )
+        ]

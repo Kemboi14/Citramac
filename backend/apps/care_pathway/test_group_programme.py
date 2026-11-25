@@ -30,6 +30,7 @@ class GroupProgrammeTestCase(CarePathwayApiTestCase):
     def setUp(self):
         super().setUp()
         self.make_clinical()
+        self.make_therapist()
         self.amina = self.register().data["patient_id"]
         self.brian = self.register(full_name="Brian Otieno Ouma", sex="MALE").data["patient_id"]
         self.carol = self.register(full_name="Carol Achieng Odhiambo").data["patient_id"]
@@ -146,6 +147,30 @@ class ConfirmTests(GroupProgrammeTestCase):
             action=AuditLogEntry.ACTION_VIEW, model="care_pathway.groupsessionentry"
         ).count()
         self.assertEqual(after - before, 3)
+
+
+class DeliverPermissionTests(GroupProgrammeTestCase):
+    def test_recording_or_correcting_a_session_needs_the_deliver_permission(self):
+        session = self.standard_session()
+        entry = self.entry_for(session, self.amina)
+        with platform_admin_context():
+            self.nurse.roles.remove(
+                Role.objects.get(name="Clinical Psychologist/Therapist", organization=None)
+            )
+        self.assertEqual(self.confirm([self.entry(self.amina)]).status_code, 403)
+        refused = self.correct(entry["id"], attendance="ABSENT", reason="Recorded wrongly")
+        self.assertEqual(refused.status_code, 403)
+
+    def test_other_categories_need_only_clinical_access(self):
+        with platform_admin_context():
+            self.nurse.roles.remove(
+                Role.objects.get(name="Clinical Psychologist/Therapist", organization=None)
+            )
+        fitness = self.confirm([self.entry(self.amina)], category="physical_fitness_and_movement")
+        self.assertEqual(fitness.status_code, 201, fitness.data)
+        entry = self.entry_for(fitness.data, self.amina)
+        corrected = self.correct(entry["id"], attendance="ABSENT", reason="Recorded wrongly")
+        self.assertEqual(corrected.status_code, 200, corrected.data)
 
 
 class CorrectionTests(GroupProgrammeTestCase):

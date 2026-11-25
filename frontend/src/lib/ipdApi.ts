@@ -55,12 +55,42 @@ export function updateWard(
 
 export type BedStatus = "AVAILABLE" | "OCCUPIED" | "RESERVED" | "MAINTENANCE";
 
+export interface BedAccommodation {
+  id: string;
+  name: string;
+  active: boolean;
+  rate: string | null;
+}
+
+export interface Room {
+  id: string;
+  ward: string;
+  name: string;
+  accommodation_type: string | null;
+  accommodation: BedAccommodation | null;
+  bed_count: number;
+}
+
+export interface AccommodationType {
+  id: string;
+  name: string;
+  active: boolean;
+  service_id: string;
+  rate: string | null;
+  bed_count: number;
+  room_count: number;
+}
+
 export interface Bed {
   id: string;
   ward: string;
   bed_number: string;
   status: BedStatus;
   occupant_name: string | null;
+  room: string | null;
+  room_name: string | null;
+  accommodation_type: string | null;
+  accommodation: BedAccommodation | null;
 }
 
 export function listBeds(accessToken: string, wardId?: string, page = 1) {
@@ -75,19 +105,69 @@ export function listBeds(accessToken: string, wardId?: string, page = 1) {
 
 export function createBed(
   accessToken: string,
-  payload: { ward: string; bed_number: string; status?: BedStatus },
+  payload: {
+    ward: string;
+    bed_number: string;
+    status?: BedStatus;
+    room?: string | null;
+    accommodation_type?: string | null;
+  },
 ) {
   return apiRequest<Bed>("/ipd/beds/", { method: "POST", body: payload, accessToken });
 }
 
-/** Status is open to ward staff; bed number and ward are Org Admin changes,
- * and a bed with admission history can't be moved to another ward. */
+/** Status is open to ward staff; bed number, ward, room and accommodation type
+ * are Org Admin changes, and a bed with admission history can't be moved to another ward. */
 export function updateBed(
   accessToken: string,
   bedId: string,
-  payload: Partial<Pick<Bed, "status" | "bed_number" | "ward">>,
+  payload: Partial<Pick<Bed, "status" | "bed_number" | "ward" | "room" | "accommodation_type">>,
 ) {
   return apiRequest<Bed>(`/ipd/beds/${bedId}/`, { method: "PATCH", body: payload, accessToken });
+}
+
+export function listRooms(accessToken: string, wardId?: string) {
+  const query = wardId ? `?ward=${wardId}` : "";
+  return apiRequest<Paginated<Room>>(`/ipd/rooms/${query}`, { accessToken });
+}
+
+export function createRoom(
+  accessToken: string,
+  payload: { ward: string; name: string; accommodation_type?: string | null },
+) {
+  return apiRequest<Room>("/ipd/rooms/", { method: "POST", body: payload, accessToken });
+}
+
+export function updateRoom(
+  accessToken: string,
+  roomId: string,
+  payload: Partial<Pick<Room, "name" | "accommodation_type">>,
+) {
+  return apiRequest<Room>(`/ipd/rooms/${roomId}/`, { method: "PATCH", body: payload, accessToken });
+}
+
+export function listAccommodationTypes(accessToken: string) {
+  return apiRequest<{ results: AccommodationType[] }>("/ipd/accommodation-types/", { accessToken });
+}
+
+export function createAccommodationType(accessToken: string, name: string) {
+  return apiRequest<AccommodationType>("/ipd/accommodation-types/", {
+    method: "POST",
+    body: { name },
+    accessToken,
+  });
+}
+
+export function updateAccommodationType(
+  accessToken: string,
+  id: string,
+  payload: { name?: string; active?: boolean },
+) {
+  return apiRequest<AccommodationType>(`/ipd/accommodation-types/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
 }
 
 export interface WardBedSummary {
@@ -107,6 +187,13 @@ export type ConsentStatus = "" | "PENDING" | "OBTAINED" | "DECLINED";
 export type NokNotification = "NOT_NOTIFIED" | "NOTIFIED" | "NOT_APPLICABLE" | "UNABLE_TO_REACH";
 
 export type ClinicalPriority = "" | "RED" | "ORANGE" | "YELLOW" | "GREEN";
+
+export interface BedNightSummary {
+  accommodation_type: string | null;
+  nights: number;
+  priced: number;
+  amount: string;
+}
 
 export interface Admission {
   id: string;
@@ -159,6 +246,8 @@ export interface Admission {
   episode: string | null;
   consultant_name: string;
   patient_citramac_number: string;
+  accommodation: BedAccommodation | null;
+  bed_nights: BedNightSummary[];
 }
 
 export interface PsychiatricReviewRequest {

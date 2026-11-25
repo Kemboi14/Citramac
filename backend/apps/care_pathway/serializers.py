@@ -297,15 +297,95 @@ class InterventionRecordSerializer(serializers.ModelSerializer):
         return user_display(obj.provider)
 
 
+class BillingServicePayerRateSerializer(serializers.Serializer):
+    payer = serializers.CharField()
+    payer_code = serializers.CharField(required=False, allow_blank=True, default="")
+    rate = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    requires_preauth = serializers.BooleanField(required=False, default=False)
+    active = serializers.BooleanField(required=False, default=True)
+
+
 class BillingServiceSerializer(serializers.ModelSerializer):
     rate = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, allow_null=True, required=False
     )
+    cost = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    markup_percent = serializers.DecimalField(
+        max_digits=7, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    tax_percent = serializers.DecimalField(
+        max_digits=7, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    medicine_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    mass = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    payer_rates = serializers.SerializerMethodField()
+    is_medication = serializers.BooleanField(read_only=True)
+    display_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = BillingService
-        fields = ["id", "name", "rate", "active"]
-        read_only_fields = ["name"]
+        fields = [
+            "id",
+            "code",
+            "category",
+            "name",
+            "display_name",
+            "description",
+            "medicine_name",
+            "mass",
+            "is_medication",
+            "cost",
+            "markup_percent",
+            "tax_percent",
+            "rate",
+            "remarks",
+            "active",
+            "payer_rates",
+        ]
+        read_only_fields = ["name", "display_name", "is_medication", "payer_rates"]
+
+    def get_payer_rates(self, obj):
+        rows = obj.payer_codes.filter(active=True).order_by("payer")
+        return [
+            {
+                "payer": row.payer,
+                "payer_code": row.payer_code,
+                "rate": str(row.rate) if row.rate is not None else None,
+                "requires_preauth": row.requires_preauth,
+                "active": row.active,
+            }
+            for row in rows
+        ]
+
+    def validate(self, attrs):
+        instance = self.instance
+        is_medication = (attrs.get("category", instance.category if instance else "") or "").strip().lower() == "medication"
+        medicine_name = attrs.get("medicine_name", instance.medicine_name if instance else "")
+        mass = attrs.get("mass", instance.mass if instance else "")
+        if is_medication:
+            if not str(medicine_name or "").strip():
+                raise serializers.ValidationError({"medicine_name": "Enter a medicine name."})
+            if not str(mass or "").strip():
+                raise serializers.ValidationError({"mass": "Enter a mass, strength or volume."})
+        return attrs
+
+    def update(self, instance, validated_data):
+        from django.db import IntegrityError
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.sync_medication_name()
+        try:
+            instance.save()
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                {"medicine_name": "A service with this name already exists."}
+            ) from exc
+        return instance
 
 
 class MedicationHistorySerializer(serializers.ModelSerializer):

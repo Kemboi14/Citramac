@@ -1,6 +1,6 @@
 import { useAuth } from "../auth/useAuth";
 import { AppShell } from "./AppShell";
-import { CLINICAL_NAV } from "./navConfig";
+import { CLINICAL_NAV, navForPermissions } from "./navConfig";
 import { GlobalClientSearch } from "./GlobalClientSearch";
 import { OrgBranchPill } from "./OrgBranchPill";
 import { TopbarActions } from "./TopbarActions";
@@ -58,7 +58,7 @@ export function ClinicalWorkspaceShell() {
     <AppShell
       brandName="CITRAMAC"
       brandSub={brandSub}
-      navGroups={CLINICAL_NAV}
+      navGroups={navForPermissions(CLINICAL_NAV, profile?.permissions)}
       userInitials={initials}
       userName={name}
       userRole={

@@ -686,6 +686,21 @@ class ConfirmReferencesSerializer(serializers.Serializer):
     appointment = serializers.UUIDField(required=False, allow_null=True)
 
 
+# The one category that is psychotherapy. Other categories (psychoeducation,
+# spiritual wellbeing, physical fitness, …) are run by any clinical staff.
+PSYCHOTHERAPY_CATEGORY = "group_psychotherapy"
+
+
+def _require_deliver(user, *categories):
+    """Recording or correcting a group psychotherapy session needs the 'Deliver
+    psychotherapy' permission (therapy.DELIVER); other categories need only the
+    clinical access the views already check."""
+    from .therapy import require_deliver
+
+    if any(getattr(c, "code", None) == PSYCHOTHERAPY_CATEGORY for c in categories):
+        require_deliver(user)
+
+
 def _reason(data):
     reason = str(data.get("reason") or "").strip()
     if not reason:
@@ -835,6 +850,7 @@ def confirm_session(user, data):
         )
 
     category = details.validated_data["category"]
+    _require_deliver(user, category)
     episodes = _open_episodes(patient_ids)
     refused = [
         _client_name(patients[pid])
@@ -934,6 +950,8 @@ def correct_session(user, session, data):
     reason = _reason(data)
     details = SessionDetailsSerializer(data=data, context={"user": user})
     details.is_valid(raise_exception=True)
+    # Moving a session into or out of group psychotherapy needs the permission too.
+    _require_deliver(user, session.category, details.validated_data["category"])
     session = GroupSession.objects.select_for_update().get(pk=session.pk)
     before = _session_snapshot(session)
     for field in SESSION_FIELDS:
@@ -1009,6 +1027,7 @@ def _sync_entry_intervention(user, session, entry, before, reason):
 def correct_entry(user, entry, data):
     """Amend one client's entry only. The version goes up and the before/after is
     kept; the linked intervention record is voided, created or updated to match."""
+    _require_deliver(user, entry.session.category)
     reason = _reason(data)
     serializer = EntrySerializer(data=data)
     serializer.is_valid(raise_exception=True)

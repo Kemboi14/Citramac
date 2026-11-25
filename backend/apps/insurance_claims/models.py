@@ -294,23 +294,25 @@ class InsuranceClaim(TenantScopedModel):
 
 
 class ServicePayerCode(TenantScopedModel):
-    """A payer's own code for one facility tariff service, and whether that
-    payer requires pre-authorisation for it. Configured by the facility from
-    the payer's published tariff — never generated or guessed. A service with
-    no row here is shown on a claim as "Payer code not configured — VERIFY".
+    """A payer's own code/rate for one facility tariff service. Configured from
+    the payer's published tariff — never generated or guessed. A service with no
+    row here is shown on a claim as "Payer code not configured — VERIFY".
     FHIR R4: ChargeItemDefinition.code / Claim.item.productOrService coding."""
 
     PAYER_CHOICES = [
         ("SHA", "SHA"),
         ("PRIVATE", "Private insurer"),
         ("EMPLOYER", "Employer scheme"),
+        ("CIC", "CIC"),
+        ("AAR", "AAR"),
     ]
 
     service = models.ForeignKey(
         "care_pathway.BillingService", on_delete=models.PROTECT, related_name="payer_codes"
     )
     payer = models.CharField(max_length=12, choices=PAYER_CHOICES)
-    payer_code = models.CharField(max_length=64)
+    payer_code = models.CharField(max_length=64, blank=True)
+    rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     requires_preauth = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
 

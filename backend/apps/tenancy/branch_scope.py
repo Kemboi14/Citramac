@@ -72,6 +72,9 @@ BRANCH_SCOPED = {
         "admission__encounter__branch",
     ),
     "ipd_ward.NursingNote": ("admission__episode__branch", "admission__encounter__branch"),
+    "ipd_ward.Room": ("ward__branch",),
+    "ipd_ward.BedStay": ("admission__episode__branch", "admission__encounter__branch"),
+    "ipd_ward.BedNight": ("admission__episode__branch", "admission__encounter__branch"),
     # Finance — billing, claims, SHA
     "billing.CostCenter": ("branch",),
     "billing.Invoice": ("encounter__branch",),

@@ -377,6 +377,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.notifications.tasks.retry_pending_deliveries",
         "schedule": crontab(minute="*/10"),
     },
+    # Bed-days (guide.md 2026-11-24): count every facility midnight an admitted
+    # client spent in a bed and raise its bed-day charge. Idempotent, so running
+    # hourly safely catches up after downtime.
+    "charge-bed-nights": {
+        "task": "apps.ipd_ward.tasks.charge_bed_nights",
+        "schedule": crontab(minute=30),
+    },
     # Legal admission status (master prompt LGL-WF-03): review-due / expiry
     # alerts and notice-period risk prompts. See apps/care_pathway/tasks.py.
     "sweep-legal-statuses": {

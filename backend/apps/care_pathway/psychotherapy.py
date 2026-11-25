@@ -484,6 +484,7 @@ def can_read(user, note):
 
 
 def _require_author(user, note):
+    therapy.require_deliver(user)
     if note.author_id != user.pk:
         raise PermissionDenied(
             "Only the clinician who wrote this session note can change or sign it."
@@ -502,6 +503,7 @@ def _require_draft(note):
 def start_or_resume(patient, user, data):
     """The clinician's open draft for this therapy type and episode, or a new one.
     A retried request resumes that draft rather than creating a second session."""
+    therapy.require_deliver(user)
     ep = therapy._open_episode(patient, data.get("episode"))
     session_type = data.get("session_type") or "INDIVIDUAL"
     if session_type not in SESSION_TYPES:
@@ -2029,6 +2031,7 @@ def amend(note, user, data):
         raise ValidationError(
             {"detail": "Edit the draft directly — amendments are for signed notes."}
         )
+    therapy.require_deliver(user)
     if not can_read(user, note):
         raise PermissionDenied("You cannot amend this note.")
     section = data.get("section")

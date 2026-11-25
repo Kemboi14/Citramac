@@ -1861,11 +1861,31 @@ export function getBillingOverview(accessToken: string) {
   return apiRequest<BillingOverview>("/care/billing/", { accessToken });
 }
 
+export interface BillingServicePayerRate {
+  payer: string;
+  payer_code: string;
+  rate: string | null;
+  requires_preauth: boolean;
+  active: boolean;
+}
+
 export interface BillingService {
   id: string;
+  code: string;
+  category: string;
   name: string;
+  display_name: string;
+  description: string;
+  medicine_name: string;
+  mass: string;
+  is_medication: boolean;
+  cost: string | null;
+  markup_percent: string | null;
+  tax_percent: string | null;
   rate: string | null;
+  remarks: string;
   active: boolean;
+  payer_rates: BillingServicePayerRate[];
 }
 
 export function listBillingServices(accessToken: string) {
@@ -1875,7 +1895,22 @@ export function listBillingServices(accessToken: string) {
 export function updateBillingService(
   accessToken: string,
   id: string,
-  payload: { rate?: string | null; active?: boolean },
+  payload: Partial<
+    Pick<
+      BillingService,
+      | "code"
+      | "category"
+      | "description"
+      | "medicine_name"
+      | "mass"
+      | "cost"
+      | "markup_percent"
+      | "tax_percent"
+      | "rate"
+      | "remarks"
+      | "active"
+    >
+  > & { payer_rates?: BillingServicePayerRate[] },
 ) {
   return apiRequest<BillingService>(`/care/billing-services/${id}/`, {
     method: "PATCH",

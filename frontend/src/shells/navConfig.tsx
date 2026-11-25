@@ -52,6 +52,8 @@ export interface NavItem {
   matchPrefix?: boolean;
   /** Other route prefixes that should highlight this item. */
   alsoActiveFor?: string[];
+  /** Shown only to people holding this permission (backend apps/accounts/catalogue.py). */
+  permission?: string;
 }
 
 export interface NavGroup {
@@ -171,8 +173,16 @@ export const CLINICAL_NAV: NavGroup[] = [
             to: "/clinical/psychotherapy/individual",
             matchPrefix: true,
             icon: MessageCircleHeart,
+            permission: "clinical.psychotherapy.deliver",
           },
-          { label: "Family Psychotherapy", to: "/clinical/psychotherapy/family", icon: House },
+          {
+            label: "Family Psychotherapy",
+            to: "/clinical/psychotherapy/family",
+            icon: House,
+            permission: "clinical.psychotherapy.deliver",
+          },
+          // Every clinical member of staff runs group sessions; only the "Group
+          // psychotherapy" category needs the deliver permission (server-checked).
           { label: "Group Psychotherapy", to: "/clinical/psychotherapy/group", icon: UsersRound },
         ],
       },
@@ -209,3 +219,17 @@ export const CLINICAL_NAV: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * The nav without the items the person's permissions don't open. Hiding a menu
+ * is convenience only — the server refuses the action either way.
+ */
+export function navForPermissions(groups: NavGroup[], held: readonly string[] | undefined) {
+  const allowed = (item: NavItem) => !item.permission || (held ?? []).includes(item.permission);
+  return groups.map((group) => ({
+    ...group,
+    items: group.items
+      .filter(allowed)
+      .map((item) => (item.children ? { ...item, children: item.children.filter(allowed) } : item)),
+  }));
+}
