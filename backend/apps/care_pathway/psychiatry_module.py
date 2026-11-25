@@ -1087,9 +1087,7 @@ def candidates():
         asked_reason.setdefault(
             activity.care_plan.patient_id, "Psychiatric review in the care plan"
         )
-        asked_episode_ids.setdefault(
-            activity.care_plan.patient_id, activity.care_plan.episode_id
-        )
+        asked_episode_ids.setdefault(activity.care_plan.patient_id, activity.care_plan.episode_id)
     for note in ProgressNote.objects.filter(
         note_type=NOTE_TYPE, status="DRAFT", patient__archived_at__isnull=True
     ).select_related("patient"):
