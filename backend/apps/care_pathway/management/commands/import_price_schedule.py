@@ -1,9 +1,9 @@
 import re
-import xml.etree.ElementTree as ET
 import zipfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from defusedxml import ElementTree as ET
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 

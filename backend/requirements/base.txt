@@ -21,4 +21,5 @@ Pillow==13.0.0
 # Needs Pango + fonts in the image (backend/Dockerfile).
 weasyprint==70.0
 jsonschema==4.26.0
+defusedxml==0.7.1
 anthropic==1.11.0
