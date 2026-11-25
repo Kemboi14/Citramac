@@ -748,6 +748,7 @@ def invoice_lines(invoice):
     shown as billed. The invoice's own lines are unchanged."""
     from datetime import timedelta
 
+    from apps.care_pathway import facility_time
     from apps.ipd_ward.models import BedNight
 
     lines = list(invoice.lines.select_related("charge_item").order_by("id"))
@@ -756,6 +757,7 @@ def invoice_lines(invoice):
         for n in BedNight.objects.filter(charge_id__in=[ln.charge_item_id for ln in lines])
     }
     rows, groups = [], {}
+
     def when(line):
         if line.charge_item_id in nights:
             return facility_time.combine_local(nights[line.charge_item_id])

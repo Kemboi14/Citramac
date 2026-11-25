@@ -363,7 +363,9 @@ class BillingServiceSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = self.instance
-        is_medication = (attrs.get("category", instance.category if instance else "") or "").strip().lower() == "medication"
+        is_medication = (
+            attrs.get("category", instance.category if instance else "") or ""
+        ).strip().lower() == "medication"
         medicine_name = attrs.get("medicine_name", instance.medicine_name if instance else "")
         mass = attrs.get("mass", instance.mass if instance else "")
         if is_medication:

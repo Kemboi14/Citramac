@@ -2365,10 +2365,14 @@ class BillingServiceView(APIView):
                 else:
                     try:
                         parsed_rate = Decimal(str(rate))
-                    except (InvalidOperation, ValueError):
-                        raise ValidationError({"payer_rates": f"Invalid rate for {payer}."})
+                    except (InvalidOperation, ValueError) as err:
+                        raise ValidationError(
+                            {"payer_rates": f"Invalid rate for {payer}."}
+                        ) from err
                     if parsed_rate < 0:
-                        raise ValidationError({"payer_rates": f"Rate for {payer} cannot be negative."})
+                        raise ValidationError(
+                            {"payer_rates": f"Rate for {payer} cannot be negative."}
+                        )
                 defaults = {
                     "payer_code": str(row.get("payer_code") or "").strip(),
                     "rate": parsed_rate,

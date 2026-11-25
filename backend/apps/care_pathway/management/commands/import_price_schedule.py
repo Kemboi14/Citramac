@@ -1,6 +1,6 @@
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -83,14 +83,18 @@ def read_xlsx(path):
                 ss.append(
                     "".join(
                         (t.text or "")
-                        for t in si.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t")
+                        for t in si.iter(
+                            "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t"
+                        )
                     )
                 )
         wb = ET.fromstring(z.read("xl/workbook.xml"))
         sheets = [
             (
                 sh.attrib["name"],
-                sh.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"],
+                sh.attrib[
+                    "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+                ],
             )
             for sh in wb.findall("m:sheets/m:sheet", NS)
         ]
@@ -142,7 +146,9 @@ class Command(BaseCommand):
         )
         parser.add_argument("--org", help="Organization slug or id. Defaults to all organizations.")
         parser.add_argument("--all-orgs", action="store_true", help="Import for all organizations.")
-        parser.add_argument("--dry-run", action="store_true", help="Parse and report, do not write.")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Parse and report, do not write."
+        )
         parser.add_argument(
             "--update-existing",
             action="store_true",
@@ -158,7 +164,9 @@ class Command(BaseCommand):
         if not orgs:
             raise CommandError("No organizations found.")
         for org in orgs:
-            self._import_org(org, sheets, dry_run=options["dry_run"], update_existing=options["update_existing"])
+            self._import_org(
+                org, sheets, dry_run=options["dry_run"], update_existing=options["update_existing"]
+            )
 
     def _orgs(self, options):
         qs = Organization.objects.all().order_by("name")
@@ -173,10 +181,16 @@ class Command(BaseCommand):
     def _import_org(self, org, sheets, dry_run, update_existing):
         created = updated = skipped = payer_upserts = 0
         with transaction.atomic():
-            c, u, s = self._import_out_of_pocket(org, sheets.get("Out of pocket", []), dry_run, update_existing)
-            created += c; updated += u; skipped += s
+            c, u, s = self._import_out_of_pocket(
+                org, sheets.get("Out of pocket", []), dry_run, update_existing
+            )
+            created += c
+            updated += u
+            skipped += s
             for payer in ("CIC", "AAR"):
-                pc, pu, ps = self._import_payer_sheet(org, payer, sheets.get(payer, []), dry_run, update_existing)
+                pc, pu, ps = self._import_payer_sheet(
+                    org, payer, sheets.get(payer, []), dry_run, update_existing
+                )
                 payer_upserts += pc + pu
                 skipped += ps
             if dry_run:
@@ -251,7 +265,11 @@ class Command(BaseCommand):
                 new_name = service.display_name
                 if service.name != new_name and (update_existing or not service.name):
                     # avoid unique name collision
-                    clash = BillingService.objects.filter(organization=org, name__iexact=new_name).exclude(pk=service.pk).exists()
+                    clash = (
+                        BillingService.objects.filter(organization=org, name__iexact=new_name)
+                        .exclude(pk=service.pk)
+                        .exists()
+                    )
                     if not clash:
                         service.name = new_name
                         changed = True
@@ -273,9 +291,13 @@ class Command(BaseCommand):
             if not service_name and not description:
                 continue
             lookup_name = description or service_name
-            service = BillingService.objects.filter(organization=org, name__iexact=lookup_name).first()
+            service = BillingService.objects.filter(
+                organization=org, name__iexact=lookup_name
+            ).first()
             if service is None:
-                service = BillingService.objects.filter(organization=org, description__iexact=description).first()
+                service = BillingService.objects.filter(
+                    organization=org, description__iexact=description
+                ).first()
             if service is None:
                 # Create a service shell so the payer rate is not lost.
                 name = lookup_name
@@ -299,11 +321,15 @@ class Command(BaseCommand):
             if cost is None and raw_cost.upper() not in {"FREE", "TBD"}:
                 skipped += 1
                 continue
-            obj = ServicePayerCode.objects.filter(organization=org, service=service, payer=payer).first()
+            obj = ServicePayerCode.objects.filter(
+                organization=org, service=service, payer=payer
+            ).first()
             defaults = {"rate": cost, "payer_code": "", "active": True, "requires_preauth": False}
             if obj is None:
                 if not dry_run:
-                    ServicePayerCode.objects.create(organization=org, service=service, payer=payer, **defaults)
+                    ServicePayerCode.objects.create(
+                        organization=org, service=service, payer=payer, **defaults
+                    )
                 created += 1
             else:
                 changed = False

@@ -11,7 +11,15 @@ from apps.sysadmin_audit.audit import log_view
 from apps.sysadmin_audit.mixins import AuditedReadMixin
 
 from . import accommodation
-from .models import AccommodationType, Admission, Bed, MedicationAdministration, NursingNote, Room, Ward
+from .models import (
+    AccommodationType,
+    Admission,
+    Bed,
+    MedicationAdministration,
+    NursingNote,
+    Room,
+    Ward,
+)
 from .serializers import (
     AdmissionSerializer,
     BedSerializer,

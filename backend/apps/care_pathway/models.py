@@ -1027,7 +1027,9 @@ class BillingService(TenantScopedModel):
     @property
     def display_name(self):
         if self.medicine_name:
-            return " ".join(part for part in [self.medicine_name.strip(), self.mass.strip()] if part)
+            return " ".join(
+                part for part in [self.medicine_name.strip(), self.mass.strip()] if part
+            )
         return self.name
 
     def sync_medication_name(self):

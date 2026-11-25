@@ -474,6 +474,7 @@ class WardBedEditTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
 
+
 class AccommodationTests(APITestCase):
     """Accommodation types, rooms, bed stays and nightly bed-day charges
     (guide.md 2026-11-24)."""
@@ -485,10 +486,16 @@ class AccommodationTests(APITestCase):
                 name="Org", slug="org-accom", facility_type="MENTAL_HEALTH_MHP"
             )
             self.admin = User.objects.create_user(
-                email="admin@org.test", password="Password123!", organization=self.org, is_active=True
+                email="admin@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
             )
             self.nurse = User.objects.create_user(
-                email="nurse@org.test", password="Password123!", organization=self.org, is_active=True
+                email="nurse@org.test",
+                password="Password123!",
+                organization=self.org,
+                is_active=True,
             )
             from apps.accounts.models import Role
 
@@ -578,7 +585,7 @@ class AccommodationTests(APITestCase):
         from decimal import Decimal
 
         from apps.care_pathway import facility_time
-        from apps.care_pathway.models import BillingService
+
         from . import accommodation
         from .models import AccommodationType, BedNight
 
@@ -613,6 +620,7 @@ class AccommodationTests(APITestCase):
         from datetime import timedelta
 
         from apps.care_pathway import facility_time
+
         from . import accommodation
         from .models import BedNight
 
@@ -636,7 +644,7 @@ class AccommodationTests(APITestCase):
 
         from apps.billing.models import Invoice, InvoiceLine
         from apps.care_pathway import facility_time
-        from apps.care_pathway.models import BillingService
+
         from . import accommodation
         from .models import AccommodationType, BedNight
 
@@ -669,9 +677,15 @@ class AccommodationTests(APITestCase):
             )
             # Discharge after the first night was counted but before the
             # second midnight was due — nights 2 and 3 were never spent.
-            early = facility_time.combine_local(nights[1].night + timedelta(days=1)) - timedelta(hours=1)
+            early = facility_time.combine_local(nights[1].night + timedelta(days=1)) - timedelta(
+                hours=1
+            )
             accommodation.close_stay(admission, early)
-            nights = list(BedNight.objects.filter(admission=admission).select_related("charge").order_by("night"))
+            nights = list(
+                BedNight.objects.filter(admission=admission)
+                .select_related("charge")
+                .order_by("night")
+            )
 
         self.assertIsNone(nights[0].charge.voided_at)  # invoiced, kept
         self.assertIsNotNone(nights[1].charge.voided_at)

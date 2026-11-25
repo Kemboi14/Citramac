@@ -37,7 +37,9 @@ function isValidRate(value: string) {
   const [whole, fraction, ...rest] = value.split(".");
   const digits = (part: string) => [...part].every((ch) => ch >= "0" && ch <= "9");
   if (rest.length > 0 || !whole || whole.length > 10 || !digits(whole)) return false;
-  return fraction === undefined || (fraction.length >= 1 && fraction.length <= 2 && digits(fraction));
+  return (
+    fraction === undefined || (fraction.length >= 1 && fraction.length <= 2 && digits(fraction))
+  );
 }
 
 function draftFrom(service: BillingService): Draft {
@@ -54,7 +56,11 @@ function payerRateValue(rates: BillingServicePayerRate[], payer: string) {
   return rates.find((r) => r.payer === payer)?.rate ?? "";
 }
 
-function setPayerRate(rates: BillingServicePayerRate[], payer: string, rate: string): BillingServicePayerRate[] {
+function setPayerRate(
+  rates: BillingServicePayerRate[],
+  payer: string,
+  rate: string,
+): BillingServicePayerRate[] {
   const next = [...rates];
   const idx = next.findIndex((r) => r.payer === payer);
   const row: BillingServicePayerRate = {
@@ -69,7 +75,13 @@ function setPayerRate(rates: BillingServicePayerRate[], payer: string, rate: str
   return next;
 }
 
-function TariffRow({ service, onSaved }: { service: BillingService; onSaved: (s: BillingService) => void }) {
+function TariffRow({
+  service,
+  onSaved,
+}: {
+  service: BillingService;
+  onSaved: (s: BillingService) => void;
+}) {
   const { accessToken } = useAuth();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(service));
   const [status, setStatus] = useState<RowStatus>({ state: "idle" });
@@ -111,7 +123,10 @@ function TariffRow({ service, onSaved }: { service: BillingService; onSaved: (s:
         setStatus({ state: "saved" });
       })
       .catch((err) =>
-        setStatus({ state: "error", message: err instanceof ApiError ? err.message : "Couldn't save." }),
+        setStatus({
+          state: "error",
+          message: err instanceof ApiError ? err.message : "Couldn't save.",
+        }),
       );
   };
 
@@ -136,7 +151,9 @@ function TariffRow({ service, onSaved }: { service: BillingService; onSaved: (s:
           ) : (
             <>
               <div className="font-semibold">{service.display_name || service.name}</div>
-              {service.category ? <span className="text-[11px] text-ink-500">{service.category}</span> : null}
+              {service.category ? (
+                <span className="text-[11px] text-ink-500">{service.category}</span>
+              ) : null}
               {service.description && service.description !== service.name ? (
                 <span className="text-[11px] text-ink-500">{service.description}</span>
               ) : null}
@@ -190,7 +207,10 @@ function TariffRow({ service, onSaved }: { service: BillingService; onSaved: (s:
                 value={payerRateValue(draft.payer_rates, payer)}
                 aria-label={`${payer} rate for ${service.display_name || service.name}`}
                 onChange={(e) => {
-                  setDraft((p) => ({ ...p, payer_rates: setPayerRate(p.payer_rates, payer, e.target.value) }));
+                  setDraft((p) => ({
+                    ...p,
+                    payer_rates: setPayerRate(p.payer_rates, payer, e.target.value),
+                  }));
                   setStatus({ state: "idle" });
                 }}
               />
@@ -220,14 +240,29 @@ function TariffRow({ service, onSaved }: { service: BillingService; onSaved: (s:
       </td>
       <td className={TD}>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={BTN} disabled={!dirty || invalidRate || medNameMissing || massMissing || status.state === "saving"} onClick={save}>
+          <button
+            type="button"
+            className={BTN}
+            disabled={
+              !dirty || invalidRate || medNameMissing || massMissing || status.state === "saving"
+            }
+            onClick={save}
+          >
             {status.state === "saving" ? "Saving…" : "Save"}
           </button>
           <span role="status" className="text-xs">
-            {invalidRate && <span className="text-status-red">Price must be zero or more, up to 2 decimals.</span>}
-            {!invalidRate && (medNameMissing || massMissing) && <span className="text-status-red">Medicine name and mass are required.</span>}
-            {!invalidRate && !medNameMissing && !massMissing && status.state === "saved" && <span className="text-brand-green">Saved</span>}
-            {!invalidRate && !medNameMissing && !massMissing && status.state === "error" && <span className="text-status-red">{status.message}</span>}
+            {invalidRate && (
+              <span className="text-status-red">Price must be zero or more, up to 2 decimals.</span>
+            )}
+            {!invalidRate && (medNameMissing || massMissing) && (
+              <span className="text-status-red">Medicine name and mass are required.</span>
+            )}
+            {!invalidRate && !medNameMissing && !massMissing && status.state === "saved" && (
+              <span className="text-brand-green">Saved</span>
+            )}
+            {!invalidRate && !medNameMissing && !massMissing && status.state === "error" && (
+              <span className="text-status-red">{status.message}</span>
+            )}
           </span>
         </div>
       </td>
@@ -247,12 +282,20 @@ export function ServiceTariffPage() {
     let cancelled = false;
     listBillingServices(accessToken)
       .then((data) => !cancelled && setServices(data))
-      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "Couldn't load the service tariff."));
-    return () => { cancelled = true; };
+      .catch(
+        (err) =>
+          !cancelled &&
+          setError(err instanceof ApiError ? err.message : "Couldn't load the service tariff."),
+      );
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken]);
 
   const categories = useMemo(() => {
-    const values = Array.from(new Set((services ?? []).map((s) => s.category || "Uncategorized"))).sort();
+    const values = Array.from(
+      new Set((services ?? []).map((s) => s.category || "Uncategorized")),
+    ).sort();
     return ["ALL", ...values];
   }, [services]);
 
@@ -261,42 +304,81 @@ export function ServiceTariffPage() {
     return (services ?? []).filter((s) => {
       if (category !== "ALL" && (s.category || "Uncategorized") !== category) return false;
       if (!q) return true;
-      return [s.display_name, s.name, s.medicine_name, s.mass, s.category, s.description, s.code].some((v) => (v || "").toLowerCase().includes(q));
+      return [
+        s.display_name,
+        s.name,
+        s.medicine_name,
+        s.mass,
+        s.category,
+        s.description,
+        s.code,
+      ].some((v) => (v || "").toLowerCase().includes(q));
     });
   }, [services, query, category]);
 
-  const onSaved = (updated: BillingService) => setServices((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? prev);
+  const onSaved = (updated: BillingService) =>
+    setServices((prev) => prev?.map((s) => (s.id === updated.id ? updated : s)) ?? prev);
   const unpricedCount = services?.filter((s) => s.rate === null).length ?? 0;
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
-        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">Organization · Billing</div>
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-brand-green-dark">
+          Organization · Billing
+        </div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Service Tariff</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-500">
-          Rates price delivered services in clinical billing (Ksh per unit). Medication rows can be edited by medicine name, mass/strength, and price. CIC/AAR insurance rates are stored per service. No rate is suggested or filled in for you.
+          Rates price delivered services in clinical billing (Ksh per unit). Medication rows can be
+          edited by medicine name, mass/strength, and price. CIC/AAR insurance rates are stored per
+          service. No rate is suggested or filled in for you.
         </p>
       </div>
 
-      {error && <p role="alert" className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+          {error}
+        </p>
+      )}
       {services === null && !error && <p className="text-sm text-ink-500">Loading tariff…</p>}
 
       {services && (
         <section className={CARD_CLASS} aria-labelledby="service-tariff-title">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border px-[18px] py-3.5">
             <div>
-              <h2 id="service-tariff-title" className="text-[13px] font-bold text-ink-900">Billable services</h2>
-              <p className="text-[11px] text-ink-500">{filtered.length} shown{unpricedCount > 0 ? ` · ${unpricedCount} without an out-of-pocket rate` : ""}</p>
+              <h2 id="service-tariff-title" className="text-[13px] font-bold text-ink-900">
+                Billable services
+              </h2>
+              <p className="text-[11px] text-ink-500">
+                {filtered.length} shown
+                {unpricedCount > 0 ? ` · ${unpricedCount} without an out-of-pocket rate` : ""}
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <input className={`${INPUT} w-56`} placeholder="Search service or medicine" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search tariff" />
-              <select className={`${INPUT} w-48`} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter category">
-                {categories.map((c) => <option key={c} value={c}>{c === "ALL" ? "All categories" : c}</option>)}
+              <input
+                className={`${INPUT} w-56`}
+                placeholder="Search service or medicine"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search tariff"
+              />
+              <select
+                className={`${INPUT} w-48`}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                aria-label="Filter category"
+              >
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "ALL" ? "All categories" : c}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
           {filtered.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-ink-500">No services match this filter.</p>
+            <p className="px-5 py-8 text-center text-sm text-ink-500">
+              No services match this filter.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] border-collapse">
@@ -307,11 +389,15 @@ export function ServiceTariffPage() {
                     <th className={TH}>Out-of-pocket price (Ksh)</th>
                     <th className={TH}>Insurance rates (Ksh)</th>
                     <th className={TH}>Active</th>
-                    <th className={TH}><span className="sr-only">Save</span></th>
+                    <th className={TH}>
+                      <span className="sr-only">Save</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((service) => <TariffRow key={service.id} service={service} onSaved={onSaved} />)}
+                  {filtered.map((service) => (
+                    <TariffRow key={service.id} service={service} onSaved={onSaved} />
+                  ))}
                 </tbody>
               </table>
             </div>

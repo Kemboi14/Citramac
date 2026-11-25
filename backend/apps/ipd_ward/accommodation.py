@@ -32,7 +32,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.care_pathway import facility_time
 
-from .models import AccommodationType, Admission, Bed, BedNight, BedStay
+from .models import AccommodationType, Bed, BedNight, BedStay
 
 SERVICE_PREFIX = "Bed-day — "
 # Starting names only, never prices (guide.md §6). The Org Admin renames,
