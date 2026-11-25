@@ -23,6 +23,8 @@ def is_platform_admin_context():
 
 
 def _set_db_session_vars(organization_id, is_platform_admin):
+    if connection.in_atomic_block and connection.needs_rollback:
+        return
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT set_config('app.current_org_id', %s, false), "
