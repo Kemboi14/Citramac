@@ -530,10 +530,14 @@ class AccommodationTests(APITestCase):
 
         with platform_admin_context():
             accommodation.seed_types(self.org.id)
-            kinds = list(AccommodationType.objects.filter(organization=self.org).order_by("order"))
-        self.assertEqual([k.name for k in kinds], ["Shared bed", "Shared room", "Private room"])
-        self.assertTrue(all(k.billing_service.rate is None for k in kinds))
-        self.assertTrue(all(k.billing_service.name == f"Bed-day — {k.name}" for k in kinds))
+            kinds = list(
+                AccommodationType.objects.filter(organization=self.org)
+                .select_related("billing_service")
+                .order_by("order")
+            )
+            self.assertEqual([k.name for k in kinds], ["Shared bed", "Shared room", "Private room"])
+            self.assertTrue(all(k.billing_service.rate is None for k in kinds))
+            self.assertTrue(all(k.billing_service.name == f"Bed-day — {k.name}" for k in kinds))
 
     def test_accommodation_type_list_seeds_and_exposes_rate(self):
         response = self.client.get(reverse("ipd-accommodation-type-list"), **self.nurse_auth)
@@ -607,14 +611,18 @@ class AccommodationTests(APITestCase):
             now = facility_time.combine_local(facility_time.local_date()) + timedelta(hours=8)
             raised = accommodation.charge_nights(now=now)
             raised_again = accommodation.charge_nights(now=now)
-            nights = list(BedNight.objects.filter(admission=admission).order_by("night"))
+            nights = list(
+                BedNight.objects.filter(admission=admission)
+                .select_related("charge")
+                .order_by("night")
+            )
 
-        self.assertEqual(raised, 3)
-        self.assertEqual(raised_again, 0)
-        self.assertEqual(len(nights), 3)
-        self.assertTrue(all(n.charge_id is not None for n in nights))
-        self.assertTrue(all(n.accommodation_type_id == private.id for n in nights))
-        self.assertTrue(all(str(n.charge.unit_price) == "5000.00" for n in nights))
+            self.assertEqual(raised, 3)
+            self.assertEqual(raised_again, 0)
+            self.assertEqual(len(nights), 3)
+            self.assertTrue(all(n.charge_id is not None for n in nights))
+            self.assertTrue(all(n.accommodation_type_id == private.id for n in nights))
+            self.assertTrue(all(str(n.charge.unit_price) == "5000.00" for n in nights))
 
     def test_unpriced_or_typeless_bed_records_night_without_charge(self):
         from datetime import timedelta
@@ -673,7 +681,6 @@ class AccommodationTests(APITestCase):
                 description="Bed-day — Shared room",
                 quantity=1,
                 unit_price=nights[0].charge.unit_price,
-                line_total=nights[0].charge.unit_price,
             )
             # Discharge after the first night was counted but before the
             # second midnight was due — nights 2 and 3 were never spent.
