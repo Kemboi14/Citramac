@@ -156,14 +156,14 @@ class SubscriptionBillingTests(APITestCase):
 
             self.org_admin = User.objects.create_user(
                 email="admin@amani-bill.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 is_active=True,
             )
             self.org_admin.roles.add(Role.objects.get(name="Org Admin", organization__isnull=True))
             self.nurse = User.objects.create_user(
                 email="nurse@amani-bill.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.org,
                 primary_branch=self.branch,
                 is_active=True,
@@ -171,7 +171,7 @@ class SubscriptionBillingTests(APITestCase):
             self.nurse.branch_access.add(self.branch)
             self.other_admin = User.objects.create_user(
                 email="admin@other-bill.test",
-                password="Password123!",
+                password="Password123!",  # pragma: allowlist secret
                 organization=self.other_org,
                 is_active=True,
             )
@@ -179,7 +179,8 @@ class SubscriptionBillingTests(APITestCase):
                 Role.objects.get(name="Org Admin", organization__isnull=True)
             )
             self.super_admin = User.objects.create_superuser(
-                email="root-bill@platform.test", password="Password123!"
+                email="root-bill@platform.test",
+                password="Password123!",  # pragma: allowlist secret
             )
 
     def _auth(self, user):
