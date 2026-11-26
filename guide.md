@@ -1511,3 +1511,34 @@ Not yet done (found in the review, each needs a decision or a screen):
   remittances / payer codes, disclosures, care-team router, client billing summary.
 
 FHIR: unchanged. Reversibility: cheap. Access checks only, and no record changes.
+
+### 2026-11-26 — CITRAMAC subscription billed by branches, private rooms and shared rooms
+
+On the owner's decisions of 2026-11-26. This is the organisation's subscription to CITRAMAC, not
+patient billing (`apps/tenancy/subscription_billing.py`).
+
+1. **Price = base + per unit.**
+   - The plan keeps its monthly base fee and has three monthly rates, set by Super Admin only:
+     per active branch, per private room, per shared room.
+   - No rate is seeded. A blank rate charges nothing and the statement says "No rate set".
+   - Every rate change is audited.
+   - An annual cycle is 12 × monthly. Nothing is prorated.
+2. **Room class on each accommodation type.**
+   - The Org Admin sets each type's class (Ward & Bed Management → Accommodation types and rooms):
+     Private room, Shared room, Shared bed / ward bay (not a room, never charged) or Unclassified.
+   - Existing types, the seeded defaults included, start Unclassified.
+   - A room counts by its own type's class, and only while its ward's branch is active (or the
+     ward has no branch).
+   - An unclassified room is listed by name and never charged.
+3. **Statement at period start.**
+   - `SubscriptionStatement` is append-only and RLS-scoped. It freezes the period, plan, counts,
+     rates, lines, total (KES) and when the counting was done.
+   - The daily lifecycle job issues it, or Super Admin issues it now.
+   - A correction is a new statement replacing the latest one, with a reason. A statement is
+     never edited.
+   - Super Admin sees each organisation's usage and statements. The Org Admin sees its own,
+     read-only. Statements print on the CITRAMAC letterhead and every opening is audited.
+
+Migrations `tenancy 0027`, `ipd_ward 0011`. Not clinical data, so no FHIR resource. Reversibility:
+cheap, because the changes are additive. Owner action: classify each organisation's accommodation
+types and set the plan rates. Until then no room or branch is charged.
