@@ -1542,3 +1542,42 @@ patient billing (`apps/tenancy/subscription_billing.py`).
 Migrations `tenancy 0027`, `ipd_ward 0011`. Not clinical data, so no FHIR resource. Reversibility:
 cheap, because the changes are additive. Owner action: classify each organisation's accommodation
 types and set the plan rates. Until then no room or branch is charged.
+
+### 2026-11-26 — drawn, witnessed signatures beyond consents; clinician specimen signature
+
+On the owner's decisions of 2026-11-26. These are stored like the 2026-11-13 consent signatures:
+`PartySignature`, append-only, bound to the SHA-256 of the content signed, the staff witness always
+present, and the image only as a fingerprint in the audit trail.
+
+1. **Mental Health Act applications and the written notice to leave.**
+   - The applicant draws their signature. That is the client, a guardian for a minor, or the
+     related person for an involuntary application (new local role `applicant`).
+   - The "signed in my presence" tick-box is refused for these forms.
+   - Print → sign → upload stays.
+   - An applicant who can't sign on screen uses the paper route. The legal configuration names
+     nobody who may sign on their behalf.
+   - The filed PDF and the print show the signatures.
+   - The medical recommendation is still signed by the doctor's authenticated click.
+2. **Safety plan.** Signing a version needs the client's drawn signature, or "unable to sign" with a
+   reason, plus the clinician as witness.
+3. **Leaving against medical advice** (`against_advice.py`).
+   - The client acknowledges against the facility's own wording (new Consent wording type
+     `DISCHARGE_AGAINST_ADVICE`).
+   - The client signs, or the clinician records "unable" or "refused" with a reason, witnessed.
+   - With no wording, nothing can be signed, and the discharge is never blocked.
+   - Each attempt is its own record. FHIR: a `Provenance` on the admission Encounter in the
+     discharge bundle.
+4. **Clinician specimen signature** (My profile → Your signature).
+   - Each new drawing is a new version, and old ones are kept.
+   - A document prints the specimen in use when it was signed, as "Signed electronically by …
+     at …". Without one it prints the name only.
+   - Signing never waits for a specimen.
+
+Migrations `accounts 0030`, `care_pathway 0072`, `documents 0006`.
+
+VERIFY:
+- ISO-ASTM E1762 signature-type codes.
+- With legal counsel: that a drawn, witnessed signature meets Kenyan requirements for statutory
+  applications, notices and the AMA acknowledgement. No statute is cited.
+
+Reversibility: cheap. Additive, and forms signed before today keep their method.
