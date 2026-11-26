@@ -2589,6 +2589,8 @@ export interface SafetyPlanDoc {
   signed_at: string | null;
   signed_by: string;
   copy_given_at: string | null;
+  /** The client's and the witness's signatures on this version. */
+  signatures: PartySignatureRow[];
   warning_signs: string;
   coping: string;
   self_talk: string;
@@ -2625,9 +2627,16 @@ export function saveSafetyPlan(
   });
 }
 
-export function signSafetyPlan(accessToken: string, patientId: string) {
+/** The clinician signs the version; the client signs with them (or why they
+ * cannot), and the clinician signs as witness. */
+export function signSafetyPlan(
+  accessToken: string,
+  patientId: string,
+  signatures: { client: SignatureInput; witness: SignatureInput },
+) {
   return apiRequest<SafetyPlanDoc>(`/care/clients/${patientId}/safety-plan/sign/`, {
     method: "POST",
+    body: { signatures },
     accessToken,
   });
 }
@@ -3105,11 +3114,13 @@ export interface CapacityRow {
 /** One on-screen signature on a consent (documents.PartySignature). */
 export interface PartySignatureRow {
   id: string;
-  role: "CLIENT" | "GUARDIAN" | "SUBSTITUTE" | "RELATED_PERSON" | "WITNESS";
+  role: "CLIENT" | "GUARDIAN" | "SUBSTITUTE" | "RELATED_PERSON" | "APPLICANT" | "WITNESS";
   role_label: string;
   signer_name: string;
   relationship: string;
-  method: "DRAWN" | "UNABLE";
+  method: "DRAWN" | "UNABLE" | "REFUSED";
+  method_label: string;
+  /** Why they could not, or would not, sign (UNABLE / REFUSED). */
   unable_reason: string;
   captured_at: string;
   captured_by: string;
@@ -3120,6 +3131,7 @@ export interface PartySignatureRow {
 export interface SignatureInput {
   image?: string;
   unable_reason?: string;
+  refused_reason?: string;
   name?: string;
   relationship?: string;
   related_person_id?: string;

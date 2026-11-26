@@ -292,8 +292,12 @@ def detail(user):
     from .models import PractitionerCredential, PractitionerCredentialItem
 
     cred = credential_for(user)
+    from . import signature_specimen
+
     out = summary(user)
     out["name"] = _name(user)
+    # Printed on documents they sign by authenticated click (2026-11-26).
+    out["signature_specimen"] = signature_specimen.summary(user)
     out["phone"] = user.phone or ""
     out["regulator_choices"] = [
         {"value": v, "label": label} for v, label in PractitionerCredential.REGULATOR_CHOICES

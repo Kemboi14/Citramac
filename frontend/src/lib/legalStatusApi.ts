@@ -1,4 +1,5 @@
 import { apiDownload, apiRequest } from "./apiClient";
+import type { PartySignatureRow } from "./carePathwayApi";
 
 /** Legal admission status — master prompt §7A (LGL-*). Statutory wording comes from
  * the server's versioned jurisdiction config and is rendered verbatim. */
@@ -35,6 +36,8 @@ export interface LegalDocumentRow {
   application: string | null;
   content: Record<string, unknown>;
   signer_kind: string;
+  /** The applicant's and the witness's signatures drawn on screen (2026-11-26). */
+  party_signatures?: PartySignatureRow[];
   signer_name: string;
   signature_method: string;
   signed_at: string | null;

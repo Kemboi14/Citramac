@@ -454,6 +454,37 @@ def _discharge_med_request(line, patient_ref, summary):
     return resource
 
 
+def _against_advice_provenances(admission, patient_ref, encounter_ref):
+    """(fullUrl, Provenance) for each signed against-advice acknowledgement."""
+    from apps.documents.consent_fhir import signature_parts
+
+    from . import against_advice
+
+    out = []
+    for ack in against_advice.acknowledgements(admission):
+        rows = against_advice.signatures_for(ack)
+        if not rows:
+            continue
+        agents, signatures = signature_parts(rows, patient_ref)
+        out.append(
+            (
+                _urn("Provenance", ack.id),
+                Provenance(
+                    id=f"ama-{ack.id}",
+                    target=[Reference(reference=encounter_ref)],
+                    recorded=max(r.captured_at for r in rows).isoformat(),
+                    activity=CodeableConcept(
+                        text="Acknowledgement of leaving against medical advice "
+                        f"(facility wording, version {ack.wording_version})"
+                    ),
+                    agent=agents,
+                    signature=signatures or None,
+                ),
+            )
+        )
+    return out
+
+
 def build_discharge_bundle(summary):
     """FHIR document Bundle for one SIGNED discharge summary (docs/17).
 
@@ -461,6 +492,12 @@ def build_discharge_bundle(summary):
     (`hospitalization.dischargeDisposition`, `period.end`) + coded Conditions +
     discharge MedicationRequests + Provenance. An amendment's Composition
     `relatesTo` (replaces) the version it supersedes; the original is untouched.
+
+    A client leaving against medical advice (disposition AMA) who acknowledged it
+    adds one Provenance per acknowledgement, targeting the Encounter: one
+    `signature` per drawn signature (sigFormat image/png, typed by the local
+    signer-role code), and a client unable or refusing to sign as an agent whose
+    role states the reason — never a signature (owner decisions 2026-11-26).
 
     VERIFY: Composition.type needs the LOINC discharge-summary document code
     (loinc.org) — carried as text only until confirmed; 57133-1 is the *referral
@@ -601,6 +638,12 @@ def build_discharge_bundle(summary):
     )
     entries = [BundleEntry(fullUrl=composition_ref, resource=composition)]
     entries += [BundleEntry(fullUrl=url, resource=resource) for url, resource in resources]
+    if summary.disposition == "AMA":
+        for ack_ref, ack_provenance in _against_advice_provenances(
+            admission, patient_ref, encounter_ref
+        ):
+            entries.append(BundleEntry(fullUrl=ack_ref, resource=ack_provenance))
+    # The signature's Provenance stays the document's last entry.
     entries.append(BundleEntry(fullUrl=_urn("Provenance", summary.id), resource=provenance))
     # bdl-9 / bdl-10: a document carries its own identity and assembly time.
     # urn:ietf:rfc:3986 is the base-spec system for a value that is itself a URI.

@@ -8,6 +8,7 @@ import {
   downloadMyProfessionalFile,
   getMyProfessionalProfile,
   openBlob,
+  recordMySignatureSpecimen,
   removeMyCredentialItem,
   removeMyProfessionalFile,
   STATUS_LABEL,
@@ -26,6 +27,8 @@ import {
   type ProfessionalProfileFields,
 } from "../../lib/professionalProfileApi";
 import DateInput from "../../components/DateInput";
+import type { SignatureInput } from "../../lib/carePathwayApi";
+import { SignaturePad } from "../care/shared/SignaturePad";
 
 const INPUT =
   "w-full rounded-[9px] border border-surface-border bg-surface-bg px-3 py-2.5 text-[13px] text-ink-900 outline-none transition-colors focus:border-brand-green focus:bg-surface-card";
@@ -177,6 +180,70 @@ type ItemDraft = {
   issued_on: string;
   expires_on: string;
 };
+
+/**
+ * Your specimen signature (2026-11-26): drawn once here and printed in the
+ * signature block of the documents you sign in the system, beside "Signed
+ * electronically by … at …". A new drawing replaces it; earlier ones are kept,
+ * and each document prints the one in use when you signed it. Signing never
+ * waits for one.
+ */
+function SignatureSpecimenSlot({
+  specimen,
+  onSave,
+}: {
+  specimen: ProfessionalProfile["signature_specimen"];
+  onSave: (image: string) => Promise<void>;
+}) {
+  const [drawing, setDrawing] = useState(false);
+  const [value, setValue] = useState<SignatureInput | null>(null);
+  const current = specimen.current;
+  return (
+    <div className={CARD}>
+      {current ? (
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <img
+            src={current.image}
+            alt="Your specimen signature"
+            className="h-[60px] max-w-[260px] rounded-md border border-surface-border bg-white object-contain p-1"
+          />
+          <span className="text-[12px] text-ink-500">
+            In use since {dateText(current.recorded_at)}
+          </span>
+        </div>
+      ) : (
+        <p className="mb-3 text-[12.5px] text-ink-500">
+          No specimen yet: documents you sign print your name only.
+        </p>
+      )}
+      {drawing ? (
+        <div className="flex flex-col gap-2">
+          <SignaturePad label="Your signature" onChange={setValue} />
+          <div className="flex flex-wrap gap-2">
+            <SaveButton
+              onSave={async () => {
+                if (!value?.image) return;
+                await onSave(value.image);
+                setDrawing(false);
+                setValue(null);
+              }}
+              disabled={!value?.image}
+            >
+              {current ? "Replace my signature" : "Save my signature"}
+            </SaveButton>
+            <button type="button" className={GHOST} onClick={() => setDrawing(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className={GHOST} onClick={() => setDrawing(true)}>
+          {current ? "Draw a new signature" : "Draw my signature"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function draftFrom(item: CredentialItem | null, issuer = ""): ItemDraft {
   return {
@@ -957,6 +1024,26 @@ export function ProfessionalProfileSection() {
           </div>
         </form>
       )}
+
+      <div className={SUBHEAD}>Your signature</div>
+      <p className={HELP}>
+        Printed on the documents you sign in the system. A new one replaces it; documents you have
+        already signed keep the one in use when you signed them.
+      </p>
+      <SignatureSpecimenSlot
+        specimen={profile.signature_specimen}
+        onSave={async (image) => {
+          setError(null);
+          setNotice(null);
+          try {
+            await applied(await recordMySignatureSpecimen(accessToken, image), false);
+            setNotice("Your signature is saved.");
+          } catch (err) {
+            setError(message(err, "Couldn't save your signature."));
+            throw err;
+          }
+        }}
+      />
 
       {error && (
         <p role="alert" className="mt-4 text-[12.5px] text-status-red">

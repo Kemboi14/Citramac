@@ -48,6 +48,7 @@ import { Breadcrumbs } from "./shared/Breadcrumbs";
 import { SafetyBanner } from "./shared/SafetyBanner";
 import { useClientBanner } from "./shared/useClientBanner";
 import { DocumentActions } from "../../components/DocumentActions";
+import { AgainstAdviceCard } from "./AgainstAdviceCard";
 
 // docs/17-DISCHARGE-AND-FOLLOW-UP.md — a discharge is a signed, versioned record
 // (FHIR Composition), never free text on the admission.
@@ -480,6 +481,15 @@ function DischargeDetail({ admissionId, onBack }: { admissionId: string; onBack:
               onChange={(next) => setPayload(next)}
               onSigned={(next) => setPayload(next)}
             />
+          )}
+          {payload.against_advice?.applies && (
+            <div className="mt-4">
+              <AgainstAdviceCard
+                admissionId={admission.id}
+                status={payload.against_advice}
+                onRecorded={(next) => setPayload(next)}
+              />
+            </div>
           )}
         </>
       )}

@@ -12,7 +12,9 @@ import {
   type ClientCareTeam,
   type PlanWorkspace,
   type SafetyPlanDoc,
+  type SignatureInput,
 } from "../../../../lib/carePathwayApi";
+import { SignaturePad } from "../../shared/SignaturePad";
 import { AutoResizeTextarea } from "../../shared/AutoResizeTextarea";
 import { formatDateTime } from "../../shared/format";
 import { BTN, BTN_GHOST, FIELD_LABEL, INPUT } from "../../shared/styles";
@@ -39,6 +41,11 @@ export function SafetyPlanModule({ patientId }: { patientId: string }) {
   const [plan, setPlan] = useState<SafetyPlanDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState("");
+  // Signing: the client signs the version with you (or why they cannot), and
+  // you sign as witness (2026-11-26). Held in memory only.
+  const [signing, setSigning] = useState(false);
+  const [clientSig, setClientSig] = useState<SignatureInput | null>(null);
+  const [witnessSig, setWitnessSig] = useState<SignatureInput | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -83,13 +90,19 @@ export function SafetyPlanModule({ patientId }: { patientId: string }) {
     }
   }
 
-  async function run(call: () => Promise<SafetyPlanDoc>, fallback: string, message: string) {
+  async function run(
+    call: () => Promise<SafetyPlanDoc>,
+    fallback: string,
+    message: string,
+  ): Promise<boolean> {
     setError(null);
     try {
       setPlan(await call());
       setSaved(message);
+      return true;
     } catch (e) {
       setError(errorText(e, fallback));
+      return false;
     }
   }
 
@@ -192,22 +205,75 @@ export function SafetyPlanModule({ patientId }: { patientId: string }) {
             VERIFY: confirm the facility crisis line number locally before giving this to the
             client.
           </p>
+          {locked && (plan.signatures ?? []).length > 0 && (
+            <ul className="flex flex-col gap-0.5 text-[12.5px] text-ink-700">
+              {plan.signatures.map((sig) => (
+                <li key={sig.id}>
+                  {sig.role_label}: {sig.signer_name}
+                  {sig.method === "UNABLE" ? ` — unable to sign: ${sig.unable_reason}` : ""} ·{" "}
+                  {formatDateTime(sig.captured_at)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!locked && signing && (
+            <div className="flex flex-col gap-2 rounded-lg border border-surface-border p-3">
+              <p className="text-[12.5px] text-ink-700">
+                The client signs version {plan.version} as it reads now, or you record why they
+                cannot; you sign as witness. Changing the plan afterwards needs a new version.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <SignaturePad label="Client's signature" allowUnable onChange={setClientSig} />
+                <SignaturePad label="Your signature as witness" onChange={setWitnessSig} />
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
-            {!locked && (
-              <button
-                type="button"
-                className={BTN}
-                onClick={() =>
-                  accessToken &&
-                  void run(
-                    () => signSafetyPlan(accessToken, patientId),
-                    "Couldn't sign the safety plan.",
-                    "Safety plan signed.",
-                  )
-                }
-              >
+            {!locked && !signing && (
+              <button type="button" className={BTN} onClick={() => setSigning(true)}>
                 Sign safety plan
               </button>
+            )}
+            {!locked && signing && (
+              <>
+                <button
+                  type="button"
+                  className={BTN}
+                  disabled={!clientSig || !witnessSig}
+                  onClick={() =>
+                    accessToken &&
+                    clientSig &&
+                    witnessSig &&
+                    void run(
+                      () =>
+                        signSafetyPlan(accessToken, patientId, {
+                          client: clientSig,
+                          witness: witnessSig,
+                        }),
+                      "Couldn't sign the safety plan.",
+                      "Safety plan signed.",
+                    ).then((ok) => {
+                      if (!ok) return; // a failed save keeps the drawings
+                      setSigning(false);
+                      setClientSig(null);
+                      setWitnessSig(null);
+                    })
+                  }
+                >
+                  Sign version {plan.version}
+                </button>
+                <button
+                  type="button"
+                  className={BTN_GHOST}
+                  onClick={() => {
+                    setSigning(false);
+                    setClientSig(null);
+                    setWitnessSig(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
             )}
             {locked && !plan.copy_given_at && (
               <button

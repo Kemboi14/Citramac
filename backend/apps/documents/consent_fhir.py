@@ -59,7 +59,7 @@ from apps.dha_interop.fhir_mapper import build_patient_resource
 from apps.dha_interop.fhir_patient import CONSENT_SCOPE_SYSTEM
 
 from .models import PartySignature
-from .signatures import ROLE_LABELS, content_sha256, visit_consent_content
+from .signatures import ROLE_LABELS, content_sha256, not_signed_text, visit_consent_content
 
 PROFILE_BASE = "urn:citramac:StructureDefinition"
 CONSENT_PROFILE = f"{PROFILE_BASE}:signed-consent"
@@ -70,6 +70,7 @@ SIGNATURE_ROLE_CODES = {
     PartySignature.ROLE_GUARDIAN: "guardian",
     PartySignature.ROLE_SUBSTITUTE: "substitute-decision-maker",
     PartySignature.ROLE_RELATED_PERSON: "related-person",
+    PartySignature.ROLE_APPLICANT: "applicant",
     PartySignature.ROLE_WITNESS: "witness",
 }
 # Decision consents about care itself; the rest are about information sharing.
@@ -119,14 +120,17 @@ def _on_behalf_of(row, patient_ref):
     return None
 
 
-def _provenance(target_pk, consent_ref, patient_ref, rows, extra_agents=()):
+def signature_parts(rows, patient_ref):
+    """(agents, signatures) for a Provenance over PartySignature rows: one agent
+    per party, one Signature per drawn signature. A party unable or refusing to
+    sign is an agent whose role states the reason — never a signature."""
     agents, sigs = [], []
     for row in rows:
         who = _signer_reference(row, patient_ref)
         on_behalf = _on_behalf_of(row, patient_ref)
         role = None
-        if row.method == PartySignature.METHOD_UNABLE:
-            role = [CodeableConcept(text=f"Unable to sign: {row.unable_reason}")]
+        if row.method != PartySignature.METHOD_DRAWN:
+            role = [CodeableConcept(text=not_signed_text(row))]
         agents.append(
             ProvenanceAgent(
                 type=CodeableConcept(coding=[_role_coding(row)]),
@@ -146,6 +150,11 @@ def _provenance(target_pk, consent_ref, patient_ref, rows, extra_agents=()):
                     data=base64.b64encode(bytes(row.image_png)).decode("ascii"),
                 )
             )
+    return agents, sigs
+
+
+def _provenance(target_pk, consent_ref, patient_ref, rows, extra_agents=()):
+    agents, sigs = signature_parts(rows, patient_ref)
     agents.extend(extra_agents)
     return Provenance(
         id=_derived_id("signatures", target_pk),

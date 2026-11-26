@@ -73,7 +73,8 @@
   <table class="signature"><tr>
     <td>
       {% if signed %}
-        <div class="signed"><strong>{{ signed_by }}</strong>{% if signer_credentials %}<br>{{ signer_credentials }}{% endif %}<br>Signed electronically {{ signed_at }}</div>
+        {% if signer_signature.image %}<img class="drawn-signature" src="{{ signer_signature.image }}" alt="Signature of {{ signed_by }}">{% endif %}
+        <div class="signed"><strong>{{ signed_by }}</strong>{% if signer_credentials %}<br>{{ signer_credentials }}{% endif %}<br>Signed electronically {% if signer_signature.image %}by {{ signed_by }} at {{ signed_at }}{% else %}{{ signed_at }}{% endif %}</div>
       {% else %}
         <div style="height:26pt"></div>
       {% endif %}

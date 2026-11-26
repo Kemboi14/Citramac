@@ -1,5 +1,10 @@
 """
-Electronic signatures on consents (owner decisions 2026-11-13).
+Electronic signatures drawn on screen and witnessed: consents (owner decisions
+2026-11-13), and since 2026-11-26 Mental Health Act applications and written
+notices (care_pathway.legal_status), safety plan versions (plan_extras) and the
+acknowledgement of leaving against medical advice (care_pathway.against_advice).
+The shared pieces are `sign_target` (a party's and the witness's signatures on
+one target, bound to its content) and `signature_row` / `print_rows` (display).
 
 Who signs:
 - a decision consent (care_pathway.VisitConsent): the party giving it — the
@@ -99,8 +104,9 @@ def _name(user):
     return (user.get_full_name() or user.email) if user else ""
 
 
-def _build(target, patient, user, role, sig, content_hash, *, allow_unable):
-    """An unsaved PartySignature from one signature payload."""
+def _build(target, patient, user, role, sig, content_hash, *, allow_unable, allow_refused=False):
+    """An unsaved PartySignature from one signature payload: a drawn `image`,
+    or — where allowed — `unable_reason` / `refused_reason`."""
     sig = sig if isinstance(sig, dict) else {}
     row = PartySignature(
         organization_id=patient.organization_id,
@@ -130,9 +136,22 @@ def _build(target, patient, user, role, sig, content_hash, *, allow_unable):
             row.related_person = person
             row.relationship = row.relationship or person.relationship
     unable = str(sig.get("unable_reason") or "").strip()
-    if unable:
-        if not allow_unable or role == PartySignature.ROLE_WITNESS:
-            raise ValidationError({"signatures": "The staff witness must sign."})
+    refused = str(sig.get("refused_reason") or "").strip()
+    if (unable or refused) and role == PartySignature.ROLE_WITNESS:
+        raise ValidationError({"signatures": "The staff witness must sign."})
+    if unable and refused:
+        raise ValidationError({"signatures": "Record either unable to sign or refused, not both."})
+    if refused:
+        if not allow_refused:
+            raise ValidationError({"signatures": "A refusal to sign is not recorded here."})
+        if len(refused) < 5:
+            raise ValidationError({"signatures": "Say what the client said or did in refusing."})
+        row.method, row.unable_reason = PartySignature.METHOD_REFUSED, refused[:500]
+    elif unable:
+        if not allow_unable:
+            raise ValidationError(
+                {"signatures": f"The {ROLE_LABELS[role].lower()} must sign this."}
+            )
         if len(unable) < 5:
             raise ValidationError({"signatures": "Say why they cannot sign."})
         row.method, row.unable_reason = PartySignature.METHOD_UNABLE, unable[:500]
@@ -151,6 +170,45 @@ def _save(row, user):
     # hashes; the image is kept there only as a fingerprint (CLINICAL_CONTENT_FIELDS).
     row.save()
     return row
+
+
+def sign_target(
+    target,
+    patient,
+    user,
+    role,
+    party_sig,
+    witness_sig,
+    content_hash,
+    *,
+    allow_unable,
+    allow_refused=False,
+):
+    """The party's signature and the staff witness's on one target (a dict
+    naming the PartySignature FK, e.g. {"legal_document": doc}), both bound to
+    `content_hash`. Both are validated before either is saved."""
+    rows = [
+        _build(
+            target,
+            patient,
+            user,
+            role,
+            party_sig,
+            content_hash,
+            allow_unable=allow_unable,
+            allow_refused=allow_refused,
+        ),
+        _build(
+            target,
+            patient,
+            user,
+            PartySignature.ROLE_WITNESS,
+            witness_sig,
+            content_hash,
+            allow_unable=False,
+        ),
+    ]
+    return [_save(row, user) for row in rows]
 
 
 # ── decision consents (VisitConsent) ──
@@ -181,22 +239,16 @@ def sign_visit_consent(consent, user, signatures, party):
         party_sig["name"] = patient.get_full_name()
     elif not party_sig.get("name"):
         party_sig["name"] = consent.given_by_name
-    target = {"visit_consent": consent}
-    rows = [
-        _build(
-            target, patient, user, PARTY_ROLE[party], party_sig, content_hash, allow_unable=True
-        ),
-        _build(
-            target,
-            patient,
-            user,
-            PartySignature.ROLE_WITNESS,
-            signatures.get("witness"),
-            content_hash,
-            allow_unable=False,
-        ),
-    ]
-    return [_save(row, user) for row in rows]
+    return sign_target(
+        {"visit_consent": consent},
+        patient,
+        user,
+        PARTY_ROLE[party],
+        party_sig,
+        signatures.get("witness"),
+        content_hash,
+        allow_unable=True,
+    )
 
 
 # ── consent documents (GeneratedDocument CON-01..11) ──
@@ -292,21 +344,16 @@ def sign_document(doc, spec, user, data):
         raise ValidationError(
             {"signatures": "Choose the family member / caregiver from the client's contacts."}
         )
-    content_hash = content_sha256(doc.content)
-    target = {"document": doc}
-    rows = [
-        _build(target, doc.patient, user, role, party, content_hash, allow_unable=True),
-        _build(
-            target,
-            doc.patient,
-            user,
-            PartySignature.ROLE_WITNESS,
-            data.get("witness"),
-            content_hash,
-            allow_unable=False,
-        ),
-    ]
-    saved = [_save(row, user) for row in rows]
+    saved = sign_target(
+        {"document": doc},
+        doc.patient,
+        user,
+        role,
+        party,
+        data.get("witness"),
+        content_sha256(doc.content),
+        allow_unable=True,
+    )
     workflow.record_party_signature(doc, user, role)
     return saved
 
@@ -320,6 +367,9 @@ def image_data_url(row):
     return "data:image/png;base64," + base64.b64encode(bytes(row.image_png)).decode("ascii")
 
 
+METHOD_LABELS = dict(PartySignature.METHOD_CHOICES)
+
+
 def signature_row(row, current_hash=None, with_image=False):
     out = {
         "id": str(row.pk),
@@ -328,6 +378,7 @@ def signature_row(row, current_hash=None, with_image=False):
         "signer_name": row.signer_name,
         "relationship": row.relationship,
         "method": row.method,
+        "method_label": METHOD_LABELS[row.method],
         "unable_reason": row.unable_reason,
         "captured_at": row.captured_at.isoformat(),
         "captured_by": _name(row.captured_by),
@@ -336,3 +387,32 @@ def signature_row(row, current_hash=None, with_image=False):
     if with_image:
         out["image"] = image_data_url(row)
     return out
+
+
+def not_signed_text(row):
+    """Why a party has no drawn signature ("" when they drew one)."""
+    if row.method == PartySignature.METHOD_REFUSED:
+        return f"Refused to sign: {row.unable_reason}"
+    if row.method == PartySignature.METHOD_UNABLE:
+        return f"Unable to sign: {row.unable_reason}"
+    return ""
+
+
+def print_rows(rows):
+    """Signatures for a printed document: images embedded as data: URLs (the
+    PDF engine fetches nothing), the reason where a party did not sign."""
+    from apps.care_pathway import facility_time
+
+    return [
+        {
+            "role": ROLE_LABELS[row.role],
+            "name": row.signer_name,
+            "relationship": row.relationship,
+            "image": image_data_url(row),
+            "method": row.method,
+            "unable_reason": row.unable_reason,
+            "not_signed": not_signed_text(row),
+            "when": facility_time.local_format(row.captured_at, "%d %b %Y %H:%M"),
+        }
+        for row in rows
+    ]

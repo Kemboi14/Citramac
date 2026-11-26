@@ -255,42 +255,82 @@ class DisclosureRecord(_AppendOnly):
         ordering = ["-released_at"]
 
 
+# Exactly one of these is what a PartySignature signs.
+SIGNATURE_TARGETS = (
+    "visit_consent",
+    "document",
+    "legal_document",
+    "safety_plan",
+    "ama_acknowledgement",
+)
+
+
+def _one_target():
+    """Q: exactly one target FK is set."""
+    condition = None
+    for chosen in SIGNATURE_TARGETS:
+        clause = models.Q(**{f"{chosen}__isnull": False})
+        for other in SIGNATURE_TARGETS:
+            if other != chosen:
+                clause &= models.Q(**{f"{other}__isnull": True})
+        condition = clause if condition is None else condition | clause
+    return condition
+
+
 class PartySignature(_AppendOnly):
-    """One person's electronic signature on a consent: a decision consent
-    (care_pathway.VisitConsent) or a consent document (GeneratedDocument).
+    """One person's electronic signature, drawn on screen and witnessed:
 
-    Owner decisions 2026-11-13: drawn on screen and witnessed by the staff member
-    present; the client signs their own consent, a parent / guardian or substitute
-    decision-maker signs when they decide, a named family member / caregiver signs
-    a family-involvement document, and the staff witness countersigns every time.
+    - a decision consent (care_pathway.VisitConsent) or a consent document
+      (GeneratedDocument) — owner decisions 2026-11-13;
+    - a Mental Health Act application or written notice to leave
+      (care_pathway.LegalDocument) — the applicant (client, parent / guardian, or
+      the related person applying for an involuntary admission) and the staff
+      witness, instead of the earlier "signed in my presence" tick-box;
+    - a version of the client-held safety plan (care_pathway.SafetyPlan) — the
+      client and the staff witness, when the clinician signs the version;
+    - the client's acknowledgement of leaving against medical advice
+      (care_pathway.AgainstAdviceAcknowledgement), against the facility's own
+      wording — owner decisions 2026-11-26.
 
-    Each row binds to the exact content signed (`content_sha256`): a document
-    edited after signing no longer matches, and its signatures stop counting.
-    Append-only; nothing is ever re-signed in place.
+    The staff witness signs as themselves every time. Each row binds to the
+    exact content signed (`content_sha256`): content changed after signing no
+    longer matches, and its signatures stop counting. Append-only; nothing is
+    ever re-signed in place.
+
+    A party may instead be recorded as unable to sign (UNABLE) or — only where
+    refusing is itself the event, a client leaving against advice — as refusing
+    to sign (REFUSED); either way with the reason, and witnessed.
 
     FHIR R4: a `Provenance.signature` (type, when, who, onBehalfOf, sigFormat
-    image/png, data) targeting the `Consent` (documents/consent_fhir.py). A
-    person unable to sign is a Provenance agent with the stated reason, never a
-    signature.
+    image/png, data) targeting what was signed (the `Consent`,
+    documents/consent_fhir.py; the discharge `Encounter` for an against-advice
+    acknowledgement, care_pathway/fhir.py). A party unable or refusing to sign
+    is a Provenance agent with the stated reason, never a signature. Statutory
+    forms and safety plans are not emitted yet (no DocumentReference /
+    CarePlan export exists for them).
     """
 
     ROLE_CLIENT = "CLIENT"
     ROLE_GUARDIAN = "GUARDIAN"
     ROLE_SUBSTITUTE = "SUBSTITUTE"
     ROLE_RELATED_PERSON = "RELATED_PERSON"
+    ROLE_APPLICANT = "APPLICANT"
     ROLE_WITNESS = "WITNESS"
     ROLE_CHOICES = [
         (ROLE_CLIENT, "Client"),
         (ROLE_GUARDIAN, "Parent / guardian"),
         (ROLE_SUBSTITUTE, "Substitute decision-maker"),
         (ROLE_RELATED_PERSON, "Family member / caregiver"),
+        (ROLE_APPLICANT, "Applicant (related person)"),
         (ROLE_WITNESS, "Staff witness"),
     ]
     METHOD_DRAWN = "DRAWN"
     METHOD_UNABLE = "UNABLE"
+    METHOD_REFUSED = "REFUSED"
     METHOD_CHOICES = [
         (METHOD_DRAWN, "Drawn on screen, witnessed"),
         (METHOD_UNABLE, "Unable to sign — reason recorded, witnessed"),
+        (METHOD_REFUSED, "Refused to sign — reason recorded, witnessed"),
     ]
 
     patient = models.ForeignKey(
@@ -310,6 +350,27 @@ class PartySignature(_AppendOnly):
         blank=True,
         related_name="party_signatures",
     )
+    legal_document = models.ForeignKey(
+        "care_pathway.LegalDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="party_signatures",
+    )
+    safety_plan = models.ForeignKey(
+        "care_pathway.SafetyPlan",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="signatures",
+    )
+    ama_acknowledgement = models.ForeignKey(
+        "care_pathway.AgainstAdviceAcknowledgement",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="signatures",
+    )
     role = models.CharField(max_length=16, choices=ROLE_CHOICES)
     signer_name = models.CharField(max_length=150)
     relationship = models.CharField(max_length=100, blank=True)
@@ -325,6 +386,7 @@ class PartySignature(_AppendOnly):
         "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     method = models.CharField(max_length=8, choices=METHOD_CHOICES)
+    # Why the party could not, or would not, sign (UNABLE / REFUSED).
     unable_reason = models.TextField(blank=True)
     image_png = models.BinaryField(null=True, blank=True)
     image_sha256 = models.CharField(max_length=64, blank=True)
@@ -337,17 +399,11 @@ class PartySignature(_AppendOnly):
     class Meta(TenantScopedModel.Meta):
         ordering = ["captured_at"]
         constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(visit_consent__isnull=False, document__isnull=True)
-                    | models.Q(visit_consent__isnull=True, document__isnull=False)
-                ),
-                name="party_signature_one_target",
-            ),
+            models.CheckConstraint(condition=_one_target(), name="party_signature_one_target"),
             models.CheckConstraint(
                 condition=(
                     models.Q(method="DRAWN", image_png__isnull=False)
-                    | models.Q(method="UNABLE", image_png__isnull=True)
+                    | models.Q(method__in=("UNABLE", "REFUSED"), image_png__isnull=True)
                     & ~models.Q(unable_reason="")
                 ),
                 name="party_signature_image_or_reason",

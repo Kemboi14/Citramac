@@ -7,11 +7,12 @@ print is restricted like the record itself and is in the audit log.
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 
+from apps.accounts import signature_specimen
 from apps.documents import printing
 from apps.sysadmin_audit.audit import write_event
 from apps.sysadmin_audit.models import AuditLogEntry
 
-from . import facility_time
+from . import against_advice, facility_time
 from .models import DischargeSummary, TriageAssessment
 
 
@@ -128,9 +129,16 @@ class DischargePrintView(APIView):
             "signed": signed,
             "signed_by": _name(summary.signed_by),
             "signed_role": summary.signed_role,
+            # The signer's specimen signature in use when they signed (2026-11-26).
+            "signer_signature": (
+                signature_specimen.signed_by(summary.signed_by, summary.signed_at) if signed else {}
+            ),
             "signed_at": _when(summary.signed_at),
             "signed_date": _when(summary.signed_at, "%d %b %Y"),
             "supersedes": summary.supersedes.version if summary.supersedes_id else "",
+            "against_advice": (
+                against_advice.print_context(admission) if summary.disposition == "AMA" else []
+            ),
             "printed_by": _name(request.user),
         }
         _audit(summary, "care_pathway.dischargesummary", request)
@@ -259,6 +267,9 @@ class TriagePrintView(APIView):
             ],
             "sections": _triage_sections(assessment.answers, labels),
             "signed_by": _name(assessment.signed_by),
+            "signer_signature": signature_specimen.signed_by(
+                assessment.signed_by, assessment.signed_at
+            ),
             "signed_at": _when(assessment.signed_at),
             "signed_date": _when(assessment.signed_at, "%d %b %Y"),
             "printed_by": _name(request.user),

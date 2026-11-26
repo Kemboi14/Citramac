@@ -18,6 +18,11 @@ urlpatterns = [
         name="me-professional-profile",
     ),
     path(
+        "me/professional-profile/signature/",
+        practitioner_views.MySignatureSpecimenView.as_view(),
+        name="me-professional-profile-signature",
+    ),
+    path(
         "me/professional-profile/submit/",
         practitioner_views.MyProfessionalProfileSubmitView.as_view(),
         name="me-professional-profile-submit",

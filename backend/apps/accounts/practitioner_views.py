@@ -11,6 +11,8 @@ The staff member, under /me/professional-profile/:
     PATCH, DELETE items/<id>/           edit / remove an entry
     POST items/<id>/documents/          add files to an entry
     GET, DELETE files/<document_id>/    download / remove one file
+    POST signature/          record a new specimen signature ({"image": PNG data URL});
+                             it replaces the one in use, which is kept (2026-11-26)
 
 A reviewer (Org Admin or staff.credentials.verify), under
 /staff-credentials/<user_id>/:
@@ -85,6 +87,21 @@ class MyProfessionalProfileView(APIView):
             raise ValidationError({"detail": "Send the profile fields as an object."})
         profile.update_own(request.user, request.data)
         return Response(profile.detail(request.user))
+
+
+class MySignatureSpecimenView(APIView):
+    """The staff member's own specimen signature, printed on documents they sign
+    (apps.accounts.signature_specimen). Append-only: a new one replaces it."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        from . import signature_specimen
+
+        _staff_only(request.user)
+        signature_specimen.record(request.user, (request.data or {}).get("image"))
+        return Response(profile.detail(request.user), status=201)
 
 
 class MyProfessionalProfileSubmitView(APIView):

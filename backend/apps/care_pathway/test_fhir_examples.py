@@ -69,6 +69,21 @@ class FhirR4ConformanceDischargeExamplesTests(SimpleTestCase):
         self.assertEqual(
             encounter["hospitalization"]["dischargeDisposition"]["coding"][0]["code"], "AMA"
         )
+        # The client refused to sign the against-advice acknowledgement: the
+        # refusal is an agent with the reason, the witness's is the only signature.
+        [ack] = [
+            e["resource"]
+            for e in bundle["entry"]
+            if e["resource"]["resourceType"] == "Provenance"
+            and e["resource"]["id"].startswith("ama-")
+        ]
+        encounter_url = next(
+            e["fullUrl"] for e in bundle["entry"] if e["resource"]["resourceType"] == "Encounter"
+        )
+        self.assertEqual(ack["target"][0]["reference"], encounter_url)
+        self.assertTrue(ack["agent"][0]["role"][0]["text"].startswith("Refused to sign: "))
+        self.assertEqual([s["type"][0]["code"] for s in ack["signature"]], ["witness"])
+        self.assertEqual(ack["signature"][0]["sigFormat"], "image/png")
 
     def test_amendment_example_replaces_the_earlier_version(self):
         composition = _load("discharge-amendment-v2")["entry"][0]["resource"]

@@ -11,6 +11,7 @@ from apps.accounts.models import Permission, PractitionerCredential, Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import EmergencyContact, Patient
 from apps.clinical_encounter.models import Encounter
+from apps.documents.test_consent_signatures import drawn
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.tenancy.context import platform_admin_context
 from apps.tenancy.models import Branch
@@ -19,6 +20,15 @@ from . import legal_config, legal_status
 from .legal_models import LegalDocument, LegalStatus
 from .models import CareTask, ClinicalAlert, TriageAssessment
 from .test_care_plan import CarePlanTestCase
+
+
+def drawn_signatures(**extra):
+    """The applicant's and the staff witness's signatures drawn on screen."""
+    return {
+        "method": "DRAWN",
+        "signatures": {"party": {"image": drawn()}, "witness": {"image": drawn()}},
+        **extra,
+    }
 
 
 class LegalStatusTestCase(CarePlanTestCase):
@@ -85,7 +95,7 @@ class LegalStatusTestCase(CarePlanTestCase):
         return self.call(
             "post",
             "care-legal-document-sign",
-            body or {"method": "ELECTRONIC", "attested": True},
+            body or drawn_signatures(),
             [doc_id],
             auth,
         )
@@ -175,7 +185,7 @@ class VoluntaryTests(LegalStatusTestCase):
         r = self.call(
             "post",
             "care-legal-notice",
-            {"method": "ELECTRONIC", "attested": True, "statement": "I intend to leave."},
+            drawn_signatures(statement="I intend to leave."),
             [ls_id],
         )
         self.assertEqual(r.status_code, 201, r.data)
@@ -221,7 +231,7 @@ class VoluntaryTests(LegalStatusTestCase):
         self.call(
             "post",
             "care-legal-notice",
-            {"method": "ELECTRONIC", "attested": True, "statement": "Leaving"},
+            drawn_signatures(statement="Leaving"),
             [ls_id],
         )
         ws = self.ws()
@@ -235,7 +245,7 @@ class VoluntaryTests(LegalStatusTestCase):
         self.call(
             "post",
             "care-legal-notice",
-            {"method": "ELECTRONIC", "attested": True, "statement": "Leaving"},
+            drawn_signatures(statement="Leaving"),
             [ls_id],
         )
         r = self.call("post", "care-legal-notice-depart", {}, [self.ws()["notice"]["id"]])
@@ -255,12 +265,7 @@ class VoluntaryTests(LegalStatusTestCase):
         guardian = self.nok(is_guardian=True)
         ok = self.sign_doc(
             doc,
-            {
-                "method": "ELECTRONIC",
-                "attested": True,
-                "signer_kind": "GUARDIAN",
-                "related_person_id": str(guardian.pk),
-            },
+            drawn_signatures(signer_kind="GUARDIAN", related_person_id=str(guardian.pk)),
         )
         self.assertEqual(ok.status_code, 200, ok.data)
         self.assertEqual(ok.data["signer_kind"], "GUARDIAN")

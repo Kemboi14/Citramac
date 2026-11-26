@@ -9,15 +9,19 @@ import { BTN_GHOST, BTN_SM, INPUT } from "./styles";
  *
  * To clear it (e.g. after the consent is saved), remount it with a new `key`.
  * `allowUnable` offers "Unable to sign" with a reason instead of a drawing, for
- * a party who cannot sign; the staff witness always draws.
+ * a party who cannot sign; `allowRefused` offers "Refused to sign" with what
+ * they said or did (only where refusing is itself the event — a client leaving
+ * against medical advice, 2026-11-26). The staff witness always draws.
  */
 export function SignaturePad({
   label,
   allowUnable = false,
+  allowRefused = false,
   onChange,
 }: {
   label: string;
   allowUnable?: boolean;
+  allowRefused?: boolean;
   onChange: (value: SignatureInput | null) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
@@ -25,7 +29,8 @@ export function SignaturePad({
   const last = useRef<{ x: number; y: number } | null>(null);
   const ink = useRef(false);
   const [hasInk, setHasInk] = useState(false);
-  const [unable, setUnable] = useState(false);
+  const [mode, setMode] = useState<"DRAWN" | "UNABLE" | "REFUSED">("DRAWN");
+  const unable = mode !== "DRAWN";
   const [reason, setReason] = useState("");
 
   const clear = () => {
@@ -53,7 +58,7 @@ export function SignaturePad({
       ctx.lineWidth = 2.2;
       ctx.strokeStyle = "#111";
     }
-    // The canvas is re-created when "Unable to sign" is unticked.
+    // The canvas is re-created when "Unable / Refused to sign" is unticked.
   }, [unable]);
 
   const point = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -88,14 +93,13 @@ export function SignaturePad({
     if (canvas.current && ink.current) onChange({ image: canvas.current.toDataURL("image/png") });
   };
 
-  const chooseUnable = (value: boolean) => {
-    setUnable(value);
+  const choose = (value: "DRAWN" | "UNABLE" | "REFUSED") => {
+    if (value !== "DRAWN") clear();
+    setMode(value);
     setReason("");
-    if (value) {
-      clear();
-      onChange(null);
-    }
+    onChange(null);
   };
+  const reasonKey = mode === "REFUSED" ? "refused_reason" : "unable_reason";
 
   return (
     <fieldset className="flex min-w-[260px] flex-1 flex-col gap-1.5 rounded-lg border border-surface-border p-2.5">
@@ -125,20 +129,37 @@ export function SignaturePad({
         <label className="flex items-center gap-2 text-[12px]">
           <input
             type="checkbox"
-            checked={unable}
-            onChange={(e) => chooseUnable(e.target.checked)}
+            checked={mode === "UNABLE"}
+            onChange={(e) => choose(e.target.checked ? "UNABLE" : "DRAWN")}
           />
           Unable to sign
+        </label>
+      )}
+      {allowRefused && (
+        <label className="flex items-center gap-2 text-[12px]">
+          <input
+            type="checkbox"
+            checked={mode === "REFUSED"}
+            onChange={(e) => choose(e.target.checked ? "REFUSED" : "DRAWN")}
+          />
+          Refused to sign
         </label>
       )}
       {unable && (
         <input
           className={INPUT}
-          placeholder="Why they cannot sign (e.g. injured hand — consent given verbally)"
+          aria-label={
+            mode === "REFUSED" ? "What they said or did in refusing" : "Why they cannot sign"
+          }
+          placeholder={
+            mode === "REFUSED"
+              ? "What they said or did in refusing (e.g. said they would not sign anything)"
+              : "Why they cannot sign (e.g. injured hand — consent given verbally)"
+          }
           value={reason}
           onChange={(e) => {
             setReason(e.target.value);
-            onChange(e.target.value.trim().length >= 5 ? { unable_reason: e.target.value } : null);
+            onChange(e.target.value.trim().length >= 5 ? { [reasonKey]: e.target.value } : null);
           }}
         />
       )}

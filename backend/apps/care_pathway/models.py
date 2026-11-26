@@ -1186,6 +1186,10 @@ class ConsentTemplate(TenantScopedModel):
         ("DOC-CON-09", "Document: Consent to communicate with school / university"),
         ("DOC-CON-10", "Document: Electronic communication consent"),
         ("DOC-CON-11", "Document: Withdrawal / revocation of consent"),
+        # What a client leaving against medical advice is asked to sign
+        # (AgainstAdviceAcknowledgement, 2026-11-26). Without it no
+        # acknowledgement can be signed; the discharge itself is never blocked.
+        ("DISCHARGE_AGAINST_ADVICE", "Acknowledgement of leaving against medical advice"),
     ]
 
     consent_type = models.CharField(max_length=32, choices=CONSENT_TYPE_CHOICES)
@@ -1285,6 +1289,54 @@ class DischargeSummary(SignedRecordMixin, TenantScopedModel):
 
     def __str__(self):
         return f"Discharge v{self.version} ({self.get_status_display()}) — {self.patient}"
+
+
+class AgainstAdviceAcknowledgement(TenantScopedModel):
+    """A client leaving against medical advice (discharge disposition AMA)
+    acknowledges it in writing, against the facility's own wording
+    (ConsentTemplate DISCHARGE_AGAINST_ADVICE) — owner decisions 2026-11-26.
+
+    The wording is frozen here as it was shown. The client's signature and the
+    staff witness's are documents.PartySignature rows bound to this content; the
+    client may instead be recorded as unable to sign or as refusing to sign,
+    with the reason, still witnessed — refusing is itself what happened in many
+    AMA departures. Append-only: a later acknowledgement (e.g. a client who
+    refused and then signed) is a new row; none is edited.
+
+    Recording one never blocks the discharge: a client who is leaving cannot be
+    held by a missing form.
+
+    FHIR R4: a `Provenance` (signature per drawn signature) targeting the
+    admission's IMP `Encounter` in the signed discharge document
+    (care_pathway/fhir.py `build_discharge_bundle`). Never sent to the SHR.
+    """
+
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
+    admission = models.ForeignKey(
+        "ipd_ward.Admission", on_delete=models.PROTECT, related_name="ama_acknowledgements"
+    )
+    # The discharge summary (draft or signed) whose AMA disposition it answers.
+    discharge_summary = models.ForeignKey(
+        DischargeSummary, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    wording = models.ForeignKey(ConsentTemplate, on_delete=models.PROTECT, related_name="+")
+    wording_version = models.CharField(max_length=32)
+    wording_text = models.TextField()
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["recorded_at"]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise PermissionError("Against-advice acknowledgements are append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Against-advice acknowledgements are append-only.")
 
 
 class DischargeMedicationLine(TenantScopedModel):

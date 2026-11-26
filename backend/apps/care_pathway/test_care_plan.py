@@ -303,13 +303,25 @@ class SignPlanTests(CarePlanTestCase):
         self.assertEqual(self.confirm().status_code, 200)
 
 
+def client_and_witness():
+    """The client's and the clinician's (witness) signatures drawn on screen."""
+    from apps.documents.test_consent_signatures import drawn
+
+    return {"signatures": {"client": {"image": drawn()}, "witness": {"image": drawn()}}}
+
+
 class SafetyPlanTests(CarePlanTestCase):
     def test_peeking_reads_the_latest_version_and_never_starts_a_revision(self):
         url = reverse("care-safety-plan", args=[self.pid])
         self.assertIsNone(self.client.get(url, {"peek": "1"}, **self.auth).data)
         self.client.get(url, **self.auth)
         self.client.put(url, {"people_to_ask": "My sister"}, format="json", **self.auth)
-        self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth)
+        self.client.post(
+            reverse("care-safety-plan-sign", args=[self.pid]),
+            client_and_witness(),
+            format="json",
+            **self.auth,
+        )
         peeked = self.client.get(url, {"peek": "1"}, **self.auth).data
         self.assertEqual((peeked["version"], bool(peeked["signed_at"])), (1, True))
         with platform_admin_context():
@@ -320,7 +332,10 @@ class SafetyPlanTests(CarePlanTestCase):
         self.assertEqual(self.client.get(url, **self.auth).data["version"], 1)
         self.assertEqual(
             self.client.post(
-                reverse("care-safety-plan-sign", args=[self.pid]), **self.auth
+                reverse("care-safety-plan-sign", args=[self.pid]),
+                client_and_witness(),
+                format="json",
+                **self.auth,
             ).status_code,
             400,
         )
@@ -330,7 +345,12 @@ class SafetyPlanTests(CarePlanTestCase):
             format="json",
             **self.auth,
         )
-        signed = self.client.post(reverse("care-safety-plan-sign", args=[self.pid]), **self.auth)
+        signed = self.client.post(
+            reverse("care-safety-plan-sign", args=[self.pid]),
+            client_and_witness(),
+            format="json",
+            **self.auth,
+        )
         self.assertEqual(signed.data["signed_by"], "Jane Njoroge")
         # No draft left: editing is refused.
         self.assertEqual(

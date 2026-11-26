@@ -105,6 +105,11 @@ export interface ProfessionalProfile extends ProfessionalProfileSummary {
   }[];
   /** Reviewer view only: false when it is the reviewer's own profile. */
   can_review?: boolean;
+  /** The specimen signature printed on documents they sign (2026-11-26). */
+  signature_specimen: {
+    current: { id: string; recorded_at: string; image: string } | null;
+    versions: number;
+  };
 }
 
 export type ProfessionalProfileUpdate = Partial<
@@ -132,6 +137,16 @@ export function updateMyProfessionalProfile(accessToken: string, body: Professio
   return apiRequest<ProfessionalProfile>("/me/professional-profile/", {
     method: "PUT",
     body,
+    accessToken,
+  });
+}
+
+/** Record a new specimen signature (a drawn PNG). It replaces the one in use;
+ * earlier ones are kept, and each document prints the one in use when signed. */
+export function recordMySignatureSpecimen(accessToken: string, image: string) {
+  return apiRequest<ProfessionalProfile>("/me/professional-profile/signature/", {
+    method: "POST",
+    body: { image },
     accessToken,
   });
 }

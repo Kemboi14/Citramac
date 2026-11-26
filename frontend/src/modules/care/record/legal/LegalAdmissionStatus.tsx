@@ -31,6 +31,8 @@ import { useRecordData } from "../useRecordData";
 import { countdownText, useNow } from "./countdown";
 import { ApplicationSignature, ChangeApplicationType } from "./ApplicationSignature";
 import { SignedCopies } from "./SignedCopies";
+import { SignaturePad } from "../../shared/SignaturePad";
+import type { SignatureInput } from "../../../../lib/carePathwayApi";
 import { DocumentActions } from "../../../../components/DocumentActions";
 import DateInput from "../../../../components/DateInput";
 
@@ -107,7 +109,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Signature capture: witnessed e-signature or a scanned wet signature (LGL-V-05). */
+/** Signature capture (LGL-V-05): the client draws their signature on screen with
+ * you as witness (2026-11-26), or a scanned wet signature. */
 function SignatureFields({
   value,
   onChange,
@@ -115,13 +118,16 @@ function SignatureFields({
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }) {
-  const method = (value.method as string) || "ELECTRONIC";
+  const method = (value.method as string) || "DRAWN";
+  const sigs = (value.signatures as { party?: SignatureInput; witness?: SignatureInput }) ?? {};
+  const pad = (key: "party" | "witness") => (sig: SignatureInput | null) =>
+    onChange({ ...value, method, signatures: { ...sigs, [key]: sig ?? undefined } });
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-4 text-[13px]">
         {(
           [
-            ["ELECTRONIC", "Electronic signature, signed in my presence"],
+            ["DRAWN", "Client signs on screen, witnessed by me"],
             ["WET_SCAN", "Captured wet signature (scan uploaded to Documents)"],
           ] as const
         ).map(([code, label]) => (
@@ -135,15 +141,11 @@ function SignatureFields({
           </label>
         ))}
       </div>
-      {method === "ELECTRONIC" ? (
-        <label className="inline-flex items-center gap-1.5 text-[13px]">
-          <input
-            type="checkbox"
-            checked={Boolean(value.attested)}
-            onChange={(e) => onChange({ ...value, method, attested: e.target.checked })}
-          />
-          I confirm the signer signed in my presence
-        </label>
+      {method === "DRAWN" ? (
+        <div className="flex flex-wrap gap-2">
+          <SignaturePad label="Client's signature" onChange={pad("party")} />
+          <SignaturePad label="Your signature as witness" onChange={pad("witness")} />
+        </div>
       ) : (
         <input
           className={INPUT}
@@ -625,6 +627,12 @@ function DocActions({
         Signed by {doc.signer_name} ({doc.signer_kind.toLowerCase().replace("_", " ")}) —{" "}
         {formatDateTime(doc.signed_at)}
         {doc.signature_method === "WET_SCAN" ? " · signed paper copy on file" : ""}
+        {doc.signature_method === "DRAWN" ? " · signed on screen, witnessed" : ""}
+        {(doc.party_signatures ?? []).map((sig) => (
+          <span key={sig.id} className="block text-[12px] text-ink-500">
+            {sig.role_label}: {sig.signer_name} · {formatDateTime(sig.captured_at)}
+          </span>
+        ))}
       </p>
     );
   return (
@@ -1273,7 +1281,7 @@ function EndStatus({ data, busy, run }: PanelProps) {
 }
 
 function GiveNotice({ data, busy, run }: PanelProps) {
-  const [sig, setSig] = useState<Record<string, unknown>>({ method: "ELECTRONIC" });
+  const [sig, setSig] = useState<Record<string, unknown>>({ method: "DRAWN" });
   const [statement, setStatement] = useState("");
   const [givenAt, setGivenAt] = useState("");
   const ls = data.legal_status;

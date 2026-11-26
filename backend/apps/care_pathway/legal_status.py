@@ -22,6 +22,16 @@ Documented assumptions (open questions in the master prompt, kept as written):
 - OQ-23 rights Task added; rights text from config only (empty until supplied).
 - OQ-24 identity numbers masked except for the unmask permission; every
   unmasked view logged.
+- Applicant signatures (owner decisions 2026-11-26): a voluntary or involuntary
+  application, and a written notice to leave, are signed either on paper
+  (printed, signed, uploaded — WET_SCAN) or drawn on screen by the applicant
+  with the staff witness (DRAWN, documents.PartySignature bound to the frozen
+  form). The earlier "signed in my presence" tick-box is no longer accepted.
+  An applicant who cannot sign is never recorded as "unable to sign" on screen:
+  the jurisdiction config provides for no one to sign a statutory application on
+  the applicant's behalf, so such an applicant signs (or makes their mark on)
+  the printed form and it is uploaded. The medical recommendation stays signed
+  by the practitioner's authenticated click.
 - maxExpiryAt = the earlier of effectiveFrom and the earliest recommendation
   signature date, plus the configured maximum (LGL-DATA says recommendation
   date, LGL-R-06 says effectiveFrom; the earlier is never longer than either).
@@ -888,16 +898,119 @@ def _attachment(doc, data):
     return att
 
 
+PAPER_ROUTE = (
+    "An applicant who cannot sign on screen signs, or makes their mark on, the printed "
+    "form, and you upload it."
+)
+
+
 def _signature(doc, data, user):
+    """How the applicant's signature is captured: drawn on screen with the staff
+    witness (DRAWN), or the signed paper form uploaded (WET_SCAN). The drawn
+    signatures themselves are saved by `_record_drawn` once the form is frozen."""
     method = data.get("method")
-    if method not in ("ELECTRONIC", "WET_SCAN"):
-        raise ValidationError({"method": "Choose electronic signature or a scanned wet signature."})
+    if method == "ELECTRONIC":
+        # The staff tick-box ("signed in my presence") this replaced, 2026-11-26.
+        raise ValidationError(
+            {
+                "method": "The applicant draws their signature on screen, witnessed by you, "
+                "or signs the printed form and you upload it."
+            }
+        )
+    if method not in ("DRAWN", "WET_SCAN"):
+        raise ValidationError(
+            {"method": "Choose a signature drawn on screen or the uploaded signed paper form."}
+        )
     if method == "WET_SCAN":
         doc.signature_attachment = _attachment(doc, data)
-    elif not data.get("attested"):
-        raise ValidationError({"attested": "Confirm the signer signed in your presence."})
+    else:
+        sigs = data.get("signatures")
+        party = sigs.get("party") if isinstance(sigs, dict) else None
+        if not isinstance(party, dict) or not isinstance(sigs.get("witness"), dict):
+            raise ValidationError(
+                {"signatures": "The applicant signs on screen and you sign as witness."}
+            )
+        if party.get("unable_reason") or party.get("refused_reason"):
+            raise ValidationError({"signatures": PAPER_ROUTE})
     doc.signature_method = method
     doc.captured_by = user
+
+
+def signature_content(doc):
+    """What a drawn signature on a statutory form attests to: the form exactly as
+    frozen at signing (`rendered`, every text and resolved field)."""
+    return {
+        "document": str(doc.pk),
+        "template": doc.template_id,
+        "version": doc.version,
+        "rendered": doc.rendered,
+    }
+
+
+def _relationship_label(code):
+    from .services import concept_labels
+
+    return concept_labels().get(("next-of-kin-relationship", code), code) if code else ""
+
+
+def _record_drawn(doc, user, data):
+    """The applicant's drawn signature and the staff witness's, bound to the
+    signed form. A guardian's signature also signs the guardian's admission
+    consent recorded with it (VisitConsent), as a consent signed on screen."""
+    from apps.documents import signatures as party_signatures
+    from apps.documents.models import PartySignature
+
+    sigs = data["signatures"]
+    drawn = {"image": (sigs.get("party") or {}).get("image")}
+    person = doc.signer_related_person
+    if doc.signer_kind == "CLIENT":
+        role = PartySignature.ROLE_CLIENT
+        drawn["name"] = doc.patient.get_full_name()
+    else:
+        role = (
+            PartySignature.ROLE_GUARDIAN
+            if doc.signer_kind == "GUARDIAN"
+            else PartySignature.ROLE_APPLICANT
+        )
+        drawn.update(
+            name=person.name,
+            related_person_id=str(person.pk),
+            relationship=_relationship_label(person.relationship),
+        )
+    rows = party_signatures.sign_target(
+        {"legal_document": doc},
+        doc.patient,
+        user,
+        role,
+        drawn,
+        sigs.get("witness"),
+        party_signatures.content_sha256(signature_content(doc)),
+        allow_unable=False,
+    )
+    consent_id = (doc.content or {}).get("guardian_consent_id")
+    if doc.signer_kind == "GUARDIAN" and consent_id:
+        consent = VisitConsent.objects.get(pk=consent_id)
+        party_signatures.sign_visit_consent(
+            consent,
+            user,
+            {"party": drawn, "witness": sigs.get("witness")},
+            "GUARDIAN",
+        )
+    return rows
+
+
+def current_signatures(doc):
+    """The drawn signatures on this form as signed (content still matching)."""
+    from apps.documents import signatures as party_signatures
+
+    if not doc.signed_at:
+        return []
+    current = party_signatures.content_sha256(signature_content(doc))
+    return list(
+        doc.party_signatures.filter(content_sha256=current)
+        .select_related("captured_by")
+        .order_by("captured_at")
+    )
 
 
 def _recommendations(application):
@@ -1085,6 +1198,8 @@ def sign(doc, user, data):
     doc.rendered = render_snapshot(doc)
     doc.status = "SIGNED"
     doc.save()
+    if doc.signature_method == "DRAWN":
+        _record_drawn(doc, user, data)
     _event(
         ls,
         "DOCUMENT_SIGNED",
@@ -1106,7 +1221,7 @@ def sign(doc, user, data):
         required = legal_config.operational(ls.config_version)["requiredRecommendations"]
         if _recommendations(doc.application).count() >= required and ls.status != "ACTIVE":
             _transition(ls, "RECOMMENDATION_SIGNED", user, document=str(doc.pk))
-    if doc.signature_method == "ELECTRONIC":
+    if doc.signature_method in ("ELECTRONIC", "DRAWN"):
         # Signed in the system: file the signed PDF in the client's attachments
         # (a form signed on paper is filed as its uploaded copy instead).
         legal_copies.file_signed_pdf(doc, user)
@@ -1484,13 +1599,15 @@ def give_notice(ls, user, data):
         signer_kind="CLIENT",
         signer_name=ls.patient.get_full_name(),
     )
-    if data.get("method") == "ELECTRONIC" and not statement:
+    if data.get("method") != "WET_SCAN" and not statement:
         raise ValidationError({"statement": "Record the client's written notice in their words."})
-    _signature(doc, data, user)  # it must be in writing: e-signed statement or scan
+    _signature(doc, data, user)  # in writing: a statement signed on screen, or a scan
     doc.signed_at = now
     doc.rendered = render_snapshot(doc)
     doc.status = "SIGNED"
     doc.save()
+    if doc.signature_method == "DRAWN":
+        _record_drawn(doc, user, data)
     hours = legal_config.operational(ls.config_version)["voluntaryNoticePeriodHours"]
     notice = DischargeNotice.objects.create(
         organization_id=ls.organization_id,
@@ -1779,6 +1896,12 @@ def render_snapshot(doc):
 # ── read model ──
 
 
+def _signature_out(row):
+    from apps.documents.signatures import signature_row
+
+    return signature_row(row)
+
+
 def document_row(doc):
     return {
         "id": str(doc.pk),
@@ -1795,6 +1918,7 @@ def document_row(doc):
         "signer_kind": doc.signer_kind,
         "signer_name": doc.signer_name,
         "signature_method": doc.signature_method,
+        "party_signatures": [_signature_out(r) for r in current_signatures(doc)],
         "signed_at": _iso(doc.signed_at),
         "captured_by": _name(doc.captured_by),
         "created_by": _name(doc.created_by),

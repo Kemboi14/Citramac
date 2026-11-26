@@ -836,6 +836,11 @@ urlpatterns = [
         name="care-admission-discharge-sign",
     ),
     path(
+        "care/admissions/<uuid:pk>/against-advice/",
+        views.AdmissionAgainstAdviceView.as_view(),
+        name="care-admission-against-advice",
+    ),
+    path(
         "care/discharges/<uuid:pk>/amend/",
         views.DischargeAmendView.as_view(),
         name="care-discharge-amend",

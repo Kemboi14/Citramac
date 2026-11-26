@@ -856,3 +856,38 @@ class PractitionerCredentialReview(TenantScopedModel):
 
     def __str__(self):
         return f"{self.action} {self.user_id}"
+
+
+class SignatureSpecimen(TenantScopedModel):
+    """
+    A clinician's drawn specimen signature (owner decisions 2026-11-26), recorded
+    once on their professional profile and printed in the signature block of the
+    documents they sign by authenticated click ("Signed electronically by … at
+    …"). It is a picture of how they sign, not the signature itself: the
+    signature is still the authenticated action, and signing is never blocked
+    for want of a specimen.
+
+    Append-only versions (a database trigger refuses UPDATE and DELETE): the
+    latest is the one in use, a new drawing replaces it and the old one is kept.
+    A document prints the specimen that was in use when it was signed
+    (`created_at <= signed_at`), so replacing a specimen never changes how an
+    earlier document prints. The image is kept in the audit trail only as a
+    fingerprint (sysadmin_audit CLINICAL_CONTENT_FIELDS: `image_png`).
+
+    Workforce data, not patient data: no FHIR resource and no EpisodeOfCare hook.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="signature_specimens")
+    image_png = models.BinaryField()
+    image_sha256 = models.CharField(max_length=64)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise PermissionError("Signature specimens are append-only; record a new one.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError("Signature specimens are append-only; record a new one.")

@@ -6,12 +6,20 @@ and on every page the document ID/version and page number (DOC-GOV-05).
 
 A signed form prints from its frozen snapshot (`rendered`) — never re-rendered
 from the current record — so the output is immutable after signing (AT-29). A
-draft prints from the live record, watermarked DRAFT. Identity numbers are
+draft prints from the live record, watermarked DRAFT.
+
+Signatures (2026-11-26): an application or notice signed on screen prints the
+applicant's and the staff witness's drawn signatures; a practitioner's
+recommendation and the admitting officer's decision print the signer's specimen
+signature in use at the time, with "Signed electronically by … at …" (the name
+only when they had none). Identity numbers are
 always masked on print (LGL-DOC-06); the unmasked value is a separate, logged view.
 """
 
 from django.utils import timezone
 from django.utils.html import escape
+
+from apps.documents import signatures
 
 from . import facility_time, legal_status
 from .legal_models import (
@@ -69,7 +77,9 @@ def _official(ls, r, labels, document_template):
             f"<p>{escape(labels.get('admittingOfficerName', ''))}: {_dots(legal_status._name(ls.decision_by) if decided else '')}</p>"
         )
         parts.append(
-            f"<p>{escape(labels.get('admittingOfficerSignature', ''))}: {_dots('Signed electronically' if decided else '')}</p>"
+            _clinician_line(
+                labels.get("admittingOfficerSignature", ""), ls.decision_by, ls.decision_at
+            )
         )
         date_label = labels.get("decisionDateTime") or labels.get("date", "Date")
         parts.append(
@@ -79,9 +89,50 @@ def _official(ls, r, labels, document_template):
     return "".join(parts)
 
 
+def _img(src, alt):
+    # `src` is a data: URL of our own PNG (base64 only); escaped regardless.
+    return f'<img class="drawn-signature" src="{escape(src)}" alt="{escape(alt)}">'
+
+
+def _clinician_line(label, user, signed_at, name=""):
+    """A signature given by authenticated click: the signer's specimen in use at
+    the time, if any, and "Signed electronically by … at …"."""
+    from apps.accounts import signature_specimen
+
+    block = signature_specimen.signed_by(user, signed_at, name)
+    text = f"Signed electronically by {block['name']} at {block['when']}"
+    image = _img(block["image"], f"Signature of {block['name']}") if block["image"] else ""
+    return f"<div class='signed-line'><p>{escape(label)}:</p>{image}<p>{_dots(text)}</p></div>"
+
+
+def _drawn_block(doc, label):
+    """An applicant's drawn signature and the staff witness's, as signed."""
+    rows = legal_status.current_signatures(doc)
+    cells = []
+    for row in signatures.print_rows(rows):
+        who = row["name"] + (f" ({row['relationship']})" if row["relationship"] else "")
+        mark = (
+            _img(row["image"], f"Signature of {row['name']}")
+            if row["image"]
+            else f"<p class='not-recorded'>{escape(row['not_signed'])}</p>"
+        )
+        cells.append(
+            f"<tr><td>{mark}<div class='line'>{escape(who)} — {escape(row['role'])}</div></td>"
+            f"<td><div>{escape(row['when'])}</div><div class='line'>Date and time</div></td></tr>"
+        )
+    return (
+        f"<p>{escape(label)}: {_dots(doc.signer_name + ' — drawn on screen, witnessed')}</p>"
+        f"<table class='signature'>{''.join(cells)}</table>"
+    )
+
+
 def _signature_line(doc, label):
     if not doc.signed_at:  # a withdrawn form keeps the signature it had
         return f"<p>{escape(label)}: {_dots('')}</p>"
+    if doc.signature_method == "DRAWN":
+        return _drawn_block(doc, label)
+    if doc.signer_kind == "PRACTITIONER":
+        return _clinician_line(label, doc.signer_user, doc.signed_at, doc.signer_name)
     how = (
         "e-signature, witnessed by " + legal_status._name(doc.captured_by)
         if doc.signature_method == "ELECTRONIC"

@@ -243,6 +243,74 @@
       }
     },
     {
+      "fullUrl": "urn:citramac:provenance:5b0d2c4e-7a1f-4e8b-9c3d-2f6a8e1b4d70",
+      "resource": {
+        "resourceType": "Provenance",
+        "id": "ama-5b0d2c4e-7a1f-4e8b-9c3d-2f6a8e1b4d70",
+        "target": [
+          {
+            "reference": "urn:citramac:encounter:ea517c5e-fb39-4a90-8c15-d2fa93f0e91a"
+          }
+        ],
+        "recorded": "2026-10-08T10:20:00Z",
+        "activity": {
+          "text": "Acknowledgement of leaving against medical advice (facility wording, version AMA-1)"
+        },
+        "agent": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:signature-role",
+                  "code": "client",
+                  "display": "Client"
+                }
+              ]
+            },
+            "role": [
+              {
+                "text": "Refused to sign: Said he would not sign anything and left the ward"
+              }
+            ],
+            "who": {
+              "reference": "urn:citramac:patient:e545d8ec-8201-4b4e-ae24-359e327a91c1"
+            }
+          },
+          {
+            "type": {
+              "coding": [
+                {
+                  "system": "urn:citramac:codesystem:signature-role",
+                  "code": "witness",
+                  "display": "Staff witness"
+                }
+              ]
+            },
+            "who": {
+              "display": "Wanjiru Kariuki (Staff witness)"
+            }
+          }
+        ],
+        "signature": [
+          {
+            "type": [
+              {
+                "system": "urn:citramac:codesystem:signature-role",
+                "code": "witness",
+                "display": "Staff witness"
+              }
+            ],
+            "when": "2026-10-08T10:20:00Z",
+            "who": {
+              "display": "Wanjiru Kariuki (Staff witness)"
+            },
+            "sigFormat": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAASwAAABkCAYAAAA8AQ3AAAADM0lEQVR4nO3by1LcQAwFUIf//+dhQRbGBcZj90NSn7NhFeiWbt8Mqcq2AQAAAAAAAAAAAAAAAAAAAAAAAAAAAEBTr8NXSO3f7APQxW8FZd+kJsC1XP0kZe+kJLg13PmVz+5J52P2AXjktZ2X1Vkp+Xct0vG3bE5/lc1Pe71bbBCGoOZyp6iu/nlZIDwhzeFpUV39XvJAaAIaW8uieud7ywUhCWZMPYvq6s+RDcIRylhGFdXVnykfPPHaGmdIIGOYUVTvnEFOeMcxS83yI4hzRSiqPaXFUz9lSGElF62o9pQWdwzJtACOFbmojhQXVw3LiuCNkamo9pQWZ4bnWuj6ylpUe0qLo2m5Frg+KhTVkeJi2yZnW9DaqlhUe0prXSGyLWRthFjmIEprPWF2LmDPrFRUR2FCTDfh8i1Y94Rb5CRKq6aw+Raq94Rd5ERKq5bQGReoa0IvMQjFlVuKjIc4RGAplhiI0sopzd5CHSYQRXVfmvCTL+fhDjRZugUGprjiSpvzsAcbLO0Cg1Na8aTOeujDDZB6eUkorRhKZD3FITsosbxkFNc8ZWaf6rANKKq5yjycJMrlPd2Bbyq3uMSUVn9l85724BeVXVwBiquP0plPffgTpZdWiNJqZ4nMl7jEzhJLK0ZpPbfMDKtcRlHlt8yja2i53Ge/0HILK05pXbNs7rNebNmFLUBpnVs6+9kut/SyFqO4vpP9Lc8lLWtNSuuLOfwX/bKKipUfq/wfRL2wRXG0UnHJ/y+iXdyiOLNCaXkDJ6Jc3pK4qmppeQMXzB6CJXFXpeKqdJeuZg1DUdFC9ofuHbxp9EAsiNYylpZ3cNOowVgQvWUpLm/hgd7DsRxGilxa3kIDvYZkOcwSsbQiniml1sNSVEQRoSS8h8ZGFZbFMMOs0lJUnfQY3H5ZFsNso0tLWXXUa2GWQjS9i0tRDWCIrKRXaUX497IlGCaraVkuPlUNZqCs6klxKapJPmYfACY5K5WzQlJWExkuq7v6SUtRBWDI8OWvQvqNNzSQXwnhy53iUVaDGTh8d+WTlnczicHDz/w3MyCV1+ErAAAAAAAAAAAAAAAAAAAAAAAAAEB8n92+pT5TUTCdAAAAAElFTkSuQmCC"
+          }
+        ]
+      }
+    },
+    {
       "fullUrl": "urn:citramac:provenance:27260a96-3150-4f52-a2ea-93d7e72884e0",
       "resource": {
         "resourceType": "Provenance",

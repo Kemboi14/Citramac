@@ -159,8 +159,14 @@ class LegalDocument(TenantScopedModel):
         ("RELATED_PERSON", "Applicant (related person)"),
         ("PRACTITIONER", "Medical practitioner"),
     ]
+    # DRAWN (2026-11-26): the applicant's signature drawn on screen with the
+    # staff witness's, as documents.PartySignature rows bound to `rendered`.
+    # ELECTRONIC: the practitioner's authenticated click on a recommendation —
+    # and, on forms signed before 2026-11-26, the staff "signed in my presence"
+    # tick-box that DRAWN replaced (those keep their method).
     METHOD_CHOICES = [
-        ("ELECTRONIC", "Electronic signature (witnessed)"),
+        ("ELECTRONIC", "Electronic signature (authenticated / attested)"),
+        ("DRAWN", "Drawn on screen, witnessed"),
         ("WET_SCAN", "Captured wet signature (scan upload)"),
     ]
 

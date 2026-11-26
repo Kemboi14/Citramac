@@ -7,11 +7,11 @@
   "experimental": false,
   "publisher": "CITRAMAC",
   "name": "Signaturerole",
-  "title": "Consent signer role",
-  "description": "Who signed a consent on screen (owner decisions 2026-11-13). VERIFY: ISO-ASTM E1762 signature-type codes; local until confirmed.",
+  "title": "Signer role",
+  "description": "Who signed on screen: a consent (owner decisions 2026-11-13), a Mental Health Act application, a safety plan or an acknowledgement of leaving against medical advice (2026-11-26). VERIFY: ISO-ASTM E1762 signature-type codes; local until confirmed.",
   "caseSensitive": true,
   "content": "complete",
-  "count": 5,
+  "count": 6,
   "concept": [
     {
       "code": "client",
@@ -28,6 +28,10 @@
     {
       "code": "related-person",
       "display": "Family member / caregiver"
+    },
+    {
+      "code": "applicant",
+      "display": "Applicant (related person)"
     },
     {
       "code": "witness",

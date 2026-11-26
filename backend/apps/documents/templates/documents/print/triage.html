@@ -38,7 +38,7 @@
 
 {% block signature %}
   <table class="signature"><tr>
-    <td><div class="signed"><strong>{{ signed_by|default:"Clinician not recorded" }}</strong><br>Signed electronically {{ signed_at }}</div>
+    <td>{% if signer_signature.image %}<img class="drawn-signature" src="{{ signer_signature.image }}" alt="Signature of {{ signed_by }}">{% endif %}<div class="signed"><strong>{{ signed_by|default:"Clinician not recorded" }}</strong><br>Signed electronically {% if signer_signature.image %}by {{ signed_by }} at {{ signed_at }}{% else %}{{ signed_at }}{% endif %}</div>
       <div class="line">Triage clinician</div></td>
     <td><div>{{ signed_date }}</div><div class="line">Date</div></td>
   </tr></table>

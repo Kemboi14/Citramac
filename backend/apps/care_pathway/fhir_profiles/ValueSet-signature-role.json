@@ -7,8 +7,8 @@
   "experimental": false,
   "publisher": "CITRAMAC",
   "name": "Signaturerole",
-  "title": "Consent signer role",
-  "description": "Client, parent / guardian, substitute decision-maker, family member / caregiver or staff witness.",
+  "title": "Signer role",
+  "description": "Client, parent / guardian, substitute decision-maker, family member / caregiver, applicant (related person) or staff witness.",
   "compose": {
     "include": [
       {

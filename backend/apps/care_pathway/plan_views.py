@@ -364,12 +364,16 @@ class PlanTaskView(APIView):
 
 
 def _safety_row(plan):
+    from apps.documents.signatures import signature_row
+
     return {
         "id": str(plan.id),
         "version": plan.version,
         "signed_at": plan.signed_at,
         "signed_by": _user_name(plan.signed_by),
         "copy_given_at": plan.copy_given_at,
+        # The client's and the witness's signatures on this version (2026-11-26).
+        "signatures": [signature_row(r) for r in plan_extras.current_signatures(plan)],
         **{f: getattr(plan, f) for f in plan_extras.SAFETY_FIELDS},
     }
 
@@ -402,7 +406,11 @@ class SafetyPlanSignView(APIView):
         plan = SafetyPlan.objects.filter(patient=patient, signed_at__isnull=True).first()
         if plan is None:
             raise ValidationError({"detail": "There is no draft safety plan to sign."})
-        return Response(_safety_row(plan_extras.sign_safety_plan(plan, request.user)))
+        return Response(
+            _safety_row(
+                plan_extras.sign_safety_plan(plan, request.user, request.data.get("signatures"))
+            )
+        )
 
 
 class SafetyPlanCopyView(APIView):

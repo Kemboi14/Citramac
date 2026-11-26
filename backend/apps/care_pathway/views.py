@@ -25,6 +25,7 @@ from apps.triage.models import VitalSigns
 from config.errors import error_response
 
 from . import (
+    against_advice,
     ews,
     facility_time,
     findings,
@@ -2917,6 +2918,8 @@ def _discharge_payload(user, admission):
         "restricted": not full,
         "summary": services.serialize_discharge(latest, full) if latest else None,
         "context": services.discharge_context(admission) if full else None,
+        # The client's acknowledgement of leaving against advice (2026-11-26).
+        "against_advice": against_advice.status(admission) if full else None,
         "versions": [
             {
                 "id": str(v.id),
@@ -2958,6 +2961,19 @@ class AdmissionDischargeSignView(APIView):
         _require_full_access(request.user, admission, services.latest_discharge(admission))
         services.sign_discharge(admission, request.user, request.data)
         return Response(_discharge_payload(request.user, _admission(pk)))
+
+
+class AdmissionAgainstAdviceView(APIView):
+    """POST care/admissions/<id>/against-advice/ — the client's acknowledgement of
+    leaving against medical advice: drawn, or unable / refused with the reason,
+    witnessed. Never a condition of the discharge."""
+
+    @clinical_only()
+    def post(self, request, pk):
+        admission = _admission(pk)
+        _require_full_access(request.user, admission, services.latest_discharge(admission))
+        against_advice.record(admission, request.user, request.data)
+        return Response(_discharge_payload(request.user, admission), status=status.HTTP_201_CREATED)
 
 
 class DischargeAmendView(APIView):

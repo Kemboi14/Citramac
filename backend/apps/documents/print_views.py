@@ -7,6 +7,7 @@ document may print it; every preview and download is in the audit log.
 
 from rest_framework.views import APIView
 
+from apps.accounts import signature_specimen
 from apps.care_pathway import facility_time
 from apps.sysadmin_audit.audit import write_event
 from apps.sysadmin_audit.models import AuditLogEntry
@@ -94,6 +95,10 @@ def document_context(doc, user):
         "signed": signed,
         "signed_by": _user(doc.signed_by),
         "signer_credentials": doc.signer_credentials,
+        # The signer's specimen signature in use when they signed (2026-11-26).
+        "signer_signature": (
+            signature_specimen.signed_by(doc.signed_by, doc.signed_at) if signed else {}
+        ),
         "signed_at": _when(doc.signed_at),
         "signed_date": _when(doc.signed_at, "%d %b %Y"),
         "content_hash_short": (doc.content_hash or "")[:16],

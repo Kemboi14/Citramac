@@ -50,13 +50,34 @@
 
   <h2>Follow-up</h2>
   <p>{{ follow_up|default:"No follow-up appointment booked." }}</p>
+
+  {% if against_advice %}
+  <h2>Acknowledgement of leaving against medical advice</h2>
+  {% for a in against_advice %}
+    <p class="pre">{{ a.wording_text }}</p>
+    <p class="source">Facility wording, version {{ a.wording_version }} · recorded {{ a.recorded_at }}</p>
+    <table class="signature">
+      {% for s in a.signatures %}
+      <tr>
+        <td>
+          {% if s.image %}<img class="drawn-signature" src="{{ s.image }}" alt="Signature of {{ s.name }}">
+          {% else %}<div class="not-recorded">{{ s.not_signed }}</div>{% endif %}
+          <div class="line">{{ s.name }} — {{ s.role }}</div>
+        </td>
+        <td><div>{{ s.when }}</div><div class="line">Date and time</div></td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% endfor %}
+  {% endif %}
 {% endblock %}
 
 {% block signature %}
   <table class="signature"><tr>
     <td>
       {% if signed %}
-        <div class="signed"><strong>{{ signed_by }}</strong>{% if signed_role %}<br>{{ signed_role }}{% endif %}<br>Signed electronically {{ signed_at }}</div>
+        {% if signer_signature.image %}<img class="drawn-signature" src="{{ signer_signature.image }}" alt="Signature of {{ signed_by }}">{% endif %}
+        <div class="signed"><strong>{{ signed_by }}</strong>{% if signed_role %}<br>{{ signed_role }}{% endif %}<br>Signed electronically {% if signer_signature.image %}by {{ signed_by }} at {{ signed_at }}{% else %}{{ signed_at }}{% endif %}</div>
       {% else %}<div style="height:26pt"></div>{% endif %}
       <div class="line">Discharging clinician — name, role{% if not signed %} and signature{% endif %}</div>
     </td>

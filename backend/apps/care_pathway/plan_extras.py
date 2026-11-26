@@ -57,16 +57,65 @@ def save_safety_plan(plan, data):
     return plan
 
 
-def sign_safety_plan(plan, user):
+def safety_plan_content(plan):
+    """What the client's and the witness's signatures on a version attest to:
+    that version's own words (owner decisions 2026-11-26)."""
+    return {
+        "patient": str(plan.patient_id),
+        "safety_plan": str(plan.pk),
+        "version": plan.version,
+        **{field: getattr(plan, field) for field in SAFETY_FIELDS},
+    }
+
+
+def current_signatures(plan):
+    """The client's and the witness's signatures on this version as it reads now."""
+    from apps.documents.signatures import content_sha256
+
+    current = content_sha256(safety_plan_content(plan))
+    return list(
+        plan.signatures.filter(content_sha256=current)
+        .select_related("captured_by")
+        .order_by("captured_at")
+    )
+
+
+@transaction.atomic
+def sign_safety_plan(plan, user, signatures=None):
+    """The clinician signs the version; the client signs it with them — drawn on
+    screen, or recorded as unable to sign with the reason — and the clinician
+    witnesses (owner decisions 2026-11-26). The client's signature is required,
+    with "unable to sign" as the alternative, so signing is never blocked."""
     from apps.accounts.practitioner_profile import require_current_licence
+    from apps.documents import signatures as party_signatures
+    from apps.documents.models import PartySignature
 
     require_current_licence(user)
+    plan = SafetyPlan.objects.select_for_update().get(pk=plan.pk)
     if plan.signed_at:
         raise ValidationError({"detail": "Already signed."})
     if not (plan.warning_signs.strip() or plan.people_to_ask.strip()):
         raise ValidationError(
             {"detail": "Add warning signs or the people to ask for help before signing."}
         )
+    if not isinstance(signatures, dict) or not isinstance(signatures.get("client"), dict):
+        raise ValidationError(
+            {
+                "signatures": "The client signs their safety plan with you (or record why "
+                "they cannot), and you sign as witness."
+            }
+        )
+    client = {**signatures["client"], "name": plan.patient.get_full_name()}
+    party_signatures.sign_target(
+        {"safety_plan": plan},
+        plan.patient,
+        user,
+        PartySignature.ROLE_CLIENT,
+        client,
+        signatures.get("witness"),
+        party_signatures.content_sha256(safety_plan_content(plan)),
+        allow_unable=True,
+    )
     plan.signed_at = timezone.now()
     plan.signed_by = user
     plan.save(update_fields=["signed_at", "signed_by", "updated_at"])

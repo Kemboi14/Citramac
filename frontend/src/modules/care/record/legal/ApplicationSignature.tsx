@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { DocumentActions } from "../../../../components/DocumentActions";
+import type { SignatureInput } from "../../../../lib/carePathwayApi";
 import {
   changeApplicationType,
   signLegalDocument,
@@ -7,6 +8,7 @@ import {
   type LegalCategory,
   type LegalDocumentRow,
 } from "../../../../lib/legalStatusApi";
+import { SignaturePad } from "../../shared/SignaturePad";
 import { BTN, BTN_GHOST, BTN_SM, INPUT } from "../../shared/styles";
 
 type Runner = (fn: (token: string) => Promise<unknown>, fallback: string) => Promise<boolean>;
@@ -31,8 +33,9 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
  * Signing a voluntary or involuntary application: print it, the applicant
  * signs the paper, upload the signed copy — which records the application as
  * signed by the applicant (wet signature, scan) and files the copy in the
- * client's attachments. An electronic signature witnessed in person remains
- * available.
+ * client's attachments. Or the applicant draws their signature on screen and
+ * you sign as witness (2026-11-26). An applicant who cannot sign on screen uses
+ * the paper form (they sign or make their mark on it).
  *
  * `signer` carries the applicant fields the form collected (signer_kind,
  * related_person_id, adult_confirmed); `beforeSign` saves the draft first.
@@ -51,9 +54,10 @@ export function ApplicationSignature({
   beforeSign?: () => Promise<boolean>;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const [method, setMethod] = useState<"UPLOAD" | "ELECTRONIC">("UPLOAD");
+  const [method, setMethod] = useState<"UPLOAD" | "DRAWN">("UPLOAD");
   const [file, setFile] = useState<File | null>(null);
-  const [attested, setAttested] = useState(false);
+  const [party, setParty] = useState<SignatureInput | null>(null);
+  const [witness, setWitness] = useState<SignatureInput | null>(null);
   const filename = `${doc.document_number}-v${doc.version}`.replace(/[^A-Za-z0-9._-]+/g, "-");
 
   const ready = async () => (beforeSign ? beforeSign() : true);
@@ -75,10 +79,15 @@ export function ApplicationSignature({
     }
   };
 
-  const signElectronically = async () => {
-    if (!(await ready())) return;
+  const signOnScreen = async () => {
+    if (!party || !witness || !(await ready())) return;
     await run(
-      (t) => signLegalDocument(t, doc.id, { ...signer, method: "ELECTRONIC", attested }),
+      (t) =>
+        signLegalDocument(t, doc.id, {
+          ...signer,
+          method: "DRAWN",
+          signatures: { party, witness },
+        }),
       "Couldn't sign the application.",
     );
   };
@@ -109,12 +118,8 @@ export function ApplicationSignature({
             Upload the signed paper form
           </label>
           <label className="inline-flex items-center gap-1.5">
-            <input
-              type="radio"
-              checked={method === "ELECTRONIC"}
-              onChange={() => setMethod("ELECTRONIC")}
-            />
-            Electronic signature, signed in my presence
+            <input type="radio" checked={method === "DRAWN"} onChange={() => setMethod("DRAWN")} />
+            Applicant signs on screen, witnessed by me
           </label>
         </div>
 
@@ -159,20 +164,20 @@ export function ApplicationSignature({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <label className="inline-flex items-center gap-1.5 text-[13px]">
-              <input
-                type="checkbox"
-                checked={attested}
-                onChange={(e) => setAttested(e.target.checked)}
-              />
-              I confirm the applicant signed in my presence
-            </label>
+            <div className="flex flex-wrap gap-2">
+              <SignaturePad label="Applicant's signature" onChange={setParty} />
+              <SignaturePad label="Your signature as witness" onChange={setWitness} />
+            </div>
+            <p className="text-[11.5px] text-ink-500">
+              The form is signed as it is saved now; the signatures are kept with it and printed on
+              it. If the applicant cannot sign on screen, use the paper form instead.
+            </p>
             <div>
               <button
                 type="button"
                 className={`${BTN} ${BTN_SM}`}
-                disabled={busy || !attested}
-                onClick={() => void signElectronically()}
+                disabled={busy || !party || !witness}
+                onClick={() => void signOnScreen()}
               >
                 Sign
               </button>

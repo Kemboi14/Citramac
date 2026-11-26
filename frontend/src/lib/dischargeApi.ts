@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import type { PartySignatureRow, SignatureInput } from "./carePathwayApi";
 
 // Mirrors backend/apps/care_pathway (views.py, services.py) — discharge planning
 // and follow-up, docs/17-DISCHARGE-AND-FOLLOW-UP.md. Nothing here touches browser
@@ -119,10 +120,32 @@ export interface DischargeAdmission {
   legacy_summary: string;
 }
 
+/** A client's acknowledgement of leaving against medical advice (2026-11-26):
+ * drawn, or unable / refused with the reason, always witnessed. */
+export interface AgainstAdviceAcknowledgement {
+  id: string;
+  recorded_at: string;
+  recorded_by: string;
+  wording_version: string;
+  wording_text: string;
+  outcome: "DRAWN" | "UNABLE" | "REFUSED" | "";
+  signatures: PartySignatureRow[];
+}
+
+export interface AgainstAdviceStatus {
+  /** The discharge (draft or signed) is recorded as left against medical advice. */
+  applies: boolean;
+  /** The facility's wording; null when none is set (nothing can be signed). */
+  wording: { version: string; text: string } | null;
+  no_wording_message: string;
+  acknowledgements: AgainstAdviceAcknowledgement[];
+}
+
 export interface DischargePayload {
   admission: DischargeAdmission;
   restricted: boolean;
   summary: DischargeSummary | null;
+  against_advice: AgainstAdviceStatus | null;
   context: {
     diagnoses: DischargeDiagnosis[];
     medications: DischargeContextMedication[];
@@ -203,6 +226,20 @@ export function signDischarge(accessToken: string, admissionId: string, input: D
   return apiRequest<DischargePayload>(`/care/admissions/${admissionId}/discharge/sign/`, {
     method: "POST",
     body: input,
+    accessToken,
+  });
+}
+
+/** Record the client's acknowledgement of leaving against advice. Never a
+ * condition of the discharge. */
+export function recordAgainstAdvice(
+  accessToken: string,
+  admissionId: string,
+  signatures: { client: SignatureInput; witness: SignatureInput },
+) {
+  return apiRequest<DischargePayload>(`/care/admissions/${admissionId}/against-advice/`, {
+    method: "POST",
+    body: { signatures },
     accessToken,
   });
 }
