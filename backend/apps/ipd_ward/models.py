@@ -24,9 +24,28 @@ class AccommodationType(TenantScopedModel):
     set on the Service Tariff page and never invented. Retired, never deleted.
     FHIR: a local code on the bed's Location.type (not emitted yet)."""
 
+    # How CITRAMAC's own subscription counts a room of this type (owner
+    # decision 2026-11-26; apps.tenancy.subscription_billing). Set by the Org
+    # Admin; blank = Unclassified (never guessed from the name). A room is
+    # counted by its own type; "ward bay" is a type for beds that are not in
+    # a room of their own, and is never charged as a room.
+    CLASS_UNCLASSIFIED = ""
+    CLASS_PRIVATE_ROOM = "PRIVATE_ROOM"
+    CLASS_SHARED_ROOM = "SHARED_ROOM"
+    CLASS_WARD_BAY = "WARD_BAY"
+    ROOM_CLASS_CHOICES = [
+        (CLASS_UNCLASSIFIED, "Unclassified"),
+        (CLASS_PRIVATE_ROOM, "Private room"),
+        (CLASS_SHARED_ROOM, "Shared room"),
+        (CLASS_WARD_BAY, "Shared bed / ward bay — not a room"),
+    ]
+
     name = models.CharField(max_length=100)
     billing_service = models.OneToOneField(
         "care_pathway.BillingService", on_delete=models.PROTECT, related_name="accommodation_type"
+    )
+    room_class = models.CharField(
+        max_length=12, choices=ROOM_CLASS_CHOICES, blank=True, default=CLASS_UNCLASSIFIED
     )
     active = models.BooleanField(default=True)
     order = models.PositiveSmallIntegerField(default=0)

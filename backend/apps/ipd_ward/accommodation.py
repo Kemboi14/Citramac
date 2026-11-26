@@ -89,6 +89,9 @@ def type_row(kind):
         "id": str(kind.id),
         "name": kind.name,
         "active": kind.active,
+        # How CITRAMAC's subscription counts a room of this type ("" = Unclassified).
+        "room_class": kind.room_class,
+        "room_class_label": kind.get_room_class_display(),
         "service_id": str(service.id),
         "rate": None if service.rate is None else str(service.rate),
         "bed_count": Bed.objects.filter(accommodation_type=kind).count(),
@@ -123,7 +126,10 @@ def add_type(user, name):
 def change_type(user, kind, data):
     """Rename (the tariff line follows; charges already raised keep their
     service, so past bills show the new name) or retire / restore. A retired
-    type can't be given to a bed or room; beds that have it keep charging."""
+    type can't be given to a bed or room; beds that have it keep charging.
+    `room_class` sets how the CITRAMAC subscription counts its rooms
+    (apps.tenancy.subscription_billing); statements already issued keep
+    their counts."""
     _require_admin(user)
     kind = AccommodationType.objects.select_for_update().get(pk=kind.pk)
     service = kind.billing_service
@@ -141,6 +147,11 @@ def change_type(user, kind, data):
         service.name = service_name(name)
     if "active" in data:
         kind.active = bool(data["active"])
+    if "room_class" in data:
+        room_class = data["room_class"] or ""
+        if room_class not in dict(AccommodationType.ROOM_CLASS_CHOICES):
+            raise ValidationError({"room_class": "Choose a class from the list."})
+        kind.room_class = room_class
     kind.save()
     service.save(update_fields=["name"])
     return kind

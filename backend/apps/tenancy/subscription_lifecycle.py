@@ -10,6 +10,9 @@ and SMS (apps.notifications.dispatch).
                the grace period, with a reminder every day
     EXPIRED    after the grace period: read-only (apps.accounts.authentication)
 
+Each run also issues the billing statement of every ACTIVE subscription whose
+period has started and has none yet (apps.tenancy.subscription_billing).
+
 Reminders are staged, not tied to exact days: each run sends the reminder
 for the stage the subscription is currently in, once (dedupe_key). A run
 that is missed, or a policy that changes, can't skip a stage or send one
@@ -255,6 +258,12 @@ def process_all_subscriptions(today=None):
                     organization_id=str(subscription.organization_id),
                 )
                 outcomes[str(subscription.id)] = "FAILED"
+        # Statements are issued after the lifecycle moves, so a subscription
+        # that lapsed today gets none (subscription_billing, 2026-11-26).
+        from .subscription_billing import issue_due_statements
+
+        for subscription_id, reference in issue_due_statements(today).items():
+            outcomes.setdefault(subscription_id, f"STATEMENT:{reference}")
         send_platform_digest(policy, today)
     return outcomes
 

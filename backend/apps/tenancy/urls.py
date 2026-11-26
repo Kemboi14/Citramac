@@ -9,6 +9,7 @@ from .views import (
     BranchRegulatoryRecordView,
     BranchViewSet,
     DepartmentViewSet,
+    MySubscriptionBillingView,
     MySubscriptionView,
     OrganizationDetailView,
     OrganizationEmailSettingsView,
@@ -18,6 +19,7 @@ from .views import (
     OrganizationSmsSettingsView,
     OrganizationSmsTestView,
     OrganizationStatusView,
+    OrganizationSubscriptionBillingView,
     OrganizationThemeView,
     OrgDashboardStatsView,
     PlatformAiSettingsView,
@@ -34,6 +36,8 @@ from .views import (
     PlatformSmsTestView,
     SubscriptionPlanViewSet,
     SubscriptionPolicyView,
+    SubscriptionStatementPrintView,
+    SubscriptionStatementSupersedeView,
     SubscriptionViewSet,
 )
 
@@ -128,6 +132,26 @@ urlpatterns = [
     path("health/", PlatformHealthView.as_view(), name="platform-health"),
     path("subscription-policy/", SubscriptionPolicyView.as_view(), name="subscription-policy"),
     path("my-subscription/", MySubscriptionView.as_view(), name="my-subscription"),
+    path(
+        "my-subscription/billing/",
+        MySubscriptionBillingView.as_view(),
+        name="my-subscription-billing",
+    ),
+    path(
+        "organizations/<uuid:pk>/subscription-billing/",
+        OrganizationSubscriptionBillingView.as_view(),
+        name="platform-organization-subscription-billing",
+    ),
+    path(
+        "subscription-statements/<uuid:pk>/supersede/",
+        SubscriptionStatementSupersedeView.as_view(),
+        name="subscription-statement-supersede",
+    ),
+    path(
+        "subscription-statements/<uuid:pk>/print/",
+        SubscriptionStatementPrintView.as_view(),
+        name="subscription-statement-print",
+    ),
     path("org-dashboard-stats/", OrgDashboardStatsView.as_view(), name="org-dashboard-stats"),
     path("", include(router.urls)),
 ]

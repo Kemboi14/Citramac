@@ -521,6 +521,21 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    """Rates are monthly, in KES, set by Super Admin only (owner decision
+    2026-11-26). Blank (null) = that unit is not charged on this plan; no
+    rate is ever filled in for them. Every change is audited by the generic
+    write-audit signals."""
+
+    rate_per_branch = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    rate_per_private_room = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+    rate_per_shared_room = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, allow_null=True, required=False
+    )
+
     class Meta:
         model = SubscriptionPlan
         fields = [
@@ -531,8 +546,16 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             "max_staff_seats",
             "included_modules",
             "price_monthly",
+            "rate_per_branch",
+            "rate_per_private_room",
+            "rate_per_shared_room",
             "is_active",
         ]
+
+    def validate_price_monthly(self, value):
+        if value < 0:
+            raise serializers.ValidationError("The base fee can't be negative.")
+        return value
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

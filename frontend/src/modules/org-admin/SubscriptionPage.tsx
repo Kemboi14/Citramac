@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { CreditCard, Lock, Phone } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../lib/apiClient";
-import { getMySubscription, type MySubscription } from "../../lib/subscriptionsApi";
+import {
+  getMySubscription,
+  getMySubscriptionBilling,
+  type MySubscription,
+  type SubscriptionBilling,
+} from "../../lib/subscriptionsApi";
+import { SubscriptionBillingPanel } from "../../components/SubscriptionBillingPanel";
 import {
   SUBSCRIPTION_STATUS_LABEL,
   SUBSCRIPTION_STATUS_TINT,
@@ -34,6 +40,8 @@ export function SubscriptionPage() {
   // `undefined` = not loaded yet; `null` = loaded, this org has no subscription record.
   const [subscription, setSubscription] = useState<MySubscription | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [billing, setBilling] = useState<SubscriptionBilling | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -41,6 +49,13 @@ export function SubscriptionPage() {
       .then((result) => setSubscription(result))
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : "Couldn't load your subscription."),
+      );
+    getMySubscriptionBilling(accessToken)
+      .then((result) => setBilling(result))
+      .catch((err) =>
+        setBillingError(
+          err instanceof ApiError ? err.message : "Couldn't load usage and statements.",
+        ),
       );
   }, [accessToken]);
 
@@ -143,6 +158,18 @@ export function SubscriptionPage() {
               </p>
             )}
           </div>
+
+          {billingError && (
+            <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
+              {billingError}
+            </p>
+          )}
+          {billing && (
+            <SubscriptionBillingPanel
+              billing={billing}
+              unclassifiedHint="Give each room an accommodation type, and each type a class, in Ward & Bed Management → Accommodation types and rooms."
+            />
+          )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className={CARD_CLASS}>

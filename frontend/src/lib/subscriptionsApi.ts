@@ -12,6 +12,12 @@ export interface SubscriptionPlan {
   max_staff_seats: number | null;
   included_modules: string[];
   price_monthly: string;
+  /** Monthly KES per active branch; null = not charged on this plan. */
+  rate_per_branch: string | null;
+  /** Monthly KES per private room; null = not charged on this plan. */
+  rate_per_private_room: string | null;
+  /** Monthly KES per shared room; null = not charged on this plan. */
+  rate_per_shared_room: string | null;
   is_active: boolean;
 }
 
@@ -102,6 +108,18 @@ export function createSubscriptionPlan(accessToken: string, payload: Omit<Subscr
   });
 }
 
+export function updateSubscriptionPlan(
+  accessToken: string,
+  id: number,
+  payload: Partial<Omit<SubscriptionPlan, "id">>,
+) {
+  return apiRequest<SubscriptionPlan>(`/platform/subscription-plans/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
 export function listSubscriptions(accessToken: string, page = 1) {
   return apiRequest<Paginated<Subscription>>(`/platform/subscriptions/?page=${page}`, {
     accessToken,
@@ -134,4 +152,122 @@ export function updateSubscription(
     body: payload,
     accessToken,
   });
+}
+
+// ── Subscription billing by branches, private rooms and shared rooms ──
+// Mirrors apps.tenancy.subscription_billing.billing_overview.
+
+export interface UnclassifiedRoom {
+  id: string;
+  room: string;
+  reason: string;
+}
+
+export interface SubscriptionUsage {
+  branches: number;
+  branch_names: string[];
+  private_rooms: number;
+  shared_rooms: number;
+  /** Rooms whose type is "Shared bed / ward bay — not a room": counted, never charged. */
+  ward_bays: number;
+  unclassified_rooms: number;
+  unclassified: UnclassifiedRoom[];
+  beds_outside_rooms: number;
+  notes: { room: string; note: string }[];
+}
+
+export interface StatementLine {
+  key: "base" | "branches" | "private_rooms" | "shared_rooms";
+  label: string;
+  count: number | null;
+  /** null = the plan sets no rate for this unit ("No rate set"). */
+  rate: string | null;
+  months: number;
+  amount: string | null;
+  charged: boolean;
+  note: string;
+}
+
+export interface SubscriptionStatement {
+  id: string;
+  reference: string;
+  period_start: string;
+  period_end: string;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  months: number;
+  plan_name: string;
+  currency: string;
+  lines: StatementLine[];
+  usage: SubscriptionUsage;
+  total: string;
+  counted_at: string;
+  method: "SCHEDULED" | "MANUAL" | "CORRECTION";
+  method_label: string;
+  issued_by: string;
+  supersedes: string | null;
+  supersedes_reference: string;
+  reason: string;
+  /** A later correction replaced this statement. */
+  superseded: boolean;
+}
+
+export interface SubscriptionBilling {
+  organization: string;
+  organization_name: string;
+  billing_cycle: "MONTHLY" | "ANNUAL";
+  months: number;
+  current_period: { start: string; end: string };
+  current_period_has_statement: boolean;
+  rates: {
+    plan_name: string;
+    price_monthly: string;
+    rate_per_branch: string | null;
+    rate_per_private_room: string | null;
+    rate_per_shared_room: string | null;
+    currency: string;
+  };
+  usage: SubscriptionUsage;
+  estimate: { lines: StatementLine[]; total: string; currency: string };
+  statements: SubscriptionStatement[];
+}
+
+/** Org Admin: their own organisation's usage, rates and statements (read-only). */
+export function getMySubscriptionBilling(accessToken: string) {
+  return apiRequest<SubscriptionBilling | null>("/platform/my-subscription/billing/", {
+    accessToken,
+  }).then((result) =>
+    result && typeof result === "object" && "statements" in result ? result : null,
+  );
+}
+
+/** Super Admin: one organisation's usage, rates and statements. */
+export function getOrganizationSubscriptionBilling(accessToken: string, organizationId: string) {
+  return apiRequest<SubscriptionBilling>(
+    `/platform/organizations/${organizationId}/subscription-billing/`,
+    { accessToken },
+  );
+}
+
+/** Super Admin: issue the current period's statement now (refused if one exists). */
+export function issueSubscriptionStatement(accessToken: string, organizationId: string) {
+  return apiRequest<SubscriptionBilling>(
+    `/platform/organizations/${organizationId}/subscription-billing/`,
+    { method: "POST", body: {}, accessToken },
+  );
+}
+
+/** Super Admin: correct a statement with a reason (a new, superseding statement). */
+export function supersedeSubscriptionStatement(
+  accessToken: string,
+  statementId: string,
+  reason: string,
+) {
+  return apiRequest<SubscriptionBilling>(
+    `/platform/subscription-statements/${statementId}/supersede/`,
+    { method: "POST", body: { reason }, accessToken },
+  );
+}
+
+export function subscriptionStatementPrintPath(statementId: string) {
+  return `/platform/subscription-statements/${statementId}/print/`;
 }

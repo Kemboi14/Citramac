@@ -7,12 +7,20 @@ import { ApiError } from "../../lib/apiClient";
 import {
   createSubscription,
   createSubscriptionPlan,
+  getOrganizationSubscriptionBilling,
+  issueSubscriptionStatement,
   listSubscriptionPlans,
   listSubscriptions,
+  supersedeSubscriptionStatement,
   updateSubscription,
+  updateSubscriptionPlan,
   type Subscription,
+  type SubscriptionBilling,
   type SubscriptionPlan,
+  type SubscriptionStatement,
 } from "../../lib/subscriptionsApi";
+import { Drawer } from "../../components/Drawer";
+import { SubscriptionBillingPanel } from "../../components/SubscriptionBillingPanel";
 import { listOrganizations, type Organization } from "../../lib/organizationsApi";
 import {
   SUBSCRIPTION_STATUS_LABEL,
@@ -66,6 +74,9 @@ interface NewPlanState {
   max_branches: string;
   max_staff_seats: string;
   price_monthly: string;
+  rate_per_branch: string;
+  rate_per_private_room: string;
+  rate_per_shared_room: string;
 }
 
 const EMPTY_NEW_PLAN: NewPlanState = {
@@ -74,7 +85,26 @@ const EMPTY_NEW_PLAN: NewPlanState = {
   max_branches: "",
   max_staff_seats: "",
   price_monthly: "",
+  rate_per_branch: "",
+  rate_per_private_room: "",
+  rate_per_shared_room: "",
 };
+
+/** Monthly unit rates (owner decision 2026-11-26). Blank = not charged on the plan. */
+const RATE_FIELDS = [
+  { key: "rate_per_branch", label: "Per active branch" },
+  { key: "rate_per_private_room", label: "Per private room" },
+  { key: "rate_per_shared_room", label: "Per shared room" },
+] as const;
+
+/** "" → null: a blank rate is "not charged", never zero. */
+function rateOrNull(value: string): string | null {
+  return value.trim() === "" ? null : value.trim();
+}
+
+function rateText(value: string | null): string {
+  return value === null ? "No rate set" : `KES ${value} / month`;
+}
 
 interface NewSubscriptionState {
   organization: string;
@@ -122,6 +152,8 @@ export function SubscriptionsPage() {
   const [expireTarget, setExpireTarget] = useState<Subscription | null>(null);
   const [expireBusy, setExpireBusy] = useState(false);
   const [expireError, setExpireError] = useState<string | null>(null);
+  // Usage, rates and statements of one tenant (Billing drawer).
+  const [billingFor, setBillingFor] = useState<Subscription | null>(null);
 
   const refresh = async () => {
     if (!accessToken) return;
@@ -164,6 +196,9 @@ export function SubscriptionsPage() {
         max_branches: Number(newPlan.max_branches) || 0,
         max_staff_seats: newPlan.max_staff_seats ? Number(newPlan.max_staff_seats) : null,
         price_monthly: newPlan.price_monthly || "0",
+        rate_per_branch: rateOrNull(newPlan.rate_per_branch),
+        rate_per_private_room: rateOrNull(newPlan.rate_per_private_room),
+        rate_per_shared_room: rateOrNull(newPlan.rate_per_shared_room),
         included_modules: [],
         is_active: true,
       });
@@ -337,9 +372,23 @@ export function SubscriptionsPage() {
                       ? "unlimited seats"
                       : `up to ${plan.max_staff_seats} seats`}
                   </div>
+                  <dl className="mt-2 grid grid-cols-1 gap-0.5 text-xs text-ink-700">
+                    {RATE_FIELDS.map((field) => (
+                      <div key={field.key} className="flex justify-between gap-2">
+                        <dt className="text-ink-500">{field.label}</dt>
+                        <dd>{rateText(plan[field.key])}</dd>
+                      </div>
+                    ))}
+                  </dl>
                   <div className="mt-2 text-xs font-semibold text-ink-500">
                     {orgCount} organization{orgCount === 1 ? "" : "s"} on this plan
                   </div>
+                  <PlanRatesEditor
+                    plan={plan}
+                    onSaved={(updated) =>
+                      setPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                    }
+                  />
                 </div>
               );
             })}
@@ -420,6 +469,23 @@ export function SubscriptionsPage() {
                   required
                 />
               </label>
+              {RATE_FIELDS.map((field) => (
+                <label key={field.key} className={LABEL_CLASS}>
+                  {field.label} (KES / month)
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className={FIELD_CLASS}
+                    value={newPlan[field.key]}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewPlan((prev) => ({ ...prev, [field.key]: value }));
+                    }}
+                    placeholder="Blank = not charged"
+                  />
+                </label>
+              ))}
             </div>
             {planFormError && (
               <p className="mt-4 rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">
@@ -594,6 +660,7 @@ export function SubscriptionsPage() {
               <th className="px-4 py-3">Renewal Date</th>
               <th className="px-4 py-3">Grace Period</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Billing</th>
             </tr>
           </thead>
           <tbody>
@@ -712,11 +779,20 @@ export function SubscriptionsPage() {
                     </div>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-brand-green hover:underline"
+                    onClick={() => setBillingFor(sub)}
+                  >
+                    Usage & statements
+                  </button>
+                </td>
               </tr>
             ))}
             {!loading && filteredSubscriptions.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-ink-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-ink-500">
                   {subscriptions.length === 0
                     ? "No subscriptions assigned yet."
                     : "No subscriptions match this filter."}
@@ -752,6 +828,199 @@ export function SubscriptionsPage() {
         </p>
         <p>No data is deleted. Setting a future renewal date restores full access.</p>
       </ConfirmDialog>
+
+      <Drawer
+        open={billingFor !== null}
+        title={billingFor ? `${billingFor.organization_name} — usage & statements` : ""}
+        subtitle="CITRAMAC subscription billing by branches, private rooms and shared rooms"
+        onClose={() => setBillingFor(null)}
+      >
+        {billingFor && <TenantBilling key={billingFor.id} subscription={billingFor} />}
+      </Drawer>
+    </div>
+  );
+}
+
+/**
+ * Super Admin: change a plan's base fee and its three monthly unit rates.
+ * A blank rate is sent as null (not charged), never as zero. Statements
+ * already issued keep the rates they were issued with.
+ */
+function PlanRatesEditor({
+  plan,
+  onSaved,
+}: {
+  plan: SubscriptionPlan;
+  onSaved: (updated: SubscriptionPlan) => void;
+}) {
+  const { accessToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState({
+    price_monthly: plan.price_monthly,
+    rate_per_branch: plan.rate_per_branch ?? "",
+    rate_per_private_room: plan.rate_per_private_room ?? "",
+    rate_per_shared_room: plan.rate_per_shared_room ?? "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="mt-2 text-xs font-semibold text-brand-green hover:underline"
+        onClick={() => {
+          setValues({
+            price_monthly: plan.price_monthly,
+            rate_per_branch: plan.rate_per_branch ?? "",
+            rate_per_private_room: plan.rate_per_private_room ?? "",
+            rate_per_shared_room: plan.rate_per_shared_room ?? "",
+          });
+          setError(null);
+          setEditing(true);
+        }}
+      >
+        Edit price & rates
+      </button>
+    );
+  }
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!accessToken || values.price_monthly.trim() === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(
+        await updateSubscriptionPlan(accessToken, plan.id, {
+          price_monthly: values.price_monthly.trim(),
+          rate_per_branch: rateOrNull(values.rate_per_branch),
+          rate_per_private_room: rateOrNull(values.rate_per_private_room),
+          rate_per_shared_room: rateOrNull(values.rate_per_shared_room),
+        }),
+      );
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save the plan.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="mt-3 flex flex-col gap-2 border-t border-surface-border pt-3">
+      <label className={LABEL_CLASS}>
+        Base fee (KES / month)
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          className={FIELD_CLASS}
+          value={values.price_monthly}
+          onChange={(e) => {
+            const value = e.target.value;
+            setValues((prev) => ({ ...prev, price_monthly: value }));
+          }}
+          required
+        />
+      </label>
+      {RATE_FIELDS.map((field) => (
+        <label key={field.key} className={LABEL_CLASS}>
+          {field.label} (KES / month)
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            className={FIELD_CLASS}
+            value={values[field.key]}
+            onChange={(e) => {
+              const value = e.target.value;
+              setValues((prev) => ({ ...prev, [field.key]: value }));
+            }}
+            placeholder="Blank = not charged"
+          />
+        </label>
+      ))}
+      <p className="text-xs text-ink-500">
+        Applies to statements issued from now on. Issued statements keep their rates.
+      </p>
+      {error && <p className="text-xs font-medium text-status-red">{error}</p>}
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={busy} className={BUTTON_CLASS}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          className="text-sm font-semibold text-ink-500 hover:text-ink-700"
+          onClick={() => setEditing(false)}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** One tenant's live usage, plan rates and statements, with Issue / Correct. */
+function TenantBilling({ subscription }: { subscription: Subscription }) {
+  const { accessToken } = useAuth();
+  const [billing, setBilling] = useState<SubscriptionBilling | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    getOrganizationSubscriptionBilling(accessToken, subscription.organization)
+      .then(setBilling)
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Couldn't load usage and statements."),
+      );
+  }, [accessToken, subscription.organization]);
+
+  const issue = async () => {
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setBilling(await issueSubscriptionStatement(accessToken, subscription.organization));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't issue the statement.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const correct = async (statement: SubscriptionStatement, reason: string) => {
+    if (!accessToken) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      setBilling(await supersedeSubscriptionStatement(accessToken, statement.id, reason));
+      return true;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't issue the correction.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {error && (
+        <p className="rounded-sm bg-status-red-tint px-3 py-2 text-sm text-status-red">{error}</p>
+      )}
+      {!billing && !error && <p className="text-sm text-ink-500">Loading usage…</p>}
+      {billing && (
+        <SubscriptionBillingPanel
+          billing={billing}
+          canManage
+          busy={busy}
+          onIssue={() => void issue()}
+          onCorrect={correct}
+          unclassifiedHint="The organisation's Org Admin classifies rooms in Ward & Bed Management."
+        />
+      )}
     </div>
   );
 }

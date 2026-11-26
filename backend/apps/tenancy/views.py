@@ -7,7 +7,7 @@ from django.db.models.functions import TruncMonth
 from django.http import FileResponse, JsonResponse
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import ActivationInvite, User
 from apps.accounts.permissions import (
+    IsOrgAdmin,
     IsOwnOrganizationMember,
     IsPlatformSuperAdmin,
     IsPlatformSuperAdminOrOrgAdmin,
@@ -1434,3 +1435,120 @@ class OrgDashboardStatsView(APIView):
                 "ward_occupancy": ward_breakdown,
             }
         )
+
+
+# ── CITRAMAC subscription billing: usage, rates and statements (2026-11-26) ──
+
+
+def _subscription_for(organization_id):
+    subscription = (
+        Subscription.all_objects.select_related("organization", "plan")
+        .filter(organization_id=organization_id)
+        .first()
+    )
+    if subscription is None:
+        raise NotFound("This organisation has no subscription.")
+    return subscription
+
+
+class OrganizationSubscriptionBillingView(APIView):
+    """
+    Super Admin. GET: the organisation's live usage (branches, private rooms,
+    shared rooms, unclassified rooms), its plan's rates, what a statement
+    would be today, and its statements. POST: "Issue statement now" for the
+    current period, refused when one already bills it (a correction is
+    SubscriptionStatementSupersedeView). See apps.tenancy.subscription_billing.
+    """
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def get(self, request, pk):
+        from .subscription_billing import billing_overview
+
+        with platform_admin_context():
+            return Response(billing_overview(_subscription_for(pk)))
+
+    def post(self, request, pk):
+        from .subscription_billing import billing_overview, issue_now
+
+        with platform_admin_context():
+            subscription = _subscription_for(pk)
+            issue_now(subscription, request.user)
+            return Response(billing_overview(subscription), status=status.HTTP_201_CREATED)
+
+
+class SubscriptionStatementSupersedeView(APIView):
+    """Super Admin: correct a statement — a new statement for the same period,
+    counted now, with a reason. The original is never changed."""
+
+    permission_classes = [IsPlatformSuperAdmin]
+
+    def post(self, request, pk):
+        from .models import SubscriptionStatement
+        from .subscription_billing import billing_overview, supersede
+
+        with platform_admin_context():
+            statement = generics.get_object_or_404(SubscriptionStatement.all_objects, pk=pk)
+            supersede(statement, request.user, request.data.get("reason"))
+            subscription = _subscription_for(statement.organization_id)
+            return Response(billing_overview(subscription), status=status.HTTP_201_CREATED)
+
+
+class MySubscriptionBillingView(APIView):
+    """Org Admin, read-only: their own organisation's usage, plan rates and
+    statements. Nothing here can be changed by the organisation."""
+
+    permission_classes = [IsOrgAdmin]
+
+    def get(self, request):
+        from .subscription_billing import billing_overview
+
+        subscription = (
+            Subscription.objects.select_related("organization", "plan")
+            .filter(organization_id=request.user.organization_id)
+            .first()
+        )
+        if subscription is None:
+            return JsonResponse(None, safe=False)
+        return Response(billing_overview(subscription))
+
+
+class SubscriptionStatementPrintView(APIView):
+    """
+    A statement in the shared document layout (apps.documents.printing), on
+    CITRAMAC's letterhead, not the organisation's: preview as HTML,
+    `?output=pdf` to download. Super Admin, or the organisation's own Org
+    Admin. Every preview and download is a VIEW audit entry.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from apps.accounts.permissions import _has_org_admin_role
+        from apps.documents import printing
+        from apps.sysadmin_audit.audit import write_entry
+        from apps.sysadmin_audit.models import AuditLogEntry
+
+        from .models import SubscriptionStatement
+        from .subscription_billing import statement_print_context
+
+        user = request.user
+        if user.is_superuser:
+            with platform_admin_context():
+                statement = generics.get_object_or_404(SubscriptionStatement.all_objects, pk=pk)
+                context = statement_print_context(statement, user)
+        else:
+            if not (user.organization_id and _has_org_admin_role(user)):
+                raise PermissionDenied("Only the Org Admin can open subscription statements.")
+            statement = generics.get_object_or_404(
+                SubscriptionStatement.all_objects, pk=pk, organization_id=user.organization_id
+            )
+            context = statement_print_context(statement, user)
+        output = "PDF download" if printing.wants_pdf(request) else "preview"
+        write_entry(
+            statement,
+            AuditLogEntry.ACTION_VIEW,
+            {"document": "subscription_statement", "output": output},
+        )
+        html = printing.render("documents/print/subscription_statement.html", context)
+        return printing.respond(request, html, statement.reference)

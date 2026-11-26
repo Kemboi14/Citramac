@@ -71,10 +71,22 @@ export interface Room {
   bed_count: number;
 }
 
+/** How CITRAMAC's subscription counts a room of this type; "" = Unclassified. */
+export type RoomClass = "" | "PRIVATE_ROOM" | "SHARED_ROOM" | "WARD_BAY";
+
+export const ROOM_CLASS_OPTIONS: { value: RoomClass; label: string }[] = [
+  { value: "", label: "Unclassified" },
+  { value: "PRIVATE_ROOM", label: "Private room" },
+  { value: "SHARED_ROOM", label: "Shared room" },
+  { value: "WARD_BAY", label: "Shared bed / ward bay — not a room" },
+];
+
 export interface AccommodationType {
   id: string;
   name: string;
   active: boolean;
+  room_class: RoomClass;
+  room_class_label: string;
   service_id: string;
   rate: string | null;
   bed_count: number;
@@ -126,9 +138,12 @@ export function updateBed(
   return apiRequest<Bed>(`/ipd/beds/${bedId}/`, { method: "PATCH", body: payload, accessToken });
 }
 
-export function listRooms(accessToken: string, wardId?: string) {
-  const query = wardId ? `?ward=${wardId}` : "";
-  return apiRequest<Paginated<Room>>(`/ipd/rooms/${query}`, { accessToken });
+export function listRooms(accessToken: string, wardId?: string, page = 1) {
+  const params = new URLSearchParams();
+  if (wardId) params.set("ward", wardId);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return apiRequest<Paginated<Room>>(`/ipd/rooms/${query ? `?${query}` : ""}`, { accessToken });
 }
 
 export function createRoom(
@@ -161,7 +176,7 @@ export function createAccommodationType(accessToken: string, name: string) {
 export function updateAccommodationType(
   accessToken: string,
   id: string,
-  payload: { name?: string; active?: boolean },
+  payload: { name?: string; active?: boolean; room_class?: RoomClass },
 ) {
   return apiRequest<AccommodationType>(`/ipd/accommodation-types/${id}/`, {
     method: "PATCH",

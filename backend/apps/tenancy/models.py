@@ -84,6 +84,18 @@ class SubscriptionPlan(models.Model):
     max_staff_seats = models.IntegerField(null=True, blank=True, help_text="Blank = unlimited.")
     included_modules = models.JSONField(default=list, blank=True)
     price_monthly = models.DecimalField(max_digits=14, decimal_places=2)
+    # Monthly rates per unit, set by Super Admin (owner decision 2026-11-26).
+    # Blank = that unit is not charged on this plan; a statement shows it as
+    # "No rate set". Never seeded with a number. See subscription_billing.py.
+    rate_per_branch = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, help_text="Per active branch."
+    )
+    rate_per_private_room = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, help_text="Per private room."
+    )
+    rate_per_shared_room = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, help_text="Per shared room."
+    )
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1018,3 +1030,76 @@ class SubscriptionPolicy(models.Model):
 
     def __str__(self):
         return "Subscription policy"
+
+
+class SubscriptionStatement(TenantScopedModel):
+    """
+    What an organisation owes CITRAMAC for one billing period, frozen when the
+    period starts (owner decision 2026-11-26): the plan's base fee plus active
+    branches, private rooms and shared rooms, each × the plan's monthly rate ×
+    the months in the cycle. Counts, rates, amounts and the counting time are
+    stored as they were; the row is never edited (database trigger, migration
+    0027). A correction is a new statement that `supersedes` this one, made by
+    Super Admin with a reason. Built by apps.tenancy.subscription_billing.
+    SaaS billing, not clinical data: no FHIR resource.
+    """
+
+    METHOD_SCHEDULED = "SCHEDULED"
+    METHOD_MANUAL = "MANUAL"
+    METHOD_CORRECTION = "CORRECTION"
+    METHOD_CHOICES = [
+        (METHOD_SCHEDULED, "Issued at the start of the period"),
+        (METHOD_MANUAL, "Issued by Super Admin"),
+        (METHOD_CORRECTION, "Correction by Super Admin"),
+    ]
+
+    reference = models.CharField(max_length=64, unique=True)
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.PROTECT, related_name="statements"
+    )
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name="+")
+    plan_name = models.CharField(max_length=100)
+    billing_cycle = models.CharField(max_length=8, choices=Subscription.BILLING_CYCLE_CHOICES)
+    months = models.PositiveSmallIntegerField()
+    period_start = models.DateField()
+    period_end = models.DateField()
+    currency = models.CharField(max_length=3)
+    # [{key, label, count, rate, months, amount, charged, note}] - rate and
+    # amount as strings (or null when the plan sets no rate for that unit).
+    lines = models.JSONField()
+    # The counts behind the lines, including what was counted but not charged
+    # (unclassified rooms, ward bays, beds outside a room), with names.
+    usage = models.JSONField()
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    counted_at = models.DateTimeField()
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
+    issued_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    supersedes = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="superseded_by",
+    )
+    reason = models.TextField(blank=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["-period_start", "-created_at"]
+        constraints = [
+            # One original statement per organisation and period; corrections
+            # chain from it through `supersedes` (one-to-one, so linear).
+            models.UniqueConstraint(
+                fields=["organization", "period_start"],
+                condition=models.Q(supersedes__isnull=True),
+                name="unique_original_statement_per_org_period",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(supersedes__isnull=True) | ~models.Q(reason=""),
+                name="statement_correction_needs_reason",
+            ),
+        ]
+
+    def __str__(self):
+        return self.reference

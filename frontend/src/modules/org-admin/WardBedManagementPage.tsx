@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BedDouble, Pencil, Plus } from "lucide-react";
+import { AccommodationSetupCard } from "./AccommodationSetupCard";
 import { allPages } from "./allPages";
 import { Pager, usePaged } from "../../components/Pager";
 import { useAuth } from "../../auth/useAuth";
@@ -521,6 +522,8 @@ export function WardBedManagementPage() {
               )}
             </div>
           )}
+
+          <AccommodationSetupCard wardId={selectedWardId} wardName={selectedWard?.name ?? null} />
         </>
       )}
     </div>

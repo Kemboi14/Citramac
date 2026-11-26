@@ -151,7 +151,7 @@ class RoomViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
 
 class AccommodationTypeViewSet(viewsets.ViewSet):
-    """GET / POST ipd/accommodation-types/, PATCH …/<id>/ {name?, active?}.
+    """GET / POST ipd/accommodation-types/, PATCH …/<id>/ {name?, active?, room_class?}.
     Listing is open to staff (the admission screen shows each bed's price);
     changes are Org Admin only and audited by the write-audit signals."""
 

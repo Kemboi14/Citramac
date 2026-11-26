@@ -1,0 +1,58 @@
+{% extends "documents/print/base.html" %}
+
+{% block content %}
+  <table class="fields">
+    <tr><th>Organisation</th><td>{{ organization_name }}</td></tr>
+    <tr><th>Plan</th><td>{{ plan_name }}</td></tr>
+    <tr><th>Billing cycle</th><td>{{ cycle }}</td></tr>
+    <tr><th>Issued</th><td>{{ method }}{% if issued_by %} — {{ issued_by }}{% endif %}</td></tr>
+    {% if supersedes %}<tr><th>Corrects</th><td>{{ supersedes }} — {{ reason }}</td></tr>{% endif %}
+    {% if replaced_by %}<tr><th>Replaced by</th><td>{{ replaced_by }}</td></tr>{% endif %}
+  </table>
+
+  <h2>Charges</h2>
+  <table class="grid">
+    <thead><tr>
+      <th>Item</th><th class="num">Count</th><th class="num">Monthly rate</th><th class="num">Months</th><th class="num">Amount</th>
+    </tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td class="num">{{ row.count }}</td>
+        <td class="num">{{ row.rate }}</td>
+        <td class="num">{{ row.months }}</td>
+        <td class="num">{{ row.amount }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr class="grand"><th>Total for the period</th><td>{{ total }}</td></tr>
+  </table>
+
+  <h2>Counted but not charged</h2>
+  <table class="fields">
+    <tr><th>Ward bays (shared beds, not rooms)</th><td>{{ usage.ward_bays }}</td></tr>
+    <tr><th>Beds not in a room</th><td>{{ usage.beds_outside_rooms }}</td></tr>
+    <tr><th>Unclassified rooms</th><td>{{ usage.unclassified_rooms }}</td></tr>
+  </table>
+  {% if usage.unclassified %}
+  <table class="grid">
+    <thead><tr><th>Unclassified room</th><th>Why</th></tr></thead>
+    <tbody>
+      {% for room in usage.unclassified %}<tr><td>{{ room.room }}</td><td>{{ room.reason }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if usage.branch_names %}
+  <p class="muted" style="margin-top:8pt">Active branches counted: {{ usage.branch_names|join:", " }}.</p>
+  {% endif %}
+  <p class="muted" style="margin-top:8pt">
+    Counts and rates are as they stood at the time shown under "Counted", and are never changed
+    afterwards. A correction is issued as a new statement that names this one.
+  </p>
+{% endblock %}
+
+{% block end_meta %}All amounts in {{ currency }}.{% endblock %}
