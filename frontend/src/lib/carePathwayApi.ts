@@ -1595,44 +1595,6 @@ export function getCarePlan(accessToken: string, patientId: string) {
   return apiRequest<CarePlan>(`/care/clients/${patientId}/care-plan/`, { accessToken });
 }
 
-export function updateCarePlan(
-  accessToken: string,
-  patientId: string,
-  payload: Partial<
-    Pick<CarePlan, "plan_type" | "interventions" | "goals" | "review_date" | "care_coordinator">
-  >,
-) {
-  return apiRequest<CarePlan>(`/care/clients/${patientId}/care-plan/`, {
-    method: "PUT",
-    body: payload,
-    accessToken,
-  });
-}
-
-export function addCarePlanActivity(
-  accessToken: string,
-  patientId: string,
-  payload: { title: string; goal: string; module: string; status?: CarePlanActivity["status"] },
-) {
-  return apiRequest<CarePlanActivity>(`/care/clients/${patientId}/care-plan/activities/`, {
-    method: "POST",
-    body: payload,
-    accessToken,
-  });
-}
-
-export function updateCarePlanActivity(
-  accessToken: string,
-  id: string,
-  payload: Partial<Pick<CarePlanActivity, "title" | "goal" | "module" | "status">>,
-) {
-  return apiRequest<CarePlanActivity>(`/care/care-plan-activities/${id}/`, {
-    method: "PATCH",
-    body: payload,
-    accessToken,
-  });
-}
-
 export interface InterventionCorrection {
   at: string;
   by: string;

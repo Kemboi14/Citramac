@@ -2,7 +2,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import User
+from apps.accounts.models import Role, User
 from apps.accounts.tokens import issue_tokens
 from apps.client_registry.models import Patient
 from apps.tenancy.context import clear_tenant_context, platform_admin_context
@@ -58,6 +58,7 @@ class IpdWardTests(APITestCase):
                 organization=self.org,
                 is_active=True,
             )
+            self.nurse.roles.add(Role.objects.get(name="Nurse", organization=None))
             self.ward = Ward.objects.create(organization=self.org, name="Stabilization Ward")
             self.bed_a = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="A1")
             self.bed_b = Bed.objects.create(organization=self.org, ward=self.ward, bed_number="A2")

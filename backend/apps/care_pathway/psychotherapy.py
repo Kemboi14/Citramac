@@ -2034,6 +2034,9 @@ def amend(note, user, data):
     therapy.require_deliver(user)
     if not can_read(user, note):
         raise PermissionDenied("You cannot amend this note.")
+    from apps.accounts.practitioner_profile import require_current_licence
+
+    require_current_licence(user)
     section = data.get("section")
     if section not in org.SECTION_KEYS:
         raise ValidationError({"section": "Choose the section to amend."})

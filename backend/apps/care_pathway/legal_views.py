@@ -23,6 +23,7 @@ class ClientLegalStatusView(APIView):
 
 
 class LegalApplicationView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         doc = legal_status.start_application(
             _patient(patient_id), request.user, request.data.get("category")
@@ -31,6 +32,7 @@ class LegalApplicationView(APIView):
 
 
 class LegalDocumentView(APIView):
+    @clinical_only()
     def put(self, request, pk):
         doc = legal_status.save_draft(
             get_object_or_404(LegalDocument, pk=pk), request.user, request.data
@@ -39,12 +41,14 @@ class LegalDocumentView(APIView):
 
 
 class LegalDocumentSignView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         doc = legal_status.sign(get_object_or_404(LegalDocument, pk=pk), request.user, request.data)
         return Response(legal_status.document_row(doc))
 
 
 class LegalDocumentAmendView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         doc = legal_status.amend(
             get_object_or_404(LegalDocument, pk=pk), request.user, request.data.get("reason", "")
@@ -53,6 +57,7 @@ class LegalDocumentAmendView(APIView):
 
 
 class LegalRecommendationView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         doc = legal_status.start_recommendation(
             get_object_or_404(LegalDocument, pk=pk), request.user

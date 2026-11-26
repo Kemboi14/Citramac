@@ -8,13 +8,21 @@ from rest_framework.response import Response
 from apps.accounts.access import has_permission
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
 from apps.retention.mixins import NoHardDeleteMixin
+from apps.sysadmin_audit.mixins import AuditedReadMixin
 
 from .models import LabOrder, LabResult, LabSpecimen
 from .permissions import can_see_unvalidated_results
 from .serializers import LabOrderSerializer, LabResultSerializer, LabSpecimenSerializer
 
 
-class LabOrderViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+def _require_lab_or_clinical(user):
+    """Ordering, collecting and recording are clinical or laboratory work."""
+    from apps.care_pathway.access import CARE, require
+
+    require(user, (CARE, "laboratory.results.validate"))
+
+
+class LabOrderViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     docs/10-API-SPECIFICATION.md §10.6 — Module 4. Gated by the same POS
     validation check as generic clinical orders — docs/07-CLINICAL-MODULES-SPEC.md
@@ -27,6 +35,7 @@ class LabOrderViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return LabOrder.objects.select_related("encounter", "loinc_code").order_by("-ordered_at")
 
     def create(self, request, *args, **kwargs):
+        _require_lab_or_clinical(request.user)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         encounter = serializer.validated_data["encounter"]
@@ -40,22 +49,34 @@ class LabOrderViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         serializer.save(organization=request.user.organization, ordered_by=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def perform_update(self, serializer):
+        _require_lab_or_clinical(self.request.user)
+        serializer.save()
 
-class LabSpecimenViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+
+class LabSpecimenViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = LabSpecimenSerializer
 
     def get_queryset(self):
         return LabSpecimen.objects.select_related("lab_order").order_by("-collected_at")
 
     def perform_create(self, serializer):
+        _require_lab_or_clinical(self.request.user)
         specimen = serializer.save(
             organization=self.request.user.organization, collected_by=self.request.user
         )
         specimen.lab_order.status = "SPECIMEN_COLLECTED"
         specimen.lab_order.save(update_fields=["status"])
 
+    def perform_update(self, serializer):
+        _require_lab_or_clinical(self.request.user)
+        order = serializer.validated_data.get("lab_order")
+        if order is not None and order.pk != serializer.instance.lab_order_id:
+            raise ValidationError({"lab_order": "A specimen can't be moved to another order."})
+        serializer.save()
 
-class LabResultViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+
+class LabResultViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """
     QC gate — docs/07-CLINICAL-MODULES-SPEC.md §7.4: unvalidated results are
     excluded from the queryset entirely for anyone who isn't lab staff/an
@@ -73,6 +94,7 @@ class LabResultViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        _require_lab_or_clinical(self.request.user)
         result = serializer.save(
             organization=self.request.user.organization, recorded_by=self.request.user
         )
@@ -80,8 +102,12 @@ class LabResultViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
         result.lab_order.save(update_fields=["status"])
 
     def perform_update(self, serializer):
+        _require_lab_or_clinical(self.request.user)
         if serializer.instance.is_validated:
             raise ValidationError({"detail": "A validated result can no longer be changed."})
+        order = serializer.validated_data.get("lab_order")
+        if order is not None and order.pk != serializer.instance.lab_order_id:
+            raise ValidationError({"lab_order": "A result can't be moved to another order."})
         serializer.save()
 
     @action(detail=True, methods=["post"])

@@ -30,6 +30,8 @@ class BillingTests(APITestCase):
             )
             # Writes are finance-only (apps.billing.permissions).
             self.clinician.roles.add(Role.objects.get(name="Billing Clerk", organization=None))
+            # Placing the order behind the billing gate is clinical work.
+            self.clinician.roles.add(Role.objects.get(name="Doctor", organization=None))
             self.patient = Patient.objects.create(
                 organization=self.org,
                 first_name="Faith",

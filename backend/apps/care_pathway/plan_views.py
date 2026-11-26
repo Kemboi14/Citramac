@@ -386,6 +386,7 @@ class SafetyPlanView(APIView):
         plan = plan_extras.open_safety_plan(patient, request.user)
         return Response(_safety_row(plan))
 
+    @clinical_only()
     def put(self, request, patient_id):
         patient = _patient(patient_id)
         plan = SafetyPlan.objects.filter(patient=patient, signed_at__isnull=True).first()
@@ -405,6 +406,7 @@ class SafetyPlanSignView(APIView):
 
 
 class SafetyPlanCopyView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         plan = SafetyPlan.objects.filter(patient=patient, signed_at__isnull=False).first()
@@ -452,6 +454,7 @@ class NursingCarePlanView(APIView):
         rows = plan.nursing_entries.select_related("activity", "recorded_by")
         return Response({"results": [_nursing_row(n) for n in rows]})
 
+    @clinical_only()
     def post(self, request, patient_id):
         plan = services.get_or_create_care_plan(_patient(patient_id), request.user)
         entry = plan_extras.add_nursing_problem(plan, request.user, request.data)
@@ -459,6 +462,7 @@ class NursingCarePlanView(APIView):
 
 
 class NursingEvaluationView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         entry = get_object_or_404(NursingCarePlanEntry, pk=pk)
         return Response(
@@ -471,6 +475,7 @@ class MdtView(APIView):
         plan = services.get_or_create_care_plan(_patient(patient_id), request.user)
         return Response({"results": [_mdt_row(r) for r in plan.mdt_reviews.all()]})
 
+    @clinical_only()
     def post(self, request, patient_id):
         plan = services.get_or_create_care_plan(_patient(patient_id), request.user)
         review = plan_extras.schedule_mdt(plan, request.user, request.data.get("scheduled_for"))
@@ -478,6 +483,7 @@ class MdtView(APIView):
 
 
 class MdtRecordView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         review = get_object_or_404(MdtReview, pk=pk)
         return Response(_mdt_row(plan_extras.record_mdt(review, request.user, request.data)))

@@ -22,7 +22,9 @@ MESSAGES = {
 
 
 def require(user, codename=CARE):
-    if user.is_superuser or has_permission(user, codename):
+    """`codename` is one permission, or a tuple of which any one is enough."""
+    codenames = codename if isinstance(codename, tuple) else (codename,)
+    if user.is_superuser or any(has_permission(user, c) for c in codenames):
         return
     raise PermissionDenied(MESSAGES.get(codename, "You don't have permission to do this."))
 

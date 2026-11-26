@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from apps.client_registry.models import Appointment
 
 from . import outcomes, records, services
+from .access import clinical_only
 from .views import _patient
 
 
@@ -24,6 +25,7 @@ class ClientDischargeChecklistView(APIView):
             raise ValidationError({"detail": "There is no open episode."})
         return Response(checklist)
 
+    @clinical_only()
     def patch(self, request, patient_id):
         patient = _patient(patient_id)
         if services.open_episode_for(patient) is None:

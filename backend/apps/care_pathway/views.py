@@ -608,12 +608,14 @@ class TriageEncounterView(APIView):
 
 
 class TriageStartView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         te = services.start_triage(_triage(pk), request.user)
         return Response({"status": te.effective_status})
 
 
 class TriageDraftView(APIView):
+    @clinical_only()
     def put(self, request, pk):
         te = _triage(pk)
         answers = request.data.get("answers") or {}
@@ -682,6 +684,7 @@ class TriageTasksView(APIView):
     """Section N "Register as tasks" — one Task per ticked action, each assigned
     to a named member of the clinical staff picked from the drop-down."""
 
+    @clinical_only()
     def post(self, request, pk):
         from . import task_assignees, task_notify, triage_care_plan, triage_psychiatric_review
 
@@ -872,13 +875,21 @@ class TriageFullRetriageView(APIView):
 
 
 class TriageFhirView(APIView):
+    @clinical_only()
     def get(self, request, pk):
+        from apps.sysadmin_audit.audit import write_entry
+        from apps.sysadmin_audit.models import AuditLogEntry
+
         from .fhir import build_triage_bundle
 
-        return Response(build_triage_bundle(_triage(pk)))
+        triage = _triage(pk)
+        bundle = build_triage_bundle(triage)
+        write_entry(triage, AuditLogEntry.ACTION_VIEW, {"output": "fhir"})
+        return Response(bundle)
 
 
 class OpenPsychiatryReviewView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         te = services.open_psychiatry_review(_triage(pk), request.user)
         return Response(
@@ -2024,6 +2035,7 @@ class ClientMedicationHistoryView(APIView):
         )
         return Response({"results": MedicationHistorySerializer(rows, many=True).data})
 
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         serializer = MedicationHistorySerializer(data=request.data)
@@ -2048,6 +2060,7 @@ class ClientAllergyView(APIView):
     def get(self, request, patient_id):
         return Response(_allergy_payload(_patient(patient_id)))
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import allergies
 
@@ -2056,6 +2069,7 @@ class ClientAllergyView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+    @clinical_only()
     def put(self, request, patient_id):
         from . import allergies
 
@@ -2066,6 +2080,7 @@ class AllergyVerifyView(APIView):
     """A clinician confirms (or refutes) a client-reported allergy; PATCH edits a
     record's type / severity / reaction or resolves / refutes it (never deletes)."""
 
+    @clinical_only()
     def patch(self, request, pk):
         from . import allergies
 
@@ -2086,6 +2101,7 @@ class AllergyVerifyView(APIView):
 
 class MedicationHistoryEntryView(APIView):
     @transaction.atomic
+    @clinical_only()
     def put(self, request, pk):
         """Revise an entry without overwriting its prior clinical assertion."""
         entry = get_object_or_404(MedicationHistoryEntry, pk=pk)
@@ -2107,6 +2123,7 @@ class MedicationHistoryEntryView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+    @clinical_only()
     def delete(self, request, pk):
         """Retire — never delete — an entry (kept for the record)."""
         entry = get_object_or_404(MedicationHistoryEntry, pk=pk)
@@ -2194,6 +2211,7 @@ class ClientAssessmentsView(APIView):
     """Record one completed assessment (items or total) — stored once in
     OutcomeScore and shared by Intake, Care Plan and Outcomes."""
 
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         data = request.data
@@ -2247,6 +2265,7 @@ class ClientWithdrawalView(APIView):
             }
         )
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import withdrawal
 
@@ -2270,6 +2289,7 @@ class ClientCarePlanView(APIView):
         plan = services.get_or_create_care_plan(patient, request.user)
         return Response(self._payload(patient, plan))
 
+    @clinical_only()
     def put(self, request, patient_id):
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
@@ -2279,8 +2299,19 @@ class ClientCarePlanView(APIView):
         return Response(self._payload(patient, plan))
 
 
+def _refuse_activity_status(data):
+    """An action's status follows its deliveries (Interventions) and the care-plan
+    decision, never a direct edit (guide.md 2026-11-18, 2026-11-20)."""
+    if "status" in data:
+        raise ValidationError(
+            {"status": "An action is started and completed by recording its delivery."}
+        )
+
+
 class ClientCarePlanActivitiesView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
+        _refuse_activity_status(request.data)
         patient = _patient(patient_id)
         plan = services.get_or_create_care_plan(patient, request.user)
         serializer = CarePlanActivitySerializer(data=request.data)
@@ -2292,7 +2323,9 @@ class ClientCarePlanActivitiesView(APIView):
 
 
 class CarePlanActivityView(APIView):
+    @clinical_only()
     def patch(self, request, pk):
+        _refuse_activity_status(request.data)
         activity = get_object_or_404(CarePlanActivity, pk=pk)
         serializer = CarePlanActivitySerializer(activity, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -3248,6 +3281,7 @@ class ClientEpisodeOutcomeView(APIView):
 
 
 class ClientNewEpisodeView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         from . import records
 
@@ -3336,6 +3370,7 @@ class ClientOatView(APIView):
             }
         )
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import oat
 
@@ -3400,6 +3435,7 @@ class ClientLabsView(APIView):
 
         return Response(labs.lab_overview(_patient(patient_id), request.user))
 
+    @clinical_only()
     def post(self, request, patient_id):
         from . import labs
 

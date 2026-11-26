@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from apps.retention.mixins import NoHardDeleteMixin
 from apps.sysadmin_audit.audit import log_view
+from apps.sysadmin_audit.mixins import AuditedReadMixin
 
 from .models import (
     BiopsychosocialAssessment,
@@ -98,13 +99,10 @@ class CareTeamRestrictedMixin:
         serializer.save()
 
 
-class BiopsychosocialAssessmentViewSet(
-    NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet
-):
-    """
-    Also the "Client History" intake list/detail from
-    mockups/citramac_clinical_workspace.html — filterable by `?patient=`.
-    """
+class BiopsychosocialAssessmentViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
+    """The v3 "Client History" intake, filterable by `?patient=`. Read-only
+    archive (2026-11-26): the signed v5 intake (care_pathway.intake) is the one
+    intake store (guide.md §5), so nothing new is written here."""
 
     full_serializer_class = BiopsychosocialAssessmentSerializer
     restricted_serializer_class = BiopsychosocialAssessmentRestrictedSerializer
@@ -120,9 +118,6 @@ class BiopsychosocialAssessmentViewSet(
             queryset = queryset.filter(patient_id=patient)
         return queryset
 
-    def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization, author=self.request.user)
-
     @action(detail=True, methods=["get"])
     def fhir(self, request, pk=None):
         """FHIR Bundle (Composition + Condition + Observation(s)) for this Client History intake."""
@@ -132,7 +127,7 @@ class BiopsychosocialAssessmentViewSet(
         return Response(build_client_history_bundle(assessment))
 
 
-class SubstanceUseEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class SubstanceUseEntryViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
     full_serializer_class = SubstanceUseEntrySerializer
     restricted_serializer_class = SubstanceUseEntryRestrictedSerializer
     patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
@@ -144,19 +139,8 @@ class SubstanceUseEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, views
             queryset = queryset.filter(assessment_id=assessment)
         return queryset
 
-    def perform_create(self, serializer):
-        # Adding to an assessment is writing to that client's restricted record.
-        if not has_full_mhp_access(
-            self.request.user, serializer.validated_data["assessment"].patient
-        ):
-            raise PermissionDenied(
-                "Only this client's care team or an Org Admin can add to this assessment.",
-                code="not_on_care_team",
-            )
-        serializer.save(organization=self.request.user.organization)
 
-
-class ReviewOfSystemEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, viewsets.ModelViewSet):
+class ReviewOfSystemEntryViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
     full_serializer_class = ReviewOfSystemEntrySerializer
     restricted_serializer_class = ReviewOfSystemEntryRestrictedSerializer
     patient_accessor = staticmethod(lambda obj: obj.assessment.patient)
@@ -167,17 +151,6 @@ class ReviewOfSystemEntryViewSet(NoHardDeleteMixin, CareTeamRestrictedMixin, vie
         if assessment:
             queryset = queryset.filter(assessment_id=assessment)
         return queryset
-
-    def perform_create(self, serializer):
-        # Adding to an assessment is writing to that client's restricted record.
-        if not has_full_mhp_access(
-            self.request.user, serializer.validated_data["assessment"].patient
-        ):
-            raise PermissionDenied(
-                "Only this client's care team or an Org Admin can add to this assessment.",
-                code="not_on_care_team",
-            )
-        serializer.save(organization=self.request.user.organization, clinician=self.request.user)
 
 
 class PsychotherapySessionViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelViewSet):
@@ -291,12 +264,16 @@ class UrineDrugScreenViewSet(CareTeamRestrictedMixin, viewsets.ReadOnlyModelView
         return UrineDrugScreen.objects.select_related("plan__patient").order_by("-collected_at")
 
 
-class ClinicalReviewViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class ClinicalReviewViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """Peer/senior review workflow — docs/07-CLINICAL-MODULES-SPEC.md §7.14.5."""
 
     serializer_class = ClinicalReviewSerializer
 
     def get_queryset(self):
+        from apps.care_pathway.access import require
+
+        # A review request names the client and summarises the case.
+        require(self.request.user)
         return ClinicalReview.objects.select_related("patient").order_by("-requested_at")
 
     def perform_create(self, serializer):
@@ -349,12 +326,18 @@ def _can_manage_supervision(user):
     )
 
 
-class SupervisionRequestViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+class SupervisionRequestViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/07-CLINICAL-MODULES-SPEC.md §7.14.5 — mirrors the mockup's nav item."""
 
     serializer_class = SupervisionRequestSerializer
 
     def get_queryset(self):
+        from apps.care_pathway.access import CARE, require
+
+        # A request names the client and the clinical topic: clinical staff, or
+        # whoever manages the supervision queue.
+        if not _can_manage_supervision(self.request.user):
+            require(self.request.user, CARE)
         queryset = SupervisionRequest.objects.select_related(
             "patient", "requested_by", "supervisor"
         )

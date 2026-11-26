@@ -170,14 +170,6 @@ const AttachmentsPage = lazyNamed(
   () => import("./modules/clinical/AttachmentsPage"),
   "AttachmentsPage",
 );
-const ClientHistoryPage = lazyNamed(
-  () => import("./modules/clinical/ClientHistoryPage"),
-  "ClientHistoryPage",
-);
-const PatientWorkspacePage = lazyNamed(
-  () => import("./modules/clinical/PatientWorkspacePage"),
-  "PatientWorkspacePage",
-);
 const NursingCarePage = lazyNamed(
   () => import("./modules/clinical/NursingCarePage"),
   "NursingCarePage",
@@ -448,10 +440,12 @@ function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="reports/clinical" element={<ClinicalReportPage />} />
             <Route path="registry" element={<ClientRegistryPage />} />
-            <Route path="patient" element={<PatientWorkspacePage />} />
+            {/* The v3 client workspace and Client History were retired (2026-11-26):
+                the client record and the v5 intake replace them. */}
+            <Route path="patient" element={<Navigate to="/clinical/registry" replace />} />
             <Route path="attachments" element={<AttachmentsPage />} />
             <Route path="appointments" element={<AppointmentsPage />} />
-            <Route path="client-history" element={<ClientHistoryPage />} />
+            <Route path="client-history" element={<Navigate to="/clinical/registry" replace />} />
             <Route path="ipd/nursing" element={<NursingCarePage />} />
             {/* The v3 Triage & MSE and encounter (SOAP) screens were retired: triage is
                 the v5 worklist, notes are progress notes on the client record. */}

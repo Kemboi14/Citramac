@@ -37,6 +37,7 @@ class LimsTests(APITestCase):
                 organization=self.org,
                 is_active=True,
             )
+            self.clinician.roles.add(Role.objects.get(name="Doctor", organization__isnull=True))
             self.lab_tech = User.objects.create_user(
                 email="labtech@org.test",
                 password="Password123!",

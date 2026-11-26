@@ -1453,3 +1453,61 @@ tariff (§6).
 Reversibility: cheap. Additive (`care_pathway 0069–0071`, `insurance_claims 0009–0010`,
 `client_registry 0029`). Charges already raised keep their price. A line can be repriced or retired,
 and an insurer retired, at any time.
+
+### 2026-11-26 — clinical writes need a clinical role; v3 Client History retired
+
+On the owner's instruction ("work on … any gaps that you may find in the system"), after a read-only
+gap review. `care_pathway/access.py` (2026-11-08) says a clinical write needs `clinical.care.record`,
+but many endpoints only checked that someone was signed in, so front desk or billing staff could
+record clinical content. Now:
+
+1. **Clinical staff only** (`clinical_only()` / `access.require`):
+   - MAR dose recording, effects and scheduling (client record and `ipd/mar`).
+   - Allergies, including verify, refute and bulk-confirm.
+   - Medication history.
+   - Restrictive practice: start, check, end and debrief.
+   - Observations: levels, entries, vital sets and handover.
+   - Outcome scores and withdrawal "unable to score".
+   - Safety plan saves, nursing care plan, MDT, the discharge checklist and new episodes.
+   - Triage start, draft and Section N tasks; opening a psychiatry review.
+   - OAT referral and client-record lab orders.
+   - The statutory legal forms: application, edit, sign, amend and recommendation.
+   - Encounter close and entered-in-error.
+   - Nursing notes and admission edits.
+   - Care-plan action create and edit.
+2. **Laboratory work** needs clinical staff or `laboratory.results.validate`. This covers lab orders,
+   specimens and results (both paths) and opening a visit to order against. A result or specimen
+   can't be moved to another order.
+   - `access.require` now accepts a tuple of permissions, any one of which is enough.
+3. **Pharmacy stores and stock batches** need `pharmacy.dispense` or an Org Admin.
+4. **Wards and beds**:
+   - Creating one needs an Org Admin.
+   - Wards, beds, rooms, stores and stock are never deleted (`NoHardDeleteMixin`). Deleting a used
+     one gave a 500 before.
+5. **Fixed once recorded:**
+   - Nursing notes are added, never edited.
+   - An admission's time is fixed once admitted, because bed-nights are counted from it.
+   - An attachment's client, admission and file can't be changed by PATCH. A wrong file is
+     archived and the right one uploaded.
+   - A care-plan action's status can't be set directly. It follows its deliveries (2026-11-18 / 11-20).
+6. **Audited reads.** These reads are now VIEW audit entries:
+   - the triage FHIR export (now also clinical only);
+   - lab orders, specimens and results;
+   - clinical review and supervision requests. Those two lists are open only to clinical staff, or
+     to whoever manages the supervision queue.
+7. **Licence check.** A psychotherapy note amendment needs a current practising licence, as signing does.
+8. **v3 Client History retired.**
+   - `mhp/biopsychosocial-assessments`, `substance-use-entries` and `review-of-systems` are
+     read-only archives. The signed v5 intake is the one intake store (§5).
+   - `/clinical/patient` and `/clinical/client-history` redirect to the registry.
+   - The unused pages (Client History, the old client workspace, OutpatientCarePage) are deleted.
+
+Behaviour change: a user without a clinical role who was recording any of the above now gets
+"Only clinical staff can record this." An Org Admin can add the permission to that role.
+
+Not yet done (found in the review, each needs a decision or a screen):
+- Pharmacy dispensing needs stores and stock, and there is no screen to receive stock yet.
+- Several backend routes have no screen: cost centres, pre-authorisations / e-claims /
+  remittances / payer codes, disclosures, care-team router, client billing summary.
+
+FHIR: unchanged. Reversibility: cheap. Access checks only, and no record changes.

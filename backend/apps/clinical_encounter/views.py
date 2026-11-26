@@ -62,8 +62,11 @@ class EncounterViewSet(
         return queryset
 
     def perform_create(self, serializer):
+        from apps.care_pathway.access import CARE, require
         from apps.care_pathway.services import get_or_open_episode
 
+        # Clinical staff, or the laboratory opening a visit to order against.
+        require(self.request.user, (CARE, "laboratory.results.validate"))
         encounter_type = serializer.validated_data.get("encounter_type") or "OUTPATIENT"
         if encounter_type not in API_OPENABLE_TYPES:
             raise ValidationError(
@@ -84,6 +87,9 @@ class EncounterViewSet(
         diagnoses go with it — they were recorded against the same mistake."""
         from django.db import transaction
 
+        from apps.care_pathway.access import require
+
+        require(request.user)
         encounter = self.get_object()
         if encounter.status == ERROR_STATUS:
             raise ValidationError({"detail": "Already marked as entered in error."})
@@ -103,6 +109,9 @@ class EncounterViewSet(
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
+        from apps.care_pathway.access import require
+
+        require(request.user)
         encounter = self.get_object()
         if encounter.status == ERROR_STATUS:
             raise ValidationError({"detail": "This encounter was entered in error."})

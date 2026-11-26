@@ -41,7 +41,7 @@ def _require_org_admin_for_layout_change(request, changed_fields, what):
         )
 
 
-class WardViewSet(viewsets.ModelViewSet):
+class WardViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = WardSerializer
 
     def perform_update(self, serializer):
@@ -63,6 +63,7 @@ class WardViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        _require_org_admin_for_layout_change(self.request, {"ward"}, "ward")
         serializer.save(organization=self.request.user.organization)
 
     @action(detail=False, methods=["get"])
@@ -89,7 +90,7 @@ class WardViewSet(viewsets.ModelViewSet):
         )
 
 
-class BedViewSet(viewsets.ModelViewSet):
+class BedViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = BedSerializer
 
     def perform_update(self, serializer):
@@ -120,12 +121,11 @@ class BedViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        if set(serializer.validated_data) & {"room", "accommodation_type"}:
-            _require_org_admin_for_layout_change(self.request, {"room"}, "bed")
+        _require_org_admin_for_layout_change(self.request, {"bed"}, "bed")
         serializer.save(organization=self.request.user.organization)
 
 
-class RoomViewSet(viewsets.ModelViewSet):
+class RoomViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """Rooms in a ward (Org Admin layout). Never deleted: a room with beds keeps
     them; an empty one can simply be left unused."""
 
@@ -335,9 +335,17 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
     def perform_update(self, serializer):
         # A bed changes only by transfer, which frees the old bed and checks
         # the new one is free.
+        from apps.care_pathway.access import require
+
+        require(self.request.user)
         bed = serializer.validated_data.get("bed")
         if bed is not None and bed.pk != serializer.instance.bed_id:
             raise ValidationError({"bed": "Move the client with a transfer."})
+        # The admission time opens the first bed stay, from which bed-nights
+        # are counted and charged (2026-11-24): it is set when admitting only.
+        admitted_at = serializer.validated_data.get("admitted_at")
+        if admitted_at is not None and admitted_at != serializer.instance.admitted_at:
+            raise ValidationError({"admitted_at": "The admission time can't be changed."})
         serializer.save()
 
     @action(detail=True, methods=["post"])
@@ -407,13 +415,18 @@ class MedicationAdministrationViewSet(AuditedReadMixin, NoHardDeleteMixin, views
         return queryset
 
     def perform_create(self, serializer):
+        from apps.care_pathway.access import require
+
+        require(self.request.user)
         serializer.save(organization=self.request.user.organization)
 
     @action(detail=True, methods=["post"])
     def administer(self, request, pk=None):
         """Digital MAR checklist confirmation — docs/07-CLINICAL-MODULES-SPEC.md §7.7."""
+        from apps.care_pathway.access import require
         from apps.care_pathway.interventions import record_administration
 
+        require(request.user)
         entry = self.get_object()
         # The same rules as the client record's MAR (care_pathway.interventions):
         # one recording per dose, a reason to decline or withhold, a witness for
@@ -432,6 +445,8 @@ class MedicationAdministrationViewSet(AuditedReadMixin, NoHardDeleteMixin, views
 
 class NursingNoteViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = NursingNoteSerializer
+    # A shift note stands as written: added, never edited in place.
+    http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         queryset = NursingNote.objects.select_related("admission").order_by("-recorded_at")
@@ -441,4 +456,7 @@ class NursingNoteViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelView
         return queryset
 
     def perform_create(self, serializer):
+        from apps.care_pathway.access import require
+
+        require(self.request.user)
         serializer.save(organization=self.request.user.organization, author=self.request.user)

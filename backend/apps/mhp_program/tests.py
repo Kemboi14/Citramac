@@ -205,6 +205,9 @@ class MhpExtensionsTests(APITestCase):
                 first_name="Samuel",
                 last_name="Kiptoo",
             )
+            therapist = Role.objects.get(name="Therapist", organization=None)
+            self.case_manager.roles.add(therapist)
+            self.supervisor.roles.add(therapist)
         self.access, _ = issue_tokens(self.case_manager)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
 
@@ -453,7 +456,9 @@ class ClientHistoryIntakeTests(APITestCase):
         self.access, _ = issue_tokens(self.therapist)
         self.auth = {"HTTP_AUTHORIZATION": f"Bearer {self.access}"}
 
-    def test_create_intake_with_clinical_history_and_plan_fields(self):
+    def test_v3_client_history_is_a_read_only_archive(self):
+        """The signed v5 intake is the one intake store (guide.md §5): nothing new
+        is written to the v3 Client History."""
         response = self.client.post(
             reverse("biopsychosocial-assessment-list"),
             {
@@ -472,10 +477,7 @@ class ClientHistoryIntakeTests(APITestCase):
             format="json",
             **self.auth,
         )
-        self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["status"], "SUBMITTED")
-        self.assertEqual(response.data["hpi_severity"], "Moderate")
-        self.assertEqual(str(response.data["author"]), str(self.therapist.id))
+        self.assertEqual(response.status_code, 405)
 
     def test_intake_list_is_filterable_by_patient_and_includes_nested_entries(self):
         from .models import BiopsychosocialAssessment, ReviewOfSystemEntry, SubstanceUseEntry
@@ -539,8 +541,7 @@ class ClientHistoryIntakeTests(APITestCase):
         End-to-end HTTP check for the `.fhir` action wired to
         `build_client_history_bundle` — the unit test in
         apps.dha_interop.tests covers the builder function directly, this
-        covers the actual endpoint the frontend calls
-        (ClientHistoryPage.tsx's "View FHIR bundle" button).
+        covers the endpoint (the v3 Client History, now a read-only archive).
         """
         from .models import BiopsychosocialAssessment, SubstanceUseEntry
 

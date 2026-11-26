@@ -365,7 +365,7 @@ class TariffApiTests(APITestCase):
     def _user(self, org, role):
         user = User.objects.create_user(
             email=f"{uuid.uuid4().hex[:8]}@org.test",
-            password="Password123!",
+            password="Password123!",  # pragma: allowlist secret
             organization=org,
             is_active=True,
         )

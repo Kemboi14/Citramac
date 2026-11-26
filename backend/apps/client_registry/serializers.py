@@ -154,6 +154,28 @@ class AttachmentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["uploaded_by", "uploaded_at"]
 
+    # Fixed once uploaded: whose document it is, the admission it belongs to,
+    # and the file itself (a signed statutory copy is evidenced by its SHA-256,
+    # guide.md 2026-11-19). A wrong file is archived and the right one uploaded.
+    FIXED_ON_UPDATE = ("patient", "admission", "file")
+
+    def update(self, instance, validated_data):
+        changed = [
+            f
+            for f in self.FIXED_ON_UPDATE
+            if f in validated_data
+            and (
+                f == "file"
+                or getattr(instance, f"{f}_id")
+                != getattr(validated_data[f], "pk", validated_data[f])
+            )
+        ]
+        if changed:
+            raise serializers.ValidationError(
+                {f: "This can't be changed once uploaded." for f in changed}
+            )
+        return super().update(instance, validated_data)
+
     def get_name(self, obj):
         from .attachment_access import display_name
 

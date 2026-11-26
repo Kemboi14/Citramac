@@ -3,6 +3,7 @@ from rest_framework import status, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from apps.accounts.access import has_permission
 from apps.billing.gate import BillingNotCleared, check_billing_clearance
 from apps.retention.mixins import NoHardDeleteMixin
 
@@ -16,7 +17,17 @@ from .serializers import (
 )
 
 
-class StoreViewSet(viewsets.ModelViewSet):
+def _require_stock_manager(user):
+    """Stores and stock batches are pharmacy administration: the pharmacist
+    (pharmacy.dispense) or the Org Admin."""
+    from apps.accounts.permissions import _has_org_admin_role
+
+    if user.is_superuser or has_permission(user, "pharmacy.dispense") or _has_org_admin_role(user):
+        return
+    raise PermissionDenied("Only pharmacy staff or an Org Admin can manage stores and stock.")
+
+
+class StoreViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     serializer_class = StoreSerializer
 
     def get_queryset(self):
@@ -26,10 +37,15 @@ class StoreViewSet(viewsets.ModelViewSet):
         return Store.objects.order_by("name")
 
     def perform_create(self, serializer):
+        _require_stock_manager(self.request.user)
         serializer.save(organization=self.request.user.organization)
 
+    def perform_update(self, serializer):
+        _require_stock_manager(self.request.user)
+        serializer.save()
 
-class DrugStockItemViewSet(viewsets.ModelViewSet):
+
+class DrugStockItemViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
     """docs/10-API-SPECIFICATION.md §10.8 — Module 6 stock items."""
 
     serializer_class = DrugStockItemSerializer
@@ -38,6 +54,7 @@ class DrugStockItemViewSet(viewsets.ModelViewSet):
         return DrugStockItem.objects.select_related("store", "drug").order_by("expiry_date")
 
     def perform_create(self, serializer):
+        _require_stock_manager(self.request.user)
         stock_item = serializer.save(organization=self.request.user.organization)
         StockMovement.objects.create(
             organization=self.request.user.organization,
@@ -50,6 +67,7 @@ class DrugStockItemViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         # Stock on hand changes only through movements (receipt, dispense), so
         # the ledger always explains it. A batch's details may be corrected.
+        _require_stock_manager(self.request.user)
         new = serializer.validated_data.get("quantity_on_hand")
         if new is not None and new != serializer.instance.quantity_on_hand:
             raise ValidationError(

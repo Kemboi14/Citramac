@@ -13,7 +13,7 @@ from apps.ipd_ward.models import MedicationAdministration
 
 from . import intervention_catalogue
 from . import interventions as iv
-from .access import clinical_only
+from .access import CARE, clinical_only
 from .models import (
     CosignRequest,
     InterventionRecord,
@@ -121,6 +121,7 @@ class ObservationLevelView(APIView):
 
 
 class ObserverHandoverView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         iv.hand_over_observer(
@@ -133,6 +134,7 @@ class ObserverHandoverView(APIView):
 
 
 class ObservationEntryView(APIView):
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         d = request.data
@@ -146,6 +148,7 @@ class ObservationSetView(APIView):
     """POST care/clients/<id>/observation-sets/ — a full set of vital signs, with
     the early warning score computed and unmeasured parameters reported."""
 
+    @clinical_only()
     def post(self, request, patient_id):
         patient = _patient(patient_id)
         vital, warnings, skipped = iv.record_observation_set(patient, request.user, request.data)
@@ -201,6 +204,7 @@ class MarView(APIView):
 
 
 class MarAdministerView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         entry = get_object_or_404(MedicationAdministration, pk=pk)
         d = request.data
@@ -221,6 +225,7 @@ class MarOrderAdministerView(APIView):
     """POST care/clients/<id>/mar/orders/<item>/administer/ {slot?, outcome, …} —
     a dose against an order at one of today's dose times, or unscheduled."""
 
+    @clinical_only()
     def post(self, request, patient_id, item_id):
         from . import services
 
@@ -248,6 +253,7 @@ class MarOrderAdministerView(APIView):
 
 
 class MarEffectView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         entry = get_object_or_404(MedicationAdministration, pk=pk)
         iv.record_effect(entry, request.user, request.data.get("effect"))
@@ -304,12 +310,14 @@ class RestrictivePracticeView(APIView):
             }
         )
 
+    @clinical_only()
     def post(self, request, patient_id):
         episode = iv.record_restrictive_episode(_patient(patient_id), request.user, request.data)
         return Response(_episode_row(episode), status=status.HTTP_201_CREATED)
 
 
 class RestrictiveCheckView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         check = get_object_or_404(RestrictiveCheck, pk=pk)
         iv.complete_check(check, request.user)
@@ -317,6 +325,7 @@ class RestrictiveCheckView(APIView):
 
 
 class RestrictiveEndView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         episode = get_object_or_404(RestrictivePracticeEpisode, pk=pk)
         iv.end_episode(episode, request.data.get("end_at"))
@@ -324,6 +333,7 @@ class RestrictiveEndView(APIView):
 
 
 class RestrictiveDebriefView(APIView):
+    @clinical_only()
     def post(self, request, pk):
         episode = get_object_or_404(RestrictivePracticeEpisode, pk=pk)
         return Response(_episode_row(iv.client_debrief(episode)))
@@ -333,6 +343,7 @@ class LabResultEntryView(APIView):
     """POST care/labs/orders/<id>/result/ {value, interpretation, unit?, reference_range?}
     — a result from the laboratory report; it awaits laboratory validation."""
 
+    @clinical_only((CARE, "laboratory.results.validate"))
     def post(self, request, pk):
         from apps.lims.models import LabOrder
 
