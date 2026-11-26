@@ -352,7 +352,8 @@ class TariffApiTests(APITestCase):
             self.other_admin = self._user(self.other, "Org Admin")
             self.clinician = self._user(self.org, "Psychiatrist")
             self.super_admin = User.objects.create_superuser(
-                email=f"super-{uuid.uuid4().hex[:5]}@platform.test", password="Password123!"
+                email=f"super-{uuid.uuid4().hex[:5]}@platform.test",
+                password="Password123!",  # pragma: allowlist secret
             )
             self.item = ServiceCatalogueItem.objects.create(
                 name="Test catalogue service", category="Test category"
