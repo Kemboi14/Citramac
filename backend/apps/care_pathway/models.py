@@ -23,6 +23,8 @@ FHIR R4 mapping (doc 15 §3, confirmed by the project owner 2026-10-07):
 | LocalValueSet / LocalConcept | ValueSet / CodeSystem (served, guide.md §4) |
 """
 
+import uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -986,6 +988,32 @@ class CosignRequest(TenantScopedModel):
         ordering = ["-requested_at"]
 
 
+class ServiceCatalogueItem(TimestampedModel):
+    """A service the platform knows about (guide.md 2026-11-26): name, category
+    and, for a medicine, name and strength — never a price. Kept by Super Admin;
+    each organisation adds the ones it offers to its own tariff and prices them
+    itself. Retired by `active=False`, never deleted. Not tenant data."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=40, blank=True)
+    category = models.CharField(max_length=120, blank=True)
+    name = models.CharField(max_length=150, unique=True)
+    description = models.CharField(max_length=255, blank=True)
+    medicine_name = models.CharField(max_length=150, blank=True)
+    mass = models.CharField(max_length=80, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    @property
+    def is_medication(self):
+        return (self.category or "").strip().lower() == "medication"
+
+    def __str__(self):
+        return self.name
+
+
 class BillingService(TenantScopedModel):
     """Facility tariff line. Rates are never invented (doc 15 C3): a service
     with no rate is excluded from billing with a visible notice.
@@ -1006,6 +1034,14 @@ class BillingService(TenantScopedModel):
     rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     remarks = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+    # The platform catalogue entry this line was added from, if any.
+    catalogue_item = models.ForeignKey(
+        ServiceCatalogueItem,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
 
     class Meta(TenantScopedModel.Meta):
         ordering = ["category", "name"]
@@ -1092,6 +1128,15 @@ class ChargeItem(TenantScopedModel):
     service = models.ForeignKey(BillingService, on_delete=models.PROTECT, related_name="+")
     quantity = models.PositiveSmallIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # The insurer whose rate `unit_price` is (apps.care_pathway.pricing); null
+    # when it is the out-of-pocket tariff rate.
+    priced_for = models.ForeignKey(
+        "insurance_claims.Insurer",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     delivered_at = models.DateTimeField(default=timezone.now)
     intervention = models.OneToOneField(
         InterventionRecord,

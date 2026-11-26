@@ -261,6 +261,14 @@ class InsuranceClaim(TenantScopedModel):
     claim_number = models.CharField(max_length=40, blank=True)
     # Payer the claim is addressed to (ServicePayerCode.PAYER_CHOICES), snapshot at creation.
     payer = models.CharField(max_length=12, blank=True)
+    # The organisation's insurer, when the claim goes to a named one (payer PRIVATE).
+    insurer = models.ForeignKey(
+        "insurance_claims.Insurer",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     # Responsible adult for any balance the payer does not cover.
     guarantor = models.CharField(max_length=255, blank=True)
     lines_checked_by = models.ForeignKey(
@@ -293,6 +301,28 @@ class InsuranceClaim(TenantScopedModel):
         return f"E-claim for {self.patient} ({self.status})"
 
 
+class Insurer(TenantScopedModel):
+    """A private insurer this organisation works with (guide.md 2026-11-26).
+    Each organisation keeps its own list, set by its Org Admin, and agrees its
+    own rates with each one (ServicePayerCode with payer INSURER). Retired by
+    `active=False`, never deleted, so charges and claims keep naming it.
+    FHIR R4: Organization (type `ins`) as Coverage.payor."""
+
+    name = models.CharField(max_length=120)
+    active = models.BooleanField(default=True)
+
+    class Meta(TenantScopedModel.Meta):
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"], name="unique_insurer_name_per_org"
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class ServicePayerCode(TenantScopedModel):
     """A payer's own code/rate for one facility tariff service. Configured from
     the payer's published tariff — never generated or guessed. A service with no
@@ -303,14 +333,17 @@ class ServicePayerCode(TenantScopedModel):
         ("SHA", "SHA"),
         ("PRIVATE", "Private insurer"),
         ("EMPLOYER", "Employer scheme"),
-        ("CIC", "CIC"),
-        ("AAR", "AAR"),
+        # One of the organisation's own insurers (`insurer`).
+        ("INSURER", "Named insurer"),
     ]
 
     service = models.ForeignKey(
         "care_pathway.BillingService", on_delete=models.PROTECT, related_name="payer_codes"
     )
     payer = models.CharField(max_length=12, choices=PAYER_CHOICES)
+    insurer = models.ForeignKey(
+        Insurer, on_delete=models.PROTECT, null=True, blank=True, related_name="service_rates"
+    )
     payer_code = models.CharField(max_length=64, blank=True)
     rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     requires_preauth = models.BooleanField(default=False)
@@ -320,12 +353,24 @@ class ServicePayerCode(TenantScopedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["organization", "service", "payer"],
+                condition=Q(insurer__isnull=True),
                 name="unique_payer_code_per_service",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "service", "insurer"],
+                condition=Q(insurer__isnull=False),
+                name="unique_insurer_rate_per_service",
+            ),
+            models.CheckConstraint(
+                condition=Q(payer="INSURER", insurer__isnull=False)
+                | (~Q(payer="INSURER") & Q(insurer__isnull=True)),
+                name="payer_code_insurer_matches_payer",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.service} → {self.payer} {self.payer_code}"
+        who = self.insurer.name if self.insurer_id else self.payer
+        return f"{self.service} → {who} {self.payer_code}"
 
 
 class ClaimLine(TenantScopedModel):

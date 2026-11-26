@@ -208,6 +208,8 @@ def _registration_row(patient):
         "allergy_status": patient.allergy_status,
         "allergy_details": allergies,
         "payer": patient.payer,
+        "insurer": str(patient.insurer_id) if patient.insurer_id else "",
+        "insurer_name": patient.insurer.name if patient.insurer_id else "",
         "identifiers": [
             {"kind": i.kind, "value": i.value, "superseded": bool(i.superseded_at)}
             for i in patient.identifiers.all()
@@ -2335,62 +2337,55 @@ class BillingOverviewView(APIView):
 
 class BillingServicesView(APIView):
     def get(self, request):
-        services = BillingService.objects.all().prefetch_related("payer_codes")
+        services = BillingService.objects.all().prefetch_related("payer_codes__insurer")
         return Response(BillingServiceSerializer(services, many=True).data)
+
+    def post(self, request):
+        """A tariff line the Org Admin writes (a service not in the catalogue)."""
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin can change the facility tariff.")
+        from . import tariff
+
+        service = tariff.create_line(request.user.organization, request.data)
+        return Response(BillingServiceSerializer(service).data, status=201)
 
 
 class BillingServiceView(APIView):
     def patch(self, request, pk):
         if not _is_org_admin(request.user):
             raise PermissionDenied("Only an Org Admin can change the facility tariff.")
+        from . import tariff
+
         service = get_object_or_404(BillingService, pk=pk)
         data = request.data.copy()
         payer_rates = data.pop("payer_rates", None)
-        serializer = BillingServiceSerializer(service, data=data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        if payer_rates is not None:
-            from decimal import Decimal, InvalidOperation
-
-            from apps.insurance_claims.models import ServicePayerCode
-
-            allowed = {code for code, _ in ServicePayerCode.PAYER_CHOICES}
-            if not isinstance(payer_rates, list):
-                raise ValidationError({"payer_rates": "Provide a list of payer rates."})
-            for row in payer_rates:
-                if not isinstance(row, dict):
-                    raise ValidationError({"payer_rates": "Each payer rate must be an object."})
-                payer = str(row.get("payer") or "").strip().upper()
-                if payer not in allowed:
-                    raise ValidationError({"payer_rates": f"Unknown payer '{payer}'."})
-                rate = row.get("rate", None)
-                if rate in ("", None):
-                    parsed_rate = None
-                else:
-                    try:
-                        parsed_rate = Decimal(str(rate))
-                    except (InvalidOperation, ValueError) as err:
-                        raise ValidationError(
-                            {"payer_rates": f"Invalid rate for {payer}."}
-                        ) from err
-                    if parsed_rate < 0:
-                        raise ValidationError(
-                            {"payer_rates": f"Rate for {payer} cannot be negative."}
-                        )
-                defaults = {
-                    "payer_code": str(row.get("payer_code") or "").strip(),
-                    "rate": parsed_rate,
-                    "requires_preauth": bool(row.get("requires_preauth", False)),
-                    "active": bool(row.get("active", True)),
-                }
-                ServicePayerCode.objects.update_or_create(
-                    organization=service.organization,
-                    service=service,
-                    payer=payer,
-                    defaults=defaults,
-                )
+        with transaction.atomic():
+            serializer = BillingServiceSerializer(service, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            if payer_rates is not None:
+                tariff.set_payer_rates(service, payer_rates)
         service.refresh_from_db()
         return Response(BillingServiceSerializer(service).data)
+
+
+class TariffCatalogueView(APIView):
+    """Org Admin → Service Tariff → Add from catalogue (guide.md 2026-11-26)."""
+
+    def get(self, request):
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin can change the facility tariff.")
+        from . import tariff
+
+        return Response(tariff.catalogue_for(request.user.organization_id))
+
+    def post(self, request):
+        if not _is_org_admin(request.user):
+            raise PermissionDenied("Only an Org Admin can change the facility tariff.")
+        from . import tariff
+
+        added = tariff.add_from_catalogue(request.user.organization, request.data.get("items"))
+        return Response(BillingServiceSerializer(added, many=True).data, status=201)
 
 
 # ── Dashboard, outpatients, reports (doc 15 §1.3, §1.11, §1.16) ──

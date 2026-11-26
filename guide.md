@@ -1391,3 +1391,65 @@ type) so a night in it is priced at that type's rate.
 Reversibility: cheap. Additive models, RLS-scoped and branch-scoped through the admission. No
 signed record changes; no back-charges. Reversing removes only stays/nights/charges that have not
 been invoiced or referenced.
+
+### 2026-11-26 — each organisation's own tariff and insurers; the platform service catalogue
+
+On the owner's decisions of 2026-11-26 ("do all", after the price schedule workbook was checked
+against the 2026-11-24 importer and the per-organisation design was recommended): prices are each
+organisation's own. The workbook is a guide to the services the system may offer, not a price list
+for everyone.
+
+1. **Platform service catalogue** (`care_pathway.ServiceCatalogueItem`, Super Admin → Service
+   Catalogue). Services by name, category and, for a medicine, name and strength. **No price, code
+   or remark.** Seeded by `care_pathway 0071` from `care_pathway/service_catalogue.json` (149
+   services, the workbook's Out of pocket sheet by name only). Lines that name a particular partner
+   facility (German Medical Center, Mary Help, Avenue Hospital, CAfRIC transport) were left out.
+   Super Admin adds, edits and retires entries. Entries are never deleted. Not tenant data.
+2. **Each organisation's tariff** (Org Admin → Service Tariff).
+   - **Add from catalogue** ticks services onto the organisation's own `BillingService` lines,
+     linked by `catalogue_item` and **unpriced** until the Org Admin sets a price.
+   - **Add a service** writes a line that is not in the catalogue.
+   - Nothing is copied into an organisation automatically, and no organisation sees another's lines
+     or prices.
+3. **Each organisation's insurers** (`insurance_claims.Insurer`, RLS; Org Admin → Service Tariff →
+   Insurers). The Org Admin adds, renames and retires (never deletes) the insurers they work with.
+   - Each insurer gets its own rate column (`ServicePayerCode`, payer `INSURER` + `insurer`).
+   - Registration offers the organisation's active insurers when the payer is Private insurance or
+     SHA + private insurer (`Patient.insurer`); any other payer clears it.
+   - Migration `insurance_claims 0010` moved the 2026-11-24 CIC / AAR rate rows onto an insurer of
+     that name in each organisation that had them (reversible).
+4. **Charging** (`care_pathway/pricing.py`, at every place a charge is raised: interventions,
+   admission, discharge, bed-days).
+   - A client registered with an active insurer is charged that insurer's active rate for the
+     service where one is set.
+   - Otherwise, and for every other client, the out-of-pocket rate applies. With neither, the
+     charge is unpriced, as before.
+   - `ChargeItem.priced_for` records the insurer, so a later change of payer never reprices a
+     charge. The invoice says "<insurer> rate" beside such a line.
+   - A Private client's claim is addressed to their insurer (`InsuranceClaim.insurer`) and uses
+     that insurer's codes. SHA + private insurer is still claimed from SHA first (coordination of
+     benefits not modelled).
+5. **Import one organisation's own workbook** (`manage.py import_price_schedule --file <xlsx> --org
+   <slug> [--dry-run] [--update-existing]`; rules in `care_pathway/price_schedule.py`). For a
+   facility whose prices really are in a workbook (CAfRIC's). One named organisation only.
+   - The "Out of pocket" sheet gives lines and prices. Every other sheet is one insurer, named by
+     the sheet, and is added to that organisation's insurers.
+   - Lines are linked to the catalogue by name. Every row it cannot take as written is listed, on
+     a dry run too.
+   - Without `--update-existing`, existing values are kept and only blanks are filled.
+   - Workbook codes are stored only when one row carries them (the sheet reuses 84–105).
+   - A description under several Service headings is one line each, "<description> — <Service>".
+     The same item at two prices is imported for neither and listed.
+   - A row with no Sales Price is unpriced; Cost is never used as the price.
+   - An insurer row that names no cash line becomes an insurer-only line with no cash price.
+     "Free" is 0; "TBD" sets no rate and is listed.
+
+FHIR (not emitted): an insurer is an `Organization` (type `ins`) as `Coverage.payor`. A tariff line
+is a `ChargeItemDefinition`, an insurer rate one of its `propertyGroup`s applicable to that payer,
+and the price charged `ChargeItem.priceOverride`. Billing configuration, not clinical data: no
+`EpisodeOfCare` hook. Insurer codes (`payer_code`) stay blank until taken from each insurer's own
+tariff (§6).
+
+Reversibility: cheap. Additive (`care_pathway 0069–0071`, `insurance_claims 0009–0010`,
+`client_registry 0029`). Charges already raised keep their price. A line can be repriced or retired,
+and an insurer retired, at any time.

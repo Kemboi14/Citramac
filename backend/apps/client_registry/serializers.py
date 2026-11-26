@@ -321,6 +321,7 @@ class PatientDetailSerializer(serializers.ModelSerializer):
             "preferred_language",
             "interpreter",
             "payer",
+            "insurer",
         ]
         read_only_fields = [
             "identity_confirmed_at",

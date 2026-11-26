@@ -75,6 +75,8 @@ export interface RegistrationRow {
   allergy_status: string;
   allergy_details: string;
   payer: string;
+  insurer?: string;
+  insurer_name?: string;
   identifiers?: { kind: string; value: string; superseded: boolean }[];
 }
 
@@ -180,6 +182,7 @@ export interface RegistrationPayload extends IdentityDetails {
   allergy_status?: string;
   allergy_details?: string;
   payer?: string;
+  insurer?: string;
   reason?: string;
   // Emergency — identity unknown
   apparent_sex?: string;
@@ -1862,7 +1865,11 @@ export function getBillingOverview(accessToken: string) {
 }
 
 export interface BillingServicePayerRate {
+  /** "INSURER" for one of the organisation's insurers; else SHA / PRIVATE / EMPLOYER. */
   payer: string;
+  /** The organisation's insurer (id) when payer is INSURER. */
+  insurer?: string | null;
+  insurer_name?: string;
   payer_code: string;
   rate: string | null;
   requires_preauth: boolean;
@@ -1885,6 +1892,8 @@ export interface BillingService {
   rate: string | null;
   remarks: string;
   active: boolean;
+  /** The platform catalogue entry this line was added from, if any. */
+  catalogue_item: string | null;
   payer_rates: BillingServicePayerRate[];
 }
 
@@ -1913,6 +1922,128 @@ export function updateBillingService(
   > & { payer_rates?: BillingServicePayerRate[] },
 ) {
   return apiRequest<BillingService>(`/care/billing-services/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
+/** A tariff line the Org Admin writes (a service not in the catalogue). */
+export function createBillingService(
+  accessToken: string,
+  payload: {
+    name?: string;
+    category: string;
+    description?: string;
+    medicine_name?: string;
+    mass?: string;
+    rate?: string | null;
+  },
+) {
+  return apiRequest<BillingService>("/care/billing-services/", {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
+/** One platform catalogue entry as the Org Admin sees it: no price, ever. */
+export interface TariffCatalogueEntry {
+  id: string;
+  category: string;
+  name: string;
+  description: string;
+  medicine_name: string;
+  mass: string;
+  /** Already a line on this organisation's tariff. */
+  on_tariff: boolean;
+}
+
+export function listTariffCatalogue(accessToken: string) {
+  return apiRequest<TariffCatalogueEntry[]>("/care/billing-services/catalogue/", { accessToken });
+}
+
+/** Adds the entries to the organisation's tariff, unpriced. Returns the lines added. */
+export function addFromCatalogue(accessToken: string, items: string[]) {
+  return apiRequest<BillingService[]>("/care/billing-services/catalogue/", {
+    method: "POST",
+    body: { items },
+    accessToken,
+  });
+}
+
+// ── The organisation's own insurers (guide.md 2026-11-26) ──
+
+export interface Insurer {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export function listInsurers(accessToken: string, activeOnly = false) {
+  return apiRequest<Insurer[]>(`/claims/insurers/${activeOnly ? "?active=1" : ""}`, {
+    accessToken,
+  });
+}
+
+export function createInsurer(accessToken: string, name: string) {
+  return apiRequest<Insurer>("/claims/insurers/", {
+    method: "POST",
+    body: { name },
+    accessToken,
+  });
+}
+
+export function updateInsurer(
+  accessToken: string,
+  id: string,
+  payload: Partial<Pick<Insurer, "name" | "active">>,
+) {
+  return apiRequest<Insurer>(`/claims/insurers/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    accessToken,
+  });
+}
+
+// ── Super Admin → Service Catalogue (names only; organisations set prices) ──
+
+export interface ServiceCatalogueItem {
+  id: string;
+  category: string;
+  name: string;
+  description: string;
+  medicine_name: string;
+  mass: string;
+  active: boolean;
+  updated_at: string;
+}
+
+export type ServiceCataloguePayload = Partial<
+  Pick<
+    ServiceCatalogueItem,
+    "category" | "name" | "description" | "medicine_name" | "mass" | "active"
+  >
+>;
+
+export function listServiceCatalogue(accessToken: string) {
+  return apiRequest<ServiceCatalogueItem[]>("/platform/service-catalogue/", { accessToken });
+}
+
+export function createServiceCatalogueItem(accessToken: string, payload: ServiceCataloguePayload) {
+  return apiRequest<ServiceCatalogueItem>("/platform/service-catalogue/", {
+    method: "POST",
+    body: payload,
+    accessToken,
+  });
+}
+
+export function updateServiceCatalogueItem(
+  accessToken: string,
+  id: string,
+  payload: ServiceCataloguePayload,
+) {
+  return apiRequest<ServiceCatalogueItem>(`/platform/service-catalogue/${id}/`, {
     method: "PATCH",
     body: payload,
     accessToken,

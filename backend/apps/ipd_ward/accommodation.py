@@ -30,7 +30,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.care_pathway import facility_time
+from apps.care_pathway import facility_time, pricing
 
 from .models import AccommodationType, Bed, BedNight, BedStay
 
@@ -255,9 +255,8 @@ def charge_nights(now=None):
                             organization_id=stay.organization_id,
                             patient=stay.admission.patient,
                             episode_id=stay.admission.episode_id,
-                            service=service,
                             quantity=1,
-                            unit_price=service.rate,
+                            **pricing.charge_fields(service, stay.admission.patient),
                             delivered_at=census_instant(night),
                         )
                     BedNight.all_objects.create(

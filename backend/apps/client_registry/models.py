@@ -53,6 +53,8 @@ class Patient(TenantScopedModel):
         ("WAIVER", "Waiver / charity"),
         ("UNKNOWN", "Unknown"),
     ]
+    # Payers that involve a private insurer; `insurer` names which one.
+    PAYERS_WITH_PRIVATE_INSURER = ("PRIVATE", "SHA_PRIVATE")
     # Registration "Social & personal details" (served value sets of the same
     # codes in apps.care_pathway.valuesets). Stored locally; employment,
     # occupation and disability are not emitted in FHIR (project owner decision).
@@ -131,6 +133,16 @@ class Patient(TenantScopedModel):
     preferred_language = models.CharField(max_length=64, blank=True)
     interpreter = models.CharField(max_length=12, choices=INTERPRETER_CHOICES, blank=True)
     payer = models.CharField(max_length=12, choices=PAYER_CHOICES, blank=True)
+    # Which of the organisation's insurers, when the payer involves one. A charge
+    # for this client is priced at that insurer's rate where one is set
+    # (guide.md 2026-11-26). FHIR R4: Coverage.payor.
+    insurer = models.ForeignKey(
+        "insurance_claims.Insurer",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     marital_status = models.CharField(max_length=10, choices=MARITAL_STATUS_CHOICES, blank=True)
     nationality = models.CharField(max_length=100, blank=True)
     occupation = models.CharField(max_length=150, blank=True)

@@ -9,6 +9,7 @@ router.register("claims/pre-authorizations", PreAuthorizationViewSet, basename="
 router.register("claims/e-claims", InsuranceClaimViewSet, basename="e-claim")
 router.register("claims/remittances", RemittanceViewSet, basename="remittance")
 router.register("claims/payer-codes", views.ServicePayerCodeViewSet, basename="payer-code")
+router.register("claims/insurers", views.InsurerViewSet, basename="insurer")
 
 urlpatterns = [
     path(

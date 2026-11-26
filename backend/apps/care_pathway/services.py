@@ -8,6 +8,7 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
@@ -22,7 +23,7 @@ from apps.sysadmin_audit.audit import write_event
 from apps.sysadmin_audit.models import AuditLogEntry
 from apps.triage.models import VitalSigns
 
-from . import facility_time, triage_rules
+from . import facility_time, pricing, triage_rules
 from .models import (
     PRIORITY_ORDER,
     BillingService,
@@ -283,6 +284,25 @@ def _apply_details(patient, data, clear=False):
     take("preferred_language")
     take("interpreter")
     take("payer")
+    # The insurer belongs to a payer that has one; any other payer clears it.
+    if patient.payer in Patient.PAYERS_WITH_PRIVATE_INSURER:
+        insurer_id = data.get("insurer")
+        if insurer_id:
+            from apps.insurance_claims.models import Insurer
+
+            try:
+                insurer = Insurer.objects.filter(
+                    pk=insurer_id, organization_id=patient.organization_id, active=True
+                ).first()
+            except (ValueError, DjangoValidationError):
+                insurer = None
+            if insurer is None:
+                raise ValidationError({"insurer": "Choose one of the organisation's insurers."})
+            patient.insurer = insurer
+        elif clear and "insurer" in data:
+            patient.insurer = None
+    else:
+        patient.insurer = None
     take("occupation")
     for field, choices in (
         ("marital_status", Patient.MARITAL_STATUS_CHOICES),
@@ -1464,9 +1484,8 @@ def record_intervention(user, patient, data, activity=None):
             organization_id=record.organization_id,
             patient=patient,
             episode=episode,
-            service=record.billing_service,
             quantity=record.quantity,
-            unit_price=record.billing_service.rate,
+            **pricing.charge_fields(record.billing_service, patient),
             delivered_at=record.performed_at,
             intervention=record,
             created_by=user,
@@ -2710,9 +2729,8 @@ def sign_discharge(admission, user, data=None):
                     organization_id=admission.organization_id,
                     patient=admission.patient,
                     episode=admission.episode,
-                    service=service,
                     quantity=1,
-                    unit_price=service.rate,
+                    **pricing.charge_fields(service, admission.patient),
                     delivered_at=discharged_at,
                     created_by=user,
                 )

@@ -4,6 +4,7 @@ import {
   cloneElement,
   isValidElement,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -17,6 +18,7 @@ import {
   getClientBanner,
   getRegistration,
   listConsentTemplates,
+  listInsurers,
   registerArrival,
   resolveIdentity,
   searchRegistrations,
@@ -227,6 +229,7 @@ interface RegForm {
   allergyStatus: string;
   allergyDetails: string;
   payer: string;
+  insurer: string;
   // Emergency — identity unknown
   apparentSex: string;
   foundLocation: string;
@@ -270,6 +273,7 @@ const EMPTY_FORM: RegForm = {
   allergyStatus: "",
   allergyDetails: "",
   payer: "",
+  insurer: "",
   apparentSex: "",
   foundLocation: "",
   arrivalReferralInfo: "",
@@ -280,6 +284,11 @@ const EMPTY_FORM: RegForm = {
   broughtById: "",
   broughtByAddress: "",
 };
+
+/** Payers that involve a private insurer (Patient.PAYERS_WITH_PRIVATE_INSURER). */
+function hasPrivateInsurer(payer: string) {
+  return payer === "PRIVATE" || payer === "SHA_PRIVATE";
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -341,6 +350,7 @@ function formFromRow(row: RegistrationRow, nokRelationships: ValueSetConcept[]):
     allergyStatus: row.allergy_status || "",
     allergyDetails: row.allergy_status === "ACTIVE_ALLERGIES" ? row.allergy_details || "" : "",
     payer: row.payer || "",
+    insurer: row.insurer || "",
   };
 }
 
@@ -450,6 +460,22 @@ export function RegistrationPage() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
   const vs = useValueSets();
+  // The organisation's own insurers (Org Admin → Service Tariff → Insurers).
+  const [insurers, setInsurers] = useState<ValueSetConcept[]>([]);
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    listInsurers(accessToken, true)
+      .then((rows) => {
+        if (!cancelled) setInsurers(rows.map((i) => ({ code: i.id, display: i.name })));
+      })
+      .catch(() => {
+        if (!cancelled) setInsurers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
   const [searchParams] = useSearchParams();
   const resolveId = searchParams.get("resolve");
   // `?edit=<patient>` corrects a client's saved details without opening a
@@ -459,6 +485,15 @@ export function RegistrationPage() {
   const [mode, setMode] = useState<IdentityStatus>("IDENTIFIED");
   const [form, setForm] = useState<RegForm>(EMPTY_FORM);
   const [selected, setSelected] = useState<RegistrationRow | null>(null);
+  // A client registered with an insurer since retired keeps it on the list,
+  // so saving other details never drops it silently.
+  const insurerOptions = useMemo(
+    () =>
+      selected?.insurer && !insurers.some((o) => o.code === selected.insurer)
+        ? [...insurers, { code: selected.insurer, display: `${selected.insurer_name} (retired)` }]
+        : insurers,
+    [insurers, selected],
+  );
   const [selectedLabel, setSelectedLabel] = useState(false);
   // One id per form instance: a retry after a network failure reuses it so the
   // server dedupes; a new one is issued after success, Clear or a new selection.
@@ -786,6 +821,7 @@ export function RegistrationPage() {
       appointment_messages: appointmentMessagesPayload(appointmentMessages),
       referral_source: form.referral.trim(),
       payer: form.payer,
+      insurer: hasPrivateInsurer(form.payer) ? form.insurer : "",
       allergy_status: allergyStatus || undefined,
       allergy_details: showAllergyDetails ? form.allergyDetails.trim() || undefined : undefined,
     };
@@ -977,6 +1013,7 @@ export function RegistrationPage() {
             confirm_new_record: confirmedNew || undefined,
             referral_source: form.referral.trim() || undefined,
             payer: form.payer || undefined,
+            insurer: hasPrivateInsurer(form.payer) && form.insurer ? form.insurer : undefined,
           };
       const result = await registerArrival(accessToken, payload);
       const name = identified
@@ -1741,6 +1778,22 @@ export function RegistrationPage() {
                       onChange={set("payer")}
                     />
                   </RegField>
+                  {hasPrivateInsurer(form.payer) && (
+                    <RegField
+                      id="reg-private-insurer"
+                      label="Private insurer"
+                      tip="Services are charged at this insurer's rate where the facility has set one."
+                    >
+                      <SelectChoices
+                        className={REG_SELECT}
+                        id="reg-private-insurer"
+                        options={insurerOptions}
+                        placeholder="— select —"
+                        value={form.insurer}
+                        onChange={set("insurer")}
+                      />
+                    </RegField>
+                  )}
                   <fieldset className={`min-w-0 ${FULL_ROW}`}>
                     <legend className="text-base font-semibold text-ink-900">
                       Privacy &amp; sharing

@@ -6,6 +6,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from apps.accounts.permissions import _has_org_admin_role
+from apps.care_pathway import pricing
 from apps.retention.mixins import NoHardDeleteMixin
 from apps.sysadmin_audit.audit import log_view
 from apps.sysadmin_audit.mixins import AuditedReadMixin
@@ -240,9 +241,8 @@ class AdmissionViewSet(AuditedReadMixin, NoHardDeleteMixin, viewsets.ModelViewSe
                 organization=user.organization,
                 patient=patient,
                 episode=episode,
-                service=service,
                 quantity=1,
-                unit_price=service.rate,
+                **pricing.charge_fields(service, patient),
                 delivered_at=admitted_at,
                 created_by=user,
             )

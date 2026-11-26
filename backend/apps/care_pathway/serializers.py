@@ -344,15 +344,28 @@ class BillingServiceSerializer(serializers.ModelSerializer):
             "rate",
             "remarks",
             "active",
+            "catalogue_item",
             "payer_rates",
         ]
-        read_only_fields = ["name", "display_name", "is_medication", "payer_rates"]
+        read_only_fields = [
+            "name",
+            "display_name",
+            "is_medication",
+            "catalogue_item",
+            "payer_rates",
+        ]
 
     def get_payer_rates(self, obj):
-        rows = obj.payer_codes.filter(active=True).order_by("payer")
+        rows = (
+            obj.payer_codes.filter(active=True)
+            .select_related("insurer")
+            .order_by("payer", "insurer__name")
+        )
         return [
             {
                 "payer": row.payer,
+                "insurer": str(row.insurer_id) if row.insurer_id else None,
+                "insurer_name": row.insurer.name if row.insurer_id else "",
                 "payer_code": row.payer_code,
                 "rate": str(row.rate) if row.rate is not None else None,
                 "requires_preauth": row.requires_preauth,

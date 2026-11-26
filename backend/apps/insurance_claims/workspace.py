@@ -139,15 +139,32 @@ def claim_payer(patient):
     return CLAIMABLE_PAYER.get(patient.payer or "")
 
 
-def _payer_codes(service_ids, payer):
+def claim_insurer(patient):
+    """The organisation's insurer a private-insurance claim is addressed to, if named."""
+    if claim_payer(patient) != "PRIVATE":
+        return None
+    from apps.care_pathway.pricing import insurer_for
+
+    return insurer_for(patient)
+
+
+def _basis_detail(charge):
+    """Says which rate a charge was raised at, when it was not the cash price."""
+    if charge is None or not charge.priced_for_id:
+        return ""
+    return f"{charge.priced_for.name} rate"
+
+
+def _payer_codes(service_ids, payer, insurer=None):
+    """A named insurer's own rows when the claim has one; else the payer's."""
     if not payer:
         return {}
-    return {
-        c.service_id: c
-        for c in ServicePayerCode.objects.filter(
-            service_id__in=service_ids, payer=payer, active=True
-        )
-    }
+    rows = ServicePayerCode.objects.filter(service_id__in=service_ids, active=True)
+    if insurer is not None:
+        rows = rows.filter(payer="INSURER", insurer=insurer)
+    else:
+        rows = rows.filter(payer=payer, insurer__isnull=True)
+    return {c.service_id: c for c in rows}
 
 
 def _requires_preauth(code, payer):
@@ -369,6 +386,7 @@ def create_claim(user, patient, charge_ids=None):
             organization=patient.organization,
             patient=patient,
             payer=payer,
+            insurer=claim_insurer(patient),
             claim_number=f"CLM-{timezone.now():%Y%m%d}-{uuid.uuid4().hex[:8].upper()}",
             created_by=user,
         )
@@ -377,7 +395,7 @@ def create_claim(user, patient, charge_ids=None):
             ClaimAttachment.objects.create(
                 organization=claim.organization, claim=claim, category=category, added_by=user
             )
-    codes = _payer_codes({c.service_id for c in charges}, claim.payer)
+    codes = _payer_codes({c.service_id for c in charges}, claim.payer, claim.insurer)
     for charge in charges:
         code = codes.get(charge.service_id)
         ClaimLine.objects.create(
@@ -751,7 +769,7 @@ def invoice_lines(invoice):
     from apps.care_pathway import facility_time
     from apps.ipd_ward.models import BedNight
 
-    lines = list(invoice.lines.select_related("charge_item").order_by("id"))
+    lines = list(invoice.lines.select_related("charge_item__priced_for").order_by("id"))
     nights = {
         n.charge_id: n.night
         for n in BedNight.objects.filter(charge_id__in=[ln.charge_item_id for ln in lines])
@@ -769,18 +787,20 @@ def invoice_lines(invoice):
             rows.append(
                 {
                     "service": line.description,
-                    "detail": "",
+                    "detail": _basis_detail(line.charge_item),
                     "quantity": line.quantity,
                     "unit_price": _money(line.unit_price),
                     "amount": _money(line.line_total),
                 }
             )
             continue
-        key = (line.description, line.unit_price)
+        basis = _basis_detail(line.charge_item)
+        key = (line.description, line.unit_price, basis)
         group = groups.get(key)
         if group is None or group["last"] + timedelta(days=1) != night:
             group = {
                 "service": line.description,
+                "basis": basis,
                 "first": night,
                 "last": night,
                 "quantity": 0,
@@ -804,7 +824,14 @@ def invoice_lines(invoice):
         out.append(
             {
                 "service": row["service"],
-                "detail": f"Nights of {span} ({count} night{'s' if count != 1 else ''})",
+                "detail": "; ".join(
+                    part
+                    for part in (
+                        f"Nights of {span} ({count} night{'s' if count != 1 else ''})",
+                        row["basis"],
+                    )
+                    if part
+                ),
                 "quantity": count,
                 "unit_price": _money(row["unit_price"]),
                 "amount": _money(row["amount"]),
@@ -898,6 +925,7 @@ def _claim_data(claim):
         "id": str(claim.id),
         "claim_number": claim.claim_number,
         "payer": claim.payer,
+        "insurer": claim.insurer.name if claim.insurer_id else "",
         "status": claim.status,
         "status_label": claim.get_status_display(),
         "timeline_stage": timeline_stage(claim),
@@ -1000,7 +1028,16 @@ def workspace(user, patient):
         "currency": "KES",
         "payer": {
             "code": patient.payer,
-            "label": patient.get_payer_display() if patient.payer else "Not recorded",
+            "label": (
+                (
+                    f"{patient.get_payer_display()} — {patient.insurer.name}"
+                    if patient.insurer_id and patient.payer in Patient.PAYERS_WITH_PRIVATE_INSURER
+                    else patient.get_payer_display()
+                )
+                if patient.payer
+                else "Not recorded"
+            ),
+            "insurer": patient.insurer.name if patient.insurer_id else "",
             "claimable": payer is not None,
             "claim_payer": payer,
             "coverage": (

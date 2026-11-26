@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import catalogue_views
 from . import client_report_views as clrview
 from . import clinical_report_views as crview
 from . import group_views as gview
@@ -772,6 +773,21 @@ urlpatterns = [
         "care/billing-services/<uuid:pk>/",
         views.BillingServiceView.as_view(),
         name="care-billing-service",
+    ),
+    path(
+        "care/billing-services/catalogue/",
+        views.TariffCatalogueView.as_view(),
+        name="care-billing-services-catalogue",
+    ),
+    path(
+        "platform/service-catalogue/",
+        catalogue_views.ServiceCatalogueView.as_view(),
+        name="platform-service-catalogue",
+    ),
+    path(
+        "platform/service-catalogue/<uuid:pk>/",
+        catalogue_views.ServiceCatalogueItemView.as_view(),
+        name="platform-service-catalogue-item",
     ),
     path("care/dashboard/", views.DashboardView.as_view(), name="care-dashboard"),
     path("care/outpatients/", views.OutpatientsView.as_view(), name="care-outpatients"),

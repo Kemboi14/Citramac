@@ -17,6 +17,7 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  ListChecks,
   Mail,
   MessageCircleHeart,
   MessageSquare,
@@ -76,6 +77,7 @@ export const SUPER_ADMIN_NAV: NavGroup[] = [
       { label: "AI Settings", to: "/super-admin/ai-settings", icon: Sparkles },
       { label: "DHA / SHA Integration", to: "/super-admin/hie-settings", icon: PlugZap },
       { label: "Theme & Colors", to: "/super-admin/theme", icon: Palette },
+      { label: "Service Catalogue", to: "/super-admin/service-catalogue", icon: ListChecks },
     ],
   },
   {

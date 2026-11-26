@@ -1,0 +1,1048 @@
+{
+ "source": "Facility price schedule workbook, Out of pocket sheet, 2026-11-25 — names only; no prices, codes or remarks",
+ "items": [
+  {
+   "category": "CISMo Level 1",
+   "name": "Assement Results Presentation Session (CI & CII)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "CISMo Level 1",
+   "name": "Introductory Session Participants",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "CISMo Level 1 Sessions",
+   "name": "Dream Credit",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "CISMo Level 2",
+   "name": "Monthly Individual Therapy Sessions for Staff",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Detox (Medically assisted withdrawal)",
+   "name": "Treatment of Withdrawal syndrome",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Education and Training I",
+   "name": "Half Day",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Education and Training II",
+   "name": "Full Day",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "General Assessment",
+   "name": "New Client",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Group Counseling",
+   "name": "Counselling Services",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "2 weeks Admission Shared Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Admission Daily Private Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Admission Daily Shared Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Admission Monthly Private Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Admission Monthly Shared Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Admission Weekly Shared Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Discounted Admission Daily Shared Room",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "SHA 90 Days Rehabilitation Program",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Inpatient Treatment",
+   "name": "Standard, Daily Option",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Blood Group Test",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "FBS",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "FHG, UECs, LFTs and HB1AC",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "FHG/FBC (Full Haemogram)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Full Haemogram",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "HB1AC",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "LFT, UECs and Full haemogram",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Lithium Levels Test",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Liver Function Test (LFT)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "P24",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Thyroid Function Test",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "UECs",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Urea,Electrolyte+ cretine",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Urinalysis",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Vitamin B12",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Lab Test Service",
+   "name": "Vitamin D Profile",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Akineton 2mg",
+   "description": "",
+   "medicine_name": "Akineton",
+   "mass": "2mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Alzolam 0.25mg",
+   "description": "",
+   "medicine_name": "Alzolam",
+   "mass": "0.25mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Amitriptyline 25mg",
+   "description": "",
+   "medicine_name": "Amitriptyline",
+   "mass": "25mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Aripitas 15mg",
+   "description": "",
+   "medicine_name": "Aripitas",
+   "mass": "15mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Artane 5mg",
+   "description": "",
+   "medicine_name": "Artane",
+   "mass": "5mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Atarax 25mg",
+   "description": "",
+   "medicine_name": "Atarax",
+   "mass": "25mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Atarax 25mg 21's",
+   "description": "",
+   "medicine_name": "Atarax",
+   "mass": "25mg 21's"
+  },
+  {
+   "category": "Medication",
+   "name": "Azithromycin 250mg tabs",
+   "description": "",
+   "medicine_name": "Azithromycin",
+   "mass": "250mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Benzhexol 5mg",
+   "description": "",
+   "medicine_name": "Benzhexol",
+   "mass": "5mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Betapyn Tablets",
+   "description": "",
+   "medicine_name": "Betapyn Tablets",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "BG-Glutamin",
+   "description": "",
+   "medicine_name": "BG-Glutamin",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Buprenophine 2mg",
+   "description": "",
+   "medicine_name": "Buprenophine",
+   "mass": "2mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Buprenophine 8mg (1 Box)",
+   "description": "",
+   "medicine_name": "Buprenophine",
+   "mass": "8mg (1 Box)"
+  },
+  {
+   "category": "Medication",
+   "name": "Cabamezapine 200mg",
+   "description": "",
+   "medicine_name": "Cabamezapine",
+   "mass": "200mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Carbamazepine 200mg",
+   "description": "",
+   "medicine_name": "Carbamazepine",
+   "mass": "200mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Chlorpromazine 100mg tabs",
+   "description": "",
+   "medicine_name": "Chlorpromazine",
+   "mass": "100mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Chlorpromazine 200mg tabs",
+   "description": "",
+   "medicine_name": "Chlorpromazine",
+   "mass": "200mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Chlorpromazine 25mg Injection",
+   "description": "",
+   "medicine_name": "Chlorpromazine",
+   "mass": "25mg Injection"
+  },
+  {
+   "category": "Medication",
+   "name": "Cipladon 1000mg",
+   "description": "",
+   "medicine_name": "Cipladon",
+   "mass": "1000mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Clonazepam 0.5mg",
+   "description": "",
+   "medicine_name": "Clonazepam",
+   "mass": "0.5mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Clonazepin 100mg",
+   "description": "",
+   "medicine_name": "Clonazepin",
+   "mass": "100mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Clopixol Acuphase 100mg",
+   "description": "",
+   "medicine_name": "Clopixol Acuphase",
+   "mass": "100mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Clopixol Depot 200mg",
+   "description": "",
+   "medicine_name": "Clopixol Depot",
+   "mass": "200mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Concerta 27mg",
+   "description": "",
+   "medicine_name": "Concerta",
+   "mass": "27mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Concerta Tabs 18mg",
+   "description": "",
+   "medicine_name": "Concerta Tabs",
+   "mass": "18mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Concerta Tabs 36mg",
+   "description": "",
+   "medicine_name": "Concerta Tabs",
+   "mass": "36mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Dazepam 5mg tabs",
+   "description": "",
+   "medicine_name": "Dazepam",
+   "mass": "5mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Dextrose 10% 500ml",
+   "description": "",
+   "medicine_name": "Dextrose",
+   "mass": "10% 500ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Diazepam Injection",
+   "description": "",
+   "medicine_name": "Diazepam Injection",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Diclofenac 25mg",
+   "description": "",
+   "medicine_name": "Diclofenac",
+   "mass": "25mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Domicum 15mg/3ml",
+   "description": "",
+   "medicine_name": "Domicum",
+   "mass": "15mg/3ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Duloxetine 30mg",
+   "description": "",
+   "medicine_name": "Duloxetine",
+   "mass": "30mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Emitino 8mg",
+   "description": "",
+   "medicine_name": "Emitino",
+   "mass": "8mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Epilim Chrono 500mg",
+   "description": "",
+   "medicine_name": "Epilim Chrono",
+   "mass": "500mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Epimate 100mg",
+   "description": "",
+   "medicine_name": "Epimate",
+   "mass": "100mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Feliz S 10mg",
+   "description": "",
+   "medicine_name": "Feliz S",
+   "mass": "10mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Flatameal-Ds suspension 200ml",
+   "description": "",
+   "medicine_name": "Flatameal-Ds suspension",
+   "mass": "200ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Fluanxol Depot 20mg/1ml",
+   "description": "",
+   "medicine_name": "Fluanxol Depot",
+   "mass": "20mg/1ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Fluanxol Depot 40mg/ml",
+   "description": "",
+   "medicine_name": "Fluanxol Depot",
+   "mass": "40mg/ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Fluexetine 20mg",
+   "description": "",
+   "medicine_name": "Fluexetine",
+   "mass": "20mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Gabapentine 300mg",
+   "description": "",
+   "medicine_name": "Gabapentine",
+   "mass": "300mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Gentamycin eye drops",
+   "description": "",
+   "medicine_name": "Gentamycin eye drops",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Lamitor 100mg",
+   "description": "",
+   "medicine_name": "Lamitor",
+   "mass": "100mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Lithium 400mg Tabs",
+   "description": "",
+   "medicine_name": "Lithium",
+   "mass": "400mg Tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Livolin forte 30 Tabs",
+   "description": "",
+   "medicine_name": "Livolin forte",
+   "mass": "30 Tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Melatonin 3mg",
+   "description": "",
+   "medicine_name": "Melatonin",
+   "mass": "3mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Metoclopramide 10mg/2ml",
+   "description": "",
+   "medicine_name": "Metoclopramide",
+   "mass": "10mg/2ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Mitrazapine 15mg",
+   "description": "",
+   "medicine_name": "Mitrazapine",
+   "mass": "15mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Mitrazapine 15mg 30 Tabs",
+   "description": "",
+   "medicine_name": "Mitrazapine",
+   "mass": "15mg 30 Tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Mitrazapine 30mg",
+   "description": "",
+   "medicine_name": "Mitrazapine",
+   "mass": "30mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Naltrexone (Addrex) 50mg tabs 30's",
+   "description": "",
+   "medicine_name": "Naltrexone (Addrex)",
+   "mass": "50mg tabs 30's"
+  },
+  {
+   "category": "Medication",
+   "name": "Netraflux 200ml Syrup",
+   "description": "",
+   "medicine_name": "Netraflux",
+   "mass": "200ml Syrup"
+  },
+  {
+   "category": "Medication",
+   "name": "Neuro forte",
+   "description": "",
+   "medicine_name": "Neuro forte",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Nexito 10mg",
+   "description": "",
+   "medicine_name": "Nexito",
+   "mass": "10mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Nexito 20mg",
+   "description": "",
+   "medicine_name": "Nexito",
+   "mass": "20mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Nexium 40mg",
+   "description": "",
+   "medicine_name": "Nexium",
+   "mass": "40mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Nicoratte Gum 4mg",
+   "description": "",
+   "medicine_name": "Nicoratte Gum",
+   "mass": "4mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Nicotine Patch",
+   "description": "",
+   "medicine_name": "Nicotine Patch",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Nifedipine 20mg",
+   "description": "",
+   "medicine_name": "Nifedipine",
+   "mass": "20mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Normal Saline 500ml",
+   "description": "",
+   "medicine_name": "Normal Saline",
+   "mass": "500ml"
+  },
+  {
+   "category": "Medication",
+   "name": "Olanzapine 10mg",
+   "description": "",
+   "medicine_name": "Olanzapine",
+   "mass": "10mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Olanzapine 5mg",
+   "description": "",
+   "medicine_name": "Olanzapine",
+   "mass": "5mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Paliperidone Injection",
+   "description": "",
+   "medicine_name": "Paliperidone Injection",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Pre-Gabalin 25mg",
+   "description": "",
+   "medicine_name": "Pre-Gabalin",
+   "mass": "25mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Propranolol Tabs 40mg",
+   "description": "",
+   "medicine_name": "Propranolol Tabs",
+   "mass": "40mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Pyridoxine Tabs",
+   "description": "",
+   "medicine_name": "Pyridoxine Tabs",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Quitipin 300mg",
+   "description": "",
+   "medicine_name": "Quitipin",
+   "mass": "300mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Quitipine 100mg",
+   "description": "",
+   "medicine_name": "Quitipine",
+   "mass": "100mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Quitipine 100mg 30's",
+   "description": "",
+   "medicine_name": "Quitipine",
+   "mass": "100mg 30's"
+  },
+  {
+   "category": "Medication",
+   "name": "Quitipine 200mg tabs",
+   "description": "",
+   "medicine_name": "Quitipine",
+   "mass": "200mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Quitipine 50mg",
+   "description": "",
+   "medicine_name": "Quitipine",
+   "mass": "50mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Ranferon Syrup 200ml",
+   "description": "",
+   "medicine_name": "Ranferon Syrup",
+   "mass": "200ml"
+  },
+  {
+   "category": "Medication",
+   "name": "RBS/FBS",
+   "description": "",
+   "medicine_name": "RBS/FBS",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Risperidone 1mg",
+   "description": "",
+   "medicine_name": "Risperidone",
+   "mass": "1mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Risperidone 2mg",
+   "description": "",
+   "medicine_name": "Risperidone",
+   "mass": "2mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Ritalin 10mg 30 Tabs",
+   "description": "",
+   "medicine_name": "Ritalin",
+   "mass": "10mg 30 Tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Tolanz 10mg",
+   "description": "",
+   "medicine_name": "Tolanz",
+   "mass": "10mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Tolanz 5mg",
+   "description": "",
+   "medicine_name": "Tolanz",
+   "mass": "5mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Topamax 50mg",
+   "description": "",
+   "medicine_name": "Topamax",
+   "mass": "50mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Tranexamic acid tab 500mg",
+   "description": "",
+   "medicine_name": "Tranexamic acid tab",
+   "mass": "500mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Tranzodone caps",
+   "description": "",
+   "medicine_name": "Tranzodone caps",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Tribees Forte",
+   "description": "",
+   "medicine_name": "Tribees Forte",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Valtas 500mg",
+   "description": "",
+   "medicine_name": "Valtas",
+   "mass": "500mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Valtas 750mg",
+   "description": "",
+   "medicine_name": "Valtas",
+   "mass": "750mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Venlafaxine",
+   "description": "",
+   "medicine_name": "Venlafaxine",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Vitamin K Injection",
+   "description": "",
+   "medicine_name": "Vitamin K Injection",
+   "mass": ""
+  },
+  {
+   "category": "Medication",
+   "name": "Zolpidem 10mg",
+   "description": "",
+   "medicine_name": "Zolpidem",
+   "mass": "10mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Zosert 50mg tabs",
+   "description": "",
+   "medicine_name": "Zosert",
+   "mass": "50mg tabs"
+  },
+  {
+   "category": "Medication",
+   "name": "Zyban Tabs 150mg",
+   "description": "",
+   "medicine_name": "Zyban Tabs",
+   "mass": "150mg"
+  },
+  {
+   "category": "Medication",
+   "name": "Zyrtal MR Tabs",
+   "description": "",
+   "medicine_name": "Zyrtal MR Tabs",
+   "mass": ""
+  },
+  {
+   "category": "Other Medical Services",
+   "name": "Diabetic services(Nogluc,Glucomet+Strips)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Medical Services",
+   "name": "Eye Review plus Spects",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Medical Services",
+   "name": "H. Pylori Kits",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Medical Services",
+   "name": "Needles G21",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Medical Services",
+   "name": "Syringe SCC",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "4 Hours of Travel KES per hour",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Barber Services",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Client Attires",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Knee brace (Medium)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Laundry charges",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Mileage (Ksh. 50/km)",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Transport to Airport",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Other Services",
+   "name": "Yoga mat",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service",
+   "name": "Couples Session — Outpatient Counselling Service",
+   "description": "Couples Session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service",
+   "name": "Individual session — Outpatient Counselling Service",
+   "description": "Individual session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service",
+   "name": "Life Skills & Well-being Program",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service I",
+   "name": "Individual session — Outpatient Counselling Service I",
+   "description": "Individual session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service I (Virtual)",
+   "name": "Individual session — Outpatient Counselling Service I (Virtual)",
+   "description": "Individual session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service II",
+   "name": "Family Psychoeducation",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service II",
+   "name": "Family session — Outpatient Counselling Service II",
+   "description": "Family session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service II (Virtual)",
+   "name": "Family session — Outpatient Counselling Service II (Virtual)",
+   "description": "Family session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Outpatient Counselling Service III (Virtual)",
+   "name": "Couples Session — Outpatient Counselling Service III (Virtual)",
+   "description": "Couples Session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Psychiatry",
+   "name": "Psychiatric consultation",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Psychotherapy",
+   "name": "Individual Session — Psychotherapy",
+   "description": "Individual Session",
+   "medicine_name": "",
+   "mass": ""
+  },
+  {
+   "category": "Toxicology",
+   "name": "Point of Care urine drug screen",
+   "description": "",
+   "medicine_name": "",
+   "mass": ""
+  }
+ ]
+}

@@ -154,6 +154,7 @@ export function RegistrationDetailsPage() {
           <Section title="Referral, allergies & payment">
             <Item label="Referral source" value={row.referral_source} />
             <Item label="Payer / insurance" value={label("payer", row.payer)} />
+            {row.insurer_name && <Item label="Insurer" value={row.insurer_name} />}
             <Item
               label="Allergy status"
               value={label("registration-allergy-status", row.allergy_status)}

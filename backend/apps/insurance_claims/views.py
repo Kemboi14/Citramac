@@ -19,6 +19,7 @@ from .models import (
     ClaimAttachment,
     ClaimLine,
     InsuranceClaim,
+    Insurer,
     PreAuthorization,
     Remittance,
     ServicePayerCode,
@@ -26,6 +27,7 @@ from .models import (
 )
 from .serializers import (
     InsuranceClaimSerializer,
+    InsurerSerializer,
     PreAuthorizationSerializer,
     RemittanceSerializer,
     ServicePayerCodeSerializer,
@@ -281,6 +283,26 @@ class ServicePayerCodeViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return ServicePayerCode.objects.select_related("service").order_by("service__name", "payer")
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+
+class InsurerViewSet(NoHardDeleteMixin, viewsets.ModelViewSet):
+    """The organisation's own insurers (guide.md 2026-11-26). Every member may
+    list them (registration offers them); only an Org Admin adds, renames or
+    retires one. Never deleted: retired with active=false."""
+
+    serializer_class = InsurerSerializer
+    permission_classes = [IsOrgAdminOrReadOnly]
+    http_method_names = ["get", "post", "patch", "head", "options"]
+    pagination_class = None  # a short list; registration offers all of it
+
+    def get_queryset(self):
+        rows = Insurer.objects.order_by("name")
+        if self.request.query_params.get("active") == "1":
+            rows = rows.filter(active=True)
+        return rows
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
